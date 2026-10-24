@@ -37,7 +37,11 @@ use LogicException;
  * adresse, valable 24 heures, l'ancienne étant alors prévenue (voir
  * DemanderUneNouvelleAdresseAction et ConfirmerNouvelleAdresseAction) ; elle
  * doit être libre parmi les propriétaires, sans que le refus dise à qui
- * elle appartient. L'adresse de tout autre compte n'est qu'un contact,
+ * elle appartient. Le propriétaire qui n'a encore aucune adresse de
+ * connexion (celle qu'il a choisie en saisissant le code du courrier
+ * attend son lien) y lit où en est ce lien et en redemande un, pour cette
+ * adresse ou une autre ; celui d'une inscription close n'en a plus et
+ * n'en demande plus. L'adresse de tout autre compte n'est qu'un contact,
  * facultatif, qui s'enregistre aussitôt, sans confirmation, et peut être
  * celle d'un autre compte : c'est le seul endroit où elle s'écrit, jamais
  * par qui a créé le compte. Elle s'enregistre en minuscules (voir
@@ -107,23 +111,47 @@ class ModifierProfil extends EditProfile
                 ->helperText('Un simple contact : elle ne sert ni à vous connecter, ni à retrouver votre accès, que vous redonne la personne qui gère votre compte.');
         }
 
+        if ($this->compte()->societe()->value('close_le') !== null) {
+            return Placeholder::make('adresse_de_connexion')
+                ->label('Adresse e-mail de connexion')
+                ->content(DemanderUneNouvelleAdresseAction::MESSAGE_INSCRIPTION_CLOSE);
+        }
+
         return TextInput::make('email')
             ->label('Adresse e-mail de connexion')
             ->email()
-            ->required()
+            ->required(fn (): bool => $this->compte()->aUneAdresseDeConnexion())
             ->maxLength(255)
             ->adresseDeConnexion()
             ->unique(table: 'users', column: 'email', ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('role_societe', RoleSociete::Proprietaire->value))
-            ->helperText(function (): ?string {
-                $compte = $this->compte();
-
-                return $compte->nouvelle_adresse !== null && $compte->nouvelle_adresse_expire_le?->isFuture()
-                    ? "Nouvelle adresse en attente : {$compte->nouvelle_adresse}. Elle remplacera celle-ci quand vous aurez suivi le lien qui lui a été envoyé."
-                    : null;
-            })
+            ->helperText(fn (): ?string => $this->etatDeLAdresseEnAttente())
             ->validationMessages([
                 'unique' => 'Cette adresse e-mail ne peut pas être utilisée.',
             ]);
+    }
+
+    /**
+     * Où en est l'adresse de connexion en attente du propriétaire : celle
+     * qui remplacera la sienne, ou, sans adresse de connexion, celle qu'il
+     * a choisie, dont le lien se suit connecté à ce compte ou se redemande
+     * ici.
+     */
+    private function etatDeLAdresseEnAttente(): ?string
+    {
+        $compte = $this->compte();
+        $enAttente = $compte->nouvelle_adresse !== null && $compte->nouvelle_adresse_expire_le?->isFuture();
+
+        if ($compte->aUneAdresseDeConnexion()) {
+            return $enAttente ? "Nouvelle adresse en attente : {$compte->nouvelle_adresse}. Elle remplacera celle-ci quand vous aurez suivi le lien qui lui a été envoyé." : null;
+        }
+
+        $echeance = $compte->nouvelle_adresse_expire_le?->setTimezone(config('app.timezone'))->format('d/m/Y à H:i');
+
+        return match (true) {
+            $enAttente => "Votre compte n'a pas encore d'adresse de connexion : suivez, en étant connecté à ce compte, le lien envoyé à {$compte->nouvelle_adresse}, valable jusqu'au {$echeance}. D'ici là, connectez-vous avec votre identifiant. Pour recevoir un nouveau lien, saisissez l'adresse ici et enregistrez.",
+            $compte->nouvelle_adresse !== null => "Le lien envoyé à {$compte->nouvelle_adresse} a expiré : saisissez l'adresse ici et enregistrez pour en recevoir un nouveau. D'ici là, connectez-vous avec votre identifiant.",
+            default => 'Votre compte n\'a pas encore d\'adresse de connexion : saisissez-la ici et enregistrez, puis suivez, en étant connecté à ce compte, le lien qui lui sera envoyé. D\'ici là, connectez-vous avec votre identifiant.',
+        };
     }
 
     protected function getPasswordFormComponent(): Component

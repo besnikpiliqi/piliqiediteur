@@ -277,25 +277,32 @@ class IdentifiantsTest extends TestCase
     }
 
     /**
-     * La base refuse un propriétaire sans adresse de connexion, à
-     * l'insertion, au passage au rôle de propriétaire et à la mise à nul de
-     * son adresse, et deux propriétaires de la même adresse.
+     * La base refuse un propriétaire dont l'adresse de connexion n'est pas
+     * confirmée par un lien, à l'insertion, au passage au rôle de
+     * propriétaire et à l'effacement de sa date de confirmation, et deux
+     * propriétaires de la même adresse ; un propriétaire sans adresse de
+     * connexion (adresse en attente de son lien, inscription close) passe,
+     * comme l'adresse de contact d'un autre compte égale à celle d'un
+     * propriétaire.
      */
-    public function test_la_base_refuse_un_proprietaire_sans_adresse_et_deux_proprietaires_de_la_meme_adresse(): void
+    public function test_la_base_refuse_un_proprietaire_a_l_adresse_non_confirmee_et_deux_proprietaires_de_la_meme_adresse(): void
     {
         $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'A']));
         $autreProprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'B']));
         $sansProprietaire = Societe::factory()->create();
-        $membreSansAdresse = DB::table('users')->insertGetId($this->ligneDeCompte($sansProprietaire, RoleSociete::Membre->value, null));
+        $membreAdresseNonConfirmee = DB::table('users')->insertGetId($this->ligneDeCompte($sansProprietaire, RoleSociete::Membre->value, 'contact@example.test'));
 
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert($this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, null))), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $membreSansAdresse)->update(['role_societe' => RoleSociete::Proprietaire->value])), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $proprietaire->id)->update(['email' => null])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert($this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, 'non-confirmee@example.test'))), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $membreAdresseNonConfirmee)->update(['role_societe' => RoleSociete::Proprietaire->value])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $proprietaire->id)->update(['email_verified_at' => null])), QueryException::class);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $autreProprietaire->id)->update(['email' => $proprietaire->email])), UniqueConstraintViolationException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert($this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, $proprietaire->email))), UniqueConstraintViolationException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert([...$this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, $proprietaire->email), 'email_verified_at' => now()])), UniqueConstraintViolationException::class);
 
-        DB::table('users')->where('id', $membreSansAdresse)->update(['email' => $proprietaire->email]);
-        $this->assertSame([$proprietaire->email, $autreProprietaire->email], [$proprietaire->refresh()->email, $autreProprietaire->refresh()->email]);
+        DB::table('users')->where('id', $membreAdresseNonConfirmee)->update(['email' => $proprietaire->email]);
+        DB::table('users')->insert($this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, null));
+        DB::table('users')->where('id', $autreProprietaire->id)->update(['email' => null, 'email_verified_at' => null]);
+        $this->assertSame([$proprietaire->email, null], [$proprietaire->refresh()->email, $autreProprietaire->refresh()->email]);
+        $this->assertSame([true, false], [$proprietaire->aUneAdresseDeConnexion(), $autreProprietaire->aUneAdresseDeConnexion()]);
     }
 
     /**
@@ -307,11 +314,11 @@ class IdentifiantsTest extends TestCase
     {
         $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'A']));
         $societe = Societe::factory()->create();
-        $compte = DB::table('users')->insertGetId([...$this->ligneDeCompte($societe, RoleSociete::Membre->value, 'futur@example.test'), 'mot_de_passe_est_l_identifiant' => true]);
+        $compte = DB::table('users')->insertGetId([...$this->ligneDeCompte($societe, RoleSociete::Membre->value, 'futur@example.test'), 'email_verified_at' => now(), 'mot_de_passe_est_l_identifiant' => true]);
 
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte)->update(['role_societe' => RoleSociete::Proprietaire->value])), QueryException::class);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $proprietaire->id)->update(['mot_de_passe_est_l_identifiant' => true])), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert([...$this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, 'autre@example.test'), 'mot_de_passe_est_l_identifiant' => true])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->insert([...$this->ligneDeCompte(Societe::factory()->create(), RoleSociete::Proprietaire->value, 'autre@example.test'), 'email_verified_at' => now(), 'mot_de_passe_est_l_identifiant' => true])), QueryException::class);
 
         DB::table('users')->where('id', $compte)->update(['mot_de_passe_est_l_identifiant' => false]);
         DB::table('users')->where('id', $compte)->update(['role_societe' => RoleSociete::Proprietaire->value]);

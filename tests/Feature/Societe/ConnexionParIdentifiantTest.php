@@ -5,6 +5,7 @@ namespace Tests\Feature\Societe;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
@@ -17,6 +18,7 @@ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\LimitationDesConnexions;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\PostesReconnus;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
 use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
@@ -141,6 +143,44 @@ class ConnexionParIdentifiantTest extends TestCase
 
         $config = file_get_contents(config_path('auth.php'));
         $this->assertStringContainsString("'timebox_duration' => (int) env('AUTH_DELAI_CONSTANT_US', 500000)", (string) $config);
+    }
+
+    /**
+     * L'adresse qu'a choisie, en saisissant le code du courrier, une autre
+     * personne que celle qui a inscrit la société, tant que son lien n'est
+     * pas suivi, et l'adresse du propriétaire d'une inscription close ne
+     * sont pas des adresses de connexion : un essai avec elles reçoit la
+     * même réponse qu'une adresse inconnue, au même coût (une vérification
+     * contre l'empreinte factice, aucun hachage) et avec autant de
+     * requêtes à la base.
+     */
+    public function test_une_adresse_en_attente_ou_d_une_inscription_close_coute_comme_une_adresse_inconnue(): void
+    {
+        $this->saisirLeCodeCommeUneAutrePersonne($this->inscrireUneSociete(null, 'inscrit@example.test'), 'representante@example.test');
+        $close = $this->inscrireUneSociete(null, 'jeanne@example.test');
+        app(TenantContext::class)->clear();
+        app(CloreLInscriptionAction::class)->cloreSansCode($close->fresh(), now()->toImmutable());
+        app(TenantContext::class)->clear();
+        $hachage = $this->compterLesVerifications();
+        $requetes = 0;
+        DB::listen(function () use (&$requetes): void {
+            $requetes++;
+        });
+        $requetesParCas = [];
+
+        foreach (['adresse inconnue' => 'personne@example.test', 'adresse en attente' => 'representante@example.test', 'adresse d\'une inscription close' => 'jeanne@example.test'] as $cas => $saisie) {
+            $hachage->verifications = 0;
+            $hachage->creations = 0;
+            $hachage->empreintes = [];
+            $requetes = 0;
+            $page = $this->seConnecter($saisie, self::MOT_DE_PASSE_CHOISI);
+            $requetesParCas[$cas] = $requetes;
+            $this->assertSame([Connexion::MESSAGE_ECHEC], $page->errors()->get('data.login'), $cas);
+            $this->assertGuest();
+            $this->assertSame([1, 0], [$hachage->verifications, $hachage->creations], $cas);
+            $this->assertSame(['bcrypt', (int) config('hashing.bcrypt.rounds')], [password_get_info($hachage->empreintes[0])['algoName'], password_get_info($hachage->empreintes[0])['options']['cost'] ?? null], $cas);
+        }
+        $this->assertSame([$requetesParCas['adresse inconnue'], $requetesParCas['adresse inconnue']], [$requetesParCas['adresse en attente'], $requetesParCas['adresse d\'une inscription close']]);
     }
 
     public function test_une_saisie_qui_n_a_pas_huit_chiffres_est_signalee_sans_rien_reveler(): void

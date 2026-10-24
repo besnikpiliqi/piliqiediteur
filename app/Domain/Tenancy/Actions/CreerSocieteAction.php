@@ -31,10 +31,11 @@ use SensitiveParameter;
  *
  * Les contrôles : l'adresse n'est l'adresse de connexion d'aucun
  * propriétaire (refusée sans dire à qui elle appartient ; l'adresse de
- * contact d'un autre compte n'empêche rien) ; le SIREN n'appartient à
- * aucune autre société (une inscription qui attend son code, ou une
- * société validée, voir Societe::sirenPris()), refusé par le seul
- * MESSAGE_SIREN_PRIS ; l'entreprise existe et est active au répertoire
+ * contact d'un autre compte, une adresse en attente de son lien et celle
+ * du propriétaire d'une inscription close n'empêchent rien) ; le SIREN
+ * n'appartient à aucune autre société (une inscription qui attend son
+ * code, ou une société validée, voir Societe::sirenPris()), refusé par le
+ * seul MESSAGE_SIREN_PRIS ; l'entreprise existe et est active au répertoire
  * Sirene de l'INSEE ; le registre national des entreprises de l'INPI donne
  * son représentant légal et l'adresse officielle de son siège (voir
  * DestinataireOfficiel). Une entreprise cessée ou inconnue est refusée

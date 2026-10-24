@@ -55,6 +55,7 @@ enum ActionAuditee: string implements HasLabel
     case ProprieteTransferee = 'propriete_transferee';
     case ProprieteReprise = 'propriete_reprise';
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
+    case AdresseDeConnexionRetiree = 'adresse_de_connexion_retiree';
     case VenteSansStock = 'vente_sans_stock';
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
@@ -111,6 +112,7 @@ enum ActionAuditee: string implements HasLabel
             self::ProprieteTransferee => 'Propriété transférée',
             self::ProprieteReprise => 'Propriété reprise par le code du courrier',
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
+            self::AdresseDeConnexionRetiree => 'Adresse de connexion retirée à la clôture de l\'inscription',
             self::VenteSansStock => 'Vente au-delà du stock',
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
@@ -125,7 +127,8 @@ enum ActionAuditee: string implements HasLabel
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
-            self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee => CategorieAudit::Acces,
+            self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee,
+            self::AdresseDeConnexionRetiree => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -177,7 +180,7 @@ enum ActionAuditee: string implements HasLabel
             // l'opération), jamais son identifiant de connexion, qui serait
             // son mot de passe tant qu'il ne l'a pas changé ; pour un accès
             // redonné, si la personne était présente.
-            self::PremiereConnexion, self::IdentifiantConsulte, self::AdresseDeConnexionChangee => ['compte'],
+            self::PremiereConnexion, self::IdentifiantConsulte, self::AdresseDeConnexionChangee, self::AdresseDeConnexionRetiree => ['compte'],
             self::AccesRedonne => ['compte', 'en_presence'],
             // L'administrateur à qui la propriété est proposée ; pour un
             // lien renvoyé, la mention qu'il l'a été.

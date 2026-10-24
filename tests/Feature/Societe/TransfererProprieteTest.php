@@ -491,7 +491,7 @@ class TransfererProprieteTest extends TestCase
 
         $retire = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'retire@example.test']);
         app(ChangerStatutCompteAction::class)->retirer($proprietaire->refresh(), $retire);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $retire->id)->update(['role_societe' => RoleSociete::Proprietaire->value])), UniqueConstraintViolationException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $retire->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email_verified_at' => now()])), UniqueConstraintViolationException::class);
         $this->assertTrue($unSeulProprietaireActif());
     }
 

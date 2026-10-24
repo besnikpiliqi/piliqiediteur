@@ -67,8 +67,9 @@ use Illuminate\Support\Str;
  *
  * Un compte ne s'efface pas : retiré, il garde son rôle, son identifiant
  * et son historique. Son adresse e-mail est l'adresse de connexion du
- * propriétaire, unique parmi les propriétaires, ou un simple contact pour
- * tout autre compte.
+ * propriétaire, confirmée par un lien et unique parmi les propriétaires
+ * (voir aUneAdresseDeConnexion()), ou un simple contact pour tout autre
+ * compte.
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'nouvelle_adresse_jeton_hache', 'jeton_acces_redonne'])]
@@ -245,6 +246,19 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function estProprietaire(): bool
     {
         return $this->role_societe === RoleSociete::Proprietaire;
+    }
+
+    /**
+     * A-t-il une adresse de connexion ? Seul le propriétaire en a une, et
+     * pas toujours : tant qu'il n'a pas suivi le lien de l'adresse choisie
+     * en saisissant le code du courrier (voir
+     * SaisirCodeDeConfirmationAction), et après la clôture de son
+     * inscription (voir CloreLInscriptionAction), il ne se connecte qu'avec
+     * son identifiant.
+     */
+    public function aUneAdresseDeConnexion(): bool
+    {
+        return $this->estProprietaire() && $this->email !== null;
     }
 
     /**

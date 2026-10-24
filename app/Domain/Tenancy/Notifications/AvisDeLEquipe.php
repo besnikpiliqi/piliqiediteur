@@ -16,9 +16,9 @@ use Illuminate\Notifications\Notification;
  * que ce que son destinataire savait déjà ou doit savoir, jamais un
  * identifiant de connexion, et mène, s'il y a lieu, à la page où agir.
  * Avec $parCourriel, elle part aussi par e-mail à l'adresse de connexion du
- * propriétaire : un accès redonné par un autre, un identifiant affiché à un
- * administrateur, un seuil d'échecs de connexion dépassé, que la cloche
- * seule signalerait trop tard.
+ * propriétaire, s'il en a une : un accès redonné par un autre, un
+ * identifiant affiché à un administrateur, un seuil d'échecs de connexion
+ * dépassé, que la cloche seule signalerait trop tard.
  */
 class AvisDeLEquipe extends Notification
 {

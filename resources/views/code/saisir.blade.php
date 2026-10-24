@@ -59,7 +59,7 @@
         <input id="code" name="code" autocomplete="one-time-code" required>
 
         @if ($verification)
-            <p class="aide">Si vous avez inscrit la société, saisissez l'adresse e-mail et le mot de passe de votre inscription : vos comptes restent. Sinon, choisissez votre adresse e-mail et votre mot de passe : vous devenez propriétaire, et les comptes créés avant vous sont retirés de la société.</p>
+            <p class="aide">Si vous avez inscrit la société, saisissez l'adresse e-mail et le mot de passe de votre inscription : vos comptes restent. Sinon, choisissez votre adresse e-mail et votre mot de passe : vous devenez propriétaire, et les comptes créés avant vous sont retirés de la société ; votre adresse ne servira à vous connecter qu'une fois confirmée par le lien qui lui sera envoyé, et d'ici là vous vous connecterez avec votre identifiant de connexion, qui vous sera montré.</p>
 
             <label for="email">Adresse e-mail</label>
             <input id="email" name="email" type="email" autocomplete="email" required value="{{ old('email') }}">

@@ -34,11 +34,14 @@ use RuntimeException;
  *   inconnu ; devenir propriétaire ou expert-comptable avec une
  *   affectation ou une autorisation de société ; devenir administrateur
  *   avec l'affectation d'un membre ; devenir membre avec l'affectation d'un
- *   administrateur ou une autorisation de société ; un propriétaire sans
- *   adresse de connexion, ou dont le mot de passe est encore son
- *   identifiant ; le rôle de propriétaire, d'administrateur ou
- *   d'expert-comptable pour un compte d'entraînement (rattaché au magasin
- *   de démonstration), qui n'ouvre jamais un magasin réel.
+ *   administrateur ou une autorisation de société ; un propriétaire dont
+ *   l'adresse de connexion n'est pas confirmée par un lien (sans date de
+ *   confirmation ; un propriétaire sans adresse de connexion passe, voir
+ *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou dont le
+ *   mot de passe est encore son identifiant ; le rôle de propriétaire,
+ *   d'administrateur ou d'expert-comptable pour un compte d'entraînement
+ *   (rattaché au magasin de démonstration), qui n'ouvre jamais un magasin
+ *   réel.
  *
  * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE INSERT OR
  * UPDATE par garde. Chaque fonction verrouille d'abord la ligne parente
@@ -54,11 +57,12 @@ use RuntimeException;
  * interblocage.
  *
  * PostgreSQL déclenche la garde de users à l'insertion et à la
- * modification de role_societe, email ou mot_de_passe_est_l_identifiant.
+ * modification de role_societe, email, email_verified_at ou
+ * mot_de_passe_est_l_identifiant.
  *
  * SQLite : un déclencheur BEFORE INSERT et un BEFORE UPDATE par garde
- * (BEFORE UPDATE OF role_societe, email, mot_de_passe_est_l_identifiant
- * pour users), qui refusent par RAISE(ABORT, ...) ; l'écriture y est déjà
+ * (BEFORE UPDATE OF role_societe, email, email_verified_at,
+ * mot_de_passe_est_l_identifiant pour users), qui refusent par RAISE(ABORT, ...) ; l'écriture y est déjà
  * sérialisée.
  *
  * Elles se posent quand toutes les tables qu'elles lisent existent (voir
@@ -81,7 +85,7 @@ final class GardesDesDroits
      * Les colonnes de users dont la modification déclenche la garde des
      * rôles.
      */
-    private const COLONNES_DES_ROLES = 'role_societe, email, mot_de_passe_est_l_identifiant';
+    private const COLONNES_DES_ROLES = 'role_societe, email, email_verified_at, mot_de_passe_est_l_identifiant';
 
     /**
      * La table que protège chaque garde.
@@ -188,7 +192,7 @@ final class GardesDesDroits
                 ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire et un expert-comptable n\'ont ni affectation ni autorisation de société'],
                 ["NEW.role_societe = {$administrateur} AND EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NOT NULL)", 'un administrateur n\'a aucune affectation de membre'],
                 ["NEW.role_societe = {$membre} AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NULL) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'],
-                ["NEW.role_societe = {$proprietaire} AND NEW.email IS NULL", 'un propriétaire a une adresse de connexion'],
+                ["NEW.role_societe = {$proprietaire} AND NEW.email IS NOT NULL AND NEW.email_verified_at IS NULL", 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'],
                 ["NEW.role_societe = {$proprietaire} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un propriétaire n\'a jamais pour mot de passe son identifiant'],
                 ["NEW.role_societe IN ({$horsDuMagasin}) AND {$compteDEntrainement}", 'un compte d\'entraînement ne change jamais de rôle de société'],
             ],

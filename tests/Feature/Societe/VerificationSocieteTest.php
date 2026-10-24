@@ -404,9 +404,11 @@ class VerificationSocieteTest extends TestCase
      * Une autre personne que celle qui a inscrit la société saisit le code
      * : elle choisit son adresse et son mot de passe et devient
      * propriétaire, par un nouveau compte au nom du représentant légal du
-     * courrier, avec son identifiant ; tous les comptes créés avant, celui
-     * de la personne inscrite compris (devenue administrateur), sont
-     * retirés de la société par elle, leurs sessions fermées.
+     * courrier, avec son identifiant, son adresse attendant la confirmation
+     * de son lien (voir AdresseDeConnexionDuProprietaireTest) ; tous les
+     * comptes créés avant, celui de la personne inscrite compris (devenue
+     * administrateur), sont retirés de la société par elle, leurs sessions
+     * fermées.
      */
     public function test_une_autre_personne_qui_saisit_le_code_devient_proprietaire_et_les_comptes_d_avant_sont_retires(): void
     {
@@ -423,7 +425,7 @@ class VerificationSocieteTest extends TestCase
 
         $nouveau = app(SaisirCodeDeConfirmationAction::class)->handle((string) $societe->siren, $code, 'Representante@Exemple.FR', self::NOUVEAU_MOT_DE_PASSE, self::NOUVEAU_MOT_DE_PASSE, '127.0.0.1');
 
-        $this->assertSame(['representante@exemple.fr', RoleSociete::Proprietaire, 'Jeanne DUPONT', StatutCompte::Actif], [$nouveau->email, $nouveau->role_societe, $nouveau->name, $nouveau->statut]);
+        $this->assertSame([null, 'representante@exemple.fr', RoleSociete::Proprietaire, 'Jeanne DUPONT', StatutCompte::Actif], [$nouveau->email, $nouveau->nouvelle_adresse, $nouveau->role_societe, $nouveau->name, $nouveau->statut]);
         $this->assertNotSame($inscrit->id, $nouveau->id);
         $this->assertMatchesRegularExpression('/^[1-9][0-9]{7}$/D', (string) $nouveau->identifiantDeConnexion());
         $this->assertTrue(Hash::check(self::NOUVEAU_MOT_DE_PASSE, $nouveau->password));

@@ -36,12 +36,13 @@ class PageDuLienTest extends TestCase
     /**
      * Le propriétaire choisit son mot de passe sur la page du lien sans
      * qu'aucune session ne s'ouvre : il est mené à la connexion, et le lien
-     * suivi confirme son adresse.
+     * suivi renouvelle la date de confirmation de son adresse.
      */
     public function test_la_page_de_lien_n_ouvre_aucune_session(): void
     {
+        $this->travelTo('2026-10-15 10:00:00');
         $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
-        $proprietaire->forceFill(['email_verified_at' => null])->save();
+        $proprietaire->forceFill(['email_verified_at' => now()->subYear()])->save();
         $jeton = Password::broker()->createToken($proprietaire);
 
         $this->get(Filament::getPanel('app')->getResetPasswordUrl($jeton, $proprietaire))->assertOk()->assertSee('Choisissez votre nouveau mot de passe.');
@@ -54,7 +55,7 @@ class PageDuLienTest extends TestCase
         $this->assertGuest();
         $proprietaire->refresh();
         $this->assertTrue(Hash::check('mon-nouveau-mot-de-passe', $proprietaire->password));
-        $this->assertNotNull($proprietaire->email_verified_at);
+        $this->assertSame('2026-10-15 10:00:00', $proprietaire->email_verified_at?->toDateTimeString());
         $this->assertFalse(Password::broker()->tokenExists($proprietaire, $jeton));
     }
 

@@ -190,9 +190,10 @@ class GardesDesDroitsEnBaseTest extends TestCase
      * Les transitions des actions, faites dans leur ordre (les droits qui
      * contrediraient le nouveau rôle s'effacent d'abord), passent : nommer
      * administrateur, le ramener membre dans son magasin, transmettre la
-     * propriété (l'adresse et le rôle du nouveau propriétaire dans la même
-     * mise à jour), promouvoir un vendeur responsable ; créer, retirer et
-     * réintégrer un expert-comptable, qui garde son rôle une fois retiré.
+     * propriété (l'adresse confirmée et le rôle du nouveau propriétaire
+     * dans la même mise à jour), promouvoir un vendeur responsable ; créer,
+     * retirer et réintégrer un expert-comptable, qui garde son rôle une fois
+     * retiré.
      */
     public function test_les_transitions_permises_passent(): void
     {
@@ -215,7 +216,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
             DB::table('affectations')->where('user_id', $nouveauProprietaire->id)->delete();
             DB::table('autorisations_societe')->where('user_id', $nouveauProprietaire->id)->delete();
             DB::table('users')->where('id', $proprietaire->id)->update(['role_societe' => RoleSociete::Administrateur->value]);
-            DB::table('users')->where('id', $nouveauProprietaire->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'nouveau-proprietaire@example.test']);
+            DB::table('users')->where('id', $nouveauProprietaire->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'nouveau-proprietaire@example.test', 'email_verified_at' => now()]);
             DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, null, null));
         });
         $this->assertTrue($nouveauProprietaire->refresh()->estProprietaire());

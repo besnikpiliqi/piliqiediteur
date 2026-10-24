@@ -4,8 +4,6 @@
 
 Une inscription vient d'être demandée avec votre adresse e-mail, qui est déjà l'adresse de connexion du propriétaire d'une société sur {{ config('app.name') }} : aucune nouvelle inscription n'a été créée.
 
-Une adresse e-mail n'est l'adresse de connexion que d'un seul propriétaire, même quand l'inscription de sa société est close : pour faire une nouvelle inscription, refaites la demande avec une autre adresse e-mail.
-
 <x-mail::button :url="$urlDeConnexion">
 Me connecter
 </x-mail::button>

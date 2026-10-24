@@ -529,6 +529,36 @@ class IsolationDesSocietesTest extends TestCase
     }
 
     /**
+     * La clôture d'une inscription ne retire que l'adresse de connexion de
+     * son propre propriétaire, et n'inscrit ce retrait qu'au journal
+     * d'audit de sa société : le propriétaire d'une inscription récente et
+     * celui d'une société validée gardent leur adresse de connexion, et
+     * leur journal ne reçoit rien.
+     */
+    public function test_la_cloture_d_une_inscription_ne_retire_que_l_adresse_de_son_proprietaire(): void
+    {
+        $this->travelTo('2026-10-01 10:00:00');
+        $echue = $this->inscrireUneSociete(null, 'echue@exemple.fr');
+        $validee = $this->inscrireUneSociete(null, 'validee@exemple.fr');
+        $this->saisirLeCodeDuCourrier($validee);
+        $this->travelTo('2026-10-25 10:00:00');
+        $recente = $this->inscrireUneSociete(null, 'recente@exemple.fr');
+        $this->travelTo('2026-11-01 10:00:00');
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
+
+        $this->assertSame(
+            [null, 'validee@exemple.fr', 'recente@exemple.fr'],
+            [$echue->proprietaire()->sole()->email, $validee->proprietaire()->sole()->email, $recente->proprietaire()->sole()->email],
+        );
+        $this->assertSame(
+            [1, 0, 0],
+            [count($this->entreesDAudit($echue, ActionAuditee::AdresseDeConnexionRetiree)), count($this->entreesDAudit($validee, ActionAuditee::AdresseDeConnexionRetiree)), count($this->entreesDAudit($recente, ActionAuditee::AdresseDeConnexionRetiree))],
+        );
+    }
+
+    /**
      * Dans une même société, ce qu'un magasin crée (client, produit, vente,
      * mouvement de stock) reste invisible dans l'autre.
      */

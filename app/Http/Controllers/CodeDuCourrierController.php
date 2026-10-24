@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Filament\Societe\Pages\TableauDeBord;
+use Filament\Notifications\Notification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,7 +24,9 @@ use Illuminate\Validation\ValidationException;
  *   et valide la société) ; la personne qui a inscrit la société redonne
  *   les siens ; une autre personne choisit les siens et devient
  *   propriétaire. Le bon code connecte le propriétaire et le mène au
- *   tableau de bord de sa société.
+ *   tableau de bord de sa société ; une autre personne y lit que le lien
+ *   de l'adresse qu'elle a choisie vient de partir, et qu'elle se connecte
+ *   d'ici là avec son identifiant, qui lui est montré.
  * - Le courrier d'une procédure de l'éditeur (/code/{objet},
  *   /code/{objet}/{siren}) : on y saisit le SIREN et le code (voir
  *   SaisirCodeDeConfirmationAction::saisirUnCodeDeProcedure()) ; le bon
@@ -75,6 +78,15 @@ class CodeDuCourrierController
 
         Auth::login($proprietaire);
         $requete->session()->regenerate();
+
+        if (! $proprietaire->aUneAdresseDeConnexion()) {
+            Notification::make()
+                ->title('Confirmez votre adresse de connexion')
+                ->body("Un lien valable 24 heures vient d'être envoyé à {$proprietaire->nouvelle_adresse} : suivez-le en étant connecté à ce compte pour en faire votre adresse de connexion. D'ici là, connectez-vous avec votre identifiant de connexion, {$proprietaire->identifiantDeConnexion()}, que montre aussi votre profil, et votre mot de passe.")
+                ->warning()
+                ->persistent()
+                ->send();
+        }
 
         return redirect()->to(TableauDeBord::getUrl(panel: 'societe', tenant: $proprietaire->societe))
             ->header('Referrer-Policy', 'no-referrer');

@@ -472,13 +472,13 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
-     * L'inscription close sans code libère son SIREN, mais l'adresse de
-     * connexion de son propriétaire reste la sienne : la même personne qui
-     * redemande l'inscription de ce SIREN avec cette adresse ne reçoit
-     * aucun lien, mais un e-mail qui lui dit de refaire la demande avec une
-     * autre adresse ; l'écran répond comme pour une adresse libre.
+     * L'inscription close sans code libère son SIREN et l'adresse de son
+     * propriétaire, qui n'est plus une adresse de connexion : la même
+     * personne qui redemande l'inscription de ce SIREN avec cette adresse
+     * reçoit le lien d'une nouvelle inscription, qui crée la nouvelle
+     * société avec cette adresse de connexion.
      */
-    public function test_l_adresse_d_une_inscription_close_recoit_l_e_mail_qui_dit_de_s_inscrire_avec_une_autre_adresse(): void
+    public function test_l_adresse_d_une_inscription_close_recoit_le_lien_d_une_nouvelle_inscription(): void
     {
         Mail::fake();
         $close = $this->inscrireUneSociete(self::SIREN, 'jeanne@maboutique.fr');
@@ -488,12 +488,11 @@ class InscriptionSocieteTest extends TestCase
 
         $this->demander()->assertHasNoFormErrors()->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
 
-        Mail::assertNotSent(DemandeInscriptionMail::class);
-        $this->assertStringContainsString(
-            'Une adresse e-mail n\'est l\'adresse de connexion que d\'un seul propriétaire, même quand l\'inscription de sa société est close : pour faire une nouvelle inscription, refaites la demande avec une autre adresse e-mail.',
-            Mail::sent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('jeanne@maboutique.fr'))->sole()->render(),
-        );
-        $this->assertSame([0, false], [DemandeInscription::query()->count(), Societe::sirenPris(self::SIREN)]);
+        Mail::assertNotSent(CompteExistantMail::class);
+        $this->post($this->lienEnvoye());
+        $nouvelle = Societe::query()->whereKeyNot($close->id)->sole();
+        $this->assertSame([self::SIREN, true, 'jeanne@maboutique.fr'], [$nouvelle->siren, $nouvelle->attendSonCode(), $nouvelle->proprietaire()->sole()->email]);
+        $this->assertNull($close->proprietaire()->sole()->email);
     }
 
     /**

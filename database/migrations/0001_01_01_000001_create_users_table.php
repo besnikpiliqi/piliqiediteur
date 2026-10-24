@@ -14,7 +14,11 @@ use Illuminate\Support\Facades\Schema;
  * Chaque compte a un identifiant de connexion de 8 chiffres, tiré au hasard
  * et jamais redonné (voir la table identifiants). Le propriétaire se
  * connecte aussi par son adresse e-mail, son adresse de connexion,
- * qu'aucun autre propriétaire n'utilise ; celle de tout autre compte est
+ * toujours confirmée par un lien envoyé à cette adresse et qu'aucun autre
+ * propriétaire n'utilise ; il n'en a aucune tant qu'il n'a pas suivi le
+ * lien de l'adresse choisie en saisissant le code du courrier (voir
+ * SaisirCodeDeConfirmationAction), ni après la clôture de son inscription
+ * (voir CloreLInscriptionAction). L'adresse de tout autre compte est
  * facultative, renseignée par la personne seule dans son profil, et n'est
  * qu'un contact (voir ModifierProfil). Un compte créé par la société (voir
  * CreerMembreAction, CreerAdministrateurAction et CreerExpertComptableAction)
@@ -54,18 +58,20 @@ return new class extends Migration
             $table->string('name');
             // En minuscules, sans espaces autour (voir
             // User::normaliserEmail()). Pour le propriétaire, son adresse de
-            // connexion, obligatoire et unique parmi les propriétaires
-            // (index users_adresse_de_connexion, garde
-            // users_role_coherent_avec_les_droits) ; pour tout autre compte,
-            // une adresse de contact facultative, que plusieurs comptes
-            // peuvent partager, jamais écrite par qui crée le compte.
+            // connexion active, unique parmi les propriétaires (index
+            // users_adresse_de_connexion) et toujours confirmée (garde
+            // users_role_coherent_avec_les_droits), ou nulle quand il n'en a
+            // aucune : une adresse qui n'est pas confirmée attend dans
+            // nouvelle_adresse, et la clôture d'une inscription efface celle
+            // de son propriétaire ; pour tout autre compte, une adresse de
+            // contact facultative, que plusieurs comptes peuvent partager,
+            // jamais écrite par qui crée le compte.
             $table->string('email')->nullable();
-            // La date à laquelle le propriétaire a suivi un lien envoyé à son
-            // adresse de connexion actuelle : celui de l'inscription, de la
-            // confirmation d'une nouvelle adresse ou de la transmission de la
-            // propriété ; nulle pour l'adresse choisie à la saisie du code du
-            // courrier par une autre personne que celle qui a inscrit la
-            // société (voir SaisirCodeDeConfirmationAction).
+            // La date à laquelle le propriétaire a suivi le dernier lien
+            // envoyé à son adresse de connexion actuelle : celui de
+            // l'inscription, de la confirmation d'une adresse, de la
+            // transmission de la propriété ou du « Mot de passe oublié » ;
+            // nulle sans adresse de connexion.
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             // Le mot de passe est-il encore l'identifiant du compte ? Vrai à
@@ -107,10 +113,12 @@ return new class extends Migration
             // personne : une demande répétée avec le même jeton est sans
             // effet.
             $table->uuid('jeton_acces_redonne')->nullable();
-            // La nouvelle adresse de connexion que le propriétaire a
-            // demandée dans son profil, en attente de la confirmation du
-            // lien envoyé à cette adresse (24 heures) : SHA-256 du jeton du
-            // lien, jamais le jeton.
+            // L'adresse de connexion en attente de la confirmation du lien
+            // envoyé à cette adresse (24 heures) : la nouvelle adresse que le
+            // propriétaire a demandée dans son profil, ou celle qu'il a
+            // choisie en saisissant le code du courrier (voir
+            // DemanderUneNouvelleAdresseAction) ; SHA-256 du jeton du lien,
+            // jamais le jeton.
             $table->string('nouvelle_adresse')->nullable();
             $table->char('nouvelle_adresse_jeton_hache', 64)->nullable()->unique();
             $table->timestamp('nouvelle_adresse_expire_le')->nullable();
@@ -132,8 +140,10 @@ return new class extends Migration
         // Un seul propriétaire par société.
         DB::statement("CREATE UNIQUE INDEX users_un_proprietaire_par_societe ON users (societe_id) WHERE role_societe = 'proprietaire'");
         // L'adresse de connexion d'un propriétaire n'est celle d'aucun autre
-        // propriétaire ; l'adresse de contact d'un autre compte n'est pas
-        // unique.
+        // propriétaire ; seules les adresses de connexion actives s'y
+        // écrivent (un propriétaire qui n'en a aucune a une adresse nulle,
+        // qui n'entre pas dans l'index), et l'adresse de contact d'un autre
+        // compte n'est pas unique.
         DB::statement("CREATE UNIQUE INDEX users_adresse_de_connexion ON users (email) WHERE role_societe = 'proprietaire'");
 
         // Les liens « Mot de passe oublié », rangés par adresse : seuls les

@@ -14,7 +14,11 @@ use SensitiveParameter;
  * Le fournisseur des comptes de l'authentification (config/auth.php) :
  * - à la connexion (clé « login »), une saisie avec « @ » est une adresse,
  *   normalisée (voir User::normaliserEmail()), cherchée parmi les
- *   propriétaires seulement ; toute autre saisie est un identifiant de
+ *   adresses de connexion des propriétaires seulement : une adresse en
+ *   attente de son lien (voir DemanderUneNouvelleAdresseAction) ou celle
+ *   d'une inscription close (voir CloreLInscriptionAction) n'en est pas
+ *   une, et reçoit la même réponse, au même délai, qu'une adresse
+ *   inconnue ; toute autre saisie est un identifiant de
  *   connexion (voir IdentifiantDeConnexion), qui désigne un compte de tout
  *   rôle, propriétaire compris. L'adresse de contact d'un autre compte
  *   n'ouvre jamais ce compte ;
@@ -105,7 +109,9 @@ class FournisseurDesComptes extends EloquentUserProvider
     }
 
     /**
-     * Le propriétaire dont c'est l'adresse de connexion.
+     * Le propriétaire dont c'est l'adresse de connexion active (un
+     * propriétaire sans adresse de connexion a une adresse nulle, qui ne
+     * répond à aucune saisie).
      */
     public static function proprietaireDeLAdresse(string $adresse): ?User
     {

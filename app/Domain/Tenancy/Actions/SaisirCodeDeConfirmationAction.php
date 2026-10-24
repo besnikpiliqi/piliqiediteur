@@ -59,16 +59,24 @@ use SensitiveParameter;
  * et il fait de la personne qui le saisit le propriétaire de la société :
  * - l'adresse et le mot de passe de l'inscription disent que c'est la
  *   personne qui l'a faite : ses comptes restent ;
- * - sinon elle choisit son adresse e-mail (celle d'aucun autre
- *   propriétaire) et son mot de passe (voir RegleDuMotDePasse) : un
- *   nouveau compte de propriétaire est créé, à son nom tel que le courrier
- *   l'a nommée (le représentant légal), avec son identifiant ; tous les
- *   comptes créés avant dans la société, celui de la personne inscrite
- *   compris (qui devient administrateur), en sont retirés, leurs sessions
- *   fermées, à l'initiative du nouveau propriétaire (voir
- *   JournalDesDroits, ProprieteReprise). L'adresse de l'inscription avec
- *   un autre mot de passe est refusée (MESSAGE_MOT_DE_PASSE_DE_L_INSCRIPTION),
- *   sans compter le code.
+ * - sinon elle choisit son adresse e-mail et son mot de passe (voir
+ *   RegleDuMotDePasse) : un nouveau compte de propriétaire est créé, à son
+ *   nom tel que le courrier l'a nommée (le représentant légal), avec son
+ *   identifiant ; tous les comptes créés avant dans la société, celui de
+ *   la personne inscrite compris (qui devient administrateur), en sont
+ *   retirés, leurs sessions fermées, à l'initiative du nouveau
+ *   propriétaire (voir JournalDesDroits, ProprieteReprise). L'adresse
+ *   choisie, refusée si elle est déjà l'adresse de connexion d'un autre
+ *   propriétaire (sans rien dire d'autre que le refus), n'est pas encore
+ *   son adresse de connexion : elle attend sur le nouveau compte, et le
+ *   lien qui la confirme part une fois la société validée (voir
+ *   DemanderUneNouvelleAdresseAction) ; il se suit connecté à ce compte,
+ *   et la confirmation revérifie qu'aucun autre propriétaire ne l'a prise
+ *   (voir ConfirmerNouvelleAdresseAction). D'ici là, ni la connexion par
+ *   adresse ni « Mot de passe oublié » ne la reconnaissent : la personne
+ *   se connecte avec son identifiant et son mot de passe. L'adresse de
+ *   l'inscription avec un autre mot de passe est refusée
+ *   (MESSAGE_MOT_DE_PASSE_DE_L_INSCRIPTION), sans compter le code.
  * Tout se fait en une transaction, sous les verrous des registres de tous
  * les magasins de la société, puis de sa ligne, puis du code : le code
  * sert une seule fois (deux saisies simultanées du bon code n'en servent
@@ -76,8 +84,9 @@ use SensitiveParameter;
  * société est validée. Un magasin créé entre la lecture de leur liste et
  * ces verrous fait tout reprendre ; un échec de la validation (un SIRET
  * réservé entre-temps ailleurs) laisse le code valable et prévient
- * l'éditeur. Ensuite, la démonstration se ferme et le propriétaire est
- * prévenu (voir ValiderLaSocieteAction::apresLaValidation()).
+ * l'éditeur. Ensuite, la démonstration se ferme, le propriétaire est
+ * prévenu (voir ValiderLaSocieteAction::apresLaValidation()) et le lien de
+ * l'adresse choisie par une autre personne part.
  *
  * Le code d'un courrier d'une procédure de l'éditeur (voir
  * saisirUnCodeDeProcedure()) se saisit seul, sur la page de son motif : il
@@ -121,6 +130,7 @@ class SaisirCodeDeConfirmationAction
         private readonly JetonsDuLien $jetonsDuLien,
         private readonly ValiderLaSocieteAction $validerLaSociete,
         private readonly AlerteEditeur $alerteEditeur,
+        private readonly DemanderUneNouvelleAdresseAction $adresseEnAttente,
     ) {}
 
     /**
@@ -149,7 +159,7 @@ class SaisirCodeDeConfirmationAction
         }
 
         try {
-            $proprietaire = $this->servir($societe, $code, $memePersonne ? null : ['email' => $email, 'password' => Hash::make($motDePasse), 'nom' => (string) ($code->destinataire['nom'] ?? $email)]);
+            [$proprietaire, $lien] = $this->servir($societe, $code, $memePersonne ? null : ['email' => $email, 'password' => Hash::make($motDePasse), 'nom' => (string) ($code->destinataire['nom'] ?? $email)]);
         } catch (SiretDejaReserveException) {
             $this->alerteEditeur->alerter($societe, 'Validation impossible à la saisie du code du courrier', [
                 'Le code du courrier est juste, mais l\'un des magasins de la société a un SIRET déjà réservé par une autre société : rien n\'a été validé, et le code reste valable.',
@@ -160,6 +170,10 @@ class SaisirCodeDeConfirmationAction
 
         $societe = $societe->fresh();
         $this->validerLaSociete->apresLaValidation($societe, $proprietaire);
+
+        if ($lien !== null) {
+            $this->adresseEnAttente->envoyer($proprietaire, $lien);
+        }
 
         return $proprietaire;
     }
@@ -303,16 +317,17 @@ class SaisirCodeDeConfirmationAction
      * verrou de la société, quelques fois au plus.
      *
      * @param  array{email: string, password: string, nom: string}|null  $nouveauCompte  le compte que choisit une autre personne que celle qui a inscrit la société
+     * @return array{0: User, 1: string|null} le propriétaire, et le lien de l'adresse en attente sur son nouveau compte
      *
      * @throws ValidationException
      * @throws SiretDejaReserveException
      */
-    private function servir(Societe $societe, CodeConfirmation $code, ?array $nouveauCompte): User
+    private function servir(Societe $societe, CodeConfirmation $code, ?array $nouveauCompte): array
     {
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $code, $nouveauCompte): User {
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $code, $nouveauCompte): array {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
                 $magasins = Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->get();
-                $proprietaire = $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $code, $nouveauCompte, $magasins): User|string {
+                $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $code, $nouveauCompte, $magasins): array|string {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
 
                     if (array_map(intval(...), Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
@@ -325,18 +340,18 @@ class SaisirCodeDeConfirmationAction
                         throw ValidationException::withMessages(['code' => self::MESSAGE_CODE_FAUX]);
                     }
 
-                    $proprietaire = $nouveauCompte === null
-                        ? User::query()->where('societe_id', $verrouillee->getKey())->where('role_societe', RoleSociete::Proprietaire->value)->lockForUpdate()->firstOrFail()
+                    [$proprietaire, $lien] = $nouveauCompte === null
+                        ? [User::query()->where('societe_id', $verrouillee->getKey())->where('role_societe', RoleSociete::Proprietaire->value)->lockForUpdate()->firstOrFail(), null]
                         : $this->reprendreLaSociete($verrouillee, $nouveauCompte);
 
                     $this->noterLeCodeJuste($verrouillee, $verrouille, $proprietaire);
                     $this->validerLaSociete->valider($verrouillee, $proprietaire, PreuveDeValidation::CodeDuCourrier);
 
-                    return $proprietaire;
+                    return [$proprietaire, $lien];
                 });
 
-                if ($proprietaire instanceof User) {
-                    return $proprietaire;
+                if (is_array($resultat)) {
+                    return $resultat;
                 }
             }
 
@@ -352,14 +367,16 @@ class SaisirCodeDeConfirmationAction
      * magasin et au journal d'audit). Dans cet ordre, à cause de l'index
      * d'un seul propriétaire par société : la personne inscrite devient
      * administrateur, sans portée ni autorisation ; le nouveau propriétaire
-     * est créé, avec son identifiant ; chaque compte d'avant est retiré par
-     * lui, ses droits supprimés, ses notifications effacées, ses sessions
-     * fermées, et le lien « Mot de passe oublié » de l'ancienne adresse de
-     * connexion s'efface.
+     * est créé, avec son identifiant, sans adresse de connexion : celle
+     * qu'il a choisie attend la confirmation de son lien ; chaque compte
+     * d'avant est retiré par lui, ses droits supprimés, ses notifications
+     * effacées, ses sessions fermées, et le lien « Mot de passe oublié » de
+     * l'ancienne adresse de connexion s'efface.
      *
      * @param  array{email: string, password: string, nom: string}  $nouveauCompte
+     * @return array{0: User, 1: string} le nouveau propriétaire, et le lien de son adresse en attente
      */
-    private function reprendreLaSociete(Societe $verrouillee, array $nouveauCompte): User
+    private function reprendreLaSociete(Societe $verrouillee, array $nouveauCompte): array
     {
         $comptes = User::query()->where('societe_id', $verrouillee->getKey())->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get()->all();
         $magasins = Magasin::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->get();
@@ -377,15 +394,16 @@ class SaisirCodeDeConfirmationAction
                 $this->jetonsDuLien->effacer((string) $inscrit->email);
             }
 
-            $nouveau = tap((new User([
+            $nouveau = (new User([
                 'name' => $nouveauCompte['nom'],
-                'email' => $nouveauCompte['email'],
                 'password' => $nouveauCompte['password'],
             ]))->forceFill([
                 'societe_id' => $verrouillee->getKey(),
                 'role_societe' => RoleSociete::Proprietaire,
                 'statut' => StatutCompte::Actif,
-            ]))->save();
+            ]);
+            $lien = $this->adresseEnAttente->mettreEnAttente($nouveau, $nouveauCompte['email']);
+            $nouveau->save();
             $this->generateur->attribuer($nouveau, motDePasseHache: $nouveauCompte['password']);
 
             foreach ($relus as $compte) {
@@ -395,9 +413,9 @@ class SaisirCodeDeConfirmationAction
                 $this->sessions->fermer($compte);
             }
 
-            return ['compte' => $nouveau];
+            return ['compte' => $nouveau, 'lien' => $lien];
         });
 
-        return $resultat['compte'];
+        return [$resultat['compte'], $resultat['lien']];
     }
 }

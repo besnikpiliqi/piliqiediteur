@@ -32,6 +32,7 @@ use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\EntreeAudit;
@@ -269,6 +270,35 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->clear();
 
         return app(SaisirCodeDeConfirmationAction::class)->handle((string) $societe->siren, $this->codeDuCourrier($societe), (string) $proprietaire->email, self::MOT_DE_PASSE_CHOISI, '', '127.0.0.1');
+    }
+
+    /**
+     * Une autre personne que celle qui a inscrit la société saisit le code
+     * de son courrier, avec cette adresse et le mot de passe
+     * MOT_DE_PASSE_CHOISI (voir SaisirCodeDeConfirmationAction) : la
+     * société est validée et cette personne en devient le propriétaire, par
+     * un nouveau compte dont l'adresse attend la confirmation de son lien.
+     * Rend le nouveau propriétaire.
+     */
+    protected function saisirLeCodeCommeUneAutrePersonne(Societe $societe, string $email): User
+    {
+        $code = $this->codeDuCourrier($societe);
+        app(TenantContext::class)->clear();
+
+        return app(SaisirCodeDeConfirmationAction::class)->handle((string) $societe->siren, $code, $email, self::MOT_DE_PASSE_CHOISI, self::MOT_DE_PASSE_CHOISI, '127.0.0.1');
+    }
+
+    /**
+     * Le jeton du dernier lien de confirmation d'une adresse de connexion
+     * envoyé à cette adresse (voir DemanderUneNouvelleAdresseAction), sous
+     * Mail::fake().
+     */
+    protected function jetonDeLAdresseEnAttente(string $adresse): string
+    {
+        $mail = Mail::sent(ConfirmationNouvelleAdresseMail::class, fn (ConfirmationNouvelleAdresseMail $mail): bool => $mail->hasTo($adresse))->last();
+        $this->assertInstanceOf(ConfirmationNouvelleAdresseMail::class, $mail, "Aucun lien de confirmation n'est parti à {$adresse}.");
+
+        return Str::afterLast($mail->lien, '/');
     }
 
     /**

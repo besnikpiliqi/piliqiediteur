@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Domain\Tva\Casts;
+namespace App\Domain\Facturation\Casts;
 
-use App\Domain\Tva\Services\NumeroTva;
+use App\Domain\Facturation\Services\NumeroTva;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 

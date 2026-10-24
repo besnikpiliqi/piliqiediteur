@@ -9,7 +9,6 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
-use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 

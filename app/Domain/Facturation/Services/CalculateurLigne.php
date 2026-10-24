@@ -1,10 +1,7 @@
 <?php
 
-namespace App\Domain\Tva\Services;
+namespace App\Domain\Facturation\Services;
 
-use App\Domain\Facturation\Services\ContexteDeVente;
-use App\Domain\Facturation\Services\QuantiteEntiere;
-use App\Domain\Facturation\Services\SaisieDecimale;
 use InvalidArgumentException;
 
 /**

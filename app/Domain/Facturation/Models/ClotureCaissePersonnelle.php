@@ -4,9 +4,9 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
-use App\Domain\Tva\Services\CalculateurLigne;
 use Database\Factories\ClotureCaissePersonnelleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

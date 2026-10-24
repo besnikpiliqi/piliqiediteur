@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Domain\Tva\Actions;
+namespace App\Domain\Contacts\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
+use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tva\Services\TerritoireFiscal;
 use App\Integrations\Vies\ClientVies;
 use App\Integrations\Vies\ViesIndisponibleException;
 use App\Models\User;

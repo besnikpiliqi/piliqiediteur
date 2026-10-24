@@ -2,8 +2,8 @@
 
 namespace App\Integrations\Vies;
 
-use App\Domain\Tva\Services\NumeroTva;
-use App\Domain\Tva\Services\TerritoireFiscal;
+use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Facturation\Services\TerritoireFiscal;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;

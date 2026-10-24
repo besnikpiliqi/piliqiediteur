@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
-use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;

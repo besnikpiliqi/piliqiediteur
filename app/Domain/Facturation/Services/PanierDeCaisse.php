@@ -10,7 +10,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tva\Services\CalculateurLigne;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;

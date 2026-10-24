@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Domain\Tva\Services;
+namespace App\Domain\Facturation\Services;
 
 use Illuminate\Support\Str;
 

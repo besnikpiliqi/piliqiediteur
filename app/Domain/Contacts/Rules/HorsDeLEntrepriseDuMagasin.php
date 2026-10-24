@@ -2,8 +2,8 @@
 
 namespace App\Domain\Contacts\Rules;
 
+use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tva\Services\NumeroTva;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 

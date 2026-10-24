@@ -9,7 +9,6 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Exceptions\NatureOperationRefuseeException;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
-use App\Domain\Tva\Services\TerritoireFiscal;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 

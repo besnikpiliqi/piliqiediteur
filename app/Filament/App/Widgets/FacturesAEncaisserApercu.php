@@ -3,8 +3,8 @@
 namespace App\Filament\App\Widgets;
 
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tva\Services\CalculateurLigne;
 use App\Filament\App\Resources\FactureResource;
 use App\Models\User;
 use Filament\Facades\Filament;

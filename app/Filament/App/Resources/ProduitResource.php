@@ -3,11 +3,11 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tva\Services\CalculateurLigne;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;

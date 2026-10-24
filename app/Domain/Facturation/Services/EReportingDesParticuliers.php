@@ -17,7 +17,6 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;

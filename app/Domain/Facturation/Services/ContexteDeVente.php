@@ -9,7 +9,6 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tva\Services\CalculateurLigne;
 use LogicException;
 
 /**

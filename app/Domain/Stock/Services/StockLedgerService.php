@@ -4,10 +4,10 @@ namespace App\Domain\Stock\Services;
 
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Tva\Services\CalculateurLigne;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;

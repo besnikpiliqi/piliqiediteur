@@ -4,9 +4,9 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
-use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

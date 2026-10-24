@@ -2,7 +2,7 @@
 
 namespace App\Domain\Catalogue\Services;
 
-use App\Domain\Tva\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Contracts\Database\Eloquent\Castable;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;

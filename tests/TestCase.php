@@ -237,14 +237,15 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Le code que porte le dernier courrier de vérification de la société,
-     * tel que son destinataire le lit (XXXX-XXXX-XXXX) dans le PDF que le
-     * prestataire factice a reçu : le logiciel n'en garde que l'empreinte.
+     * Le code que porte le dernier courrier de ce motif (la vérification,
+     * sauf autre motif) de la société, tel que son destinataire le lit
+     * (XXXX-XXXX-XXXX) dans le PDF que le prestataire factice a reçu : le
+     * logiciel n'en garde que l'empreinte.
      */
-    protected function codeDuCourrier(Societe $societe): string
+    protected function codeDuCourrier(Societe $societe, MotifCode $motif = MotifCode::Verification): string
     {
         $reference = (string) app(TenantContext::class)->runAsSociete($societe, fn () => CodeConfirmation::query()
-            ->where('motif', MotifCode::Verification->value)
+            ->where('motif', $motif->value)
             ->orderByDesc('id')
             ->value('reference_envoi'));
         $pdf = app(ServiceEnvoiRecommande::class)->envois()[$reference]['pdf'];

@@ -44,9 +44,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // Les rappels des prestataires arrivent sans session : ils se
         // prouvent par leur signature (voir RappelsDesPrestatairesController).
         $middleware->validateCsrfTokens(except: ['rappels/*']);
-        // Hors des panneaux, une page réservée aux comptes connectés mène à
-        // la connexion de l'administration de la société.
-        $middleware->redirectGuestsTo(fn (): string => route('filament.societe.auth.login'));
     })
     ->withSchedule(function (Schedule $schedule): void {
         // À minuit pile, heure de Paris comme tous les horaires ci-dessous

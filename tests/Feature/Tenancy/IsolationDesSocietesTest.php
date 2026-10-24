@@ -15,12 +15,15 @@ use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\EntreeAudit;
@@ -437,6 +440,44 @@ class IsolationDesSocietesTest extends TestCase
         ]);
         $this->assertSame([[0, 0], [1, 1]], [$etat($premiere), $etat($seconde)]);
         $this->assertSame((int) $premiere->proprietaire()->sole()->id, (int) $this->saisirLeCodeDuCourrier($premiere)->id);
+    }
+
+    /**
+     * Le code d'un courrier d'une procédure de l'éditeur ne vaut que pour
+     * la société de son courrier : saisi sur la page de son motif avec le
+     * SIREN d'une autre société, il est refusé, l'essai faux ne se compte
+     * que dans cette autre société, et rien n'est servi ni noté nulle part ;
+     * avec son SIREN, il ne sert et ne s'inscrit que dans sa société.
+     */
+    public function test_un_code_de_procedure_ne_vaut_que_pour_la_societe_de_son_courrier(): void
+    {
+        $premiere = $this->inscrireUneSociete();
+        $seconde = $this->inscrireUneSociete();
+        $this->saisirLeCodeDuCourrier($premiere);
+        $this->saisirLeCodeDuCourrier($seconde);
+        $editeur = new InterventionDeLEditeur('Récupération du compte du propriétaire', 'DOSSIER-2026-0002', ['alice']);
+        foreach ([$premiere, $seconde] as $societe) {
+            app(TenantContext::class)->clear();
+            app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::Recuperation, $editeur);
+        }
+        $codeDeLaPremiere = $this->codeDuCourrier($premiere, MotifCode::Recuperation);
+        $etat = fn (Societe $societe): array => app(TenantContext::class)->runAsSociete($societe, fn (): array => [
+            CodeConfirmation::query()->where('motif', MotifCode::Recuperation->value)->sole()->only(['tentatives', 'utilise_le']),
+            VerificationSociete::query()->where('type', TypeVerification::Courrier->value)->count(),
+        ]);
+        app(TenantContext::class)->clear();
+
+        $this->assertThrows(
+            fn () => app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure((string) $seconde->siren, MotifCode::Recuperation, $codeDeLaPremiere, '127.0.0.1'),
+            fn (ValidationException $refus): bool => $refus->errors() === ['code' => [SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX]],
+        );
+
+        $this->assertSame([[['tentatives' => 0, 'utilise_le' => null], 1], [['tentatives' => 1, 'utilise_le' => null], 1]], [$etat($premiere), $etat($seconde)]);
+
+        app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure((string) $premiere->siren, MotifCode::Recuperation, $codeDeLaPremiere, '127.0.0.1');
+
+        $this->assertSame([2, 1], [$etat($premiere)[1], $etat($seconde)[1]]);
+        $this->assertNotNull($etat($premiere)[0]['utilise_le']);
     }
 
     /**

@@ -6,9 +6,9 @@
     @param string $siren
     @param \App\Domain\Tenancy\Enums\MotifCode $motif
     @param string $code
-    @param string $expireLe
+    @param string $expireLe le jour et l'heure (heure de Paris) où le code expire
     @param string $date
-    @param string $adresseCourte
+    @param string $adresseCourte l'adresse de la page du code de ce motif
     @param string $qrCode l'URI data: du QR code de la page
     @param string $application
     @param string|null $editeur l'adresse e-mail de l'éditeur
@@ -59,10 +59,12 @@
 
         <img class="qr" src="{{ $qrCode }}" alt="QR code de la page du code">
 
-        <p>Ce code est valable jusqu'au {{ $expireLe }} et ne sert qu'une fois. Pour le saisir, scannez le QR code avec votre téléphone, ou rendez-vous sur <strong>{{ $adresseCourte }}</strong>, puis saisissez le SIREN {{ $siren }} et ce code.</p>
+        <p>Ce code est valable jusqu'au {{ $expireLe }} (heure de Paris) et ne sert qu'une fois. Pour le saisir, scannez le QR code avec votre téléphone, ou rendez-vous sur <strong>{{ $adresseCourte }}</strong>, puis saisissez le SIREN {{ $siren }} et ce code.</p>
 
         @if ($motif === \App\Domain\Tenancy\Enums\MotifCode::Verification)
-            <p>La personne qui saisit ce code devient propriétaire de l'inscription et choisit alors son adresse e-mail et son mot de passe. Si vous n'êtes pas à l'origine de cette inscription, saisissez ce code vous-même : les comptes créés par la personne qui l'a faite en seront retirés. Sans code saisi avant le {{ $expireLe }}, l'inscription sera close.</p>
+            <p>La personne qui saisit ce code devient propriétaire de l'inscription et choisit alors son adresse e-mail et son mot de passe. Si vous n'êtes pas à l'origine de cette inscription, saisissez ce code vous-même : les comptes créés par la personne qui l'a faite en seront retirés. Sans code saisi d'ici là, l'inscription sera close.</p>
+        @else
+            <p>Une fois ce code saisi, l'éditeur poursuit la procédure et vous contacte.</p>
         @endif
 
         <p>Ne communiquez ce code à personne.@if (filled($editeur)) Pour toute question, écrivez à l'éditeur : {{ $editeur }}.@endif</p>

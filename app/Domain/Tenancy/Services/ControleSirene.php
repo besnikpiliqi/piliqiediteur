@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\SireneIndisponibleException;
@@ -167,9 +168,10 @@ class ControleSirene
      * la société, qui doit être la société active.
      *
      * @param  array{resultat: ResultatVerification, unite: UniteSirene|null, motif: string|null}  $consultation  ce qu'a rendu unite()
-     * @param  User|null  $auteur  la personne dont l'action a demandé le contrôle ; null pour le système
+     * @param  User|null  $auteur  la personne dont l'action a demandé le contrôle ; null pour le système ou l'éditeur
+     * @param  InterventionDeLEditeur|null  $editeur  l'intervention de l'éditeur qui a demandé le contrôle
      */
-    public function noterUnite(Societe $societe, array $consultation, ?User $auteur = null): VerificationSociete
+    public function noterUnite(Societe $societe, array $consultation, ?User $auteur = null, ?InterventionDeLEditeur $editeur = null): VerificationSociete
     {
         $unite = $consultation['unite'];
 
@@ -179,7 +181,7 @@ class ControleSirene
             'categorie_juridique' => $unite->categorieJuridique,
             'denomination' => $unite->denomination,
             'diffusion_partielle' => $unite->diffusionPartielle,
-        ], $auteur);
+        ], $auteur, $editeur);
     }
 
     /**
@@ -276,8 +278,8 @@ class ControleSirene
     /**
      * @param  array<string, mixed>|null  $details
      */
-    private function noter(Societe $societe, ?Magasin $magasin, TypeVerification $type, ResultatVerification $resultat, ?array $details, ?User $auteur): VerificationSociete
+    private function noter(Societe $societe, ?Magasin $magasin, TypeVerification $type, ResultatVerification $resultat, ?array $details, ?User $auteur, ?InterventionDeLEditeur $editeur = null): VerificationSociete
     {
-        return $this->registre->noter($societe, $type, $resultat, $details, $auteur, fournisseur: self::FOURNISSEUR, magasin: $magasin);
+        return $this->registre->noter($societe, $type, $resultat, $details, $auteur, fournisseur: self::FOURNISSEUR, magasin: $magasin, editeur: $editeur);
     }
 }

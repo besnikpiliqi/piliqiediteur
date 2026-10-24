@@ -12,7 +12,10 @@ use Filament\Support\Contracts\HasLabel;
  * l'éditeur (étape 13) : la récupération du compte d'un propriétaire, la
  * libération d'un SIRET pris à tort, la révocation d'une société qui a
  * pris le SIREN d'une autre entreprise, l'examen exceptionnel d'un SIREN.
- * Un seul code actif par SIREN et par motif.
+ * Un seul code actif par SIREN et par motif. Chaque motif a sa page où
+ * saisir le code (voir CodeDuCourrierController) : le code de la
+ * vérification valide la société, celui d'une procédure prouve seulement
+ * la remise du courrier, pour que l'éditeur la poursuive.
  */
 enum MotifCode: string implements HasLabel
 {
@@ -31,5 +34,16 @@ enum MotifCode: string implements HasLabel
             self::Revocation => 'Révocation d\'une inscription de votre SIREN',
             self::ExamenSiren => 'Examen de votre SIREN',
         };
+    }
+
+    /**
+     * Les motifs des procédures postales de l'éditeur : tous sauf la
+     * vérification.
+     *
+     * @return list<self>
+     */
+    public static function proceduresDeLEditeur(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $motif): bool => $motif !== self::Verification));
     }
 }

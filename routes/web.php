@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Tenancy\Enums\MotifCode;
 use App\Http\Controllers\CodeDuCourrierController;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Http\Controllers\ConfirmerNouvelleAdresseController;
@@ -19,15 +20,25 @@ Route::post('/inscription/{jeton}', [ConfirmerInscriptionController::class, 'con
     ->middleware('throttle:10,1')
     ->name('inscription.confirmer');
 
-// La page du code du courrier recommandé (voir CodeDuCourrierController),
-// ouverte à tous, que le QR code du courrier ouvre avec le SIREN déjà
-// rempli : la saisie du code valide la société.
+// Les pages du code du courrier recommandé (voir CodeDuCourrierController),
+// ouvertes à tous, que le QR code du courrier ouvre avec le SIREN déjà
+// rempli : la saisie du code d'un courrier de vérification valide la
+// société ; celle du code d'un courrier d'une procédure de l'éditeur, sur
+// la page de son motif, prouve sa remise.
 Route::get('/code/{siren?}', [CodeDuCourrierController::class, 'afficher'])
     ->where('siren', '[0-9]{9}')
     ->name('code.afficher');
 Route::post('/code', [CodeDuCourrierController::class, 'saisir'])
     ->middleware('throttle:10,1')
     ->name('code.saisir');
+Route::get('/code/{objet}/{siren?}', [CodeDuCourrierController::class, 'afficherProcedure'])
+    ->whereIn('objet', array_map(fn (MotifCode $motif): string => $motif->value, MotifCode::proceduresDeLEditeur()))
+    ->where('siren', '[0-9]{9}')
+    ->name('code.procedure.afficher');
+Route::post('/code/{objet}', [CodeDuCourrierController::class, 'saisirProcedure'])
+    ->whereIn('objet', array_map(fn (MotifCode $motif): string => $motif->value, MotifCode::proceduresDeLEditeur()))
+    ->middleware('throttle:10,1')
+    ->name('code.procedure.saisir');
 
 // Les rappels signés du prestataire d'envoi recommandé (voir
 // RappelsDesPrestatairesController), sans session ni jeton CSRF.

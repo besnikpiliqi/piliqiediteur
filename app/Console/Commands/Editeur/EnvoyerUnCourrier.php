@@ -17,7 +17,10 @@ use LogicException;
  * la limite d'un seul nouveau courrier qui vaut pour le propriétaire :
  * pour la vérification d'une inscription qui attend son code, ou pour un
  * motif des procédures postales de l'éditeur. Le code actif du même motif
- * s'annule.
+ * s'annule. Le code d'un courrier de procédure se saisit sur la page de
+ * son motif, que le courrier indique : sa saisie s'inscrit au registre des
+ * vérifications de la société et prévient l'éditeur (voir
+ * SaisirCodeDeConfirmationAction::saisirUnCodeDeProcedure()).
  */
 #[Signature('editeur:courrier:envoyer {societe : Identifiant ou uuid de la société} {--motif=verification : verification, recuperation, liberation_siret, revocation ou examen_siren} '.ProcedureDeLEditeur::OPTIONS_COMMUNES)]
 #[Description('Envoie un code de confirmation par courrier recommandé au représentant légal d\'une entreprise')]

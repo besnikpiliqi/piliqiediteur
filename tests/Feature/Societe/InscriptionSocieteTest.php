@@ -472,6 +472,31 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
+     * L'inscription close sans code libère son SIREN, mais l'adresse de
+     * connexion de son propriétaire reste la sienne : la même personne qui
+     * redemande l'inscription de ce SIREN avec cette adresse ne reçoit
+     * aucun lien, mais un e-mail qui lui dit de refaire la demande avec une
+     * autre adresse ; l'écran répond comme pour une adresse libre.
+     */
+    public function test_l_adresse_d_une_inscription_close_recoit_l_e_mail_qui_dit_de_s_inscrire_avec_une_autre_adresse(): void
+    {
+        Mail::fake();
+        $close = $this->inscrireUneSociete(self::SIREN, 'jeanne@maboutique.fr');
+        app(TenantContext::class)->clear();
+        app(CloreLInscriptionAction::class)->cloreSansCode($close->fresh(), now()->toImmutable());
+        app(TenantContext::class)->clear();
+
+        $this->demander()->assertHasNoFormErrors()->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
+
+        Mail::assertNotSent(DemandeInscriptionMail::class);
+        $this->assertStringContainsString(
+            'Une adresse e-mail n\'est l\'adresse de connexion que d\'un seul propriétaire, même quand l\'inscription de sa société est close : pour faire une nouvelle inscription, refaites la demande avec une autre adresse e-mail.',
+            Mail::sent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('jeanne@maboutique.fr'))->sole()->render(),
+        );
+        $this->assertSame([0, false], [DemandeInscription::query()->count(), Societe::sirenPris(self::SIREN)]);
+    }
+
+    /**
      * Le propriétaire que crée la confirmation de son lien, et non la
      * fabrique, agit dès son inscription : son adresse est confirmée, son
      * mot de passe est le sien, il a son identifiant de connexion, il ouvre

@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
@@ -12,6 +13,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\AnnulationDesCodes;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\CourrierDeCode;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\DestinataireOfficiel;
@@ -38,11 +40,18 @@ use Illuminate\Support\Facades\DB;
  * - à la confirmation de l'inscription, une seule fois par SIREN tant
  *   qu'une inscription attend (le SIREN n'appartient qu'à elle), pour une
  *   entreprise active au répertoire Sirene (voir premier(), appelé par
- *   CreerSocieteAction) ;
+ *   CreerSocieteAction, qui en fait le contrôle) ;
  * - à la demande du propriétaire, un seul nouveau courrier, au plus tôt
  *   quinze jours après le premier (voir nouvelEnvoi()) ;
  * - à la demande de l'éditeur, pour un motif de ses procédures ou après le
  *   traitement à la main d'un courrier non reçu (voir parLEditeur()).
+ * Le nouveau courrier de la vérification, que le propriétaire ou l'éditeur
+ * le demande, ne part que pour une entreprise encore active au répertoire
+ * Sirene, contrôlée le jour même et inscrite au registre des vérifications
+ * (voir exigerUneEntrepriseActive()) : une entreprise cessée ou inconnue
+ * est refusée avec le motif du répertoire, et un répertoire qui ne répond
+ * pas fait réessayer plus tard. Le courrier d'une procédure de l'éditeur
+ * part sans ce contrôle : il en décide.
  * Un nouveau courrier annule le code actif du même motif : le premier ne
  * vaut plus. Seule l'empreinte du code se garde (voir CodesDeConfirmation)
  * ; le code en clair ne va qu'au courrier. Un prestataire qui ne répond
@@ -56,6 +65,8 @@ class EnvoyerCodeDeConfirmationAction
 
     public const MESSAGE_PAS_ENCORE = 'Un nouveau courrier pourra être demandé à partir du %s, quinze jours après le premier.';
 
+    public const MESSAGE_REPERTOIRE_INDISPONIBLE = 'Le répertoire Sirene de l\'INSEE ne répond pas pour le moment : le courrier n\'est pas parti, réessayez dans quelques minutes.';
+
     public const MESSAGE_PLUS_DE_NOUVEL_ENVOI = 'Un seul nouveau courrier peut être demandé : déposez des pièces pour que l\'éditeur traite votre demande, ou contactez-le.';
 
     public function __construct(
@@ -66,6 +77,7 @@ class EnvoyerCodeDeConfirmationAction
         private readonly ServiceEnvoiRecommande $envoi,
         private readonly JournalAudit $journalAudit,
         private readonly AnnulationDesCodes $annulationDesCodes,
+        private readonly ControleSirene $controleSirene,
     ) {}
 
     /**
@@ -90,6 +102,7 @@ class EnvoyerCodeDeConfirmationAction
         return app(TenantContext::class)->runAsSociete($societe, function () use ($proprietaire, $societe): CodeConfirmation {
             $proprietaire = app(LecteurDesDroits::class)->exigerDansLaSociete($proprietaire, 'verifierLaSociete', $societe, $societe, new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION));
             $this->exigerUnNouvelEnvoiPossible($societe);
+            $this->exigerUneEntrepriseActive($societe, $proprietaire, null);
             $destinataire = $this->destinataireOfficiel->du((string) $societe->siren);
 
             return DB::transaction(function () use ($proprietaire, $societe, $destinataire): CodeConfirmation {
@@ -111,6 +124,14 @@ class EnvoyerCodeDeConfirmationAction
     public function parLEditeur(Societe $societe, MotifCode $motif, InterventionDeLEditeur $editeur): CodeConfirmation
     {
         return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motif, $editeur): CodeConfirmation {
+            if ($motif === MotifCode::Verification) {
+                if (! $societe->attendSonCode()) {
+                    throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
+                }
+
+                $this->exigerUneEntrepriseActive($societe, null, $editeur);
+            }
+
             $destinataire = $this->destinataireOfficiel->du((string) $societe->siren);
 
             return DB::transaction(function () use ($societe, $motif, $editeur, $destinataire): CodeConfirmation {
@@ -185,7 +206,30 @@ class EnvoyerCodeDeConfirmationAction
         }
 
         if ($possibleLe->isFuture()) {
-            throw new VerificationRefuseeException(sprintf(self::MESSAGE_PAS_ENCORE, $possibleLe->setTimezone(config('app.timezone'))->format('d/m/Y')));
+            throw new VerificationRefuseeException(sprintf(self::MESSAGE_PAS_ENCORE, $possibleLe->setTimezone(config('app.timezone'))->format('d/m/Y à H:i')));
+        }
+    }
+
+    /**
+     * Contrôle le jour même, au répertoire Sirene, que l'entreprise est
+     * encore active, et inscrit la consultation au registre des
+     * vérifications, au nom de qui demande le courrier ; sinon le courrier
+     * ne part pas.
+     *
+     * @throws VerificationRefuseeException
+     */
+    private function exigerUneEntrepriseActive(Societe $societe, ?User $proprietaire, ?InterventionDeLEditeur $editeur): void
+    {
+        $consultation = $this->controleSirene->unite((string) $societe->siren);
+
+        if ($consultation['resultat'] === ResultatVerification::Indisponible) {
+            throw new VerificationRefuseeException(self::MESSAGE_REPERTOIRE_INDISPONIBLE);
+        }
+
+        $this->controleSirene->noterUnite($societe, $consultation, $proprietaire, $editeur);
+
+        if ($consultation['resultat'] !== ResultatVerification::Concluante) {
+            throw new VerificationRefuseeException((string) $consultation['motif']);
         }
     }
 

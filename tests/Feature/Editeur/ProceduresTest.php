@@ -116,7 +116,8 @@ class ProceduresTest extends TestCase
      * n'écrit rien non plus : un motif de courrier inconnu, un courrier qui
      * ne peut pas partir après l'examen des pièces (qui restent, pour un
      * nouvel examen), une inscription déjà validée qui n'attend plus de
-     * code.
+     * code, ni son refus ni son courrier de vérification (sans consulter
+     * le répertoire Sirene).
      */
     public function test_une_procedure_refusee_n_ecrit_rien(): void
     {
@@ -143,6 +144,9 @@ class ProceduresTest extends TestCase
         $this->procedure('editeur:societe:refuser', $validee)
             ->expectsOutputToContain(CloreLInscriptionAction::MESSAGE_N_ATTEND_PLUS)
             ->assertFailed();
+        $this->procedure('editeur:courrier:envoyer', $validee, ['--motif' => 'verification'])
+            ->expectsOutputToContain(EnvoyerCodeDeConfirmationAction::MESSAGE_N_ATTEND_PLUS)
+            ->assertFailed();
         $this->assertSame($avant, $this->ecritures());
     }
 
@@ -151,8 +155,10 @@ class ProceduresTest extends TestCase
      * origine « éditeur », avec sa justification, sa pièce, son opérateur,
      * l'utilisateur système, l'hôte et la version du module fiscal, comme
      * la ligne qu'elle ajoute au registre des vérifications. L'examen des
-     * pièces efface les pièces et fait partir un nouveau courrier, sans
-     * valider la société. La société se désigne aussi par son uuid.
+     * pièces efface les pièces et fait partir un nouveau courrier, après le
+     * contrôle de l'entreprise au répertoire Sirene, inscrit lui aussi au
+     * nom de l'éditeur, sans valider la société. La société se désigne
+     * aussi par son uuid.
      */
     public function test_une_procedure_faite_s_inscrit_au_journal_d_audit_avec_son_origine_et_son_operateur(): void
     {
@@ -171,12 +177,18 @@ class ProceduresTest extends TestCase
             'hote' => (string) gethostname(),
             'version_module' => ModuleFiscal::VERSION,
         ];
-        [$ligne, $entree] = app(TenantContext::class)->runAsSociete($societe, fn (): array => [
-            VerificationSociete::query()->where('type', TypeVerification::Manuelle->value)->sole(),
-            EntreeAudit::query()->where('action', ActionAuditee::VerificationEnregistree->value)->orderByDesc('id')->first(),
-        ]);
+        [$ligne, $entree, $consultation] = app(TenantContext::class)->runAsSociete($societe, function (): array {
+            $ligne = VerificationSociete::query()->where('type', TypeVerification::Manuelle->value)->sole();
+
+            return [
+                $ligne,
+                EntreeAudit::query()->where('action', ActionAuditee::VerificationEnregistree->value)->where('cible_type', $ligne->getMorphClass())->where('cible_id', $ligne->id)->sole(),
+                EntreeAudit::query()->where('action', ActionAuditee::VerificationEnregistree->value)->orderByDesc('id')->first(),
+            ];
+        });
         $this->assertSame(['nouveau_courrier_apres_examen_des_pieces', 'editeur', $operateur], [$ligne->details['decision'], $ligne->fournisseur, $ligne->operateur]);
         $this->assertSame(['editeur', self::JUSTIFICATION, $operateur], [$entree->origine, $entree->justification, $entree->operateur]);
+        $this->assertSame([TypeVerification::SireneUnite->value, 'editeur', self::JUSTIFICATION, $operateur], [$consultation->nouvelles_valeurs['type'], $consultation->origine, $consultation->justification, $consultation->operateur]);
         $this->assertCount($courriers + 1, app(ServiceEnvoiRecommande::class)->envois());
         $this->assertSame([0, true], [app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceVerification::query()->whereNull('effacee_le')->count()), $societe->fresh()->attendSonCode()]);
     }

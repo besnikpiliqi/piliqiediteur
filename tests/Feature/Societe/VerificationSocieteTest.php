@@ -42,6 +42,7 @@ use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\CourrierDeCode;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\DestinataireOfficiel;
@@ -221,6 +222,30 @@ class VerificationSocieteTest extends TestCase
         $this->assertStringContainsString('src="'.QrCode::uriDeDonnees($adresse).'"', $html);
         $this->assertSame(QrCode::svg($adresse), base64_decode(substr(QrCode::uriDeDonnees($adresse), strlen('data:image/svg+xml;base64,')), true));
         $this->assertStringNotContainsString(str_replace('-', '', $code), $adresse);
+    }
+
+    /**
+     * Le courrier dit une seule fois le jour et l'heure (heure de Paris)
+     * jusqu'où son code vaut, et que l'inscription se clôt sans code saisi
+     * d'ici là : le dernier jour, le code vaut jusqu'à cette heure.
+     */
+    public function test_le_code_vaut_jusqu_au_jour_et_a_l_heure_que_le_courrier_imprime(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $societe = $this->inscrireUneSociete();
+        $code = $this->codeDuCourrier($societe);
+        $actif = $this->codeActif($societe);
+
+        $html = app(CourrierDeCode::class)->html(DestinataireDuCourrier::depuisTableau($actif->destinataire), (string) $societe->siren, MotifCode::Verification, $code, $actif->expire_le);
+
+        $this->assertStringContainsString('Ce code est valable jusqu\'au 04/11/2026 à 10:00 (heure de Paris) et ne sert qu\'une fois.', $html);
+        $this->assertStringContainsString('Sans code saisi d\'ici là, l\'inscription sera close.', $html);
+        $this->assertSame(1, substr_count($html, '04/11/2026'));
+
+        $this->travelTo('2026-11-04 09:59:59');
+        $this->saisirCommeLInscrit($societe, $code);
+
+        $this->assertTrue($societe->fresh()->estValidee());
     }
 
     /**
@@ -494,6 +519,66 @@ class VerificationSocieteTest extends TestCase
     }
 
     /**
+     * Le courrier d'une procédure de l'éditeur (ici, la récupération du
+     * compte du propriétaire) mène à la page de son motif, que son QR code
+     * ouvre avec le SIREN rempli : la page du code de la vérification ne
+     * reconnaît pas son code, et ne le compte pas ; sur la sienne, un code
+     * faux se compte, et le bon sert une seule fois, prouve la remise du
+     * courrier au registre des vérifications avec son motif et prévient
+     * l'éditeur, sans rien valider, reprendre ni connecter.
+     */
+    public function test_le_code_d_un_courrier_de_l_editeur_se_saisit_sur_la_page_de_son_motif_et_previent_l_editeur(): void
+    {
+        Mail::fake();
+        config(['editeur.email' => 'editeur@piliqi.test']);
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $this->saisirLeCodeDuCourrier($societe);
+        $siren = (string) $societe->siren;
+        app(TenantContext::class)->clear();
+        $courrier = app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::Recuperation, self::editeur());
+        $code = $this->codeDuCourrier($societe, MotifCode::Recuperation);
+        $relu = fn (): CodeConfirmation => app(TenantContext::class)->runAsSociete($societe, fn (): CodeConfirmation => CodeConfirmation::query()->findOrFail($courrier->id));
+        $objet = ['objet' => MotifCode::Recuperation->value];
+
+        $adresse = CourrierDeCode::adresseDeLaPage($siren, MotifCode::Recuperation);
+        $this->assertSame(rtrim((string) config('app.url'), '/')."/code/recuperation/{$siren}", $adresse);
+        $this->assertStringContainsString(CourrierDeCode::adresseCourte(MotifCode::Recuperation), $this->texteDuPdf($this->envois()->envois()[$courrier->reference_envoi]['pdf']));
+        $html = app(CourrierDeCode::class)->html(DestinataireDuCourrier::depuisTableau($courrier->destinataire), $siren, MotifCode::Recuperation, $code, $courrier->expire_le);
+        $this->assertStringContainsString('src="'.QrCode::uriDeDonnees($adresse).'"', $html);
+        $this->assertStringContainsString('Une fois ce code saisi, l\'éditeur poursuit la procédure et vous contacte.', $html);
+        $this->assertStringNotContainsString('devient propriétaire', $html);
+
+        $this->post(route('code.saisir'), ['siren' => $siren, 'code' => $code, 'email' => $proprietaire->email, 'password' => self::MOT_DE_PASSE_CHOISI])
+            ->assertRedirect(route('code.afficher'))
+            ->assertSessionHasErrors(['code' => SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX]);
+        $this->assertSame([0, null], [$relu()->tentatives, $relu()->utilise_le]);
+
+        $this->get($adresse)
+            ->assertOk()
+            ->assertSee(MotifCode::Recuperation->getLabel())
+            ->assertSee('value="'.$siren.'"', false)
+            ->assertDontSee('name="email"', false);
+        $this->post(route('code.procedure.saisir', $objet), ['siren' => $siren, 'code' => self::codeFaux($code)])
+            ->assertRedirect(route('code.procedure.afficher', $objet))
+            ->assertSessionHasErrors(['code' => SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX]);
+        $this->assertSame(1, $relu()->tentatives);
+
+        $this->post(route('code.procedure.saisir', $objet), ['siren' => $siren, 'code' => $code])
+            ->assertRedirect(route('code.procedure.afficher', $objet))
+            ->assertSessionHas('code_reconnu', true);
+
+        $this->assertGuest();
+        $this->assertNotNull($relu()->utilise_le);
+        $ligne = $this->lignes($societe, TypeVerification::Courrier)->last();
+        $this->assertSame([ResultatVerification::Concluante, MotifCode::Recuperation->value, $courrier->reference_envoi], [$ligne->resultat, $ligne->details['motif'], $ligne->reference]);
+        $this->assertSame([MotifCode::Recuperation->value, 'juste', 2], array_values(collect($this->audit($societe, ActionAuditee::CodeSaisi)->last()->nouvelles_valeurs)->only(['motif', 'resultat', 'tentatives'])->all()));
+        Mail::assertSent(AlerteEditeurMail::class, fn (AlerteEditeurMail $mail): bool => $mail->objet === 'Code d\'un courrier de l\'éditeur saisi');
+        $this->assertSame([[$proprietaire->id, RoleSociete::Proprietaire, StatutCompte::Actif]], User::query()->where('societe_id', $societe->id)->get()->map(fn (User $compte): array => [$compte->id, $compte->role_societe, $compte->statut])->all());
+        $this->post(route('code.procedure.saisir', $objet), ['siren' => $siren, 'code' => $code])
+            ->assertSessionHasErrors(['code' => SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX]);
+    }
+
+    /**
      * La validation suit la preuve, sans auteur : le propriétaire connecté
      * qui saisit le code ne signe pas les droits implicites qu'elle inscrit
      * au journal des événements de son magasin ; le système les signe.
@@ -691,7 +776,7 @@ class VerificationSocieteTest extends TestCase
         $nouvelEnvoi = fn () => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe->fresh());
 
         $this->travelTo('2026-10-20 09:59:59');
-        $this->assertThrows($nouvelEnvoi, VerificationRefuseeException::class, sprintf(EnvoyerCodeDeConfirmationAction::MESSAGE_PAS_ENCORE, '20/10/2026'));
+        $this->assertThrows($nouvelEnvoi, VerificationRefuseeException::class, sprintf(EnvoyerCodeDeConfirmationAction::MESSAGE_PAS_ENCORE, '20/10/2026 à 10:00'));
         $this->assertCount(1, $this->envois()->envois());
 
         $this->travelTo('2026-10-20 10:00:00');
@@ -710,10 +795,42 @@ class VerificationSocieteTest extends TestCase
     }
 
     /**
+     * Un nouveau courrier de la vérification, que le propriétaire ou
+     * l'éditeur le demande, ne part que pour une entreprise encore active
+     * au répertoire Sirene, contrôlée le jour même et inscrite au registre
+     * des vérifications : une entreprise cessée depuis l'inscription est
+     * refusée avec le motif du répertoire ; un répertoire qui ne répond pas
+     * fait réessayer plus tard. Dans les deux cas, rien ne part, et le
+     * nouveau courrier reste possible.
+     */
+    public function test_un_nouveau_courrier_ne_part_que_pour_une_entreprise_encore_active_au_repertoire(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $societe->proprietaire()->sole();
+        $nouvelEnvoi = fn () => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe->fresh());
+        $this->travelTo('2026-10-20 10:00:00');
+
+        $this->repertoire()->rendreInjoignable();
+        $this->assertThrows($nouvelEnvoi, VerificationRefuseeException::class, EnvoyerCodeDeConfirmationAction::MESSAGE_REPERTOIRE_INDISPONIBLE);
+        $this->repertoire()->rendreInjoignable(false);
+        $this->repertoire()->cesser((string) $societe->siren);
+
+        $this->assertThrows($nouvelEnvoi, VerificationRefuseeException::class, ControleSirene::MOTIF_ENTREPRISE_CESSEE);
+        $this->assertThrows(fn () => app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::Verification, self::editeur()), VerificationRefuseeException::class, ControleSirene::MOTIF_ENTREPRISE_CESSEE);
+
+        $this->assertCount(1, $this->envois()->envois());
+        $this->assertSame([ResultatVerification::Concluante, ResultatVerification::Negative, ResultatVerification::Negative], $this->lignes($societe, TypeVerification::SireneUnite)->pluck('resultat')->all());
+        $this->assertFalse(app(CourriersDeVerification::class)->nouvelEnvoiPossibleLe($societe->fresh())->isFuture());
+    }
+
+    /**
      * La page de la vérification montre le courrier (destinataire,
-     * adresse, dates) et la page où saisir son code ; elle ne propose un
-     * nouveau courrier qu'au propriétaire, à partir du quinzième jour, puis
-     * le dépôt de pièces pour l'éditeur.
+     * adresse, jour d'envoi, jour et heure où son code et l'inscription
+     * prennent fin, dits une seule fois) et la page où saisir son code ;
+     * elle ne propose un nouveau courrier qu'au propriétaire, à partir du
+     * quinzième jour à l'heure du premier, puis le dépôt de pièces pour
+     * l'éditeur.
      */
     public function test_la_page_de_la_verification_montre_le_courrier_et_ne_propose_un_nouveau_courrier_qu_au_quinzieme_jour(): void
     {
@@ -725,7 +842,7 @@ class VerificationSocieteTest extends TestCase
 
         $this->ouvrirLaPageDeVerification($societe, $proprietaire);
         Livewire::test(PageDeVerification::class)
-            ->assertSeeText(['Jeanne DUPONT', '1 RUE DE LA REPUBLIQUE', '04/11/2026', 'Un nouveau courrier pourra être demandé à partir du 20/10/2026.'])
+            ->assertSeeText(['Jeanne DUPONT', '1 RUE DE LA REPUBLIQUE', 'Son code est valable jusqu\'au 04/11/2026 à 10:00 et ne sert qu\'une fois ; sans code saisi d\'ici là, l\'inscription sera close et le SIREN libéré.', 'Un nouveau courrier pourra être demandé à partir du 20/10/2026 à 10:00.'], false)
             ->assertSee(CourrierDeCode::adresseDeLaPage((string) $societe->siren), false)
             ->assertActionHidden('demanderUnNouveauCourrier')
             ->assertActionHidden('deposerUnePiece');
@@ -889,6 +1006,46 @@ class VerificationSocieteTest extends TestCase
         $this->assertNotNull($this->codeActif($remis)->remis_le);
         $this->saisirLeCodeDuCourrier($remis);
         $this->assertTrue($remis->fresh()->estValidee());
+    }
+
+    /**
+     * L'avis d'un courrier revenu, comme la page de la vérification, dit ce
+     * que le propriétaire peut encore faire : avant le quinzième jour, à
+     * partir de quand il pourra demander un nouveau courrier ; ensuite, le
+     * demander ; quand le nouveau courrier revient aussi, déposer des pièces
+     * pour l'éditeur ou le contacter.
+     */
+    public function test_l_avis_d_un_courrier_revenu_dit_ce_que_le_proprietaire_peut_encore_faire(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $tot = $this->inscrireUneSociete();
+        $tard = $this->inscrireUneSociete();
+        $retourner = function (Societe $societe): void {
+            $this->envois()->retourner((string) $this->codeActif($societe)->reference_envoi);
+            app(SuivreLesEnvoisAction::class)->suivreTout();
+        };
+        $avis = fn (Societe $societe): array => $societe->proprietaire->notifications()->reorder('created_at')->get()->pluck('data.body')->all();
+        $revenu = 'Le courrier recommandé n\'a pas été retiré au bureau de poste et son code ne vaut plus. ';
+
+        $this->travelTo('2026-10-06 10:00:00');
+        $retourner($tot);
+
+        $this->assertSame([$revenu.'Un nouveau courrier pourra être demandé depuis la page de la vérification à partir du 20/10/2026 à 10:00.'], $avis($tot));
+        $this->ouvrirLaPageDeVerification($tot, $tot->proprietaire);
+        Livewire::test(PageDeVerification::class)
+            ->assertSeeText('Ce courrier est revenu sans avoir été retiré au bureau de poste : son code ne vaut plus. Sans nouveau courrier, l\'inscription sera close le 04/11/2026 à 10:00 et le SIREN libéré.', false)
+            ->assertDontSeeText('Son code est valable');
+
+        $this->travelTo('2026-10-21 10:00:00');
+        $retourner($tard);
+
+        $this->assertSame([$revenu.'Demandez un nouveau courrier depuis la page de la vérification.'], $avis($tard));
+
+        app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($tot->proprietaire, $tot->fresh());
+        $retourner($tot);
+
+        $this->assertSame($revenu.'Déposez des pièces depuis la page de la vérification pour que l\'éditeur traite votre demande, ou contactez-le.', collect($avis($tot))->last());
+        $this->assertCount(2, $avis($tot));
     }
 
     /**

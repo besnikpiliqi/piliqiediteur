@@ -16,8 +16,9 @@ use Tests\TestCase;
 /**
  * Deux confirmations d'inscription du même SIREN au même instant, chacune
  * dans son processus, sur une vraie base PostgreSQL (voir
- * CreerSocieteAction) : la seconde passe les contrôles, le SIREN n'étant
- * encore pris par aucune société validée en base, puis attend, sur l'index
+ * CreerSocieteAction) : la seconde passe les contrôles, aucune autre
+ * inscription ne gardant encore ce SIREN en base (la transaction de la
+ * première n'est pas terminée), puis attend, sur l'index
  * unique partiel des SIREN (societes_siren_unique), la transaction de la
  * première, et échoue avec le seul message du SIREN pris. Une seule
  * société, un seul propriétaire, un seul code ; le courrier de la seconde

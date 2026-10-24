@@ -11,9 +11,12 @@ use Illuminate\Mail\Mailables\Envelope;
  * du propriétaire d'une autre société (voir InscriptionSociete) : aucune
  * demande n'est créée, et la personne qui détient cette adresse apprend
  * qu'elle a déjà un compte de propriétaire, avec le lien de connexion et
- * celui du mot de passe oublié. L'écran de l'inscription, lui, répond
- * comme pour une adresse libre. L'adresse de contact d'un autre compte
- * n'empêche aucune inscription.
+ * celui du mot de passe oublié, et qu'une nouvelle inscription se demande
+ * avec une autre adresse, même quand l'inscription de sa société est
+ * close (une adresse n'est l'adresse de connexion que d'un seul
+ * propriétaire). L'écran de l'inscription, lui, répond comme pour une
+ * adresse libre. L'adresse de contact d'un autre compte n'empêche aucune
+ * inscription.
  */
 class CompteExistantMail extends Mailable
 {

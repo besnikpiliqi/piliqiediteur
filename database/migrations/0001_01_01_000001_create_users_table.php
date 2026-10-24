@@ -65,7 +65,7 @@ return new class extends Migration
             // confirmation d'une nouvelle adresse ou de la transmission de la
             // propriété ; nulle pour l'adresse choisie à la saisie du code du
             // courrier par une autre personne que celle qui a inscrit la
-            // société (voir SaisirLeCodeDuCourrierAction).
+            // société (voir SaisirCodeDeConfirmationAction).
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             // Le mot de passe est-il encore l'identifiant du compte ? Vrai à

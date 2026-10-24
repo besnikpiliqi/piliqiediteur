@@ -33,28 +33,30 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 use SensitiveParameter;
 
 /**
- * La saisie du code d'un courrier recommandé de vérification, sur la page
- * publique que le QR code du courrier ouvre (voir CodeDuCourrierController),
- * sans être connecté : le SIREN, le code, une adresse e-mail et un mot de
- * passe. C'est la seule preuve qui valide la société (voir
- * ValiderLaSocieteAction, PreuveDeValidation::CodeDuCourrier).
+ * La saisie du code d'un courrier recommandé, sur la page publique que le
+ * QR code du courrier ouvre (voir CodeDuCourrierController), sans être
+ * connecté.
  *
- * Le code se cherche par le SIREN saisi parmi les codes de vérification
- * actifs (la seule lecture hors de toute société, avant qu'aucune ne soit
- * ouverte, limitée à ce SIREN), puis se compare à leur empreinte. Un SIREN
- * inconnu, sans courrier en cours ou un code faux reçoivent la même
+ * Le code se cherche par le SIREN saisi parmi les codes actifs du motif de
+ * la page (la seule lecture hors de toute société, avant qu'aucune ne soit
+ * ouverte, limitée à ce SIREN et à ce motif : un seul code au plus, voir
+ * CodeConfirmation), puis se compare à son empreinte. Un SIREN inconnu,
+ * sans courrier en cours de ce motif ou un code faux reçoivent la même
  * réponse (MESSAGE_CODE_FAUX), après le même calcul d'empreinte ; une
  * saisie fausse se compte sur le code et s'inscrit au journal d'audit de
  * sa société, sans jamais l'annuler (un tiers ne bloque pas le courrier du
- * représentant légal) : la page limite les saisies par adresse IP
- * (SAISIES_PAR_HEURE_ET_PAR_ADRESSE_IP), et un code de douze caractères
- * (60 bits) ne se devine pas.
+ * représentant légal) : les pages limitent ensemble les saisies par
+ * adresse IP (SAISIES_PAR_HEURE_ET_PAR_ADRESSE_IP), et un code de douze
+ * caractères (60 bits) ne se devine pas.
  *
- * Le bon code fait de la personne qui le saisit le propriétaire de la
- * société :
+ * Le code d'un courrier de vérification (voir handle()) se saisit avec une
+ * adresse e-mail et un mot de passe. C'est la seule preuve qui valide la
+ * société (voir ValiderLaSocieteAction, PreuveDeValidation::CodeDuCourrier),
+ * et il fait de la personne qui le saisit le propriétaire de la société :
  * - l'adresse et le mot de passe de l'inscription disent que c'est la
  *   personne qui l'a faite : ses comptes restent ;
  * - sinon elle choisit son adresse e-mail (celle d'aucun autre
@@ -76,6 +78,14 @@ use SensitiveParameter;
  * réservé entre-temps ailleurs) laisse le code valable et prévient
  * l'éditeur. Ensuite, la démonstration se ferme et le propriétaire est
  * prévenu (voir ValiderLaSocieteAction::apresLaValidation()).
+ *
+ * Le code d'un courrier d'une procédure de l'éditeur (voir
+ * saisirUnCodeDeProcedure()) se saisit seul, sur la page de son motif : il
+ * prouve que le courrier a été remis à l'adresse officielle du siège. Il
+ * sert une seule fois, son contrôle s'inscrit au registre des
+ * vérifications avec son motif, et l'éditeur est prévenu, qui poursuit la
+ * procédure ; il ne valide ni ne change rien d'autre, et ne connecte
+ * personne.
  */
 class SaisirCodeDeConfirmationAction
 {
@@ -95,8 +105,8 @@ class SaisirCodeDeConfirmationAction
 
     /**
      * L'empreinte bcrypt (coût 12, celui de la production) d'une valeur
-     * jetée, comparée quand aucun code n'est en cours pour le SIREN saisi :
-     * la réponse vient après le même calcul.
+     * jetée, comparée quand aucun code n'est en cours pour le SIREN saisi
+     * et le motif de la page : la réponse vient après le même calcul.
      */
     private const EMPREINTE_FICTIVE = '$2y$12$DsTIOz2uxq3ZOvTZ5/8UueFYjy/ASR8QynhJHg6feOU/F7UBP1FRi';
 
@@ -114,20 +124,17 @@ class SaisirCodeDeConfirmationAction
     ) {}
 
     /**
+     * Le code d'un courrier de vérification, avec l'adresse e-mail et le
+     * mot de passe de la personne qui le saisit.
+     *
      * @return User le propriétaire de la société validée, que la page connecte
      *
      * @throws ValidationException
      */
     public function handle(string $siren, string $saisie, string $email, #[SensitiveParameter] string $motDePasse, #[SensitiveParameter] string $confirmation, string $adresseIp): User
     {
-        $cle = 'saisie-code-ip:'.sha1($adresseIp);
-
-        if (RateLimiter::tooManyAttempts($cle, self::SAISIES_PAR_HEURE_ET_PAR_ADRESSE_IP)) {
-            throw ValidationException::withMessages(['code' => self::MESSAGE_TROP_DE_SAISIES]);
-        }
-
-        RateLimiter::hit($cle, 3600);
-        $code = $this->codeJuste($siren, $saisie);
+        $this->limiterLesSaisies($adresseIp);
+        $code = $this->codeJuste($siren, MotifCode::Verification, $saisie);
         $societe = Societe::query()->findOrFail($code->societe_id);
         $email = User::normaliserEmail($email);
         $inscrit = $societe->proprietaire()->first();
@@ -158,17 +165,65 @@ class SaisirCodeDeConfirmationAction
     }
 
     /**
-     * Le code de vérification actif de ce SIREN que désigne la saisie ;
-     * sinon chaque code actif de ce SIREN compte un essai faux, et la
-     * réponse ne dit rien de plus.
+     * Le code d'un courrier d'une procédure de l'éditeur, saisi seul sur la
+     * page de son motif : servi sous le verrou de sa ligne, dans sa
+     * société, puis l'éditeur est prévenu.
      *
      * @throws ValidationException
      */
-    private function codeJuste(string $siren, string $saisie): CodeConfirmation
+    public function saisirUnCodeDeProcedure(string $siren, MotifCode $motif, string $saisie, string $adresseIp): void
+    {
+        if ($motif === MotifCode::Verification) {
+            throw new LogicException('Le code d\'un courrier de vérification se saisit avec une adresse e-mail et un mot de passe.');
+        }
+
+        $this->limiterLesSaisies($adresseIp);
+        $code = $this->codeJuste($siren, $motif, $saisie);
+        $societe = Societe::query()->findOrFail($code->societe_id);
+
+        app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(function () use ($societe, $code): void {
+            $verrouille = CodeConfirmation::query()->whereKey($code->getKey())->lockForUpdate()->first();
+
+            if ($verrouille === null || ! $verrouille->estActif()) {
+                throw ValidationException::withMessages(['code' => self::MESSAGE_CODE_FAUX]);
+            }
+
+            $this->noterLeCodeJuste($societe, $verrouille, null);
+        }));
+
+        $this->alerteEditeur->alerter($societe, 'Code d\'un courrier de l\'éditeur saisi', [
+            "Le code du courrier recommandé « {$motif->getLabel()} » (référence {$code->reference_envoi}) a été saisi sur sa page : le courrier a été remis à l'adresse officielle du siège, et la procédure peut se poursuivre.",
+        ]);
+    }
+
+    /**
+     * Les saisies de code des pages, ensemble, par adresse IP.
+     *
+     * @throws ValidationException
+     */
+    private function limiterLesSaisies(string $adresseIp): void
+    {
+        $cle = 'saisie-code-ip:'.sha1($adresseIp);
+
+        if (RateLimiter::tooManyAttempts($cle, self::SAISIES_PAR_HEURE_ET_PAR_ADRESSE_IP)) {
+            throw ValidationException::withMessages(['code' => self::MESSAGE_TROP_DE_SAISIES]);
+        }
+
+        RateLimiter::hit($cle, 3600);
+    }
+
+    /**
+     * Le code actif de ce SIREN et de ce motif que désigne la saisie ;
+     * sinon le code actif de ce SIREN et de ce motif compte un essai faux,
+     * et la réponse ne dit rien de plus.
+     *
+     * @throws ValidationException
+     */
+    private function codeJuste(string $siren, MotifCode $motif, string $saisie): CodeConfirmation
     {
         $actifs = preg_match('/^[0-9]{9}$/D', $siren) !== 1 ? new Collection : CodeConfirmation::withoutGlobalScope(SocieteScope::class)
             ->where('siren', $siren)
-            ->where('motif', MotifCode::Verification->value)
+            ->where('motif', $motif->value)
             ->whereNull('utilise_le')
             ->whereNull('annule_le')
             ->where('expire_le', '>', now())
@@ -190,6 +245,25 @@ class SaisirCodeDeConfirmationAction
         }
 
         return $juste;
+    }
+
+    /**
+     * Sert ce code, verrouillé et actif, dans la transaction de l'appelant
+     * : son usage, au journal d'audit de sa société, et le contrôle de
+     * l'adresse officielle qu'il prouve, au registre des vérifications,
+     * avec son motif.
+     */
+    private function noterLeCodeJuste(Societe $societe, CodeConfirmation $verrouille, ?User $auteur): void
+    {
+        $verrouille->forceFill(['utilise_le' => now()])->save();
+        $this->journalAudit->inscrire(ActionAuditee::CodeSaisi, $auteur, null, null, ['motif' => $verrouille->motif->value, 'resultat' => 'juste', 'tentatives' => $verrouille->tentatives + 1], $verrouille);
+        $this->registreDesVerifications->noter($societe, TypeVerification::Courrier, ResultatVerification::Concluante, [
+            'siren' => $verrouille->siren,
+            'envoi_id' => $verrouille->getKey(),
+            'motif' => $verrouille->motif->value,
+            'source_adresse' => $verrouille->destinataire['adresse']['source'] ?? null,
+            'reference_envoi' => $verrouille->reference_envoi,
+        ], $auteur, fournisseur: 'recommande', reference: $verrouille->reference_envoi);
     }
 
     /**
@@ -255,15 +329,7 @@ class SaisirCodeDeConfirmationAction
                         ? User::query()->where('societe_id', $verrouillee->getKey())->where('role_societe', RoleSociete::Proprietaire->value)->lockForUpdate()->firstOrFail()
                         : $this->reprendreLaSociete($verrouillee, $nouveauCompte);
 
-                    $verrouille->forceFill(['utilise_le' => now()])->save();
-                    $this->journalAudit->inscrire(ActionAuditee::CodeSaisi, $proprietaire, null, null, ['motif' => $verrouille->motif->value, 'resultat' => 'juste', 'tentatives' => $verrouille->tentatives + 1], $verrouille);
-                    $this->registreDesVerifications->noter($verrouillee, TypeVerification::Courrier, ResultatVerification::Concluante, [
-                        'siren' => $verrouille->siren,
-                        'envoi_id' => $verrouille->getKey(),
-                        'motif' => $verrouille->motif->value,
-                        'source_adresse' => $verrouille->destinataire['adresse']['source'] ?? null,
-                        'reference_envoi' => $verrouille->reference_envoi,
-                    ], $proprietaire, fournisseur: 'recommande', reference: $verrouille->reference_envoi);
+                    $this->noterLeCodeJuste($verrouillee, $verrouille, $proprietaire);
                     $this->validerLaSociete->valider($verrouillee, $proprietaire, PreuveDeValidation::CodeDuCourrier);
 
                     return $proprietaire;

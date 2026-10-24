@@ -23,14 +23,18 @@
             @if ($courrier !== null && $destinataire !== null)
                 <p>Le {{ $courrier->envoye_le->setTimezone(config('app.timezone'))->format('d/m/Y') }}, un courrier recommandé avec avis de réception, à remettre au destinataire en personne, est parti à :</p>
                 <p>@foreach ($destinataire->lignes() as $ligne){{ $ligne }}<br>@endforeach</p>
-                <p>Son code vaut jusqu'au {{ $courrier->expire_le->setTimezone(config('app.timezone'))->format('d/m/Y') }} et ne sert qu'une fois. S'il n'est pas remis en mains propres, le destinataire le retire au bureau de poste.</p>
+                @if ($courrier->retourne_le !== null)
+                    <p>Ce courrier est revenu sans avoir été retiré au bureau de poste : son code ne vaut plus. Sans nouveau courrier, l'inscription sera close le {{ $this->cloturePrevueLe()->setTimezone(config('app.timezone'))->format('d/m/Y à H:i') }} et le SIREN libéré.</p>
+                @else
+                    <p>Son code est valable jusqu'au {{ $courrier->expire_le->setTimezone(config('app.timezone'))->format('d/m/Y à H:i') }} et ne sert qu'une fois ; sans code saisi d'ici là, l'inscription sera close et le SIREN libéré. S'il n'est pas remis en mains propres, le destinataire le retire au bureau de poste.</p>
+                @endif
             @endif
 
-            <p>Saisissez le code sur <a href="{{ $this->adresseDeLaPageDuCode() }}" class="underline">la page du code</a>, que le QR code du courrier ouvre aussi. Sans code saisi avant le {{ $this->cloturePrevueLe()->setTimezone(config('app.timezone'))->format('d/m/Y') }}, l'inscription sera close et le SIREN libéré.</p>
+            <p>Saisissez le code sur <a href="{{ $this->adresseDeLaPageDuCode() }}" class="underline">la page du code</a>, que le QR code du courrier ouvre aussi.</p>
 
             @php($nouvelEnvoi = $this->nouvelEnvoiPossibleLe())
             @if ($nouvelEnvoi !== null && $nouvelEnvoi->isFuture())
-                <p>Courrier pas reçu ? Un nouveau courrier pourra être demandé à partir du {{ $nouvelEnvoi->setTimezone(config('app.timezone'))->format('d/m/Y') }}.</p>
+                <p>Courrier pas reçu ? Un nouveau courrier pourra être demandé à partir du {{ $nouvelEnvoi->setTimezone(config('app.timezone'))->format('d/m/Y à H:i') }}.</p>
             @elseif ($this->piecesPossibles())
                 <p>Le nouveau courrier est parti. S'il ne vous parvient pas non plus, déposez des pièces pour que l'éditeur traite votre demande, ou contactez-le.</p>
             @endif

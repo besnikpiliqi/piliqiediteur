@@ -29,9 +29,10 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
  * La vérification de la société : où en est son courrier recommandé (le
- * destinataire, l'adresse, le jour d'envoi, la date jusqu'à laquelle son
- * code vaut, et la page où le saisir, celle que le QR code du courrier
- * ouvre), et les gestes qui la font avancer, pour son propriétaire seul :
+ * destinataire, l'adresse, le jour d'envoi, le jour et l'heure jusqu'où
+ * son code vaut, ou son retour, et la page où le saisir, celle que le QR
+ * code du courrier ouvre), et les gestes qui la font avancer, pour son
+ * propriétaire seul :
  * demander un nouveau courrier, une seule fois, au plus tôt quinze jours
  * après le premier ; ensuite, déposer des pièces pour que l'éditeur traite
  * son cas à la main. Chaque geste passe par son action, qui contrôle

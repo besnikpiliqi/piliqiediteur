@@ -126,7 +126,7 @@ class EmettreAvoirAction
         $this->arreterLesMontants($avoir);
         Produit::verrouillerPourLeStock($avoir->lignes->pluck('produit_id'));
 
-        $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
+        $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->annee());
 
         $avoir->figerLeClient();
         $avoir->forceFill([

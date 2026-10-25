@@ -2,8 +2,8 @@
 
 namespace App\Integrations\Sirene;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -87,7 +87,7 @@ class InseeSirene implements RepertoireSirene
     {
         $corps = $this->consulter('siret', [
             'q' => "siren:{$siren} AND periode(etatAdministratifEtablissement:A)",
-            'date' => CarbonImmutable::now('Europe/Paris')->toDateString(),
+            'date' => Calendrier::deParis()->aujourdhui(),
             'nombre' => self::ETABLISSEMENTS_PAR_RECHERCHE,
         ]);
 

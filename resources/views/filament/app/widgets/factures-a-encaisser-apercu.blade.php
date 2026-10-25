@@ -36,7 +36,7 @@
                             </td>
                             <td class="py-1 pe-3">{{ $facture->nomDuClient() ?? '—' }}</td>
                             <td class="py-1 pe-3 text-end">{{ $calculateur->enEuros($facture->resteDuEnCentimes()) }}</td>
-                            <td @class(['py-1 pe-3', 'font-semibold text-danger-600 dark:text-danger-400' => $facture->estEchue()])>{{ $facture->date_echeance?->format('d/m/Y') ?? '—' }}</td>
+                            <td @class(['py-1 pe-3', 'font-semibold text-danger-600 dark:text-danger-400' => $facture->estEchue()])>{{ $facture->date_echeance === null ? '—' : \App\Domain\Calendrier\Calendrier::afficherJour($facture->date_echeance, 'd/m/Y') }}</td>
                             <td class="py-1">
                                 @if ($facture->paiement_contre_passe)
                                     <x-filament::badge color="danger">Paiement contre-passé</x-filament::badge>

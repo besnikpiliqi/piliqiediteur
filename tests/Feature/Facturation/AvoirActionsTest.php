@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -745,7 +746,7 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $ticket = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), Calendrier::deParis()->aujourdhui());
         $retour = [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]];
 
         $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $retour), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
@@ -763,7 +764,7 @@ class AvoirActionsTest extends TestCase
         $professionnel = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacture($professionnel, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), Calendrier::deParis()->aujourdhui());
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
@@ -783,11 +784,11 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]));
         $this->travelTo(self::aParis('2026-10-08 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $client->update(['type_client' => TypeClient::Particulier]);
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $this->travelTo(self::aParis('2026-10-09 19:30:00'));
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
@@ -814,7 +815,7 @@ class AvoirActionsTest extends TestCase
         $client->update(['type_client' => TypeClient::Professionnel]);
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(['TK-LYON1-2026-000001', 1, '12.00'], [$ticket->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
         $this->travelTo(self::aParis('2026-10-09 19:30:00'));

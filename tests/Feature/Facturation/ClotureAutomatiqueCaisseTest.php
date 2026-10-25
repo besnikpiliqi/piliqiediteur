@@ -144,7 +144,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         // Le vendeur n'a jamais fermé sa caisse personnelle (voir
         // VerificateurCaissesPersonnelles) : ça ne doit rien changer ici.
         $this->assertTrue(
-            app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 15:00:00'))->contains('id', $vendeur->id)
+            app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-08')->contains('id', $vendeur->id)
         );
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
@@ -160,7 +160,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->emettreFactureHier($magasin);
 
         app(TenantContext::class)->set($magasin);
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, self::aParis('2026-10-08 15:00:00'));
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-08');
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -180,7 +180,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
         app(TenantContext::class)->set($magasin);
         $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame(['2026-10-08', 1], [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes]);
+        $this->assertSame(['2026-10-08', 1], [$cloture->date_cloture, $cloture->nombre_ventes]);
         $this->assertSame($cloture->id, $venteDHier->fresh()->cloture_caisse_id);
         $this->assertNull($venteDuJour->fresh()->cloture_caisse_id, 'La vente du jour même ne doit pas être incluse dans la clôture de la veille.');
     }
@@ -229,7 +229,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
         app(TenantContext::class)->set($magasin);
         $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame('2026-07-14', $cloture->date_cloture->toDateString());
+        $this->assertSame('2026-07-14', $cloture->date_cloture);
         $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
     }
 
@@ -297,7 +297,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $this->assertSame(
             [['2026-12-31', 'Z-MABOUT-2026-000001', '12.00'], ['2027-01-01', 'Z-MABOUT-2027-000001', '0.00']],
-            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->total_ttc])->all(),
+            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture, $cloture->numero, $cloture->total_ttc])->all(),
         );
     }
 
@@ -325,7 +325,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $clotures = ClotureCaisse::query()->orderBy('date_cloture')->get();
         $this->assertSame(
             [['2026-10-05', 'Z-MABOUT-2026-000001', '12.00'], ['2026-10-06', 'Z-MABOUT-2026-000002', '0.00'], ['2026-10-07', 'Z-MABOUT-2026-000003', '12.00'], ['2026-10-08', 'Z-MABOUT-2026-000004', '0.00']],
-            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->total_ttc])->all(),
+            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture, $cloture->numero, $cloture->total_ttc])->all(),
         );
         $this->assertSame($clotures[2]->id, $venteDu7->fresh()->cloture_caisse_id);
     }
@@ -400,7 +400,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
         app(TenantContext::class)->set($magasin);
         $this->assertSame(0, $avantLaPremiereVente);
-        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
     }
 
     /**
@@ -449,7 +449,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
         $this->assertSame(
             ['2026-10-08', '2026-10-09'],
-            app(TenantContext::class)->runAs($magasinEnPanne, fn (): array => ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all()),
+            app(TenantContext::class)->runAs($magasinEnPanne, fn (): array => ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all()),
         );
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
@@ -104,7 +105,7 @@ class SuivreLesEnvoisAction
 
         return match (true) {
             $possibleLe === null => 'Déposez des pièces depuis la page de la vérification pour que l\'éditeur traite votre demande, ou contactez-le.',
-            $possibleLe->isFuture() => 'Un nouveau courrier pourra être demandé depuis la page de la vérification à partir du '.$possibleLe->setTimezone(config('app.timezone'))->format('d/m/Y à H:i').'.',
+            $possibleLe->isFuture() => 'Un nouveau courrier pourra être demandé depuis la page de la vérification à partir du '.Calendrier::deParis()->afficher($possibleLe, 'd/m/Y à H:i').'.',
             default => 'Demandez un nouveau courrier depuis la page de la vérification.',
         };
     }

@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -331,7 +332,7 @@ class AvoirResource extends Resource
         $designations = collect($documents)->map(function (Facture $document): string {
             $type = $document->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture';
 
-            return $type.' '.$document->numero.' du '.$document->date_emission->format('d/m/Y à H \\h i');
+            return $type.' '.$document->numero.' du '.Calendrier::deParis()->afficher($document->date_emission, 'd/m/Y à H \\h i');
         });
 
         return collect([Avoir::documentQuiDonneLeClient($documents)->nomDuClient(), $designations->implode(', ')])->filter()->implode(' — ');

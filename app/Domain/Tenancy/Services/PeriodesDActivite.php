@@ -2,12 +2,11 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use LogicException;
 
 /**
@@ -56,7 +55,7 @@ class PeriodesDActivite
     }
 
     /**
-     * Les jours, à l'heure de Paris, des périodes du magasin : pour chacune,
+     * Les jours du calendrier des périodes du magasin : pour chacune,
      * le jour de son début et celui de sa fin, sa fin étant nulle tant
      * qu'elle est ouverte. Un jour est dans une période s'il tombe entre
      * ces deux jours, compris.
@@ -69,12 +68,7 @@ class PeriodesDActivite
             ->where('magasin_id', $magasin->getKey())
             ->orderBy('debut')
             ->get(['debut', 'fin'])
-            ->map(fn (PeriodeActivite $periode): array => [self::jour($periode->debut), $periode->fin === null ? null : self::jour($periode->fin)])
+            ->map(fn (PeriodeActivite $periode): array => [Calendrier::deParis()->jourDe($periode->debut), $periode->fin === null ? null : Calendrier::deParis()->jourDe($periode->fin)])
             ->all();
-    }
-
-    private static function jour(CarbonInterface $instant): string
-    {
-        return CarbonImmutable::instance($instant)->setTimezone(config('app.timezone'))->toDateString();
     }
 }

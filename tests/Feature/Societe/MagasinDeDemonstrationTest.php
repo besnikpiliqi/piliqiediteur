@@ -8,6 +8,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -120,7 +121,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
         $ticket = $this->vendre();
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(['payee', 1], [$ticket->fresh()->statut->value, ClotureCaisse::query()->count()]);
         $this->assertSame(0, $societe->magasinsReels()->count());
@@ -185,7 +186,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
         $ticket = $this->vendre();
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(['payee', 1, 1], [$ticket->fresh()->statut->value, ClotureCaisse::query()->count(), Facture::query()->count()]);
         $chainesDeLaDemonstration = EnregistrementFiscal::query()->pluck('chaine')->map->value->unique()->sort()->values()->all();

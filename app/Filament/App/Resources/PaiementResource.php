@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -128,8 +129,8 @@ class PaiementResource extends Resource
                 DatePicker::make('recu_le')
                     ->label('Reçu le')
                     ->required()
-                    ->default(today())
-                    ->maxDate(today())
+                    ->default(Calendrier::deParis()->aujourdhui())
+                    ->maxDate(Calendrier::deParis()->aujourdhui())
                     ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
@@ -276,7 +277,7 @@ class PaiementResource extends Resource
             'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues.',
             self::enEuros((float) $paiement->montant),
             $paiement->mode_paiement->getLabel(),
-            $paiement->recu_le->format('d/m/Y'),
+            Calendrier::afficherJour($paiement->recu_le, 'd/m/Y'),
         )];
 
         if ($bons->count() === 1) {
@@ -297,7 +298,7 @@ class PaiementResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('recu_le')->label('Reçu le')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('recu_le')->label('Reçu le')->jour()->sortable(),
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('mode_paiement')->label('Mode')->badge(),
                 Tables\Columns\TextColumn::make('montant')

@@ -4,10 +4,9 @@ namespace App\Domain\Contacts\Models;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
-use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -51,7 +50,7 @@ class ConsultationVies extends Model
     {
         return [
             'valide' => 'boolean',
-            'consultee_le' => HorodatageUtc::class.':'.config('app.timezone'),
+            'consultee_le' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau(),
         ];
     }
 
@@ -67,28 +66,27 @@ class ConsultationVies extends Model
 
     /**
      * La consultation telle que l'écran la cite : son n° chez VIES quand
-     * elle en a un, et son instant à l'heure de Paris (« consultation
+     * elle en a un, et son instant à l'heure du calendrier (« consultation
      * WAPIAAAAW1234567 du 09/10/2026 à 14:32 »).
      */
     public function reference(): string
     {
-        return trim('consultation '.$this->identifiant_consultation).' du '.$this->consultee_le->format('d/m/Y à H:i');
+        return trim('consultation '.$this->identifiant_consultation).' du '.Calendrier::deParis()->afficher($this->consultee_le, 'd/m/Y à H:i');
     }
 
     /**
-     * Les vérifications faites tel jour à Paris, de minuit à minuit, qu'elles
-     * aient trouvé le n° valide ou non : la dernière décide (voir
+     * Les vérifications faites tel jour du calendrier, de minuit à minuit,
+     * qu'elles aient trouvé le n° valide ou non : la dernière décide (voir
      * ControleNatureOperation::consultationDuJour()). La colonne étant en
-     * UTC, ses bornes se convertissent en UTC (voir HorodatageUtc). Une date
-     * porte son jour dans son propre fuseau, comme pour whereDate().
+     * UTC, ses bornes se comparent comme des instants (voir HorodatageUtc).
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
      */
-    public function scopeDuJour(Builder $query, CarbonInterface|string $jour): Builder
+    public function scopeDuJour(Builder $query, string $jour): Builder
     {
-        $minuit = CarbonImmutable::parse($jour instanceof CarbonInterface ? $jour->toDateString() : $jour, config('app.timezone'))->startOfDay();
+        [$minuit, $minuitSuivant] = Calendrier::deParis()->bornesDuJour($jour);
 
-        return $query->whereBetween('consultee_le', [HorodatageUtc::enBase($minuit), HorodatageUtc::enBase($minuit->endOfDay())]);
+        return $query->where('consultee_le', '>=', HorodatageUtc::enBase($minuit))->where('consultee_le', '<', HorodatageUtc::enBase($minuitSuivant));
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\EReportingResource\Pages;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Filament\App\Resources\EReportingResource;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Contracts\Support\Htmlable;
@@ -15,6 +16,6 @@ class ViewEReporting extends ViewRecord
      */
     public function getTitle(): string|Htmlable
     {
-        return 'E-reporting du '.$this->getRecord()->getAttribute('date_cloture')->format('d/m/Y');
+        return 'E-reporting du '.Calendrier::afficherJour($this->getRecord()->getAttribute('date_cloture'), 'd/m/Y');
     }
 }

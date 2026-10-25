@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -240,8 +241,8 @@ class EmettreFactureAction
         }
 
         $manques = $this->stock->verifier($compte, $facture, $confirmation);
-        $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->enHeureLocale());
-        $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
+        $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->jour());
+        $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->annee());
 
         $facture->figerLeClient();
         $facture->forceFill([
@@ -249,7 +250,7 @@ class EmettreFactureAction
             'statut' => StatutFacture::Emise,
             'consultation_vies_id' => $consultationVies?->getKey(),
             'date_emission' => $instant->utc,
-            'date_echeance' => $instant->enHeureLocale()->addDays($facture->magasin->delaiDePaiementPour($facture->client))->toDateString(),
+            'date_echeance' => Calendrier::ajouterJours($instant->jour(), $facture->magasin->delaiDePaiementPour($facture->client)),
         ])->save();
 
         // Synchrone et dans la même transaction : voir le commentaire
@@ -259,7 +260,7 @@ class EmettreFactureAction
         $facture = $facture->fresh();
 
         if ($reglement !== null) {
-            $this->encaisserComptant($compte, $facture, $reglement, $instant->enHeureLocale()->toDateString());
+            $this->encaisserComptant($compte, $facture, $reglement, $instant->jour());
         }
 
         $facture = $facture->fresh();

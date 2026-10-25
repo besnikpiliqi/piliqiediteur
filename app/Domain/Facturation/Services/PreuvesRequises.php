@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
@@ -141,9 +142,9 @@ class PreuvesRequises
      */
     private function attestationAttendue(Facture $facture): string
     {
-        $echeance = $facture->livraison_date->toImmutable()->startOfMonth()->addMonth()->setDay(10);
+        $echeance = Calendrier::jourDuMoisSuivant($facture->livraison_date, 10);
 
-        return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.$echeance->format('d/m/Y')
-            .($echeance->lt(today()) ? ' : délai dépassé' : '');
+        return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.Calendrier::afficherJour($echeance, 'd/m/Y')
+            .($echeance < Calendrier::deParis()->aujourdhui() ? ' : délai dépassé' : '');
     }
 }

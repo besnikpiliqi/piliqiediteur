@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Pages\Auth;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\DemanderUneNouvelleAdresseAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -145,7 +146,7 @@ class ModifierProfil extends EditProfile
             return $enAttente ? "Nouvelle adresse en attente : {$compte->nouvelle_adresse}. Elle remplacera celle-ci quand vous aurez suivi le lien qui lui a été envoyé." : null;
         }
 
-        $echeance = $compte->nouvelle_adresse_expire_le?->setTimezone(config('app.timezone'))->format('d/m/Y à H:i');
+        $echeance = $compte->nouvelle_adresse_expire_le === null ? null : Calendrier::deParis()->afficher($compte->nouvelle_adresse_expire_le, 'd/m/Y à H:i');
 
         return match (true) {
             $enAttente => "Votre compte n'a pas encore d'adresse de connexion : suivez, en étant connecté à ce compte, le lien envoyé à {$compte->nouvelle_adresse}, valable jusqu'au {$echeance}. D'ici là, connectez-vous avec votre identifiant. Pour recevoir un nouveau lien, saisissez l'adresse ici et enregistrez.",

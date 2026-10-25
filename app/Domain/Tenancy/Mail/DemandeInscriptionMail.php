@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Mail;
 
+use App\Domain\Calendrier\Calendrier;
 use Carbon\CarbonInterface;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -31,7 +32,7 @@ class DemandeInscriptionMail extends Mailable
             markdown: 'mail.inscription-demande',
             with: [
                 'lien' => $this->lien,
-                'expireLe' => $this->expireLe->copy()->setTimezone(config('app.timezone'))->format('d/m/Y à H:i'),
+                'expireLe' => Calendrier::deParis()->afficher($this->expireLe, 'd/m/Y à H:i'),
             ],
         );
     }

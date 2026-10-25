@@ -10,6 +10,7 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -370,7 +371,7 @@ class DroitsConcurrenceTest extends TestCase
             'paiement' => self::payer($vendeur, Facture::query()->findOrFail($documentId)),
             'avoir' => app(EnregistrerAvoirAction::class)->handle($vendeur, Facture::query()->findOrFail($documentId)->client, [['ligne_facture_id' => Facture::query()->findOrFail($documentId)->lignes->sole()->id, 'quantite' => 1]], 'Retour'),
             'contre-passation' => app(ContrePasserPaiementAction::class)->handle($vendeur, Paiement::query()->findOrFail($documentId), 'Erreur de saisie'),
-            'clôture manuelle' => app(CloturerCaisseAction::class)->handle($vendeur, app(TenantContext::class)->magasin(), today()),
+            'clôture manuelle' => app(CloturerCaisseAction::class)->handle($vendeur, app(TenantContext::class)->magasin(), Calendrier::deParis()->aujourdhui()),
             'caisse' => self::vendreAuComptant($vendeur, Client::query()->where('est_comptoir', true)->sole(), self::lignes(), ModePaiement::Especes),
         };
     }
@@ -387,7 +388,7 @@ class DroitsConcurrenceTest extends TestCase
 
     private static function payer(User $auteur, Facture $facture): Paiement
     {
-        return app(EnregistrerPaiementAction::class)->handle($auteur, $facture->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $facture->total_ttc, 'recu_le' => today()->toDateString()], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
+        return app(EnregistrerPaiementAction::class)->handle($auteur, $facture->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $facture->total_ttc, 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -328,7 +329,7 @@ class FacturesAEncaisserTest extends TestCase
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => $montant,
             'reference' => null,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -60,10 +62,10 @@ class Devis extends Model implements DocumentEnvoyable
         'type_client' => TypeClient::class,
         'franchise_en_base' => 'boolean',
         'nature_operation' => NatureOperation::class,
-        'livraison_date' => 'date',
+        'livraison_date' => JourCivil::class,
         'transport_par' => TransportPar::class,
         'date_emission' => 'datetime',
-        'date_validite' => 'date',
+        'date_validite' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
@@ -207,13 +209,13 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * La date de validité est le dernier jour où le client peut accepter le
-     * devis, à l'heure de Paris : il ne peut plus l'être le lendemain (voir
+     * La date de validité est le dernier jour du calendrier où le client
+     * peut accepter le devis : il ne peut plus l'être le lendemain (voir
      * AccepterDevisAction), et un devis envoyé expire alors (voir
      * ExpirerLesDevisAction).
      */
     public function validiteDepassee(): bool
     {
-        return $this->date_validite !== null && $this->date_validite->lt(today());
+        return $this->date_validite !== null && $this->date_validite < Calendrier::deParis()->aujourdhui();
     }
 }

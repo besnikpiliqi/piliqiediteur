@@ -12,6 +12,7 @@ use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -166,7 +167,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame(['2026-10-05', 1, '12.00'], [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes, $cloture->total_ttc]);
+        $this->assertSame(['2026-10-05', 1, '12.00'], [$cloture->date_cloture, $cloture->nombre_ventes, $cloture->total_ttc]);
     }
 
     /**
@@ -213,7 +214,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $this->assertThrows(fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $ticket->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $ticket->id, 'montant' => 12]]), LogicException::class, $this->refus($motif));
 
         $this->assertSame(0, Paiement::query()->count());
@@ -349,7 +350,7 @@ class MagasinEnLectureSeuleTest extends TestCase
 
         $cloture = app(EReportingDesParticuliers::class)->journeesADeclarer($magasin->fresh())->sole();
         $transactions = app(EReportingDesParticuliers::class)->apercu($cloture)->transactions;
-        $this->assertSame('2026-10-05', $cloture->date_cloture->toDateString());
+        $this->assertSame('2026-10-05', $cloture->date_cloture);
         $this->assertSame([[CategorieEReporting::LivraisonsDeBiens, 2000, 1000, 200]], array_map(fn (array $transaction): array => [$transaction['categorie'], $transaction['taux'], $transaction['ht'], $transaction['tva']], $transactions));
     }
 

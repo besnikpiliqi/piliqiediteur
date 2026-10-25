@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -407,7 +408,7 @@ class TenantIsolationTest extends TestCase
         $contexte->set($memeSociete);
 
         $this->assertThrows(
-            fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), Client::factory()->create(), ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $vente->id, 'montant' => '12.00']]),
+            fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), Client::factory()->create(), ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $vente->id, 'montant' => '12.00']]),
             ModelNotFoundException::class,
         );
 

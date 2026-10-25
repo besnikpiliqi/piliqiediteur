@@ -153,7 +153,7 @@ class PreuvesOperationTest extends TestCase
         $preuve->refresh();
         $this->assertSame(
             [$magasin->id, $export->id, TypePreuve::Mrn, '26FR000000123456E1', '2026-10-09', 'Bureau de douane de Lyon', $this->proprietaireDe($magasin)->id],
-            [$preuve->magasin_id, $preuve->facture_id, $preuve->type, $preuve->reference, $preuve->date_document->toDateString(), $preuve->emetteur, $preuve->note_par],
+            [$preuve->magasin_id, $preuve->facture_id, $preuve->type, $preuve->reference, $preuve->date_document, $preuve->emetteur, $preuve->note_par],
         );
     }
 

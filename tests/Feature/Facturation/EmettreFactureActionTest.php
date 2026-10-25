@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -310,7 +311,7 @@ class EmettreFactureActionTest extends TestCase
     {
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $magasin = app(TenantContext::class)->magasin();
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -335,7 +336,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_une_facture_a_un_professionnel_s_emet_encore_apres_la_cloture_de_la_journee(): void
     {
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), Calendrier::deParis()->aujourdhui());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -395,7 +396,7 @@ class EmettreFactureActionTest extends TestCase
 
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->uneLigne()));
 
-        $this->assertSame($echeance, $facture->date_echeance->toDateString());
+        $this->assertSame($echeance, $facture->date_echeance);
     }
 
     /**
@@ -412,7 +413,7 @@ class EmettreFactureActionTest extends TestCase
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertNull($brouillon->date_echeance);
-        $this->assertSame('2026-11-08', $ticket->date_echeance->toDateString());
+        $this->assertSame('2026-11-08', $ticket->date_echeance);
     }
 
     /**

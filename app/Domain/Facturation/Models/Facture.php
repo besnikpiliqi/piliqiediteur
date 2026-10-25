@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -10,6 +11,8 @@ use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneExcepti
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -37,8 +40,6 @@ use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Database\Factories\FactureFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -48,7 +49,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use LogicException;
 
@@ -121,9 +121,9 @@ class Facture extends Model implements DocumentEnvoyable
         'statut' => StatutFacture::class,
         'franchise_en_base' => 'boolean',
         'nature_operation' => NatureOperation::class,
-        'livraison_date' => 'date',
+        'livraison_date' => JourCivil::class,
         'transport_par' => TransportPar::class,
-        'date_echeance' => 'date',
+        'date_echeance' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
@@ -330,8 +330,8 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le jour, à l'heure de Paris (AAAA-MM-JJ), de la première facture ou
-     * du premier ticket émis par le magasin actif : sa première journée de
+     * Le jour du calendrier (AAAA-MM-JJ) de la première facture ou du
+     * premier ticket émis par le magasin actif : sa première journée de
      * caisse (voir CloturerLesJourneesAction). Null tant qu'il n'a rien
      * vendu.
      */
@@ -339,7 +339,7 @@ class Facture extends Model implements DocumentEnvoyable
     {
         $premiere = static::query()->emises()->min('date_emission');
 
-        return $premiere === null ? null : CarbonImmutable::parse($premiere, 'UTC')->setTimezone(config('app.timezone'))->toDateString();
+        return $premiere === null ? null : Calendrier::deParis()->jourDe(HorodatageUtc::depuisLaBase($premiere));
     }
 
     /**
@@ -373,7 +373,7 @@ class Facture extends Model implements DocumentEnvoyable
      * professionnel. Un ticket corrigé depuis par un avoir y figure :
      * l'avoir se déduit à part, le jour de son émission.
      */
-    public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
+    public function scopeEnAttenteDeCloture(Builder $query, string $jour): Builder
     {
         return $query
             ->tickets()
@@ -631,14 +631,15 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Son échéance est dépassée : elle tombait avant aujourd'hui. Une
+     * Son échéance est dépassée : elle tombait avant aujourd'hui, jour du
+     * calendrier. Une
      * facture émise a toujours son échéance (voir EmettreFactureAction) :
      * seul un document numéroté directement en base, que signale la
      * vérification de l'intégrité, peut ne pas en avoir.
      */
     public function estEchue(): bool
     {
-        return $this->date_echeance !== null && $this->date_echeance->lt(today());
+        return $this->date_echeance !== null && $this->date_echeance < Calendrier::deParis()->aujourdhui();
     }
 
     /**
@@ -678,14 +679,16 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le nombre de jours depuis sa dernière relance (0 si elle a été
-     * relancée aujourd'hui), null tant qu'elle n'a jamais été relancée.
+     * Le nombre de jours du calendrier depuis sa dernière relance (0 si
+     * elle a été relancée aujourd'hui), null tant qu'elle n'a jamais été
+     * relancée.
      */
     public function joursDepuisLaDerniereRelance(): ?int
     {
-        $derniere = $this->relancesComptees()->max('created_at');
+        $derniere = $this->relancesComptees()->latest('created_at')->latest('id')->first();
+        $calendrier = Calendrier::deParis();
 
-        return $derniere === null ? null : (int) Carbon::parse($derniere)->startOfDay()->diffInDays(today());
+        return $derniere === null ? null : Calendrier::joursEntre($calendrier->jourDe($derniere->created_at), $calendrier->aujourdhui());
     }
 
     /**
@@ -699,7 +702,7 @@ class Facture extends Model implements DocumentEnvoyable
         [$document, $accord] = $this->estPourUnProfessionnel() ? ['la facture', 'e'] : ['le ticket de caisse', ''];
 
         return "Sauf erreur de notre part, {$document} {$this->numero} d'un montant de {$euros((float) $this->total_ttc)} TTC, "
-            ."arrivé{$accord} à échéance le {$this->date_echeance->format('d/m/Y')}, n'est pas entièrement réglé{$accord} : "
+            ."arrivé{$accord} à échéance le ".Calendrier::afficherJour($this->date_echeance, 'd/m/Y').", n'est pas entièrement réglé{$accord} : "
             ."il reste {$euros($this->montantRestant())} à payer.\n"
             .'Nous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais. '
             ."Si vous l'avez réglé{$accord} entre-temps, merci de ne pas tenir compte de ce message.";

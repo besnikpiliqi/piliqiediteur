@@ -11,11 +11,10 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\Exceptions\InvalidFormatException;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -95,7 +94,7 @@ class ExporterJournalDesEvenementsAction
      */
     public function handle(User $auteur, string $du, string $au): Closure
     {
-        if (self::jour($au)->lessThan(self::jour($du))) {
+        if (self::jour($au) < self::jour($du)) {
             throw new InvalidArgumentException('La période de l\'export se termine au plus tôt le jour où elle commence.');
         }
 
@@ -131,19 +130,13 @@ class ExporterJournalDesEvenementsAction
         };
     }
 
-    private static function jour(string $date): CarbonImmutable
+    /**
+     * @throws InvalidArgumentException
+     */
+    private static function jour(string $date): string
     {
-        try {
-            $jour = CarbonImmutable::createFromFormat('!Y-m-d', $date);
-        } catch (InvalidFormatException) {
-            $jour = null;
-        }
-
-        if ($jour === null || $jour->format('Y-m-d') !== $date) {
-            throw new InvalidArgumentException("« {$date} » n'est pas une date de période valide (AAAA-MM-JJ attendu).");
-        }
-
-        return $jour;
+        return Calendrier::jourValide($date)
+            ?? throw new InvalidArgumentException("« {$date} » n'est pas une date de période valide (AAAA-MM-JJ attendu).");
     }
 
     /**
@@ -158,7 +151,7 @@ class ExporterJournalDesEvenementsAction
 
         $lecture = [
             (string) $evenement->sequence,
-            $evenement->horodatage->setTimezone(config('app.timezone'))->format('d/m/Y H:i:s'),
+            Calendrier::deParis()->afficher($evenement->horodatage, 'd/m/Y H:i:s'),
             (string) ($evenement->contenuSigne()['horodatage'] ?? ''),
             (string) ($donnees['code'] ?? $evenement->type),
             (string) ($donnees['libelle'] ?? ''),

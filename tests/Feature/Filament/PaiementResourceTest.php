@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -99,7 +100,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 120,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $facture->id, 'montant' => 120],
                 ],
@@ -163,7 +164,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => (string) $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => '120',
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => (string) $facture->id, 'montant' => '120'],
                 ],
@@ -190,7 +191,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $clientDUnAutreMagasin->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 120,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ])
             ->call('create')
             ->assertHasFormErrors(['client_id' => 'exists']);
@@ -214,7 +215,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 170,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $factureA->id, 'montant' => 120],
                     ['facture_id' => $factureB->id, 'montant' => 50],
@@ -237,7 +238,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client);
 
-        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::CarteBancaire->value, 'montant' => 120], now()->toDateString());
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::CarteBancaire->value, 'montant' => 120], Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
         $this->assertSame(1, Paiement::query()->count());
@@ -253,7 +254,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 50], now()->toDateString())
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 50], Calendrier::deParis()->aujourdhui())
             ->assertHasNoTableActionErrors();
 
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
@@ -276,7 +277,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 150], now()->toDateString())
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 150], Calendrier::deParis()->aujourdhui())
             ->assertHasTableActionErrors(['parts'])
             ->assertSee('Les parts du règlement (150,00 €) dépassent ce qui reste dû (120,00 €).');
 
@@ -298,7 +299,7 @@ class PaiementResourceTest extends TestCase
         $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Virement->value, 'montant' => 120], '2026-10-08')
             ->assertHasNoTableActionErrors();
 
-        $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le->toDateString());
+        $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le);
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
     }
 
@@ -364,7 +365,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 150,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $facture->id, 'montant' => 150],
                 ],
@@ -400,7 +401,7 @@ class PaiementResourceTest extends TestCase
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le->toDateString());
+        $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le);
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
     }
 
@@ -440,7 +441,7 @@ class PaiementResourceTest extends TestCase
                 'mode_paiement' => ModePaiement::Cheque->value,
                 'montant' => 120,
                 'reference' => str_repeat('A', 101),
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $facture->id, 'montant' => 120],
                 ],
@@ -547,7 +548,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Especes->value,
                 'montant' => 120,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [['facture_id' => $factureDeA->id, 'montant' => 120]],
             ])
             ->call('create');
@@ -567,7 +568,7 @@ class PaiementResourceTest extends TestCase
             'client_id' => $client->id,
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ]);
         $paiement->forceFill(['cree_par' => $membre->getKey()])->save();
 
@@ -617,7 +618,7 @@ class PaiementResourceTest extends TestCase
             'client_id' => $client->id,
             'mode_paiement' => ModePaiement::Especes,
             'montant' => 10,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ]);
         $client->delete();
 
@@ -647,7 +648,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 170,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $factureA->id, 'montant' => 120],
                     ['facture_id' => $factureB->id, 'montant' => 50],
@@ -671,7 +672,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client, 120);
-        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], now()->toDateString());
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], Calendrier::deParis()->aujourdhui());
         $client->delete();
 
         Livewire::test(CreatePaiement::class)
@@ -679,7 +680,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 120,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $facture->id, 'montant' => 120],
                 ],
@@ -705,7 +706,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 200,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [
                     ['facture_id' => $facture->id, 'montant' => 120],
                 ],
@@ -752,7 +753,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
-        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], now()->toDateString());
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], Calendrier::deParis()->aujourdhui());
         $errone = Paiement::query()->sole();
 
         Livewire::test(ListPaiements::class)
@@ -777,7 +778,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
-        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], now()->toDateString());
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], Calendrier::deParis()->aujourdhui());
 
         Livewire::test(ListPaiements::class)
             ->callTableAction('contre_passer', Paiement::query()->sole(), data: ['motif' => ''])
@@ -821,7 +822,7 @@ class PaiementResourceTest extends TestCase
         ])), $prixDesFactures);
         $virementRejete = app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => array_sum($prixDesFactures), 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => array_sum($prixDesFactures), 'recu_le' => Calendrier::deParis()->aujourdhui()],
             array_map(fn (Facture $facture): array => ['facture_id' => $facture->id, 'montant' => $facture->total_ttc], $factures),
         );
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]]);
@@ -883,7 +884,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         ['client' => $client, 'factures' => [$premiere, $seconde]] = $this->clientDontLeCreditSImputeALaContrePassation([120, 120]);
         $formulaire = Livewire::test(CreatePaiement::class)
-            ->fillForm(['client_id' => $client->id, 'mode_paiement' => ModePaiement::Virement->value, 'montant' => 204, 'recu_le' => now()->toDateString()])
+            ->fillForm(['client_id' => $client->id, 'mode_paiement' => ModePaiement::Virement->value, 'montant' => 204, 'recu_le' => Calendrier::deParis()->aujourdhui()])
             ->assertDontSee('Crédit disponible pour ce client');
 
         $formulaire
@@ -916,7 +917,7 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => '10000000000000',
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
                 'allocations' => [['facture_id' => $facture->id, 'montant' => '10000000000000']],
             ])
             ->call('create')
@@ -1013,7 +1014,7 @@ class PaiementResourceTest extends TestCase
         $bon = $this->bonDAvoir(10);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $ticket = $this->emettreFactureDepuisLePanneau($comptoir, 50);
-        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000), new PartDeReglement(ModePaiement::Especes, 1000)], [$bon->numero], today()->toDateString());
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000), new PartDeReglement(ModePaiement::Especes, 1000)], [$bon->numero], Calendrier::deParis()->aujourdhui());
         $partsDuTicket = Paiement::query()->whereHas('allocations', fn (Builder $allocations): Builder => $allocations->where('facture_id', $ticket->id));
         $carte = (clone $partsDuTicket)->where('mode_paiement', ModePaiement::CarteBancaire)->sole();
         $especes = (clone $partsDuTicket)->where('mode_paiement', ModePaiement::Especes)->sole();

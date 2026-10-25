@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
@@ -11,7 +12,6 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
@@ -49,7 +49,7 @@ class CaissesPersonnellesFermeesDOfficeConcurrenceTest extends TestCase
                 $concurrente = $this->demarrerUnProcessusConcurrent(static function () use ($magasinId): void {
                     $magasin = Magasin::query()->findOrFail($magasinId);
                     app(TenantContext::class)->set($magasin);
-                    app(FermerLesCaissesPersonnellesAction::class)->handle($magasin, CarbonImmutable::now()->endOfDay());
+                    app(FermerLesCaissesPersonnellesAction::class)->handle($magasin, Calendrier::deParis()->bornesDuJour(Calendrier::deParis()->aujourdhui())[1]->subSecond());
                 });
                 $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
             }

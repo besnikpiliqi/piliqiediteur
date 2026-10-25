@@ -6,6 +6,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
@@ -55,6 +56,7 @@ use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,7 +65,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Mail\Markdown;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
@@ -143,6 +144,7 @@ class AppServiceProvider extends ServiceProvider
         $this->nommerLesModelesPolymorphes();
         $this->declarerLaSaisieEnDirect();
         $this->declarerLaRechercheSansAccents();
+        $this->afficherLesDatesAuCalendrier();
         $this->declarerLAdresseDeConnexion();
         $this->limiterLesChoixAuMagasin();
         $this->garderLesChoixDuPanneauSociete();
@@ -219,20 +221,24 @@ class AppServiceProvider extends ServiceProvider
      * Le message d'une règle de date (after, before...) écrit la date
      * comparée comme on l'écrit en français (« postérieure ou égale au
      * 09/10/2026 », suivie de l'heure si elle en a une), jamais sous sa
-     * forme technique « 2026-10-09 00:00:00 ». Une règle qui compare à un
-     * autre champ nomme ce champ par son libellé, comme le fait Laravel.
+     * forme technique « 2026-10-09 00:00:00 ». La règle compare le texte
+     * saisi au texte de la règle, sans fuseau : le message reprend ce
+     * texte tel qu'il est écrit. Une règle qui compare à un autre champ
+     * nomme ce champ par son libellé, comme le fait Laravel.
      */
     private function ecrireLesDatesEnFrancaisDansLesMessages(): void
     {
         foreach (['after', 'after_or_equal', 'before', 'before_or_equal', 'date_equals'] as $regle) {
             Validator::replacer($regle, static function (string $message, string $attribute, string $rule, array $parameters, ValidatorDeLaravel $validator): string {
-                if (strtotime($parameters[0]) === false) {
+                $jour = Calendrier::jourValide(substr($parameters[0], 0, 10));
+
+                if ($jour === null) {
                     return str_replace(':date', $validator->getDisplayableAttribute($parameters[0]), $message);
                 }
 
-                $date = Carbon::parse($parameters[0]);
+                $heure = substr($parameters[0], 11, 5);
 
-                return str_replace(':date', $date->format($date->isStartOfDay() ? 'd/m/Y' : 'd/m/Y à H:i'), $message);
+                return str_replace(':date', Calendrier::afficherJour($jour, 'd/m/Y').(in_array($heure, ['', '00:00'], true) ? '' : ' à '.$heure), $message);
             });
         }
     }
@@ -351,6 +357,27 @@ class AppServiceProvider extends ServiceProvider
 
         if (! $relation->getParent() instanceof Societe || ! $tenant instanceof Societe || ! $relation->getParent()->is($tenant)) {
             throw new LogicException("Le champ « {$component->getName()} » de l'espace société propose des magasins ou des comptes sans passer par une relation de la société.");
+        }
+    }
+
+    /**
+     * Les colonnes et les entrées de Filament affichent un instant à
+     * l'heure du calendrier (->dateTime(), y compris réduit à son jour par
+     * ->dateTime('d/m/Y')), et un jour (cast JourCivil) tel quel par
+     * ->jour(), sans aucun fuseau : ->date() relirait le jour comme un
+     * minuit du fuseau de l'application, puis le convertirait à celui de
+     * la colonne, qui peut donner la veille.
+     */
+    private function afficherLesDatesAuCalendrier(): void
+    {
+        foreach ([TextColumn::class, TextEntry::class] as $composant) {
+            $composant::configureUsing(static function (TextColumn|TextEntry $composant): void {
+                $composant->timezone(Calendrier::deParis()->fuseau());
+            });
+            $composant::macro('jour', function (string $format = 'd/m/Y'): TextColumn|TextEntry {
+                /** @var TextColumn|TextEntry $this */
+                return $this->formatStateUsing(static fn (?string $state): ?string => blank($state) ? null : Calendrier::afficherJour($state, $format));
+            });
         }
     }
 

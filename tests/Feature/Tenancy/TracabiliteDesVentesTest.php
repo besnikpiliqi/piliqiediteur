@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -296,7 +297,7 @@ class TracabiliteDesVentesTest extends TestCase
 
     private function payer(User $auteur, Facture $facture): mixed
     {
-        return app(EnregistrerPaiementAction::class)->handle($auteur, $facture->client, ['mode_paiement' => ModePaiement::CarteBancaire->value, 'montant' => $facture->total_ttc, 'recu_le' => today()->toDateString()], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
+        return app(EnregistrerPaiementAction::class)->handle($auteur, $facture->client, ['mode_paiement' => ModePaiement::CarteBancaire->value, 'montant' => $facture->total_ttc, 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
     }
 
     /**

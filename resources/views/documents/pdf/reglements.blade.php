@@ -20,7 +20,7 @@
         </tr>
         @foreach($reglements->paiements as $paiement)
             <tr>
-                <td class="libelle">{{ implode(' · ', array_filter([$dateEmission?->format('d/m/Y'), $paiement['mode']->getLabel(), $paiement['reference']], filled(...))) }}</td>
+                <td class="libelle">{{ implode(' · ', array_filter([$dateEmission === null ? null : \App\Domain\Calendrier\Calendrier::deParis()->afficher($dateEmission, 'd/m/Y'), $paiement['mode']->getLabel(), $paiement['reference']], filled(...))) }}</td>
                 <td class="montant">{{ $calculateur->enEuros($paiement['montant']) }}</td>
             </tr>
         @endforeach

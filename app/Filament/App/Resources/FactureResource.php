@@ -6,6 +6,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
@@ -212,7 +213,7 @@ class FactureResource extends Resource
                 TextEntry::make('statut')->badge(),
                 self::clientEntry(),
                 TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
-                TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('Fixée à l\'émission'),
+                TextEntry::make('date_echeance')->label('Échéance')->jour()->placeholder('Fixée à l\'émission'),
                 TextEntry::make('cree_par_nom')->label('Créée par'),
                 self::natureEntry(),
                 TextEntry::make('consultation_vies')
@@ -271,7 +272,7 @@ class FactureResource extends Resource
                                 ->state(fn (PaiementAllocation $record): string => (float) $record->montant_alloue < 0 ? 'Contre-passation' : 'Paiement')
                                 ->badge()
                                 ->color(fn (string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray'),
-                            TextEntry::make('paiement.recu_le')->label('Reçu le')->date('d/m/Y'),
+                            TextEntry::make('paiement.recu_le')->label('Reçu le')->jour(),
                             TextEntry::make('paiement.mode_paiement')->label('Mode')->badge(),
                             TextEntry::make('montant_alloue')
                                 ->label('Montant imputé')
@@ -436,11 +437,11 @@ class FactureResource extends Resource
                     ->schema([
                         TextEntry::make('type')->label('Type')->state(fn (PreuveOperation $record): string => $record->type->getLabel()),
                         TextEntry::make('reference')->label('Référence')->state(fn (PreuveOperation $record): string => $record->reference),
-                        TextEntry::make('date_document')->label('Date du document')->state(fn (PreuveOperation $record) => $record->date_document)->date('d/m/Y')->placeholder('—'),
+                        TextEntry::make('date_document')->label('Date du document')->state(fn (PreuveOperation $record) => $record->date_document)->jour()->placeholder('—'),
                         TextEntry::make('emetteur')->label('Établie par')->state(fn (PreuveOperation $record): ?string => $record->emetteur)->placeholder('—'),
                         TextEntry::make('note')
                             ->label('Enregistrée')
-                            ->state(fn (PreuveOperation $record): string => 'le '.$record->created_at->format('d/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
+                            ->state(fn (PreuveOperation $record): string => 'le '.Calendrier::deParis()->afficher($record->created_at, 'd/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
                     ])
                     ->columns(5),
             ]);
@@ -489,12 +490,12 @@ class FactureResource extends Resource
                     ->state(function (Facture $record): ?string {
                         $bordereau = self::bordereauQuiFaitFoi($record);
 
-                        return $bordereau === null ? null : 'le '.$bordereau->created_at->format('d/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
+                        return $bordereau === null ? null : 'le '.Calendrier::deParis()->afficher($bordereau->created_at, 'd/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
                     }),
                 TextEntry::make('bordereaux_detaxe_remplaces')
                     ->label('N° remplacés')
                     ->state(fn (Facture $record): array => $record->bordereauxDetaxe()->get()->slice(0, -1)
-                        ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le {$bordereau->created_at->format('d/m/Y à H:i')}")
+                        ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le ".Calendrier::deParis()->afficher($bordereau->created_at, 'd/m/Y à H:i'))
                         ->values()
                         ->all())
                     ->listWithLineBreaks()
@@ -673,7 +674,7 @@ class FactureResource extends Resource
                     ->state(fn (Facture $record): string => self::paye($record))
                     ->money('EUR'),
                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Créée par')->toggleable(),
-                Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->date('d/m/Y'),
+                Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->jour(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFacture::class),
@@ -829,8 +830,8 @@ class FactureResource extends Resource
                 DatePicker::make('recu_le')
                     ->label('Reçu le')
                     ->required()
-                    ->default(today())
-                    ->maxDate(today())
+                    ->default(Calendrier::deParis()->aujourdhui())
+                    ->maxDate(Calendrier::deParis()->aujourdhui())
                     ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
             ])
             ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
@@ -907,7 +908,7 @@ class FactureResource extends Resource
 
         if ($facture->nature_operation->exigeVies()
             && $client->aUnNumeroTvaVerifiableSurVies()
-            && app(ControleNatureOperation::class)->consultationDuJour($client, now()) === null) {
+            && app(ControleNatureOperation::class)->consultationDuJour($client, Calendrier::deParis()->aujourdhui()) === null) {
             app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $client);
         }
     }

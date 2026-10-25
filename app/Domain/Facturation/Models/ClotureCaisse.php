@@ -7,11 +7,12 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
-use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\ClotureCaisseFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -67,7 +68,7 @@ class ClotureCaisse extends Model
     ];
 
     protected $casts = [
-        'date_cloture' => 'date',
+        'date_cloture' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
@@ -101,14 +102,11 @@ class ClotureCaisse extends Model
     }
 
     /**
-     * La clôture de tel jour (AAAA-MM-JJ). whereDate() plutôt qu'une
-     * égalité : le cast « date » écrit la colonne « AAAA-MM-JJ 00:00:00 »
-     * sous SQLite, qu'une comparaison avec « AAAA-MM-JJ » seul ne
-     * trouverait jamais.
+     * La clôture de tel jour du calendrier (AAAA-MM-JJ).
      */
     public function scopeDuJour(Builder $query, string $jour): Builder
     {
-        return $query->whereDate('date_cloture', $jour);
+        return $query->where('date_cloture', $jour);
     }
 
     /**
@@ -120,14 +118,12 @@ class ClotureCaisse extends Model
      */
     public static function derniereJourneeCloturee(): ?string
     {
-        $derniere = static::query()->max('date_cloture');
-
-        return $derniere === null ? null : CarbonImmutable::parse($derniere)->toDateString();
+        return static::query()->max('date_cloture');
     }
 
     /**
-     * Une journée clôturée est finie pour la caisse : jusqu'à minuit,
-     * heure de Paris, elle n'émet plus aucun ticket ni aucun avoir sur un
+     * Une journée clôturée est finie pour la caisse : jusqu'à minuit du
+     * calendrier, elle n'émet plus aucun ticket ni aucun avoir sur un
      * ticket (voir EmettreFactureAction et EmettreAvoirAction). Chaque
      * clôture couvre ainsi exactement sa journée, et la fenêtre de
      * confirmation du bouton de clôture le dit avant (voir
@@ -138,10 +134,10 @@ class ClotureCaisse extends Model
      */
     public static function refusDUneVente(CarbonInterface $instant, ?string $derniereJourneeCloturee): ?string
     {
-        $journee = CarbonImmutable::instance($instant)->setTimezone(config('app.timezone'));
+        $journee = Calendrier::deParis()->jourDe($instant);
 
-        return $derniereJourneeCloturee !== null && $journee->toDateString() <= $derniereJourneeCloturee
-            ? "La journée du {$journee->format('d/m/Y')} est clôturée : les ventes reprennent demain."
+        return $derniereJourneeCloturee !== null && $journee <= $derniereJourneeCloturee
+            ? 'La journée du '.Calendrier::afficherJour($journee, 'd/m/Y').' est clôturée : les ventes reprennent demain.'
             : null;
     }
 

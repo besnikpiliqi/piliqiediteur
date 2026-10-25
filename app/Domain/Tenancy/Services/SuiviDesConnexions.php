@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Models\User;
@@ -91,8 +92,6 @@ final class SuiviDesConnexions
 
     private static function date(CarbonInterface $instant): string
     {
-        $local = $instant->copy()->setTimezone(config('app.timezone'));
-
-        return 'le '.$local->format('d/m/Y').' à '.$local->format('H:i');
+        return 'le '.Calendrier::deParis()->afficher($instant, 'd/m/Y à H:i');
     }
 }

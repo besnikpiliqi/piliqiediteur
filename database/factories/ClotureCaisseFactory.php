@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -16,7 +17,7 @@ class ClotureCaisseFactory extends Factory
     public function definition(): array
     {
         return [
-            'date_cloture' => now()->toDateString(),
+            'date_cloture' => Calendrier::deParis()->aujourdhui(),
             'recapitulatif' => RecapitulatifDeCloture::vide(),
         ];
     }

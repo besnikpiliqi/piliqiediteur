@@ -3,11 +3,11 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -78,21 +78,24 @@ final class CaissesDeLaSociete
     /**
      * Pour chacun de ces magasins, dans leur ordre : le magasin, les noms
      * des vendeurs dont la caisse est encore ouverte aujourd'hui, et les
-     * relevés fermés ce jour-là, du plus récent au plus ancien.
+     * relevés fermés ce jour du calendrier (« AAAA-MM-JJ »), du plus
+     * récent au plus ancien.
      *
      * @return list<array{magasin: Magasin, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>
      */
-    public function pour(User $compte, CarbonImmutable $jour): array
+    public function pour(User $compte, string $journee): array
     {
-        $journee = CarbonImmutable::parse($jour->toDateString(), config('app.timezone'));
+        $calendrier = Calendrier::deParis();
+        [$debut, $fin] = $calendrier->bornesDuJour($journee);
         $contexte = app(TenantContext::class);
 
         return $this->magasins($compte)
             ->map(fn (Magasin $magasin): array => $contexte->runAs($magasin, fn (): array => [
                 'magasin' => $magasin,
-                'caisses_ouvertes' => $this->verificateur->vendeursAvecCaisseOuverte(CarbonImmutable::today(config('app.timezone')))->pluck('name')->values()->all(),
+                'caisses_ouvertes' => $this->verificateur->vendeursAvecCaisseOuverte($calendrier->aujourdhui())->pluck('name')->values()->all(),
                 'releves' => ClotureCaissePersonnelle::query()
-                    ->whereBetween('cloturee_a', [$journee->startOfDay(), $journee->endOfDay()])
+                    ->where('cloturee_a', '>=', $debut)
+                    ->where('cloturee_a', '<', $fin)
                     ->orderByDesc('cloturee_a')
                     ->orderByDesc('id')
                     ->get(self::COLONNES_DU_RELEVE),

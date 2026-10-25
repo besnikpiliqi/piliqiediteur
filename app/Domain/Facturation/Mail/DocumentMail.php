@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Mail;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Models\Avoir;
@@ -116,9 +117,9 @@ class DocumentMail extends Mailable
             $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de {$montant}.",
             $document instanceof Facture && $document->montantRestant() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}, déjà réglée.",
             $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}"
-                .($document->date_echeance ? ", à régler au plus tard le {$document->date_echeance->format('d/m/Y')}." : '.'),
+                .($document->date_echeance ? ', à régler au plus tard le '.Calendrier::afficherJour($document->date_echeance, 'd/m/Y').'.' : '.'),
             $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de {$montant}"
-                .($document->date_validite ? ", valable jusqu'au {$document->date_validite->format('d/m/Y')}." : '.'),
+                .($document->date_validite ? ', valable jusqu\'au '.Calendrier::afficherJour($document->date_validite, 'd/m/Y').'.' : '.'),
             $document instanceof Avoir => "Veuillez trouver ci-joint notre avoir {$document->numero} d'un montant de {$montant}.",
         };
     }

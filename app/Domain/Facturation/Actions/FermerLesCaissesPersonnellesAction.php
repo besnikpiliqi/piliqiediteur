@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
@@ -42,9 +43,9 @@ class FermerLesCaissesPersonnellesAction
 
     /**
      * Ferme les caisses personnelles du magasin, qui doit être le magasin
-     * actif, ouvertes jusqu'à la journée de la borne : chacune compte ses
-     * ventes émises jusqu'à la borne et ses encaissements reçus jusqu'à sa
-     * journée.
+     * actif, ouvertes jusqu'à la journée du calendrier de la borne : chacune
+     * compte ses ventes émises jusqu'à la borne et ses encaissements reçus
+     * jusqu'à sa journée.
      *
      * @return Collection<int, ClotureCaissePersonnelle> les relevés notés, par vendeur
      *
@@ -56,9 +57,9 @@ class FermerLesCaissesPersonnellesAction
             throw new LogicException('Les caisses personnelles d\'un magasin ne se ferment que depuis ce magasin.');
         }
 
-        $borne = CarbonImmutable::instance($jusquAu)->setTimezone(config('app.timezone'));
+        $borne = CarbonImmutable::instance($jusquAu);
 
-        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->verificateur->vendeursAvecCaisseOuverte($borne)
+        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->verificateur->vendeursAvecCaisseOuverte(Calendrier::deParis()->jourDe($borne))
             ->map(function (User $vendeur) use ($borne): ?ClotureCaissePersonnelle {
                 try {
                     return $this->fermerSaCaisse->fermerDOffice($vendeur, $borne);

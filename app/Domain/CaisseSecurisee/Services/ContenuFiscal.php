@@ -4,6 +4,7 @@ namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\CategorieOperation;
 use App\Domain\Facturation\Models\Avoir;
@@ -112,7 +113,7 @@ class ContenuFiscal
                 'montant' => $this->calculateur->enCentiemes($paiement->montant),
                 'reference' => $paiement->reference,
                 'notes' => $paiement->notes,
-                'recu_le' => $paiement->recu_le->toDateString(),
+                'recu_le' => $paiement->recu_le,
                 'cree_par' => $this->identifiant($paiement->cree_par),
             ],
             'contre_passe' => $paiement->estUneContrePassation() ? [
@@ -166,7 +167,7 @@ class ContenuFiscal
 
         return [
             'numero' => $facture->numero,
-            'date_emission' => $facture->date_emission?->toIso8601String(),
+            'date_emission' => $facture->date_emission === null ? null : Calendrier::deParis()->iso8601($facture->date_emission),
             'client' => $this->clientFige($facture),
             'franchise_en_base' => $facture->franchise_en_base,
             'nature_operation' => $facture->nature_operation->value,
@@ -176,14 +177,14 @@ class ContenuFiscal
                 'code_postal' => $facture->livraison_code_postal,
                 'ville' => $facture->livraison_ville,
                 'pays' => $facture->livraison_pays,
-                'date' => $facture->livraison_date?->toDateString(),
+                'date' => $facture->livraison_date,
                 'transport_par' => $facture->transport_par?->value,
             ],
             'consultation_vies_id' => $this->identifiant($facture->consultation_vies_id),
             'cree_par' => $this->identifiant($facture->cree_par),
             'devis_id' => $this->identifiant($facture->devis_id),
             'devise' => $facture->devise,
-            'date_echeance' => $facture->date_echeance?->toDateString(),
+            'date_echeance' => $facture->date_echeance,
             'conditions_paiement' => $facture->conditions_paiement,
             'notes' => $facture->notes,
             ...$this->lignesEtTotaux($facture->lignes, $facture, 1),
@@ -207,7 +208,7 @@ class ContenuFiscal
                 'numero_tva' => $consultation->numero_tva,
                 'valide' => $consultation->valide,
                 'identifiant' => $consultation->identifiant_consultation,
-                'consultee_le' => $consultation->consultee_le->toIso8601String(),
+                'consultee_le' => Calendrier::deParis()->iso8601($consultation->consultee_le),
             ],
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
@@ -239,7 +240,7 @@ class ContenuFiscal
 
         return [
             'numero' => $avoir->numero,
-            'date_emission' => $avoir->date_emission?->toIso8601String(),
+            'date_emission' => $avoir->date_emission === null ? null : Calendrier::deParis()->iso8601($avoir->date_emission),
             'client' => $this->clientFige($avoir),
             'franchise_en_base' => $avoir->franchise_en_base,
             'nature_operation' => $avoir->nature_operation->value,
@@ -250,7 +251,7 @@ class ContenuFiscal
             'documents_corriges' => $documentsCorriges
                 ->map(fn (Facture $facture): array => [
                     'numero' => $facture->numero,
-                    'date_emission' => $facture->date_emission?->toDateString(),
+                    'date_emission' => $facture->date_emission === null ? null : Calendrier::deParis()->jourDe($facture->date_emission),
                 ])
                 ->all(),
             ...$this->lignesEtTotaux($avoir->lignes, $avoir, -1),

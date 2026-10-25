@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Concerns;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
 use Illuminate\Support\Str;
@@ -75,7 +76,7 @@ trait NoteSaNatureDOperation
             $this->livraison_complement,
             trim("{$this->livraison_code_postal} {$this->livraison_ville}"),
             $this->livraison_pays,
-            $this->livraison_date === null ? null : 'Livraison le '.$this->livraison_date->format('d/m/Y'),
+            $this->livraison_date === null ? null : 'Livraison le '.Calendrier::afficherJour($this->livraison_date, 'd/m/Y'),
             $this->transport_par?->getLabel(),
         ], filled(...)));
     }

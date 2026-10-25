@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -693,7 +694,7 @@ class EmissionSigneeTest extends TestCase
 
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '120.00', 'reference' => 'VIR-7', 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '120.00', 'reference' => 'VIR-7', 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $factures[0]->id, 'montant' => '20.00'], ['facture_id' => $factures[1]->id, 'montant' => '40.00'], ['facture_id' => $factures[2]->id, 'montant' => '60.00']],
         );
 
@@ -855,7 +856,7 @@ class EmissionSigneeTest extends TestCase
 
         $requetes = $this->requetesDe(fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $facture->id, 'montant' => '20.00']],
         ));
 

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -183,30 +184,15 @@ abstract class TestCase extends BaseTestCase
      * une heure écrite dans un test dit toujours de quel fuseau elle est,
      * et ne se relit jamais dans le fuseau par défaut. Une heure qui
      * n'existe pas à Paris (sautée au passage à l'heure d'été) ou qui s'y
-     * répète (au passage à l'heure d'hiver) est refusée : elle ne désigne
-     * pas un seul instant, qui s'écrit alors en UTC (voir enUtc()).
+     * répète (au passage à l'heure d'hiver) est refusée (voir
+     * Calendrier::heureMurale()) : elle ne désigne pas un seul instant,
+     * qui s'écrit alors en UTC (voir enUtc()).
      *
      * @throws InvalidArgumentException
      */
     protected static function aParis(string $heure): CarbonImmutable
     {
-        $fuseau = new DateTimeZone('Europe/Paris');
-        $murale = self::heureEcrite($heure)->getTimestamp();
-        $instants = [];
-
-        foreach ($fuseau->getTransitions($murale - 2 * 86400, $murale + 2 * 86400) as $transition) {
-            $instant = $murale - $transition['offset'];
-
-            if ($fuseau->getOffset(new DateTimeImmutable('@'.$instant)) === $transition['offset']) {
-                $instants[$instant] = true;
-            }
-        }
-
-        if (count($instants) !== 1) {
-            throw new InvalidArgumentException(sprintf('%s %s à Paris : écrivez cet instant en UTC (enUtc()).', $heure, $instants === [] ? "n'existe pas" : 'se répète'));
-        }
-
-        return CarbonImmutable::createFromTimestamp(array_key_first($instants))->setTimezone(date_default_timezone_get());
+        return Calendrier::deParis()->heureMurale($heure);
     }
 
     /**

@@ -20,7 +20,6 @@ use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Models\User;
-use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -175,7 +174,7 @@ class Avoir extends Model implements DocumentEnvoyable
      * CloturerCaisseAction) : un retour se compte le jour où il a lieu, pas
      * celui de la vente d'origine.
      */
-    public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
+    public function scopeEnAttenteDeCloture(Builder $query, string $jour): Builder
     {
         return $query
             ->where('type_client', TypeClient::Particulier)

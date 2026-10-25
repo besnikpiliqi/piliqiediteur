@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
@@ -543,7 +544,7 @@ class EnvoyerDocumentActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 }

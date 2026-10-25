@@ -6,10 +6,10 @@ use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -93,21 +93,20 @@ class EnregistrementFiscal extends Model
     }
 
     /**
-     * Les enregistrements horodatés du jour $du au jour $au, bornes
-     * comprises, chaque jour à l'heure de Paris, de minuit à minuit : la
-     * colonne étant en UTC, ses bornes se convertissent en UTC (voir
-     * HorodatageUtc). Une borne absente ne limite rien.
+     * Les enregistrements horodatés du jour $du au jour $au du calendrier
+     * (« AAAA-MM-JJ »), bornes comprises : du minuit de $du au minuit qui
+     * suit $au, exclu. Une borne absente ne limite rien.
      */
     public function scopeHorodatesDuJourAuJour(Builder $query, ?string $du, ?string $au): Builder
     {
-        $fuseau = config('app.timezone');
+        $calendrier = Calendrier::deParis();
 
         return $query
             ->when(filled($du), fn (Builder $enregistrements): Builder => $enregistrements->where(
-                'horodatage', '>=', HorodatageUtc::enBase(CarbonImmutable::parse($du, $fuseau)->startOfDay()),
+                'horodatage', '>=', HorodatageUtc::enBase($calendrier->debutDuJour($du)),
             ))
             ->when(filled($au), fn (Builder $enregistrements): Builder => $enregistrements->where(
-                'horodatage', '<=', HorodatageUtc::enBase(CarbonImmutable::parse($au, $fuseau)->endOfDay()),
+                'horodatage', '<', HorodatageUtc::enBase($calendrier->bornesDuJour($au)[1]),
             ));
     }
 

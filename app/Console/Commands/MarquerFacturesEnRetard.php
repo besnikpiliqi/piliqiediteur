@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
@@ -56,9 +57,10 @@ class MarquerFacturesEnRetard extends Command
      */
     private function marquerLesFacturesDe(Magasin $magasin): int
     {
+        $aujourdhui = Calendrier::deParis()->aujourdhui();
         $echues = fn (): Builder => Facture::query()
             ->whereIn('statut', [StatutFacture::Emise, StatutFacture::Envoyee, StatutFacture::PartiellementPayee])
-            ->whereDate('date_echeance', '<', now());
+            ->where('date_echeance', '<', $aujourdhui);
 
         $marquees = $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
             ->filter(fn (string $numero, int $id): bool => $echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1);

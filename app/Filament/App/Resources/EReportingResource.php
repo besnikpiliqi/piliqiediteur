@@ -3,13 +3,13 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Services\ApercuEReporting;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EReportingResource\Pages;
-use Carbon\CarbonImmutable;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -195,7 +195,7 @@ class EReportingResource extends Resource
     {
         return $infolist->schema([
             InfolistSection::make('Journée')->schema([
-                TextEntry::make('date_cloture')->label('Journée clôturée')->date('d/m/Y'),
+                TextEntry::make('date_cloture')->label('Journée clôturée')->jour(),
                 TextEntry::make('numero')
                     ->label('Clôture')
                     ->url(fn (ClotureCaisse $record): string => ClotureCaisseResource::getUrl('view', ['record' => $record]))
@@ -214,7 +214,7 @@ class EReportingResource extends Resource
                 ? EReportingDesParticuliers::MENTION_DEMONSTRATION
                 : 'Une journée clôturée apparaît ici dès qu\'elle compte une vente ou un avoir à un particulier, ou l\'encaissement d\'une prestation de services.')
             ->columns([
-                Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->jour()->sortable(),
                 Tables\Columns\TextColumn::make('numero')->label('Clôture'),
                 Tables\Columns\TextColumn::make('apercu')
                     ->label('Aperçu')
@@ -325,6 +325,6 @@ class EReportingResource extends Resource
      */
     private static function date(string $jour): string
     {
-        return CarbonImmutable::parse($jour)->format('d/m/Y');
+        return Calendrier::afficherJour($jour, 'd/m/Y');
     }
 }

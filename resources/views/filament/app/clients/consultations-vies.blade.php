@@ -29,7 +29,7 @@
             <tbody>
                 @foreach ($consultations as $consultation)
                     <tr style="border-top: 1px solid rgba(128, 128, 128, 0.25);">
-                        <td style="padding: 0.25rem 0.5rem;">{{ $consultation->consultee_le->format('d/m/Y à H:i') }}</td>
+                        <td style="padding: 0.25rem 0.5rem;">{{ \App\Domain\Calendrier\Calendrier::deParis()->afficher($consultation->consultee_le, 'd/m/Y à H:i') }}</td>
                         <td style="padding: 0.25rem 0.5rem;">{{ $consultation->numero_tva }}</td>
                         <td style="padding: 0.25rem 0.5rem;">{{ $consultation->valide ? 'Valide' : 'Inconnu' }}</td>
                         <td style="padding: 0.25rem 0.5rem;">{{ $consultation->identifiant_consultation ?? '—' }}</td>

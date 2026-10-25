@@ -2,6 +2,7 @@
 
 namespace App\Domain\CaisseSecurisee\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use Carbon\CarbonImmutable;
 
 /**
@@ -21,17 +22,25 @@ final readonly class InstantFiscal
      */
     public function pourSignature(): string
     {
-        return $this->utc->format('YmdHis').'Z';
+        return Calendrier::horodatageSigne($this->utc);
     }
 
     /**
-     * Le même instant à l'heure de l'application (Europe/Paris) : l'année
-     * de numérotation d'un document, le jour de réception d'un règlement.
-     * La date d'émission d'un document s'enregistre, elle, en UTC (voir
-     * HorodateSonEmission).
+     * Le jour du calendrier de cet instant (AAAA-MM-JJ) : la journée de
+     * caisse d'une vente, le jour de réception d'un règlement, le point de
+     * départ d'une échéance.
      */
-    public function enHeureLocale(): CarbonImmutable
+    public function jour(): string
     {
-        return $this->utc->setTimezone(config('app.timezone'));
+        return Calendrier::deParis()->jourDe($this->utc);
+    }
+
+    /**
+     * L'année du calendrier de cet instant (AAAA) : celle des numéros d'un
+     * document.
+     */
+    public function annee(): string
+    {
+        return Calendrier::deParis()->anneeDe($this->utc);
     }
 }

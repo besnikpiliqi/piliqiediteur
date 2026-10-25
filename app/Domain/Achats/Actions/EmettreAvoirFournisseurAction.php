@@ -9,6 +9,7 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -90,12 +91,13 @@ class EmettreAvoirFournisseurAction
         $this->arreterLesMontants($avoirFournisseur);
         $avoirFournisseur->verifierQueLeStockSuffit();
 
-        $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, now()->format('Y'));
+        $maintenant = CarbonImmutable::now('UTC');
+        $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, Calendrier::deParis()->anneeDe($maintenant));
 
         $avoirFournisseur->forceFill([
             'numero' => $numero,
             'statut' => StatutAvoirFournisseur::Emise,
-            'date_emission' => CarbonImmutable::now('UTC'),
+            'date_emission' => $maintenant,
         ])->save();
 
         // Synchrone et dans la même transaction, voir le commentaire de

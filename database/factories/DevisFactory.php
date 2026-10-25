@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Devis;
@@ -19,7 +20,7 @@ class DevisFactory extends Factory
         return [
             'client_id' => Client::factory(),
             'type_client' => fn (array $attributs): TypeClient => Client::query()->withTrashed()->findOrFail($attributs['client_id'])->type_client,
-            'date_validite' => now()->addDays(30)->toDateString(),
+            'date_validite' => Calendrier::ajouterJours(Calendrier::deParis()->aujourdhui(), 30),
         ];
     }
 }

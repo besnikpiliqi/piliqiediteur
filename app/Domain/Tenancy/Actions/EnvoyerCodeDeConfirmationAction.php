@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -24,6 +25,7 @@ use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\EnvoiRecommande\DestinataireDuCourrier;
 use App\Integrations\EnvoiRecommande\EnvoiRecommandeIndisponibleException;
 use App\Models\User;
+use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -156,7 +158,7 @@ class EnvoyerCodeDeConfirmationAction
     private function envoyer(Societe $societe, MotifCode $motif, DestinataireDuCourrier $destinataire, ?User $proprietaire, ?InterventionDeLEditeur $editeur): CodeConfirmation
     {
         $code = $this->codes->generer();
-        $expireLe = now()->addDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS);
+        $expireLe = Calendrier::deParis()->decaler(now(), CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
 
         try {
             return DB::transaction(function () use ($societe, $motif, $destinataire, $proprietaire, $editeur, $code, $expireLe): CodeConfirmation {
@@ -206,7 +208,7 @@ class EnvoyerCodeDeConfirmationAction
         }
 
         if ($possibleLe->isFuture()) {
-            throw new VerificationRefuseeException(sprintf(self::MESSAGE_PAS_ENCORE, $possibleLe->setTimezone(config('app.timezone'))->format('d/m/Y à H:i')));
+            throw new VerificationRefuseeException(sprintf(self::MESSAGE_PAS_ENCORE, Calendrier::deParis()->afficher($possibleLe, 'd/m/Y à H:i')));
         }
     }
 

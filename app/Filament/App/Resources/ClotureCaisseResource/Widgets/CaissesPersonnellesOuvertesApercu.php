@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -29,7 +30,7 @@ class CaissesPersonnellesOuvertesApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today());
+        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui());
 
         return [
             Stat::make('Caisses personnelles ouvertes', (string) $vendeurs->count())

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -128,7 +129,7 @@ class PaiementPolicyTest extends TestCase
 
         return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $facture->client,
-            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $facture->id, 'montant' => '12.00']],
         );
     }

@@ -2,9 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\ActionTraitee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -31,7 +33,7 @@ class PurgerActionsTraitees extends Command
 
     public function handle(TenantContext $tenantContext): int
     {
-        $limite = now()->subDays(config('conservation.actions_traitees_en_jours'));
+        $limite = Calendrier::deParis()->decaler(now(), CarbonInterval::days(-config('conservation.actions_traitees_en_jours')));
         $effaces = 0;
         $enEchec = 0;
 

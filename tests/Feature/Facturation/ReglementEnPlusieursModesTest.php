@@ -268,7 +268,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $facture, [new PartDeReglement(ModePaiement::Especes, 4000), new PartDeReglement(ModePaiement::CarteBancaire, 6000, 'CB-9')], [], '2026-10-08');
 
         $this->assertSame([['especes', '40.00'], ['carte_bancaire', '60.00']], self::paiementsDe($facture));
-        $this->assertSame(['2026-10-08', '2026-10-08'], Paiement::query()->orderBy('id')->get()->map(fn (Paiement $paiement): string => $paiement->recu_le->toDateString())->all());
+        $this->assertSame(['2026-10-08', '2026-10-08'], Paiement::query()->orderBy('id')->get()->map(fn (Paiement $paiement): string => $paiement->recu_le)->all());
         $this->assertSame([StatutFacture::Payee, 0.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }

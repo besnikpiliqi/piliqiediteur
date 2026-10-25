@@ -2,13 +2,13 @@
 
 namespace App\Filament\Societe\Pages;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Collection;
@@ -57,7 +57,7 @@ class LesCaisses extends Page
 
     public function mount(): void
     {
-        $this->jour = CarbonImmutable::today(config('app.timezone'))->toDateString();
+        $this->jour = Calendrier::deParis()->aujourdhui();
     }
 
     /**
@@ -69,7 +69,7 @@ class LesCaisses extends Page
      * n'obtient jamais les caisses ni l'adresse d'un magasin qu'il
      * désignerait lui-même.
      *
-     * @return array{journee: CarbonImmutable, caisses: list<array{magasin: Magasin, url: string, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>}
+     * @return array{journee: string, caisses: list<array{magasin: Magasin, url: string, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>}
      */
     protected function getViewData(): array
     {
@@ -87,12 +87,11 @@ class LesCaisses extends Page
     }
 
     /**
-     * Le jour choisi, aujourd'hui si la saisie n'est pas une date.
+     * Le jour choisi (« AAAA-MM-JJ »), aujourd'hui si la saisie n'est pas
+     * un jour.
      */
-    private function jourChoisi(): CarbonImmutable
+    private function jourChoisi(): string
     {
-        $jour = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $this->jour) === 1 ? CarbonImmutable::createFromFormat('!Y-m-d', $this->jour, config('app.timezone')) : false;
-
-        return $jour instanceof CarbonImmutable && $jour->toDateString() === $this->jour ? $jour : CarbonImmutable::today(config('app.timezone'));
+        return Calendrier::jourValide($this->jour) ?? Calendrier::deParis()->aujourdhui();
     }
 }

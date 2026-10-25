@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -155,7 +156,7 @@ class CloturerCaisseActionTest extends TestCase
         $factureParticulier = $this->emettreFacturePour($particulier, 120); // 120 TTC
         $this->emettreFacturePour($professionnel, 60); // ne doit jamais être agrégée
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame('120.00', $cloture->total_ttc);
@@ -182,7 +183,7 @@ class CloturerCaisseActionTest extends TestCase
             ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Erreur de saisie');
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame(1, $cloture->nombre_avoirs);
@@ -199,14 +200,14 @@ class CloturerCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $venteDHier = $this->emettreFacturePour($client, 60); // 60 TTC
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFacturePour($client, 120); // 120 TTC
         $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDHier->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame(1, $cloture->nombre_avoirs);
@@ -264,7 +265,7 @@ class CloturerCaisseActionTest extends TestCase
             ['ligne_facture_id' => $vente->lignes->firstWhere('produit_id', $ecran->id)->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([
             ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null, 'remarque' => null],
@@ -286,7 +287,7 @@ class CloturerCaisseActionTest extends TestCase
         ]));
         $client->delete();
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(2, $cloture->nombre_ventes);
         $this->assertSame(1, $cloture->nombre_avoirs);
@@ -301,7 +302,7 @@ class CloturerCaisseActionTest extends TestCase
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(0, $cloture->nombre_avoirs);
         $this->assertSame('0.00', $cloture->total_ttc);
@@ -310,7 +311,7 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_numerote_la_cloture(): void
     {
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertNotNull($cloture->numero);
         $this->assertNotNull($cloture->cloturee_a);
@@ -319,15 +320,15 @@ class CloturerCaisseActionTest extends TestCase
     public function test_une_journee_deja_cloturee_ne_peut_pas_letre_deux_fois(): void
     {
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
-        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now()), LogicException::class, 'La journée du 09/10/2026 est déjà clôturée.');
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui()), LogicException::class, 'La journée du 09/10/2026 est déjà clôturée.');
     }
 
     public function test_deux_journees_differentes_peuvent_chacune_etre_cloturees(): void
     {
-        $hier = self::aParis('2026-10-08 10:00:00');
-        $aujourdhui = now();
+        $hier = '2026-10-08';
+        $aujourdhui = Calendrier::deParis()->aujourdhui();
 
         $clotureHier = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $hier);
         $clotureAujourdhui = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $aujourdhui);
@@ -364,7 +365,7 @@ class CloturerCaisseActionTest extends TestCase
         $this->travelTo(self::aParis('2026-10-08 19:00:00'));
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-07'), LogicException::class, "Le magasin était fermé le 07/10/2026 : cette journée n'a pas de clôture.");
-        $this->assertSame('2026-10-08', app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-08')->date_cloture->toDateString());
+        $this->assertSame('2026-10-08', app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-08')->date_cloture);
         $this->assertSame(2, ClotureCaisse::query()->count());
     }
 
@@ -672,7 +673,7 @@ class CloturerCaisseActionTest extends TestCase
         $vente = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $ecran->id, 'quantite' => 1], ['produit_id' => $livre->id, 'quantite' => 1]]);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $vente->lignes->firstWhere('produit_id', $livre->id)->id, 'quantite' => 1]], 'Retour');
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $recapitulatif = $cloture->fresh()->recapitulatif;
         $this->assertSame(['nombre' => 1, 'ht' => 6000, 'tva' => 1055, 'ttc' => 7055, 'par_taux' => [
@@ -697,7 +698,7 @@ class CloturerCaisseActionTest extends TestCase
         $facture = $this->emettreFacturePour($professionnel, 60);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $recapitulatif = $cloture->fresh()->recapitulatif;
         $this->assertSame(['nombre' => 1, 'ht' => 5000, 'tva' => 1000, 'ttc' => 6000, 'par_taux' => [['taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'ttc' => 6000]]], $recapitulatif['factures_professionnels']);
@@ -717,7 +718,7 @@ class CloturerCaisseActionTest extends TestCase
         $this->vendreUnTicket($client, 25);
         $this->vendreUnTicket($client, 25);
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(['nombre' => 2, 'ht' => 4166, 'tva' => 834, 'ttc' => 5000, 'par_taux' => [
             ['taux' => 2000, 'ht' => 4166, 'tva' => 834, 'ttc' => 5000],
@@ -798,7 +799,7 @@ class CloturerCaisseActionTest extends TestCase
             new PartDeReglement(ModePaiement::CarteBancaire, 4000),
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([[1, 0, 4000], [1, 0, 4000]], [self::encaissementsDe($cloture)['especes'], self::encaissementsDe($cloture)['carte_bancaire']]);
     }
@@ -814,9 +815,9 @@ class CloturerCaisseActionTest extends TestCase
         app(TenantContext::class)->set($autreMagasin);
         $this->vendreUnTicket(Client::factory()->create(), 60, ModePaiement::CarteBancaire);
 
-        $clotureAutre = app(CloturerCaisseAction::class)->handle(self::auteur(), $autreMagasin, now());
+        $clotureAutre = app(CloturerCaisseAction::class)->handle(self::auteur(), $autreMagasin, Calendrier::deParis()->aujourdhui());
         app(TenantContext::class)->set($this->magasin);
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([[1, 0, 1200], [0, 0, 0]], [self::encaissementsDe($cloture)['especes'], self::encaissementsDe($cloture)['carte_bancaire']]);
         $this->assertSame(['perpetuel_reel' => 1200, 'perpetuel_absolu' => 1200], $cloture->fresh()->recapitulatif['grands_totaux']);
@@ -829,7 +830,7 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_cloture_faite_ne_se_modifie_plus_ni_ne_se_supprime(): void
     {
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertThrows(
             fn () => $cloture->fresh()->forceFill(['recapitulatif' => ['credit_avoir_impute' => 1]])->save(),

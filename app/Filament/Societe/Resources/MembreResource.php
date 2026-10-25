@@ -4,6 +4,7 @@ namespace App\Filament\Societe\Resources;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -206,7 +207,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
         $auteur = User::query()->where('societe_id', $compte->societe_id)->find($compte->acces_redonne_par)?->name ?? 'un compte de la société';
 
-        return 'Le '.$compte->acces_redonne_le->setTimezone(config('app.timezone'))->format('d/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
+        return 'Le '.Calendrier::deParis()->afficher($compte->acces_redonne_le, 'd/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
     }
 
     /**

@@ -2,12 +2,14 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -30,7 +32,7 @@ class CloreInscriptionsSansCode extends Command
 {
     public function handle(CloreLInscriptionAction $clore): int
     {
-        $limite = CarbonImmutable::now()->subDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS);
+        $limite = Calendrier::deParis()->decaler(CarbonImmutable::now(), CarbonInterval::days(-CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
         $closes = 0;
         $enEchec = 0;
 

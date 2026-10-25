@@ -2,10 +2,12 @@
 
 namespace App\Domain\CaisseSecurisee\Services;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -17,7 +19,6 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use Carbon\CarbonImmutable;
 use Closure;
 use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
@@ -388,8 +389,8 @@ class VerificateurIntegrite
             $this->rapport->signaler(AnomalieFiscale::defaut('horodatage', sprintf(
                 '%s : horodaté le %s, avant l\'enregistrement précédent (%s).',
                 $situation,
-                self::aLHeureDeParis($horodatage),
-                self::aLHeureDeParis($precedent['horodatage']),
+                self::enClair($horodatage),
+                self::enClair($precedent['horodatage']),
             ), $reference));
         }
 
@@ -623,8 +624,8 @@ class VerificateurIntegrite
         if ($plusRecent !== null && ($dernierVerrou === null || $dernierVerrou < $plusRecent)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('tete', sprintf(
                 'La ligne de tête date le dernier verrou du registre %s, avant son enregistrement le plus récent (%s).',
-                $dernierVerrou === null ? 'd\'aucun instant' : 'du '.self::aLHeureDeParis($dernierVerrou),
-                self::aLHeureDeParis($plusRecent),
+                $dernierVerrou === null ? 'd\'aucun instant' : 'du '.self::enClair($dernierVerrou),
+                self::enClair($plusRecent),
             )));
         }
     }
@@ -738,8 +739,8 @@ class VerificateurIntegrite
             $this->rapport->signaler(AnomalieFiscale::defaut('date_emission', sprintf(
                 '%s porte la date d\'émission %s, qui n\'est pas l\'instant de sa signature (%s).',
                 $libelle,
-                $dateEmission === null ? 'illisible' : 'du '.self::aLHeureDeParis($dateEmission),
-                $horodatage === null ? 'illisible' : self::aLHeureDeParis($horodatage),
+                $dateEmission === null ? 'illisible' : 'du '.self::enClair($dateEmission),
+                $horodatage === null ? 'illisible' : self::enClair($horodatage),
             ), $reference));
         }
     }
@@ -1321,14 +1322,14 @@ class VerificateurIntegrite
             return;
         }
 
-        $anneeDEmission = CarbonImmutable::createFromFormat('Y-m-d H:i:s', $emission, 'UTC')->setTimezone(config('app.timezone'))->format('Y');
+        $anneeDEmission = Calendrier::deParis()->anneeDe(HorodatageUtc::depuisLaBase($emission));
 
         if ($anneeDEmission !== $serie->period_key) {
             $this->rapport->signaler(AnomalieFiscale::defaut('numerotation', sprintf(
                 '%s est numéroté dans l\'année %s mais émis le %s.',
                 self::libelleDuDocument($alias, (int) $document->id, $document->numero),
                 $serie->period_key,
-                self::aLHeureDeParis($emission),
+                self::enClair($emission),
             ), ['document' => $alias, 'document_id' => (int) $document->id, 'numero' => $document->numero]));
         }
     }
@@ -1575,11 +1576,12 @@ class VerificateurIntegrite
             : null;
     }
 
-    private static function aLHeureDeParis(string $horodatageEnBase): string
+    /**
+     * Un horodatage lu en base, affiché à l'heure du calendrier.
+     */
+    private static function enClair(string $horodatageEnBase): string
     {
-        return CarbonImmutable::createFromFormat('Y-m-d H:i:s', $horodatageEnBase, 'UTC')
-            ->setTimezone(config('app.timezone'))
-            ->format('d/m/Y à H:i:s');
+        return Calendrier::deParis()->afficher(HorodatageUtc::depuisLaBase($horodatageEnBase), 'd/m/Y à H:i:s');
     }
 
     /**

@@ -156,7 +156,7 @@ class ModifierDevisActionTest extends TestCase
         );
 
         $devis->refresh();
-        $this->assertSame([StatutDevis::Expire, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite->toDateString(), $devis->total_ttc]);
+        $this->assertSame([StatutDevis::Expire, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite, $devis->total_ttc]);
     }
 
     /**
@@ -178,7 +178,7 @@ class ModifierDevisActionTest extends TestCase
         );
 
         $devis->refresh();
-        $this->assertSame([StatutDevis::Envoye, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite->toDateString(), $devis->total_ttc]);
+        $this->assertSame([StatutDevis::Envoye, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite, $devis->total_ttc]);
     }
 
     public function test_un_devis_deja_converti_en_facture_nest_plus_modifiable(): void

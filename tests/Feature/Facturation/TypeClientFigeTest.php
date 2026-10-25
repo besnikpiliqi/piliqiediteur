@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -90,7 +91,7 @@ class TypeClientFigeTest extends TestCase
         [, $ticket] = $this->ticketDontLeClientDevientProfessionnel();
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(['TK-MABOUT-2026-000001', '100.00', '20.00', '120.00'], [$ticket->numero, $ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
         $this->assertSame(['Ticket de caisse', 'ticket-TK-MABOUT-2026-000001.pdf', false], [$ticket->libelleDocument(), app(FacturePdfGenerator::class)->nomFichier($ticket), $ticket->relevantDeLeInvoicing()]);
@@ -171,7 +172,7 @@ class TypeClientFigeTest extends TestCase
         $magasin = $this->magasin();
         [$client, $ticket] = $this->ticketDontLeClientDevientProfessionnel();
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $this->travelTo(self::aParis('2026-10-10 10:00:00'));
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client->fresh(), [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
@@ -182,7 +183,7 @@ class TypeClientFigeTest extends TestCase
             Arr::only($this->clientSigne($avoir), ['type_client', 'nom', 'siren']),
         );
         $this->travelTo(self::aParis('2026-10-10 19:00:00'));
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $this->assertSame([0, 1, '-120.00'], [$cloture->nombre_ventes, $cloture->nombre_avoirs, $cloture->total_ttc]);
         $this->assertSame($cloture->id, $avoir->fresh()->cloture_caisse_id);
     }

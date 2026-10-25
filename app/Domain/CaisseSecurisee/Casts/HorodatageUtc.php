@@ -18,8 +18,8 @@ use InvalidArgumentException;
  * d'octobre) ne dirait plus de quel instant elle est.
  *
  * Relu en UTC (le registre), ou au fuseau passé en argument
- * (HorodatageUtc::class.':Europe/Paris') : le même instant, qui s'affiche
- * alors à l'heure de Paris.
+ * (HorodatageUtc::class.':'.Calendrier::deParis()->fuseau()) : le même
+ * instant, qui s'affiche alors à l'heure du calendrier.
  *
  * Seule une date qui porte son fuseau (DateTimeInterface) s'écrit : une
  * chaîne ne dit pas de quel fuseau est son heure.
@@ -41,9 +41,18 @@ class HorodatageUtc implements CastsAttributes
         return CarbonImmutable::instance($instant)->utc()->format(self::FORMAT);
     }
 
+    /**
+     * L'instant d'un texte lu en base hors d'un modèle (un agrégat, une
+     * lecture brute).
+     */
+    public static function depuisLaBase(string $texte): CarbonImmutable
+    {
+        return CarbonImmutable::createFromFormat('!'.self::FORMAT, $texte, 'UTC');
+    }
+
     public function get(Model $model, string $key, mixed $value, array $attributes): ?CarbonImmutable
     {
-        return $value === null ? null : CarbonImmutable::createFromFormat(self::FORMAT, $value, 'UTC')->setTimezone($this->fuseauDeLecture);
+        return $value === null ? null : self::depuisLaBase($value)->setTimezone($this->fuseauDeLecture);
     }
 
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
@@ -274,7 +275,7 @@ class DemanderLaTransmissionDeLaProprieteAction
             $lien,
             $societe->getFilamentName(),
             $auteur->name,
-            $demande->expire_le->setTimezone(config('app.timezone'))->format('d/m/Y à H:i'),
+            Calendrier::deParis()->afficher($demande->expire_le, 'd/m/Y à H:i'),
         ));
         $this->debit->compter($auteur);
 

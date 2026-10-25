@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\CategorieEReporting;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -93,7 +94,7 @@ class EReportingDesParticuliers
 
     public function apercu(ClotureCaisse $cloture): ApercuEReporting
     {
-        $journee = $cloture->date_cloture->toDateString();
+        $journee = $cloture->date_cloture;
 
         if ($cloture->magasin->est_demonstration) {
             return new ApercuEReporting($journee, true, [], [], []);
@@ -286,7 +287,7 @@ class EReportingDesParticuliers
     {
         $precedente = ClotureCaisse::query()
             ->where('magasin_id', $cloture->magasin_id)
-            ->whereDate('date_cloture', '<', $cloture->date_cloture->toDateString())
+            ->where('date_cloture', '<', $cloture->date_cloture)
             ->orderByDesc('date_cloture')
             ->first();
         $reglements = $this->sansLesReductions($this->reglements(
@@ -442,12 +443,12 @@ class EReportingDesParticuliers
     }
 
     /**
-     * Le jour d'un enregistrement du registre fiscal, à l'heure de Paris
+     * Le jour du calendrier d'un enregistrement du registre fiscal
      * (AAAA-MM-JJ).
      */
     private static function jourDe(EnregistrementFiscal $enregistrement): string
     {
-        return $enregistrement->horodatage->setTimezone(config('app.timezone'))->toDateString();
+        return Calendrier::deParis()->jourDe($enregistrement->horodatage);
     }
 
     /**

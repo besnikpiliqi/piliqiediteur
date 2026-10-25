@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
@@ -106,7 +107,7 @@ class JournalAudit
                 'justification' => $editeur?->justification,
                 'operateur' => $editeur?->operateur(),
                 'cle_id' => $cleId,
-                'expire_le' => $duree === null ? null : $maintenant->add($duree),
+                'expire_le' => $duree === null ? null : Calendrier::deParis()->decaler($maintenant, $duree),
                 'created_at' => $maintenant,
             ]);
             $entree->societe_id = $societe->getKey();
@@ -203,7 +204,7 @@ class JournalAudit
     {
         return match (true) {
             $valeur instanceof BackedEnum => $valeur->value,
-            $valeur instanceof \DateTimeInterface => CarbonImmutable::instance($valeur)->toDateString(),
+            $valeur instanceof \DateTimeInterface => Calendrier::deParis()->jourDe($valeur),
             is_float($valeur) => (string) $valeur,
             is_array($valeur) => array_map(self::valeur(...), $valeur),
             default => $valeur,

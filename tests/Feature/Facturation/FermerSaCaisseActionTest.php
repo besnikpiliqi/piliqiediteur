@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -346,7 +347,7 @@ class FermerSaCaisseActionTest extends TestCase
         return app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => $mode->value,
             'montant' => $montant,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 }

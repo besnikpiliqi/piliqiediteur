@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -121,7 +122,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 30,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $nouvelleFacture->id, 'montant' => 30]]);
 
         $this->assertSame(StatutFacture::Payee, $nouvelleFacture->fresh()->statut);

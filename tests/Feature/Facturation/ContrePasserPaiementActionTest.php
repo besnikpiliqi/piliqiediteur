@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -73,7 +74,7 @@ class ContrePasserPaiementActionTest extends TestCase
     {
         return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => $mode->value, 'montant' => $montant, 'reference' => $reference, 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => $mode->value, 'montant' => $montant, 'reference' => $reference, 'recu_le' => Calendrier::deParis()->aujourdhui()],
             array_map(static fn (int $factureId, string $montantImpute): array => ['facture_id' => $factureId, 'montant' => $montantImpute], array_keys($imputations), $imputations),
         );
     }
@@ -109,7 +110,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
         $this->assertSame(
             [$client->id, ModePaiement::Especes, '-100.00', 'CAISSE-7', 'Erreur de saisie : 10 € reçus', '2026-10-09', $operateur->id, $errone->id],
-            [$contrePassation->client_id, $contrePassation->mode_paiement, $contrePassation->montant, $contrePassation->reference, $contrePassation->notes, $contrePassation->recu_le->toDateString(), $contrePassation->cree_par, $contrePassation->contre_passe_paiement_id],
+            [$contrePassation->client_id, $contrePassation->mode_paiement, $contrePassation->montant, $contrePassation->reference, $contrePassation->notes, $contrePassation->recu_le, $contrePassation->cree_par, $contrePassation->contre_passe_paiement_id],
         );
         $this->assertSame([[$facture->id, '-100.00']], $contrePassation->allocations->map(fn ($allocation): array => [$allocation->facture_id, $allocation->montant_alloue])->all());
         $facture->refresh();
@@ -225,13 +226,13 @@ class ContrePasserPaiementActionTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertThrows(fn () => $this->contrePasser($errone), LogicException::class, 'La journée du 09/10/2026 est clôturée : la contre-passation pourra être faite demain.');
         $this->travelTo(self::aParis('2026-10-10 09:00:00'));
         $contrePassation = $this->contrePasser($errone);
 
-        $this->assertSame('2026-10-10', $contrePassation->recu_le->toDateString());
+        $this->assertSame('2026-10-10', $contrePassation->recu_le);
         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
     }
 
@@ -345,7 +346,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $ticketRendu = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
         $bon = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticketRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $ticket = $this->facture($comptoir, 50);
-        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::Especes, 3000)], [$bon->numero], today()->toDateString());
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::Especes, 3000)], [$bon->numero], Calendrier::deParis()->aujourdhui());
         $errone = Paiement::query()->where('montant', '30.00')->sole();
 
         return compact('ticket', 'bon', 'errone');
@@ -407,7 +408,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
         ['ticket' => $ticket, 'bon' => $bon, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
         $this->contrePasser($errone, 'Saisi sur le mauvais ticket');
-        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], today()->toDateString());
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([], $verrous);
     }

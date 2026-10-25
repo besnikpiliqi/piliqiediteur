@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -23,7 +24,6 @@ use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -111,7 +111,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
             [$releveDePaul->mode_fermeture, $releveDePaul->fermee_par, $releveDePaul->factures->modelKeys(), $releveDePaul->total_ttc, $releveDePaul->jusqu_au->getTimestamp()],
         );
         $this->assertSame([$releveDeLea->id], ClotureCaissePersonnelle::query()->where('vendeur_id', $lea->id)->pluck('id')->all());
-        $this->assertTrue(app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->isEmpty());
+        $this->assertTrue(app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->isEmpty());
     }
 
     public function test_le_releve_ferme_d_office_porte_la_mention_fermee_automatiquement(): void
@@ -370,7 +370,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
             [$releve->factures->modelKeys(), $releve->total_ttc, $releve->jusqu_au->getTimestamp()],
         );
         $this->assertTrue(Facture::query()->nonFermeesParLeVendeur($paul->id)->whereKey($ticketDApresMinuit->id)->exists());
-        $this->assertSame([$paul->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(CarbonImmutable::parse('2026-10-10'))->pluck('id')->all());
+        $this->assertSame([$paul->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-10')->pluck('id')->all());
     }
 
     /**

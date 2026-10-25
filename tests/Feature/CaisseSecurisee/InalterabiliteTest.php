@@ -4,6 +4,7 @@ namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -212,7 +213,7 @@ class InalterabiliteTest extends TestCase
         $facture = $this->emettre($client);
         $payer = fn (string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => $montant, 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $facture->id, 'montant' => $montant]],
         );
 
@@ -261,7 +262,7 @@ class InalterabiliteTest extends TestCase
         $facture = $this->emettre($client);
         app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $facture->id, 'montant' => '20.00']],
         );
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);

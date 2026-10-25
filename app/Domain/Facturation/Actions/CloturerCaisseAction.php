@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -20,10 +21,7 @@ use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -107,37 +105,39 @@ class CloturerCaisseAction
     ) {}
 
     /**
-     * La clôture de cette journée par son auteur.
+     * La clôture de cette journée du calendrier (AAAA-MM-JJ) par son
+     * auteur.
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+    public function handle(User $auteur, Magasin $magasin, string $journee): ClotureCaisse
     {
-        return DB::transaction(function () use ($auteur, $magasin, $date): ClotureCaisse {
+        return DB::transaction(function () use ($auteur, $magasin, $journee): ClotureCaisse {
             $instant = $this->registre->verrouiller($magasin);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'cloturer', $magasin, ClotureCaisse::class);
 
-            return $this->operateur->pendant($compte, fn (): ClotureCaisse => $this->cloturer($compte, $magasin, Carbon::parse($date)->toDateString(), $instant));
+            return $this->operateur->pendant($compte, fn (): ClotureCaisse => $this->cloturer($compte, $magasin, $journee, $instant));
         });
     }
 
     /**
-     * La clôture de cette journée par le système, sans auteur : la
-     * clôture automatique de minuit et ses journées rattrapées.
+     * La clôture de cette journée du calendrier (AAAA-MM-JJ) par le
+     * système, sans auteur : la clôture automatique de minuit et ses
+     * journées rattrapées.
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+    public function parLeSysteme(Magasin $magasin, string $journee): ClotureCaisse
     {
-        return DB::transaction(function () use ($magasin, $date): ClotureCaisse {
+        return DB::transaction(function () use ($magasin, $journee): ClotureCaisse {
             $instant = $this->registre->verrouiller($magasin);
 
-            return $this->operateur->pendantLeSysteme(fn (): ClotureCaisse => $this->cloturer(null, $magasin, Carbon::parse($date)->toDateString(), $instant));
+            return $this->operateur->pendantLeSysteme(fn (): ClotureCaisse => $this->cloturer(null, $magasin, $journee, $instant));
         });
     }
 
@@ -148,7 +148,7 @@ class CloturerCaisseAction
      */
     private function cloturer(?User $compte, Magasin $magasin, string $journee, InstantFiscal $instant): ClotureCaisse
     {
-        $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->enHeureLocale()->toDateString(), $this->registre->derniereJourneeCloturee($magasin));
+        $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->jour(), $this->registre->derniereJourneeCloturee($magasin));
         $this->panierDeCaisse->abandonnerLesVentesOuvertesLe($journee);
 
         $ventes = Facture::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
@@ -171,7 +171,7 @@ class CloturerCaisseAction
         $cloture->save();
 
         $cloture->forceFill([
-            'numero' => $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, CarbonImmutable::parse($journee)->format('Y')),
+            'numero' => $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, substr($journee, 0, 4)),
             'cloturee_a' => now(),
         ])->save();
 
@@ -210,14 +210,18 @@ class CloturerCaisseAction
 
     /**
      * @param  string  $journee  la journée à clôturer, AAAA-MM-JJ
-     * @param  string  $aujourdhui  la journée en cours à l'heure de Paris, AAAA-MM-JJ
+     * @param  string  $aujourdhui  la journée en cours, AAAA-MM-JJ
      * @param  string|null  $derniere  la dernière journée clôturée, lue sous le verrou du registre
      *
      * @throws LogicException
      */
     private function verifierQueLaJourneePeutEtreCloturee(Magasin $magasin, string $journee, string $aujourdhui, ?string $derniere): void
     {
-        $enClair = static fn (string $jour): string => CarbonImmutable::parse($jour)->format('d/m/Y');
+        if (Calendrier::jourValide($journee) === null) {
+            throw new LogicException("« {$journee} » n'est pas une journée : une journée s'écrit AAAA-MM-JJ.");
+        }
+
+        $enClair = static fn (string $jour): string => Calendrier::afficherJour($jour, 'd/m/Y');
 
         if ($journee > $aujourdhui) {
             throw new LogicException("La journée du {$enClair($journee)} n'est pas encore commencée.");
@@ -233,7 +237,7 @@ class CloturerCaisseAction
                 : "La journée du {$enClair($journee)} précède la dernière journée clôturée, celle du {$enClair($derniere)} : les journées se clôturent dans l'ordre.");
         }
 
-        $enAttente = $this->journeesDeCaisse->aCloturer($magasin, CarbonImmutable::parse($journee)->subDay()->toDateString(), $derniere)->first();
+        $enAttente = $this->journeesDeCaisse->aCloturer($magasin, Calendrier::ajouterJours($journee, -1), $derniere)->first();
 
         if ($enAttente !== null) {
             throw new LogicException("Clôturez d'abord la journée du {$enClair($enAttente)}.");

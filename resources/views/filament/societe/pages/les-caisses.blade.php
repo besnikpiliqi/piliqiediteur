@@ -1,6 +1,7 @@
 {{-- Voir LesCaisses. --}}
 <x-filament-panels::page>
     @php($euros = fn (float|string $montant): string => number_format((float) $montant, 2, ',', ' ').' €')
+    @php($calendrier = \App\Domain\Calendrier\Calendrier::deParis())
 
     <x-filament::section>
         <label class="flex flex-wrap items-center gap-3">
@@ -28,7 +29,7 @@
             </p>
 
             @if ($caissesDuMagasin['releves']->isEmpty())
-                <p>Aucun relevé de caisse fermé le {{ $journee->format('d/m/Y') }}.</p>
+                <p>Aucun relevé de caisse fermé le {{ \App\Domain\Calendrier\Calendrier::afficherJour($journee, 'd/m/Y') }}.</p>
             @else
                 <table class="w-full text-start text-sm">
                     <thead>
@@ -47,7 +48,7 @@
                         @foreach ($caissesDuMagasin['releves'] as $releve)
                             <tr class="border-t border-gray-200 dark:border-white/10">
                                 <td class="py-1 pe-3">{{ $releve->vendeur_nom }}</td>
-                                <td class="py-1 pe-3">{{ $releve->periode_debut->format('d/m/Y H:i') }} → {{ $releve->jusqu_au->format('d/m/Y H:i') }}</td>
+                                <td class="py-1 pe-3">{{ $calendrier->afficher($releve->periode_debut, 'd/m/Y H:i') }} → {{ $calendrier->afficher($releve->jusqu_au, 'd/m/Y H:i') }}</td>
                                 <td class="py-1 pe-3">{{ $releve->libelleDeFermeture() }}</td>
                                 <td class="py-1 pe-3 text-end">{{ $releve->nombre_ventes }}</td>
                                 <td class="py-1 pe-3 text-end">{{ $euros($releve->total_ttc) }}</td>

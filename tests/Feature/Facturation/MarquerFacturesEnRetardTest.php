@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -64,7 +65,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 50,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => 50]]);
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
         app(TenantContext::class)->clear();
@@ -94,7 +95,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->travelTo(self::aParis('2026-10-10 00:15:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
-        $this->assertSame(['2026-10-09', StatutFacture::EnRetard], [$facture->fresh()->date_echeance->toDateString(), $facture->fresh()->statut]);
+        $this->assertSame(['2026-10-09', StatutFacture::EnRetard], [$facture->fresh()->date_echeance, $facture->fresh()->statut]);
     }
 
     public function test_une_facture_dont_lecheance_nest_pas_encore_passee_nest_pas_touchee(): void
@@ -232,7 +233,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => 20,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => 20]]);
         $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
 
@@ -323,7 +324,7 @@ class MarquerFacturesEnRetardTest extends TestCase
             app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
                 'mode_paiement' => ModePaiement::Especes,
                 'montant' => 120,
-                'recu_le' => today()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ], [['facture_id' => $facture->id, 'montant' => 120]]);
         });
     }

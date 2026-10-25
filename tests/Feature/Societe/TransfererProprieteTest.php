@@ -5,6 +5,7 @@ namespace Tests\Feature\Societe;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -684,14 +685,14 @@ class TransfererProprieteTest extends TestCase
         $nouveau = $vendeur->refresh();
         $this->assertFalse($nouveau->tientUneCaisseDans($magasin));
         $this->assertThrows(fn () => self::vendreAuComptant($nouveau, Client::factory()->create(), $this->lignes(), ModePaiement::Especes), AuthorizationException::class, LecteurDesDroits::REFUS);
-        $this->assertSame([$nouveau->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->modelKeys());
+        $this->assertSame([$nouveau->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->modelKeys());
 
         $this->dansLeMagasin($magasin, $nouveau);
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer')->assertHasNoActionErrors();
 
         $releve = ClotureCaissePersonnelle::query()->sole();
         $this->assertSame([$nouveau->id, ModeFermetureCaisse::Automatique, 1, '12.00'], [$releve->vendeur_id, $releve->mode_fermeture, $releve->nombre_ventes, $releve->total_ttc]);
-        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->all());
+        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->all());
     }
 
     /**
@@ -737,8 +738,8 @@ class TransfererProprieteTest extends TestCase
         $contrePassation = $contrePasser();
 
         $this->assertSame([$nouveau->id, $paiement->id, '-12.00'], [$contrePassation->cree_par, $contrePassation->contre_passe_paiement_id, $contrePassation->montant]);
-        $this->assertSame([$responsableAilleurs->id], app(TenantContext::class)->runAs($autre, fn (): array => app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->modelKeys()));
-        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->all());
+        $this->assertSame([$responsableAilleurs->id], app(TenantContext::class)->runAs($autre, fn (): array => app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->modelKeys()));
+        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->all());
     }
 
     /**
@@ -773,9 +774,9 @@ class TransfererProprieteTest extends TestCase
         $this->assertSame([$responsable->id, 'Responsable de test', StatutFacture::Emise], [$vente->cree_par, $vente->cree_par_nom, $vente->statut]);
         $this->assertSame([$responsable->id, $responsable->id], [$enregistrement->operateur_id, $enregistrement->contenuSigne()['donnees']['document']['cree_par']]);
         $this->assertSame([1, 1], [app(FermerSaCaisseAction::class)->apercu($nouveau)->nombre_ventes, app(FermerSaCaisseAction::class)->apercu($responsable)->nombre_ventes]);
-        $this->assertEqualsCanonicalizing([$nouveau->id, $responsable->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->modelKeys());
+        $this->assertEqualsCanonicalizing([$nouveau->id, $responsable->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->modelKeys());
 
-        app(EnregistrerPaiementAction::class)->handle($responsable, $ticketDu->client, ['mode_paiement' => ModePaiement::Especes, 'montant' => 12, 'recu_le' => today()->toDateString()], [['facture_id' => $ticketDu->id, 'montant' => 12]]);
+        app(EnregistrerPaiementAction::class)->handle($responsable, $ticketDu->client, ['mode_paiement' => ModePaiement::Especes, 'montant' => 12, 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticketDu->id, 'montant' => 12]]);
 
         $this->assertSame([$nouveau->id, StatutFacture::Payee], [$ticketDu->fresh()->cree_par, $ticketDu->fresh()->statut]);
     }

@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -67,7 +68,7 @@ class ReimputationALaContrePassationTest extends TestCase
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => number_format(array_sum(array_map(static fn (Facture $facture): float => (float) $facture->total_ttc, $factures)), 2, '.', ''),
             'reference' => null,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], $allocations);
     }
 

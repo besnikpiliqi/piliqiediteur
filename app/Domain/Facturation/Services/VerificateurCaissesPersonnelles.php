@@ -2,13 +2,12 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -24,7 +23,7 @@ use LogicException;
  * La caisse d'un vendeur est ouverte au soir d'une journée tant qu'il a
  * des ventes ou des encaissements de cette journée ou d'une journée
  * antérieure qu'aucune de ses fermetures n'a comptés. Une vente est de la
- * journée de son émission, à l'heure de Paris ; un encaissement, de celle
+ * journée du calendrier de son émission ; un encaissement, de celle
  * où il est reçu, une contre-passation comprise, qui revient au vendeur du
  * paiement qu'elle corrige (voir Paiement::scopeNonFermesParLeVendeur()).
  * Quiconque enregistre un paiement a ainsi sa caisse, et la ferme tant
@@ -42,18 +41,17 @@ class VerificateurCaissesPersonnelles
 {
     /**
      * Les vendeurs du magasin actif dont la caisse personnelle est ouverte
-     * au soir de cette journée, chacun une fois, par identifiant. Une date
-     * porte sa journée dans son propre fuseau.
+     * au soir de cette journée du calendrier (« AAAA-MM-JJ »), chacun une
+     * fois, par identifiant.
      *
      * @return Collection<int, User>
      */
-    public function vendeursAvecCaisseOuverte(CarbonInterface $jour): Collection
+    public function vendeursAvecCaisseOuverte(string $journee): Collection
     {
-        $journee = $jour->toDateString();
-        $finDeLaJournee = CarbonImmutable::parse($journee, config('app.timezone'))->endOfDay();
+        $finDeLaJournee = Calendrier::deParis()->bornesDuJour($journee)[1]->subSecond();
         $paiementsOuverts = Paiement::query()
             ->whereDoesntHave('cloturesCaissePersonnelles')
-            ->whereDate('recu_le', '<=', $journee);
+            ->where('recu_le', '<=', $journee);
 
         $vendeurIds = Facture::query()
             ->emises()

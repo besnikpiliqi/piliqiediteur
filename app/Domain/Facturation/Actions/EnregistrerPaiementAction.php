@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -22,7 +23,6 @@ use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -98,7 +98,10 @@ class EnregistrerPaiementAction
      */
     public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null, array $bonsDAvoir = []): Paiement
     {
-        if (Carbon::parse($donneesPaiement['recu_le'])->startOfDay()->gt(today())) {
+        $recuLe = Calendrier::jourValide((string) $donneesPaiement['recu_le'])
+            ?? throw new LogicException('La date de réception d\'un paiement s\'écrit « AAAA-MM-JJ ».');
+
+        if ($recuLe > Calendrier::deParis()->aujourdhui()) {
             throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
         }
 

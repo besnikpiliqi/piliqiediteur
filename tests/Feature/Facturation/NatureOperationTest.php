@@ -357,7 +357,7 @@ class NatureOperationTest extends TestCase
 
         $this->assertSame(['250.00', '0.00', '250.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame($consultation->id, $facture->consultation_vies_id);
-        $this->assertSame(['2026-10-12', TransportPar::Magasin], [$facture->livraison_date->toDateString(), $facture->transport_par]);
+        $this->assertSame(['2026-10-12', TransportPar::Magasin], [$facture->livraison_date, $facture->transport_par]);
         $this->assertStringContainsString('Exonération de TVA, article 262 ter I du CGI', $this->pdf($facture));
     }
 
@@ -676,7 +676,7 @@ class NatureOperationTest extends TestCase
         $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh());
 
         $this->assertSame(NatureOperation::ExportHorsUe, $facture->nature_operation);
-        $this->assertSame(['1 Main Street', '10001', 'New York', 'US', '2026-10-20', TransportPar::Magasin], [$facture->livraison_adresse, $facture->livraison_code_postal, $facture->livraison_ville, $facture->livraison_pays, $facture->livraison_date->toDateString(), $facture->transport_par]);
+        $this->assertSame(['1 Main Street', '10001', 'New York', 'US', '2026-10-20', TransportPar::Magasin], [$facture->livraison_adresse, $facture->livraison_code_postal, $facture->livraison_ville, $facture->livraison_pays, $facture->livraison_date, $facture->transport_par]);
         $this->assertSame(['833.33', '0.00', '833.33'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame('20.00', $facture->lignes->sole()->taux_tva_du_prix);
     }

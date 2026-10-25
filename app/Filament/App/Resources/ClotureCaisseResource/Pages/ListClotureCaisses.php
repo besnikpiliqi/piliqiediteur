@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\ClotureCaisseResource\Pages;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -13,7 +14,6 @@ use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteAper
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -74,7 +74,7 @@ class ListClotureCaisses extends ListRecords
     {
         parent::mount();
 
-        $this->journee = today()->toDateString();
+        $this->journee = Calendrier::deParis()->aujourdhui();
     }
 
     /**
@@ -97,8 +97,8 @@ class ListClotureCaisses extends ListRecords
      */
     protected function getHeaderActions(): array
     {
-        $journeeVisee = CarbonImmutable::parse($this->journee);
-        $enClair = $journeeVisee->format('d/m/Y');
+        $journeeVisee = $this->journee;
+        $enClair = Calendrier::afficherJour($journeeVisee, 'd/m/Y');
 
         return [
             Actions\Action::make('cloturer')
@@ -125,7 +125,7 @@ class ListClotureCaisses extends ListRecords
                     Notification::make()
                         ->title($clotures->count() === 1
                             ? "Journée du {$enClair} clôturée"
-                            : 'Journées du '.$clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->format('d/m/Y'))->join(', ', ' et ').' clôturées')
+                            : 'Journées du '.$clotures->map(fn (ClotureCaisse $cloture): string => Calendrier::afficherJour($cloture->date_cloture, 'd/m/Y'))->join(', ', ' et ').' clôturées')
                         ->body($caissesFermees->isEmpty()
                             ? null
                             : 'Caisses personnelles fermées automatiquement : '.$caissesFermees->map(fn (ClotureCaissePersonnelle $releve): string => $releve->vendeur_nom)->implode(', ').'.')
@@ -143,7 +143,7 @@ class ListClotureCaisses extends ListRecords
      */
     private function journeesACloturer(): Collection
     {
-        return $this->journeesEnAttente ??= app(CloturerLesJourneesAction::class)->journeesEnAttente(CarbonImmutable::parse($this->journee));
+        return $this->journeesEnAttente ??= app(CloturerLesJourneesAction::class)->journeesEnAttente($this->journee);
     }
 
     /**
@@ -154,7 +154,7 @@ class ListClotureCaisses extends ListRecords
      */
     private function vendeursAvecCaisseOuverte(): Collection
     {
-        return $this->vendeursEnAttente ??= app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(CarbonImmutable::parse($this->journee));
+        return $this->vendeursEnAttente ??= app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte($this->journee);
     }
 
     /**
@@ -177,7 +177,7 @@ class ListClotureCaisses extends ListRecords
             $enAttente = ClotureCaisseResource::enAttenteDeCloture(collect([$journee]));
             $total = number_format($enAttente['total_ttc'], 2, ',', ' ');
 
-            $paragraphes[] = CarbonImmutable::parse($journee)->format('d/m/Y').' : '.match (true) {
+            $paragraphes[] = Calendrier::afficherJour($journee, 'd/m/Y').' : '.match (true) {
                 $enAttente['ventes'] === 0 && $enAttente['avoirs'] === 0 => 'aucune vente au comptoir, la clôture sera créée à zéro.',
                 $enAttente['avoirs'] === 0 => "{$enAttente['ventes']} vente(s) au comptoir pour un total de {$total} €.",
                 default => "{$enAttente['ventes']} vente(s) au comptoir et {$enAttente['avoirs']} avoir(s) déduit(s), pour un total net de {$total} €.",

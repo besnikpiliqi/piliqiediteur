@@ -5,6 +5,7 @@ namespace Tests\Feature\Societe;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -1157,7 +1158,7 @@ class VerificationSocieteTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => $facture->total_ttc,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
 
         $this->assertSame([StatutFacture::Payee, StatutFacture::Payee], [$ticket->fresh()->statut, $facture->fresh()->statut]);

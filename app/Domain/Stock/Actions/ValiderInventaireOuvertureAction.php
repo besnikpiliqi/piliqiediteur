@@ -5,6 +5,7 @@ namespace App\Domain\Stock\Actions;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Enums\OrigineProduit;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
@@ -21,6 +22,7 @@ use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -141,10 +143,11 @@ class ValiderInventaireOuvertureAction
         $lignes = $inventaire->lignes()->with('produit')->get();
         $this->constructeurLignes->valoriser($inventaire, $lignes);
 
+        $maintenant = CarbonImmutable::now();
         $inventaire->forceFill([
-            'numero' => $this->numerotation->suivant($magasin, TypeDocument::InventaireOuverture, now()->format('Y')),
+            'numero' => $this->numerotation->suivant($magasin, TypeDocument::InventaireOuverture, Calendrier::deParis()->anneeDe($maintenant)),
             'statut' => StatutInventaireOuverture::Valide,
-            'date_validation' => now(),
+            'date_validation' => $maintenant,
             'valide_par' => $compte->getKey(),
         ])->save();
 

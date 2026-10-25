@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
@@ -21,7 +22,6 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -108,7 +108,7 @@ class ContrePasserPaiementAction
         $magasin = app(TenantContext::class)->magasin();
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::CONTRE_PASSER_PAIEMENT, $auteur, ['paiement_id' => $paiementErrone->getKey(), 'motif' => $motif], fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $paiementErrone, $motif, $magasin) {
-            $journee = $this->registre->verrouiller($magasin)->enHeureLocale();
+            $journee = $this->registre->verrouiller($magasin)->jour();
             $original = Paiement::query()->whereKey($paiementErrone->getKey())->firstOrFail();
 
             if ($original->estUneContrePassation()) {
@@ -133,7 +133,7 @@ class ContrePasserPaiementAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function contrePasser(User $compte, Paiement $original, string $motif, CarbonImmutable $journee): Paiement
+    private function contrePasser(User $compte, Paiement $original, string $motif, string $journee): Paiement
     {
         $contrePassation = new Paiement([
             'client_id' => $original->client_id,
@@ -141,7 +141,7 @@ class ContrePasserPaiementAction
             'montant' => '-'.$original->montant,
             'reference' => $original->reference,
             'notes' => $motif,
-            'recu_le' => $journee->toDateString(),
+            'recu_le' => $journee,
         ]);
         $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey(), 'cree_par' => $compte->getKey()])->save();
         $factures = [];
@@ -202,14 +202,15 @@ class ContrePasserPaiementAction
     }
 
     /**
+     * @param  string  $journee  AAAA-MM-JJ, le jour de la contre-passation
      * @param  string|null  $derniereJourneeCloturee  AAAA-MM-JJ, lue sous le verrou du registre
      *
      * @throws LogicException
      */
-    private function refuserSiLaJourneeEstCloturee(CarbonImmutable $journee, ?string $derniereJourneeCloturee): void
+    private function refuserSiLaJourneeEstCloturee(string $journee, ?string $derniereJourneeCloturee): void
     {
-        if ($derniereJourneeCloturee !== null && $journee->toDateString() <= $derniereJourneeCloturee) {
-            throw new LogicException("La journée du {$journee->format('d/m/Y')} est clôturée : la contre-passation pourra être faite demain.");
+        if ($derniereJourneeCloturee !== null && $journee <= $derniereJourneeCloturee) {
+            throw new LogicException('La journée du '.Calendrier::afficherJour($journee, 'd/m/Y').' est clôturée : la contre-passation pourra être faite demain.');
         }
     }
 }

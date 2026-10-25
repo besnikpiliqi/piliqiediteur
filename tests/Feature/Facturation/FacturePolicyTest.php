@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -188,7 +189,7 @@ class FacturePolicyTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => 12]]);
 
         $this->assertFalse($vendeur->can('encaisser', $facture->fresh()));

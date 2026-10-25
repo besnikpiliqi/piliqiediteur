@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
@@ -55,7 +56,7 @@ class VerifierIntegriteFiscale extends Command
         $echecs = 0;
 
         foreach ($magasins as $magasin) {
-            $complet = $this->option('complet') || now()->day === self::jourDeLaVerificationComplete($magasin);
+            $complet = $this->option('complet') || (int) Calendrier::afficherJour(Calendrier::deParis()->aujourdhui(), 'j') === self::jourDeLaVerificationComplete($magasin);
 
             try {
                 $rapport = $tenantContext->runAs($magasin, fn () => $verifier->parLeSysteme($magasin, $complet));

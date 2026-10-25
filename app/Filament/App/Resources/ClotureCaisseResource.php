@@ -3,12 +3,12 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
-use Carbon\CarbonImmutable;
 use Closure;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -78,10 +78,10 @@ class ClotureCaisseResource extends Resource
      */
     public static function libelleDesJournees(Collection $journees): string
     {
-        $aujourdhui = today()->toDateString();
+        $aujourdhui = Calendrier::deParis()->aujourdhui();
 
         return $journees
-            ->map(fn (string $journee): string => CarbonImmutable::parse($journee)->format('d/m/Y').($journee < $aujourdhui ? ' (oubliée)' : ''))
+            ->map(fn (string $journee): string => Calendrier::afficherJour($journee, 'd/m/Y').($journee < $aujourdhui ? ' (oubliée)' : ''))
             ->join(', ', ' et ');
     }
 
@@ -112,7 +112,7 @@ class ClotureCaisseResource extends Resource
         return $infolist->schema([
             InfolistSection::make('Clôture')->schema([
                 TextEntry::make('numero')->label('Numéro'),
-                TextEntry::make('date_cloture')->label('Journée clôturée')->date('d/m/Y'),
+                TextEntry::make('date_cloture')->label('Journée clôturée')->jour(),
                 TextEntry::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y à H:i'),
                 TextEntry::make('cree_par_nom')->label('Déclenchée par')->placeholder('Automatique (planifiée à minuit)'),
             ])->columns(2),
@@ -327,7 +327,7 @@ class ClotureCaisseResource extends Resource
             ->defaultSort('date_cloture', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
-                Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->jour()->sortable(),
                 Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
                 Tables\Columns\TextColumn::make('nombre_avoirs')->label('Avoirs'),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR'),

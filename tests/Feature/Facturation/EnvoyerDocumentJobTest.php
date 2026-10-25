@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -116,7 +117,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
         $mail->assertSeeInHtml("Veuillez trouver ci-joint notre facture {$facture->numero} d'un montant de 120,00 € TTC, déjà réglée.", escape: false);
         $mail->assertDontSeeInHtml('à régler');
-        $this->assertSame(['2026-11-08', 0.0], [$facture->date_echeance->toDateString(), $facture->montantRestant()]);
+        $this->assertSame(['2026-11-08', 0.0], [$facture->date_echeance, $facture->montantRestant()]);
     }
 
     /**
@@ -710,7 +711,7 @@ class EnvoyerDocumentJobTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 

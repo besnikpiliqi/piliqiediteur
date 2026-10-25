@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -61,7 +62,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
     {
         return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             Client::query()->findOrFail($clientId),
-            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $factureId, 'montant' => $montant]],
         );
     }

@@ -6,6 +6,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
@@ -14,7 +15,6 @@ use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -73,8 +73,8 @@ class CloturerLesJourneesAction
     ) {}
 
     /**
-     * Les journées du magasin actif encore à clôturer jusqu'à $jour compris
-     * (à l'heure de Paris), dans l'ordre : du lendemain de la dernière
+     * Les journées du magasin actif encore à clôturer jusqu'au jour $jour
+     * du calendrier compris, dans l'ordre : du lendemain de la dernière
      * journée clôturée, ou du jour de la première vente, jusqu'à $jour,
      * sans les jours qui ne tombent dans aucune de ses périodes d'activité
      * (voir JourneesDeCaisse) : un magasin fermé ne produit plus de ticket
@@ -82,13 +82,9 @@ class CloturerLesJourneesAction
      *
      * @return Collection<int, string> les journées, AAAA-MM-JJ
      */
-    public function journeesEnAttente(CarbonInterface $jour): Collection
+    public function journeesEnAttente(string $jour): Collection
     {
-        return $this->journeesDeCaisse->aCloturer(
-            app(TenantContext::class)->magasin(),
-            CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->toDateString(),
-            ClotureCaisse::derniereJourneeCloturee(),
-        );
+        return $this->journeesDeCaisse->aCloturer(app(TenantContext::class)->magasin(), $jour, ClotureCaisse::derniereJourneeCloturee());
     }
 
     /**
@@ -105,7 +101,7 @@ class CloturerLesJourneesAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function parUnePersonne(User $auteur, Magasin $magasin, CarbonInterface $jour, ?string $jeton = null): array
+    public function parUnePersonne(User $auteur, Magasin $magasin, string $jour, ?string $jeton = null): array
     {
         $this->verifierQueLeMagasinEstActif($magasin);
         $clotures = new Collection;
@@ -114,7 +110,7 @@ class CloturerLesJourneesAction
             $jeton,
             ActionsUniques::CLOTURER_LA_JOURNEE,
             $auteur,
-            ['jour' => CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->toDateString()],
+            ['jour' => $jour],
             fn () => $this->registre->verrouiller($magasin),
             function () use ($auteur, $magasin, $jour, $clotures): array {
                 $journees = $this->journeesEnAttente($jour);
@@ -152,7 +148,7 @@ class CloturerLesJourneesAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function parLeSysteme(Magasin $magasin, CarbonInterface $jour): Collection
+    public function parLeSysteme(Magasin $magasin, string $jour): Collection
     {
         $this->verifierQueLeMagasinEstActif($magasin);
 
@@ -173,19 +169,19 @@ class CloturerLesJourneesAction
 
     /**
      * Ferme d'office, au nom du système, les caisses personnelles restées
-     * ouvertes, jusqu'à maintenant, ou jusqu'à la fin de la dernière
-     * journée clôturée si elle est déjà finie. Un échec ne défait aucune
+     * ouvertes, jusqu'à maintenant, ou jusqu'à la dernière seconde de la
+     * dernière journée clôturée si elle est déjà finie. Un échec ne défait aucune
      * clôture : il est signalé au journal de l'application, et minuit les
      * fermera.
      *
      * @return Collection<int, ClotureCaissePersonnelle>
      */
-    private function fermerLesCaissesPersonnelles(Magasin $magasin, CarbonInterface $jour): Collection
+    private function fermerLesCaissesPersonnelles(Magasin $magasin, string $jour): Collection
     {
         try {
             return $this->fermerLesCaisses->handle(
                 $magasin,
-                CarbonImmutable::now()->min(CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->endOfDay()),
+                CarbonImmutable::now()->min(Calendrier::deParis()->bornesDuJour($jour)[1]->subSecond()),
             );
         } catch (Throwable $exception) {
             report($exception);

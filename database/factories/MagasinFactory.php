@@ -2,13 +2,13 @@
 
 namespace Database\Factories;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -73,7 +73,7 @@ class MagasinFactory extends Factory
     {
         (new PeriodeActivite)->forceFill([
             'magasin_id' => $magasin->getKey(),
-            'debut' => CarbonImmutable::parse(self::DEBUT_D_ACTIVITE, config('app.timezone')),
+            'debut' => Calendrier::deParis()->heureMurale(self::DEBUT_D_ACTIVITE),
             'ouverte_par' => $par?->getKey(),
         ])->save();
     }

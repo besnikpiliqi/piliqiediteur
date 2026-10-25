@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -30,7 +31,7 @@ class VentesEnAttenteApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(today());
+        $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(Calendrier::deParis()->aujourdhui());
 
         if ($journees->isEmpty()) {
             return [

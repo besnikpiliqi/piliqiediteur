@@ -7,6 +7,7 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -408,7 +409,7 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => 120,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => 120]]);
     }
 

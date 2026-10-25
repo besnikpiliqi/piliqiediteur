@@ -154,7 +154,7 @@ class ServiceResource extends Resource
                 Tables\Columns\IconColumn::make('actif')->label('Proposé à la caisse')->boolean(),
                 Tables\Columns\IconColumn::make('frais_accessoires')->label('Frais accessoires')->boolean()->toggleable(),
                 Tables\Columns\IconColumn::make('lieu_specifique')->label('Lieu fixé par la loi')->boolean()->toggleable(),
-                Tables\Columns\TextColumn::make('created_at')->label('Créé le')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable(),
             ])
             ->defaultSort('nom')
             ->filters([

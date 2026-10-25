@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -386,7 +387,7 @@ class FactureResourceTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $cable->id, 'quantite' => 1]]));
 
         foreach (['0.10', '0.20'] as $montant) {
-            app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()], [['facture_id' => $facture->id, 'montant' => $montant]]);
+            app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $facture->id, 'montant' => $montant]]);
         }
 
         $this->assertSame(['0.10', '0.10', '0.20'], [$facture->allocationsAvoir()->sole()->montant_alloue, ...$facture->allocationsPaiement()->orderBy('id')->pluck('montant_alloue')->all()]);
@@ -1143,7 +1144,7 @@ class FactureResourceTest extends TestCase
 
         Livewire::test(ListFactures::class)->callTableAction('emettre', $brouillon);
 
-        $this->assertSame('2026-11-08', $brouillon->fresh()->date_echeance->toDateString());
+        $this->assertSame('2026-11-08', $brouillon->fresh()->date_echeance);
     }
 
     public function test_creer_et_emettre_une_facture_depuis_le_panneau(): void
@@ -2136,7 +2137,7 @@ class FactureResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $brouillon->refresh();
-        $this->assertSame([NatureOperation::LivraisonIntracommunautaire, 'Berlin', '2026-10-12', TransportPar::Magasin], [$brouillon->nature_operation, $brouillon->livraison_ville, $brouillon->livraison_date->toDateString(), $brouillon->transport_par]);
+        $this->assertSame([NatureOperation::LivraisonIntracommunautaire, 'Berlin', '2026-10-12', TransportPar::Magasin], [$brouillon->nature_operation, $brouillon->livraison_ville, $brouillon->livraison_date, $brouillon->transport_par]);
         $this->assertSame(['250.00', '0.00', '250.00'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
     }
 

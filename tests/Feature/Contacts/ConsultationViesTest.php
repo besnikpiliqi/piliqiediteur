@@ -3,6 +3,7 @@
 namespace Tests\Feature\Contacts;
 
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Tenancy\Models\Magasin;
@@ -87,7 +88,7 @@ class ConsultationViesTest extends TestCase
 
         $this->assertSame([$veilleAuSoir->id], ConsultationVies::query()->duJour('2026-10-09')->pluck('id')->all());
         $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour('2026-10-10')->orderBy('id')->pluck('id')->all());
-        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour(self::aParis('2026-10-10 12:00'))->orderBy('id')->pluck('id')->all());
+        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour(Calendrier::deParis()->jourDe(self::aParis('2026-10-10 12:00')))->orderBy('id')->pluck('id')->all());
     }
 
     public function test_la_reference_cite_le_numero_de_consultation_quand_vies_en_a_donne_un(): void

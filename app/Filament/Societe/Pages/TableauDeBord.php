@@ -3,6 +3,7 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -84,7 +85,7 @@ class TableauDeBord extends Dashboard
 
         return match (true) {
             $societe->estClose() => 'L\'inscription de votre société est close.',
-            $societe->estValidee() => 'Votre société est validée depuis le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
+            $societe->estValidee() => 'Votre société est validée depuis le '.Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y').'.',
             default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
         };
     }
@@ -243,9 +244,9 @@ class TableauDeBord extends Dashboard
         $courriers = app(CourriersDeVerification::class);
 
         return match (true) {
-            $societe->estValidee() => 'Validée le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
+            $societe->estValidee() => 'Validée le '.Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y').'.',
             $societe->estClose() => 'Inscription close.',
-            default => 'Le courrier recommandé est parti au représentant légal de votre entreprise, à l\'adresse de son siège : saisissez son code avant le '.$courriers->cloturePrevueLe($societe)->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
+            default => 'Le courrier recommandé est parti au représentant légal de votre entreprise, à l\'adresse de son siège : saisissez son code avant le '.Calendrier::deParis()->afficher($courriers->cloturePrevueLe($societe), 'd/m/Y').'.',
         };
     }
 }

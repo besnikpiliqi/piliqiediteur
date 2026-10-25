@@ -3,8 +3,8 @@
 namespace App\Filament\App\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\ChiffreDAffaires;
-use Carbon\CarbonInterface;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -34,10 +34,12 @@ class FacturesApercu extends BaseWidget
 
     protected function getStats(): array
     {
+        $aujourdhui = Calendrier::deParis()->aujourdhui();
+
         return [
-            $this->statPourPeriode('Cette semaine', now()->startOfWeek(), now()->endOfWeek()),
-            $this->statPourPeriode('Ce mois-ci', now()->startOfMonth(), now()->endOfMonth()),
-            $this->statPourPeriode('Cette année', now()->startOfYear(), now()->endOfYear()),
+            $this->statPourPeriode('Cette semaine', Calendrier::premierJourDeLaSemaine($aujourdhui), $aujourdhui),
+            $this->statPourPeriode('Ce mois-ci', Calendrier::premierJourDuMois($aujourdhui), $aujourdhui),
+            $this->statPourPeriode('Cette année', Calendrier::premierJourDeLAnnee($aujourdhui), $aujourdhui),
         ];
     }
 
@@ -50,9 +52,9 @@ class FacturesApercu extends BaseWidget
      * « 133,33 € HT », puis « 160,00 € TTC · 2 factures, 1 avoir » : le
      * nombre d'avoirs n'apparaît que s'il y en a.
      */
-    private function statPourPeriode(string $libelle, CarbonInterface $debut, CarbonInterface $fin): Stat
+    private function statPourPeriode(string $libelle, string $du, string $au): Stat
     {
-        $net = app(ChiffreDAffaires::class)->netSurPeriode($debut, $fin, $this->voitLesVentesDeToutLEquipe() ? null : auth()->user());
+        $net = app(ChiffreDAffaires::class)->netSurPeriode($du, $au, $this->voitLesVentesDeToutLEquipe() ? null : auth()->user());
         $euros = fn (float $montant): string => number_format($montant, 2, ',', ' ').' €';
         $nombres = $net['factures'].($net['factures'] > 1 ? ' factures' : ' facture')
             .($net['avoirs'] > 0 ? ', '.$net['avoirs'].($net['avoirs'] > 1 ? ' avoirs' : ' avoir') : '');

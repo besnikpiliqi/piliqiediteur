@@ -5,6 +5,7 @@ namespace Tests\Feature\Tenancy;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
@@ -117,7 +118,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         $responsable = $this->nomme($this->responsable($magasin), 'Claire Martin');
         $vendeur = $this->nomme($this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes()), 'Paul Martin');
         $ticket = $this->vendre($vendeur, Client::factory()->create(['nom' => 'Client du ticket', 'email' => 'client@exemple.fr']), []);
-        $paiement = app(EnregistrerPaiementAction::class)->handle($vendeur, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
+        $paiement = app(EnregistrerPaiementAction::class)->handle($vendeur, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
         app(NoterBordereauDetaxeAction::class)->handle($vendeur, $ticket, 'BD-2026-0001');
         app(EnvoyerDocumentAction::class)->handle($vendeur, $ticket, 'client@exemple.fr', null);
         $versLaMartinique = $this->vendre($vendeur, Client::factory()->create(['nom' => 'Client de Fort-de-France']), ['nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR']);

@@ -108,7 +108,7 @@ class DevisResource extends Resource
                 // Repassé en brouillon par une modification, un devis garde
                 // la date de son dernier envoi (voir ModifierDevisAction).
                 TextEntry::make('date_emission')->label('Dernier envoi le')->dateTime('d/m/Y')->placeholder('—'),
-                TextEntry::make('date_validite')->label('Valide jusqu\'au')->date('d/m/Y')->placeholder('—'),
+                TextEntry::make('date_validite')->label('Valide jusqu\'au')->jour()->placeholder('—'),
                 FactureResource::natureEntry(),
             ])->columns(3),
 
@@ -137,7 +137,7 @@ class DevisResource extends Resource
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
-                Tables\Columns\TextColumn::make('date_validite')->label('Validité')->date('d/m/Y'),
+                Tables\Columns\TextColumn::make('date_validite')->label('Validité')->jour(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([

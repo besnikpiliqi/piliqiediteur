@@ -2,10 +2,10 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PeriodesDActivite;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 /**
@@ -46,17 +46,17 @@ class JourneesDeCaisse
         }
 
         $journee = $derniereCloturee !== null && $derniereCloturee >= $premiereVente
-            ? CarbonImmutable::parse($derniereCloturee)->addDay()
-            : CarbonImmutable::parse($premiereVente);
+            ? Calendrier::ajouterJours($derniereCloturee, 1)
+            : $premiereVente;
         $periodes = $this->periodesDActivite->jours($magasin);
         $journees = collect();
 
-        while ($journee->toDateString() <= $fin) {
-            if (self::estDansUnePeriode($journee->toDateString(), $periodes)) {
-                $journees->push($journee->toDateString());
+        while ($journee <= $fin) {
+            if (self::estDansUnePeriode($journee, $periodes)) {
+                $journees->push($journee);
             }
 
-            $journee = $journee->addDay();
+            $journee = Calendrier::ajouterJours($journee, 1);
         }
 
         return $journees;

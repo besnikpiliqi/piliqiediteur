@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -46,7 +47,7 @@ class PreuveOperation extends Model
     {
         return [
             'type' => TypePreuve::class,
-            'date_document' => 'date',
+            'date_document' => JourCivil::class,
         ];
     }
 

@@ -117,13 +117,13 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                 TextColumn::make('factures_max_date_emission')
                     ->label('Dernier achat')
                     ->max(['factures' => fn (Builder $query): Builder => $query->visiblesPar(auth()->user())], 'date_emission')
-                    ->date('d/m/Y')
+                    ->dateTime('d/m/Y')
                     ->placeholder('—')
                     ->visible($voitLesFiches)
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label('Créé le')
-                    ->date('d/m/Y')
+                    ->dateTime('d/m/Y')
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('created_at', $direction)->orderBy('id', $direction)),
             ])
             ->filters([

@@ -16,6 +16,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -128,7 +129,7 @@ class LecteurDesDroitsTest extends TestCase
         $this->assertTrue($membre->can('cloturer', ClotureCaisse::class), 'L\'écran a vu le droit de clôturer.');
 
         $this->aLaPremiereRequeteDeLAction(fn () => $this->retirerLAutorisation($membre, $magasin, PermissionRegistry::CLOTURE_CAISSE_GERER));
-        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parUnePersonne($membre, $magasin, now()), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parUnePersonne($membre, $magasin, Calendrier::deParis()->aujourdhui()), AuthorizationException::class, LecteurDesDroits::REFUS);
 
         $this->assertSame(0, ClotureCaisse::query()->count());
     }
@@ -168,7 +169,7 @@ class LecteurDesDroitsTest extends TestCase
                 static function (self $test, Magasin $magasin, User $membre): Closure {
                     $ticket = $test->vendreUnTicket($membre);
 
-                    return fn () => app(EnregistrerPaiementAction::class)->handle($membre, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
+                    return fn () => app(EnregistrerPaiementAction::class)->handle($membre, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
                 },
                 PermissionRegistry::PAIEMENT_CREER,
                 static fn (): int => Paiement::query()->count(),
@@ -185,7 +186,7 @@ class LecteurDesDroitsTest extends TestCase
             'contre-passation' => [
                 static function (self $test, Magasin $magasin, User $membre): Closure {
                     $ticket = $test->vendreUnTicket($membre);
-                    $paiement = app(EnregistrerPaiementAction::class)->handle($membre, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
+                    $paiement = app(EnregistrerPaiementAction::class)->handle($membre, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
 
                     return fn () => app(ContrePasserPaiementAction::class)->handle($membre, $paiement, 'Erreur de saisie');
                 },
@@ -196,7 +197,7 @@ class LecteurDesDroitsTest extends TestCase
                 static function (self $test, Magasin $magasin, User $membre): Closure {
                     $test->vendreUnTicket($membre);
 
-                    return fn () => app(CloturerCaisseAction::class)->handle($membre, $magasin, today());
+                    return fn () => app(CloturerCaisseAction::class)->handle($membre, $magasin, Calendrier::deParis()->aujourdhui());
                 },
                 PermissionRegistry::CLOTURE_CAISSE_GERER,
                 static fn (): int => ClotureCaisse::query()->count(),
@@ -347,11 +348,11 @@ class LecteurDesDroitsTest extends TestCase
         PanierCaisse::factory()->create(['user_id' => $vendeur->id]);
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
-        ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne($responsable, $magasin, now());
+        ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne($responsable, $magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(
             [['2026-10-08', $responsable->id, 'Claire Martin'], ['2026-10-09', $responsable->id, 'Claire Martin']],
-            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->cree_par, $cloture->cree_par_nom])->all(),
+            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture, $cloture->cree_par, $cloture->cree_par_nom])->all(),
         );
         $abandon = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement)->where('type', (string) CodeEvenement::TransactionAbandonnee->value)->sole();
         $this->assertSame(['id' => $responsable->id, 'nom' => 'Claire Martin'], $abandon->contenuSigne()['operateur']);
@@ -377,7 +378,7 @@ class LecteurDesDroitsTest extends TestCase
         $this->actingAs($proprietaire);
         $this->travelTo(self::aParis('2026-10-10 00:05:00'));
 
-        app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, self::aParis('2026-10-09 00:05:00'));
+        app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, '2026-10-09');
 
         $abandon = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement)->where('type', (string) CodeEvenement::TransactionAbandonnee->value)->sole();
         $this->assertNull($abandon->contenuSigne()['operateur']);

@@ -6,6 +6,8 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
@@ -79,8 +81,8 @@ class FactureAchat extends Model
         return [
             'statut' => StatutFactureAchat::class,
             'source' => SourceFactureAchat::class,
-            'date_facture' => 'date',
-            'date_validation' => HorodatageUtc::class.':'.config('app.timezone'),
+            'date_facture' => JourCivil::class,
+            'date_validation' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau(),
             'rang_validation' => 'integer',
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',

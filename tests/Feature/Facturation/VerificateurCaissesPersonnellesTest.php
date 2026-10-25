@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -19,8 +20,6 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -59,7 +58,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->emettreFacturePour($vendeur, $client, $produit);
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'));
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-08');
 
         $this->assertTrue($vendeursEnAttente->contains('id', $vendeur->id));
     }
@@ -80,7 +79,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'));
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-08');
 
         $this->assertFalse($vendeursEnAttente->contains('id', $vendeur->id));
     }
@@ -103,7 +102,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
         app(FermerSaCaisseAction::class)->handle($vendeurFerme, $vendeurFerme);
 
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'));
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-08');
 
         $this->assertTrue($vendeursEnAttente->contains('id', $vendeurOuvert->id));
         $this->assertFalse($vendeursEnAttente->contains('id', $vendeurFerme->id));
@@ -126,8 +125,8 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
         $verificateur = app(VerificateurCaissesPersonnelles::class);
 
-        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(CarbonImmutable::parse('2026-07-14'))->isEmpty());
-        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(CarbonImmutable::parse('2026-07-15'))->contains('id', $vendeur->id));
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte('2026-07-14')->isEmpty());
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte('2026-07-15')->contains('id', $vendeur->id));
     }
 
     public function test_aucun_vendeur_en_attente_sans_aucune_vente_ce_jour_la(): void
@@ -136,7 +135,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'));
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-08');
 
         $this->assertTrue($vendeursEnAttente->isEmpty());
     }
@@ -163,7 +162,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         // Le vendeur ne ferme sa caisse que deux jours plus tard.
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-07 10:00:00'));
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-07');
 
         $this->assertFalse($vendeursEnAttente->contains('id', $vendeur->id));
     }
@@ -193,10 +192,10 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         $verificateur = app(VerificateurCaissesPersonnelles::class);
-        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'))->contains('id', $vendeur->id));
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte('2026-10-08')->contains('id', $vendeur->id));
 
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'))->contains('id', $vendeur->id));
+        $this->assertFalse($verificateur->vendeursAvecCaisseOuverte('2026-10-08')->contains('id', $vendeur->id));
     }
 
     /**
@@ -220,10 +219,10 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $verificateur = app(VerificateurCaissesPersonnelles::class);
-        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now())->contains('id', $vendeur->id));
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->contains('id', $vendeur->id));
 
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(now())->contains('id', $vendeur->id));
+        $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->contains('id', $vendeur->id));
     }
 
     /**
@@ -240,14 +239,14 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($collegue, $collegue);
         $this->actingAs($vendeur);
-        $this->encaisser($facture, 12, today());
+        $this->encaisser($facture, 12, Calendrier::deParis()->aujourdhui());
         $verificateur = app(VerificateurCaissesPersonnelles::class);
 
-        $vendeursEnAttente = $verificateur->vendeursAvecCaisseOuverte(now());
+        $vendeursEnAttente = $verificateur->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([$vendeur->id], $vendeursEnAttente->pluck('id')->all());
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now())->isEmpty());
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->isEmpty());
     }
 
     /**
@@ -263,13 +262,13 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $facture = $this->emettreUnTicketPour($vendeur, Client::factory()->create());
-        $paiement = $this->encaisser($facture, 12, today());
+        $paiement = $this->encaisser($facture, 12, Calendrier::deParis()->aujourdhui());
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->actingAs($proprietaire);
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, 'Chèque sans provision');
 
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now());
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([$vendeur->id], $vendeursEnAttente->pluck('id')->all());
     }
@@ -291,11 +290,11 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         app(FermerSaCaisseAction::class)->handle($collegue, $collegue);
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->actingAs($vendeur);
-        $this->encaisser($facture, 12, self::aParis('2026-10-08 00:00:00'));
+        $this->encaisser($facture, 12, '2026-10-08');
         $verificateur = app(VerificateurCaissesPersonnelles::class);
 
-        $avantHier = $verificateur->vendeursAvecCaisseOuverte(self::aParis('2026-10-07 10:00:00'));
-        $hier = $verificateur->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 10:00:00'));
+        $avantHier = $verificateur->vendeursAvecCaisseOuverte('2026-10-07');
+        $hier = $verificateur->vendeursAvecCaisseOuverte('2026-10-08');
 
         $this->assertTrue($avantHier->isEmpty());
         $this->assertSame([$vendeur->id], $hier->pluck('id')->all());
@@ -309,12 +308,12 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
-    private function encaisser(Facture $facture, float $montant, CarbonInterface $recuLe): Paiement
+    private function encaisser(Facture $facture, float $montant, string $recuLe): Paiement
     {
         return app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => $montant,
-            'recu_le' => $recuLe->toDateString(),
+            'recu_le' => $recuLe,
         ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 }

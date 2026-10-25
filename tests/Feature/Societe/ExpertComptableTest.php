@@ -6,6 +6,7 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -145,7 +146,7 @@ class ExpertComptableTest extends TestCase
         $this->actingAs($proprietaire)->withHeader('User-Agent', 'Navigateur du propriétaire')->get("/app/{$magasin->uuid}")->assertSuccessful();
 
         $this->dansLeMagasin($magasin, $expert);
-        $export = Livewire::test(ListEnregistrementsFiscaux::class)->callAction('exporter_journal', ['du' => today()->toDateString(), 'au' => today()->toDateString()]);
+        $export = Livewire::test(ListEnregistrementsFiscaux::class)->callAction('exporter_journal', ['du' => Calendrier::deParis()->aujourdhui(), 'au' => Calendrier::deParis()->aujourdhui()]);
 
         $contenu = base64_decode($export->effects['download']['content']);
         $this->assertStringNotContainsString('Navigateur du propriétaire', $contenu);
@@ -169,7 +170,7 @@ class ExpertComptableTest extends TestCase
             ->callAction('telecharger_pdf')
             ->assertFileDownloaded("ticket-{$ticket->numero}.pdf");
         Livewire::test(ListEnregistrementsFiscaux::class)
-            ->callAction('exporter_journal', ['du' => today()->toDateString(), 'au' => today()->toDateString()])
+            ->callAction('exporter_journal', ['du' => Calendrier::deParis()->aujourdhui(), 'au' => Calendrier::deParis()->aujourdhui()])
             ->assertFileDownloaded();
 
         $this->assertStringStartsWith('%PDF', base64_decode($telechargement->effects['download']['content']));
@@ -211,7 +212,7 @@ class ExpertComptableTest extends TestCase
         foreach ([$premier, $second] as $expert) {
             $this->assertTrue($expert->refresh()->estExpertComptable());
             $this->dansLeMagasin($magasin, $expert);
-            Livewire::test(ListEnregistrementsFiscaux::class)->callAction('exporter_journal', ['du' => today()->toDateString(), 'au' => today()->toDateString()]);
+            Livewire::test(ListEnregistrementsFiscaux::class)->callAction('exporter_journal', ['du' => Calendrier::deParis()->aujourdhui(), 'au' => Calendrier::deParis()->aujourdhui()]);
         }
 
         $operateurs = EnregistrementFiscal::query()->where('type', (string) CodeEvenement::ExportDeDonnees->value)->orderBy('sequence')->get()->map(fn (EnregistrementFiscal $export): array => $export->contenuSigne()['operateur'])->all();

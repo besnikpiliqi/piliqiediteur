@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
@@ -117,7 +118,7 @@ class ListClotureCaissePersonnelles extends ListRecords
      */
     private static function vendeursAvecCaisseOuverte(): Collection
     {
-        return app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())
+        return app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())
             ->reject(fn (User $vendeur): bool => $vendeur->is(auth()->user()))
             ->values();
     }

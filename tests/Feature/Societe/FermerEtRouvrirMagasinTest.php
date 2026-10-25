@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
@@ -122,7 +123,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $this->assertSame(
             [['2026-10-05', 1, null], ['2026-10-06', 0, null], ['2026-10-07', 0, null]],
-            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes, $cloture->cree_par])->all(),
+            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture, $cloture->nombre_ventes, $cloture->cree_par])->all(),
         );
         $evenement = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', '270')->orderByDesc('sequence')->first()->contenuSigne();
         $this->assertSame(
@@ -150,7 +151,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $this->assertSame([true, 'Ce magasin est fermé'], [$ferme->estEnLectureSeule(), $ferme->motifDeLectureSeule()]);
         $this->assertThrows(fn () => $this->vendre($magasin), VenteNonAutoriseeException::class, 'Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.');
         app(TenantContext::class)->set($magasin);
-        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->map->toDateString()->all());
+        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->all());
         $this->assertSame(1, Facture::query()->count());
     }
 
@@ -195,7 +196,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $this->assertSame(
             [['2026-10-05', 'Z-MABOUT-2026-000001'], ['2026-10-09', 'Z-MABOUT-2026-000002'], ['2026-10-10', 'Z-MABOUT-2026-000003']],
-            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->numero])->all(),
+            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture, $cloture->numero])->all(),
         );
     }
 
@@ -210,12 +211,12 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $this->vendre($magasin);
         app(TenantContext::class)->set($magasin);
 
-        $enAttente = app(CloturerLesJourneesAction::class)->journeesEnAttente(now());
+        $enAttente = app(CloturerLesJourneesAction::class)->journeesEnAttente(Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(['2026-10-07'], $enAttente->all());
         $this->travelTo(self::aParis('2026-10-07 19:00:00'));
-        $cloture = app(CloturerLesJourneesAction::class)->parUnePersonne($this->proprietaireDe($magasin), $magasin, now())['clotures']->sole();
-        $this->assertSame(['2026-10-07', 'Z-MABOUT-2026-000002', 1], [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->nombre_ventes]);
+        $cloture = app(CloturerLesJourneesAction::class)->parUnePersonne($this->proprietaireDe($magasin), $magasin, Calendrier::deParis()->aujourdhui())['clotures']->sole();
+        $this->assertSame(['2026-10-07', 'Z-MABOUT-2026-000002', 1], [$cloture->date_cloture, $cloture->numero, $cloture->nombre_ventes]);
     }
 
     /**
@@ -236,10 +237,10 @@ class FermerEtRouvrirMagasinTest extends TestCase
 
         $this->assertThrows(fn () => $this->vendre($magasin), LogicException::class, 'La journée du 05/10/2026 est clôturée : les ventes reprennent demain.');
         app(TenantContext::class)->set($magasin);
-        $this->assertSame([], app(CloturerLesJourneesAction::class)->journeesEnAttente(now())->all());
+        $this->assertSame([], app(CloturerLesJourneesAction::class)->journeesEnAttente(Calendrier::deParis()->aujourdhui())->all());
         $this->travelTo(self::aParis('2026-10-06 09:00:00'));
         $this->assertSame('TK-MABOUT-2026-000002', $this->vendre($magasin)->numero);
-        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->map->toDateString()->all());
+        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->all());
     }
 
     /**
@@ -509,7 +510,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $releve = ClotureCaissePersonnelle::query()->where('vendeur_id', $vendeur->id)->sole();
         $this->assertSame([ModeFermetureCaisse::Automatique, [$ticket->id], 1], [$releve->mode_fermeture, $releve->factures->modelKeys(), $releve->paiements->count()]);
         $this->assertSame([1, '12.00'], [ClotureCaisse::query()->sole()->nombre_ventes, ClotureCaisse::query()->sole()->total_ttc]);
-        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now())->all());
+        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->all());
     }
 
     /**
@@ -773,7 +774,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         );
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinFerme));
         Notification::assertSentTo($proprietaire, StockDuMagasinCede::class, fn (StockDuMagasinCede $avis): bool => $avis->valeurHt === '25.00' && $avis->produitsEnStockNegatif === ['GOMME Gomme (-2)']);
-        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->map->toDateString()->all());
+        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->all());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
         $this->assertThrows(fn () => $this->rouvrir($magasin), LogicException::class, RouvrirMagasinAction::MESSAGE_CEDE);
     }

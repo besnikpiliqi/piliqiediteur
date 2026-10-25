@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Filament\App\Resources\PosteReconnuResource\Pages;
@@ -58,7 +59,7 @@ class PosteReconnuResource extends Resource
                 Tables\Columns\TextColumn::make('created_at')->label('Le')->dateTime('d/m/Y à H:i'),
                 Tables\Columns\TextColumn::make('retire_le')
                     ->label('Retiré')
-                    ->state(fn (PosteReconnu $record): ?string => $record->estRetire() ? 'Le '.$record->retire_le->setTimezone(config('app.timezone'))->format('d/m/Y à H:i').' par '.$record->retire_par_nom : null)
+                    ->state(fn (PosteReconnu $record): ?string => $record->estRetire() ? 'Le '.Calendrier::deParis()->afficher($record->retire_le, 'd/m/Y à H:i').' par '.$record->retire_par_nom : null)
                     ->placeholder('—'),
             ])
             ->actions([

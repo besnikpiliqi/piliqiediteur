@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
@@ -86,8 +87,8 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ->modalDescription('L\'export s\'inscrit lui-même au journal des événements du magasin.')
                 ->modalSubmitActionLabel('Exporter')
                 ->form([
-                    DatePicker::make('du')->label('Du')->required()->default(now()->startOfMonth()->toDateString()),
-                    DatePicker::make('au')->label('Au')->required()->afterOrEqual('du')->default(now()->toDateString()),
+                    DatePicker::make('du')->label('Du')->required()->default(Calendrier::premierJourDuMois(Calendrier::deParis()->aujourdhui())),
+                    DatePicker::make('au')->label('Au')->required()->afterOrEqual('du')->default(Calendrier::deParis()->aujourdhui()),
                 ])
                 ->authorize(static fn (): bool => EnregistrementFiscalResource::canViewAny())
                 ->action(function (array $data): ?StreamedResponse {

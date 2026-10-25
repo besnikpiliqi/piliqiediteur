@@ -8,6 +8,7 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -112,7 +113,7 @@ class NuitDeParisTest extends TestCase
 
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $jour);
 
-        $this->assertThrows(fn () => $this->vendre(12), LogicException::class, 'La journée du '.date('d/m/Y', (int) strtotime($jour)).' est clôturée : les ventes reprennent demain.');
+        $this->assertThrows(fn () => $this->vendre(12), LogicException::class, 'La journée du '.Calendrier::afficherJour($jour, 'd/m/Y').' est clôturée : les ventes reprennent demain.');
     }
 
     #[DataProvider('nuits')]
@@ -126,7 +127,7 @@ class NuitDeParisTest extends TestCase
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
-        $this->assertSame([$veille], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+        $this->assertSame([$veille], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
     }
 
     /**
@@ -168,7 +169,7 @@ class NuitDeParisTest extends TestCase
         $this->magasinActif();
         $facture = $this->emettreUneFacture(Client::factory()->create(), 120);
         $this->travelTo($nuit);
-        $lendemain = date('Y-m-d', (int) strtotime("{$jour} +1 day"));
+        $lendemain = Calendrier::ajouterJours($jour, 1);
         $payer = fn (string $recuLe) => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 60,
@@ -177,7 +178,7 @@ class NuitDeParisTest extends TestCase
 
         $paiement = $payer($jour);
 
-        $this->assertSame($jour, $paiement->recu_le->toDateString());
+        $this->assertSame($jour, $paiement->recu_le);
         $this->assertThrows(fn () => $payer($lendemain), LogicException::class, 'Un paiement ne peut pas être reçu à une date future.');
     }
 
@@ -192,15 +193,15 @@ class NuitDeParisTest extends TestCase
         $this->travelTo($nuit);
         $this->magasinActif();
         $facture = $this->emettreUneFacture(Client::factory()->create(['delai_paiement_jours' => 30]), 120);
-        $echeance = date('Y-m-d', (int) strtotime("{$jour} +30 days"));
+        $echeance = Calendrier::ajouterJours($jour, 30);
 
-        $this->assertSame($echeance, $facture->date_echeance->toDateString());
+        $this->assertSame($echeance, $facture->date_echeance);
 
         $this->travelTo(self::aParis("{$echeance} 23:30:00"));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
 
-        $this->travelTo(self::aParis(date('Y-m-d', (int) strtotime("{$echeance} +1 day")).' 00:30:00'));
+        $this->travelTo(self::aParis(Calendrier::ajouterJours($echeance, 1).' 00:30:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
         $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
     }
@@ -219,7 +220,7 @@ class NuitDeParisTest extends TestCase
         $this->travelTo($nuit);
         app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
-        $this->travelTo(self::aParis(date('Y-m-d', (int) strtotime("{$jour} +6 days")).' 10:00:00'));
+        $this->travelTo(self::aParis(Calendrier::ajouterJours($jour, 6).' 10:00:00'));
 
         $this->assertSame(6, $facture->fresh()->joursDepuisLaDerniereRelance());
     }
@@ -418,7 +419,7 @@ class NuitDeParisTest extends TestCase
         $ticket = $this->vendre(12);
 
         $html = app(FacturePdfGenerator::class)->html($ticket->load('client', 'lignes', 'magasin'));
-        $this->assertStringContainsString('Émise le '.date('d/m/Y', (int) strtotime($jour)), $html);
+        $this->assertStringContainsString('Émise le '.Calendrier::afficherJour($jour, 'd/m/Y'), $html);
     }
 
     /**
@@ -435,7 +436,7 @@ class NuitDeParisTest extends TestCase
 
         Livewire::test(CreatePaiement::class)
             ->assertFormSet(['recu_le' => $jour])
-            ->fillForm(['recu_le' => date('Y-m-d', (int) strtotime("{$jour} +1 day"))])
+            ->fillForm(['recu_le' => Calendrier::ajouterJours($jour, 1)])
             ->call('create')
             ->assertHasFormErrors(['recu_le' => 'before_or_equal']);
     }

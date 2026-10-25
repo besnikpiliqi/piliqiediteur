@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Models\Magasin;
@@ -27,7 +28,7 @@ class ExpirerLesDevisAction
         return Devis::query()
             ->where('magasin_id', $magasin->getKey())
             ->where('statut', StatutDevis::Envoye)
-            ->whereDate('date_validite', '<', today())
+            ->where('date_validite', '<', Calendrier::deParis()->aujourdhui())
             ->update(['statut' => StatutDevis::Expire]);
     }
 }

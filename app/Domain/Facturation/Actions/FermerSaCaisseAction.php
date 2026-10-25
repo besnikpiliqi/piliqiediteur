@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -163,9 +164,9 @@ class FermerSaCaisseAction
     }
 
     /**
-     * Les paiements reçus jusqu'à la journée de la borne, à l'heure de
-     * Paris, et jamais encore comptés : un encaissement est de la journée
-     * où il est reçu (voir VerificateurCaissesPersonnelles).
+     * Les paiements reçus jusqu'à la journée du calendrier de la borne, et
+     * jamais encore comptés : un encaissement est de la journée où il est
+     * reçu (voir VerificateurCaissesPersonnelles).
      *
      * @return Builder<Paiement>
      */
@@ -173,7 +174,7 @@ class FermerSaCaisseAction
     {
         return Paiement::query()
             ->nonFermesParLeVendeur($vendeur->getKey())
-            ->whereDate('recu_le', '<=', CarbonImmutable::instance($jusquAu)->setTimezone(config('app.timezone'))->toDateString())
+            ->where('recu_le', '<=', Calendrier::deParis()->jourDe($jusquAu))
             ->orderBy('id');
     }
 
@@ -204,9 +205,10 @@ class FermerSaCaisseAction
 
     /**
      * « Depuis » : la borne de la dernière fermeture du vendeur, ou le
-     * début de la journée de la borne s'il n'en a fait aucune, ou la plus
-     * ancienne vente ou le plus ancien paiement compté s'il est antérieur
-     * -- y compris ceux d'une journée précédente qu'il n'avait pas fermée.
+     * minuit de la journée du calendrier de la borne s'il n'en a fait
+     * aucune, ou la plus ancienne vente ou le plus ancien paiement compté
+     * s'il est antérieur -- y compris ceux d'une journée précédente qu'il
+     * n'avait pas fermée.
      *
      * @param  Collection<int, Facture>  $factures
      * @param  Collection<int, Paiement>  $paiements
@@ -217,7 +219,7 @@ class FermerSaCaisseAction
             ->where('vendeur_id', $vendeur->getKey())
             ->orderByDesc('id')
             ->first();
-        $depuis = $derniere?->jusqu_au ?? $jusquAu->setTimezone(config('app.timezone'))->startOfDay();
+        $depuis = $derniere?->jusqu_au ?? Calendrier::deParis()->debutDuJour(Calendrier::deParis()->jourDe($jusquAu));
 
         foreach ([$factures->min('date_emission'), $paiements->min('created_at')] as $plusAncien) {
             if ($plusAncien !== null && $plusAncien->lt($depuis)) {

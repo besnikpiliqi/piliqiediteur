@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -421,7 +422,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
-            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
+            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => Calendrier::deParis()->aujourdhui()],
             [['facture_id' => $facture->id, 'montant' => $montant]],
         );
     }

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Support\QrCode;
 use App\Integrations\EnvoiRecommande\DestinataireDuCourrier;
@@ -42,8 +43,8 @@ class CourrierDeCode
             'siren' => $siren,
             'motif' => $motif,
             'code' => $code,
-            'expireLe' => $expireLe->copy()->setTimezone(config('app.timezone'))->format('d/m/Y à H:i'),
-            'date' => now()->setTimezone(config('app.timezone'))->format('d/m/Y'),
+            'expireLe' => Calendrier::deParis()->afficher($expireLe, 'd/m/Y à H:i'),
+            'date' => Calendrier::deParis()->afficher(now(), 'd/m/Y'),
             'adresseCourte' => self::adresseCourte($motif),
             'qrCode' => QrCode::uriDeDonnees(self::adresseDeLaPage($siren, $motif)),
             'application' => config('app.name'),

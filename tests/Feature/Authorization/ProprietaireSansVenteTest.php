@@ -7,6 +7,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -142,7 +143,7 @@ class ProprietaireSansVenteTest extends TestCase
         $brouillon = $this->brouillonDuResponsable($magasin);
         $ticket = $this->ticketDuResponsable($magasin);
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
-        $reglement = ['jeton' => (string) Str::uuid(), 'parts' => [['mode' => ModePaiement::Especes->value, 'montant' => '12.00']], 'recu_le' => today()->toDateString()];
+        $reglement = ['jeton' => (string) Str::uuid(), 'parts' => [['mode' => ModePaiement::Especes->value, 'montant' => '12.00']], 'recu_le' => Calendrier::deParis()->aujourdhui()];
 
         Livewire::test(CreateFacture::class)->assertForbidden();
         Livewire::test(CreatePaiement::class)->assertForbidden();
@@ -166,8 +167,8 @@ class ProprietaireSansVenteTest extends TestCase
         $refus = [
             fn () => app(CreerFactureAction::class)->handle($proprietaire, Client::factory()->create(), $this->lignes()),
             fn () => app(EmettreFactureAction::class)->handle($proprietaire, $brouillon),
-            fn () => app(EnregistrerPaiementAction::class)->handle($proprietaire, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]),
-            fn () => app(EncaisserEnPlusieursModesAction::class)->handle($proprietaire, $ticket, [new PartDeReglement(ModePaiement::Especes, 1200)], [], today()->toDateString()),
+            fn () => app(EnregistrerPaiementAction::class)->handle($proprietaire, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]),
+            fn () => app(EncaisserEnPlusieursModesAction::class)->handle($proprietaire, $ticket, [new PartDeReglement(ModePaiement::Especes, 1200)], [], Calendrier::deParis()->aujourdhui()),
             fn () => self::vendreAuComptant($proprietaire, $this->comptoir(), $this->lignes()),
         ];
         foreach ($refus as $geste) {
@@ -213,13 +214,13 @@ class ProprietaireSansVenteTest extends TestCase
         $envoi = app(EnvoyerDocumentAction::class)->handle($proprietaire, $ticket, 'client@example.test', null);
         $contrePassation = app(ContrePasserPaiementAction::class)->handle($proprietaire, Paiement::query()->sole(), 'Mauvais mode');
         $releve = app(FermerSaCaisseAction::class)->handle($proprietaire, $responsable);
-        $cloture = app(CloturerCaisseAction::class)->handle($proprietaire, $magasin, today()->toDateString());
+        $cloture = app(CloturerCaisseAction::class)->handle($proprietaire, $magasin, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([1, (int) $proprietaire->id], [EnvoiDocument::query()->count(), (int) $envoi->envoye_par]);
         $this->assertSame([(int) $proprietaire->id, '-12.00'], [(int) $contrePassation->cree_par, $contrePassation->montant]);
         $this->assertSame([(int) $responsable->id, ModeFermetureCaisse::Responsable, 1], [(int) $releve->vendeur_id, $releve->mode_fermeture, $releve->nombre_ventes]);
         $this->assertSame([1, 1], [ClotureCaisse::query()->count(), $cloture->nombre_ventes]);
-        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->all());
+        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->all());
         $this->assertSame(0, ClotureCaissePersonnelle::query()->where('vendeur_id', $proprietaire->id)->count());
     }
 
@@ -236,7 +237,7 @@ class ProprietaireSansVenteTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsableDeTest($magasin);
         $ticket = $this->ticketDuResponsable($magasin);
-        $erreur = app(EnregistrerPaiementAction::class)->handle($responsable, $ticket->client, ['mode_paiement' => ModePaiement::Cheque->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
+        $erreur = app(EnregistrerPaiementAction::class)->handle($responsable, $ticket->client, ['mode_paiement' => ModePaiement::Cheque->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
 
         app(ContrePasserPaiementAction::class)->handle($proprietaire, $erreur, 'Chèque refusé');
 
@@ -244,13 +245,13 @@ class ProprietaireSansVenteTest extends TestCase
         $this->dansLeMagasin($magasin, $proprietaire);
         Livewire::test(ListPaiements::class)->assertActionHidden('create');
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('encaisser');
-        $this->assertThrows(fn () => app(EnregistrerPaiementAction::class)->handle($proprietaire, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => app(EnregistrerPaiementAction::class)->handle($proprietaire, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]), AuthorizationException::class, LecteurDesDroits::REFUS);
         $this->assertSame(2, Paiement::query()->count());
 
-        app(EnregistrerPaiementAction::class)->handle($responsable, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
+        app(EnregistrerPaiementAction::class)->handle($responsable, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
 
         $this->assertSame(StatutFacture::Payee, $ticket->fresh()->statut);
-        $this->assertSame([$responsable->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->modelKeys());
+        $this->assertSame([$responsable->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())->modelKeys());
     }
 
     /**
@@ -269,10 +270,10 @@ class ProprietaireSansVenteTest extends TestCase
         $this->dansLeMagasin($magasin, $proprietaire);
 
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('encaisser');
-        $this->assertThrows(fn () => app(EncaisserEnPlusieursModesAction::class)->handle($proprietaire, $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], today()->toDateString()), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => app(EncaisserEnPlusieursModesAction::class)->handle($proprietaire, $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], Calendrier::deParis()->aujourdhui()), AuthorizationException::class, LecteurDesDroits::REFUS);
         $this->assertSame([2000, StatutFacture::Emise], [$bon->fresh()->creditEnCentimes(), $ticket->fresh()->statut]);
 
-        app(EncaisserEnPlusieursModesAction::class)->handle($responsable, $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], today()->toDateString());
+        app(EncaisserEnPlusieursModesAction::class)->handle($responsable, $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([0, StatutFacture::Payee], [$bon->fresh()->creditEnCentimes(), $ticket->fresh()->statut]);
     }
@@ -313,7 +314,7 @@ class ProprietaireSansVenteTest extends TestCase
 
         Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionVisible('ajouter_preuve');
         Livewire::test(ViewFacture::class, ['record' => $detaxe->getRouteKey()])->assertActionVisible('noter_bordereau_detaxe');
-        $preuve = app(AjouterPreuveOperationAction::class)->handle($proprietaire, $export, TypePreuve::Mrn, '26FR000000123456E1', today()->toDateString(), 'Bureau de douane de Lyon');
+        $preuve = app(AjouterPreuveOperationAction::class)->handle($proprietaire, $export, TypePreuve::Mrn, '26FR000000123456E1', Calendrier::deParis()->aujourdhui(), 'Bureau de douane de Lyon');
         $bordereau = app(NoterBordereauDetaxeAction::class)->handle($proprietaire, $detaxe, '2026FR000123456');
 
         $this->assertSame([(int) $proprietaire->id, (int) $proprietaire->id], [(int) $preuve->note_par, (int) $bordereau->note_par]);

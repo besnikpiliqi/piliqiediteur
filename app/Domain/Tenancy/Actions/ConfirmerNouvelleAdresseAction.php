@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Mail\AdresseChangeeMail;
@@ -123,7 +124,7 @@ class ConfirmerNouvelleAdresseAction
         $compte->refresh();
 
         if ($resultat['ancienne'] !== null) {
-            Mail::to($resultat['ancienne'])->send(new AdresseChangeeMail($compte->name, now()->setTimezone(config('app.timezone'))->format('d/m/Y à H:i')));
+            Mail::to($resultat['ancienne'])->send(new AdresseChangeeMail($compte->name, Calendrier::deParis()->afficher(now(), 'd/m/Y à H:i')));
         }
 
         return $compte;

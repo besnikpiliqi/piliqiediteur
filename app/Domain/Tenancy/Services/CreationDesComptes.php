@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -119,7 +120,7 @@ final class CreationDesComptes
     {
         $limite = self::limiteDuJour($societe);
 
-        if (User::query()->where('cree_par', $auteur->getKey())->where('created_at', '>=', now()->startOfDay())->count() >= $limite) {
+        if (User::query()->where('cree_par', $auteur->getKey())->where('created_at', '>=', Calendrier::deParis()->debutDuJour(Calendrier::deParis()->aujourdhui()))->count() >= $limite) {
             throw ValidationException::withMessages(['name' => self::messageDeLaLimite($limite)]);
         }
     }

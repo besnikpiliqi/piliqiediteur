@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -108,7 +109,7 @@ class ClotureCaisseResourceTest extends TestCase
             ->assertNotified('Journée du 09/10/2026 clôturée');
 
         $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame(['2026-10-09', 'Z-MABOUT-2026-000001', 1, '60.00'], [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
+        $this->assertSame(['2026-10-09', 'Z-MABOUT-2026-000001', 1, '60.00'], [$cloture->date_cloture, $cloture->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
         $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
 
         $this->travelTo(self::aParis('2026-10-10 00:00:00'));
@@ -210,7 +211,7 @@ class ClotureCaisseResourceTest extends TestCase
         $clotures = ClotureCaisse::query()->orderBy('date_cloture')->get();
         $this->assertSame(
             [['2026-10-08', 'Z-MABOUT-2026-000001', '60.00'], ['2026-10-09', 'Z-MABOUT-2026-000002', '60.00']],
-            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->total_ttc])->all(),
+            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture, $cloture->numero, $cloture->total_ttc])->all(),
         );
         $this->assertSame([$clotures[0]->id, $clotures[1]->id], [$venteDu8->fresh()->cloture_caisse_id, $venteDu9->fresh()->cloture_caisse_id]);
     }
@@ -264,7 +265,7 @@ class ClotureCaisseResourceTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $ticket->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $ticket->id, 'montant' => 12]]);
         $this->actingAs($this->proprietaireDe($magasin));
 
@@ -325,7 +326,7 @@ class ClotureCaisseResourceTest extends TestCase
 
         $page->callMountedAction();
 
-        $this->assertSame(['2026-10-09'], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+        $this->assertSame(['2026-10-09'], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
     }
 
     public function test_le_bouton_est_absent_pour_un_vendeur_sans_l_autorisation_de_cloturer(): void
@@ -438,7 +439,7 @@ class ClotureCaisseResourceTest extends TestCase
             ['produit_id' => $cable->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $facture->date_emission);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($facture->date_emission));
 
         $this->assertSame(['76.67', '13.33', '90.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertSame([
@@ -525,7 +526,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->vendreAuComptantUnTicketDe(60, ModePaiement::Especes);
         $client = Client::factory()->create();
         $this->emettreAvoir($client, $this->vendreAuComptantUnTicketDe(30, ModePaiement::CarteBancaire, $client));
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
 
         $fiche = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()]);
 
@@ -552,7 +553,7 @@ class ClotureCaisseResourceTest extends TestCase
         $client = Client::factory()->create();
         $ticket = $this->vendreAuComptantUnTicketDe(30, ModePaiement::Especes, $client);
         $avoir = $this->emettreAvoir($client, $ticket);
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
 
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
             ->assertSeeHtml('href="'.FactureResource::getUrl('view', ['record' => $ticket]).'"')
@@ -583,7 +584,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->actingAs($proprietaire);
         $avoir = $this->emettreAvoir($clientDuCollegue, $ticketDuCollegue);
         $this->actingAs($vendeur);
-        $cloture = app(CloturerCaisseAction::class)->handle($vendeur, $magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle($vendeur, $magasin, Calendrier::deParis()->aujourdhui());
 
         $fiche = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()]);
 

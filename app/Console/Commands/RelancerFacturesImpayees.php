@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -67,17 +68,18 @@ class RelancerFacturesImpayees extends Command
     private function relancerLesFacturesDe(Magasin $magasin, EnvoyerDocumentAction $envoyer): int
     {
         $relancees = 0;
+        $aujourdhui = Calendrier::deParis()->aujourdhui();
 
         Facture::query()
             ->with('client')
             ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
-            ->whereDate('date_echeance', '<', today())
+            ->where('date_echeance', '<', $aujourdhui)
             ->whereHas('client', fn (Builder $client) => $client->whereNotNull('email')->where('email', '!=', ''))
             ->lazyById()
-            ->each(function (Facture $facture) use ($magasin, $envoyer, &$relancees) {
+            ->each(function (Facture $facture) use ($magasin, $envoyer, $aujourdhui, &$relancees) {
                 $due = $magasin->relanceDue(
                     $facture->niveauDeRelanceAtteint() + 1,
-                    (int) $facture->date_echeance->diffInDays(today()),
+                    Calendrier::joursEntre($facture->date_echeance, $aujourdhui),
                     $facture->joursDepuisLaDerniereRelance(),
                 );
 

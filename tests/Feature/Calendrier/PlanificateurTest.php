@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Calendrier;
 
+use App\Domain\Calendrier\Calendrier;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
@@ -48,7 +49,7 @@ class PlanificateurTest extends TestCase
     {
         $taches = array_map(static fn (Event $evenement): array => [self::commande($evenement), $evenement->expression, $evenement->timezone], $this->evenements());
 
-        $this->assertSame(array_map(static fn (array $tache): array => [...$tache, 'Europe/Paris'], self::TACHES), $taches);
+        $this->assertSame(array_map(static fn (array $tache): array => [...$tache, Calendrier::deParis()->fuseau()], self::TACHES), $taches);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Calendrier\Calendrier;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -38,7 +39,7 @@ class ConformiteApercu extends BaseWidget
             : sprintf(
                 'Signé par la vente n° %d du %s',
                 $derniereVente->sequence,
-                $derniereVente->horodatage->setTimezone(config('app.timezone'))->format('d/m/Y à H:i:s'),
+                Calendrier::deParis()->afficher($derniereVente->horodatage, 'd/m/Y à H:i:s'),
             );
 
         return [
@@ -79,7 +80,7 @@ class ConformiteApercu extends BaseWidget
         $quand = sprintf(
             'Vérification %s du %s',
             ($details['verification'] ?? null) === 'complete' ? 'complète' : 'incrémentale',
-            $controle->horodatage->setTimezone(config('app.timezone'))->format('d/m/Y à H:i:s'),
+            Calendrier::deParis()->afficher($controle->horodatage, 'd/m/Y à H:i:s'),
         );
 
         return $anomalies === 0

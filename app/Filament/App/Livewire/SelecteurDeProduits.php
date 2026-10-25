@@ -212,7 +212,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                     ->visible($voitLaValeurDuStock)
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('fournisseur.nom')->label('Fournisseur')->placeholder('—')->visible($voitLesFiches)->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')->label('Entré le')->date('d/m/Y')->visible($voitLesFiches)->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->label('Entré le')->dateTime('d/m/Y')->visible($voitLesFiches)->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 Filter::make('en_stock')

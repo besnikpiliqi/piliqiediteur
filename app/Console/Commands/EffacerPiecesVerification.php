@@ -2,11 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -48,7 +50,7 @@ class EffacerPiecesVerification extends Command
 
         PieceVerification::withoutGlobalScope(SocieteScope::class)
             ->whereNull('effacee_le')
-            ->where('deposee_le', '<=', now()->addMinutes(self::MINUTES_ENTRE_DEUX_PASSAGES)->subDays(PieceVerification::CONSERVATION_EN_JOURS))
+            ->where('deposee_le', '<=', Calendrier::deParis()->decaler(now()->addMinutes(self::MINUTES_ENTRE_DEUX_PASSAGES), CarbonInterval::days(-PieceVerification::CONSERVATION_EN_JOURS)))
             ->lazyById()
             ->each(function (PieceVerification $piece) use ($pieces, $tenantContext, &$effacees): void {
                 $tenantContext->runAsSociete(Societe::query()->findOrFail($piece->societe_id), fn () => $pieces->effacer($piece, PiecesDeVerification::MOTIF_DELAI));

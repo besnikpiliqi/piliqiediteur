@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -50,7 +51,7 @@ class ImputerAvoirSurSesFacturesActionConcurrenceTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => $facture->total_ttc,
-            'recu_le' => today()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
 
         return $facture;

@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
@@ -1198,7 +1199,7 @@ class CaisseTest extends TestCase
     public function test_apres_la_cloture_de_la_journee_la_caisse_n_encaisse_plus_jusqu_a_minuit(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $vente = ['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'];
         $this->travelTo(self::aParis('2026-10-09 19:30:00'));
@@ -1658,7 +1659,7 @@ class CaisseTest extends TestCase
     public function test_apres_la_cloture_un_appel_direct_a_encaisser_est_refuse_meme_pour_un_professionnel(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin(self::aParis('2026-10-09 19:00:00'));
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
         $professionnel = Client::factory()->professionnel()->create();
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(self::aParis('2026-10-09 19:30:00'));

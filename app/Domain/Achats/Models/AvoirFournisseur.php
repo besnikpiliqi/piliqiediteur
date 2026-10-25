@@ -5,6 +5,7 @@ namespace App\Domain\Achats\Models;
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -67,7 +68,7 @@ class AvoirFournisseur extends Model
         return [
             'statut' => StatutAvoirFournisseur::class,
             'source' => SourceAvoirFournisseur::class,
-            'date_emission' => HorodatageUtc::class.':'.config('app.timezone'),
+            'date_emission' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau(),
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',

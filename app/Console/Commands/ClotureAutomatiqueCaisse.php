@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -49,8 +49,8 @@ class ClotureAutomatiqueCaisse extends Command
 {
     public function handle(TenantContext $tenantContext, CloturerLesJourneesAction $cloturerLesJournees, FermerLesCaissesPersonnellesAction $fermerLesCaisses): int
     {
-        $hier = CarbonImmutable::now()->subDay();
-        $finDHier = $hier->endOfDay();
+        $hier = Calendrier::ajouterJours(Calendrier::deParis()->aujourdhui(), -1);
+        $finDHier = Calendrier::deParis()->bornesDuJour($hier)[1]->subSecond();
         $clotures = 0;
         $caissesFermees = 0;
         $magasinsEnEchec = 0;
@@ -80,7 +80,7 @@ class ClotureAutomatiqueCaisse extends Command
             });
         });
 
-        $this->info("{$clotures} clôture(s) automatique(s) effectuée(s) jusqu'au {$hier->format('d/m/Y')}.");
+        $this->info("{$clotures} clôture(s) automatique(s) effectuée(s) jusqu'au ".Calendrier::afficherJour($hier, 'd/m/Y').'.');
         $this->info("{$caissesFermees} caisse(s) personnelle(s) fermée(s) automatiquement.");
 
         if ($magasinsEnEchec > 0) {

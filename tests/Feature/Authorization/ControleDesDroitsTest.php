@@ -7,6 +7,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -381,7 +382,7 @@ class ControleDesDroitsTest extends TestCase
         $this->assertFalse($proprietaire->can('delete', $emise));
         $this->assertFalse($proprietaire->can('update', $emise));
 
-        app(CloturerCaisseAction::class)->handle($proprietaire, $magasin, now());
+        app(CloturerCaisseAction::class)->handle($proprietaire, $magasin, Calendrier::deParis()->aujourdhui());
         $this->assertThrows(fn () => app(ContrePasserPaiementAction::class)->handle($proprietaire, $paiement, 'Saisie erronée'), LogicException::class, 'La journée du 09/10/2026 est clôturée : la contre-passation pourra être faite demain.');
 
         $this->assertTrue($proprietaire->can(PermissionRegistry::AVOIR_CREER));

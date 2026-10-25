@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -152,9 +153,9 @@ class PolitiqueDArrondiTest extends TestCase
             ->assertSee('41,67')
             ->assertSee('8,33')
             ->assertDontSee('41,66');
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $ticket->date_emission);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($ticket->date_emission));
         $this->assertSame(['41.67', '8.33', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
-        $this->assertSame(['ht' => 41.67, 'tva' => 8.33, 'ttc' => 50.0, 'factures' => 1, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode(now()->startOfDay(), now()->endOfDay()));
+        $this->assertSame(['ht' => 41.67, 'tva' => 8.33, 'ttc' => 50.0, 'factures' => 1, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode(Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
         Livewire::test(FacturesApercu::class)->assertSeeInOrder(['Cette semaine', '41,67 € HT', '50,00 € TTC · 1 facture']);
     }
 
@@ -215,7 +216,7 @@ class PolitiqueDArrondiTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $vente->getRouteKey()])->assertSee('41,67')->assertSee('8,33');
 
         if (! $professionnel) {
-            $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $vente->date_emission);
+            $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($vente->date_emission));
             $this->assertSame(['41.67', '8.33', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         }
     }
@@ -233,12 +234,12 @@ class PolitiqueDArrondiTest extends TestCase
 
         $premier = $this->vendreALaCaisse($this->comptoir(), [[$tshirt, 1]]);
         $second = $this->vendreALaCaisse($this->comptoir(), [[$tshirt, 1]]);
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $premier->date_emission);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($premier->date_emission));
 
         $this->assertSame(['20.83', '4.17', '25.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['20.83', '4.17', '25.00'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
         $this->assertSame(['41.66', '8.34', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
-        $this->assertSame(['ht' => 41.66, 'tva' => 8.34, 'ttc' => 50.0, 'factures' => 2, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode(now()->startOfDay(), now()->endOfDay()));
+        $this->assertSame(['ht' => 41.66, 'tva' => 8.34, 'ttc' => 50.0, 'factures' => 2, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode(Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
     }
 
     /**
@@ -346,7 +347,7 @@ class PolitiqueDArrondiTest extends TestCase
         $troisieme = $this->vendreALaCaisse($this->comptoir(), [[$livre, 1]]);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $this->comptoir(), [['ligne_facture_id' => $premier->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $premier->date_emission);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($premier->date_emission));
 
         $this->assertSame(
             [['41.67', '8.33', '50.00'], ['29.17', '5.83', '35.00'], ['9.48', '0.52', '10.00'], ['20.83', '4.17', '25.00']],

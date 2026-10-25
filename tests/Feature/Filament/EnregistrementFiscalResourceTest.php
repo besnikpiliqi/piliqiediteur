@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -217,7 +218,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->connecterProprietaire();
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui());
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class);
 

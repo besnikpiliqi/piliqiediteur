@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Enums\NatureOperation;
@@ -9,7 +10,6 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Exceptions\NatureOperationRefuseeException;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
-use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -52,7 +52,7 @@ use Illuminate\Support\Collection;
  *
  * Le client contrôlé est sa fiche, celle que la facture copie à son
  * émission (voir FigeLeClient). La consultation VIES retenue est la
- * dernière vérification faite ce jour-là à Paris du n° exact de cette
+ * dernière vérification faite ce jour-là du n° exact de cette
  * fiche, si elle l'a trouvé valide (voir consultationDuJour()), cherchée
  * dans le magasin actif (MagasinScope) : jamais une consultation reçue
  * d'un formulaire ni celle d'un autre magasin.
@@ -64,11 +64,11 @@ class ControleNatureOperation
      * donne la consultation VIES qu'elle retient quand sa nature en exige
      * une (voir NatureOperation::exigeVies()).
      *
-     * @param  CarbonInterface  $jour  l'instant de l'émission
+     * @param  string  $jour  le jour de l'émission (AAAA-MM-JJ)
      *
      * @throws NatureOperationRefuseeException
      */
-    public function verifier(Facture $facture, CarbonInterface $jour): ?ConsultationVies
+    public function verifier(Facture $facture, string $jour): ?ConsultationVies
     {
         $manquements = $this->manquements($facture, $jour);
 
@@ -83,10 +83,10 @@ class ControleNatureOperation
      * Tout ce qui empêche la facture d'être émise dans sa nature, chacun en
      * une phrase sans point final ; rien pour une vente en France.
      *
-     * @param  CarbonInterface  $jour  l'instant de l'émission
+     * @param  string  $jour  le jour de l'émission (AAAA-MM-JJ)
      * @return list<string>
      */
-    public function manquements(Facture $facture, CarbonInterface $jour): array
+    public function manquements(Facture $facture, string $jour): array
     {
         $nature = $facture->nature_operation;
 
@@ -109,14 +109,14 @@ class ControleNatureOperation
     }
 
     /**
-     * La dernière vérification, ce jour-là à Paris, du n° de TVA qu'a
+     * La dernière vérification, ce jour du calendrier, du n° de TVA qu'a
      * aujourd'hui la fiche du client, dans le magasin actif, si elle l'a
      * trouvé valide ; null sinon : aucune vérification ce jour-là, ou la
      * dernière l'a trouvé inconnu de VIES, même après une vérification
      * valide plus tôt dans la journée -- le magasin sait alors que le n° ne
      * vaut plus, et la vente reste à la TVA française.
      */
-    public function consultationDuJour(Client $client, CarbonInterface $jour): ?ConsultationVies
+    public function consultationDuJour(Client $client, string $jour): ?ConsultationVies
     {
         if (blank($client->numero_tva)) {
             return null;
@@ -228,7 +228,7 @@ class ControleNatureOperation
      *
      * @return list<string|null>
      */
-    private function manquementsDuNumeroTva(NatureOperation $nature, Client $client, CarbonInterface $jour): array
+    private function manquementsDuNumeroTva(NatureOperation $nature, Client $client, string $jour): array
     {
         $prefixe = TerritoireFiscal::prefixeTvaUe($client->numero_tva);
         $prefixesRefuses = $nature === NatureOperation::LivraisonIntracommunautaire ? ['FR'] : ['FR', 'XI'];
@@ -240,7 +240,7 @@ class ControleNatureOperation
         }
 
         return [$this->consultationDuJour($client, $jour) === null
-            ? "le n° de TVA {$client->numero_tva} n'a pas été trouvé valide sur VIES le {$jour->copy()->setTimezone(config('app.timezone'))->format('d/m/Y')}"
+            ? "le n° de TVA {$client->numero_tva} n'a pas été trouvé valide sur VIES le ".Calendrier::afficherJour($jour, 'd/m/Y')
             : null];
     }
 }

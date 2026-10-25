@@ -13,6 +13,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
@@ -134,7 +135,7 @@ class FactureAchatResource extends Resource
                 TextEntry::make('source')->badge(),
                 TextEntry::make('fournisseur.nom')->label('Fournisseur'),
                 TextEntry::make('numero_fournisseur')->label('N° facture fournisseur')->placeholder('—'),
-                TextEntry::make('date_facture')->label('Date facture')->date('d/m/Y')->placeholder('—'),
+                TextEntry::make('date_facture')->label('Date facture')->jour()->placeholder('—'),
                 TextEntry::make('date_validation')->label('Validée le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('cree_par_nom')->label('Créée par'),
                 TextEntry::make('escompte_pourcentage')
@@ -199,7 +200,7 @@ class FactureAchatResource extends Resource
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
-                Tables\Columns\TextColumn::make('date_facture')->label('Date facture')->date('d/m/Y'),
+                Tables\Columns\TextColumn::make('date_facture')->label('Date facture')->jour(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFactureAchat::class),
@@ -327,7 +328,7 @@ class FactureAchatResource extends Resource
                     ? '<a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>'
                     : e($avoir->numero);
 
-                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.$avoir->date_emission->format('d/m/Y').')')))->toHtml();
+                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.Calendrier::deParis()->afficher($avoir->date_emission, 'd/m/Y').')')))->toHtml();
             });
 
         return $retours->isEmpty() ? null : new HtmlString($retours->implode('<br>'));

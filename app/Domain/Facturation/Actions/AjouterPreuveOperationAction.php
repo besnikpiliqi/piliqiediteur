@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
@@ -12,8 +13,6 @@ use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
-use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -131,26 +130,20 @@ class AjouterPreuveOperationAction
     }
 
     /**
-     * La date que porte le document, jamais après aujourd'hui à Paris.
+     * Le jour que porte le document (« AAAA-MM-JJ »), jamais après
+     * aujourd'hui.
      *
      * @throws InvalidArgumentException
      */
     private function dateDuDocument(string $saisie): string
     {
-        try {
-            $date = CarbonImmutable::createFromFormat('!Y-m-d', $saisie, config('app.timezone'));
-        } catch (InvalidFormatException) {
-            $date = null;
-        }
+        $jour = Calendrier::jourValide($saisie)
+            ?? throw new InvalidArgumentException('La date du document n\'est pas une date valide.');
 
-        if ($date === null || $date->format('Y-m-d') !== $saisie) {
-            throw new InvalidArgumentException('La date du document n\'est pas une date valide.');
-        }
-
-        if ($date->isAfter(today())) {
+        if ($jour > Calendrier::deParis()->aujourdhui()) {
             throw new InvalidArgumentException('La date du document ne peut pas être dans le futur.');
         }
 
-        return $saisie;
+        return $jour;
     }
 }

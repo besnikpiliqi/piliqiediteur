@@ -4,12 +4,14 @@ namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -36,7 +38,7 @@ class FermerDemonstrationsInactives extends Command
 
     public function handle(FermerLaDemonstrationAction $fermer): int
     {
-        $limite = CarbonImmutable::now()->subDays(self::JOURS_D_INACTIVITE);
+        $limite = Calendrier::deParis()->decaler(CarbonImmutable::now(), CarbonInterval::days(-self::JOURS_D_INACTIVITE));
         $fermees = 0;
         $enEchec = 0;
 

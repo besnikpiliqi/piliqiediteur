@@ -5,8 +5,8 @@ namespace App\Filament\App\Resources;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -65,7 +65,7 @@ class EnregistrementFiscalResource extends Resource
                 TextEntry::make('type')->label('Type ou code')
                     ->formatStateUsing(fn (EnregistrementFiscal $record): string => $record->libelleDuType()),
                 TextEntry::make('horodatage')->label('Horodatage (heure de Paris)')
-                    ->dateTime('d/m/Y à H:i:s', config('app.timezone')),
+                    ->dateTime('d/m/Y à H:i:s'),
                 TextEntry::make('libelle_operateur')->label('Opérateur')
                     ->state(fn (EnregistrementFiscal $record): string => $record->libelleDeLOperateur()),
                 TextEntry::make('libelle_document')->label('Document')
@@ -125,7 +125,7 @@ class EnregistrementFiscalResource extends Resource
                     ->formatStateUsing(fn (EnregistrementFiscal $record): string => $record->libelleDuType())
                     ->wrap(),
                 Tables\Columns\TextColumn::make('horodatage')->label('Horodatage (heure de Paris)')
-                    ->dateTime('d/m/Y H:i:s', config('app.timezone'))
+                    ->dateTime('d/m/Y H:i:s')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('libelle_operateur')->label('Opérateur')
                     ->state(fn (EnregistrementFiscal $record): string => $record->libelleDeLOperateur()),
@@ -145,8 +145,8 @@ class EnregistrementFiscalResource extends Resource
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query->horodatesDuJourAuJour($data['du'] ?? null, $data['au'] ?? null))
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
-                        filled($data['du'] ?? null) ? 'Du '.CarbonImmutable::parse($data['du'])->format('d/m/Y') : null,
-                        filled($data['au'] ?? null) ? 'Au '.CarbonImmutable::parse($data['au'])->format('d/m/Y') : null,
+                        filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour($data['du'], 'd/m/Y') : null,
+                        filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour($data['au'], 'd/m/Y') : null,
                     ]))),
                 Tables\Filters\SelectFilter::make('code')->label('Code de l\'événement')
                     ->options(collect(CodeEvenement::cases())->mapWithKeys(

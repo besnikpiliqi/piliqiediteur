@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -97,8 +98,8 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         }
         $this->assertSame($premiere->ventilation_tva, $seconde->fresh()->ventilation_tva);
         $this->assertNotSame($premiere->numero, $seconde->numero);
-        $this->assertSame($premiere->date_emission->toDateString(), $seconde->date_emission->toDateString());
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $premiere->date_emission);
+        $this->assertSame(Calendrier::deParis()->jourDe($premiere->date_emission), Calendrier::deParis()->jourDe($seconde->date_emission));
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($premiere->date_emission));
         $this->assertSame(['102.30', '17.70', '120.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertEqualsCanonicalizing([
             ['taux_tva' => '20.00', 'montant_ht' => 83.34, 'montant_tva' => 16.66, 'montant_ttc' => 100.0],

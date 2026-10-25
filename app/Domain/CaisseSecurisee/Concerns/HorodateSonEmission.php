@@ -3,7 +3,7 @@
 namespace App\Domain\CaisseSecurisee\Concerns;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
-use Carbon\CarbonImmutable;
+use App\Domain\Calendrier\Calendrier;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -14,24 +14,27 @@ use Illuminate\Database\Eloquent\Builder;
  * signe se relise au même instant toute l'année, heure qui se répète au
  * passage à l'heure d'hiver comprise.
  *
- * La colonne étant en UTC, une période de Paris se cherche par ses bornes
- * converties en UTC (emisEntre(), emisJusquA(), emisLe()), jamais par
- * whereDate(), qui comparerait la date UTC.
+ * La colonne étant en UTC, une période de jours du calendrier se cherche
+ * par les instants de ses bornes (emisDuAu(), emisLe(), emisJusquA()).
  */
 trait HorodateSonEmission
 {
     public function initializeHorodateSonEmission(): void
     {
-        $this->mergeCasts(['date_emission' => HorodatageUtc::class.':'.config('app.timezone')]);
+        $this->mergeCasts(['date_emission' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau()]);
     }
 
     /**
-     * Les documents émis de $debut à $fin, bornes comprises, quel que soit
-     * leur fuseau.
+     * Les documents émis du jour $du au jour $au du calendrier, compris :
+     * du minuit de $du au minuit qui suit $au, exclu.
      */
-    public function scopeEmisEntre(Builder $query, CarbonInterface $debut, CarbonInterface $fin): Builder
+    public function scopeEmisDuAu(Builder $query, string $du, string $au): Builder
     {
-        return $query->whereBetween('date_emission', [HorodatageUtc::enBase($debut), HorodatageUtc::enBase($fin)]);
+        $calendrier = Calendrier::deParis();
+
+        return $query
+            ->where('date_emission', '>=', HorodatageUtc::enBase($calendrier->debutDuJour($du)))
+            ->where('date_emission', '<', HorodatageUtc::enBase($calendrier->bornesDuJour($au)[1]));
     }
 
     /**
@@ -44,14 +47,11 @@ trait HorodateSonEmission
     }
 
     /**
-     * Les documents émis tel jour à Paris, de minuit à minuit : 23, 24 ou
-     * 25 heures selon le changement d'heure. Une date porte son jour dans
-     * son propre fuseau, comme pour whereDate().
+     * Les documents émis tel jour du calendrier, de minuit à minuit : 23,
+     * 24 ou 25 heures selon le changement d'heure.
      */
-    public function scopeEmisLe(Builder $query, CarbonInterface|string $jour): Builder
+    public function scopeEmisLe(Builder $query, string $jour): Builder
     {
-        $minuit = CarbonImmutable::parse($jour instanceof CarbonInterface ? $jour->toDateString() : $jour, config('app.timezone'))->startOfDay();
-
-        return $query->emisEntre($minuit, $minuit->endOfDay());
+        return $query->emisDuAu($jour, $jour);
     }
 }

@@ -259,7 +259,7 @@ class DevisConversionTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertNull($brouillon->date_echeance);
-        $this->assertSame('2026-11-08', $facture->date_echeance->toDateString());
+        $this->assertSame('2026-11-08', $facture->date_echeance);
     }
 
     public function test_convertir_un_devis_garde_le_service_de_chaque_ligne_de_service(): void

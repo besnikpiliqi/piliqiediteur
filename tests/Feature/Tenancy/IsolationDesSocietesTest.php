@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -44,7 +45,6 @@ use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -359,8 +359,8 @@ class IsolationDesSocietesTest extends TestCase
         app(TenantContext::class)->runAs($magasinB, fn () => app(FermerSaCaisseAction::class)->handle(self::responsableDeTest($magasinB), self::responsableDeTest($magasinB)));
         app(TenantContext::class)->clear();
 
-        $vuParA = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasinA), CarbonImmutable::today());
-        $vuParB = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasinB), CarbonImmutable::today());
+        $vuParA = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasinA), Calendrier::deParis()->aujourdhui());
+        $vuParB = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasinB), Calendrier::deParis()->aujourdhui());
 
         $this->assertSame([[$magasinA->id, ['Responsable de test'], 0]], array_map(fn (array $caisses): array => [$caisses['magasin']->id, $caisses['caisses_ouvertes'], $caisses['releves']->count()], $vuParA));
         $this->assertSame([[$magasinB->id, [], 1]], array_map(fn (array $caisses): array => [$caisses['magasin']->id, $caisses['caisses_ouvertes'], $caisses['releves']->count()], $vuParB));

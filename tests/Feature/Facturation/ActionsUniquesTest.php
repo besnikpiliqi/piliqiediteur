@@ -6,6 +6,7 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -254,8 +255,8 @@ class ActionsUniquesTest extends TestCase
         $this->vendreAuComptoir(self::auteur(), null);
         $jeton = (string) Str::uuid();
 
-        $premiere = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, now(), $jeton);
-        $repetee = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, now(), $jeton);
+        $premiere = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui(), $jeton);
+        $repetee = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui(), $jeton);
 
         $this->assertSame(1, ClotureCaisse::query()->count());
         $this->assertSame([$premiere['clotures']->sole()->id], $repetee['clotures']->map(fn (ClotureCaisse $cloture): int => $cloture->id)->all());
@@ -322,7 +323,7 @@ class ActionsUniquesTest extends TestCase
      */
     private function paiementDe(string $montant): array
     {
-        return ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()];
+        return ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => Calendrier::deParis()->aujourdhui()];
     }
 
     /**

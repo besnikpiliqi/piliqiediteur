@@ -8,6 +8,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -138,13 +139,14 @@ class ValiderFactureAchatAction
 
         $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
 
-        $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));
+        $maintenant = CarbonImmutable::now('UTC');
+        $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, Calendrier::deParis()->anneeDe($maintenant));
 
         $factureAchat->forceFill([
             'numero' => $numero,
             'rang_validation' => $this->numerotation->rangSuivant($factureAchat->magasin, TypeDocument::FactureAchat),
             'statut' => StatutFactureAchat::Validee,
-            'date_validation' => CarbonImmutable::now('UTC'),
+            'date_validation' => $maintenant,
         ])->save();
 
         // Synchrone et dans la même transaction, voir le commentaire de

@@ -2,10 +2,12 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -60,7 +62,7 @@ class CourriersDeVerification
 
         $premier = $courriers->first()?->envoye_le ?? $societe->created_at;
 
-        return CarbonImmutable::parse($premier)->addDays(self::JOURS_AVANT_UN_NOUVEL_ENVOI);
+        return Calendrier::deParis()->decaler($premier, CarbonInterval::days(self::JOURS_AVANT_UN_NOUVEL_ENVOI));
     }
 
     /**
@@ -78,6 +80,6 @@ class CourriersDeVerification
      */
     public function cloturePrevueLe(Societe $societe): CarbonImmutable
     {
-        return CarbonImmutable::parse($this->dernier($societe)?->envoye_le ?? $societe->created_at)->addDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS);
+        return Calendrier::deParis()->decaler($this->dernier($societe)?->envoye_le ?? $societe->created_at, CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
     }
 }

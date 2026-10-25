@@ -3,6 +3,7 @@
 namespace App\Domain\CaisseSecurisee\Models;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -67,7 +68,7 @@ class TraceEvenement extends Model
             'enregistrement_fiscal_id' => $evenement->getKey(),
             'ip' => $requete->ip(),
             'agent_utilisateur' => $navigateur === null ? null : mb_substr($navigateur, 0, 255),
-            'expire_le' => CarbonImmutable::now()->addMonthsNoOverflow(config('conservation.traces_en_mois')),
+            'expire_le' => Calendrier::deParis()->decalerEnMoisSansDebordement(CarbonImmutable::now(), config('conservation.traces_en_mois')),
         ])->save();
     }
 }

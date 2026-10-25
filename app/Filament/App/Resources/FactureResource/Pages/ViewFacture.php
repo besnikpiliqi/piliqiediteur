@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\FactureResource\Pages;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\TypePreuve;
@@ -101,7 +102,7 @@ class ViewFacture extends ViewRecord
                         ->maxLength(100),
                     DatePicker::make('date_document')
                         ->label('Date du document')
-                        ->maxDate(today()),
+                        ->maxDate(Calendrier::deParis()->aujourdhui()),
                     TextInput::make('emetteur')
                         ->label('Établie par')
                         ->helperText('La douane, le transporteur, l\'assureur ou l\'acquéreur. Deux documents de transport doivent venir de deux parties indépendantes du magasin et du client.')

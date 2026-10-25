@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
@@ -15,7 +16,6 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Models\Magasin;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
@@ -89,7 +89,7 @@ class RecapitulatifDeCloture
      */
     public function etablir(Magasin $magasin, string $journee, EloquentCollection $tickets, EloquentCollection $avoirsDeTickets, ?ClotureCaisse $precedente): array
     {
-        $finDeLaJournee = CarbonImmutable::parse($journee, config('app.timezone'))->endOfDay();
+        $finDeLaJournee = Calendrier::deParis()->bornesDuJour($journee)[1]->subSecond();
         $ventes = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $finDeLaJournee);
         $encaissements = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $finDeLaJournee);
         $derniereSequenceVente = $ventes->last()?->sequence ?? $precedente?->derniere_sequence_vente;

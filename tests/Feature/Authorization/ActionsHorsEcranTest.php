@@ -13,6 +13,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Actions\ExporterJournalDesEvenementsAction;
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
@@ -253,8 +254,8 @@ class ActionsHorsEcranTest extends TestCase
             }),
             'enregistrer un paiement' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => $this->payer($auteur, $ticket)),
             'contre-passer un paiement' => $this->avec($this->payer($vendeur, $this->ticket($vendeur)), fn ($paiement, User $auteur) => app(ContrePasserPaiementAction::class)->handle($auteur, $paiement, 'Erreur de saisie')),
-            'clôturer la journée' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CloturerCaisseAction::class)->handle($auteur, $magasin, today())),
-            'clôturer les journées en attente' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CloturerLesJourneesAction::class)->parUnePersonne($auteur, $magasin, now())),
+            'clôturer la journée' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CloturerCaisseAction::class)->handle($auteur, $magasin, Calendrier::deParis()->aujourdhui())),
+            'clôturer les journées en attente' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CloturerLesJourneesAction::class)->parUnePersonne($auteur, $magasin, Calendrier::deParis()->aujourdhui())),
             'fermer la caisse d\'un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur): Closure {
                 $this->ticket($vendeur);
 
@@ -275,7 +276,7 @@ class ActionsHorsEcranTest extends TestCase
             }),
             'créer un service à la caisse' => fn (User $auteur) => app(TrouverOuCreerServiceAction::class)->handle($auteur, 'Pose de verre trempé'),
             'vérifier un numéro de TVA' => $this->avec(Client::factory()->professionnel()->create(['pays' => 'DE', 'numero_tva' => 'DE123456789']), fn (Client $client, User $auteur) => app(VerifierNumeroTvaAction::class)->handle($auteur, $client)),
-            'exporter le journal des événements' => fn (User $auteur) => app(ExporterJournalDesEvenementsAction::class)->handle($auteur, today()->toDateString(), today()->toDateString()),
+            'exporter le journal des événements' => fn (User $auteur) => app(ExporterJournalDesEvenementsAction::class)->handle($auteur, Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()),
             'vérifier l\'intégrité' => fn (User $auteur) => app(VerifierIntegriteAction::class)->handle($auteur, $magasin, false),
             'créer un vendeur' => fn (User $auteur) => app(CreerMembreAction::class)->handle($auteur, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur),
             'modifier un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ModifierMembreAction::class)->handle($auteur, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW])),
@@ -404,7 +405,7 @@ class ActionsHorsEcranTest extends TestCase
 
     private function payer(User $auteur, Facture $ticket): mixed
     {
-        return app(EnregistrerPaiementAction::class)->handle($auteur, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
+        return app(EnregistrerPaiementAction::class)->handle($auteur, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
     }
 
     private function factureAchat(User $auteur): FactureAchat

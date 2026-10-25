@@ -3,6 +3,7 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
@@ -45,7 +46,7 @@ class CaissesDeLaSocieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($lyon);
         $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
 
-        $caisses = app(CaissesDeLaSociete::class)->pour($proprietaire, today()->toImmutable());
+        $caisses = app(CaissesDeLaSociete::class)->pour($proprietaire, Calendrier::deParis()->aujourdhui());
 
         $this->assertSame(
             [[$lyon->id, [], [['Paul', '12.00']]], [$paris->id, ['Jeanne'], []]],
@@ -79,7 +80,7 @@ class CaissesDeLaSocieteTest extends TestCase
         $aveugle = $this->administrateur($lyon, [$paris->id], [], $sansLesReleves);
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
 
-        $this->assertSame([$lyon->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($administrateur, today()->toImmutable())));
+        $this->assertSame([$lyon->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($administrateur, Calendrier::deParis()->aujourdhui())));
         Livewire::test(LesCaisses::class)
             ->assertSee('Caisses encore ouvertes : Paul.')
             ->assertDontSee(['Paris Opéra', 'Jeanne Roux', 'Nice Étoile', 'Luc Morel']);
@@ -104,7 +105,7 @@ class CaissesDeLaSocieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($reel);
         $this->dansLEspaceDeLaSociete($reel->societe, $proprietaire);
 
-        $this->assertSame([$reel->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($proprietaire, today()->toImmutable())));
+        $this->assertSame([$reel->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($proprietaire, Calendrier::deParis()->aujourdhui())));
         Livewire::test(LesCaisses::class)
             ->assertSee('Lyon')
             ->assertDontSee([$demonstration->nom, '('.$demonstration->code.')', 'Responsable de test', 'Bordeaux', 'Inès']);
@@ -123,7 +124,7 @@ class CaissesDeLaSocieteTest extends TestCase
         app(TenantContext::class)->runAs($magasin, fn () => app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $vendeur));
         app(TenantContext::class)->clear();
 
-        [$caisses] = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasin), today()->toImmutable());
+        [$caisses] = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasin), Calendrier::deParis()->aujourdhui());
         $releve = $caisses['releves']->sole();
 
         $this->assertSame(['magasin', 'caisses_ouvertes', 'releves'], array_keys($caisses));
@@ -168,7 +169,7 @@ class CaissesDeLaSocieteTest extends TestCase
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
         $page = Livewire::test(LesCaisses::class);
 
-        foreach (['2026-10-18', today()->toDateString(), 'pas une date', '2026-02-30'] as $jour) {
+        foreach (['2026-10-18', Calendrier::deParis()->aujourdhui(), 'pas une date', '2026-02-30'] as $jour) {
             $page->set('jour', $jour)->assertSee('Lyon')->assertDontSee(['Paris Opéra', 'Jeanne Roux', $paris->uuid, 'Bordeaux', $ailleurs->uuid]);
         }
         foreach (['caisses', 'urlDesReleves', 'jourChoisi', 'getViewData'] as $methode) {

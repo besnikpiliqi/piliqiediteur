@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -54,7 +55,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 120,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $facture->id, 'montant' => 120],
         ]);
@@ -75,7 +76,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 50,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $facture->id, 'montant' => 50],
         ]);
@@ -87,7 +88,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 70,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $facture->id, 'montant' => 70],
         ]);
@@ -106,7 +107,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 120,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $factureA->id, 'montant' => 100],
             ['facture_id' => $factureB->id, 'montant' => 20],
@@ -130,7 +131,7 @@ class EnregistrerPaiementActionTest extends TestCase
             fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => '200.00',
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ], [['facture_id' => $facture->id, 'montant' => '120.00']]),
             LogicException::class,
             'Le montant reçu (200,00 €) doit être égal au total imputé sur les factures (120,00 €).',
@@ -149,7 +150,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => '170.00',
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $premiere->id, 'montant' => '120.00'],
             ['facture_id' => $seconde->id, 'montant' => '50.00'],
@@ -168,7 +169,7 @@ class EnregistrerPaiementActionTest extends TestCase
             fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
                 'mode_paiement' => ModePaiement::Especes->value,
                 'montant' => '50.00',
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ], []),
             LogicException::class,
             'Un paiement règle au moins une facture.',
@@ -186,7 +187,7 @@ class EnregistrerPaiementActionTest extends TestCase
             fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
                 'mode_paiement' => ModePaiement::Especes->value,
                 'montant' => '-20.00',
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ], [['facture_id' => $facture->id, 'montant' => '20.00']]),
             LogicException::class,
             'Le montant reçu doit être strictement positif.',
@@ -204,7 +205,7 @@ class EnregistrerPaiementActionTest extends TestCase
             fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
                 'mode_paiement' => ModePaiement::Especes->value,
                 'montant' => '100.00',
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ], [['facture_id' => $facture->id, 'montant' => '60.00'], ['facture_id' => $facture->id, 'montant' => '40.00']]),
             LogicException::class,
             'Une facture ne s\'impute qu\'une fois par paiement.',
@@ -223,11 +224,11 @@ class EnregistrerPaiementActionTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $ticketRetourne = $this->emettreFactureDe($comptoir, 120); // total TTC 120
-        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '120.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticketRetourne->id, 'montant' => '120.00']]);
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '120.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticketRetourne->id, 'montant' => '120.00']]);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticketRetourne->lignes()->sole()->id, 'quantite' => 1]]);
         $ticket = $this->emettreFactureDe($comptoir, 120); // total TTC 120
 
-        $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '10.00']]);
+        $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '10.00']]);
 
         $this->assertSame(0, $paiement->creditsImputes()->count());
         $this->assertSame([StatutFacture::PartiellementPayee, 110.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
@@ -244,7 +245,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 200,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $facture->id, 'montant' => 200],
         ]);
@@ -260,7 +261,7 @@ class EnregistrerPaiementActionTest extends TestCase
             app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 100,
-                'recu_le' => now()->toDateString(),
+                'recu_le' => Calendrier::deParis()->aujourdhui(),
             ], [
                 ['facture_id' => $factureA->id, 'montant' => 60],
                 ['facture_id' => $factureB->id, 'montant' => 60],
@@ -286,7 +287,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $clientPayeur, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 50,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $facture->id, 'montant' => 50],
         ]);
@@ -305,7 +306,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 50,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [
             ['facture_id' => $facture->id, 'montant' => 50],
         ]);
@@ -349,7 +350,7 @@ class EnregistrerPaiementActionTest extends TestCase
             'recu_le' => '2026-10-08',
         ], [['facture_id' => $facture->id, 'montant' => 120]]);
 
-        $this->assertSame('2026-10-08', $paiement->fresh()->recu_le->toDateString());
+        $this->assertSame('2026-10-08', $paiement->fresh()->recu_le);
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
     }
 
@@ -367,7 +368,7 @@ class EnregistrerPaiementActionTest extends TestCase
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 120,
-            'recu_le' => now()->toDateString(),
+            'recu_le' => Calendrier::deParis()->aujourdhui(),
         ], [['facture_id' => $facture->id, 'montant' => 120]]);
 
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);

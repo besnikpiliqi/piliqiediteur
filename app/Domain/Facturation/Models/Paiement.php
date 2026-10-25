@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -52,7 +53,7 @@ class Paiement extends Model
     protected $casts = [
         'mode_paiement' => ModePaiement::class,
         'montant' => 'decimal:2',
-        'recu_le' => 'date',
+        'recu_le' => JourCivil::class,
     ];
 
     public function estValidee(): bool

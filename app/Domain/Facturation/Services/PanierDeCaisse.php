@@ -9,13 +9,13 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -279,14 +279,14 @@ class PanierDeCaisse
     }
 
     /**
-     * Les paniers enregistrés pour la dernière fois ce jour-là ou avant, à
-     * l'heure de Paris.
+     * Les paniers enregistrés pour la dernière fois ce jour du calendrier ou
+     * avant.
      *
      * @return Builder<PanierCaisse>
      */
     private function ventesOuvertesLe(string $journee): Builder
     {
-        return PanierCaisse::query()->where('updated_at', '<', CarbonImmutable::parse($journee, config('app.timezone'))->addDay());
+        return PanierCaisse::query()->where('updated_at', '<', Calendrier::deParis()->bornesDuJour($journee)[1]);
     }
 
     /**

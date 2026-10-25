@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -643,7 +644,7 @@ class EReportingDesParticuliersTest extends TestCase
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
         app(TenantContext::class)->set($demonstration);
         self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]]);
-        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, Calendrier::deParis()->aujourdhui());
 
         $apercu = $this->apercu($cloture);
 

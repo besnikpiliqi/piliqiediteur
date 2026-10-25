@@ -29,8 +29,10 @@ use Illuminate\Support\Str;
  * RegistreFiscal.
  *
  * Les horodatages, enregistrés et signés en UTC, s'affichent à l'heure du
- * calendrier. La fiche montre le contenu signé mis en forme, puis son texte
- * exact, à copier pour vérifier la signature hors de l'application ;
+ * calendrier, avec la mention de l'heure d'été ou d'hiver pendant l'heure
+ * qui se répète (voir Calendrier::afficherDansUnJournal()). La fiche
+ * montre le contenu signé mis en forme, puis son texte exact, à copier
+ * pour vérifier la signature hors de l'application ;
  * l'export CSV du journal des événements (voir ListEnregistrementsFiscaux)
  * reprend aussi ce texte pour chaque événement technique.
  *
@@ -65,7 +67,7 @@ class EnregistrementFiscalResource extends Resource
                 TextEntry::make('type')->label('Type ou code')
                     ->formatStateUsing(fn (EnregistrementFiscal $record): string => $record->libelleDuType()),
                 TextEntry::make('horodatage')->label('Horodatage (heure de Paris)')
-                    ->dateTime('d/m/Y à H:i:s'),
+                    ->formatStateUsing(fn (EnregistrementFiscal $record): string => Calendrier::deParis()->afficherDansUnJournal($record->horodatage, 'd/m/Y à H:i:s')),
                 TextEntry::make('libelle_operateur')->label('Opérateur')
                     ->state(fn (EnregistrementFiscal $record): string => $record->libelleDeLOperateur()),
                 TextEntry::make('libelle_document')->label('Document')
@@ -125,7 +127,7 @@ class EnregistrementFiscalResource extends Resource
                     ->formatStateUsing(fn (EnregistrementFiscal $record): string => $record->libelleDuType())
                     ->wrap(),
                 Tables\Columns\TextColumn::make('horodatage')->label('Horodatage (heure de Paris)')
-                    ->dateTime('d/m/Y H:i:s')
+                    ->formatStateUsing(fn (EnregistrementFiscal $record): string => Calendrier::deParis()->afficherDansUnJournal($record->horodatage, 'd/m/Y H:i:s'))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('libelle_operateur')->label('Opérateur')
                     ->state(fn (EnregistrementFiscal $record): string => $record->libelleDeLOperateur()),

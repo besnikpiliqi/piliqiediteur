@@ -3,7 +3,9 @@
 namespace Tests\Feature\Calendrier;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -34,12 +36,16 @@ use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
+use App\Filament\App\Resources\EnregistrementFiscalResource\Pages\ListEnregistrementsFiscaux;
+use App\Filament\App\Resources\EnregistrementFiscalResource\Pages\ViewEnregistrementFiscal;
+use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Queue;
@@ -333,6 +339,63 @@ class HeureRepeteeTest extends TestCase
             ['25/10/2026 02:10', '25/10/2026 02:50'],
             $caisses['releves']->map(fn ($releve): string => Calendrier::deParis()->afficher($releve->cloturee_a, 'd/m/Y H:i'))->all(),
         );
+    }
+
+    /**
+     * Le journal des événements dit, pendant l'heure répétée, si un
+     * horodatage est de l'heure d'été ou de l'heure d'hiver (Q3) : la
+     * liste, dans l'ordre réel du plus récent au plus ancien, la fiche et
+     * la colonne lisible de l'export CSV ; la colonne signée de l'export
+     * reste l'horodatage UTC, et le widget de conformité, qui n'est pas le
+     * journal, n'ajoute rien.
+     */
+    public function test_le_journal_des_evenements_dit_l_heure_d_ete_ou_d_hiver_pendant_l_heure_repetee(): void
+    {
+        $this->travelTo(self::enUtc('2026-10-25 00:30:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->proprietaireDe($magasin));
+        Filament::setTenant($magasin);
+        $premier = DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']));
+        $this->travelTo(self::enUtc('2026-10-25 01:30:00'));
+        $second = DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => 'reel_simplifie', 'nouvelle_valeur' => 'reel_normal']));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        self::vendreAuComptant(self::responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        Livewire::test(ListEnregistrementsFiscaux::class)
+            ->assertSeeInOrder(["25/10/2026 02:30:00 (heure d'hiver)", "25/10/2026 02:30:00 (heure d'été)"]);
+        Livewire::test(ViewEnregistrementFiscal::class, ['record' => $premier->getRouteKey()])
+            ->assertSee("25/10/2026 à 02:30:00 (heure d'été)");
+        Livewire::test(ConformiteApercu::class)
+            ->assertSee('25/10/2026 à 02:30:00')
+            ->assertDontSee('(heure d');
+
+        $export = Livewire::test(ListEnregistrementsFiscaux::class)->callAction('exporter_journal', ['du' => '2026-10-25', 'au' => '2026-10-25']);
+        $lignes = array_values(array_filter($this->lignesDuCsv($export), fn (array $ligne): bool => in_array($ligne[0], [(string) $premier->sequence, (string) $second->sequence], true)));
+
+        $this->assertSame(
+            [["25/10/2026 02:30:00 (heure d'été)", '20261025003000Z'], ["25/10/2026 02:30:00 (heure d'hiver)", '20261025013000Z']],
+            array_map(fn (array $ligne): array => [$ligne[1], $ligne[2]], $lignes),
+        );
+    }
+
+    /**
+     * Le fichier téléchargé par l'action, lu comme un tableur le lit.
+     *
+     * @return list<list<string>>
+     */
+    private function lignesDuCsv(Testable $composant): array
+    {
+        $contenu = base64_decode($composant->effects['download']['content']);
+        $flux = fopen('php://memory', 'r+b');
+        fwrite($flux, substr($contenu, 3));
+        rewind($flux);
+        $lignes = [];
+
+        while (($ligne = fgetcsv($flux, null, ';', '"', '')) !== false) {
+            $lignes[] = $ligne;
+        }
+
+        return $lignes;
     }
 
     private function proprietaire(): User

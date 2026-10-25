@@ -4,8 +4,10 @@ namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Calendrier\Calendrier;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
@@ -97,6 +99,45 @@ class CommandesModuleFiscalTest extends TestCase
             ->expectsOutputToContain('Aucune clé publique épinglée dans /srv/piliqi/resources/caisse-securisee/cles.')
             ->expectsOutputToContain("n'est pas épinglée")
             ->expectsOutputToContain('Caisse sécurisée non opérationnelle : 2 contrôle(s) en échec.')
+            ->assertFailed();
+    }
+
+    /**
+     * Sous PostgreSQL, le fuseau par défaut de la base (celui que reçoit
+     * toute session avant que l'application ne fixe le sien) doit être
+     * l'UTC : une session ouverte avec le fuseau de Paris pour fuseau de
+     * départ, comme après ALTER DATABASE, fait échouer le diagnostic, alors
+     * que SHOW TIMEZONE y rend l'UTC que l'application vient de fixer.
+     */
+    public function test_diagnostiquer_echoue_quand_le_fuseau_par_defaut_de_la_base_n_est_pas_utc(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Le fuseau par défaut d\'une base n\'existe que sous PostgreSQL.');
+        }
+
+        $connexionDuTest = DB::getDefaultConnection();
+        config(['database.connections.fuseau_de_paris' => [...config("database.connections.{$connexionDuTest}"), 'server_options' => ['TimeZone' => Calendrier::deParis()->fuseau()]]]);
+        DB::setDefaultConnection('fuseau_de_paris');
+
+        try {
+            $this->assertSame('UTC', DB::selectOne('show timezone')->TimeZone);
+            $this->artisan('caisse:diagnostiquer')
+                ->expectsOutputToContain('Le fuseau par défaut de la base est « '.Calendrier::deParis()->fuseau().' »')
+                ->expectsOutputToContain('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.')
+                ->assertFailed();
+        } finally {
+            DB::setDefaultConnection($connexionDuTest);
+            DB::purge('fuseau_de_paris');
+        }
+    }
+
+    public function test_diagnostiquer_echoue_quand_le_fuseau_de_l_application_n_est_pas_utc(): void
+    {
+        config(['app.timezone' => Calendrier::deParis()->fuseau()]);
+
+        $this->artisan('caisse:diagnostiquer')
+            ->expectsOutputToContain("Le fuseau de l'application doit être UTC")
+            ->expectsOutputToContain('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.')
             ->assertFailed();
     }
 }

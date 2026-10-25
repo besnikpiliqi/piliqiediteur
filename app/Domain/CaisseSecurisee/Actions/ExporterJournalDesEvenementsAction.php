@@ -29,11 +29,13 @@ use InvalidArgumentException;
  * qui comprend aujourd'hui contient sa propre trace.
  *
  * Une ligne par événement, dans l'ordre de la chaîne : sa séquence, son
- * horodatage (à l'heure du calendrier, puis tel qu'il est signé, en UTC), son
- * code et son libellé, son opérateur, ses détails, l'adresse IP et le
- * navigateur, le document qu'il référence, puis de quoi le vérifier hors
- * de l'application : la signature précédente, sa signature, l'algorithme,
- * la clé et la version du module, et le contenu exact qui est signé.
+ * horodatage (à l'heure du calendrier, avec la mention de l'heure d'été
+ * ou d'hiver pendant l'heure qui se répète, puis tel qu'il est signé, en
+ * UTC), son code et son libellé, son opérateur, ses détails, l'adresse IP
+ * et le navigateur, le document qu'il référence, puis de quoi le vérifier
+ * hors de l'application : la signature précédente, sa signature,
+ * l'algorithme, la clé et la version du module, et le contenu exact qui
+ * est signé.
  *
  * L'adresse IP et le navigateur ne sont pas signés : ils viennent de la
  * trace de l'événement (voir TraceEvenement), tant qu'elle n'est pas
@@ -151,7 +153,7 @@ class ExporterJournalDesEvenementsAction
 
         $lecture = [
             (string) $evenement->sequence,
-            Calendrier::deParis()->afficher($evenement->horodatage, 'd/m/Y H:i:s'),
+            Calendrier::deParis()->afficherDansUnJournal($evenement->horodatage, 'd/m/Y H:i:s'),
             (string) ($evenement->contenuSigne()['horodatage'] ?? ''),
             (string) ($donnees['code'] ?? $evenement->type),
             (string) ($donnees['libelle'] ?? ''),

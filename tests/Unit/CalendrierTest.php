@@ -184,6 +184,42 @@ class CalendrierTest extends TestCase
         );
     }
 
+    /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function heuresDUnJournal(): array
+    {
+        return [
+            'début du premier passage' => ['2026-10-25T00:00:00Z', '25/10/2026 02:00:00', " (heure d'été)"],
+            'fin du premier passage' => ['2026-10-25T00:59:59Z', '25/10/2026 02:59:59', " (heure d'été)"],
+            'début du second passage' => ['2026-10-25T01:00:00Z', '25/10/2026 02:00:00', " (heure d'hiver)"],
+            'fin du second passage' => ['2026-10-25T01:59:59Z', '25/10/2026 02:59:59', " (heure d'hiver)"],
+            'premier passage de l\'année suivante' => ['2027-10-31T00:30:00Z', '31/10/2027 02:30:00', " (heure d'été)"],
+            'veille de l\'heure répétée' => ['2026-10-24T23:59:59Z', '25/10/2026 01:59:59', ''],
+            'après l\'heure répétée' => ['2026-10-25T02:00:00Z', '25/10/2026 03:00:00', ''],
+            'un autre dimanche' => ['2026-10-18T00:30:00Z', '18/10/2026 02:30:00', ''],
+            'avant l\'heure sautée' => ['2027-03-28T00:59:59Z', '28/03/2027 01:59:59', ''],
+            'après l\'heure sautée' => ['2027-03-28T01:00:00Z', '28/03/2027 03:00:00', ''],
+        ];
+    }
+
+    /**
+     * Dans un journal, une heure que Paris répète au passage à l'heure
+     * d'hiver dit si elle est la première (heure d'été) ou la seconde
+     * (heure d'hiver), décision de l'éditeur (Q3) ; aucune autre heure ne
+     * porte de mention, et afficher() n'en ajoute jamais.
+     */
+    #[DataProvider('heuresDUnJournal')]
+    public function test_une_heure_repetee_porte_dans_un_journal_la_mention_de_l_heure_d_ete_ou_d_hiver(string $instant, string $texte, string $mention): void
+    {
+        $calendrier = Calendrier::deParis();
+
+        $this->assertSame(
+            [$texte.$mention, $texte],
+            [$calendrier->afficherDansUnJournal(new DateTimeImmutable($instant), 'd/m/Y H:i:s'), $calendrier->afficher(new DateTimeImmutable($instant), 'd/m/Y H:i:s')],
+        );
+    }
+
     public function test_l_horodatage_signe_est_en_utc(): void
     {
         $this->assertSame(

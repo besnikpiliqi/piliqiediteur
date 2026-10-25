@@ -14,7 +14,8 @@ use LogicException;
  * Le calendrier d'un fuseau, seule classe de l'application qui connaît un
  * fuseau : il donne le jour, l'année, le minuit et les bornes d'un jour,
  * les décalages en jours, mois ou années (la même heure murale n jours
- * plus tard), l'affichage d'un instant et l'heure murale d'un instant.
+ * plus tard), l'affichage d'un instant (avec, dans un journal, la mention
+ * de l'heure qui se répète) et l'instant d'une heure murale.
  * Un calendrier porte son fuseau et ne le reçoit qu'à sa création, par sa
  * fabrique : deParis() pour tous les magasins.
  *
@@ -119,11 +120,29 @@ final class Calendrier
 
     /**
      * L'instant mis en forme à l'heure du calendrier (format de date de
-     * PHP).
+     * PHP), sans aucune mention.
      */
     public function afficher(DateTimeInterface $instant, string $format): string
     {
         return $this->dansLeFuseau($instant)->format($format);
+    }
+
+    /**
+     * Comme afficher(), suivi de « (heure d'été) » ou « (heure d'hiver) »
+     * quand l'heure murale de l'instant se répète dans le fuseau du
+     * calendrier, au passage à l'heure d'hiver : pour un journal, dont
+     * l'ordre reste ainsi lisible (décision de l'éditeur, Q3). L'heure
+     * sautée au passage à l'heure d'été n'existe pas : rien ne s'ajoute.
+     */
+    public function afficherDansUnJournal(DateTimeInterface $instant, string $format): string
+    {
+        $texte = $this->afficher($instant, $format);
+
+        if (count($this->instantsDeLHeureMurale(self::heureEcrite($this->afficher($instant, 'Y-m-d H:i:s')))) < 2) {
+            return $texte;
+        }
+
+        return $texte.($this->dansLeFuseau($instant)->isDST() ? " (heure d'été)" : " (heure d'hiver)");
     }
 
     /**
@@ -264,10 +283,10 @@ final class Calendrier
     /**
      * Les instants (horodatages Unix) qu'une heure murale désigne dans le
      * fuseau du calendrier : un seul, aucun quand le fuseau la saute, deux
-     * quand il la répète. Chaque décalage que le fuseau prend autour de
-     * cette heure donne un instant candidat, retenu si le fuseau a bien
-     * ce décalage à cet instant : un calcul en secondes UTC, sans aucune
-     * date écrite.
+     * quand il la répète (voir heureMurale() et afficherDansUnJournal()).
+     * Chaque décalage que le fuseau prend autour de cette heure donne un
+     * instant candidat, retenu si le fuseau a bien ce décalage à cet
+     * instant : un calcul en secondes UTC, sans aucune date écrite.
      *
      * @return list<int>
      */

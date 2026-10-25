@@ -24,10 +24,12 @@ use LogicException;
  * relances ». Chaque autorisation ne règle que ses propres paramètres, et
  * aucune ce que la société gère (nom, code, adresse, SIRET du magasin).
  *
- * La page a lu les paramètres à son ouverture (voir FicheLue) : seules les
- * corrections de son auteur s'écrivent ; ce qu'une autre personne a
- * changé depuis reste, et une correction qui porte sur un paramètre
- * changé entre-temps est refusée.
+ * La page a lu ses paramètres à son ouverture, et seulement les siens
+ * (voir parametresDe() et FicheLue) : seules les corrections de son
+ * auteur s'écrivent, et l'action les rend, pour que la page n'annonce que
+ * ce qui est écrit ; ce qu'une autre personne a changé depuis reste, et
+ * une correction qui porte sur un paramètre changé entre-temps est
+ * refusée.
  *
  * Dans une transaction, la ligne du magasin se relit sous un verrou qui
  * exclut toute autre écriture de cette ligne et les gestes qui la lisent
@@ -60,20 +62,35 @@ class ModifierLesParametresDuMagasinAction
     ) {}
 
     /**
+     * Les paramètres du magasin que règle cette autorisation : ceux que sa
+     * page lit, garde et enregistre, et aucun autre.
+     *
+     * @param  string  $autorisation  PermissionRegistry::PARAMETRES_GERER, PRIX_VENTE_REGLER ou RELANCES_REGLER
+     * @return list<string>
+     *
+     * @throws LogicException
+     */
+    public static function parametresDe(string $autorisation): array
+    {
+        return self::PARAMETRES[$autorisation] ?? throw new LogicException('Cette autorisation ne règle aucun paramètre du magasin.');
+    }
+
+    /**
      * @param  string  $autorisation  celle de la page : PermissionRegistry::PARAMETRES_GERER, PRIX_VENTE_REGLER ou RELANCES_REGLER
      * @param  array<string, mixed>  $ficheLue  les paramètres tels que la page les a lus (voir FicheLue::valeurs())
      * @param  array<string, mixed>  $saisie  les paramètres que la page enregistre
+     * @return array<string, mixed> les corrections écrites, vide quand la saisie n'a rien corrigé
      *
      * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(User $auteur, string $autorisation, array $ficheLue, array $saisie): Magasin
+    public function handle(User $auteur, string $autorisation, array $ficheLue, array $saisie): array
     {
-        $parametres = self::PARAMETRES[$autorisation] ?? throw new LogicException('Cette autorisation ne règle aucun paramètre du magasin.');
-        $lue = FicheLue::depuis(Magasin::class, $ficheLue);
+        $parametres = self::parametresDe($autorisation);
+        $lue = FicheLue::depuis(Magasin::class, $ficheLue, $parametres);
         $corrections = $lue->corrections(Arr::only($saisie, $parametres));
 
-        return DB::transaction(function () use ($auteur, $autorisation, $lue, $corrections): Magasin {
+        return DB::transaction(function () use ($auteur, $autorisation, $lue, $corrections): array {
             $magasin = app(TenantContext::class)->magasin();
             $relu = Magasin::query()->whereKey($magasin->getKey())->lock('for no key update')->firstOrFail();
             $relu->verifierQuIlEstOuvert();
@@ -82,7 +99,7 @@ class ModifierLesParametresDuMagasinAction
 
             $this->operateur->pendant($compte, fn (): bool => $relu->fill($corrections)->save());
 
-            return $relu;
+            return $corrections;
         });
     }
 }

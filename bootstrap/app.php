@@ -17,12 +17,14 @@ use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
 use App\Http\Responses\ReponseAUnDocumentDisparu;
+use App\Http\Responses\ReponseDansUnMagasinEnLectureSeule;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -117,4 +119,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // ReponseAUnDocumentDisparu). Laravel a déjà changé l'absence du
         // modèle en NotFoundHttpException, qui la garde comme précédente.
         $exceptions->render(fn (NotFoundHttpException $exception, Request $request) => ReponseAUnDocumentDisparu::pour($exception, $request));
+        // Une page d'écriture du magasin restée ouverte pendant qu'il
+        // passait en lecture seule : au lieu d'une page interdite, retour
+        // au tableau de bord, qui dit pourquoi (voir
+        // ReponseDansUnMagasinEnLectureSeule). Laravel a déjà changé un
+        // refus d'autorisation en HttpException.
+        $exceptions->render(fn (HttpException $exception, Request $request) => ReponseDansUnMagasinEnLectureSeule::pour($exception, $request));
     })->create();

@@ -10,12 +10,14 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Contacts\Support\DoublonDUneFiche;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -37,9 +39,11 @@ use LogicException;
  *   plus rien (voir Magasin::verifierQuIlEstOuvert()), et sa fermeture,
  *   qui verrouille cette ligne (voir FermerMagasinAction), passe tout
  *   entière avant ou après la modification ;
- * - l'auteur, sous le verrou de sa ligne (voir LecteurDesDroits) ;
+ * - l'auteur, sous le verrou de sa ligne (voir LecteurDesDroits), qui
+ *   doit pouvoir modifier les fiches de ce genre (updateAny()) ;
  * - la fiche, relue sous le sien : une fiche qui n'est plus dans le
- *   magasin ou qui a été archivée entre-temps est refusée, avec un message.
+ *   magasin ou qui a été archivée entre-temps, même avant que la page ne
+ *   s'envoie, est refusée, avec un message.
  * L'auteur relu doit pouvoir modifier la fiche relue (voir ClientPolicy,
  * FournisseurPolicy, ProduitPolicy et ServicePolicy) ; fixer le prix de
  * référence d'un service demande en plus d'être autorisé à fixer les prix
@@ -47,7 +51,12 @@ use LogicException;
  * reçu sur une facture récupérée automatiquement ne se corrige pas (voir
  * Produit::vientDUneFactureAchatApi()). La modification se fait au nom de
  * l'auteur relu (voir OperateurCourant). Le client comptoir garde son nom
- * et son type (voir Client::booted()).
+ * et son type (voir Client::booted()). Un SIRET de fournisseur, un nom de
+ * service ou une référence de produit qu'une autre personne vient
+ * d'enregistrer dans le magasin, entre la validation du formulaire et
+ * l'écriture, est refusé comme par cette validation, jamais par une
+ * erreur de la base (voir DoublonDUneFiche et
+ * Produit::refuserUneReferencePriseEntreTemps()).
  */
 class ModifierUneFicheAction
 {
@@ -78,31 +87,35 @@ class ModifierUneFicheAction
         $lue = FicheLue::depuis($fiche::class, $ficheLue);
         $corrections = $lue->corrections($saisie);
 
-        return DB::transaction(function () use ($auteur, $fiche, $lue, $corrections): Client|Fournisseur|Produit|Service {
-            $magasin = app(TenantContext::class)->magasin();
+        try {
+            return DB::transaction(function () use ($auteur, $fiche, $lue, $corrections): Client|Fournisseur|Produit|Service {
+                $magasin = app(TenantContext::class)->magasin();
 
-            if ($fiche instanceof Produit && array_intersect_key($corrections, array_flip(Produit::parametresDeConformite())) !== []) {
-                $this->registre->verrouiller($magasin);
-            }
+                if ($fiche instanceof Produit && array_intersect_key($corrections, array_flip(Produit::parametresDeConformite())) !== []) {
+                    $this->registre->verrouiller($magasin);
+                }
 
-            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
-            $compte = $this->lecteur->exigerSousVerrou($auteur, 'update', $magasin, $fiche);
+                Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+                $compte = $this->lecteur->exigerSousVerrou($auteur, 'updateAny', $magasin, $fiche::class);
 
-            $relue = $fiche->newQueryWithoutScope(SoftDeletingScope::class)->whereKey($fiche->getKey())->lockForUpdate()->first()
-                ?? throw new LogicException(ArchiverUneFicheAction::REFUS_INTROUVABLE);
+                $relue = $fiche->newQueryWithoutScope(SoftDeletingScope::class)->whereKey($fiche->getKey())->lockForUpdate()->first()
+                    ?? throw new LogicException(ArchiverUneFicheAction::REFUS_INTROUVABLE);
 
-            if (! $relue instanceof Service && $relue->trashed()) {
-                throw new LogicException(self::REFUS_ARCHIVEE);
-            }
+                if (! $relue instanceof Service && $relue->trashed()) {
+                    throw new LogicException(self::REFUS_ARCHIVEE);
+                }
 
-            $this->lecteur->exiger($compte, 'update', $magasin, $relue);
-            $this->exigerLeDroitDeCorriger($compte, $magasin, $relue, $corrections);
-            $lue->refuserUneCorrectionPerimee($relue, $corrections, self::REFUS_PERIMEE);
+                $this->lecteur->exiger($compte, 'update', $magasin, $relue);
+                $this->exigerLeDroitDeCorriger($compte, $magasin, $relue, $corrections);
+                $lue->refuserUneCorrectionPerimee($relue, $corrections, self::REFUS_PERIMEE);
 
-            $this->operateur->pendant($compte, fn (): bool => $relue->fill($corrections)->save());
+                $this->operateur->pendant($compte, fn (): bool => $relue->fill($corrections)->save());
 
-            return $relue;
-        });
+                return $relue;
+            });
+        } catch (UniqueConstraintViolationException $doublon) {
+            throw DoublonDUneFiche::refus($fiche::class, $doublon);
+        }
     }
 
     /**

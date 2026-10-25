@@ -159,7 +159,7 @@ class ParametresFacturesTest extends TestCase
     /**
      * La page, ouverte avant qu'une autre personne ne change le délai de
      * paiement, enregistre seulement la mention qu'on y corrige : le délai
-     * de l'autre personne reste, et la page le montre ensuite.
+     * de l'autre personne reste, et la page le dit et le montre ensuite.
      */
     public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
     {
@@ -169,7 +169,7 @@ class ParametresFacturesTest extends TestCase
         Magasin::query()->findOrFail($magasin->id)->update(['delai_paiement_jours' => 45]);
         $page->fillForm(['mention_escompte' => 'Escompte de 1 % pour paiement sous 8 jours.'])
             ->call('save')
-            ->assertNotified('Paramètres des factures enregistrés')
+            ->assertNotified(ParametresFactures::AUTRES_PARAMETRES_CHANGES)
             ->assertFormSet(['delai_paiement_jours' => 45]);
 
         $this->assertSame([45, 'Escompte de 1 % pour paiement sous 8 jours.'], [$magasin->fresh()->delai_paiement_jours, $magasin->fresh()->mention_escompte]);

@@ -62,9 +62,9 @@ class CoordonneesMagasin extends Page implements HasForms
      */
     public array $data = [];
 
-    public static function canAccess(): bool
+    protected static function autorisationDeLaPage(): string
     {
-        return auth()->user()?->can(PermissionRegistry::PARAMETRES_GERER) ?? false;
+        return PermissionRegistry::PARAMETRES_GERER;
     }
 
     public function mount(): void
@@ -120,8 +120,10 @@ class CoordonneesMagasin extends Page implements HasForms
             'references_acheteur' => array_values(array_unique(array_filter(array_map(trim(...), $donnees['references_acheteur'] ?? []), filled(...)))) ?: null,
         ];
 
-        if ($this->enregistrerLesParametres(PermissionRegistry::PARAMETRES_GERER, $saisie, 'Coordonnées du magasin enregistrées')) {
-            $this->remplir($this->lireLesParametres());
+        $magasin = $this->enregistrerLesParametres($saisie, 'Coordonnées du magasin enregistrées');
+
+        if ($magasin !== null) {
+            $this->remplir($magasin);
         }
     }
 

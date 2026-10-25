@@ -307,4 +307,25 @@ class FournisseurResourceTest extends TestCase
         $fournisseur->refresh();
         $this->assertSame(['commandes@grossiste.test', '01 02 03 04 05'], [$fournisseur->email, $fournisseur->telephone]);
     }
+
+    /**
+     * La page valide un SIRET encore libre ; un collègue enregistre un
+     * fournisseur avec ce SIRET juste avant l'écriture (ici au moment où
+     * la page écrit le sien) : l'index unique arrête la modification, la
+     * page le dit comme son formulaire, jamais par une erreur du serveur,
+     * et la fiche reste telle qu'elle était.
+     */
+    public function test_un_siret_pris_entre_la_validation_et_l_ecriture_est_refuse_et_le_dit(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste', 'siret' => null]);
+        $page = Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()])->fillForm(['siret' => '73282932000074']);
+        Fournisseur::updating(static function (): void {
+            Fournisseur::factory()->create(['nom' => 'Grossiste du Sud', 'siret' => '73282932000074']);
+        });
+
+        $page->call('save')->assertNotified(self::MESSAGE_SIRET_PRIS);
+
+        $this->assertNull($fournisseur->fresh()->siret);
+    }
 }

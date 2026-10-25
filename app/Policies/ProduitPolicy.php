@@ -29,15 +29,26 @@ class ProduitPolicy extends MagasinPolicy
 
     /**
      * Un produit archivé se restaure avant de se modifier : sa page de
-     * modification ne le trouve plus. Ce refus retire aussi, dans la liste
-     * des produits archivés, le bouton « Modifier » et le lien de sa ligne
-     * (voir ProduitResource::table()).
+     * modification ne s'ouvre plus, et une page restée ouverte ne
+     * l'enregistre plus (voir EnregistreLesCorrectionsDeLaFiche). Ce refus
+     * retire aussi, dans la liste des produits archivés, le bouton
+     * « Modifier » et le lien de sa ligne (voir ProduitResource::table()).
      */
     public function update(User $user, Produit $produit): bool
     {
         return $this->appartientAuMagasinActif($produit)
             && ! $produit->trashed()
-            && $user->can(PermissionRegistry::PRODUIT_UPDATE);
+            && $this->updateAny($user);
+    }
+
+    /**
+     * La première question que pose la modification d'une fiche à son
+     * auteur relu sous verrou, avant de relire la fiche ; la fiche, relue,
+     * repasse ensuite par update() (voir ModifierUneFicheAction).
+     */
+    public function updateAny(User $user): bool
+    {
+        return $user->can(PermissionRegistry::PRODUIT_UPDATE);
     }
 
     public function delete(User $user, Produit $produit): bool

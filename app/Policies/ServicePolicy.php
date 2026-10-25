@@ -31,7 +31,17 @@ class ServicePolicy extends MagasinPolicy
 
     public function update(User $user, Service $service): bool
     {
-        return $this->appartientAuMagasinActif($service) && $user->can(PermissionRegistry::PRODUIT_UPDATE);
+        return $this->appartientAuMagasinActif($service) && $this->updateAny($user);
+    }
+
+    /**
+     * La première question que pose la modification d'une fiche à son
+     * auteur relu sous verrou, avant de relire la fiche ; la fiche, relue,
+     * repasse ensuite par update() (voir ModifierUneFicheAction).
+     */
+    public function updateAny(User $user): bool
+    {
+        return $user->can(PermissionRegistry::PRODUIT_UPDATE);
     }
 
     /**

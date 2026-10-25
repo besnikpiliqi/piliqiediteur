@@ -3,6 +3,7 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -42,23 +43,21 @@ class ParametresRelances extends Page implements HasForms
      */
     public array $data = [];
 
-    public static function canAccess(): bool
+    protected static function autorisationDeLaPage(): string
     {
-        return auth()->user()?->can(PermissionRegistry::RELANCES_REGLER) ?? false;
+        return PermissionRegistry::RELANCES_REGLER;
     }
 
     public function mount(): void
     {
-        $this->remplir();
+        $this->remplir($this->lireLesParametres());
     }
 
     /**
      * Les relances telles qu'elles sont enregistrées, relues en base.
      */
-    private function remplir(): void
+    private function remplir(Magasin $magasin): void
     {
-        $magasin = $this->lireLesParametres();
-
         $this->form->fill(['actif' => $magasin->relances_automatiques, 'delais' => $magasin->delais_relance]);
     }
 
@@ -116,12 +115,12 @@ class ParametresRelances extends Page implements HasForms
         $data = $this->form->getState();
 
         // Désactivées, les relances gardent leurs délais enregistrés.
-        $enregistre = $data['actif']
-            ? $this->enregistrerLesParametres(PermissionRegistry::RELANCES_REGLER, ['relances_automatiques' => true, 'delais_relance' => $data['delais']], 'Relances automatiques enregistrées')
-            : $this->enregistrerLesParametres(PermissionRegistry::RELANCES_REGLER, ['relances_automatiques' => false], 'Relances automatiques désactivées');
+        $magasin = $data['actif']
+            ? $this->enregistrerLesParametres(['relances_automatiques' => true, 'delais_relance' => $data['delais']], 'Relances automatiques enregistrées')
+            : $this->enregistrerLesParametres(['relances_automatiques' => false], 'Relances automatiques désactivées');
 
-        if ($enregistre) {
-            $this->remplir();
+        if ($magasin !== null) {
+            $this->remplir($magasin);
         }
     }
 

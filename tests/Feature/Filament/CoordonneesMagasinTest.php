@@ -129,8 +129,9 @@ class CoordonneesMagasinTest extends TestCase
     /**
      * La page, ouverte avant qu'une autre personne n'ajoute une référence
      * d'acheteur, enregistre seulement le téléphone qu'on y corrige : la
-     * référence reste ; corriger aussi les références que l'autre personne
-     * a changées entre-temps est refusé, et rien ne s'écrit.
+     * référence reste, et la page le dit et la montre ; corriger aussi les
+     * références que l'autre personne a changées entre-temps est refusé,
+     * et rien ne s'écrit.
      */
     public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
     {
@@ -140,7 +141,7 @@ class CoordonneesMagasinTest extends TestCase
         $autrePage = Livewire::test(CoordonneesMagasin::class);
 
         $magasin->fresh()->update(['references_acheteur' => ['CLI-4521']]);
-        $page->fillForm(['telephone' => '04 72 00 00 00'])->call('save')->assertNotified('Coordonnées du magasin enregistrées');
+        $page->fillForm(['telephone' => '04 72 00 00 00'])->call('save')->assertNotified(CoordonneesMagasin::AUTRES_PARAMETRES_CHANGES)->assertFormSet(['references_acheteur' => ['CLI-4521']]);
         $autrePage->fillForm(['references_acheteur' => ['ACH-9']])->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
 
         $this->assertSame(['04 72 00 00 00', ['CLI-4521']], [$magasin->fresh()->telephone, $magasin->fresh()->references_acheteur]);

@@ -8,6 +8,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Contacts\Support\DoublonDUneFiche;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -36,14 +37,10 @@ use LogicException;
  * OperateurCourant), dans le magasin actif (voir BelongsToMagasin). Un
  * SIRET de fournisseur ou un nom de service qu'une autre personne vient
  * d'enregistrer dans le magasin est refusé comme par la validation du
- * formulaire, jamais par une erreur de la base.
+ * formulaire, jamais par une erreur de la base (voir DoublonDUneFiche).
  */
 class CreerUneFicheAction
 {
-    public const REFUS_SIRET_PRIS = 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être archivé : affichez les fournisseurs archivés pour le restaurer.';
-
-    public const REFUS_SERVICE_EXISTANT = 'Ce service existe déjà : une autre personne vient de l\'enregistrer.';
-
     public function __construct(
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
@@ -74,11 +71,7 @@ class CreerUneFicheAction
                 return $this->operateur->pendant($compte, fn (): Client|Fournisseur|Service => $classe::query()->create($attributs));
             });
         } catch (UniqueConstraintViolationException $doublon) {
-            throw match ($classe) {
-                Fournisseur::class => new LogicException(self::REFUS_SIRET_PRIS, previous: $doublon),
-                Service::class => new LogicException(self::REFUS_SERVICE_EXISTANT, previous: $doublon),
-                default => $doublon,
-            };
+            throw DoublonDUneFiche::refus($classe, $doublon);
         }
     }
 }

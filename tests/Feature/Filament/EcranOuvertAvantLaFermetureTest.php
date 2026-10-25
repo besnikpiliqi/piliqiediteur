@@ -26,6 +26,7 @@ use App\Filament\App\Pages\CoordonneesMagasin;
 use App\Filament\App\Pages\ParametresFactures;
 use App\Filament\App\Pages\ParametresPrixDeVente;
 use App\Filament\App\Pages\ParametresRelances;
+use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
@@ -36,18 +37,22 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\EditFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
+use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use App\Models\User;
 use Closure;
+use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Livewire\Mechanisms\ComponentRegistry;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -65,6 +70,12 @@ use Tests\TestCase;
  * page, dans sa fenêtre ou dans la création rapide d'un client) ou d'une
  * page de paramètres du magasin, rempli avant et enregistré après : rien
  * ne s'écrit.
+ *
+ * Le navigateur, lui, ne garde pas le magasin d'avant : sa requête
+ * suivante relit le magasin fermé, et une page de modification, de
+ * création ou de paramètres revient au tableau de bord, qui dit pourquoi,
+ * au lieu d'une page interdite (voir
+ * test_un_formulaire_envoye_par_le_navigateur_apres_la_fermeture_revient_au_tableau_de_bord_qui_dit_pourquoi()).
  */
 class EcranOuvertAvantLaFermetureTest extends TestCase
 {
@@ -214,6 +225,59 @@ class EcranOuvertAvantLaFermetureTest extends TestCase
         $this->assertTrue(auth()->user()->estActif());
 
         $enregistrer($ecran)->assertNotified(LecteurDesDroits::REFUS);
+        $rienNEstEcrit();
+    }
+
+    /**
+     * La page envoyée par le navigateur, son adresse, ce qu'on y saisit,
+     * son geste, et ce qui ne doit pas s'écrire.
+     *
+     * @return array<string, array{0: class-string, 1: Closure(Magasin): string, 2: array<string, string>, 3: string, 4: Closure(): void}>
+     */
+    public static function pagesEnvoyeesParLeNavigateur(): array
+    {
+        $aucun = static fn (string $classe, string $nom): Closure => static fn () => self::assertSame(0, $classe::withoutGlobalScopes()->where('nom', $nom)->count());
+        $magasin = static fn (): Magasin => app(TenantContext::class)->magasin()->fresh();
+
+        return [
+            'modifier un client sur sa page' => [EditClient::class, static fn (Magasin $boutique): string => ClientResource::getUrl('edit', ['record' => Client::factory()->create(['nom' => 'Martin'])], tenant: $boutique), ['data.nom' => 'Martin et fils'], 'save', $aucun(Client::class, 'Martin et fils')],
+            'modifier un fournisseur sur sa page' => [EditFournisseur::class, static fn (Magasin $boutique): string => FournisseurResource::getUrl('edit', ['record' => Fournisseur::factory()->create(['nom' => 'Grossiste'])], tenant: $boutique), ['data.nom' => 'Grossiste du Sud'], 'save', $aucun(Fournisseur::class, 'Grossiste du Sud')],
+            'modifier un produit sur sa page' => [EditProduit::class, static fn (Magasin $boutique): string => ProduitResource::getUrl('edit', ['record' => Produit::factory()->create(['nom' => 'Coque'])], tenant: $boutique), ['data.nom' => 'Coque rouge'], 'save', $aucun(Produit::class, 'Coque rouge')],
+            'créer un client sur sa page' => [CreateClient::class, static fn (Magasin $boutique): string => ClientResource::getUrl('create', tenant: $boutique), ['data.nom' => 'Nouveau client', 'data.type_client' => TypeClient::Particulier->value], 'create', $aucun(Client::class, 'Nouveau client')],
+            'créer un fournisseur sur sa page' => [CreateFournisseur::class, static fn (Magasin $boutique): string => FournisseurResource::getUrl('create', tenant: $boutique), ['data.nom' => 'Nouveau fournisseur'], 'create', $aucun(Fournisseur::class, 'Nouveau fournisseur')],
+            'régler les factures' => [ParametresFactures::class, static fn (Magasin $boutique): string => ParametresFactures::getUrl(tenant: $boutique), ['data.delai_paiement_jours' => '45'], 'save', static fn () => self::assertSame(30, $magasin()->delai_paiement_jours)],
+            'régler les coordonnées' => [CoordonneesMagasin::class, static fn (Magasin $boutique): string => CoordonneesMagasin::getUrl(tenant: $boutique), ['data.telephone' => '04 72 00 00 00'], 'save', static fn () => self::assertNull($magasin()->telephone)],
+            'régler les prix de vente' => [ParametresPrixDeVente::class, static fn (Magasin $boutique): string => ParametresPrixDeVente::getUrl(tenant: $boutique), ['data.actif' => true], 'save', static fn () => self::assertFalse($magasin()->prix_vente_automatique)],
+            'régler les relances' => [ParametresRelances::class, static fn (Magasin $boutique): string => ParametresRelances::getUrl(tenant: $boutique), ['data.actif' => true], 'save', static fn () => self::assertFalse($magasin()->relances_automatiques)],
+        ];
+    }
+
+    /**
+     * Ce que reçoit le navigateur : la page, ouverte avant la fermeture du
+     * magasin, s'envoie après par une vraie requête Livewire, qui relit le
+     * magasin fermé et redemande le droit d'écrire de la page avant tout
+     * geste. Au lieu d'une page interdite, rien ne s'exécute, et la
+     * personne revient au tableau de bord du magasin, qui dit pourquoi
+     * (voir ReponseDansUnMagasinEnLectureSeule).
+     *
+     * @param  class-string  $page
+     * @param  Closure(Magasin): string  $adresse
+     * @param  array<string, string>  $saisie
+     * @param  Closure(): void  $rienNEstEcrit
+     */
+    #[DataProvider('pagesEnvoyeesParLeNavigateur')]
+    public function test_un_formulaire_envoye_par_le_navigateur_apres_la_fermeture_revient_au_tableau_de_bord_qui_dit_pourquoi(string $page, Closure $adresse, array $saisie, string $geste, Closure $rienNEstEcrit): void
+    {
+        [$magasin] = $this->dansLaBoutique();
+        $instantane = $this->instantaneLivewire($this->get($adresse($magasin))->assertOk()->getContent(), app(ComponentRegistry::class)->getName($page));
+
+        app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), Magasin::query()->findOrFail($magasin->id), MotifFermeture::Temporaire, 'password');
+        $reponse = $this->requeteLivewire($instantane, $saisie, $geste);
+
+        $tableauDeBord = Filament::getPanel('app')->getUrl($magasin);
+        $reponse->assertOk()->assertJsonPath('components.0.effects.redirect', $tableauDeBord);
+        $this->assertSame($instantane, $reponse->json('components.0.snapshot'));
+        $this->get($tableauDeBord)->assertOk()->assertSee(self::MAGASIN_FERME);
         $rienNEstEcrit();
     }
 

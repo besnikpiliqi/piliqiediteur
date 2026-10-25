@@ -53,9 +53,9 @@ class ParametresFactures extends Page implements HasForms
      */
     public array $data = [];
 
-    public static function canAccess(): bool
+    protected static function autorisationDeLaPage(): string
     {
-        return auth()->user()?->can(PermissionRegistry::PARAMETRES_GERER) ?? false;
+        return PermissionRegistry::PARAMETRES_GERER;
     }
 
     public function mount(): void
@@ -93,8 +93,10 @@ class ParametresFactures extends Page implements HasForms
 
     public function save(): void
     {
-        if ($this->enregistrerLesParametres(PermissionRegistry::PARAMETRES_GERER, $this->form->getState(), 'Paramètres des factures enregistrés')) {
-            $this->form->fill($this->lireLesParametres()->only(self::CHAMPS));
+        $magasin = $this->enregistrerLesParametres($this->form->getState(), 'Paramètres des factures enregistrés');
+
+        if ($magasin !== null) {
+            $this->form->fill($magasin->only(self::CHAMPS));
         }
     }
 

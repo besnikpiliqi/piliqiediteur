@@ -3,11 +3,14 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\CreerUneFicheAction;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -36,13 +39,16 @@ use Tests\TestCase;
 /**
  * Le refus de l'éditeur, qui clôt une inscription, et un geste qui écrit
  * dans un magasin réel de cette société avant sa validation (une facture
- * d'achat ou un inventaire d'ouverture validés, une fiche produit
- * modifiée, un client créé, les paramètres du magasin réglés), au même
- * instant, chacun dans son processus, sur une vraie base PostgreSQL.
+ * d'achat ou un inventaire d'ouverture validés, une facture d'achat
+ * validée corrigée, une fiche modifiée ou créée, le taux d'un produit
+ * changé, un service créé depuis une vente, les paramètres du magasin
+ * réglés), au même instant, chacun dans son processus, sur une vraie base
+ * PostgreSQL.
  *
  * Le geste relit la ligne de son magasin sous un verrou partagé (exclusif
  * de toute autre écriture de cette ligne pour les paramètres du magasin,
- * qu'il écrit) et le dit ouvert tant que l'inscription ne l'est pas ; la
+ * qu'il écrit ; après le registre fiscal du magasin pour un changement de
+ * taux) et le dit ouvert tant que l'inscription ne l'est pas ; la
  * clôture verrouille la société, puis les lignes de ses magasins réels,
  * avant de la clore. Un geste commencé avant la clôture passe donc tout
  * entier avant elle, qui ne se date qu'ensuite et ne s'inscrit au journal
@@ -56,9 +62,10 @@ use Tests\TestCase;
  * propriétaire, sans toucher à la ligne d'un magasin ; la validation de
  * la facture d'achat verrouille la ligne de son magasin sous un verrou
  * partagé, puis celle du propriétaire. La seconde attend la première,
- * sans interblocage, et toutes deux passent. De même pour une fiche
- * produit modifiée, un client créé ou les paramètres du magasin réglés
- * par le propriétaire.
+ * sans interblocage, et toutes deux passent. De même pour chacun des
+ * autres gestes, faits par le propriétaire ; un changement de taux, qui
+ * verrouille d'abord le registre du magasin, attend la saisie, ou la fait
+ * attendre, dès ce registre.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -87,6 +94,22 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
             'le client créé après la clôture' => ['creerUnClient', false],
             'les paramètres du magasin réglés avant la clôture' => ['reglerLesParametresDuMagasin', true],
             'les paramètres du magasin réglés après la clôture' => ['reglerLesParametresDuMagasin', false],
+            'la facture d\'achat validée corrigée avant la clôture' => ['corrigerUneFactureDAchat', true],
+            'la facture d\'achat validée corrigée après la clôture' => ['corrigerUneFactureDAchat', false],
+            'le taux de la fiche produit modifié avant la clôture' => ['modifierLeTauxDUneFicheProduit', true],
+            'le taux de la fiche produit modifié après la clôture' => ['modifierLeTauxDUneFicheProduit', false],
+            'le client modifié avant la clôture' => ['modifierUnClient', true],
+            'le client modifié après la clôture' => ['modifierUnClient', false],
+            'le fournisseur modifié avant la clôture' => ['modifierUnFournisseur', true],
+            'le fournisseur modifié après la clôture' => ['modifierUnFournisseur', false],
+            'le service modifié avant la clôture' => ['modifierUnService', true],
+            'le service modifié après la clôture' => ['modifierUnService', false],
+            'le fournisseur créé avant la clôture' => ['creerUnFournisseur', true],
+            'le fournisseur créé après la clôture' => ['creerUnFournisseur', false],
+            'le service créé avant la clôture' => ['creerUnService', true],
+            'le service créé après la clôture' => ['creerUnService', false],
+            'le service créé depuis une vente avant la clôture' => ['trouverOuCreerUnService', true],
+            'le service créé depuis une vente après la clôture' => ['trouverOuCreerUnService', false],
         ];
     }
 
@@ -184,13 +207,30 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
             'la société validée avant le client' => ['creerUnClient', false],
             'les paramètres du magasin réglés d\'abord' => ['reglerLesParametresDuMagasin', true],
             'la société validée avant les paramètres du magasin' => ['reglerLesParametresDuMagasin', false],
+            'la facture d\'achat validée corrigée d\'abord' => ['corrigerUneFactureDAchat', true],
+            'la société validée avant la correction de la facture d\'achat' => ['corrigerUneFactureDAchat', false],
+            'le taux de la fiche produit modifié d\'abord' => ['modifierLeTauxDUneFicheProduit', true],
+            'la société validée avant le taux de la fiche produit' => ['modifierLeTauxDUneFicheProduit', false],
+            'le client modifié d\'abord' => ['modifierUnClient', true],
+            'la société validée avant le client modifié' => ['modifierUnClient', false],
+            'le fournisseur modifié d\'abord' => ['modifierUnFournisseur', true],
+            'la société validée avant le fournisseur modifié' => ['modifierUnFournisseur', false],
+            'le service modifié d\'abord' => ['modifierUnService', true],
+            'la société validée avant le service modifié' => ['modifierUnService', false],
+            'le fournisseur créé d\'abord' => ['creerUnFournisseur', true],
+            'la société validée avant le fournisseur créé' => ['creerUnFournisseur', false],
+            'le service créé d\'abord' => ['creerUnService', true],
+            'la société validée avant le service créé' => ['creerUnService', false],
+            'le service créé depuis une vente d\'abord' => ['trouverOuCreerUnService', true],
+            'la société validée avant le service créé depuis une vente' => ['trouverOuCreerUnService', false],
         ];
     }
 
     /**
      * Comme la validation d'une facture d'achat : la saisie du code et un
-     * geste du propriétaire sur une fiche ou les paramètres du magasin,
-     * qui verrouille la ligne de son magasin puis la sienne, au même
+     * geste du propriétaire sur un achat, une fiche ou les paramètres du
+     * magasin, qui verrouille la ligne de son magasin puis la sienne
+     * (après le registre du magasin pour un changement de taux), au même
      * instant. Le second attend le premier, sans interblocage, et tous
      * deux passent.
      */
@@ -238,8 +278,14 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
         return match ($geste) {
             'validerUneFactureDAchat' => app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [[...$carnet, 'prix_unitaire_ht' => '2.00']])->id,
             'validerUnInventaire' => app(CreerInventaireOuvertureAction::class)->handle($proprietaire, [[...$carnet, 'cout_unitaire_ht' => '2.00']])->id,
-            'modifierUneFicheProduit' => Produit::factory()->create(['nom' => 'Coque rouge'])->id,
-            'creerUnClient', 'reglerLesParametresDuMagasin' => 0,
+            'corrigerUneFactureDAchat' => app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [
+                ['produit_id' => Produit::factory()->create(['nom' => 'Coque rouge', 'taux_tva' => 20])->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
+            ]))->id,
+            'modifierUneFicheProduit', 'modifierLeTauxDUneFicheProduit' => Produit::factory()->create(['nom' => 'Coque rouge', 'taux_tva' => 20])->id,
+            'modifierUnClient' => Client::factory()->create(['nom' => 'Martin'])->id,
+            'modifierUnFournisseur' => Fournisseur::factory()->create(['nom' => 'Grossiste'])->id,
+            'modifierUnService' => Service::factory()->create(['nom' => 'Diagnostic'])->id,
+            'creerUnClient', 'creerUnFournisseur', 'creerUnService', 'trouverOuCreerUnService', 'reglerLesParametresDuMagasin' => 0,
         };
     }
 
@@ -256,23 +302,51 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
         match ($geste) {
             'validerUneFactureDAchat' => app(ValiderFactureAchatAction::class)->handle($proprietaire, FactureAchat::query()->findOrFail($documentId)),
             'validerUnInventaire' => app(ValiderInventaireOuvertureAction::class)->handle($proprietaire, InventaireOuverture::query()->findOrFail($documentId)),
-            'modifierUneFicheProduit' => app(ModifierUneFicheAction::class)->handle($proprietaire, $produit = Produit::query()->findOrFail($documentId), FicheLue::de($produit)->valeurs(), ['nom' => 'Coque bleue']),
+            'corrigerUneFactureDAchat' => app(ModifierFactureAchatAction::class)->handle($proprietaire, $factureAchat = FactureAchat::query()->findOrFail($documentId), $factureAchat->fournisseur, [
+                ['produit_id' => $factureAchat->lignes()->value('produit_id'), 'quantite' => 8, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
+            ]),
+            'modifierUneFicheProduit' => self::modifierLaFiche($proprietaire, Produit::query()->findOrFail($documentId), ['nom' => 'Coque bleue']),
+            'modifierLeTauxDUneFicheProduit' => self::modifierLaFiche($proprietaire, Produit::query()->findOrFail($documentId), ['taux_tva' => '5.5']),
+            'modifierUnClient' => self::modifierLaFiche($proprietaire, Client::query()->findOrFail($documentId), ['nom' => 'Martin et fils']),
+            'modifierUnFournisseur' => self::modifierLaFiche($proprietaire, Fournisseur::query()->findOrFail($documentId), ['nom' => 'Grossiste du Sud']),
+            'modifierUnService' => self::modifierLaFiche($proprietaire, Service::query()->findOrFail($documentId), ['nom' => 'Diagnostic complet']),
             'creerUnClient' => app(CreerUneFicheAction::class)->handle($proprietaire, Client::class, ['nom' => 'Nouveau client', 'type_client' => TypeClient::Particulier]),
+            'creerUnFournisseur' => app(CreerUneFicheAction::class)->handle($proprietaire, Fournisseur::class, ['nom' => 'Nouveau fournisseur']),
+            'creerUnService' => app(CreerUneFicheAction::class)->handle($proprietaire, Service::class, ['nom' => 'Nouveau service', 'actif' => true]),
+            'trouverOuCreerUnService' => app(TrouverOuCreerServiceAction::class)->handle($proprietaire, 'Nouveau service'),
             'reglerLesParametresDuMagasin' => app(ModifierLesParametresDuMagasinAction::class)->handle($proprietaire, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($magasin)->valeurs(), ['delai_paiement_jours' => 45]),
         };
     }
 
     /**
-     * Le geste s'est-il fait : le brouillon validé, la fiche modifiée, le
-     * client créé, les paramètres réglés ?
+     * La fiche telle que le propriétaire l'a lue juste avant, avec sa
+     * correction.
+     *
+     * @param  array<string, string>  $saisie
+     */
+    private static function modifierLaFiche(User $proprietaire, Client|Fournisseur|Produit|Service $fiche, array $saisie): Client|Fournisseur|Produit|Service
+    {
+        return app(ModifierUneFicheAction::class)->handle($proprietaire, $fiche, FicheLue::de($fiche)->valeurs(), $saisie);
+    }
+
+    /**
+     * Le geste s'est-il fait : le brouillon validé ou corrigé, la fiche
+     * modifiée ou créée, les paramètres réglés ?
      */
     private function valide(string $geste, int $documentId): bool
     {
         return match ($geste) {
             'validerUneFactureDAchat' => FactureAchat::query()->findOrFail($documentId)->statut === StatutFactureAchat::Validee,
             'validerUnInventaire' => InventaireOuverture::query()->findOrFail($documentId)->statut === StatutInventaireOuverture::Valide,
+            'corrigerUneFactureDAchat' => FactureAchat::query()->findOrFail($documentId)->lignes()->sole()->quantite === 8,
             'modifierUneFicheProduit' => Produit::query()->findOrFail($documentId)->nom === 'Coque bleue',
+            'modifierLeTauxDUneFicheProduit' => Produit::query()->findOrFail($documentId)->taux_tva === '5.50',
+            'modifierUnClient' => Client::query()->findOrFail($documentId)->nom === 'Martin et fils',
+            'modifierUnFournisseur' => Fournisseur::query()->findOrFail($documentId)->nom === 'Grossiste du Sud',
+            'modifierUnService' => Service::query()->findOrFail($documentId)->nom === 'Diagnostic complet',
             'creerUnClient' => Client::query()->where('nom', 'Nouveau client')->exists(),
+            'creerUnFournisseur' => Fournisseur::query()->where('nom', 'Nouveau fournisseur')->exists(),
+            'creerUnService', 'trouverOuCreerUnService' => Service::query()->where('nom', 'Nouveau service')->exists(),
             'reglerLesParametresDuMagasin' => app(TenantContext::class)->magasin()->fresh()->delai_paiement_jours === 45,
         };
     }

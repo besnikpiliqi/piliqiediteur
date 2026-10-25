@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Placeholder;
@@ -47,23 +48,21 @@ class ParametresPrixDeVente extends Page implements HasForms
      */
     public array $data = [];
 
-    public static function canAccess(): bool
+    protected static function autorisationDeLaPage(): string
     {
-        return auth()->user()?->can(PermissionRegistry::PRIX_VENTE_REGLER) ?? false;
+        return PermissionRegistry::PRIX_VENTE_REGLER;
     }
 
     public function mount(): void
     {
-        $this->remplir();
+        $this->remplir($this->lireLesParametres());
     }
 
     /**
      * Le barème tel qu'il est enregistré, relu en base.
      */
-    private function remplir(): void
+    private function remplir(Magasin $magasin): void
     {
-        $magasin = $this->lireLesParametres();
-
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
             ...$magasin->bareme_prix_vente->versTableau(),
@@ -212,14 +211,23 @@ class ParametresPrixDeVente extends Page implements HasForms
 
         // Désactivé, le barème ne se modifie pas : celui enregistré reste
         // tel quel.
-        if (! $data['actif']) {
-            if ($this->enregistrerLesParametres(PermissionRegistry::PRIX_VENTE_REGLER, ['prix_vente_automatique' => false], 'Prix de vente automatique désactivé')) {
-                $this->remplir();
-            }
+        $magasin = $data['actif']
+            ? $this->enregistrerLeBareme($data)
+            : $this->enregistrerLesParametres(['prix_vente_automatique' => false], 'Prix de vente automatique désactivé');
 
-            return;
+        if ($magasin !== null) {
+            $this->remplir($magasin);
         }
+    }
 
+    /**
+     * Le calcul activé avec le barème saisi : le magasin relu, ou null
+     * quand le barème ou l'enregistrement est refusé.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function enregistrerLeBareme(array $data): ?Magasin
+    {
         try {
             $bareme = BaremePrixDeVente::depuisTableau([
                 'paliers' => array_values($data['paliers'] ?? []),
@@ -229,11 +237,9 @@ class ParametresPrixDeVente extends Page implements HasForms
         } catch (InvalidArgumentException $exception) {
             Notification::make()->title($exception->getMessage())->danger()->send();
 
-            return;
+            return null;
         }
 
-        if ($this->enregistrerLesParametres(PermissionRegistry::PRIX_VENTE_REGLER, ['prix_vente_automatique' => true, 'bareme_prix_vente' => $bareme], 'Barème de prix de vente enregistré')) {
-            $this->remplir();
-        }
+        return $this->enregistrerLesParametres(['prix_vente_automatique' => true, 'bareme_prix_vente' => $bareme], 'Barème de prix de vente enregistré');
     }
 }

@@ -6,6 +6,8 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\SupprimerFactureAchatAction;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -18,6 +20,8 @@ use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Resources\ClientResource;
+use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
@@ -28,10 +32,14 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FournisseurResource;
+use App\Filament\App\Resources\FournisseurResource\Pages\EditFournisseur;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\EditInventaireOuverture;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\ListInventairesOuverture;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\ViewInventaireOuverture;
+use App\Filament\App\Resources\ProduitResource;
+use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Models\User;
 use Closure;
 use Filament\Facades\Filament;
@@ -55,6 +63,12 @@ use Tests\TestCase;
  * du navigateur (voir requeteLivewire()) : Livewire relit le document
  * avant tout code de la page, et seul le gestionnaire des exceptions de
  * l'application rattrape son absence (voir ReponseAUnDocumentDisparu).
+ *
+ * De même pour la page de modification d'une fiche (un client, un
+ * fournisseur, un produit) qu'une autre personne archive pendant qu'elle
+ * est ouverte : son enregistrement est refusé, avec un message qui dit
+ * de restaurer la fiche, la saisie restant à l'écran ; jamais une page
+ * interdite, et rien ne s'écrit (voir EnregistreLesCorrectionsDeLaFiche).
  */
 class DocumentDisparuDeLEcranTest extends TestCase
 {
@@ -184,6 +198,43 @@ class DocumentDisparuDeLEcranTest extends TestCase
         $ecran->call('mountTableAction', $bouton, (string) $enregistrement->getKey())
             ->assertNotified($liste::LIGNE_DISPARUE)
             ->assertSet('mountedTableActions', []);
+    }
+
+    /**
+     * La page de modification de la fiche, sa ressource, la fiche, et la
+     * correction qu'on y saisit.
+     *
+     * @return array<string, array{0: class-string, 1: class-string, 2: Closure(): Model, 3: string, 4: string}>
+     */
+    public static function fichesArchiveesEntreTemps(): array
+    {
+        return [
+            'un client' => [EditClient::class, ClientResource::class, static fn (): Model => Client::factory()->create(['nom' => 'Martin', 'telephone' => '01 02 03 04 05']), 'telephone', '04 72 00 00 00'],
+            'un fournisseur' => [EditFournisseur::class, FournisseurResource::class, static fn (): Model => Fournisseur::factory()->create(['nom' => 'Grossiste', 'telephone' => '01 02 03 04 05']), 'telephone', '04 72 00 00 00'],
+            'un produit' => [EditProduit::class, ProduitResource::class, static fn (): Model => Produit::factory()->create(['nom' => 'Coque rouge']), 'nom', 'Coque bleue'],
+        ];
+    }
+
+    /**
+     * @param  class-string  $page
+     * @param  class-string  $ressource
+     * @param  Closure(): Model  $creer
+     */
+    #[DataProvider('fichesArchiveesEntreTemps')]
+    public function test_l_enregistrement_d_une_fiche_archivee_entre_temps_est_refuse_et_le_dit(string $page, string $ressource, Closure $creer, string $champ, string $correction): void
+    {
+        $fiche = $creer();
+        $avant = $fiche->getAttribute($champ);
+        $ecran = $this->get($ressource::getUrl('edit', ['record' => $fiche], tenant: $this->magasin))->assertOk()->getContent();
+        $instantane = $this->instantaneLivewire($ecran, app(ComponentRegistry::class)->getName($page));
+        app(ArchiverUneFicheAction::class)->archiver($this->responsable, $fiche->fresh());
+
+        $reponse = $this->requeteLivewire($instantane, ["data.{$champ}" => $correction], 'save');
+
+        $reponse->assertOk()->assertJsonMissingPath('components.0.effects.redirect');
+        $this->assertSame([ModifierUneFicheAction::REFUS_ARCHIVEE], collect(session('filament.notifications'))->pluck('title')->all());
+        $this->assertTrue($fiche->fresh()->trashed());
+        $this->assertSame($avant, $fiche->fresh()->getAttribute($champ));
     }
 
     /**

@@ -416,11 +416,23 @@ class Magasin extends Model implements HasName
      */
     public function verifierQuIlEstOuvert(): void
     {
+        $refus = $this->refusEnLectureSeule();
+
+        if ($refus !== null) {
+            throw new LogicException($refus);
+        }
+    }
+
+    /**
+     * Ce que l'écran dit d'un geste que la lecture seule refuse (voir
+     * motifDeLectureSeule()) ; null quand le magasin n'est pas en lecture
+     * seule.
+     */
+    public function refusEnLectureSeule(): ?string
+    {
         $motif = $this->motifDeLectureSeule();
 
-        if ($motif !== null) {
-            throw new LogicException("{$motif} : seules la consultation et les téléchargements restent possibles.");
-        }
+        return $motif === null ? null : "{$motif} : seules la consultation et les téléchargements restent possibles.";
     }
 
     /**
@@ -444,10 +456,10 @@ class Magasin extends Model implements HasName
      */
     public function refusDeVente(): ?string
     {
-        $motif = $this->motifDeLectureSeule();
+        $refusEnLectureSeule = $this->refusEnLectureSeule();
 
         return match (true) {
-            $motif !== null => "{$motif} : seules la consultation et les téléchargements restent possibles.",
+            $refusEnLectureSeule !== null => $refusEnLectureSeule,
             $this->est_demonstration => $this->societe->estValidee() ? self::REFUS_DEMONSTRATION_TERMINEE : null,
             ! $this->societe->estValidee() => self::REFUS_SOCIETE_A_VERIFIER,
             $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",

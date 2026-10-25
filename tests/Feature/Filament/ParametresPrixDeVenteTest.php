@@ -242,9 +242,30 @@ class ParametresPrixDeVenteTest extends TestCase
     }
 
     /**
+     * La page, ouverte quand le calcul était désactivé ; une autre
+     * personne l'active ; la page est enregistrée sans rien y changer.
+     * Rien ne s'écrit, et la page ne dit pas « désactivé » alors que le
+     * calcul reste actif : elle dit que rien n'a été modifié et le montre
+     * actif.
+     */
+    public function test_une_page_qui_n_a_rien_corrige_n_annonce_pas_l_etat_qu_elle_montrait(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresPrixDeVente::class)->assertFormSet(['actif' => false]);
+
+        Magasin::query()->findOrFail($magasin->id)->update(['prix_vente_automatique' => true]);
+        $page->call('save')
+            ->assertNotified(ParametresPrixDeVente::RIEN_N_EST_MODIFIE)
+            ->assertFormSet(['actif' => true]);
+
+        $this->assertTrue($magasin->fresh()->prix_vente_automatique);
+    }
+
+    /**
      * La page, ouverte avant qu'une autre personne n'enregistre son propre
      * barème, active le calcul sans toucher au barème : celui de l'autre
-     * personne reste ; corriger aussi le barème qu'elle a changé
+     * personne reste, et la page le dit au lieu d'annoncer le barème
+     * qu'elle montrait ; corriger aussi le barème qu'elle a changé
      * entre-temps est refusé, et rien ne s'écrit.
      */
     public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
@@ -255,7 +276,7 @@ class ParametresPrixDeVenteTest extends TestCase
         $bareme = new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 5.0]], 20.0, false);
 
         Magasin::query()->findOrFail($magasin->id)->update(['bareme_prix_vente' => $bareme]);
-        $page->fillForm(['actif' => true])->call('save')->assertNotified('Barème de prix de vente enregistré');
+        $page->fillForm(['actif' => true])->call('save')->assertNotified(ParametresPrixDeVente::AUTRES_PARAMETRES_CHANGES)->assertFormSet(['benefice_au_dela' => 20.0]);
         $autrePage->fillForm(['actif' => true, 'benefice_au_dela' => 80])->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
 
         $this->assertTrue($magasin->fresh()->prix_vente_automatique);

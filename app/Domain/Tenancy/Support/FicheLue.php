@@ -30,9 +30,13 @@ use UnitEnum;
  * mutateurs) : un taux « 20 » saisi vaut le « 20.00 » lu, un nombre de
  * jours « 30 » vaut 30, une énumération vaut sa valeur, un barème vaut un
  * barème de mêmes paliers ; un champ vidé vaut un attribut vide. La fiche
- * lue garde les attributs modifiables de la fiche ($fillable), tels que la
- * base les a rendus : des valeurs simples, que l'écran garde avec lui
- * (voir valeurs()).
+ * lue garde les attributs modifiables de la fiche ($fillable), ou
+ * seulement ceux qu'un écran règle (les paramètres d'une page du magasin,
+ * que chaque autorisation règle à part, voir
+ * ModifierLesParametresDuMagasinAction::parametresDe()), tels que la base
+ * les a rendus : des valeurs simples, que l'écran garde avec lui et que le
+ * navigateur peut lire (voir valeurs()), jamais un attribut que l'écran
+ * ne montre pas.
  */
 final class FicheLue
 {
@@ -46,22 +50,39 @@ final class FicheLue
     ) {}
 
     /**
-     * La fiche telle que la base l'a rendue à sa lecture.
+     * La fiche telle que la base l'a rendue à sa lecture : ses attributs
+     * modifiables, ou seulement ceux-là parmi eux.
+     *
+     * @param  list<string>|null  $attributs
      */
-    public static function de(Model $fiche): self
+    public static function de(Model $fiche, ?array $attributs = null): self
     {
-        return new self($fiche::class, Arr::only($fiche->getRawOriginal(), $fiche->getFillable()));
+        return new self($fiche::class, Arr::only($fiche->getRawOriginal(), self::modifiables($fiche, $attributs)));
     }
 
     /**
-     * La fiche qu'un écran a lue et gardée (voir valeurs()).
+     * La fiche qu'un écran a lue et gardée (voir valeurs()) : ses attributs
+     * modifiables, ou seulement ceux-là parmi eux.
      *
      * @param  class-string<Model>  $modele
      * @param  array<string, mixed>  $valeurs
+     * @param  list<string>|null  $attributs
      */
-    public static function depuis(string $modele, array $valeurs): self
+    public static function depuis(string $modele, array $valeurs, ?array $attributs = null): self
     {
-        return new self($modele, Arr::only($valeurs, (new $modele)->getFillable()));
+        return new self($modele, Arr::only($valeurs, self::modifiables(new $modele, $attributs)));
+    }
+
+    /**
+     * Les attributs modifiables de la fiche ($fillable), ou ceux-là
+     * seulement parmi eux.
+     *
+     * @param  list<string>|null  $attributs
+     * @return list<string>
+     */
+    private static function modifiables(Model $fiche, ?array $attributs): array
+    {
+        return $attributs === null ? $fiche->getFillable() : array_values(array_intersect($fiche->getFillable(), $attributs));
     }
 
     /**

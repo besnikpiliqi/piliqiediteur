@@ -146,7 +146,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                     ->authorize(fn (): bool => auth()->user()?->can(PermissionRegistry::CLIENT_CREATE) ?? false)
                     ->modalHeading('Nouveau client')
                     ->form(ClientResource::creationRapideSchema())
-                    ->action(fn (array $data) => $this->choisir(Client::create($data)->getKey())),
+                    ->action(fn (array $data) => $this->choisir(ClientResource::creerUnClient($data))),
             ]);
     }
 

@@ -1576,6 +1576,31 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
+     * L'écran résout le fournisseur choisi avant la correction : archivé
+     * depuis par une autre requête, il est relu sous verrou par la
+     * correction, qui le voit archivé et la refuse, avec un message ; la
+     * facture et son produit gardent leur fournisseur.
+     */
+    public function test_corriger_une_facture_dachat_validee_vers_un_fournisseur_archive_depuis_sa_lecture_est_refuse(): void
+    {
+        $ancien = Fournisseur::factory()->create(['nom' => 'Grossiste']);
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($ancien, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]);
+        $nouveauLu = Fournisseur::factory()->create(['nom' => 'Nouveau grossiste']);
+        Fournisseur::query()->findOrFail($nouveauLu->id)->delete();
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $nouveauLu, [
+                ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+            ]),
+            LogicException::class,
+            'Le fournisseur « Nouveau grossiste » a été archivé : restaurez-le depuis la liste des fournisseurs avant de corriger cette facture d\'achat.',
+        );
+
+        $this->assertSame([$ancien->id, $ancien->id], [$factureAchat->fresh()->fournisseur_id, $produit->fresh()->fournisseur_id]);
+    }
+
+    /**
      * Chaque ligne d'achat reçoit un produit, ou dans un brouillon la fiche
      * du nouveau produit qu'elle créera (voir LigneAchat) -- jamais aucun des
      * deux, ni les deux à la fois ; sa ligne d'avoir fournisseur reprend le

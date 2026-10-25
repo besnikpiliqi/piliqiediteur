@@ -4,8 +4,11 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Filament\App\Resources\ServiceResource\Pages;
+use App\Domain\Tenancy\Support\FicheLue;
+use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -27,10 +30,13 @@ use Illuminate\Support\Collection;
  * personne autorisée à « accorder des remises et fixer le prix d'un
  * service » : pour les autres, ils s'affichent sans se changer, et une
  * valeur envoyée malgré tout ne s'enregistre pas (un champ désactivé ne
- * part pas avec le formulaire).
+ * part pas avec le formulaire) ; l'action du domaine le revérifie sous
+ * verrou (voir CreerUneFicheAction et ModifierUneFicheAction).
  */
 class ServiceResource extends Resource
 {
+    use GereLesExceptionsMetier;
+
     protected static ?string $model = Service::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
@@ -155,14 +161,33 @@ class ServiceResource extends Resource
                 Tables\Filters\TernaryFilter::make('actif')->label('Proposé à la caisse'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                self::actionModifier(),
             ]);
+    }
+
+    /**
+     * « Modifier » : la fenêtre lit la fiche à son ouverture, que la page
+     * garde (voir ManageServices::$fichesLues) ; l'enregistrement n'écrit
+     * que ce que la personne y a corrigé depuis (voir
+     * ModifierUneFicheAction).
+     */
+    private static function actionModifier(): Tables\Actions\EditAction
+    {
+        return Tables\Actions\EditAction::make()
+            ->mutateRecordDataUsing(function (array $data, Service $record, ManageServices $livewire): array {
+                $livewire->fichesLues[$record->getKey()] = FicheLue::de($record)->valeurs();
+
+                return $data;
+            })
+            ->using(fn (Service $record, array $data, ManageServices $livewire): Service => static::executerOuInterrompre(
+                fn (): Service => app(ModifierUneFicheAction::class)->handle(auth()->user(), $record, $livewire->fichesLues[$record->getKey()] ?? [], $data),
+            ));
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ManageServices::route('/'),
+            'index' => ManageServices::route('/'),
         ];
     }
 }

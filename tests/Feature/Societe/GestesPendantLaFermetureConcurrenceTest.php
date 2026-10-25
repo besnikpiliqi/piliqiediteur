@@ -3,14 +3,23 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\SupprimerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Actions\CreerUneFicheAction;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
@@ -44,11 +53,13 @@ use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
 use App\Models\User;
 use Closure;
 use Illuminate\Contracts\Process\ProcessResult;
@@ -88,10 +99,12 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     private const MAGASIN_FERME = 'Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.';
 
     /**
-     * Chaque geste, et s'il écrit au registre fiscal du magasin, dont il
-     * prend alors le verrou en premier.
+     * Chaque geste, s'il écrit au registre fiscal du magasin, dont il prend
+     * alors le verrou en premier, et le verrou qu'il prend sur la ligne du
+     * magasin : partagé, ou, pour les paramètres du magasin qu'il écrit,
+     * exclusif de toute autre écriture de cette ligne.
      *
-     * @var array<string, array{0: string, 1: bool}>
+     * @var array<string, array{0: string, 1: bool, 2?: string}>
      */
     private const GESTES = [
         'créer une facture d\'achat' => ['creerUneFactureDAchat', false],
@@ -116,18 +129,32 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         'saisir un inventaire d\'ouverture' => ['saisirUnInventaire', true],
         'modifier un inventaire d\'ouverture' => ['modifierUnInventaire', true],
         'supprimer un inventaire d\'ouverture' => ['supprimerUnInventaire', false],
+        'valider une facture d\'achat' => ['validerUneFactureDAchat', false],
+        'corriger une facture d\'achat validée' => ['corrigerUneFactureDAchat', false],
+        'modifier une fiche produit' => ['modifierUneFicheProduit', false],
+        'modifier le taux d\'une fiche produit' => ['modifierLeTauxDUneFicheProduit', true],
+        'modifier un client' => ['modifierUnClient', false],
+        'modifier un fournisseur' => ['modifierUnFournisseur', false],
+        'modifier un service' => ['modifierUnService', false],
+        'créer un client' => ['creerUnClient', false],
+        'créer un fournisseur' => ['creerUnFournisseur', false],
+        'créer un service' => ['creerUnService', false],
+        'créer un service depuis une vente' => ['trouverOuCreerUnService', false],
+        'régler les paramètres du magasin' => ['reglerLesParametresDuMagasin', false, 'for no key update'],
     ];
 
     /**
-     * @return array<string, array{0: string, 1: bool, 2: bool}>
+     * @return array<string, array{0: string, 1: bool, 2: bool, 3: string}>
      */
     public static function gestesEtOrdres(): array
     {
         $cas = [];
 
-        foreach (self::GESTES as $libelle => [$geste, $surLeRegistre]) {
-            $cas["{$libelle}, le geste d'abord"] = [$geste, $surLeRegistre, true];
-            $cas["{$libelle}, l'autre geste d'abord"] = [$geste, $surLeRegistre, false];
+        foreach (self::GESTES as $libelle => $geste) {
+            [$methode, $surLeRegistre] = $geste;
+            $verrouDuMagasin = $geste[2] ?? 'for share';
+            $cas["{$libelle}, le geste d'abord"] = [$methode, $surLeRegistre, true, $verrouDuMagasin];
+            $cas["{$libelle}, l'autre geste d'abord"] = [$methode, $surLeRegistre, false, $verrouDuMagasin];
         }
 
         return $cas;
@@ -135,7 +162,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
 
     #[DataProvider('gestesEtOrdres')]
     #[Group('concurrence')]
-    public function test_un_geste_simultane_a_la_fermeture_du_magasin_passe_avant_elle_ou_est_refuse_apres(string $geste, bool $surLeRegistre, bool $leGesteDAbord): void
+    public function test_un_geste_simultane_a_la_fermeture_du_magasin_passe_avant_elle_ou_est_refuse_apres(string $geste, bool $surLeRegistre, bool $leGesteDAbord, string $verrouDuMagasin): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
@@ -151,7 +178,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
             self::fermer($magasinId);
         };
 
-        $resultat = $this->croiser($leGesteDAbord, $surLeRegistre, $faire, $fermer);
+        $resultat = $this->croiser($leGesteDAbord, $surLeRegistre, $verrouDuMagasin, $faire, $fermer);
 
         app(TenantContext::class)->set($magasin);
         $this->assertSame(StatutMagasin::Ferme, $magasin->fresh()->statut);
@@ -178,7 +205,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
      */
     #[DataProvider('gestesEtOrdres')]
     #[Group('concurrence')]
-    public function test_un_geste_commence_dans_le_magasin_ferme_est_refuse_avant_sa_reouverture_comme_apres(string $geste, bool $surLeRegistre, bool $leGesteDAbord): void
+    public function test_un_geste_commence_dans_le_magasin_ferme_est_refuse_avant_sa_reouverture_comme_apres(string $geste, bool $surLeRegistre, bool $leGesteDAbord, string $verrouDuMagasin): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
@@ -199,7 +226,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
             $this->assertThrows($faire, LogicException::class, self::MAGASIN_FERME);
             self::rouvrir($magasinId);
         } else {
-            $resultat = $this->croiser(false, $surLeRegistre, $faire, $rouvrir);
+            $resultat = $this->croiser(false, $surLeRegistre, $verrouDuMagasin, $faire, $rouvrir);
             $this->assertTrue($resultat->failed(), $resultat->output());
             $this->assertStringContainsString(LecteurDesDroits::REFUS, $resultat->errorOutput());
         }
@@ -256,21 +283,21 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
      * le processus du test, l'autre dans le sien : le second démarre dès
      * que le premier tient le verrou qu'il attendra, et attend qu'il l'ait
      * rendu. Ce verrou est le registre fiscal pour un geste qui y écrit ;
-     * sinon la ligne du magasin, sous un verrou partagé quand le geste
-     * passe le premier, ou verrouillée par la fermeture ou la réouverture.
-     * Rend le résultat du processus concurrent.
+     * sinon la ligne du magasin, sous le verrou du geste quand il passe le
+     * premier, ou verrouillée par la fermeture ou la réouverture. Rend le
+     * résultat du processus concurrent.
      *
      * @param  Closure(): void  $faire
      * @param  Closure(): void  $autre
      */
-    private function croiser(bool $leGesteDAbord, bool $surLeRegistre, Closure $faire, Closure $autre): ProcessResult
+    private function croiser(bool $leGesteDAbord, bool $surLeRegistre, string $verrouDuMagasin, Closure $faire, Closure $autre): ProcessResult
     {
         $concurrente = null;
         $second = $leGesteDAbord ? $autre : $faire;
 
         match (true) {
             $surLeRegistre => $this->concurrencerDesQueLeRegistreEstVerrouille($second, $concurrente),
-            $leGesteDAbord => $this->concurrencerDesQueLaLigneEstVerrouillee('magasins', 'for share', $second, $concurrente),
+            $leGesteDAbord => $this->concurrencerDesQueLaLigneEstVerrouillee('magasins', $verrouDuMagasin, $second, $concurrente),
             default => $this->concurrencerDesQueLaLigneEstVerrouillee('magasins', 'for update', $second, $concurrente),
         };
 
@@ -312,6 +339,13 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
             'retirerUnArticleDuPanier', 'abandonnerLaVente' => tap(['jeton' => '9f1c2d7a-6b1e-4c3f-8d2a-1e5b7c9d0a11', 'produit' => $produit->id], fn (array $panier) => app(PanierDeCaisse::class)->enregistrer($auteur, $panier['jeton'], null, self::lignesDuPanier($produit->id, 2))),
             'saisirUnInventaire' => [],
             'modifierUnInventaire', 'supprimerUnInventaire' => ['id' => app(CreerInventaireOuvertureAction::class)->handle($auteur, [$carnet])->id],
+            'validerUneFactureDAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]])->id],
+            'corrigerUneFactureDAchat' => ['id' => app(ValiderFactureAchatAction::class)->handle($auteur, app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]))->id, 'produit' => $produit->id],
+            'modifierUneFicheProduit', 'modifierLeTauxDUneFicheProduit' => ['id' => $produit->id],
+            'modifierUnClient' => ['id' => Client::factory()->create(['nom' => 'Martin'])->id],
+            'modifierUnFournisseur' => ['id' => Fournisseur::factory()->create(['nom' => 'Grossiste'])->id],
+            'modifierUnService' => ['id' => Service::factory()->create(['nom' => 'Diagnostic'])->id],
+            'creerUnClient', 'creerUnFournisseur', 'creerUnService', 'trouverOuCreerUnService', 'reglerLesParametresDuMagasin' => [],
         };
     }
 
@@ -352,7 +386,30 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
             'saisirUnInventaire' => app(CreerInventaireOuvertureAction::class)->handle($auteur, [$carnet]),
             'modifierUnInventaire' => app(ModifierInventaireOuvertureAction::class)->handle($auteur, InventaireOuverture::query()->findOrFail($parametres['id']), [$carnet]),
             'supprimerUnInventaire' => app(SupprimerInventaireOuvertureAction::class)->handle($auteur, InventaireOuverture::query()->findOrFail($parametres['id'])),
+            'validerUneFactureDAchat' => app(ValiderFactureAchatAction::class)->handle($auteur, FactureAchat::query()->findOrFail($parametres['id'])),
+            'corrigerUneFactureDAchat' => app(ModifierFactureAchatAction::class)->handle($auteur, $factureAchat = FactureAchat::query()->findOrFail($parametres['id']), $factureAchat->fournisseur, [['produit_id' => $parametres['produit'], 'quantite' => 8, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]),
+            'modifierUneFicheProduit' => self::modifierLaFiche($auteur, Produit::query()->findOrFail($parametres['id']), ['nom' => 'Coque bleue']),
+            'modifierLeTauxDUneFicheProduit' => self::modifierLaFiche($auteur, Produit::query()->findOrFail($parametres['id']), ['taux_tva' => '5.5']),
+            'modifierUnClient' => self::modifierLaFiche($auteur, Client::query()->findOrFail($parametres['id']), ['nom' => 'Martin et fils']),
+            'modifierUnFournisseur' => self::modifierLaFiche($auteur, Fournisseur::query()->findOrFail($parametres['id']), ['nom' => 'Grossiste du Sud']),
+            'modifierUnService' => self::modifierLaFiche($auteur, Service::query()->findOrFail($parametres['id']), ['nom' => 'Diagnostic complet']),
+            'creerUnClient' => app(CreerUneFicheAction::class)->handle($auteur, Client::class, ['nom' => 'Nouveau client', 'type_client' => TypeClient::Particulier]),
+            'creerUnFournisseur' => app(CreerUneFicheAction::class)->handle($auteur, Fournisseur::class, ['nom' => 'Nouveau fournisseur']),
+            'creerUnService' => app(CreerUneFicheAction::class)->handle($auteur, Service::class, ['nom' => 'Nouveau service', 'actif' => true]),
+            'trouverOuCreerUnService' => app(TrouverOuCreerServiceAction::class)->handle($auteur, 'Nouveau service'),
+            'reglerLesParametresDuMagasin' => app(ModifierLesParametresDuMagasinAction::class)->handle($auteur, PermissionRegistry::PARAMETRES_GERER, FicheLue::de($magasin)->valeurs(), ['delai_paiement_jours' => 45]),
         };
+    }
+
+    /**
+     * Le geste d'une page de modification ouverte sur cette fiche telle
+     * qu'elle est en base (voir EnregistreLesCorrectionsDeLaFiche).
+     *
+     * @param  array<string, mixed>  $saisie
+     */
+    private static function modifierLaFiche(User $auteur, Client|Fournisseur|Produit|Service $fiche, array $saisie): void
+    {
+        app(ModifierUneFicheAction::class)->handle($auteur, $fiche, FicheLue::de($fiche)->valeurs(), $saisie);
     }
 
     /**
@@ -384,6 +441,17 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
             'saisirUnInventaire' => $this->assertSame($fait ? 1 : 0, InventaireOuverture::query()->count()),
             'modifierUnInventaire' => $this->assertSame($fait ? 12 : 10, InventaireOuverture::query()->findOrFail($parametres['id'])->lignes()->sole()->quantite),
             'supprimerUnInventaire' => $this->assertSame($fait ? 0 : 1, InventaireOuverture::query()->count()),
+            'validerUneFactureDAchat' => $this->assertSame($fait ? StatutFactureAchat::Validee : StatutFactureAchat::Brouillon, FactureAchat::query()->findOrFail($parametres['id'])->statut),
+            'corrigerUneFactureDAchat' => $this->assertSame($fait ? 8 : 5, FactureAchat::query()->findOrFail($parametres['id'])->lignes()->sole()->quantite),
+            'modifierUneFicheProduit' => $this->assertSame($fait ? 'Coque bleue' : 'Coque rouge', Produit::query()->findOrFail($parametres['id'])->nom),
+            'modifierLeTauxDUneFicheProduit' => $this->assertSame($fait ? '5.50' : '20.00', Produit::query()->findOrFail($parametres['id'])->taux_tva),
+            'modifierUnClient' => $this->assertSame($fait ? 'Martin et fils' : 'Martin', Client::query()->findOrFail($parametres['id'])->nom),
+            'modifierUnFournisseur' => $this->assertSame($fait ? 'Grossiste du Sud' : 'Grossiste', Fournisseur::query()->findOrFail($parametres['id'])->nom),
+            'modifierUnService' => $this->assertSame($fait ? 'Diagnostic complet' : 'Diagnostic', Service::query()->findOrFail($parametres['id'])->nom),
+            'creerUnClient' => $this->assertSame($fait ? 1 : 0, Client::query()->where('nom', 'Nouveau client')->count()),
+            'creerUnFournisseur' => $this->assertSame($fait ? 1 : 0, Fournisseur::query()->where('nom', 'Nouveau fournisseur')->count()),
+            'creerUnService', 'trouverOuCreerUnService' => $this->assertSame($fait ? 1 : 0, Service::query()->where('nom', 'Nouveau service')->count()),
+            'reglerLesParametresDuMagasin' => $this->assertSame($fait ? 45 : 30, app(TenantContext::class)->magasin()->fresh()->delai_paiement_jours),
         };
     }
 

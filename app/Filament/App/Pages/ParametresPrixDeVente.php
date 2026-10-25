@@ -6,9 +6,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ProduitResource;
-use Filament\Facades\Filament;
+use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -26,11 +25,12 @@ use InvalidArgumentException;
 /**
  * Le barème avec lequel le magasin fixe ses prix de vente (voir
  * BaremePrixDeVente) : un bénéfice selon le prix d'achat de l'article,
- * appliqué aux produits de ses factures d'achat.
+ * appliqué aux produits de ses factures d'achat. Seul ce que la personne
+ * y a corrigé s'enregistre (voir EnregistreLesParametresDuMagasin).
  */
 class ParametresPrixDeVente extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use EnregistreLesParametresDuMagasin, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-calculator';
 
@@ -54,8 +54,15 @@ class ParametresPrixDeVente extends Page implements HasForms
 
     public function mount(): void
     {
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
+        $this->remplir();
+    }
+
+    /**
+     * Le barème tel qu'il est enregistré, relu en base.
+     */
+    private function remplir(): void
+    {
+        $magasin = $this->lireLesParametres();
 
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
@@ -71,18 +78,16 @@ class ParametresPrixDeVente extends Page implements HasForms
                 ->label('Calculer automatiquement le prix de vente')
                 ->helperText('Dans une facture d\'achat, le prix de vente TTC d\'un produit se remplit d\'après ce barème dès que vous saisissez son prix d\'achat. Vous pouvez toujours le corriger. Désactivé, votre barème est gardé pour le jour où vous le réactivez.')
                 ->live()
-                // Désactiver remet le barème enregistré : une saisie laissée
-                // en cours ne se retrouve ni grisée à l'écran comme si elle
-                // valait, avec ses erreurs, ni bloquante à l'enregistrement.
+                // Désactiver remet le barème que la page a lu : une saisie
+                // laissée en cours ne se retrouve ni grisée à l'écran comme
+                // si elle valait, avec ses erreurs, ni bloquante à
+                // l'enregistrement.
                 ->afterStateUpdated(function (bool $state, Set $set): void {
                     if ($state) {
                         return;
                     }
 
-                    /** @var Magasin $magasin */
-                    $magasin = Filament::getTenant();
-
-                    foreach ($magasin->fresh()->bareme_prix_vente->versTableau() as $champ => $valeur) {
+                    foreach ($this->parametresTelsQueLus()->bareme_prix_vente->versTableau() as $champ => $valeur) {
                         $set($champ, $valeur);
                     }
 
@@ -205,15 +210,12 @@ class ParametresPrixDeVente extends Page implements HasForms
     {
         $data = $this->form->getState();
 
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
-
         // Désactivé, le barème ne se modifie pas : celui enregistré reste
         // tel quel.
         if (! $data['actif']) {
-            $magasin->update(['prix_vente_automatique' => false]);
-
-            Notification::make()->title('Prix de vente automatique désactivé')->success()->send();
+            if ($this->enregistrerLesParametres(PermissionRegistry::PRIX_VENTE_REGLER, ['prix_vente_automatique' => false], 'Prix de vente automatique désactivé')) {
+                $this->remplir();
+            }
 
             return;
         }
@@ -230,8 +232,8 @@ class ParametresPrixDeVente extends Page implements HasForms
             return;
         }
 
-        $magasin->update(['prix_vente_automatique' => true, 'bareme_prix_vente' => $bareme]);
-
-        Notification::make()->title('Barème de prix de vente enregistré')->success()->send();
+        if ($this->enregistrerLesParametres(PermissionRegistry::PRIX_VENTE_REGLER, ['prix_vente_automatique' => true, 'bareme_prix_vente' => $bareme], 'Barème de prix de vente enregistré')) {
+            $this->remplir();
+        }
     }
 }

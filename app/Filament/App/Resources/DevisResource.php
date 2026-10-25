@@ -72,6 +72,7 @@ class DevisResource extends Resource
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),

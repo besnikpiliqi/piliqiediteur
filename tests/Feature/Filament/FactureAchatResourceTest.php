@@ -12,6 +12,8 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -25,6 +27,7 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
+use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
@@ -32,6 +35,7 @@ use Filament\Forms\Components\Select;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -1178,6 +1182,157 @@ class FactureAchatResourceTest extends TestCase
             ->assertNotified('Le produit « Câble USB-C » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.');
         $this->assertSame(4, $component->get("data.lignes.{$cle}.quantite"));
         $this->assertSame(5, $brouillon->fresh()->lignes->sole()->quantite);
+    }
+
+    /**
+     * La ligne a lu la fiche du produit à son choix ; un collègue corrige
+     * ensuite son nom, son prix de vente et le suivi de son stock dans
+     * « Produits ». La facture s'enregistre sans rien remettre de la fiche
+     * que la ligne avait lue : sa correction reste.
+     */
+    public function test_une_ligne_ouverte_avant_une_correction_dans_produits_ne_l_efface_pas(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $page = $this->factureDAchatQuiAchete($produit);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm(['nom' => 'Coque iPhone 15 Pro', 'prix_vente_ttc' => '18', 'suivi_stock' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $page->call('create')->assertHasNoFormErrors();
+
+        $produit->refresh();
+        $this->assertSame(['Coque iPhone 15 Pro', '18.00', false], [$produit->nom, $produit->prix_vente_ttc, $produit->suivi_stock]);
+        $this->assertSame($produit->id, FactureAchat::query()->sole()->lignes->sole()->produit_id);
+    }
+
+    /**
+     * Rouvrir un brouillon lit la fiche de chacun de ses produits ; un
+     * collègue corrige ensuite un prix de vente. Enregistrer le brouillon
+     * pour ses seules notes ne remet pas l'ancien prix.
+     */
+    public function test_enregistrer_un_brouillon_rouvert_ne_retablit_pas_l_ancienne_fiche(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 4, 'prix_unitaire_ht' => '2.10']]);
+        $page = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['prix_vente_ttc' => '18'])->call('save')->assertHasNoFormErrors();
+        $page->fillForm(['notes' => 'Livrée en deux colis'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame(['18.00', 'Livrée en deux colis'], [$produit->fresh()->prix_vente_ttc, $brouillon->fresh()->notes]);
+    }
+
+    /**
+     * Une personne qui saisit les achats sans pouvoir modifier les
+     * produits ne corrige aucune fiche : le changement de prix qu'un
+     * collègue fait pendant qu'elle remplit sa facture ne fait pas refuser
+     * celle-ci, et reste.
+     */
+    public function test_sans_droit_sur_les_produits_une_fiche_changee_entre_temps_ne_refuse_pas_la_facture(): void
+    {
+        $this->connecterUnMembreQuiSaisitLesAchatsSansDroitProduit();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $page = $this->factureDAchatQuiAchete($produit);
+
+        Produit::query()->findOrFail($produit->id)->update(['prix_vente_ttc' => 18]);
+        $page->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame(1, FactureAchat::query()->count());
+        $this->assertSame('18.00', $produit->fresh()->prix_vente_ttc);
+    }
+
+    /**
+     * Le taux de TVA changé dans « Produits » pendant que la facture se
+     * remplit n'est ni rétabli par elle ni inscrit une seconde fois au
+     * journal des événements : un seul changement, 20 % vers 5,5 %.
+     */
+    public function test_un_taux_change_dans_produits_n_est_ni_retabli_ni_journalise_par_la_facture(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Livre de recettes', 'reference' => 'LIV-01', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $page = $this->factureDAchatQuiAchete($produit);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['taux_tva' => '5.5'])->call('save')->assertHasNoFormErrors();
+        $page->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame('5.50', $produit->fresh()->taux_tva);
+        $this->assertSame([['20.00', '5.50']], $this->changementsDeTauxJournalises());
+    }
+
+    /**
+     * La ligne corrige le prix de vente qu'elle a lu, 15,00 € vers
+     * 16,00 € ; un collègue l'a entre-temps passé à 18,00 €. La facture
+     * est refusée, avec un message qui dit quoi faire, et rien ne
+     * s'écrit : la correction du collègue reste.
+     */
+    public function test_corriger_dans_la_ligne_un_prix_change_entre_temps_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $page = $this->factureDAchatQuiAchete($produit, ['prix_vente_ttc' => '16']);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['prix_vente_ttc' => '18'])->call('save')->assertHasNoFormErrors();
+        $page->call('create')->assertNotified('La fiche du produit « Coque iPhone 15 » a été modifiée depuis que cette ligne l\'a lue : choisissez de nouveau ce produit dans la ligne pour repartir de sa fiche actuelle, puis refaites votre correction.');
+
+        $this->assertSame(0, FactureAchat::query()->count());
+        $this->assertSame('18.00', $produit->fresh()->prix_vente_ttc);
+    }
+
+    /**
+     * La ligne corrige le nom du produit pendant qu'un collègue change son
+     * prix : les deux corrections restent.
+     */
+    public function test_corriger_dans_la_ligne_un_autre_attribut_garde_le_changement_d_un_collegue(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $page = $this->factureDAchatQuiAchete($produit, ['nom' => 'Coque iPhone 15 noire']);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['prix_vente_ttc' => '18'])->call('save')->assertHasNoFormErrors();
+        $page->call('create')->assertHasNoFormErrors();
+
+        $produit->refresh();
+        $this->assertSame(['Coque iPhone 15 noire', '18.00'], [$produit->nom, $produit->prix_vente_ttc]);
+    }
+
+    /**
+     * La page de création d'une facture d'achat, avec une ligne qui achète
+     * 4 de ce produit, choisi dans le catalogue, puis corrigé comme
+     * l'indique $corrections.
+     *
+     * @param  array<string, mixed>  $corrections
+     */
+    private function factureDAchatQuiAchete(Produit $produit, array $corrections = []): Testable
+    {
+        return Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $produit->id])
+            ->setFormComponentActionData([...$corrections, 'quantite' => 4])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+    }
+
+    /**
+     * Les changements de taux de TVA inscrits au journal des événements
+     * du magasin (JET 270), chacun [ancienne valeur, nouvelle valeur].
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function changementsDeTauxJournalises(): array
+    {
+        return EnregistrementFiscal::query()
+            ->where('type', (string) CodeEvenement::ParametreDeConformite->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->filter(fn (array $details): bool => $details['parametre'] === 'taux_tva')
+            ->map(fn (array $details): array => [$details['ancienne_valeur'], $details['nouvelle_valeur']])
+            ->values()
+            ->all();
     }
 
     private function connecterLeProprietaire(): Magasin

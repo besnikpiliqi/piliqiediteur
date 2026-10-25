@@ -163,6 +163,7 @@ class FactureResource extends Resource
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 // L'échéance ne se saisit pas : elle se calcule à l'émission,
                 // date d'émission + délai du client choisi, sinon délai du

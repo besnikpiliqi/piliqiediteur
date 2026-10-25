@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Actions\CreerUneFicheAction;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -264,6 +265,20 @@ class ClientResource extends Resource
             TextInput::make('telephone')->tel()->maxLength(30),
             self::champEmail(),
         ];
+    }
+
+    /**
+     * Le client créé depuis la création rapide (voir creationRapideSchema())
+     * d'une facture, d'un devis, de la caisse ou du tableau des clients,
+     * par l'action du domaine, qui relit sous verrou le magasin et son
+     * auteur (voir CreerUneFicheAction) ; un refus se lit en notification
+     * et la fenêtre reste ouverte. Rend son identifiant.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function creerUnClient(array $data): int
+    {
+        return static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(auth()->user(), Client::class, $data))->getKey();
     }
 
     /**

@@ -36,7 +36,12 @@ use LogicException;
  * Chacun de ses produits existants doit encore être au catalogue : une
  * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
  * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
- * (voir Produit::rattacherAuFournisseur()) sans être restauré. Ses
+ * (voir Produit::rattacherAuFournisseur()) sans être restauré. L'un et
+ * les autres se contrôlent une fois relus sous verrou : le fournisseur
+ * sous un verrou partagé, après la facture d'achat, puis ses produits
+ * (voir plus bas). Leur archivage, qui verrouille la fiche (voir
+ * ArchiverUneFicheAction), passe donc tout entier avant la validation,
+ * qui le voit et la refuse, ou après elle, qu'il attend. Ses
  * nouveaux produits naissent alors, avant son numéro (voir
  * ConstructeurLigneAchat::creerLesNouveauxProduits()) : un refus (prix de
  * vente manquant, référence prise entre-temps) annule toute la validation,
@@ -60,7 +65,8 @@ use LogicException;
  * son écran restait ouvert est vu. Les
  * mouvements de stock de la réception notent son nom. Ses produits
  * existants se verrouillent, par identifiant croissant, après la facture
- * d'achat et avant la numérotation (voir Produit::verrouillerPourLeStock()).
+ * d'achat et son fournisseur, et avant la numérotation (voir
+ * Produit::verrouillerPourLeStock()).
  *
  * La validation demandée par une personne porte un jeton (R3, voir
  * ActionsUniques), cherché sous le verrou de la ligne de son auteur :
@@ -118,15 +124,18 @@ class ValiderFactureAchatAction
             throw new AuthorizationException(self::REFUS_SANS_DROIT_DE_CREER_DES_PRODUITS);
         }
 
-        if ($factureAchat->fournisseur->trashed()) {
-            throw new LogicException("Le fournisseur « {$factureAchat->fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant de valider cette facture d'achat.");
+        $fournisseur = $factureAchat->fournisseur()->sharedLock()->firstOrFail();
+
+        if ($fournisseur->trashed()) {
+            throw new LogicException("Le fournisseur « {$fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant de valider cette facture d'achat.");
         }
+
+        Produit::verrouillerPourLeStock($factureAchat->lignes()->pluck('produit_id'));
 
         if (($produitArchive = $factureAchat->produitArchive()) !== null) {
             throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture, avant de la valider.");
         }
 
-        Produit::verrouillerPourLeStock($factureAchat->lignes()->pluck('produit_id'));
         $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
 
         $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));

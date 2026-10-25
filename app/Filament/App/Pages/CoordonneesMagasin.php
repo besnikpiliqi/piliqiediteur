@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
@@ -12,7 +13,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 
 /**
@@ -28,11 +28,12 @@ use Filament\Pages\Page;
  * « Paramètres du magasin » (PermissionRegistry::PARAMETRES_GERER), que le
  * propriétaire et les responsables du magasin ont toujours et qu'ils
  * cochent pour qui ils veulent ; en lecture seule, la page se ferme. Seul
- * le magasin actif est lu et modifié, et rien de la société.
+ * le magasin actif est lu et modifié, et rien de la société, et seulement
+ * ce que la personne y a corrigé (voir EnregistreLesParametresDuMagasin).
  */
 class CoordonneesMagasin extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use EnregistreLesParametresDuMagasin, InteractsWithForms;
 
     /**
      * Les champs de la page, tous enregistrés tels quels sur le magasin.
@@ -68,7 +69,7 @@ class CoordonneesMagasin extends Page implements HasForms
 
     public function mount(): void
     {
-        $this->remplir();
+        $this->remplir($this->lireLesParametres());
     }
 
     public function form(Form $form): Form
@@ -114,19 +115,18 @@ class CoordonneesMagasin extends Page implements HasForms
     public function save(): void
     {
         $donnees = $this->form->getState();
-        $this->magasin()->update([
+        $saisie = [
             ...$donnees,
             'references_acheteur' => array_values(array_unique(array_filter(array_map(trim(...), $donnees['references_acheteur'] ?? []), filled(...)))) ?: null,
-        ]);
-        $this->remplir();
+        ];
 
-        Notification::make()->title('Coordonnées du magasin enregistrées')->success()->send();
+        if ($this->enregistrerLesParametres(PermissionRegistry::PARAMETRES_GERER, $saisie, 'Coordonnées du magasin enregistrées')) {
+            $this->remplir($this->lireLesParametres());
+        }
     }
 
-    private function remplir(): void
+    private function remplir(Magasin $magasin): void
     {
-        $magasin = $this->magasin()->refresh();
-
         $this->form->fill([...$magasin->only(self::CHAMPS), 'references_acheteur' => $magasin->references_acheteur ?? []]);
     }
 

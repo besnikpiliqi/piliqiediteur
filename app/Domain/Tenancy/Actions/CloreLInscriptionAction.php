@@ -128,8 +128,10 @@ class CloreLInscriptionAction
      * Les lignes de ses magasins réels se verrouillent d'abord, par
      * identifiant croissant (« for no key update ») : un geste qui
      * écrit dans un magasin réel avant la validation (une facture d'achat
-     * validée, un inventaire d'ouverture, un brouillon), qui relit la ligne
-     * de son magasin sous un verrou partagé et le dit ouvert tant que
+     * validée, un inventaire d'ouverture, un brouillon, une fiche, ses
+     * paramètres), qui relit la ligne de son magasin sous un verrou partagé
+     * (« for no key update » pour ses paramètres, qui l'écrivent ; voir
+     * ModifierLesParametresDuMagasinAction) et le dit ouvert tant que
      * l'inscription ne l'est pas (voir Magasin::verifierQuIlEstOuvert()),
      * passe tout entier avant la clôture, ou après elle, et la voit : rien
      * ne s'écrit dans une société close. Les magasins se verrouillent après

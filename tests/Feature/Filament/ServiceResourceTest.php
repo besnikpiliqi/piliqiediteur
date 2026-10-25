@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
@@ -186,5 +187,44 @@ class ServiceResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * La fenêtre « Modifier » d'un service, ouverte avant qu'un collègue ne
+     * fixe son prix de référence, enregistre seulement le nom qu'on y
+     * corrige : le prix et son taux restent.
+     */
+    public function test_une_fenetre_ouverte_avant_la_correction_d_un_collegue_ne_l_efface_pas(): void
+    {
+        $this->connecterProprietaire();
+        $service = Service::factory()->create(['nom' => 'Diagnostic', 'prix_ttc' => null, 'taux_tva' => null]);
+        $page = Livewire::test(ManageServices::class)->mountTableAction('edit', $service);
+
+        Service::query()->findOrFail($service->id)->update(['prix_ttc' => 30, 'taux_tva' => 20]);
+        $page->setTableActionData(['nom' => 'Diagnostic complet'])->callMountedTableAction()->assertHasNoTableActionErrors();
+
+        $service->refresh();
+        $this->assertSame(['Diagnostic complet', '30.00', '20.00'], [$service->nom, $service->prix_ttc, $service->taux_tva]);
+    }
+
+    /**
+     * La fenêtre retire de la caisse le service qu'elle a lu actif ; un
+     * collègue a entre-temps changé son prix de référence, qu'elle
+     * corrige aussi. L'enregistrement est refusé, avec un message qui dit
+     * quoi faire, et rien ne s'écrit.
+     */
+    public function test_une_correction_sur_un_attribut_change_entre_temps_est_refusee(): void
+    {
+        $this->connecterProprietaire();
+        $service = Service::factory()->create(['nom' => 'Diagnostic', 'prix_ttc' => 30, 'taux_tva' => 20]);
+        $page = Livewire::test(ManageServices::class)->mountTableAction('edit', $service);
+
+        Service::query()->findOrFail($service->id)->update(['prix_ttc' => 35]);
+        $page->setTableActionData(['prix_ttc' => '32', 'actif' => false])
+            ->callMountedTableAction()
+            ->assertNotified(ModifierUneFicheAction::REFUS_PERIMEE);
+
+        $service->refresh();
+        $this->assertSame(['35.00', true], [$service->prix_ttc, $service->actif]);
     }
 }

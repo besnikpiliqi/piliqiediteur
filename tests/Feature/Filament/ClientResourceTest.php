@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
@@ -1161,5 +1162,43 @@ class ClientResourceTest extends TestCase
 
         $reponse->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)
             ->assertDontSee('<script>alert(1)</script>', false);
+    }
+
+    /**
+     * La page d'un client, ouverte avant qu'un collègue ne corrige son
+     * délai de paiement, enregistre seulement le téléphone qu'on y
+     * corrige : le délai du collègue, qui sert à l'échéance, reste.
+     */
+    public function test_une_page_ouverte_avant_la_correction_d_un_collegue_ne_l_efface_pas(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create(['nom' => 'Martin', 'telephone' => '01 02 03 04 05', 'delai_paiement_jours' => 30]);
+        $page = Livewire::test(EditClient::class, ['record' => $client->getRouteKey()]);
+
+        Client::query()->findOrFail($client->id)->update(['delai_paiement_jours' => 45]);
+        $page->fillForm(['telephone' => '06 11 22 33 44'])->call('save')->assertHasNoFormErrors();
+
+        $client->refresh();
+        $this->assertSame(['06 11 22 33 44', 45], [$client->telephone, $client->delai_paiement_jours]);
+    }
+
+    /**
+     * La page corrige le délai de paiement qu'elle a lu ; un collègue l'a
+     * changé entre-temps. L'enregistrement est refusé, avec un message qui
+     * dit quoi faire, et rien ne s'écrit.
+     */
+    public function test_une_correction_sur_un_attribut_change_entre_temps_est_refusee(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create(['nom' => 'Martin', 'telephone' => '01 02 03 04 05', 'delai_paiement_jours' => 30]);
+        $page = Livewire::test(EditClient::class, ['record' => $client->getRouteKey()]);
+
+        Client::query()->findOrFail($client->id)->update(['delai_paiement_jours' => 45]);
+        $page->fillForm(['telephone' => '06 11 22 33 44', 'delai_paiement_jours' => 60])
+            ->call('save')
+            ->assertNotified(ModifierUneFicheAction::REFUS_PERIMEE);
+
+        $client->refresh();
+        $this->assertSame(['01 02 03 04 05', 45], [$client->telephone, $client->delai_paiement_jours]);
     }
 }

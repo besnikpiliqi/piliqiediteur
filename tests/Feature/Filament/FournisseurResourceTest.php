@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FournisseurResource;
@@ -267,5 +268,43 @@ class FournisseurResourceTest extends TestCase
             ->call('callMountedTableAction');
 
         $this->assertSoftDeleted($fournisseur);
+    }
+
+    /**
+     * La page d'un fournisseur, ouverte avant qu'un collègue ne corrige
+     * son adresse e-mail, enregistre seulement le téléphone qu'on y
+     * corrige : l'adresse du collègue reste.
+     */
+    public function test_une_page_ouverte_avant_la_correction_d_un_collegue_ne_l_efface_pas(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste', 'email' => 'ancien@grossiste.test', 'telephone' => '01 02 03 04 05']);
+        $page = Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()]);
+
+        Fournisseur::query()->findOrFail($fournisseur->id)->update(['email' => 'commandes@grossiste.test']);
+        $page->fillForm(['telephone' => '04 72 00 00 00'])->call('save')->assertHasNoFormErrors();
+
+        $fournisseur->refresh();
+        $this->assertSame(['commandes@grossiste.test', '04 72 00 00 00'], [$fournisseur->email, $fournisseur->telephone]);
+    }
+
+    /**
+     * La page corrige l'adresse e-mail qu'elle a lue ; un collègue l'a
+     * changée entre-temps. L'enregistrement est refusé, avec un message
+     * qui dit quoi faire, et rien ne s'écrit.
+     */
+    public function test_une_correction_sur_un_attribut_change_entre_temps_est_refusee(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste', 'email' => 'ancien@grossiste.test', 'telephone' => '01 02 03 04 05']);
+        $page = Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()]);
+
+        Fournisseur::query()->findOrFail($fournisseur->id)->update(['email' => 'commandes@grossiste.test']);
+        $page->fillForm(['email' => 'contact@grossiste.test', 'telephone' => '04 72 00 00 00'])
+            ->call('save')
+            ->assertNotified(ModifierUneFicheAction::REFUS_PERIMEE);
+
+        $fournisseur->refresh();
+        $this->assertSame(['commandes@grossiste.test', '01 02 03 04 05'], [$fournisseur->email, $fournisseur->telephone]);
     }
 }

@@ -16,6 +16,7 @@ use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
@@ -56,6 +57,17 @@ use LogicException;
  * ValiderFactureAchatAction). Sans utilisateur connecté (facture récupérée automatiquement chez le
  * fournisseur), il n'y a aucun droit à vérifier.
  *
+ * La ligne d'un produit existant saisie à l'écran garde la fiche du
+ * produit telle qu'elle l'a lue (sa clé "fiche_lue", voir FicheLue) : elle
+ * ne corrige que ce que son auteur y a changé. Ce qu'une autre personne a
+ * changé depuis sur la fiche reste ; une correction qui porte sur un
+ * attribut changé entre-temps est refusée, avec un message (voir
+ * produitDeLaLigne()). Les produits existants des lignes se verrouillent,
+ * par identifiant croissant, avant d'être relus : leur fiche ne change
+ * plus jusqu'à la fin de l'enregistrement. Une ligne sans fiche lue (une
+ * facture récupérée automatiquement, un appel direct) dit toute la fiche
+ * de son produit.
+ *
  * Corriger le taux de TVA d'un produit existant s'inscrit au journal des
  * événements du magasin (voir JournaliseSesParametresDeConformite) : l'action
  * qui enregistre les lignes verrouille d'abord le registre fiscal, en tête
@@ -77,6 +89,12 @@ class ConstructeurLigneAchat
         'suivi_stock',
         'seuil_alerte',
     ];
+
+    /**
+     * Le refus d'une ligne qui corrige un attribut de la fiche qu'une autre
+     * personne a changé depuis que la ligne l'a lue.
+     */
+    public const REFUS_FICHE_PERIMEE = 'La fiche du produit « %s » a été modifiée depuis que cette ligne l\'a lue : choisissez de nouveau ce produit dans la ligne pour repartir de sa fiche actuelle, puis refaites votre correction.';
 
     /**
      * Ce qu'une ligne peut effacer de la fiche de son produit ; un autre
@@ -102,7 +120,10 @@ class ConstructeurLigneAchat
      * verrouille le registre puis ses produits, et l'achat, qui tiendrait
      * un produit déjà corrigé en attendant le registre, s'attendraient
      * l'un l'autre. Une facture d'achat qui ne change aucun taux ne touche
-     * pas au registre.
+     * pas au registre. Une ligne qui garde la fiche lue change le taux
+     * quand son auteur l'a corrigé (voir FicheLue::corrections()) : un taux
+     * changé entre-temps par une autre personne ne s'écrit pas ; une ligne
+     * sans fiche lue, quand le taux qu'elle dit n'est pas celui du produit.
      *
      * @param  list<array<string, mixed>>  $lignes  voir enregistrer()
      */
@@ -111,12 +132,27 @@ class ConstructeurLigneAchat
         foreach ($lignes as $donnees) {
             $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->find($donnees['produit_id']) : null;
 
-            if ($produit?->fill(Arr::only(self::attributsDuProduit($donnees), Produit::parametresDeConformite()))->isDirty()) {
+            if ($produit !== null && self::corrigeUnParametreDeConformite($produit, $donnees)) {
                 $this->registre->verrouiller(app(TenantContext::class)->magasin());
 
                 return;
             }
         }
+    }
+
+    /**
+     * La ligne corrige-t-elle le taux de TVA de ce produit existant ? Avec
+     * la fiche lue, quand son auteur l'y a changé, quoi que la fiche vaille
+     * à cet instant ; sans, quand le taux qu'elle dit n'est pas celui du
+     * produit.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    private static function corrigeUnParametreDeConformite(Produit $produit, array $donnees): bool
+    {
+        $corrections = Arr::only(self::correctionsDeLaFiche($produit, $donnees), Produit::parametresDeConformite());
+
+        return is_array($donnees['fiche_lue'] ?? null) ? $corrections !== [] : $produit->fill($corrections)->isDirty();
     }
 
     /**
@@ -129,8 +165,11 @@ class ConstructeurLigneAchat
      *
      * Le droit de créer ou de corriger un produit se demande à son auteur,
      * relu par l'action qui l'appelle (voir verifierLeDroitDEnregistrer()).
+     * Les produits existants des lignes se verrouillent d'abord, par
+     * identifiant croissant (voir Produit::verrouillerPourLeStock()), après
+     * la facture d'achat que l'action a verrouillée ou créée.
      *
-     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
+     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, fiche_lue?: array<string, mixed>|null, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
      */
     public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lignes): void
     {
@@ -138,6 +177,7 @@ class ConstructeurLigneAchat
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
+        Produit::verrouillerPourLeStock(array_column($lignes, 'produit_id'));
         $fichesDejaSaisies = $factureAchat->lignes()
             ->whereNull('produit_id')
             ->get()
@@ -465,11 +505,16 @@ class ConstructeurLigneAchat
     }
 
     /**
-     * Le produit existant, avec les corrections apportées depuis la ligne,
-     * pas encore enregistrées ; ou la fiche du nouveau produit, au taux de
-     * TVA par défaut du magasin si la ligne n'en donne pas.
+     * Le produit existant, relu sous son verrou (voir enregistrer()), avec
+     * les corrections apportées depuis la ligne, pas encore enregistrées
+     * (voir correctionsDeLaFiche()) : une correction qui porte sur un
+     * attribut changé depuis que la ligne a lu la fiche est refusée. Ou la
+     * fiche du nouveau produit, au taux de TVA par défaut du magasin si la
+     * ligne n'en donne pas.
      *
      * @param  array<string, mixed>  $donnees
+     *
+     * @throws LogicException
      */
     private function produitDeLaLigne(FactureAchat $factureAchat, array $donnees): Produit
     {
@@ -482,7 +527,13 @@ class ConstructeurLigneAchat
                 throw new LogicException("Le produit « {$produit->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.");
             }
 
-            $produit->fill($attributs);
+            $corrections = self::correctionsDeLaFiche($produit, $donnees);
+
+            if (is_array($donnees['fiche_lue'] ?? null)) {
+                FicheLue::depuis(Produit::class, $donnees['fiche_lue'])->refuserUneCorrectionPerimee($produit, $corrections, sprintf(self::REFUS_FICHE_PERIMEE, $produit->nom));
+            }
+
+            $produit->fill($corrections);
 
             // Seule une autre facture récupérée automatiquement, donc la
             // source elle-même, peut encore corriger ce que le fournisseur
@@ -504,6 +555,24 @@ class ConstructeurLigneAchat
             'taux_tva' => $donnees['taux_tva'] ?? $factureAchat->magasin->tauxTvaParDefaut(),
             ...$attributs,
         ]);
+    }
+
+    /**
+     * Ce que la ligne corrige de la fiche de ce produit existant : ce que
+     * son auteur y a changé depuis la fiche lue (voir
+     * FicheLue::corrections()) ; sans fiche lue, tout ce qu'elle en dit,
+     * qui remplace la fiche.
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private static function correctionsDeLaFiche(Produit $produit, array $donnees): array
+    {
+        $attributs = self::attributsDuProduit($donnees);
+
+        return is_array($donnees['fiche_lue'] ?? null)
+            ? FicheLue::depuis(Produit::class, $donnees['fiche_lue'])->corrections($attributs)
+            : $attributs;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresRelances;
@@ -207,5 +208,25 @@ class ParametresRelancesTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * La page, ouverte avant qu'une autre personne ne change les délais de
+     * relance, active les relances sans toucher aux délais : ceux de
+     * l'autre personne restent ; corriger aussi les délais qu'elle a
+     * changés entre-temps est refusé, et rien ne s'écrit.
+     */
+    public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresRelances::class);
+        $autrePage = Livewire::test(ParametresRelances::class);
+
+        Magasin::query()->findOrFail($magasin->id)->update(['delais_relance' => [5, 20]]);
+        $page->fillForm(['actif' => true])->call('save')->assertNotified('Relances automatiques enregistrées');
+        $autrePage->fillForm(['actif' => true])->set('data.delais', $this->delais('45', '10'))->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
+
+        $magasin->refresh();
+        $this->assertSame([true, [5, 20]], [$magasin->relances_automatiques, $magasin->delais_relance]);
     }
 }

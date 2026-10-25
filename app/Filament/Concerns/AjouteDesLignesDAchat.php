@@ -10,6 +10,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
 use App\Filament\App\Resources\ProduitResource;
 use Closure;
 use Filament\Forms\Components\Actions;
@@ -42,7 +43,11 @@ use InvalidArgumentException;
  * d'achat (voir appliquerLeBareme()). Un produit existant n'est corrigé
  * qu'à l'enregistrement de la facture, avec elle, et un nouveau produit ne
  * naît qu'à sa validation (voir ConstructeurLigneAchat) : l'état d'une
- * ligne porte donc le produit sous sa clé "produit".
+ * ligne porte donc le produit sous sa clé "produit", et, pour un produit
+ * du catalogue, sa fiche telle que la ligne l'a lue sous sa clé
+ * "fiche_lue" (voir FicheLue), lue quand le produit est choisi dans la
+ * ligne ou quand la facture s'ouvre : l'enregistrement n'écrit que ce que
+ * la personne a corrigé depuis cette lecture.
  */
 trait AjouteDesLignesDAchat
 {
@@ -84,6 +89,7 @@ trait AjouteDesLignesDAchat
     {
         return [
             Hidden::make('produit_id'),
+            Hidden::make('fiche_lue'),
             // Gardée avec la ligne pour la retrouver à sa réouverture (voir
             // appliquerLeBareme()), jamais enregistrée.
             Hidden::make('prix_vente_propose')->dehydrated(false),
@@ -218,6 +224,7 @@ trait AjouteDesLignesDAchat
 
         return [
             Section::make('Produit')->schema([
+                Hidden::make('fiche_lue'),
                 Radio::make('origine')
                     ->label('')
                     ->options([
@@ -413,13 +420,16 @@ trait AjouteDesLignesDAchat
     }
 
     /**
-     * Les valeurs du produit choisi, ou une fiche vierge.
+     * Les valeurs du produit choisi, et sa fiche telle que la ligne la lit
+     * à cet instant ; ou une fiche vierge.
      */
     private static function remplirDepuisLeProduit(?Produit $produit, Set $set): void
     {
         if ($produit === null) {
             $set('produit_id', null);
         }
+
+        $set('fiche_lue', $produit === null ? null : FicheLue::de($produit)->valeurs());
 
         foreach (self::valeursDuProduit($produit) as $champ => $valeur) {
             $set($champ, $valeur);
@@ -452,7 +462,8 @@ trait AjouteDesLignesDAchat
 
     /**
      * Les champs non modifiables de la fiche ne reviennent pas du
-     * formulaire : la ligne reprend alors ceux du produit. Un produit
+     * formulaire : la ligne reprend alors ceux de la fiche qu'elle a lue,
+     * jamais une relecture, qui passerait pour une correction. Un produit
      * archivé depuis reste celui de la ligne, que l'enregistrement refuse
      * avec un message (voir ConstructeurLigneAchat) : il ne devient jamais
      * un nouveau produit en silence.
@@ -463,11 +474,17 @@ trait AjouteDesLignesDAchat
     private static function ligneDepuisLeFormulaire(array $data): array
     {
         $produit = filled($data['produit_id'] ?? null) ? Produit::withTrashed()->find($data['produit_id']) : null;
-        $valeursDuProduit = [...($produit === null ? [] : self::valeursDuProduit($produit)), ...array_intersect_key($data, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT))];
+        $ficheLue = match (true) {
+            $produit === null => null,
+            is_array($data['fiche_lue'] ?? null) => FicheLue::depuis(Produit::class, $data['fiche_lue']),
+            default => FicheLue::de($produit),
+        };
+        $valeursDuProduit = [...($ficheLue === null ? [] : self::valeursDuProduit($ficheLue->fiche())), ...array_intersect_key($data, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT))];
         $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte((float) $valeursDuProduit['prix_vente_ttc']);
 
         return [
             'produit_id' => $produit?->id,
+            'fiche_lue' => $ficheLue?->valeurs(),
             'produit' => $valeursDuProduit,
             'quantite' => $data['quantite'],
             'prix_unitaire_ht' => self::prixEnTexte((float) $data['prix_unitaire_ht']),
@@ -488,6 +505,7 @@ trait AjouteDesLignesDAchat
             ...($ligne['produit'] ?? []),
             'origine' => filled($ligne['produit_id'] ?? null) ? self::PRODUIT_EXISTANT : self::NOUVEAU_PRODUIT,
             'produit_id' => $ligne['produit_id'] ?? null,
+            'fiche_lue' => $ligne['fiche_lue'] ?? null,
             'quantite' => $ligne['quantite'] ?? 1,
             'prix_unitaire_ht' => $ligne['prix_unitaire_ht'] ?? null,
             'remise_pourcentage' => $ligne['remise_pourcentage'] ?? 0,
@@ -498,9 +516,9 @@ trait AjouteDesLignesDAchat
 
     /**
      * Une ligne déjà enregistrée, telle que la facture l'affiche à sa
-     * modification : le produit tel qu'il est aujourd'hui, ou la fiche du
-     * nouveau produit que le brouillon garde jusqu'à sa validation ; la
-     * ligne telle qu'elle a été achetée.
+     * modification : le produit tel qu'il est aujourd'hui, avec sa fiche
+     * ainsi lue, ou la fiche du nouveau produit que le brouillon garde
+     * jusqu'à sa validation ; la ligne telle qu'elle a été achetée.
      *
      * @return array<string, mixed>
      */
@@ -508,6 +526,7 @@ trait AjouteDesLignesDAchat
     {
         return [
             'produit_id' => $ligne->produit_id,
+            'fiche_lue' => $ligne->produit === null ? null : FicheLue::de($ligne->produit)->valeurs(),
             'produit' => self::valeursDuProduit($ligne->produit ?? new Produit($ligne->nouveau_produit)),
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,

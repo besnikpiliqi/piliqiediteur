@@ -3,15 +3,13 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Tenancy\Models\Magasin;
-use Filament\Facades\Filament;
+use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 
 /**
@@ -26,11 +24,12 @@ use Filament\Pages\Page;
  * le magasin envers ses clients : ils se règlent avec « Paramètres du
  * magasin »
  * (PermissionRegistry::PARAMETRES_GERER). Seul le magasin actif est lu et
- * modifié.
+ * modifié, et seulement ce que la personne y a corrigé (voir
+ * EnregistreLesParametresDuMagasin).
  */
 class ParametresFactures extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use EnregistreLesParametresDuMagasin, InteractsWithForms;
 
     /**
      * Les champs de la page, tous enregistrés tels quels sur le magasin.
@@ -61,7 +60,7 @@ class ParametresFactures extends Page implements HasForms
 
     public function mount(): void
     {
-        $this->form->fill($this->magasin()->only(self::CHAMPS));
+        $this->form->fill($this->lireLesParametres()->only(self::CHAMPS));
     }
 
     public function form(Form $form): Form
@@ -94,10 +93,9 @@ class ParametresFactures extends Page implements HasForms
 
     public function save(): void
     {
-        $this->magasin()->update($this->form->getState());
-        $this->form->fill($this->magasin()->only(self::CHAMPS));
-
-        Notification::make()->title('Paramètres des factures enregistrés')->success()->send();
+        if ($this->enregistrerLesParametres(PermissionRegistry::PARAMETRES_GERER, $this->form->getState(), 'Paramètres des factures enregistrés')) {
+            $this->form->fill($this->lireLesParametres()->only(self::CHAMPS));
+        }
     }
 
     private static function mention(string $champ, string $libelle): Textarea
@@ -112,11 +110,5 @@ class ParametresFactures extends Page implements HasForms
                 'required' => 'Cette mention est obligatoire sur une facture à un professionnel.',
                 'max' => 'Au plus 500 caractères.',
             ]);
-    }
-
-    private function magasin(): Magasin
-    {
-        /** @var Magasin */
-        return Filament::getTenant();
     }
 }

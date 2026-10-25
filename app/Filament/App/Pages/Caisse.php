@@ -398,7 +398,7 @@ class Caisse extends Page implements HasForms
                         ->schema(ClientResource::creationRapideSchema()))
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
-                    ->createOptionUsing(fn (array $data) => Client::create($data)->getKey())
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
                     ->afterStateUpdated(fn (mixed $state) => $this->preselectionnerLeModePrefere($state))
                     ->required(),
             ]),

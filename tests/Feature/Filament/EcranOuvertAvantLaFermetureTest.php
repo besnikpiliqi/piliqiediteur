@@ -6,7 +6,9 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -18,17 +20,28 @@ use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Livewire\SelecteurDeClients;
+use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Pages\CoordonneesMagasin;
+use App\Filament\App\Pages\ParametresFactures;
+use App\Filament\App\Pages\ParametresPrixDeVente;
+use App\Filament\App\Pages\ParametresRelances;
+use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
+use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
+use App\Filament\App\Resources\FournisseurResource\Pages\EditFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
 use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
+use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -47,6 +60,11 @@ use Tests\TestCase;
  * base sous verrou au moment d'écrire. Le refus se lit en notification,
  * et le document ou la fiche reste tel qu'il était ; une ligne cochée que
  * l'action groupée n'a pas pu retirer reste cochée.
+ *
+ * De même pour le formulaire d'une fiche (la créer ou la modifier, sur sa
+ * page, dans sa fenêtre ou dans la création rapide d'un client) ou d'une
+ * page de paramètres du magasin, rempli avant et enregistré après : rien
+ * ne s'écrit.
  */
 class EcranOuvertAvantLaFermetureTest extends TestCase
 {
@@ -125,6 +143,78 @@ class EcranOuvertAvantLaFermetureTest extends TestCase
 
         $this->confirmer($ecran, $bouton, LecteurDesDroits::REFUS);
         $resteTelQuIlEtait($enregistrement);
+    }
+
+    /**
+     * Le formulaire ouvert et rempli ; son enregistrement ; ce qui doit en
+     * rester, ou ne pas exister.
+     *
+     * @return array<string, array{0: Closure(): Testable, 1: Closure(Testable): Testable, 2: Closure(): void}>
+     */
+    public static function formulaires(): array
+    {
+        $enregistrer = static fn (Testable $ecran): Testable => $ecran->call('save');
+        $creer = static fn (Testable $ecran): Testable => $ecran->call('create');
+        $fenetreDeLaListe = static fn (Testable $ecran): Testable => $ecran->callMountedTableAction();
+        $fenetreDeLaPage = static fn (Testable $ecran): Testable => $ecran->callMountedAction();
+        $fenetreDuChamp = static fn (Testable $ecran): Testable => $ecran->callMountedFormComponentAction();
+        $nouveauClient = ['nom' => 'Nouveau client', 'type_client' => TypeClient::Particulier->value];
+        $aucun = static fn (string $classe, string $nom): Closure => static fn () => self::assertSame(0, $classe::withoutGlobalScopes()->where('nom', $nom)->count());
+        $magasin = static fn (): Magasin => app(TenantContext::class)->magasin()->fresh();
+
+        return [
+            'modifier un client sur sa page' => [static fn (): Testable => Livewire::test(EditClient::class, ['record' => Client::factory()->create(['nom' => 'Martin'])->getRouteKey()])->fillForm(['nom' => 'Martin et fils']), $enregistrer, $aucun(Client::class, 'Martin et fils')],
+            'modifier un fournisseur sur sa page' => [static fn (): Testable => Livewire::test(EditFournisseur::class, ['record' => Fournisseur::factory()->create(['nom' => 'Grossiste'])->getRouteKey()])->fillForm(['nom' => 'Grossiste du Sud']), $enregistrer, $aucun(Fournisseur::class, 'Grossiste du Sud')],
+            'modifier un produit sur sa page' => [static fn (): Testable => Livewire::test(EditProduit::class, ['record' => Produit::factory()->create(['nom' => 'Coque'])->getRouteKey()])->fillForm(['nom' => 'Coque rouge']), $enregistrer, $aucun(Produit::class, 'Coque rouge')],
+            'modifier un service dans sa fenêtre' => [static fn (): Testable => Livewire::test(ManageServices::class)->mountTableAction('edit', Service::factory()->create(['nom' => 'Diagnostic']))->setTableActionData(['nom' => 'Diagnostic complet']), $fenetreDeLaListe, $aucun(Service::class, 'Diagnostic complet')],
+            'créer un client sur sa page' => [static fn (): Testable => Livewire::test(CreateClient::class)->fillForm($nouveauClient), $creer, $aucun(Client::class, 'Nouveau client')],
+            'créer un fournisseur sur sa page' => [static fn (): Testable => Livewire::test(CreateFournisseur::class)->fillForm(['nom' => 'Nouveau fournisseur']), $creer, $aucun(Fournisseur::class, 'Nouveau fournisseur')],
+            'créer un service dans sa fenêtre' => [static fn (): Testable => Livewire::test(ManageServices::class)->mountAction('create')->setActionData(['nom' => 'Nouveau service', 'actif' => true]), $fenetreDeLaPage, $aucun(Service::class, 'Nouveau service')],
+            'créer un client depuis la caisse' => [static fn (): Testable => Livewire::test(Caisse::class)->mountFormComponentAction('client_id', 'createOption')->setFormComponentActionData($nouveauClient), $fenetreDuChamp, $aucun(Client::class, 'Nouveau client')],
+            'créer un client depuis une facture' => [static fn (): Testable => Livewire::test(CreateFacture::class)->mountFormComponentAction('client_id', 'createOption')->setFormComponentActionData($nouveauClient), $fenetreDuChamp, $aucun(Client::class, 'Nouveau client')],
+            'créer un client depuis le tableau des clients' => [static fn (): Testable => Livewire::test(SelecteurDeClients::class)->mountTableAction('nouveauClient')->setTableActionData($nouveauClient), $fenetreDeLaListe, $aucun(Client::class, 'Nouveau client')],
+            'créer un service depuis une vente' => [static fn (): Testable => Livewire::test(CreateFacture::class)->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')->setFormComponentActionData(['nouveau_service' => 'Nouveau service']), $fenetreDuChamp, $aucun(Service::class, 'Nouveau service')],
+            'régler les factures' => [static fn (): Testable => Livewire::test(ParametresFactures::class)->fillForm(['delai_paiement_jours' => '45']), $enregistrer, static fn () => self::assertSame(30, $magasin()->delai_paiement_jours)],
+            'régler les coordonnées' => [static fn (): Testable => Livewire::test(CoordonneesMagasin::class)->fillForm(['telephone' => '04 72 00 00 00']), $enregistrer, static fn () => self::assertNull($magasin()->telephone)],
+            'régler les prix de vente' => [static fn (): Testable => Livewire::test(ParametresPrixDeVente::class)->fillForm(['actif' => true]), $enregistrer, static fn () => self::assertFalse($magasin()->prix_vente_automatique)],
+            'régler les relances' => [static fn (): Testable => Livewire::test(ParametresRelances::class)->fillForm(['actif' => true]), $enregistrer, static fn () => self::assertFalse($magasin()->relances_automatiques)],
+        ];
+    }
+
+    /**
+     * @param  Closure(): Testable  $ouvrir
+     * @param  Closure(Testable): Testable  $enregistrer
+     * @param  Closure(): void  $rienNEstEcrit
+     */
+    #[DataProvider('formulaires')]
+    public function test_un_formulaire_enregistre_apres_la_fermeture_du_magasin_est_refuse_et_le_dit(Closure $ouvrir, Closure $enregistrer, Closure $rienNEstEcrit): void
+    {
+        [$magasin] = $this->dansLaBoutique();
+        $ecran = $ouvrir();
+
+        app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), Magasin::query()->findOrFail($magasin->id), MotifFermeture::Temporaire, 'password');
+        $this->assertFalse(app(TenantContext::class)->magasin()->estFerme());
+
+        $enregistrer($ecran)->assertNotified(self::MAGASIN_FERME);
+        $rienNEstEcrit();
+    }
+
+    /**
+     * @param  Closure(): Testable  $ouvrir
+     * @param  Closure(Testable): Testable  $enregistrer
+     * @param  Closure(): void  $rienNEstEcrit
+     */
+    #[DataProvider('formulaires')]
+    public function test_un_formulaire_enregistre_apres_la_suspension_de_son_auteur_est_refuse_et_le_dit(Closure $ouvrir, Closure $enregistrer, Closure $rienNEstEcrit): void
+    {
+        [$magasin, $responsable] = $this->dansLaBoutique();
+        $ecran = $ouvrir();
+
+        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), User::query()->findOrFail($responsable->id));
+        $this->assertTrue(auth()->user()->estActif());
+
+        $enregistrer($ecran)->assertNotified(LecteurDesDroits::REFUS);
+        $rienNEstEcrit();
     }
 
     /**

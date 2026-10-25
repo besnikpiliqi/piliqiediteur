@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -123,5 +124,25 @@ class CoordonneesMagasinTest extends TestCase
         $this->dansLeMagasin($magasin->fresh(), $this->proprietaireDe($magasin));
 
         Livewire::test(CoordonneesMagasin::class)->assertForbidden();
+    }
+
+    /**
+     * La page, ouverte avant qu'une autre personne n'ajoute une référence
+     * d'acheteur, enregistre seulement le téléphone qu'on y corrige : la
+     * référence reste ; corriger aussi les références que l'autre personne
+     * a changées entre-temps est refusé, et rien ne s'écrit.
+     */
+    public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
+        $page = Livewire::test(CoordonneesMagasin::class);
+        $autrePage = Livewire::test(CoordonneesMagasin::class);
+
+        $magasin->fresh()->update(['references_acheteur' => ['CLI-4521']]);
+        $page->fillForm(['telephone' => '04 72 00 00 00'])->call('save')->assertNotified('Coordonnées du magasin enregistrées');
+        $autrePage->fillForm(['references_acheteur' => ['ACH-9']])->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
+
+        $this->assertSame(['04 72 00 00 00', ['CLI-4521']], [$magasin->fresh()->telephone, $magasin->fresh()->references_acheteur]);
     }
 }

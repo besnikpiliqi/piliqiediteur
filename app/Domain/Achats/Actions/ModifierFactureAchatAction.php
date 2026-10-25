@@ -41,7 +41,11 @@ use LogicException;
  *
  * Comme CreerFactureAchatAction, elle reçoit le fournisseur déjà résolu par
  * une requête limitée au magasin, jamais un fournisseur_id brut venu du
- * formulaire, et quand une ligne change le taux de TVA d'un produit, le
+ * formulaire ; elle le relit sous un verrou partagé, après la facture
+ * d'achat : archivé depuis que l'écran l'a lu, ou par une requête
+ * simultanée qui passe avant ce verrou, il est vu ; archivé ensuite, il
+ * attend la fin de la correction (voir ArchiverUneFicheAction). Quand une
+ * ligne change le taux de TVA d'un produit, le
  * registre fiscal du magasin est le premier verrou de sa transaction,
  * avant la facture d'achat (voir
  * ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
@@ -54,6 +58,13 @@ use LogicException;
  * passe donc tout entière avant ou après la correction : une correction
  * qui attendait une cession est refusée, et aucune réception corrigée
  * n'entre dans le stock que la cession a sorti.
+ *
+ * Une facture déjà validée verrouille ensuite, par identifiant croissant,
+ * les produits que sa réception a reçus et ceux que sa correction reçoit
+ * (voir Produit::verrouillerPourLeStock()), avant de les dire encore au
+ * catalogue : aucun ne s'archive au milieu de sa correction, qui ne
+ * corrige jamais le stock d'un produit archivé ni ne finit sur un
+ * produit introuvable.
  *
  * Son auteur est relu sous le verrou de sa ligne, après le magasin et
  * avant la facture d'achat et ses produits : il doit pouvoir saisir les
@@ -103,6 +114,15 @@ class ModifierFactureAchatAction
             $this->lecteur->exiger($compte, 'update', $magasin, $factureAchat);
 
             $estValidee = $factureAchat->statut === StatutFactureAchat::Validee;
+            $fournisseur = Fournisseur::withTrashed()->whereKey($fournisseur->getKey())->sharedLock()->firstOrFail();
+
+            // Les produits que la réception a reçus et ceux que sa correction
+            // reçoit, relus sous verrou avant d'être contrôlés : un archivage
+            // simultané passe tout entier avant la correction, qui le voit,
+            // ou après elle.
+            if ($estValidee) {
+                Produit::verrouillerPourLeStock([...$factureAchat->lignes()->pluck('produit_id'), ...array_column($lignes, 'produit_id')]);
+            }
 
             if ($estValidee && ($produitArchive = $factureAchat->produitArchive()) !== null) {
                 throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue avant de corriger cette facture d'achat.");

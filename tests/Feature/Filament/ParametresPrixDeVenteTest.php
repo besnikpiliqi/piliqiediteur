@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresPrixDeVente;
@@ -238,5 +239,26 @@ class ParametresPrixDeVenteTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * La page, ouverte avant qu'une autre personne n'enregistre son propre
+     * barème, active le calcul sans toucher au barème : celui de l'autre
+     * personne reste ; corriger aussi le barème qu'elle a changé
+     * entre-temps est refusé, et rien ne s'écrit.
+     */
+    public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresPrixDeVente::class);
+        $autrePage = Livewire::test(ParametresPrixDeVente::class);
+        $bareme = new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 5.0]], 20.0, false);
+
+        Magasin::query()->findOrFail($magasin->id)->update(['bareme_prix_vente' => $bareme]);
+        $page->fillForm(['actif' => true])->call('save')->assertNotified('Barème de prix de vente enregistré');
+        $autrePage->fillForm(['actif' => true, 'benefice_au_dela' => 80])->call('save')->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
+
+        $this->assertTrue($magasin->fresh()->prix_vente_automatique);
+        $this->assertEquals($bareme, $magasin->fresh()->bareme_prix_vente);
     }
 }

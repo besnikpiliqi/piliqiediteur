@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresFactures;
@@ -153,5 +154,42 @@ class ParametresFacturesTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * La page, ouverte avant qu'une autre personne ne change le délai de
+     * paiement, enregistre seulement la mention qu'on y corrige : le délai
+     * de l'autre personne reste, et la page le montre ensuite.
+     */
+    public function test_une_page_ouverte_avant_la_correction_d_une_autre_personne_ne_l_efface_pas(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresFactures::class);
+
+        Magasin::query()->findOrFail($magasin->id)->update(['delai_paiement_jours' => 45]);
+        $page->fillForm(['mention_escompte' => 'Escompte de 1 % pour paiement sous 8 jours.'])
+            ->call('save')
+            ->assertNotified('Paramètres des factures enregistrés')
+            ->assertFormSet(['delai_paiement_jours' => 45]);
+
+        $this->assertSame([45, 'Escompte de 1 % pour paiement sous 8 jours.'], [$magasin->fresh()->delai_paiement_jours, $magasin->fresh()->mention_escompte]);
+    }
+
+    /**
+     * La page corrige le délai qu'elle a lu ; une autre personne l'a
+     * changé entre-temps. L'enregistrement est refusé, avec un message qui
+     * dit quoi faire, et rien ne s'écrit.
+     */
+    public function test_une_correction_d_un_parametre_change_entre_temps_est_refusee(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresFactures::class);
+
+        Magasin::query()->findOrFail($magasin->id)->update(['delai_paiement_jours' => 45]);
+        $page->fillForm(['delai_paiement_jours' => '60', 'mention_escompte' => 'Escompte de 1 % pour paiement sous 8 jours.'])
+            ->call('save')
+            ->assertNotified(ModifierLesParametresDuMagasinAction::REFUS_PERIMES);
+
+        $this->assertSame([45, 'Pas d\'escompte pour paiement anticipé.'], [$magasin->fresh()->delai_paiement_jours, $magasin->fresh()->mention_escompte]);
     }
 }

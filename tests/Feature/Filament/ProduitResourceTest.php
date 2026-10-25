@@ -6,6 +6,8 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -753,5 +755,102 @@ class ProduitResourceTest extends TestCase
 
         $this->assertSame(['Écran OLED', $fournisseur->id], [$produit->fresh()->nom, $produit->fresh()->fournisseur_id]);
         $this->assertSame('Grossiste fermé', $produit->fresh()->fournisseur->nom);
+    }
+
+    /**
+     * La page d'un produit, ouverte avant qu'une facture d'achat ne
+     * corrige son prix de vente, enregistre seulement le nom qu'on y
+     * corrige : le prix de la facture d'achat reste.
+     */
+    public function test_une_page_ouverte_avant_une_correction_par_une_facture_d_achat_ne_l_efface_pas(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $page = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
+
+        app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'produit' => ['prix_vente_ttc' => '18'], 'quantite' => 1, 'prix_unitaire_ht' => '5.00'],
+        ]);
+        $page->fillForm(['nom' => 'Coque iPhone 15 Pro'])->call('save')->assertHasNoFormErrors();
+
+        $produit->refresh();
+        $this->assertSame(['Coque iPhone 15 Pro', '18.00'], [$produit->nom, $produit->prix_vente_ttc]);
+    }
+
+    /**
+     * La page corrige le prix de vente qu'elle a lu, 15,00 € vers
+     * 16,00 € ; une autre personne l'a entre-temps passé à 18,00 €.
+     * L'enregistrement est refusé, avec un message qui dit quoi faire, et
+     * rien ne s'écrit.
+     */
+    public function test_une_page_ouverte_refuse_de_reecrire_un_prix_change_depuis_son_ouverture(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $page = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
+
+        Produit::query()->findOrFail($produit->id)->update(['prix_vente_ttc' => 18]);
+        $page->fillForm(['nom' => 'Coque iPhone 15 Pro', 'prix_vente_ttc' => '16'])
+            ->call('save')
+            ->assertNotified('Cette fiche a été modifiée par une autre personne depuis que vous l\'avez ouverte : rechargez la page pour repartir de la fiche actuelle, puis refaites votre correction.');
+
+        $produit->refresh();
+        $this->assertSame(['Coque iPhone 15', '18.00'], [$produit->nom, $produit->prix_vente_ttc]);
+    }
+
+    /**
+     * Un taux de TVA corrigé depuis la page s'inscrit au journal des
+     * événements, une fois, avec son ancienne et sa nouvelle valeur ; un
+     * enregistrement qui ne le change pas n'y inscrit rien.
+     */
+    public function test_un_taux_corrige_depuis_la_page_s_inscrit_une_fois_au_journal_des_evenements(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Livre de recettes', 'reference' => 'LIV-01', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['taux_tva' => '5.5'])->call('save')->assertHasNoFormErrors();
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['nom' => 'Livre de cuisine'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame(['5.50', 'Livre de cuisine'], [$produit->fresh()->taux_tva, $produit->fresh()->nom]);
+        $this->assertSame([[
+            'parametre' => 'taux_tva',
+            'produit' => ['id' => $produit->id, 'reference' => 'LIV-01', 'nom' => 'Livre de recettes'],
+            'ancienne_valeur' => '20.00',
+            'nouvelle_valeur' => '5.50',
+        ]], EnregistrementFiscal::query()
+            ->where('type', (string) CodeEvenement::ParametreDeConformite->value)
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->filter(fn (array $details): bool => $details['parametre'] === 'taux_tva')
+            ->values()
+            ->all());
+    }
+
+    /**
+     * Le registre fiscal, que les ventes attendent, ne se verrouille que
+     * pour un changement de taux de TVA, et alors avant l'écriture du
+     * produit : une autre correction de la fiche ne fait pas attendre les
+     * ventes.
+     */
+    public function test_seul_un_changement_de_taux_verrouille_le_registre_avant_le_produit(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Livre de recettes', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $requetes = [];
+        DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['nom' => 'Livre de cuisine'])->call('save')->assertHasNoFormErrors();
+        $sansTaux = $requetes;
+        $requetes = [];
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['taux_tva' => '5.5'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame([], array_values(array_filter($sansTaux, fn (string $sql): bool => str_contains($sql, '"tetes_registre_fiscal"'))));
+        $verrouDuRegistre = array_key_first(array_filter($requetes, fn (string $sql): bool => str_contains($sql, '"tetes_registre_fiscal"')));
+        $ecritureDuProduit = array_key_first(array_filter($requetes, fn (string $sql): bool => str_starts_with($sql, 'update "produits"')));
+        $this->assertNotNull($verrouDuRegistre);
+        $this->assertLessThan($ecritureDuProduit, $verrouDuRegistre);
+        $this->assertSame(['Livre de cuisine', '5.50'], [$produit->fresh()->nom, $produit->fresh()->taux_tva]);
     }
 }

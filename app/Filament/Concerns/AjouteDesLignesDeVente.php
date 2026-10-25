@@ -46,6 +46,7 @@ use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 use Livewire\Component as LivewireComponent;
 use Livewire\Livewire;
+use LogicException;
 use WeakMap;
 
 /**
@@ -1028,7 +1029,7 @@ trait AjouteDesLignesDeVente
         if ($nouveauService !== '') {
             try {
                 $nouveau = app(TrouverOuCreerServiceAction::class)->handle(auth()->user(), $nouveauService, $data['prix_ttc'] ?? null, $data['taux_tva'] ?? null);
-            } catch (InvalidArgumentException|AuthorizationException $exception) {
+            } catch (LogicException|AuthorizationException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
                 return;

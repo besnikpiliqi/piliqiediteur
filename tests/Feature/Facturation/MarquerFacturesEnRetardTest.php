@@ -46,10 +46,10 @@ class MarquerFacturesEnRetardTest extends TestCase
 
     public function test_une_facture_emise_dont_lecheance_est_depassee_passe_en_retard(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -58,7 +58,7 @@ class MarquerFacturesEnRetardTest extends TestCase
 
     public function test_une_facture_partiellement_payee_dont_lecheance_est_depassee_passe_en_retard(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
@@ -68,7 +68,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         ], [['facture_id' => $facture->id, 'montant' => 50]]);
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
         app(TenantContext::class)->clear();
-        $this->travelTo('2026-10-02 10:00:00');
+        $this->travelTo(self::aParis('2026-10-02 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -83,7 +83,7 @@ class MarquerFacturesEnRetardTest extends TestCase
      */
     public function test_une_facture_dont_l_echeance_est_aujourd_hui_n_est_en_retard_que_le_lendemain(): void
     {
-        $this->travelTo('2026-10-09 00:15:00');
+        $this->travelTo(self::aParis('2026-10-09 00:15:00'));
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
         app(TenantContext::class)->clear();
@@ -91,7 +91,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
 
-        $this->travelTo('2026-10-10 00:15:00');
+        $this->travelTo(self::aParis('2026-10-10 00:15:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
         $this->assertSame(['2026-10-09', StatutFacture::EnRetard], [$facture->fresh()->date_echeance->toDateString(), $facture->fresh()->statut]);
@@ -109,13 +109,13 @@ class MarquerFacturesEnRetardTest extends TestCase
 
     public function test_une_facture_deja_payee_nest_pas_touchee_meme_echue(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
 
         app(TenantContext::class)->set($magasin);
         $facture->forceFill(['statut' => StatutFacture::Payee])->save();
-        $this->travelTo('2026-10-04 10:00:00');
+        $this->travelTo(self::aParis('2026-10-04 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -131,7 +131,7 @@ class MarquerFacturesEnRetardTest extends TestCase
     public function test_une_facture_qui_ne_doit_rien_ne_passe_jamais_en_retard(): void
     {
         Notification::fake();
-        $this->travelTo('2026-09-01 10:00:00');
+        $this->travelTo(self::aParis('2026-09-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -139,7 +139,7 @@ class MarquerFacturesEnRetardTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100],
         ]));
         app(TenantContext::class)->clear();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -153,12 +153,12 @@ class MarquerFacturesEnRetardTest extends TestCase
      */
     public function test_un_magasin_suspendu_est_traite(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
 
         $magasin->forceFill(['suspendu_le' => now()])->save();
-        $this->travelTo('2026-10-03 10:00:00');
+        $this->travelTo(self::aParis('2026-10-03 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -172,7 +172,7 @@ class MarquerFacturesEnRetardTest extends TestCase
      */
     public function test_le_proprietaire_est_prevenu_des_factures_de_son_magasin_passees_en_retard(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $proprietaireA = User::factory()->create();
         $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
         $vendeurA = $this->membre($magasinA, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@boutique-a.fr']);
@@ -182,7 +182,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $factureA2 = $this->emettreFacture($magasinA, 4);
         $this->emettreFacture($magasinA, 6);
         $factureB = $this->emettreFacture($magasinB, 3);
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -220,14 +220,14 @@ class MarquerFacturesEnRetardTest extends TestCase
      */
     public function test_une_facture_en_retard_payee_en_partie_reste_en_retard_sans_nouvelle_notification(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $facture = $this->emettreFacture($magasin, 0);
-        $this->travelTo('2026-10-02 00:15:00');
+        $this->travelTo(self::aParis('2026-10-02 00:15:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
-        $this->travelTo('2026-10-02 15:00:00');
+        $this->travelTo(self::aParis('2026-10-02 15:00:00'));
         app(TenantContext::class)->set($magasin);
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
@@ -236,7 +236,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         ], [['facture_id' => $facture->id, 'montant' => 20]]);
         $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
 
-        $this->travelTo('2026-10-03 00:15:00');
+        $this->travelTo(self::aParis('2026-10-03 00:15:00'));
         app(TenantContext::class)->clear();
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -249,11 +249,11 @@ class MarquerFacturesEnRetardTest extends TestCase
      */
     public function test_la_notification_nomme_les_dix_premieres_factures_et_compte_les_autres(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $numeros = collect(range(1, 11))->map(fn (): string => $this->emettreFacture($magasin, 0)->numero);
-        $this->travelTo('2026-10-04 10:00:00');
+        $this->travelTo(self::aParis('2026-10-04 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -271,13 +271,13 @@ class MarquerFacturesEnRetardTest extends TestCase
      */
     public function test_une_facture_payee_pendant_le_passage_en_retard_n_est_pas_annoncee(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $payee = $this->emettreFacture($magasin, 0);
         $enRetard = $this->emettreFacture($magasin, 0);
         app(TenantContext::class)->clear();
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $this->payerApresLaLectureDesFacturesEchues($payee);
 
         $this->artisan('app:marquer-factures-en-retard')
@@ -292,12 +292,12 @@ class MarquerFacturesEnRetardTest extends TestCase
 
     public function test_traite_plusieurs_magasins_independamment(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasinA = Magasin::factory()->create();
         $magasinB = Magasin::factory()->create();
         $factureA = $this->emettreFacture($magasinA, 0);
         $factureB = $this->emettreFacture($magasinB, 0);
-        $this->travelTo('2026-10-02 10:00:00');
+        $this->travelTo(self::aParis('2026-10-02 10:00:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 

@@ -93,22 +93,22 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
 
     public function test_la_cloture_du_jour_n_est_jamais_bloquee_et_ferme_d_office_les_caisses_personnelles_ouvertes(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $lea = $this->vendeur($magasin, 'Léa Durand');
         $ticketDePaul = $this->vendreUnTicket($paul);
         $this->vendreUnTicket($lea);
         $releveDeLea = app(FermerSaCaisseAction::class)->handle($lea, $lea);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $this->cloturerLaJourneeDepuisLePanneau();
 
         $this->assertSame(1, ClotureCaisse::query()->count());
         $releveDePaul = ClotureCaissePersonnelle::query()->where('vendeur_id', $paul->id)->sole();
         $this->assertSame(
-            [ModeFermetureCaisse::Automatique, null, [$ticketDePaul->id], '12.00', '2026-10-09 19:00:00'],
-            [$releveDePaul->mode_fermeture, $releveDePaul->fermee_par, $releveDePaul->factures->modelKeys(), $releveDePaul->total_ttc, $releveDePaul->jusqu_au->format('Y-m-d H:i:s')],
+            [ModeFermetureCaisse::Automatique, null, [$ticketDePaul->id], '12.00', self::aParis('2026-10-09 19:00:00')->getTimestamp()],
+            [$releveDePaul->mode_fermeture, $releveDePaul->fermee_par, $releveDePaul->factures->modelKeys(), $releveDePaul->total_ttc, $releveDePaul->jusqu_au->getTimestamp()],
         );
         $this->assertSame([$releveDeLea->id], ClotureCaissePersonnelle::query()->where('vendeur_id', $lea->id)->pluck('id')->all());
         $this->assertTrue(app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->isEmpty());
@@ -116,14 +116,14 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
 
     public function test_le_releve_ferme_d_office_porte_la_mention_fermee_automatiquement(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $lea = $this->vendeur($magasin, 'Léa Durand');
         $this->vendreUnTicket($paul);
         $this->vendreUnTicket($lea);
         $releveDeLea = app(FermerSaCaisseAction::class)->handle($lea, $lea);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->cloturerLaJourneeDepuisLePanneau();
         $releveDePaul = ClotureCaissePersonnelle::query()->where('vendeur_id', $paul->id)->sole();
 
@@ -141,20 +141,20 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
      */
     public function test_minuit_ferme_les_caisses_personnelles_restees_ouvertes_meme_apres_une_cloture_manuelle(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $ticket = $this->vendreUnTicket($paul);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->cloturerLaJourneeDepuisLePanneau();
-        $this->travelTo('2026-10-09 20:00:00');
+        $this->travelTo(self::aParis('2026-10-09 20:00:00'));
         $this->actingAs($paul);
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $ticket->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
             'recu_le' => '2026-10-09',
         ], [['facture_id' => $ticket->id, 'montant' => 12]]);
-        $this->travelTo('2026-10-10 00:00:00');
+        $this->travelTo(self::aParis('2026-10-10 00:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')
             ->expectsOutputToContain('1 caisse(s) personnelle(s) fermée(s) automatiquement.')
@@ -164,19 +164,19 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $this->assertSame(1, ClotureCaisse::query()->count());
         $releveDeMinuit = ClotureCaissePersonnelle::query()->where('vendeur_id', $paul->id)->latest('id')->firstOrFail();
         $this->assertSame(
-            [ModeFermetureCaisse::Automatique, 0, ['especes' => '12.00'], '2026-10-09 23:59:59'],
-            [$releveDeMinuit->mode_fermeture, $releveDeMinuit->nombre_ventes, $releveDeMinuit->encaissements, $releveDeMinuit->jusqu_au->format('Y-m-d H:i:s')],
+            [ModeFermetureCaisse::Automatique, 0, ['especes' => '12.00'], self::aParis('2026-10-09 23:59:59')->getTimestamp()],
+            [$releveDeMinuit->mode_fermeture, $releveDeMinuit->nombre_ventes, $releveDeMinuit->encaissements, $releveDeMinuit->jusqu_au->getTimestamp()],
         );
         $this->assertSame(2, ClotureCaissePersonnelle::query()->where('vendeur_id', $paul->id)->count());
     }
 
     public function test_un_responsable_ferme_la_caisse_d_un_vendeur(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $ticket = $this->vendreUnTicket($paul);
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
 
         Livewire::test(ListClotureCaissePersonnelles::class)
             ->assertActionVisible('fermer_la_caisse_d_un_vendeur')
@@ -353,21 +353,21 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
      */
     public function test_une_operation_posterieure_a_la_borne_n_est_pas_comptee(): void
     {
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $ticketDeLaVeille = $this->vendreUnTicket($paul);
-        $this->travelTo('2026-10-10 00:00:30');
+        $this->travelTo(self::aParis('2026-10-10 00:00:30'));
         $ticketDApresMinuit = $this->vendreUnTicket($paul);
-        $this->travelTo('2026-10-10 00:01:00');
+        $this->travelTo(self::aParis('2026-10-10 00:01:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
         $releve = ClotureCaissePersonnelle::query()->sole();
         $this->assertSame(
-            [[$ticketDeLaVeille->id], '12.00', '2026-10-09 23:59:59'],
-            [$releve->factures->modelKeys(), $releve->total_ttc, $releve->jusqu_au->format('Y-m-d H:i:s')],
+            [[$ticketDeLaVeille->id], '12.00', self::aParis('2026-10-09 23:59:59')->getTimestamp()],
+            [$releve->factures->modelKeys(), $releve->total_ttc, $releve->jusqu_au->getTimestamp()],
         );
         $this->assertTrue(Facture::query()->nonFermeesParLeVendeur($paul->id)->whereKey($ticketDApresMinuit->id)->exists());
         $this->assertSame([$paul->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(CarbonImmutable::parse('2026-10-10'))->pluck('id')->all());
@@ -382,11 +382,11 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
     public function test_un_echec_de_fermeture_d_office_laisse_la_cloture_du_jour_faite(): void
     {
         Exceptions::fake([RuntimeException::class]);
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $this->vendreUnTicket($paul);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->mock(FermerSaCaisseAction::class)->shouldReceive('fermerDOffice')->andThrow(new RuntimeException('Panne simulée'));
 
         Livewire::test(ListClotureCaisses::class)
@@ -398,7 +398,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $this->assertDatabaseCount('clotures_caisse_personnelles', 0);
 
         $this->app->forgetInstance(FermerSaCaisseAction::class);
-        $this->travelTo('2026-10-10 00:00:00');
+        $this->travelTo(self::aParis('2026-10-10 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);

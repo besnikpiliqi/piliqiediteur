@@ -41,7 +41,7 @@ class VerifierIntegriteActionTest extends TestCase
      */
     private function magasinActif(): Magasin
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
 

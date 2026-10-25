@@ -55,7 +55,7 @@ class CorrectionParAvoirTest extends TestCase
         $ticketCorrige = $ticket->fresh();
         $this->assertSame(StatutFacture::Payee, $ticketCorrige->statut);
         $this->assertSame($ticket->numero, $ticketCorrige->numero);
-        $this->assertSame($ticket->date_emission->toDateTimeString(), $ticketCorrige->date_emission->toDateTimeString());
+        $this->assertMemeInstant($ticket->date_emission, $ticketCorrige->date_emission);
         $this->assertSame('180.00', $ticketCorrige->total_ttc);
         $this->assertSame(0.0, $ticketCorrige->montantRestant());
         $this->assertSame(10, $produit->fresh()->stock_quantite);

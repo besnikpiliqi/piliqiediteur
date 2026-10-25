@@ -61,7 +61,7 @@ class CloturerLesJourneesActionTest extends TestCase
 
     public function test_un_magasin_qui_n_a_jamais_vendu_n_a_aucune_journee_a_cloturer(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $magasin = $this->magasin();
 
         $clotures = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
@@ -79,9 +79,9 @@ class CloturerLesJourneesActionTest extends TestCase
     public function test_cloture_dans_l_ordre_chaque_journee_depuis_la_premiere_vente(): void
     {
         $magasin = $this->magasin();
-        $this->travelTo('2026-10-07 10:00:00');
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
         $venteDu7 = $this->vendreUnTicket();
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $clotures = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
@@ -95,10 +95,10 @@ class CloturerLesJourneesActionTest extends TestCase
     public function test_reprend_au_lendemain_de_la_derniere_journee_cloturee(): void
     {
         $magasin = $this->magasin();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicket();
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-05');
-        $this->travelTo('2026-10-08 19:00:00');
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
 
         $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(now());
 
@@ -113,11 +113,11 @@ class CloturerLesJourneesActionTest extends TestCase
     public function test_les_journees_a_cloturer_ne_sont_que_celles_des_periodes_d_activite(): void
     {
         $magasin = $this->magasin();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicket();
-        PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole()->forceFill(['fin' => CarbonImmutable::parse('2026-10-06 18:00:00', config('app.timezone')), 'motif_fin' => MotifFermeture::Temporaire])->save();
-        (new PeriodeActivite)->forceFill(['magasin_id' => $magasin->id, 'debut' => CarbonImmutable::parse('2026-10-08 09:00:00', config('app.timezone'))])->save();
-        $this->travelTo('2026-10-09 19:00:00');
+        PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole()->forceFill(['fin' => self::aParis('2026-10-06 18:00:00'), 'motif_fin' => MotifFermeture::Temporaire])->save();
+        (new PeriodeActivite)->forceFill(['magasin_id' => $magasin->id, 'debut' => self::aParis('2026-10-08 09:00:00')])->save();
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $clotures = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
@@ -133,9 +133,9 @@ class CloturerLesJourneesActionTest extends TestCase
     public function test_une_erreur_arrete_le_magasin_a_sa_journee_puis_la_cloture_reprend_a_cette_journee(): void
     {
         $magasin = $this->magasin();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicket();
-        $this->travelTo('2026-10-08 19:00:00');
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
         $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RecapitulatifDeCloture::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
         {
             public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
@@ -166,9 +166,9 @@ class CloturerLesJourneesActionTest extends TestCase
     public function test_une_erreur_a_une_journee_du_bouton_laisse_cloturees_les_precedentes_et_la_demande_repetee_reprend_a_cette_journee(): void
     {
         $magasin = $this->magasin();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicket();
-        $this->travelTo('2026-10-08 19:00:00');
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
         $jeton = (string) Str::uuid();
         $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RecapitulatifDeCloture::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
         {
@@ -203,7 +203,7 @@ class CloturerLesJourneesActionTest extends TestCase
     public function test_refuse_de_cloturer_un_autre_magasin_que_le_magasin_actif(): void
     {
         $autreMagasin = $this->magasin();
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $this->vendreUnTicket();
         $magasin = $this->magasin();
 

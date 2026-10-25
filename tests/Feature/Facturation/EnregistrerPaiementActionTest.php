@@ -318,7 +318,7 @@ class EnregistrerPaiementActionTest extends TestCase
      */
     public function test_un_paiement_recu_a_une_date_future_est_refuse(): void
     {
-        $this->travelTo('2026-10-09 23:30:00');
+        $this->travelTo(self::aParis('2026-10-09 23:30:00'));
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
@@ -339,7 +339,7 @@ class EnregistrerPaiementActionTest extends TestCase
 
     public function test_un_paiement_recu_a_une_date_passee_est_enregistre(): void
     {
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 

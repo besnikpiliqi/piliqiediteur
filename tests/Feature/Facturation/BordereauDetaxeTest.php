@@ -55,7 +55,7 @@ class BordereauDetaxeTest extends TestCase
      */
     private function magasin(): Magasin
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $proprietaire = User::factory()->create();
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);

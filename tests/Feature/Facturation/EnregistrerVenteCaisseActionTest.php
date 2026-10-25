@@ -205,7 +205,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
      */
     private function clientComptoir(): Client
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
 
         return Client::query()->where('est_comptoir', true)->sole();

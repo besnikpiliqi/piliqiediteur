@@ -49,7 +49,7 @@ class PolitiqueDArrondiTest extends TestCase
      */
     private function magasin(): Magasin
     {
-        $this->travelTo('2026-10-14 10:00:00');
+        $this->travelTo(self::aParis('2026-10-14 10:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
         $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
@@ -367,7 +367,7 @@ class PolitiqueDArrondiTest extends TestCase
      */
     public function test_hors_tva_et_franchise_gardent_leur_principe(): void
     {
-        $this->travelTo('2026-10-14 10:00:00');
+        $this->travelTo(self::aParis('2026-10-14 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
         $cable = $this->article('Câble', '40.00');
         $export = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 2]], [

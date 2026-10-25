@@ -111,11 +111,11 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_la_fermeture_cloture_les_journees_en_attente_et_s_inscrit_au_jet_270(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $this->vendre($magasin);
-        $this->travelTo('2026-10-07 15:00:00');
+        $this->travelTo(self::aParis('2026-10-07 15:00:00'));
 
         $this->fermer($magasin, MotifFermeture::Temporaire);
 
@@ -131,18 +131,18 @@ class FermerEtRouvrirMagasinTest extends TestCase
         );
         $this->assertSame(MotifFermeture::Temporaire, $magasin->fresh()->motif_fermeture);
         $periode = PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole();
-        $this->assertSame(['2026-10-07 15:00:00', MotifFermeture::Temporaire, $proprietaire->id, $proprietaire->name], [$periode->fin->format('Y-m-d H:i:s'), $periode->motif_fin, (int) $periode->fermee_par, $periode->fermee_par_nom]);
+        $this->assertSame([self::aParis('2026-10-07 15:00:00')->getTimestamp(), MotifFermeture::Temporaire, $proprietaire->id, $proprietaire->name], [$periode->fin->getTimestamp(), $periode->motif_fin, (int) $periode->fermee_par, $periode->fermee_par_nom]);
         $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinFerme)[0];
         $this->assertSame([['statut' => 'actif'], ['motif' => 'temporaire', 'statut' => 'ferme'], $proprietaire->id], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, (int) $entree->auteur_id]);
     }
 
     public function test_un_magasin_ferme_passe_en_lecture_seule_et_ne_produit_plus_de_ticket_z(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->vendre($magasin);
         $this->fermer($magasin, MotifFermeture::Cessation);
-        $this->travelTo('2026-10-09 01:00:00');
+        $this->travelTo(self::aParis('2026-10-09 01:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -156,11 +156,11 @@ class FermerEtRouvrirMagasinTest extends TestCase
 
     public function test_la_reouverture_reprend_le_meme_registre_les_memes_series_et_les_memes_grands_totaux(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $premier = $this->vendre($magasin);
         $this->fermer($magasin, MotifFermeture::Temporaire);
-        $this->travelTo('2026-10-08 09:00:00');
+        $this->travelTo(self::aParis('2026-10-08 09:00:00'));
 
         $this->rouvrir($magasin);
 
@@ -182,13 +182,13 @@ class FermerEtRouvrirMagasinTest extends TestCase
 
     public function test_aucun_ticket_z_n_est_produit_pour_les_jours_de_fermeture(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->vendre($magasin);
         $this->fermer($magasin, MotifFermeture::Temporaire);
-        $this->travelTo('2026-10-09 09:00:00');
+        $this->travelTo(self::aParis('2026-10-09 09:00:00'));
         $this->rouvrir($magasin);
-        $this->travelTo('2026-10-11 01:00:00');
+        $this->travelTo(self::aParis('2026-10-11 01:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -201,11 +201,11 @@ class FermerEtRouvrirMagasinTest extends TestCase
 
     public function test_le_premier_ticket_z_apres_la_reouverture_est_celui_du_premier_jour_non_cloture(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->vendre($magasin);
         $this->fermer($magasin, MotifFermeture::Temporaire);
-        $this->travelTo('2026-10-07 09:00:00');
+        $this->travelTo(self::aParis('2026-10-07 09:00:00'));
         $this->rouvrir($magasin);
         $this->vendre($magasin);
         app(TenantContext::class)->set($magasin);
@@ -213,7 +213,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $enAttente = app(CloturerLesJourneesAction::class)->journeesEnAttente(now());
 
         $this->assertSame(['2026-10-07'], $enAttente->all());
-        $this->travelTo('2026-10-07 19:00:00');
+        $this->travelTo(self::aParis('2026-10-07 19:00:00'));
         $cloture = app(CloturerLesJourneesAction::class)->parUnePersonne($this->proprietaireDe($magasin), $magasin, now())['clotures']->sole();
         $this->assertSame(['2026-10-07', 'Z-MABOUT-2026-000002', 1], [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->nombre_ventes]);
     }
@@ -225,19 +225,19 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_fermer_et_rouvrir_le_meme_jour_ne_produit_qu_un_z_et_reprend_les_ventes_le_lendemain(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->vendre($magasin);
-        $this->travelTo('2026-10-05 11:00:00');
+        $this->travelTo(self::aParis('2026-10-05 11:00:00'));
         $this->fermer($magasin, MotifFermeture::Temporaire);
-        $this->travelTo('2026-10-05 12:00:00');
+        $this->travelTo(self::aParis('2026-10-05 12:00:00'));
 
         $this->rouvrir($magasin);
 
         $this->assertThrows(fn () => $this->vendre($magasin), LogicException::class, 'La journée du 05/10/2026 est clôturée : les ventes reprennent demain.');
         app(TenantContext::class)->set($magasin);
         $this->assertSame([], app(CloturerLesJourneesAction::class)->journeesEnAttente(now())->all());
-        $this->travelTo('2026-10-06 09:00:00');
+        $this->travelTo(self::aParis('2026-10-06 09:00:00'));
         $this->assertSame('TK-MABOUT-2026-000002', $this->vendre($magasin)->numero);
         $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->map->toDateString()->all());
     }
@@ -320,7 +320,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_la_reouverture_attend_la_confirmation_sirene_si_l_insee_ne_repond_pas(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->fermer($magasin, MotifFermeture::Temporaire);
         $this->repertoire()->rendreInjoignable();
@@ -355,13 +355,13 @@ class FermerEtRouvrirMagasinTest extends TestCase
     public function test_un_magasin_suspendu_peut_etre_ferme_et_reste_suspendu(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $suspendu = now()->subDay()->startOfSecond();
+        $suspendu = self::aParis('2026-10-08 10:00:00');
         $magasin->forceFill(['suspendu_le' => $suspendu])->save();
 
         $this->fermer($magasin, MotifFermeture::Cessation);
 
         $ferme = $magasin->fresh();
-        $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Cessation, $suspendu->toDateTimeString()], [$ferme->statut, $ferme->motif_fermeture, $ferme->suspendu_le->toDateTimeString()]);
+        $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Cessation, $suspendu->getTimestamp()], [$ferme->statut, $ferme->motif_fermeture, $ferme->suspendu_le->getTimestamp()]);
     }
 
     /**
@@ -430,14 +430,14 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_la_fermeture_ferme_d_office_les_caisses_personnelles_et_garde_l_equipe(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $this->actingAs($vendeur);
         $ticket = $this->vendre($magasin);
         auth()->logout();
         $affectations = Affectation::query()->where('magasin_id', $magasin->id)->count();
-        $this->travelTo('2026-10-05 18:00:00');
+        $this->travelTo(self::aParis('2026-10-05 18:00:00'));
 
         $this->fermer($magasin, MotifFermeture::Temporaire);
 
@@ -491,7 +491,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_une_vente_faite_avant_le_verrou_du_registre_entre_dans_le_releve_ferme_d_office(): void
     {
-        $this->travelTo('2026-10-05 18:00:00');
+        $this->travelTo(self::aParis('2026-10-05 18:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $ticket = null;
@@ -613,7 +613,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_un_magasin_rouvert_avant_la_validation_entre_en_activite_a_la_validation(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         Event::fake([MagasinOuvert::class]);
         $societe = $this->inscrireUneSociete();
         $siege = $this->creerLeMagasinDuSiege($societe);
@@ -738,23 +738,23 @@ class FermerEtRouvrirMagasinTest extends TestCase
     public function test_un_magasin_ferme_temporairement_se_cede_sans_etre_rouvert_ni_recontrole_au_repertoire_sirene(): void
     {
         Notification::fake();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $carnet = $this->produitEnStock('CARNET', 'Carnet', 10, '2.50');
         $this->produitEnStock('GOMME', 'Gomme', -2, '0.80');
         $this->vendre($magasin);
-        $this->travelTo('2026-10-05 18:00:00');
+        $this->travelTo(self::aParis('2026-10-05 18:00:00'));
         $this->fermer($magasin, MotifFermeture::Temporaire);
         $this->repertoire()->fermer((string) $magasin->siret);
-        $this->travelTo('2026-10-09 11:00:00');
+        $this->travelTo(self::aParis('2026-10-09 11:00:00'));
 
         $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma Boutique');
 
         $cede = $magasin->fresh();
         $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Cession, true], [$cede->statut, $cede->motif_fermeture, $cede->aEteCede()]);
         $periode = PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole();
-        $this->assertSame(['2026-10-05 18:00:00', MotifFermeture::Temporaire], [$periode->fin->format('Y-m-d H:i:s'), $periode->motif_fin]);
+        $this->assertSame([self::aParis('2026-10-05 18:00:00')->getTimestamp(), MotifFermeture::Temporaire], [$periode->fin->getTimestamp(), $periode->motif_fin]);
         app(TenantContext::class)->set($magasin);
         $this->assertSame(
             [[$carnet->id, 10, '2.5000', 'magasin', $magasin->id, $proprietaire->id]],

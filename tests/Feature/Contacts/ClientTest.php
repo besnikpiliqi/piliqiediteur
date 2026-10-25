@@ -169,16 +169,16 @@ class ClientTest extends TestCase
     {
         $this->creerMagasin();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
-        $verifier = fn (string $numeroTva, string $instant): ConsultationVies => ConsultationVies::forceCreate([
+        $verifier = fn (string $numeroTva, CarbonImmutable $instant): ConsultationVies => ConsultationVies::forceCreate([
             'client_id' => $client->id,
             'numero_tva' => $numeroTva,
             'valide' => true,
-            'consultee_le' => CarbonImmutable::parse($instant, 'Europe/Paris'),
+            'consultee_le' => $instant,
             'reponse' => '{"valid":true}',
         ]);
-        $verifier('DE123456789', '2026-10-08 10:00:00');
-        $derniereDeLAncien = $verifier('DE123456789', '2026-10-09 10:00:00');
-        $verifier('DE999999999', '2026-10-09 12:00:00');
+        $verifier('DE123456789', self::aParis('2026-10-08 10:00:00'));
+        $derniereDeLAncien = $verifier('DE123456789', self::aParis('2026-10-09 10:00:00'));
+        $verifier('DE999999999', self::aParis('2026-10-09 12:00:00'));
 
         $this->assertTrue($derniereDeLAncien->is($client->derniereConsultationVies()));
 

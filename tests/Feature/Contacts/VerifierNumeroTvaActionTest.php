@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Contacts;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
@@ -72,7 +73,7 @@ class VerifierNumeroTvaActionTest extends TestCase
     {
         $proprietaire = $this->magasinIdentifie();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
-        $this->travelTo('2026-10-09 14:32:10');
+        $this->travelTo(self::aParis('2026-10-09 14:32:10'));
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies(['name' => 'ACME GMBH', 'address' => "MUSTERSTRASSE 1\n10115 BERLIN"]))]);
 
@@ -85,15 +86,15 @@ class VerifierNumeroTvaActionTest extends TestCase
             'nom' => 'ACME GMBH',
             'adresse' => "MUSTERSTRASSE 1\n10115 BERLIN",
             'identifiant_consultation' => 'WAPIAAAAW1234567',
-            'consultee_le' => '09/10/2026 14:32:10',
+            'consultee_le' => self::aParis('2026-10-09 14:32:10')->getTimestamp(),
             'consultee_par' => $proprietaire->id,
         ], [
             ...$consultation->fresh()->only(['client_id', 'numero_tva', 'valide', 'nom', 'adresse', 'identifiant_consultation']),
-            'consultee_le' => $consultation->fresh()->consultee_le->format('d/m/Y H:i:s'),
+            'consultee_le' => $consultation->fresh()->consultee_le->getTimestamp(),
             'consultee_par' => $consultation->fresh()->consultee_par,
         ]);
         $this->assertSame(self::reponseVies(['name' => 'ACME GMBH', 'address' => "MUSTERSTRASSE 1\n10115 BERLIN"]), json_decode($consultation->fresh()->reponse, true));
-        $this->assertSame('2026-10-09 12:32:10', DB::table('consultations_vies')->value('consultee_le'));
+        $this->assertSame(HorodatageUtc::enBase(self::enUtc('2026-10-09 12:32:10')), DB::table('consultations_vies')->value('consultee_le'));
         Http::assertSent(fn (Request $requete): bool => $requete->url() === self::URL_VIES
             && $requete->method() === 'POST'
             && $requete->data() === ['countryCode' => 'DE', 'vatNumber' => '123456789', 'requesterMemberStateCode' => 'FR', 'requesterNumber' => '88100000009']);

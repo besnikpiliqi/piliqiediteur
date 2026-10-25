@@ -29,7 +29,6 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
@@ -201,7 +200,7 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_un_avoir_fournisseur_se_cree_depuis_le_menu_avoirs_fournisseur(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $premiere = $this->recevoir([[$cable, 10, '10.00']]);
@@ -243,7 +242,7 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_un_avoir_fournisseur_se_cree_depuis_la_fiche_de_la_facture_d_achat(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'taux_tva' => 20, 'suivi_stock' => true]);
@@ -330,7 +329,7 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_chaque_retour_s_affiche_en_orange_sous_sa_ligne_avec_le_numero_de_l_avoir(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'taux_tva' => 20, 'suivi_stock' => true]);
@@ -360,7 +359,7 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_les_avoirs_et_les_retours_se_lisent_dans_l_ordre_de_leur_emission(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
@@ -391,13 +390,13 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_les_retours_d_une_ligne_restent_dans_l_ordre_de_leur_emission_quand_l_heure_de_paris_se_repete(): void
     {
-        $this->travelTo('2026-10-24 10:32:00');
+        $this->travelTo(self::aParis('2026-10-24 10:32:00'));
         $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
-        $this->travelTo(CarbonImmutable::parse('2026-10-25 00:50:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-25 00:50:00'));
         $premier = $this->retourner($factureAchat, 0, 1);
-        $this->travelTo(CarbonImmutable::parse('2026-10-25 01:10:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-25 01:10:00'));
         $second = $this->retourner($factureAchat, 0, 2);
 
         $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()]);
@@ -418,7 +417,7 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_un_vendeur_sans_l_autorisation_ne_voit_pas_le_bouton(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $magasin = $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
@@ -504,7 +503,7 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_un_avoir_sans_numero_du_fournisseur_avertit_sans_refuser(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);

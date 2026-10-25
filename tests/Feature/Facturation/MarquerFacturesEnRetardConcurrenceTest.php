@@ -85,11 +85,11 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
     public function test_une_facture_payee_pendant_le_passage_en_retard_n_est_annoncee_que_si_elle_est_passee_en_retard(bool $leRetardDAbord): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $payee = $this->ticketPayableComptant($magasin);
         $autre = $this->ticketPayableComptant($magasin);
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         [$magasinId, $factureId] = [$magasin->id, $payee->id];
         $payer = static function () use ($magasinId, $factureId): void {
             self::payerLaFacture($magasinId, $factureId);
@@ -157,10 +157,10 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
     public function test_le_passage_en_retard_et_un_autre_geste_simultanes_passent_l_un_apres_l_autre_sans_interblocage(string $geste, bool $leRetardDAbord): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $echu = $this->ticketPayableComptant($magasin);
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $parametres = $this->preparer($magasin, $geste);
         $magasinId = $magasin->id;
         $faire = static function () use ($geste, $magasinId, $parametres): void {
@@ -233,11 +233,11 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
     public function test_le_passage_en_retard_pendant_la_validation_ou_le_refus_de_la_societe_passe_sans_interblocage(string $fin, bool $leRetardDAbord): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe);
         $echu = $this->ticketPayableComptant($demonstration);
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $finir = $this->finDeLInscription($fin, $societe);
         $marquer = static function (): void {
             self::marquerLesFacturesEnRetard();

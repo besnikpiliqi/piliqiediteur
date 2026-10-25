@@ -71,7 +71,6 @@ use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\App\Resources\ProduitResource;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Closure;
 use Filament\Resources\Resource as RessourceFilament;
 use Illuminate\Database\Eloquent\Builder;
@@ -520,7 +519,7 @@ class TenantIsolationTest extends TestCase
                 'action' => ActionsUniques::EMETTRE_FACTURE,
                 'user_id' => User::factory()->create()->getKey(),
                 'empreinte_demande' => str_repeat('0', 64),
-                'created_at' => CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'),
+                'created_at' => self::enUtc('2026-10-09 08:00:00'),
             ],
             Avoir::class => ['client_id' => Client::factory()->create()->getKey(), 'type_client' => TypeClient::Particulier],
             AvoirAllocation::class => [
@@ -536,14 +535,14 @@ class TenantIsolationTest extends TestCase
                 'client_id' => Client::factory()->etranger('DE', 'DE123456789')->create()->getKey(),
                 'numero_tva' => 'DE123456789',
                 'valide' => true,
-                'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
+                'consultee_le' => self::enUtc('2026-10-09 12:32:10'),
                 'reponse' => '{"valid":true}',
             ],
             EnregistrementFiscal::class => [
                 'chaine' => ChaineFiscale::Vente,
                 'sequence' => 1,
                 'type' => 'ticket',
-                'horodatage' => CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'),
+                'horodatage' => self::enUtc('2026-10-09 08:00:00'),
                 'contenu' => '{"format":1}',
                 'signature' => 'signature',
                 'algorithme' => 'ES256',
@@ -571,7 +570,7 @@ class TenantIsolationTest extends TestCase
                 'enregistrement_fiscal_id' => self::creerEnregistrement(EnregistrementFiscal::class)->getKey(),
                 'ip' => '203.0.113.7',
                 'agent_utilisateur' => 'Navigateur de test',
-                'expire_le' => CarbonImmutable::parse('2027-10-09 08:00:00', 'UTC'),
+                'expire_le' => self::enUtc('2027-10-09 08:00:00'),
             ],
         };
 

@@ -14,7 +14,6 @@ use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\VerificateurJournalAudit;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -182,12 +181,12 @@ class JournalAuditTest extends TestCase
      */
     public function test_l_effacement_des_entrees_expirees_garde_la_chaine_verifiable(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2014-03-01 10:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2014-03-01 10:00:00'));
         $societe = Societe::factory()->create();
         $anciennes = [$this->inscrire($societe, null), $this->inscrire($societe, null)];
-        $this->travelTo(CarbonImmutable::parse('2016-01-01 10:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2016-01-01 10:00:00'));
         $recente = $this->inscrire($societe, null);
-        $this->travelTo(CarbonImmutable::parse('2025-01-01 10:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2025-01-01 10:00:00'));
 
         $this->artisan('app:purger-journal-audit')
             ->expectsOutput('2 entrée(s) du journal d\'audit effacée(s).')
@@ -266,12 +265,12 @@ class JournalAuditTest extends TestCase
      */
     public function test_les_traces_de_plus_d_un_an_sont_effacees_sans_toucher_aux_entrees(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2024-03-01 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2024-03-01 10:00:00'));
         $societe = Societe::factory()->create();
         $ancienne = $this->inscrireParUneRequete($societe);
-        $this->travelTo(CarbonImmutable::parse('2024-06-01 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2024-06-01 10:00:00'));
         $recente = $this->inscrireParUneRequete($societe);
-        $this->travelTo(CarbonImmutable::parse('2025-03-02 04:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2025-03-02 04:00:00'));
 
         $this->artisan('app:purger-traces')
             ->expectsOutput('1 trace(s) technique(s) effacée(s).')

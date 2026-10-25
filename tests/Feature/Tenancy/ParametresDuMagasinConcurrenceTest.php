@@ -66,7 +66,7 @@ class ParametresDuMagasinConcurrenceTest extends TestCase
     public function test_les_parametres_regles_pendant_une_vente_ou_un_achat_passent_avant_ou_apres_sans_interblocage(string $geste, bool $lesParametresDAbord): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = self::responsableDeTest($magasin);
         $produit = Produit::factory()->create(['nom' => 'Coque rouge', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);

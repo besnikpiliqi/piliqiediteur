@@ -157,7 +157,7 @@ class MagasinEnLectureSeuleTest extends TestCase
     #[DataProvider('situationsEnLectureSeule')]
     public function test_la_journee_se_cloture_toujours_a_la_main(string $situation, string $motif): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
         app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
@@ -303,11 +303,11 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_aucune_facture_ne_se_relance_plus_a_la_main(string $situation, string $motif): void
     {
         Queue::fake([EnvoyerDocumentJob::class]);
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
         $facture = $this->factureEchueAujourdhui();
         $this->passerEn($magasin, $situation);
-        $this->travelTo('2026-10-20 09:00:00');
+        $this->travelTo(self::aParis('2026-10-20 09:00:00'));
 
         $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer($this->proprietaireDe($magasin), $facture, 'client@exemple.fr'), LogicException::class, $this->refus($motif));
 
@@ -318,10 +318,10 @@ class MagasinEnLectureSeuleTest extends TestCase
     #[DataProvider('situationsEnLectureSeule')]
     public function test_la_cloture_automatique_traite_le_magasin(string $situation, string $motif): void
     {
-        $this->travelTo('2026-10-04 10:00:00');
+        $this->travelTo(self::aParis('2026-10-04 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $ticket = $this->vendreUnTicket();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->passerEn($magasin, $situation);
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
@@ -339,11 +339,11 @@ class MagasinEnLectureSeuleTest extends TestCase
     #[DataProvider('situationsApresLaValidation')]
     public function test_les_dernieres_ventes_sont_declarees(string $situation, string $motif): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
         $this->passerEn($magasin, $situation);
-        $this->travelTo('2026-10-06 00:00:00');
+        $this->travelTo(self::aParis('2026-10-06 00:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -356,11 +356,11 @@ class MagasinEnLectureSeuleTest extends TestCase
     #[DataProvider('situationsEnLectureSeule')]
     public function test_les_factures_en_retard_sont_marquees(string $situation, string $motif): void
     {
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
         $facture = $this->factureEchueAujourdhui();
         $this->passerEn($magasin, $situation);
-        $this->travelTo('2026-10-03 00:15:00');
+        $this->travelTo(self::aParis('2026-10-03 00:15:00'));
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
@@ -371,12 +371,12 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_aucune_relance_automatique_n_est_envoyee(string $situation, string $motif): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
         $magasin->update(['relances_automatiques' => true, 'delais_relance' => [7, 15, 30]]);
         $this->factureEchueAujourdhui();
         $this->passerEn($magasin, $situation);
-        $this->travelTo('2026-10-20 09:00:00');
+        $this->travelTo(self::aParis('2026-10-20 09:00:00'));
 
         $this->artisan('app:relancer-factures-impayees')->assertSuccessful();
 
@@ -433,7 +433,7 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_aucune_relance_automatique_pour_une_societe_suspendue_ou_non_validee(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $suspendue = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
         $suspendue->update(['relances_automatiques' => true, 'delais_relance' => [7, 15, 30]]);
         $this->factureEchueAujourdhui();
@@ -442,7 +442,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $this->factureEchueAujourdhui();
         $suspendue->societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
         $nonValidee->societe->forceFill(['validee_le' => null])->save();
-        $this->travelTo('2026-10-20 09:00:00');
+        $this->travelTo(self::aParis('2026-10-20 09:00:00'));
 
         $this->artisan('app:relancer-factures-impayees')->assertSuccessful();
 

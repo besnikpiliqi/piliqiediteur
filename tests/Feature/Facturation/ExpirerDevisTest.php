@@ -14,7 +14,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Exceptions;
 use RuntimeException;
 use Tests\TestCase;
@@ -29,11 +28,11 @@ class ExpirerDevisTest extends TestCase
 
     public function test_un_devis_envoye_expire_le_lendemain_du_dernier_jour_de_sa_validite(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $echuHier = $this->devisEnvoye($magasin, '2026-10-08');
         $valableAujourdHui = $this->devisEnvoye($magasin, '2026-10-09');
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
 
         $this->artisan('app:expirer-devis')
             ->expectsOutputToContain('1 devis expiré(s).')
@@ -49,12 +48,12 @@ class ExpirerDevisTest extends TestCase
      */
     public function test_seuls_les_devis_envoyes_expirent(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $brouillon = $this->devisBrouillon($magasin, '2026-10-08');
         $accepte = app(TenantContext::class)->runAs($magasin, fn (): Devis => app(AccepterDevisAction::class)->handle(self::auteur(), $this->devisEnvoye($magasin, '2026-10-08')));
         $sansValidite = $this->devisEnvoye($magasin, null);
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
 
         $this->artisan('app:expirer-devis')->assertSuccessful();
 
@@ -69,12 +68,12 @@ class ExpirerDevisTest extends TestCase
      */
     public function test_le_passage_d_un_magasin_ne_touche_pas_aux_devis_d_un_autre(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasinA = Magasin::factory()->create();
         $magasinB = Magasin::factory()->create();
         $devisDeA = $this->devisEnvoye($magasinA, '2026-10-08');
         $devisDeB = $this->devisEnvoye($magasinB, '2026-10-08');
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
 
         $expires = app(TenantContext::class)->runAs($magasinA, fn (): int => app(ExpirerLesDevisAction::class)->handle($magasinA));
 
@@ -90,12 +89,12 @@ class ExpirerDevisTest extends TestCase
      */
     public function test_un_passage_pour_un_autre_magasin_que_celui_du_contexte_ne_touche_a_rien(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasinA = Magasin::factory()->create();
         $magasinB = Magasin::factory()->create();
         $devisDeA = $this->devisEnvoye($magasinA, '2026-10-08');
         $devisDeB = $this->devisEnvoye($magasinB, '2026-10-08');
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
 
         $expires = app(TenantContext::class)->runAs($magasinA, fn (): int => app(ExpirerLesDevisAction::class)->handle($magasinB));
 
@@ -110,11 +109,11 @@ class ExpirerDevisTest extends TestCase
      */
     public function test_un_magasin_suspendu_est_traite(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = Magasin::factory()->create();
         $devis = $this->devisEnvoye($magasin, '2026-10-08');
         $magasin->forceFill(['suspendu_le' => now()])->save();
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
 
         $this->artisan('app:expirer-devis')->assertSuccessful();
 
@@ -127,12 +126,12 @@ class ExpirerDevisTest extends TestCase
      */
     public function test_la_panne_d_un_magasin_n_empeche_pas_d_expirer_les_devis_des_autres(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasinEnPanne = Magasin::factory()->create();
         $autreMagasin = Magasin::factory()->create();
         $devisEnPanne = $this->devisEnvoye($magasinEnPanne, '2026-10-08');
         $autreDevis = $this->devisEnvoye($autreMagasin, '2026-10-08');
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
         Exceptions::fake([RuntimeException::class]);
         $this->app->instance(ExpirerLesDevisAction::class, new class($magasinEnPanne->id) extends ExpirerLesDevisAction
         {
@@ -158,7 +157,7 @@ class ExpirerDevisTest extends TestCase
         $this->assertDatabaseHas('devis', ['id' => $devisEnPanne->id, 'statut' => 'envoye']);
 
         $this->app->forgetInstance(ExpirerLesDevisAction::class);
-        $this->travelTo('2026-10-10 00:30:00');
+        $this->travelTo(self::aParis('2026-10-10 00:30:00'));
         $this->artisan('app:expirer-devis')->assertSuccessful();
 
         $this->assertDatabaseHas('devis', ['id' => $devisEnPanne->id, 'statut' => 'expire']);
@@ -169,7 +168,7 @@ class ExpirerDevisTest extends TestCase
         // Le planning de bootstrap/app.php s'enregistre au démarrage
         // d'Artisan, comme sur le serveur avant schedule:run.
         $this->artisan('schedule:list')->assertSuccessful();
-        $this->travelTo(Carbon::parse('2026-10-08 22:30:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-08 22:30:00'));
 
         $evenementsDus = app(Schedule::class)->dueEvents($this->app);
 

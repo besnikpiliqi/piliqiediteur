@@ -6,11 +6,9 @@ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ConfirmerNouvelleAdresseAction;
 use App\Domain\Tenancy\Actions\DemanderUneNouvelleAdresseAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
-use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
@@ -85,11 +83,11 @@ class AdresseDeConnexionConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $proprietaireId = (int) $societe->proprietaire()->sole()->getKey();
         app(TenantContext::class)->clear();
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $connexionDuTest = DB::getDefaultConnection();
         $concurrente = null;
         DB::listen(function (QueryExecuted $requete) use (&$concurrente, $connexionDuTest, $proprietaireId): void {
@@ -101,7 +99,7 @@ class AdresseDeConnexionConcurrenceTest extends TestCase
             }
         });
 
-        $this->assertTrue(app(CloreLInscriptionAction::class)->cloreSansCode($societe->fresh(), CarbonImmutable::now()->subDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS)));
+        $this->assertTrue(app(CloreLInscriptionAction::class)->cloreSansCode($societe->fresh(), self::aParis('2026-10-05 10:00:00')));
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

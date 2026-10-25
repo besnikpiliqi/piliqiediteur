@@ -33,7 +33,6 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -55,7 +54,7 @@ class CloturerCaisseActionTest extends TestCase
     {
         parent::setUp();
 
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($this->magasin);
     }
@@ -94,7 +93,7 @@ class CloturerCaisseActionTest extends TestCase
      */
     private function journeeDExemple(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $particulier = Client::factory()->create();
         $cable = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $livre = Produit::factory()->create(['prix_vente_ttc' => 10.55, 'taux_tva' => 5.5, 'suivi_stock' => false]);
@@ -107,7 +106,7 @@ class CloturerCaisseActionTest extends TestCase
         self::vendreAuComptant(self::auteur(), $particulier, [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
         $this->payer($this->emettreFacturePour(Client::factory()->professionnel()->create(), 50), ModePaiement::Virement, '2026-10-05');
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $deuxCables->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->travelTo('2026-10-05 19:00:00');
+        $this->travelTo(self::aParis('2026-10-05 19:00:00'));
     }
 
     /**
@@ -198,10 +197,10 @@ class CloturerCaisseActionTest extends TestCase
     public function test_un_avoir_se_deduit_des_ventes_du_jour_de_son_emission(): void
     {
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $venteDHier = $this->emettreFacturePour($client, 60); // 60 TTC
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFacturePour($client, 120); // 120 TTC
         $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDHier->lignes->firstOrFail()->id, 'quantite' => 1],
@@ -227,9 +226,9 @@ class CloturerCaisseActionTest extends TestCase
     public function test_une_journee_de_caisse_va_de_minuit_a_minuit_a_paris(): void
     {
         $client = Client::factory()->create();
-        $this->travelTo(CarbonImmutable::parse('2026-07-14 21:30:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-07-14 21:30:00'));
         $venteDu14 = $this->emettreFacturePour($client, 60);
-        $this->travelTo(CarbonImmutable::parse('2026-07-14 22:30:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-07-14 22:30:00'));
         $venteDu15 = $this->emettreFacturePour($client, 120);
         $avoirDu15 = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDu14->lignes->firstOrFail()->id, 'quantite' => 1],
@@ -319,7 +318,7 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_une_journee_deja_cloturee_ne_peut_pas_letre_deux_fois(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now()), LogicException::class, 'La journée du 09/10/2026 est déjà clôturée.');
@@ -327,7 +326,7 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_deux_journees_differentes_peuvent_chacune_etre_cloturees(): void
     {
-        $hier = now()->subDay();
+        $hier = self::aParis('2026-10-08 10:00:00');
         $aujourdhui = now();
 
         $clotureHier = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $hier);
@@ -342,9 +341,9 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_journee_dont_la_veille_n_est_pas_cloturee_est_refusee(): void
     {
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $this->emettreFacturePour(Client::factory()->create());
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09'), LogicException::class, "Clôturez d'abord la journée du 08/10/2026.");
         $this->assertSame(0, ClotureCaisse::query()->count());
@@ -357,12 +356,12 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_journee_hors_des_periodes_d_activite_est_refusee_et_ne_retient_pas_la_suivante(): void
     {
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $this->emettreFacturePour(Client::factory()->create());
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-06');
-        PeriodeActivite::query()->where('magasin_id', $this->magasin->id)->sole()->forceFill(['fin' => CarbonImmutable::parse('2026-10-06 19:00:00', config('app.timezone')), 'motif_fin' => MotifFermeture::Temporaire])->save();
-        (new PeriodeActivite)->forceFill(['magasin_id' => $this->magasin->id, 'debut' => CarbonImmutable::parse('2026-10-08 09:00:00', config('app.timezone'))])->save();
-        $this->travelTo('2026-10-08 19:00:00');
+        PeriodeActivite::query()->where('magasin_id', $this->magasin->id)->sole()->forceFill(['fin' => self::aParis('2026-10-06 19:00:00'), 'motif_fin' => MotifFermeture::Temporaire])->save();
+        (new PeriodeActivite)->forceFill(['magasin_id' => $this->magasin->id, 'debut' => self::aParis('2026-10-08 09:00:00')])->save();
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-07'), LogicException::class, "Le magasin était fermé le 07/10/2026 : cette journée n'a pas de clôture.");
         $this->assertSame('2026-10-08', app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-08')->date_cloture->toDateString());
@@ -371,7 +370,7 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_une_journee_pas_encore_commencee_est_refusee(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10'), LogicException::class, "La journée du 10/10/2026 n'est pas encore commencée.");
         $this->assertSame(0, ClotureCaisse::query()->count());
@@ -379,7 +378,7 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_une_journee_anterieure_a_la_derniere_journee_cloturee_est_refusee(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-07'), LogicException::class, "La journée du 07/10/2026 précède la dernière journée clôturée, celle du 09/10/2026 : les journées se clôturent dans l'ordre.");
@@ -395,11 +394,11 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_la_cloture_abandonne_les_ventes_restees_ouvertes_a_la_caisse_ce_jour_la(): void
     {
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $vendeur = User::factory()->create();
         $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
         PanierCaisse::factory()->avecLeProduit($ecran, 3)->create(['user_id' => $vendeur->id]);
-        $this->travelTo('2026-10-10 00:00:30');
+        $this->travelTo(self::aParis('2026-10-10 00:00:30'));
         $vendeurDeNuit = User::factory()->create();
         PanierCaisse::factory()->create(['user_id' => $vendeurDeNuit->id]);
 
@@ -422,14 +421,14 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_la_cloture_inscrit_la_baisse_d_un_prix_pas_encore_arrete_avant_d_abandonner_la_vente(): void
     {
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $vendeur = self::responsableDeTest($this->magasin);
         $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 150, 'taux_tva' => 20]);
         $jeton = (string) Str::uuid();
         $lignes = fn (string $prix): array => ['ligne' => ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 3, 'prix_unitaire_ttc' => $prix, 'taux_tva' => '20', 'remise_pourcentage' => '0']];
         app(PanierDeCaisse::class)->enregistrer($vendeur, $jeton, null, $lignes('150.00'));
         app(PanierDeCaisse::class)->enregistrer($vendeur, $jeton, null, $lignes('120.00'));
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
@@ -477,7 +476,7 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_cloture_a_zero_inscrit_aussi_l_evenement_50(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
@@ -518,7 +517,7 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_cloture_refusee_n_inscrit_aucun_evenement(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10'), LogicException::class, "La journée du 10/10/2026 n'est pas encore commencée.");
 
@@ -554,12 +553,12 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_contre_passation_se_deduit_du_mode_du_paiement_contre_passe(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $facture = $this->emettreFacturePour(Client::factory()->professionnel()->create(), 50);
         $virementErrone = $this->payer($facture, ModePaiement::Virement, '2026-10-09');
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $virementErrone, 'Virement saisi deux fois');
         $this->payer($facture->fresh(), ModePaiement::Cheque, '2026-10-09');
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
@@ -578,13 +577,13 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_un_paiement_enregistre_apres_la_cloture_compte_dans_la_cloture_suivante(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $facture = $this->emettreFacturePour(Client::factory()->professionnel()->create(), 50);
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $clotureDuJour = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->payer($facture, ModePaiement::Virement, '2026-10-09');
-        $this->travelTo('2026-10-10 19:00:00');
+        $this->travelTo(self::aParis('2026-10-10 19:00:00'));
 
         $clotureDuLendemain = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10');
 
@@ -598,11 +597,11 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_un_paiement_ne_compte_jamais_dans_deux_clotures(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->vendreUnTicket(Client::factory()->create(), 12, ModePaiement::CarteBancaire);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $premiere = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
-        $this->travelTo('2026-10-10 19:00:00');
+        $this->travelTo(self::aParis('2026-10-10 19:00:00'));
 
         $seconde = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10');
 
@@ -618,13 +617,13 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_un_paiement_date_d_un_jour_deja_cloture_compte_le_jour_de_son_enregistrement(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $facture = $this->emettreFacturePour(Client::factory()->professionnel()->create(), 50);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $clotureDuJour = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
-        $this->travelTo('2026-10-10 10:00:00');
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
         $this->payer($facture, ModePaiement::Cheque, '2026-10-09');
-        $this->travelTo('2026-10-10 19:00:00');
+        $this->travelTo(self::aParis('2026-10-10 19:00:00'));
 
         $clotureDuLendemain = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10');
 
@@ -640,12 +639,12 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_le_credit_d_avoir_impute_se_montre_a_part_des_encaissements_par_mode(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $rendu = $this->vendreUnTicket($client, 50);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $rendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $this->vendreUnTicket($client, 80, ModePaiement::CarteBancaire);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
@@ -733,14 +732,14 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_le_recapitulatif_reprend_les_grands_totaux_du_registre(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $ticket = $this->vendreUnTicket($client, 12);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $veille = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
-        $this->travelTo('2026-10-10 10:00:00');
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->travelTo('2026-10-10 19:00:00');
+        $this->travelTo(self::aParis('2026-10-10 19:00:00'));
 
         $lendemain = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10');
 
@@ -755,12 +754,12 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_cloture_rattrapee_garde_les_grands_totaux_et_les_paiements_de_sa_journee(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $this->vendreUnTicket($client, 12);
-        $this->travelTo('2026-10-10 09:00:00');
+        $this->travelTo(self::aParis('2026-10-10 09:00:00'));
         $this->vendreUnTicket($client, 30, ModePaiement::CarteBancaire);
-        $this->travelTo('2026-10-10 09:30:00');
+        $this->travelTo(self::aParis('2026-10-10 09:30:00'));
 
         $rattrapee = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
@@ -775,11 +774,11 @@ class CloturerCaisseActionTest extends TestCase
      */
     public function test_une_facture_a_un_professionnel_emise_apres_la_cloture_compte_dans_la_cloture_suivante(): void
     {
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $clotureDuJour = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->emettreFacturePour(Client::factory()->professionnel()->create(), 60);
-        $this->travelTo('2026-10-10 19:00:00');
+        $this->travelTo(self::aParis('2026-10-10 19:00:00'));
 
         $clotureDuLendemain = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10');
 

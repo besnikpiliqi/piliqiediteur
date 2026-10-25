@@ -157,9 +157,9 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
         $client = Client::factory()->professionnel()->create();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $premiere = $this->emettreUneFacture($client);
-        $this->travelTo('2026-10-12 10:00:00');
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         $seconde = $this->emettreUneFacture($client);
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
@@ -180,7 +180,7 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         $avoir = $this->crediter($client, $this->emettreUneFacture($client));
 
@@ -246,7 +246,7 @@ class AvoirPdfGeneratorTest extends TestCase
      */
     public function test_un_avoir_sur_facture_imprime_les_colonnes_ht_et_un_avoir_sur_ticket_les_colonnes_ttc(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
         $produit = Produit::factory()->create(['reference' => 'TAS-01', 'nom' => 'Tasse', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $professionnel = Client::factory()->professionnel()->create();
@@ -274,7 +274,7 @@ class AvoirPdfGeneratorTest extends TestCase
      */
     public function test_une_reference_de_60_caracteres_et_de_grands_montants_laissent_toutes_les_colonnes_de_l_avoir_dans_la_page(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'ABCDEFGHIJ']));
         $reference = 'CABLE-USB-C-VERS-USB-C-TRESSE-NYLON-100W-2M-NOIR-MODELE-2026';
         $client = Client::factory()->professionnel()->create();

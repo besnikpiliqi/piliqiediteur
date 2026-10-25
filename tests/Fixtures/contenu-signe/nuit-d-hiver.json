@@ -1,0 +1,497 @@
+{
+    "ticket": {
+        "format": 1,
+        "magasin": {
+            "uuid": "…",
+            "siren": "100000009",
+            "siret": "10000000900017"
+        },
+        "caisse": "…",
+        "chaine": "vente",
+        "sequence": 1,
+        "type": "ticket",
+        "horodatage": "20261115233000Z",
+        "operateur": {
+            "id": "…",
+            "nom": "Responsable de test"
+        },
+        "version_module": "1.2",
+        "cle_id": "…",
+        "signature_precedente": null,
+        "gt": {
+            "montant": 2400,
+            "perpetuel_reel": 2400,
+            "perpetuel_absolu": 2400
+        },
+        "document": {
+            "type": "facture",
+            "id": "…"
+        },
+        "donnees": {
+            "document": {
+                "numero": "TK-LYON1-2026-000001",
+                "date_emission": "2026-11-16T00:30:00+01:00",
+                "client": {
+                    "id": "…",
+                    "comptoir": false,
+                    "type_client": "particulier",
+                    "nom": "Paul Martin",
+                    "adresse": null,
+                    "complement_adresse": null,
+                    "code_postal": null,
+                    "ville": null,
+                    "pays": "FR",
+                    "siren": null,
+                    "siret": null,
+                    "numero_tva": null,
+                    "identifiant_etranger": null,
+                    "etabli_en_france": true
+                },
+                "franchise_en_base": false,
+                "nature_operation": "vente_france",
+                "livraison": {
+                    "adresse": null,
+                    "complement": null,
+                    "code_postal": null,
+                    "ville": null,
+                    "pays": null,
+                    "date": null,
+                    "transport_par": null
+                },
+                "consultation_vies_id": null,
+                "cree_par": "…",
+                "devis_id": null,
+                "devise": "EUR",
+                "date_echeance": "2026-12-16",
+                "conditions_paiement": null,
+                "notes": null,
+                "lignes": [
+                    {
+                        "ordre": 0,
+                        "nature": "bien",
+                        "produit_id": "…",
+                        "service_id": null,
+                        "reference": "CAF-250",
+                        "description": "Café moulu 250 g",
+                        "quantite": 2,
+                        "prix_unitaire_ht": 10000000,
+                        "prix_unitaire_ttc": 1200,
+                        "taux_tva": 2000,
+                        "taux_tva_du_prix": 2000,
+                        "remise": 0,
+                        "ht": 2000,
+                        "tva": 400,
+                        "ttc": 2400
+                    }
+                ],
+                "ventilation": [
+                    {
+                        "taux": 2000,
+                        "ht": 2000,
+                        "tva": 400,
+                        "ttc": 2400
+                    }
+                ],
+                "totaux": {
+                    "ht": 2000,
+                    "tva": 400,
+                    "ttc": 2400
+                }
+            },
+            "contexte": {
+                "emetteur": {
+                    "nom": "Ma Boutique",
+                    "raison_sociale": "Les Délices de Jeanne",
+                    "forme_juridique": "SAS",
+                    "entrepreneur_individuel": false,
+                    "capital_social": 1000000,
+                    "capital_variable": false,
+                    "siren": "100000009",
+                    "siret": "10000000900017",
+                    "immatriculation": "RCS Lyon",
+                    "numero_tva": "FR88100000009",
+                    "adresse": "12 rue Mercière",
+                    "complement_adresse": null,
+                    "code_postal": "69002",
+                    "ville": "Lyon",
+                    "pays": "FR",
+                    "siege": {
+                        "adresse": "1 rue de la République",
+                        "complement_adresse": null,
+                        "code_postal": "69002",
+                        "ville": "Lyon"
+                    },
+                    "email": "contact@ma-boutique.example",
+                    "telephone": "04 72 00 00 00",
+                    "regime_tva": null,
+                    "option_debits_tva": false,
+                    "mentions": {
+                        "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
+                        "indemnite_recouvrement": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.",
+                        "escompte": "Pas d'escompte pour paiement anticipé."
+                    }
+                },
+                "categorie_operation": "livraison_de_biens",
+                "mentions": [
+                    "Catégorie de l'opération : Livraison de biens"
+                ],
+                "consultation_vies": null,
+                "reglements": [
+                    {
+                        "paiement_id": "…",
+                        "mode": "especes",
+                        "reference": null,
+                        "montant": 2400
+                    }
+                ],
+                "credits_avoir": []
+            }
+        }
+    },
+    "encaissement": {
+        "format": 1,
+        "magasin": {
+            "uuid": "…",
+            "siren": "100000009",
+            "siret": "10000000900017"
+        },
+        "caisse": "…",
+        "chaine": "encaissement",
+        "sequence": 1,
+        "type": "paiement",
+        "horodatage": "20261115233000Z",
+        "operateur": {
+            "id": "…",
+            "nom": "Responsable de test"
+        },
+        "version_module": "1.2",
+        "cle_id": "…",
+        "signature_precedente": null,
+        "document": {
+            "type": "paiement",
+            "id": "…"
+        },
+        "donnees": {
+            "paiement": {
+                "client_id": "…",
+                "mode": "especes",
+                "montant": 2400,
+                "reference": null,
+                "notes": null,
+                "recu_le": "2026-11-16",
+                "cree_par": "…"
+            },
+            "contre_passe": null,
+            "client": {
+                "id": "…",
+                "nom": "Paul Martin",
+                "type_client": "particulier",
+                "comptoir": false,
+                "siret": null,
+                "numero_tva": null,
+                "adresse": null,
+                "complement_adresse": null,
+                "code_postal": null,
+                "ville": null,
+                "pays": "FR",
+                "email": "paul.martin@exemple.fr",
+                "telephone": "01 23 45 67 89"
+            },
+            "allocations": [
+                {
+                    "facture_id": "…",
+                    "numero": "TK-LYON1-2026-000001",
+                    "montant": 2400
+                }
+            ],
+            "credits_imputes": []
+        }
+    },
+    "facture": {
+        "format": 1,
+        "magasin": {
+            "uuid": "…",
+            "siren": "100000009",
+            "siret": "10000000900017"
+        },
+        "caisse": "…",
+        "chaine": "vente",
+        "sequence": 2,
+        "type": "facture",
+        "horodatage": "20261115233000Z",
+        "operateur": {
+            "id": "…",
+            "nom": "Responsable de test"
+        },
+        "version_module": "1.2",
+        "cle_id": "…",
+        "signature_precedente": "…",
+        "gt": {
+            "montant": 25000,
+            "perpetuel_reel": 27400,
+            "perpetuel_absolu": 27400
+        },
+        "document": {
+            "type": "facture",
+            "id": "…"
+        },
+        "donnees": {
+            "document": {
+                "numero": "FAC-LYON1-2026-000001",
+                "date_emission": "2026-11-16T00:30:00+01:00",
+                "client": {
+                    "id": "…",
+                    "comptoir": false,
+                    "type_client": "professionnel",
+                    "nom": "Muster GmbH",
+                    "adresse": null,
+                    "complement_adresse": null,
+                    "code_postal": "10115",
+                    "ville": "Berlin",
+                    "pays": "DE",
+                    "siren": null,
+                    "siret": null,
+                    "numero_tva": "DE123456789",
+                    "identifiant_etranger": null,
+                    "etabli_en_france": false
+                },
+                "franchise_en_base": false,
+                "nature_operation": "livraison_intracommunautaire",
+                "livraison": {
+                    "adresse": "Musterstraße 1",
+                    "complement": null,
+                    "code_postal": "10115",
+                    "ville": "Berlin",
+                    "pays": "DE",
+                    "date": "2026-11-16",
+                    "transport_par": "acquereur"
+                },
+                "consultation_vies_id": "…",
+                "cree_par": "…",
+                "devis_id": null,
+                "devise": "EUR",
+                "date_echeance": "2026-12-16",
+                "conditions_paiement": null,
+                "notes": null,
+                "lignes": [
+                    {
+                        "ordre": 0,
+                        "nature": "bien",
+                        "produit_id": "…",
+                        "service_id": null,
+                        "reference": "VIS-001",
+                        "description": "Vis à bois",
+                        "quantite": 12,
+                        "prix_unitaire_ht": 20833333,
+                        "prix_unitaire_ttc": 2500,
+                        "taux_tva": 0,
+                        "taux_tva_du_prix": 2000,
+                        "remise": 0,
+                        "ht": 25000,
+                        "tva": 0,
+                        "ttc": 25000
+                    }
+                ],
+                "ventilation": [
+                    {
+                        "taux": 0,
+                        "ht": 25000,
+                        "tva": 0,
+                        "ttc": 25000
+                    }
+                ],
+                "totaux": {
+                    "ht": 25000,
+                    "tva": 0,
+                    "ttc": 25000
+                }
+            },
+            "contexte": {
+                "emetteur": {
+                    "nom": "Ma Boutique",
+                    "raison_sociale": "Les Délices de Jeanne",
+                    "forme_juridique": "SAS",
+                    "entrepreneur_individuel": false,
+                    "capital_social": 1000000,
+                    "capital_variable": false,
+                    "siren": "100000009",
+                    "siret": "10000000900017",
+                    "immatriculation": "RCS Lyon",
+                    "numero_tva": "FR88100000009",
+                    "adresse": "12 rue Mercière",
+                    "complement_adresse": null,
+                    "code_postal": "69002",
+                    "ville": "Lyon",
+                    "pays": "FR",
+                    "siege": {
+                        "adresse": "1 rue de la République",
+                        "complement_adresse": null,
+                        "code_postal": "69002",
+                        "ville": "Lyon"
+                    },
+                    "email": "contact@ma-boutique.example",
+                    "telephone": "04 72 00 00 00",
+                    "regime_tva": null,
+                    "option_debits_tva": false,
+                    "mentions": {
+                        "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
+                        "indemnite_recouvrement": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.",
+                        "escompte": "Pas d'escompte pour paiement anticipé."
+                    }
+                },
+                "categorie_operation": "livraison_de_biens",
+                "mentions": [
+                    "Catégorie de l'opération : Livraison de biens",
+                    "Exonération de TVA, article 262 ter I du CGI"
+                ],
+                "consultation_vies": {
+                    "numero_tva": "DE123456789",
+                    "valide": true,
+                    "identifiant": "WAPIAAAAW1234567",
+                    "consultee_le": "2026-11-16T00:30:00+01:00"
+                },
+                "reglements": [],
+                "credits_avoir": []
+            }
+        }
+    },
+    "avoir": {
+        "format": 1,
+        "magasin": {
+            "uuid": "…",
+            "siren": "100000009",
+            "siret": "10000000900017"
+        },
+        "caisse": "…",
+        "chaine": "vente",
+        "sequence": 3,
+        "type": "avoir",
+        "horodatage": "20261115233000Z",
+        "operateur": {
+            "id": "…",
+            "nom": "Responsable de test"
+        },
+        "version_module": "1.2",
+        "cle_id": "…",
+        "signature_precedente": "…",
+        "gt": {
+            "montant": -1200,
+            "perpetuel_reel": 26200,
+            "perpetuel_absolu": 28600
+        },
+        "document": {
+            "type": "avoir",
+            "id": "…"
+        },
+        "donnees": {
+            "document": {
+                "numero": "AV-LYON1-2026-000001",
+                "date_emission": "2026-11-16T00:30:00+01:00",
+                "client": {
+                    "id": "…",
+                    "comptoir": false,
+                    "type_client": "particulier",
+                    "nom": "Paul Martin",
+                    "adresse": null,
+                    "complement_adresse": null,
+                    "code_postal": null,
+                    "ville": null,
+                    "pays": "FR",
+                    "siren": null,
+                    "siret": null,
+                    "numero_tva": null,
+                    "identifiant_etranger": null,
+                    "etabli_en_france": true
+                },
+                "franchise_en_base": false,
+                "nature_operation": "vente_france",
+                "cree_par": "…",
+                "devise": "EUR",
+                "motif": "Retour",
+                "corrige": "ticket",
+                "documents_corriges": [
+                    {
+                        "numero": "TK-LYON1-2026-000001",
+                        "date_emission": "2026-11-16"
+                    }
+                ],
+                "lignes": [
+                    {
+                        "ordre": 0,
+                        "nature": "bien",
+                        "produit_id": "…",
+                        "reference": "CAF-250",
+                        "description": "Café moulu 250 g",
+                        "quantite": -1,
+                        "prix_unitaire_ht": 10000000,
+                        "prix_unitaire_ttc": 1200,
+                        "taux_tva": 2000,
+                        "taux_tva_du_prix": 2000,
+                        "remise": 0,
+                        "ht": -1000,
+                        "tva": -200,
+                        "ttc": -1200,
+                        "origine": {
+                            "ligne_facture_id": "…",
+                            "facture_id": "…",
+                            "numero": "TK-LYON1-2026-000001"
+                        }
+                    }
+                ],
+                "ventilation": [
+                    {
+                        "taux": 2000,
+                        "ht": -1000,
+                        "tva": -200,
+                        "ttc": -1200
+                    }
+                ],
+                "totaux": {
+                    "ht": -1000,
+                    "tva": -200,
+                    "ttc": -1200
+                }
+            },
+            "contexte": {
+                "emetteur": {
+                    "nom": "Ma Boutique",
+                    "raison_sociale": "Les Délices de Jeanne",
+                    "forme_juridique": "SAS",
+                    "entrepreneur_individuel": false,
+                    "capital_social": 1000000,
+                    "capital_variable": false,
+                    "siren": "100000009",
+                    "siret": "10000000900017",
+                    "immatriculation": "RCS Lyon",
+                    "numero_tva": "FR88100000009",
+                    "adresse": "12 rue Mercière",
+                    "complement_adresse": null,
+                    "code_postal": "69002",
+                    "ville": "Lyon",
+                    "pays": "FR",
+                    "siege": {
+                        "adresse": "1 rue de la République",
+                        "complement_adresse": null,
+                        "code_postal": "69002",
+                        "ville": "Lyon"
+                    },
+                    "email": "contact@ma-boutique.example",
+                    "telephone": "04 72 00 00 00",
+                    "regime_tva": null,
+                    "option_debits_tva": false,
+                    "mentions": {
+                        "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
+                        "indemnite_recouvrement": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.",
+                        "escompte": "Pas d'escompte pour paiement anticipé."
+                    }
+                },
+                "categorie_operation": "livraison_de_biens",
+                "mentions": [
+                    "Catégorie de l'opération : Livraison de biens"
+                ],
+                "imputations": [],
+                "bon_d_avoir": null
+            }
+        }
+    }
+}

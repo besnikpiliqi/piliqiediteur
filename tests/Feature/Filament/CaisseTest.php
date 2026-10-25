@@ -241,9 +241,9 @@ class CaisseTest extends TestCase
         Filament::setTenant($magasin);
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-09 08:00:05'));
         self::vendreAuComptant(self::auteur(), $clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
-        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-09 08:00:04'));
         Exceptions::fake([HorlogeRegressiveException::class]);
 
         Livewire::test(Caisse::class)
@@ -1197,11 +1197,11 @@ class CaisseTest extends TestCase
      */
     public function test_apres_la_cloture_de_la_journee_la_caisse_n_encaisse_plus_jusqu_a_minuit(): void
     {
-        $magasin = $this->ouvrirLaCaisseDUnMagasin('2026-10-09 19:00:00');
+        $magasin = $this->ouvrirLaCaisseDUnMagasin(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $vente = ['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'];
-        $this->travelTo('2026-10-09 19:30:00');
+        $this->travelTo(self::aParis('2026-10-09 19:30:00'));
 
         Livewire::test(Caisse::class)
             ->assertSee('La journée du 09/10/2026 est clôturée : les ventes reprennent demain.')
@@ -1212,7 +1212,7 @@ class CaisseTest extends TestCase
 
         $this->assertSame(0, Facture::query()->count());
 
-        $this->travelTo('2026-10-10 00:01:00');
+        $this->travelTo(self::aParis('2026-10-10 00:01:00'));
 
         Livewire::test(Caisse::class)
             ->assertDontSee('est clôturée')
@@ -1657,11 +1657,11 @@ class CaisseTest extends TestCase
      */
     public function test_apres_la_cloture_un_appel_direct_a_encaisser_est_refuse_meme_pour_un_professionnel(): void
     {
-        $magasin = $this->ouvrirLaCaisseDUnMagasin('2026-10-09 19:00:00');
+        $magasin = $this->ouvrirLaCaisseDUnMagasin(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $professionnel = Client::factory()->professionnel()->create();
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $this->travelTo('2026-10-09 19:30:00');
+        $this->travelTo(self::aParis('2026-10-09 19:30:00'));
 
         Livewire::test(Caisse::class)
             ->fillForm([
@@ -2062,12 +2062,13 @@ class CaisseTest extends TestCase
 
     /**
      * La caisse de « Ma Boutique », ouverte par son responsable de test, à
-     * cet instant figé, heure de Paris : les numéros des tickets et des
-     * avoirs portent l'année 2026 quel que soit le jour où le test tourne.
+     * cet instant figé, le 9 octobre 2026 à 10 h à Paris sans autre
+     * précision : les numéros des tickets et des avoirs portent l'année
+     * 2026 quel que soit le jour où le test tourne.
      */
-    private function ouvrirLaCaisseDUnMagasin(string $instant = '2026-10-09 10:00:00'): Magasin
+    private function ouvrirLaCaisseDUnMagasin(?CarbonImmutable $instant = null): Magasin
     {
-        $this->travelTo($instant);
+        $this->travelTo($instant ?? self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);

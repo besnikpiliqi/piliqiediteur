@@ -98,7 +98,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
     public function test_la_contre_passation_annule_le_paiement_errone_et_rouvre_la_facture(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $operateur = $this->responsable($this->magasinActif());
         $this->actingAs($operateur);
         $client = Client::factory()->professionnel()->create();
@@ -134,12 +134,12 @@ class ContrePasserPaiementActionTest extends TestCase
 
     public function test_une_facture_echue_rouverte_par_la_contre_passation_est_en_retard(): void
     {
-        $this->travelTo('2026-09-01 10:00:00');
+        $this->travelTo(self::aParis('2026-09-01 10:00:00'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         $this->contrePasser($errone);
 
@@ -220,7 +220,7 @@ class ContrePasserPaiementActionTest extends TestCase
      */
     public function test_une_contre_passation_attend_le_lendemain_d_une_journee_cloturee(): void
     {
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $magasin = $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
@@ -228,7 +228,7 @@ class ContrePasserPaiementActionTest extends TestCase
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
 
         $this->assertThrows(fn () => $this->contrePasser($errone), LogicException::class, 'La journée du 09/10/2026 est clôturée : la contre-passation pourra être faite demain.');
-        $this->travelTo('2026-10-10 09:00:00');
+        $this->travelTo(self::aParis('2026-10-10 09:00:00'));
         $contrePassation = $this->contrePasser($errone);
 
         $this->assertSame('2026-10-10', $contrePassation->recu_le->toDateString());
@@ -243,7 +243,7 @@ class ContrePasserPaiementActionTest extends TestCase
      */
     public function test_la_contre_passation_est_signee_dans_la_chaine_des_encaissements(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
@@ -302,7 +302,7 @@ class ContrePasserPaiementActionTest extends TestCase
      */
     public function test_le_bon_paiement_ne_regle_que_ce_que_le_credit_impute_a_la_contre_passation_laisse_du(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $dejaPayee = $this->facture($client, 90);
@@ -339,7 +339,7 @@ class ContrePasserPaiementActionTest extends TestCase
      */
     private function paiementErroneQuiImputeDuCredit(): array
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $ticketRendu = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);

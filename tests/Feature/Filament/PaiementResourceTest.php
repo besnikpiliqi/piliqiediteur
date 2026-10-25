@@ -27,7 +27,6 @@ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\PaiementResource\Pages\CreatePaiement;
 use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Builder;
@@ -122,9 +121,9 @@ class PaiementResourceTest extends TestCase
     {
         $magasin = $this->connecterLeProprietaire();
         $client = Client::factory()->create();
-        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-09 08:00:05'));
         $facture = $this->emettreFactureDepuisLePanneau($client);
-        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-09 08:00:04'));
         Exceptions::fake([HorlogeRegressiveException::class]);
 
         Livewire::test(CreatePaiement::class)
@@ -291,7 +290,7 @@ class PaiementResourceTest extends TestCase
      */
     public function test_laction_rapide_encaisser_accepte_une_date_de_reception_passee(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
@@ -308,7 +307,7 @@ class PaiementResourceTest extends TestCase
      */
     public function test_laction_rapide_encaisser_refuse_une_date_de_reception_future(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
@@ -383,7 +382,7 @@ class PaiementResourceTest extends TestCase
      */
     public function test_le_formulaire_des_paiements_accepte_une_date_de_reception_passee(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
@@ -407,7 +406,7 @@ class PaiementResourceTest extends TestCase
 
     public function test_le_formulaire_des_paiements_refuse_une_date_de_reception_future(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120

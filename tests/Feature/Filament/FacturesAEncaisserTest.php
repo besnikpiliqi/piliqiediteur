@@ -19,7 +19,6 @@ use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Widgets\FacturesAEncaisserApercu;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -229,14 +228,14 @@ class FacturesAEncaisserTest extends TestCase
      */
     public function test_le_retard_se_compte_a_part(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-01 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = $this->magasin();
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->responsableDeTest($magasin);
         $enRetard = $this->facture($vendeur, 'Atelier Martin', 50);
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $aLHeure = $this->facture($vendeur, 'Garage Durand', 120);
-        $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         $this->dansLeMagasin($magasin, $proprietaire);
 
         $alerte = Livewire::test(FacturesAEncaisserApercu::class);

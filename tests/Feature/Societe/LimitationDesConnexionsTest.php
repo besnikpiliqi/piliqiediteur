@@ -46,6 +46,7 @@ class LimitationDesConnexionsTest extends TestCase
 
     public function test_trop_d_echecs_pour_un_identifiant_et_une_adresse_ip_font_attendre_de_plus_en_plus(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
 
@@ -69,7 +70,7 @@ class LimitationDesConnexionsTest extends TestCase
      */
     public function test_l_attente_croissante_se_garde_tant_que_les_echecs_se_suivent_jusqu_a_quinze_minutes(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
 
@@ -178,6 +179,7 @@ class LimitationDesConnexionsTest extends TestCase
      */
     public function test_aucun_compte_n_est_jamais_bloque_definitivement(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
         foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE + 5) as $rang) {
@@ -241,6 +243,7 @@ class LimitationDesConnexionsTest extends TestCase
      */
     public function test_dix_echecs_de_suite_avec_un_temoin_de_poste_le_font_ignorer_une_heure(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
         $poste = $this->posteConnuDe($identifiant);
@@ -264,25 +267,25 @@ class LimitationDesConnexionsTest extends TestCase
      */
     public function test_un_poste_connu_reste_ignore_l_heure_qui_suit_son_dixieme_echec_meme_etale(): void
     {
-        $this->travelTo('2026-10-09 09:55:00');
+        $this->travelTo(self::aParis('2026-10-09 09:55:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
         $poste = $this->posteConnuDe($identifiant);
 
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         foreach (range(1, LimitationDesConnexions::ECHECS_DE_SUITE_PAR_POSTE - 1) as $rang) {
             $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon', $poste)), "essai {$rang}");
         }
-        $this->travelTo('2026-10-09 10:50:00');
+        $this->travelTo(self::aParis('2026-10-09 10:50:00'));
         $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon', $poste)));
 
-        $this->travelTo('2026-10-09 11:05:00');
+        $this->travelTo(self::aParis('2026-10-09 11:05:00'));
         foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE) as $rang) {
             $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon', $poste)), "essai ignoré {$rang}");
         }
         $this->assertSame(LimitationDesConnexions::message(60), $this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)));
 
-        $this->travelTo('2026-10-09 11:51:00');
+        $this->travelTo(self::aParis('2026-10-09 11:51:00'));
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)->assertHasNoErrors();
         $this->assertAuthenticatedAs($vendeur);
     }

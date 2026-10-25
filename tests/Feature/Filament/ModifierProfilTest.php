@@ -115,6 +115,7 @@ class ModifierProfilTest extends TestCase
      */
     public function test_un_lien_de_confirmation_expire_ou_rejoue_est_refuse(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $proprietaire = $this->creerProprietaire();
 
@@ -149,14 +150,14 @@ class ModifierProfilTest extends TestCase
     public function test_confirmer_une_nouvelle_adresse_pose_sa_date_de_confirmation_et_seul_le_proprietaire_en_demande(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $proprietaire = $this->creerProprietaire();
-        $proprietaire->forceFill(['email_verified_at' => now()->subYear()])->save();
+        $proprietaire->forceFill(['email_verified_at' => self::aParis('2025-10-15 10:00:00')])->save();
 
         app(DemanderUneNouvelleAdresseAction::class)->handle($proprietaire, 'jeanne.martin@example.test');
         app(ConfirmerNouvelleAdresseAction::class)->handle($this->jetonEnvoyeA('jeanne.martin@example.test'));
 
-        $this->assertSame('2026-10-15 10:00:00', $proprietaire->refresh()->email_verified_at?->toDateTimeString());
+        $this->assertMemeInstant(self::aParis('2026-10-15 10:00:00'), $proprietaire->refresh()->email_verified_at);
         $vendeur = $this->membre($this->magasinDe($proprietaire), RoleMagasin::Vendeur);
         $this->assertThrows(fn () => app(DemanderUneNouvelleAdresseAction::class)->handle($vendeur, 'paul@example.test'), LogicException::class, 'Seul le propriétaire a une adresse de connexion à confirmer.');
         Mail::assertNotSent(ConfirmationNouvelleAdresseMail::class, fn (ConfirmationNouvelleAdresseMail $mail): bool => $mail->hasTo('paul@example.test'));
@@ -195,7 +196,7 @@ class ModifierProfilTest extends TestCase
     public function test_une_nouvelle_adresse_au_dela_du_debit_des_e_mails_est_refusee_sans_rien_changer(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $proprietaire = $this->creerProprietaire();
         $adresse = $proprietaire->email;
         $administrateur = $this->administrateurPretAReprendre($this->magasinDe($proprietaire));

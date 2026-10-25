@@ -3,6 +3,7 @@
 namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
@@ -19,7 +20,6 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -149,7 +149,7 @@ class RegistreFiscalTest extends TestCase
 
     public function test_chaque_chaine_suit_sa_propre_sequence_depuis_1_dans_chaque_magasin(): void
     {
-        $this->freezeTime();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasinA = $this->magasinActif();
         $this->enregistrer(ChaineFiscale::Vente);
         $this->enregistrer(ChaineFiscale::Encaissement, 'paiement');
@@ -194,7 +194,7 @@ class RegistreFiscalTest extends TestCase
 
     public function test_le_contenu_signe_se_verifie_tel_quel_et_reprend_l_en_tete_de_l_enregistrement(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $magasin = Magasin::factory()->avecLaSociete(['siren' => '100000009'])->create(['siret' => '10000000900017']);
         app(TenantContext::class)->set($magasin);
         $vendeuse = User::factory()->responsableDeTest($magasin, self::MOT_DE_PASSE_CHOISI)->create(['name' => 'Zoé Lefèvre']);
@@ -228,7 +228,7 @@ class RegistreFiscalTest extends TestCase
 
         $enregistrement = $enregistrement->fresh();
         $this->assertSame('2026-10-09T08:15:30+00:00', $enregistrement->horodatage->toIso8601String());
-        $this->assertSame('2026-10-09 08:15:30', DB::table('enregistrements_fiscaux')->where('id', $enregistrement->id)->value('horodatage'));
+        $this->assertSame(HorodatageUtc::enBase(self::enUtc('2026-10-09 08:15:30')), DB::table('enregistrements_fiscaux')->where('id', $enregistrement->id)->value('horodatage'));
         $this->assertSame('facture', $enregistrement->document_type);
         $this->assertTrue($enregistrement->document->is($facture));
         $this->assertTrue($enregistrement->operateur->is($vendeuse));
@@ -244,7 +244,7 @@ class RegistreFiscalTest extends TestCase
      */
     public function test_les_ecritures_d_une_transaction_portent_toutes_l_instant_de_son_verrou(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $magasin = $this->magasinActif();
 
         [$instant, $redonne, $vente, $encaissement, $evenement] = $this->auNomDuSysteme(fn (): array => DB::transaction(function () use ($magasin): array {
@@ -278,7 +278,7 @@ class RegistreFiscalTest extends TestCase
      */
     public function test_un_point_de_sauvegarde_annule_ne_laisse_ni_ses_enregistrements_ni_un_instant_oublie(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif();
 
         $vente = $this->auNomDuSysteme(fn (): EnregistrementFiscal => DB::transaction(function (): EnregistrementFiscal {
@@ -292,7 +292,7 @@ class RegistreFiscalTest extends TestCase
 
             return $registre->enregistrerVente('ticket', 0, []);
         }));
-        $this->travelTo('2026-10-09 10:15:29');
+        $this->travelTo(self::aParis('2026-10-09 10:15:29'));
 
         $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'ticket']], $this->registre());
         $this->assertNull($vente->signature_precedente);
@@ -395,10 +395,10 @@ class RegistreFiscalTest extends TestCase
 
     public function test_une_horloge_qui_recule_est_refusee_et_signalee(): void
     {
-        $this->travelTo('2026-10-09 10:00:05');
+        $this->travelTo(self::aParis('2026-10-09 10:00:05'));
         $magasin = $this->magasinActif();
         $this->enregistrer();
-        $this->travelTo('2026-10-09 10:00:04');
+        $this->travelTo(self::aParis('2026-10-09 10:00:04'));
         Log::spy();
 
         $this->assertRefuseAvantDEcrire(
@@ -413,10 +413,10 @@ class RegistreFiscalTest extends TestCase
 
     public function test_un_verrou_sans_ecriture_fixe_aussi_l_heure_sous_laquelle_l_horloge_ne_recule_plus(): void
     {
-        $this->travelTo('2026-10-09 10:00:05');
+        $this->travelTo(self::aParis('2026-10-09 10:00:05'));
         $magasin = $this->magasinActif();
         DB::transaction(fn (): InstantFiscal => app(RegistreFiscal::class)->verrouiller($magasin));
-        $this->travelTo('2026-10-09 10:00:04');
+        $this->travelTo(self::aParis('2026-10-09 10:00:04'));
 
         $this->assertRefuseAvantDEcrire(
             fn (RegistreFiscal $registre) => $registre->enregistrerVente('ticket', 0, []),
@@ -517,7 +517,7 @@ class RegistreFiscalTest extends TestCase
      */
     public function test_journaliser_range_l_adresse_ip_et_le_navigateur_dans_la_trace(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->magasinActif();
         Route::get('/test/journaliser', function () use ($magasin): int {
             app(TenantContext::class)->set($magasin);
@@ -532,8 +532,8 @@ class RegistreFiscalTest extends TestCase
         $evenement = EnregistrementFiscal::query()->findOrFail($reponse->getContent());
         $this->assertSame(['code', 'libelle', 'details'], array_keys($this->contenu($evenement)['donnees']));
         $this->assertSame(
-            ['203.0.113.7', 'Mozilla/5.0 (Navigateur de test)', '2027-10-09 08:00:00'],
-            [$evenement->trace->ip, $evenement->trace->agent_utilisateur, $evenement->trace->expire_le->format('Y-m-d H:i:s')],
+            ['203.0.113.7', 'Mozilla/5.0 (Navigateur de test)', self::enUtc('2027-10-09 08:00:00')->getTimestamp()],
+            [$evenement->trace->ip, $evenement->trace->agent_utilisateur, $evenement->trace->expire_le->getTimestamp()],
         );
     }
 

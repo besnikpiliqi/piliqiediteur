@@ -55,7 +55,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
      */
     private function factureDu(string $jour, Client $client, float $prixTtc): Facture
     {
-        $this->travelTo("{$jour} 10:00:00");
+        $this->travelTo(self::aParis("{$jour} 10:00:00"));
 
         return $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]), 1);
     }
@@ -87,7 +87,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
      */
     private function avoirTotalDu(string $jour, Facture $facture): Avoir
     {
-        $this->travelTo("{$jour} 10:00:00");
+        $this->travelTo(self::aParis("{$jour} 10:00:00"));
 
         return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
     }
@@ -137,11 +137,11 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
      */
     public function test_un_avoir_partiel_laisse_en_retard_sa_facture_echue(): void
     {
-        $this->travelTo('2026-09-01 10:00:00');
+        $this->travelTo(self::aParis('2026-09-01 10:00:00'));
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $facture->forceFill(['statut' => StatutFacture::EnRetard])->save();
 
         $this->emettreAvoir($client, [[$facture, 1]]);
@@ -262,7 +262,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $f0 = $this->factureDu('2026-09-01', $dupont, 100);
         $this->encaisser($f0, 100);
         $f1 = $this->factureDu('2026-09-01', $dupont, 120);
-        $this->travelTo('2026-10-09 09:00:00');
+        $this->travelTo(self::aParis('2026-10-09 09:00:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
         $this->assertSame(StatutFacture::EnRetard, $f1->fresh()->statut);
 
@@ -281,7 +281,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $ticketPaye = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $ticketImpaye = $this->emettreFacture($comptoir, Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]), 1);
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -76,7 +77,7 @@ class VerificateurIntegriteTest extends TestCase
      */
     private function activite(): array
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $particulier = Client::factory()->create();
         $professionnel = Client::factory()->professionnel()->create();
         $cafe = $this->produit('CAF', 12);
@@ -107,7 +108,7 @@ class VerificateurIntegriteTest extends TestCase
      */
     private function contrePassationPuisBonPaiement(): array
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $professionnel = Client::factory()->professionnel()->create();
         $emettre = fn (Produit $article): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, [['produit_id' => $article->id, 'quantite' => 1]]));
         $payer = fn (Facture $facture, string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
@@ -359,7 +360,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => '2026-10-09 08:00:01']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:01'))]);
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
@@ -448,7 +449,7 @@ class VerificateurIntegriteTest extends TestCase
         $initialisation = $this->enregistrement(ChaineFiscale::Evenement, 1);
         $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_update');
 
-        DB::table('enregistrements_fiscaux')->where('magasin_id', $initialisation->magasin_id)->where('id', $initialisation->id)->update(['horodatage' => '2026-10-09 07:00:00']);
+        DB::table('enregistrements_fiscaux')->where('magasin_id', $initialisation->magasin_id)->where('id', $initialisation->id)->update(['horodatage' => HorodatageUtc::enBase(self::enUtc('2026-10-09 07:00:00'))]);
 
         $this->assertSame([
             [90, 'Enregistrement n° 1 du journal des événements : l\'en-tête signé diffère de ses colonnes (horodatage).'],
@@ -463,9 +464,9 @@ class VerificateurIntegriteTest extends TestCase
     public function test_un_horodatage_anterieur_a_l_enregistrement_precedent_est_detecte(): void
     {
         $this->magasinActif();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         DB::transaction(fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::ExportDeDonnees));
-        $this->travelTo('2026-10-09 11:00:00');
+        $this->travelTo(self::aParis('2026-10-09 11:00:00'));
         DB::transaction(fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::ExportDeDonnees));
         DB::transaction(fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::ExportDeDonnees));
         $deuxiemeExport = $this->enregistrement(ChaineFiscale::Evenement, 3);
@@ -473,7 +474,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->reecrireEtResigner(
             $deuxiemeExport,
             static fn (string $contenu): string => str_replace('"horodatage":"20261009090000Z"', '"horodatage":"20261009075959Z"', $contenu),
-            ['horodatage' => '2026-10-09 07:59:59'],
+            ['horodatage' => HorodatageUtc::enBase(self::enUtc('2026-10-09 07:59:59'))],
         );
 
         $this->assertSame([
@@ -575,7 +576,7 @@ class VerificateurIntegriteTest extends TestCase
                 'La ligne de tête ne note pas la version du module et la clé du dernier enregistrement du registre.',
             ],
             'dernier verrou' => [
-                static fn (array $chaines): array => ['dernier_horodatage' => '2026-10-09 07:59:59'],
+                static fn (array $chaines): array => ['dernier_horodatage' => HorodatageUtc::enBase(self::enUtc('2026-10-09 07:59:59'))],
                 'La ligne de tête date le dernier verrou du registre du 09/10/2026 à 09:59:59, avant son enregistrement le plus récent (09/10/2026 à 10:00:00).',
             ],
         ];
@@ -723,7 +724,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->activite();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-LYON1-2026-000003', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-LYON1-2026-000003', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000003 n\'a aucun enregistrement de la chaîne des ventes.'],
@@ -798,7 +799,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->activite();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => $numero, 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => $numero, 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         $this->assertSame([95, $anomalie], $this->anomalies($this->verifier())[1]);
     }
@@ -932,7 +933,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => '2025-12-31 12:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => HorodatageUtc::enBase(self::enUtc('2025-12-31 12:00:00'))]);
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
@@ -1095,7 +1096,7 @@ class VerificateurIntegriteTest extends TestCase
      */
     public function test_un_enregistrement_et_un_document_de_deux_magasins_ne_se_correspondent_jamais(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasinB = $this->magasinActif('LYON2');
         $ticketDeB = $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
         $enregistrementDeB = $this->enregistrementDe($ticketDeB, ChaineFiscale::Vente);
@@ -1156,7 +1157,7 @@ class VerificateurIntegriteTest extends TestCase
     public function test_un_paiement_signe_qui_impute_plus_que_le_reste_du_est_detecte(): void
     {
         $magasin = $this->magasinActif();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $ticket = $this->encaisser($client, [[$this->produit('ART', 100), 1]], ModePaiement::CarteBancaire);
         $this->assertSame(100.0, $ticket->montantPaye());

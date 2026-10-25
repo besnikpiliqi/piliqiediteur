@@ -58,7 +58,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     private function journeeDExemple(): ClotureCaisse
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $particulier = Client::factory()->create();
         $cable = $this->produit(50);
         $deuxCables = self::vendreAuComptant(self::auteur(), $particulier, [['produit_id' => $cable->id, 'quantite' => 2]], ModePaiement::Especes);
@@ -69,7 +69,7 @@ class EReportingDesParticuliersTest extends TestCase
         self::vendreAuComptant(self::auteur(), $particulier, [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
         $this->payer($this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => $cable->id, 'quantite' => 1]]), 50, ModePaiement::Virement, '2026-10-05');
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $deuxCables->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->travelTo('2026-10-05 19:00:00');
+        $this->travelTo(self::aParis('2026-10-05 19:00:00'));
 
         return $this->cloturer('2026-10-05');
     }
@@ -158,7 +158,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_l_apercu_egale_le_net_de_la_cloture(): void
     {
-        $this->travelTo('2026-10-05 09:00:00');
+        $this->travelTo(self::aParis('2026-10-05 09:00:00'));
         $client = Client::factory()->create();
         $billet = $this->produit(25);
         self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $billet->id, 'quantite' => 1]]);
@@ -179,7 +179,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_un_avoir_du_jour_se_deduit_de_sa_categorie_et_de_son_taux(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $ecran = $this->produit(60);
         $vente = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $ecran->id, 'quantite' => 2], ['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1]]);
@@ -195,11 +195,11 @@ class EReportingDesParticuliersTest extends TestCase
 
     public function test_une_journee_qui_n_a_que_des_avoirs_donne_des_montants_negatifs(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $vente = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(60)->id, 'quantite' => 1]]);
         $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
@@ -215,7 +215,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_facture_a_un_professionnel_n_entre_jamais_dans_l_apercu(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $professionnel = Client::factory()->professionnel()->create();
         $facture = $this->emettre($professionnel, [$this->reparation(60)]);
         $this->payer($facture, 60, ModePaiement::Virement, '2026-10-05');
@@ -235,10 +235,10 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_journee_sans_operation_n_a_rien_a_declarer(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1]]);
         $avecVente = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 19:00:00');
+        $this->travelTo(self::aParis('2026-10-06 19:00:00'));
 
         $aZero = $this->cloturer('2026-10-06');
 
@@ -256,7 +256,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_vente_sans_tva_francaise_se_range_dans_les_operations_non_soumises_en_attente_de_son_motif(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->emettre(Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1]], [
             'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
         ]);
@@ -280,7 +280,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_vente_en_franchise_en_base_se_range_dans_les_operations_non_soumises_categorie_a_verifier(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->reglerLaSociete($this->magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1]]);
 
@@ -304,7 +304,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_vente_en_france_a_zero_pour_cent_se_range_dans_les_operations_non_soumises_categorie_a_verifier(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(10, 0)->id, 'quantite' => 1]]);
 
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
@@ -327,7 +327,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_l_encaissement_d_un_service_est_ventile_par_taux_et_marque_a_confirmer(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         self::vendreAuComptant(self::auteur(), $client, [$this->reparation(60)], ModePaiement::CarteBancaire);
         self::vendreAuComptant(self::auteur(), $client, [$this->reparation(30, 10)]);
@@ -354,12 +354,12 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_un_service_regle_par_un_credit_d_avoir_compte_parmi_les_encaissements_a_la_date_de_son_utilisation(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $ecran = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(50)->id, 'quantite' => 1]]);
         $this->emettre($client, [$this->reparation(80)]);
         $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ecran->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
         $duSix = $this->cloturer('2026-10-06');
@@ -377,12 +377,12 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_l_avoir_d_une_prestation_deja_encaissee_ne_se_deduit_pas_de_ses_encaissements_en_attendant_l_editeur(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $payee = self::vendreAuComptant(self::auteur(), $client, [$this->reparation(60)], ModePaiement::CarteBancaire);
         $this->emettre($client, [$this->reparation(60)]);
         $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]], 'Annulée');
 
         $duSix = $this->cloturer('2026-10-06');
@@ -418,11 +418,11 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_le_credit_d_un_avoir_impute_sur_le_ticket_qu_il_corrige_n_est_pas_un_encaissement(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $reparation = $this->emettre($client, [$this->reparation(60)]);
         $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $reparation->lignes->sole()->id, 'quantite' => 1]], 'Annulée');
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
@@ -439,12 +439,12 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_le_credit_d_un_avoir_sur_deux_tickets_ne_retire_des_encaissements_que_ce_qu_il_corrige_du_ticket_regle(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $ecran = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(50)->id, 'quantite' => 1]]);
         $heures = $this->emettre($client, [[...$this->reparation(10), 'quantite' => 6]]);
         $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ecran->lignes->sole()->id, 'quantite' => 1],
             ['ligne_facture_id' => $heures->lignes->sole()->id, 'quantite' => 1],
@@ -466,18 +466,18 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_le_credit_reimpute_apres_une_contre_passation_compte_au_dela_de_ce_qu_il_corrige(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $ecran = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(40)->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
         $reparations = self::vendreAuComptant(self::auteur(), $client, [[...$this->reparation(60), 'quantite' => 2]], ModePaiement::CarteBancaire);
         $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ecran->lignes->sole()->id, 'quantite' => 1],
             ['ligne_facture_id' => $reparations->lignes->sole()->id, 'quantite' => 1],
         ], 'Retour');
         $duSix = $this->cloturer('2026-10-06');
-        $this->travelTo('2026-10-07 10:00:00');
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $reparations->allocationsPaiement()->sole()->paiement, 'Carte refusée');
 
         $duSept = $this->cloturer('2026-10-07');
@@ -494,7 +494,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_un_reglement_partiel_d_un_ticket_mixte_reste_a_repartir(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $mixte = $this->emettre(Client::factory()->create(), [['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1], $this->reparation(60)]);
         $this->payer($mixte, 30, ModePaiement::Especes, '2026-10-05');
 
@@ -510,10 +510,10 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_la_contre_passation_d_un_paiement_de_service_se_deduit_a_sa_date(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [$this->reparation(60)], ModePaiement::CarteBancaire);
         $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $ticket->allocationsPaiement()->sole()->paiement, 'Carte refusée');
 
         $duSix = $this->cloturer('2026-10-06');
@@ -530,10 +530,10 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_la_contre_passation_du_reglement_d_un_ticket_mixte_solde_en_une_fois_rend_la_part_du_service(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1], $this->reparation(60)], ModePaiement::CarteBancaire);
         $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $ticket->allocationsPaiement()->sole()->paiement, 'Carte refusée');
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
@@ -548,10 +548,10 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_un_ticket_mixte_solde_en_un_seul_reglement_apres_son_emission_declare_la_part_du_service(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $mixte = $this->emettre(Client::factory()->create(), [['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1], $this->reparation(60)]);
         $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $this->payer($mixte, 70.55, ModePaiement::Especes, '2026-10-06');
 
         $apercu = $this->apercu($this->cloturer('2026-10-06'));
@@ -568,16 +568,16 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_journee_dont_seul_l_avoir_d_un_professionnel_regle_une_prestation_d_un_particulier_est_a_declarer(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $this->emettre($client, [$this->reparation(60)]);
         $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '123456789']);
         $facture = $this->emettre($client->fresh(), [['produit_id' => $this->produit(40)->id, 'quantite' => 1]]);
         $this->payer($facture, 40, ModePaiement::Virement, '2026-10-06');
         $this->cloturer('2026-10-06');
-        $this->travelTo('2026-10-07 10:00:00');
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client->fresh(), [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
         $duSept = $this->cloturer('2026-10-07');
@@ -593,10 +593,10 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_journee_dont_le_paiement_d_une_prestation_est_contre_passe_le_jour_meme_n_est_pas_a_declarer(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $reparation = $this->emettre(Client::factory()->create(), [$this->reparation(60)]);
         $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $paiement = $this->payer($reparation, 60, ModePaiement::Especes, '2026-10-06');
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, 'Saisie en double');
 
@@ -614,15 +614,15 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_une_journee_qui_n_encaisse_qu_un_service_est_a_declarer_mais_pas_celle_qui_n_encaisse_qu_un_bien(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $reparation = $this->emettre($client, [$this->reparation(60)]);
         $ecran = $this->emettre($client, [['produit_id' => $this->produit(12)->id, 'quantite' => 1]]);
         $duCinq = $this->cloturer('2026-10-05');
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $this->payer($reparation, 60, ModePaiement::Especes, '2026-10-06');
         $duSix = $this->cloturer('2026-10-06');
-        $this->travelTo('2026-10-07 10:00:00');
+        $this->travelTo(self::aParis('2026-10-07 10:00:00'));
         $this->payer($ecran, 12, ModePaiement::Especes, '2026-10-07');
 
         $duSept = $this->cloturer('2026-10-07');
@@ -638,7 +638,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_le_magasin_de_demonstration_n_a_rien_a_declarer(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
         app(TenantContext::class)->set($demonstration);
@@ -660,7 +660,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_l_apercu_ne_lit_que_les_documents_du_magasin_de_la_cloture(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $autreMagasin = Magasin::factory()->create();
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [$this->reparation(60)], ModePaiement::CarteBancaire);
         app(TenantContext::class)->set($autreMagasin);

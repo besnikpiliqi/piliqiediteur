@@ -367,7 +367,7 @@ class ControleDesDroitsTest extends TestCase
      */
     public function test_le_proprietaire_n_a_besoin_d_aucune_case_mais_reste_soumis_aux_regles_de_tous(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsableDeTest($magasin);

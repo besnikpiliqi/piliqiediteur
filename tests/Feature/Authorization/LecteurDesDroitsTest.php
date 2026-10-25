@@ -120,11 +120,11 @@ class LecteurDesDroitsTest extends TestCase
 
     public function test_une_autorisation_retiree_entre_l_ecran_et_le_verrou_refuse_la_cloture_manuelle(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->vendreUnTicket($this->responsableDeTest($magasin));
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->assertTrue($membre->can('cloturer', ClotureCaisse::class), 'L\'écran a vu le droit de clôturer.');
 
         $this->aLaPremiereRequeteDeLAction(fn () => $this->retirerLAutorisation($membre, $magasin, PermissionRegistry::CLOTURE_CAISSE_GERER));
@@ -337,15 +337,15 @@ class LecteurDesDroitsTest extends TestCase
      */
     public function test_la_cloture_manuelle_enregistre_et_signe_son_auteur(): void
     {
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
         $responsable->forceFill(['name' => 'Claire Martin'])->save();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $this->vendreUnTicket($vendeur);
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         PanierCaisse::factory()->create(['user_id' => $vendeur->id]);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne($responsable, $magasin, now());
 
@@ -368,16 +368,16 @@ class LecteurDesDroitsTest extends TestCase
      */
     public function test_une_entree_du_systeme_appelee_pendant_une_requete_authentifiee_signe_un_operateur_nul(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsableDeTest($magasin);
         $this->vendreUnTicket($responsable);
         PanierCaisse::factory()->create(['user_id' => $responsable->id]);
         $this->actingAs($proprietaire);
-        $this->travelTo('2026-10-10 00:05:00');
+        $this->travelTo(self::aParis('2026-10-10 00:05:00'));
 
-        app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now()->subDay());
+        app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, self::aParis('2026-10-09 00:05:00'));
 
         $abandon = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement)->where('type', (string) CodeEvenement::TransactionAbandonnee->value)->sole();
         $this->assertNull($abandon->contenuSigne()['operateur']);

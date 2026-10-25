@@ -96,11 +96,11 @@ class ClotureCaisseResourceTest extends TestCase
     public function test_le_proprietaire_cloture_la_journee_du_jour_depuis_le_panneau(): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $facture = $this->emettreFactureParticulier(Client::factory()->create()); // 60 € TTC
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $this->actingAs($this->proprietaireDe($magasin));
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         Livewire::test(ListClotureCaisses::class)
             ->assertActionHasLabel('cloturer', 'Clôturer la journée du 09/10/2026')
@@ -111,7 +111,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->assertSame(['2026-10-09', 'Z-MABOUT-2026-000001', 1, '60.00'], [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
         $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
 
-        $this->travelTo('2026-10-10 00:00:00');
+        $this->travelTo(self::aParis('2026-10-10 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         $this->assertSame(1, app(TenantContext::class)->runAs($magasin, fn (): int => ClotureCaisse::query()->count()));
@@ -124,7 +124,7 @@ class ClotureCaisseResourceTest extends TestCase
     public function test_la_modale_annonce_les_ventes_du_jour_et_previent_qu_ensuite_plus_aucune_vente_n_est_possible(): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier(Client::factory()->create()); // 50 € HT, TVA 20 % => 60 € TTC
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
 
@@ -142,7 +142,7 @@ class ClotureCaisseResourceTest extends TestCase
     public function test_la_modale_annonce_les_ventes_en_cours_a_la_caisse_qu_elle_abandonnera(): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier(Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         PanierCaisse::factory()->create(['user_id' => $this->responsableDeTest($magasin)->id]);
@@ -156,7 +156,7 @@ class ClotureCaisseResourceTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier($client); // 60 € TTC
         $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
@@ -173,7 +173,7 @@ class ClotureCaisseResourceTest extends TestCase
     public function test_la_modale_previent_quand_aucune_vente_au_comptoir_n_est_en_attente(): void
     {
         $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -194,12 +194,12 @@ class ClotureCaisseResourceTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $venteDu8 = $this->emettreFactureParticulier($client);
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $venteDu9 = $this->emettreFactureParticulier($client);
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
@@ -223,14 +223,14 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_le_bouton_reste_actif_et_la_fenetre_nomme_les_caisses_qui_seront_fermees_automatiquement(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $vendeur->forceFill(['name' => 'Paul Martin'])->save();
         $this->actingAs($vendeur);
         $this->vendreUnTicket();
         $this->actingAs($this->proprietaireDe($magasin));
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         Livewire::test(ListClotureCaisses::class)
             ->assertActionEnabled('cloturer')
@@ -241,8 +241,8 @@ class ClotureCaisseResourceTest extends TestCase
 
         $releve = ClotureCaissePersonnelle::query()->sole();
         $this->assertSame(
-            [$vendeur->id, ModeFermetureCaisse::Automatique, null, 1, '12.00', '2026-10-09 19:00:00'],
-            [$releve->vendeur_id, $releve->mode_fermeture, $releve->fermee_par, $releve->nombre_ventes, $releve->total_ttc, $releve->jusqu_au->format('Y-m-d H:i:s')],
+            [$vendeur->id, ModeFermetureCaisse::Automatique, null, 1, '12.00', self::aParis('2026-10-09 19:00:00')->getTimestamp()],
+            [$releve->vendeur_id, $releve->mode_fermeture, $releve->fermee_par, $releve->nombre_ventes, $releve->total_ttc, $releve->jusqu_au->getTimestamp()],
         );
         $this->assertSame(1, ClotureCaisse::query()->count());
     }
@@ -254,7 +254,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_la_cloture_ferme_d_office_la_caisse_du_comptable_qui_encaisse(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $ticket = $this->vendreUnTicket();
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
@@ -294,7 +294,7 @@ class ClotureCaisseResourceTest extends TestCase
     public function test_le_bouton_disparait_une_fois_la_journee_cloturee(): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier(Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
 
@@ -313,15 +313,15 @@ class ClotureCaisseResourceTest extends TestCase
     public function test_une_confirmation_apres_minuit_ne_cloture_jamais_la_journee_qui_commence(): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier(Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
-        $this->travelTo('2026-10-09 23:59:00');
+        $this->travelTo(self::aParis('2026-10-09 23:59:00'));
         $page = Livewire::test(ListClotureCaisses::class)->mountAction('cloturer');
-        $this->travelTo('2026-10-10 00:00:00');
+        $this->travelTo(self::aParis('2026-10-10 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
         app(TenantContext::class)->set($magasin);
-        $this->travelTo('2026-10-10 00:01:00');
+        $this->travelTo(self::aParis('2026-10-10 00:01:00'));
 
         $page->callMountedAction();
 
@@ -356,7 +356,7 @@ class ClotureCaisseResourceTest extends TestCase
 
     public function test_la_page_de_detail_affiche_les_factures_agregees(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $facture = $this->emettreFactureParticulier(Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
@@ -370,7 +370,7 @@ class ClotureCaisseResourceTest extends TestCase
 
     public function test_la_page_de_detail_affiche_les_avoirs_deduits(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
         $avoir = $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
@@ -392,17 +392,17 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_un_vendeur_ne_voit_que_les_clotures_quil_a_lui_meme_declenchees(): void
     {
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $this->vendreUnTicket();
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
-        $this->travelTo('2026-10-08 19:00:00');
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
         $this->actingAs($vendeurA);
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $this->actingAs($vendeurB);
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
@@ -464,7 +464,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_la_fiche_montre_l_apercu_de_l_e_reporting_en_francais(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $particulier = Client::factory()->create();
         $cable = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -479,7 +479,7 @@ class ClotureCaisseResourceTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $cable->id, 'quantite' => 1]]));
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '50.00', 'recu_le' => '2026-10-05'], [['facture_id' => $facture->id, 'montant' => '50.00']]);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $deuxCables->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->travelTo('2026-10-05 19:00:00');
+        $this->travelTo(self::aParis('2026-10-05 19:00:00'));
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-05');
 
         $fiche = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()]);
@@ -520,7 +520,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_la_fiche_affiche_les_encaissements_par_mode_et_la_somme_des_avoirs(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreAuComptantUnTicketDe(60, ModePaiement::Especes);
         $client = Client::factory()->create();
@@ -547,7 +547,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_les_numeros_des_tickets_et_des_avoirs_ouvrent_leur_fiche(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
         $ticket = $this->vendreAuComptantUnTicketDe(30, ModePaiement::Especes, $client);
@@ -570,7 +570,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_un_vendeur_qui_ne_voit_que_ses_ventes_ne_voit_dans_la_cloture_que_le_detail_de_ses_documents(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER], ['name' => 'Claire Vendeuse']);

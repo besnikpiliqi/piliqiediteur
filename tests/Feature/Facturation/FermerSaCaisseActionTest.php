@@ -77,14 +77,14 @@ class FermerSaCaisseActionTest extends TestCase
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-07 18:00:00');
+        $this->travelTo(self::aParis('2026-10-07 18:00:00'));
         $this->emettreFacturePour($vendeur, $client, 120);
 
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertSame(1, $cloture->nombre_ventes);
-        $this->assertSame('2026-10-07 18:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::aParis('2026-10-07 18:00:00'), $cloture->periode_debut);
     }
 
     /**
@@ -95,45 +95,45 @@ class FermerSaCaisseActionTest extends TestCase
     public function test_le_releve_part_du_plus_ancien_paiement_qu_il_compte(): void
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
-        $this->travelTo('2026-10-07 09:00:00');
+        $this->travelTo(self::aParis('2026-10-07 09:00:00'));
         $this->actingAs($this->vendeurDeLaPremiereHeure($this->magasin));
         $factureDUnCollegue = $this->emettreUnDocument(Client::factory()->create(), 45);
-        $this->travelTo('2026-10-07 18:00:00');
+        $this->travelTo(self::aParis('2026-10-07 18:00:00'));
         $this->actingAs($vendeur);
         $this->encaisser($factureDUnCollegue, ModePaiement::Especes, 45);
 
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertSame([0, ['especes' => '45.00']], [$cloture->nombre_ventes, $cloture->fresh()->encaissements]);
-        $this->assertSame('2026-10-07 18:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::aParis('2026-10-07 18:00:00'), $cloture->periode_debut);
     }
 
     public function test_sans_vente_ni_fermeture_le_releve_part_du_debut_de_la_journee(): void
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertSame(0, $cloture->nombre_ventes);
-        $this->assertSame('2026-10-08 00:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::aParis('2026-10-08 00:00:00'), $cloture->periode_debut);
     }
 
     public function test_le_releve_suivant_part_de_la_fermeture_precedente(): void
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-08 09:00:00');
+        $this->travelTo(self::aParis('2026-10-08 09:00:00'));
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $this->emettreFacturePour($vendeur, $client, 120);
 
-        $this->travelTo('2026-10-08 11:00:00');
+        $this->travelTo(self::aParis('2026-10-08 11:00:00'));
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertSame(1, $cloture->nombre_ventes);
-        $this->assertSame('2026-10-08 09:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::aParis('2026-10-08 09:00:00'), $cloture->periode_debut);
     }
 
     public function test_une_seconde_fermeture_ne_reprend_que_les_ventes_depuis_la_premiere(): void

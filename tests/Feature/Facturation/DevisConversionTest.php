@@ -20,7 +20,6 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use LogicException;
 use Tests\TestCase;
 
@@ -73,12 +72,12 @@ class DevisConversionTest extends TestCase
      */
     public function test_un_devis_dont_la_validite_est_depassee_ne_s_accepte_plus(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ['date_validite' => '2026-10-08']));
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         $this->assertThrows(
             fn () => app(AccepterDevisAction::class)->handle(self::auteur(), $devis),
@@ -91,12 +90,12 @@ class DevisConversionTest extends TestCase
 
     public function test_un_devis_s_accepte_encore_le_dernier_jour_de_sa_validite(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ['date_validite' => '2026-10-08']));
-        $this->travelTo(Carbon::parse('2026-10-08 23:59:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-08 23:59:00'));
 
         $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
@@ -110,7 +109,7 @@ class DevisConversionTest extends TestCase
      */
     public function test_un_devis_dont_la_validite_est_depassee_ne_part_pas(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -251,11 +250,11 @@ class DevisConversionTest extends TestCase
      */
     public function test_la_facture_tiree_d_un_devis_prend_son_echeance_a_son_emission(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerDevis(Client::factory()->professionnel()->create(), $produit));
         $brouillon = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 

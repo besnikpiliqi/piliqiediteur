@@ -131,6 +131,7 @@ class MotDePasseOublieTest extends TestCase
      */
     public function test_mot_de_passe_oublie_avec_l_adresse_d_un_compte_qui_n_est_pas_proprietaire_n_envoie_rien_et_repond_pareil(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Notification::fake();
         $proprietaire = $this->proprietaire();
         $magasin = $proprietaire->societe->magasins()->firstOrFail();

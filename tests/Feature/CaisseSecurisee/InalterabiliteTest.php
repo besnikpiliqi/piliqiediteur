@@ -25,7 +25,6 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -52,7 +51,7 @@ class InalterabiliteTest extends TestCase
     {
         parent::setUp();
 
-        $this->freezeTime();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create());
     }
 
@@ -85,7 +84,7 @@ class InalterabiliteTest extends TestCase
             'nom du client figé' => [static fn (): array => ['client_nom' => 'Autre nom'], 'client_nom'],
             'type du client' => [static fn (): array => ['type_client' => TypeClient::Professionnel], 'type_client'],
             'numéro' => [static fn (): array => ['numero' => 'TK-LYON1-2026-999999'], 'numero'],
-            'date d\'émission' => [static fn (): array => ['date_emission' => CarbonImmutable::parse('2020-01-01 00:00:00', 'UTC')], 'date_emission'],
+            'date d\'émission' => [static fn (): array => ['date_emission' => self::enUtc('2020-01-01 00:00:00')], 'date_emission'],
             'notes' => [static fn (): array => ['notes' => 'Réécrite après coup'], 'notes'],
         ];
     }
@@ -208,7 +207,7 @@ class InalterabiliteTest extends TestCase
      */
     public function test_le_statut_de_reglement_d_une_facture_emise_evolue_encore(): void
     {
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => 0]);
         $facture = $this->emettre($client);
         $payer = fn (string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
@@ -219,7 +218,7 @@ class InalterabiliteTest extends TestCase
 
         $payer('20.00');
         $partiellementPayee = $facture->fresh()->statut;
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
         $enRetard = $facture->fresh()->statut;
         $payer('40.00');

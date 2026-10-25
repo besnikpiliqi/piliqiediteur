@@ -521,7 +521,7 @@ class AvoirActionsTest extends TestCase
      */
     public function test_un_echec_d_emission_ne_laisse_aucun_brouillon_d_avoir(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
@@ -741,17 +741,17 @@ class AvoirActionsTest extends TestCase
      */
     public function test_un_avoir_sur_un_ticket_est_refuse_apres_la_cloture_de_sa_journee_puis_emis_le_lendemain(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $ticket = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
         $retour = [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]];
 
         $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $retour), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
         $this->assertSame(0, Avoir::query()->count());
 
-        $this->travelTo('2026-10-10 00:01:00');
+        $this->travelTo(self::aParis('2026-10-10 00:01:00'));
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $retour);
 
         $this->assertSame(['AV-LYON1-2026-000001', '12.00'], [$avoir->numero, $avoir->total_ttc]);
@@ -759,10 +759,10 @@ class AvoirActionsTest extends TestCase
 
     public function test_un_avoir_sur_une_facture_a_un_professionnel_s_emet_encore_apres_la_cloture_de_la_journee(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $professionnel = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacture($professionnel, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
@@ -779,22 +779,22 @@ class AvoirActionsTest extends TestCase
     public function test_un_avoir_sur_une_facture_reste_hors_des_clotures_meme_si_le_client_devient_particulier(): void
     {
         $magasin = app(TenantContext::class)->magasin();
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $client = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]));
-        $this->travelTo('2026-10-08 19:00:00');
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $client->update(['type_client' => TypeClient::Particulier]);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
-        $this->travelTo('2026-10-09 19:30:00');
+        $this->travelTo(self::aParis('2026-10-09 19:30:00'));
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame(['FAC-LYON1-2026-000001', 'AV-LYON1-2026-000001', '120.00'], [$facture->numero, $avoir->numero, $avoir->total_ttc]);
         $this->assertSame(0, Avoir::query()->enAttenteDeCloture('2026-10-09')->count());
-        $this->travelTo('2026-10-11 00:00:00');
+        $this->travelTo(self::aParis('2026-10-11 00:00:00'));
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-10');
         $this->assertSame([0, '0.00'], [$cloture->nombre_avoirs, $cloture->total_ttc]);
         $this->assertNull($avoir->fresh()->cloture_caisse_id);
@@ -807,17 +807,17 @@ class AvoirActionsTest extends TestCase
      */
     public function test_un_ticket_dont_le_client_devient_professionnel_reste_dans_sa_cloture_et_son_avoir_attend_le_lendemain(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $ticket = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
-        $this->travelTo('2026-10-09 15:00:00');
+        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
         $client->update(['type_client' => TypeClient::Professionnel]);
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
 
         $this->assertSame(['TK-LYON1-2026-000001', 1, '12.00'], [$ticket->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
-        $this->travelTo('2026-10-09 19:30:00');
+        $this->travelTo(self::aParis('2026-10-09 19:30:00'));
         $this->assertThrows(
             fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]),
             LogicException::class,
@@ -834,7 +834,7 @@ class AvoirActionsTest extends TestCase
      */
     public function test_l_avoir_d_une_facture_professionnelle_attend_l_identite_complete_du_magasin(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $professionnel = Client::factory()->professionnel()->create();
         $particulier = Client::factory()->create();

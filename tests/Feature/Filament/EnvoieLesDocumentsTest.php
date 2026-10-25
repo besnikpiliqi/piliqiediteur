@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -28,6 +29,7 @@ use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
+use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -101,7 +103,7 @@ class EnvoieLesDocumentsTest extends TestCase
      */
     public function test_la_facture_d_un_client_archive_se_relance_depuis_sa_fiche(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         $this->connecterLeProprietaire();
         $client = Client::factory()->create(['email' => 'archive@exemple.fr']);
@@ -164,7 +166,7 @@ class EnvoieLesDocumentsTest extends TestCase
 
     public function test_relancer_une_facture_echue_depuis_sa_fiche(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         $this->connecterLeProprietaire();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(['email' => 'client@exemple.fr']), '2026-10-01');
@@ -187,7 +189,7 @@ class EnvoieLesDocumentsTest extends TestCase
 
     public function test_une_facture_pas_encore_echue_ne_se_relance_pas(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $this->connecterLeProprietaire();
         $facture = $this->emettreFacture(Client::factory()->create(['delai_paiement_jours' => 16]));
 
@@ -267,7 +269,7 @@ class EnvoieLesDocumentsTest extends TestCase
         Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
         $magasin = $this->connecterLeProprietaire();
         $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         Livewire::test(ListFactures::class)
             ->callTableAction('telecharger_pdf', $brouillon->fresh())
@@ -283,14 +285,14 @@ class EnvoieLesDocumentsTest extends TestCase
      */
     public function test_sans_la_permission_d_envoyer_les_actions_d_envoi_n_apparaissent_pas(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_ENVOYER])), ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         app(TenantContext::class)->set($magasin);
         $facture = $this->emettreFacture(Client::factory()->create(['delai_paiement_jours' => 0]), $vendeur);
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
 
         Livewire::test(ListFactures::class)
             ->assertTableActionVisible('telecharger_pdf', $facture)
@@ -347,16 +349,16 @@ class EnvoieLesDocumentsTest extends TestCase
 
     /**
      * Une facture de 120,00 € TTC émise le jour de son échéance, à un client
-     * payable comptant (délai de 0 jour, B7) ; le test reprend ensuite à
-     * l'instant où il en était.
+     * payable comptant (délai de 0 jour, B7) ; l'horloge revient ensuite
+     * telle qu'elle était, figée au même instant ou libre.
      */
     private function emettreFactureEchueLe(Client $client, string $echeance): Facture
     {
-        $maintenant = now()->toImmutable();
+        $horloge = Carbon::getTestNow();
         $client->update(['delai_paiement_jours' => 0]);
-        $this->travelTo("{$echeance} 10:00:00");
+        $this->travelTo(self::aParis("{$echeance} 10:00:00"));
         $facture = $this->emettreFacture($client);
-        $this->travelTo($maintenant);
+        $horloge === null ? $this->travelBack() : $this->travelTo($horloge);
 
         return $facture;
     }

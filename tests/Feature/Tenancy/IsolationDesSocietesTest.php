@@ -537,13 +537,13 @@ class IsolationDesSocietesTest extends TestCase
      */
     public function test_la_cloture_d_une_inscription_ne_retire_que_l_adresse_de_son_proprietaire(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $echue = $this->inscrireUneSociete(null, 'echue@exemple.fr');
         $validee = $this->inscrireUneSociete(null, 'validee@exemple.fr');
         $this->saisirLeCodeDuCourrier($validee);
-        $this->travelTo('2026-10-25 10:00:00');
+        $this->travelTo(self::aParis('2026-10-25 10:00:00'));
         $recente = $this->inscrireUneSociete(null, 'recente@exemple.fr');
-        $this->travelTo('2026-11-01 10:00:00');
+        $this->travelTo(self::aParis('2026-11-01 10:00:00'));
         app(TenantContext::class)->clear();
 
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
@@ -566,16 +566,16 @@ class IsolationDesSocietesTest extends TestCase
      */
     public function test_la_cloture_d_une_inscription_n_annule_que_les_transmissions_de_sa_societe(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $echue = $this->inscrireUneSociete(null, 'echue@exemple.fr');
-        $this->travelTo('2026-10-25 10:00:00');
+        $this->travelTo(self::aParis('2026-10-25 10:00:00'));
         $recente = $this->inscrireUneSociete(null, 'recente@exemple.fr');
         $administrateurDeLEchue = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($echue), 'admin.echue@exemple.fr');
         $administrateurDeLaRecente = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($recente), 'admin.recente@exemple.fr');
-        $this->travelTo('2026-11-01 09:00:00');
+        $this->travelTo(self::aParis('2026-11-01 09:00:00'));
         $this->demanderLaTransmission($echue->proprietaire()->sole(), $administrateurDeLEchue, self::MOT_DE_PASSE_CHOISI);
         $jetonDeLaRecente = $this->demanderLaTransmission($recente->proprietaire()->sole(), $administrateurDeLaRecente, self::MOT_DE_PASSE_CHOISI);
-        $this->travelTo('2026-11-01 10:00:00');
+        $this->travelTo(self::aParis('2026-11-01 10:00:00'));
         app(TenantContext::class)->clear();
 
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();

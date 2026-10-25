@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -400,7 +401,7 @@ class FactureResourceTest extends TestCase
      */
     public function test_la_fiche_montre_la_date_le_mode_et_la_reference_de_chaque_paiement(): void
     {
-        $this->travelTo('2026-10-14 10:00:00');
+        $this->travelTo(self::aParis('2026-10-14 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
@@ -423,7 +424,7 @@ class FactureResourceTest extends TestCase
      */
     public function test_la_fiche_montre_les_paiements_et_leurs_contre_passations_dans_l_ordre_de_leur_enregistrement(): void
     {
-        $this->travelTo('2026-10-14 10:00:00');
+        $this->travelTo(self::aParis('2026-10-14 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
@@ -457,7 +458,7 @@ class FactureResourceTest extends TestCase
      */
     public function test_la_fiche_montre_les_avoirs_emis_dans_l_ordre_de_leur_emission(): void
     {
-        $this->travelTo('2026-10-14 10:00:00');
+        $this->travelTo(self::aParis('2026-10-14 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
@@ -1120,7 +1121,7 @@ class FactureResourceTest extends TestCase
      */
     public function test_le_brouillon_cree_depuis_le_panneau_prend_son_echeance_a_son_emission(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
@@ -1138,7 +1139,7 @@ class FactureResourceTest extends TestCase
             ->assertHasNoFormErrors();
         $brouillon = Facture::query()->sole();
         $this->assertNull($brouillon->date_echeance);
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         Livewire::test(ListFactures::class)->callTableAction('emettre', $brouillon);
 
@@ -1660,7 +1661,7 @@ class FactureResourceTest extends TestCase
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['nom' => 'Jean Ancien']), [['produit_id' => $produit->id, 'quantite' => 1]]);
         $intacte = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['nom' => 'Paul Tiers']));
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
         $numerote = $brouillon->fresh();
 
         Livewire::test(ListFactures::class)
@@ -1932,7 +1933,7 @@ class FactureResourceTest extends TestCase
      */
     private function magasinQuiVendHorsDeFrance(): Magasin
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
         $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);

@@ -115,7 +115,7 @@ class MagasinDeDemonstrationTest extends TestCase
      */
     public function test_la_demonstration_fonctionne_sans_aucun_magasin_reel(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
@@ -179,7 +179,7 @@ class MagasinDeDemonstrationTest extends TestCase
 
     public function test_la_demonstration_vend_encaisse_et_cloture_dans_son_propre_registre(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
@@ -398,15 +398,16 @@ class MagasinDeDemonstrationTest extends TestCase
 
     public function test_une_demonstration_inactive_30_jours_se_ferme_et_se_rouvre_avant_la_validation(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $this->vendre();
 
-        $this->travel(29)->days();
+        $this->travelTo(self::aParis('2026-11-07 10:00:00'));
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $this->assertSame(StatutMagasin::Actif, $demonstration->fresh()->statut);
 
-        $this->travel(2)->days();
+        $this->travelTo(self::aParis('2026-11-09 10:00:00'));
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
 
@@ -495,14 +496,15 @@ class MagasinDeDemonstrationTest extends TestCase
      */
     public function test_les_comptes_d_entrainement_sont_retires_a_la_validation_ou_a_la_cloture_et_gardes_a_la_fermeture_pour_inactivite(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $validee = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($validee->proprietaire, $validee);
         $compte = $this->compteDEntrainement($demonstration);
         $this->ouvrirUneSessionAilleurs($compte);
 
-        $this->travel(15)->days();
+        $this->travelTo(self::aParis('2026-10-24 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($validee->proprietaire, $validee->fresh());
-        $this->travel(16)->days();
+        $this->travelTo(self::aParis('2026-11-09 10:00:00'));
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $this->assertSame([StatutMagasin::Ferme, StatutCompte::Actif], [$demonstration->fresh()->statut, $compte->refresh()->statut]);
         app(OuvrirLaDemonstrationAction::class)->handle($validee->proprietaire, $validee->fresh());
@@ -519,7 +521,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $close = $this->inscrireUneSociete();
         $autreDemonstration = app(OuvrirLaDemonstrationAction::class)->handle($close->proprietaire, $close);
         $compteDeLaCloture = $this->compteDEntrainement($autreDemonstration);
-        $this->travel(31)->days();
+        $this->travelTo(self::aParis('2026-12-10 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->assertSuccessful();
         $this->assertSame([true, StatutCompte::Retire], [$close->fresh()->estClose(), $compteDeLaCloture->refresh()->statut]);
     }
@@ -534,15 +536,15 @@ class MagasinDeDemonstrationTest extends TestCase
      */
     public function test_aucun_compte_ne_se_cree_ni_ne_se_reintegre_dans_une_demonstration_terminee(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire;
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
         $ancien = $this->compteDEntrainement($demonstration);
-        $this->travel(15)->days();
+        $this->travelTo(self::aParis('2026-10-24 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe->fresh());
-        $this->travel(16)->days();
+        $this->travelTo(self::aParis('2026-11-09 10:00:00'));
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $this->assertFalse($demonstration->fresh()->estUneDemonstrationTerminee());
         $this->assertTrue(app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration->fresh(), ['name' => 'Pendant la pause'], RoleMagasin::Vendeur))->estActif());

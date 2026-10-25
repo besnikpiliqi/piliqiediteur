@@ -47,6 +47,7 @@ class MembresTest extends TestCase
      */
     public function test_le_proprietaire_cree_un_vendeur_pour_un_magasin_avec_son_identifiant_pour_premier_mot_de_passe(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -71,7 +72,7 @@ class MembresTest extends TestCase
         $this->assertSame([PermissionRegistry::FACTURE_VIEW], $paul->autorisationsDans($autre));
         $this->assertSame([(int) $autre->id, false], [(int) $paul->magasinDeSonIdentifiant()?->id, $paul->peutOuvrir($magasin)]);
 
-        $this->travel(30)->days();
+        $this->travelTo(self::aParis('2026-11-08 10:00:00'));
         $this->assertTrue(Hash::check($identifiant, $paul->refresh()->password));
         $this->assertTrue($paul->peutAgir());
     }
@@ -199,7 +200,7 @@ class MembresTest extends TestCase
      */
     public function test_le_compte_de_trop_du_jour_est_refuse_a_son_auteur(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsable($magasin);
@@ -218,7 +219,7 @@ class MembresTest extends TestCase
         $this->assertSame($limite, User::query()->where('cree_par', $proprietaire->id)->count());
         $this->assertTrue(app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Par le responsable'], RoleMagasin::Vendeur)->exists);
 
-        $this->travel(1)->day();
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
         $this->assertTrue(app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Le lendemain'], RoleMagasin::Vendeur)->exists);
     }
 

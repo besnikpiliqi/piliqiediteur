@@ -124,7 +124,7 @@ class CreerEtablissementActionTest extends TestCase
             }],
             'un ancien SIRET d\'un magasin de la société, resté réservé' => [static function (Magasin $premier): string {
                 $ancien = IdentifiantsInsee::avecSaCle($premier->societe->siren.'0007');
-                (new SiretMagasin)->forceFill(['societe_id' => $premier->societe_id, 'magasin_id' => $premier->id, 'siret' => $ancien, 'reserve_le' => now()->subYear(), 'retire_le' => now()])->save();
+                (new SiretMagasin)->forceFill(['societe_id' => $premier->societe_id, 'magasin_id' => $premier->id, 'siret' => $ancien, 'reserve_le' => now()->subHours(24 * 365), 'retire_le' => now()])->save();
 
                 return $ancien;
             }],
@@ -515,7 +515,7 @@ class CreerEtablissementActionTest extends TestCase
         );
 
         $ligne->fresh()->forceFill(['retire_le' => now()])->save();
-        $this->assertThrows(fn () => $ligne->fresh()->forceFill(['retire_le' => now()->addDay()])->save(), LogicException::class, 'Une ligne du registre des SIRET ne se corrige jamais');
+        $this->assertThrows(fn () => $ligne->fresh()->forceFill(['retire_le' => now()->addHours(24)])->save(), LogicException::class, 'Une ligne du registre des SIRET ne se corrige jamais');
         $this->assertSame($magasin->siret, $ligne->fresh()->siret);
     }
 

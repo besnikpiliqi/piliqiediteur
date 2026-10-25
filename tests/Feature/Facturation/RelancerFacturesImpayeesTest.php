@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -21,7 +22,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
@@ -39,7 +39,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_chaque_niveau_echu_part_une_seule_fois(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $facture = $this->factureImpayee($this->magasinQuiRelance(), 'client@exemple.fr');
 
         $this->relancerLe('2026-10-07');
@@ -72,7 +72,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_une_facture_deja_tres_en_retard_recoit_les_relances_dans_l_ordre_et_au_rythme_des_delais(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->magasinQuiRelance();
         $magasin->update(['relances_automatiques' => false]);
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
@@ -99,10 +99,10 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_une_relance_manuelle_n_est_jamais_redoublee(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $facture = $this->factureImpayee($this->magasinQuiRelance(), 'client@exemple.fr');
         $this->relancerLe('2026-10-08');
-        $this->travelTo('2026-10-10 14:00:00');
+        $this->travelTo(self::aParis('2026-10-10 14:00:00'));
         app(TenantContext::class)->set($facture->magasin);
         app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
@@ -122,7 +122,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_une_relance_en_echec_repart_le_lendemain(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $facture = $this->factureImpayee($this->magasinQuiRelance(), 'client@exemple.fr');
         $this->relancerLe('2026-10-08');
         $relance = EnvoiDocument::query()->withoutGlobalScopes()->sole();
@@ -142,7 +142,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_la_facture_d_un_client_archive_est_relancee(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $facture = $this->factureImpayee($this->magasinQuiRelance(), 'archive@exemple.fr');
         $facture->client->delete();
 
@@ -155,7 +155,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_les_factures_reglees_corrigees_par_un_avoir_ou_sans_adresse_ne_sont_pas_relancees(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->magasinQuiRelance();
         $payee = $this->factureImpayee($magasin, 'payee@exemple.fr');
         $this->payer($payee, 120);
@@ -185,14 +185,14 @@ class RelancerFacturesImpayeesTest extends TestCase
     {
         Mail::fake();
         Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->magasinQuiRelance();
         app(TenantContext::class)->set($magasin);
         $sansEnregistrement = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['email' => 'anomalie@exemple.fr', 'delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $sansEnregistrement->id)
-            ->update(['numero' => 'TK-RELANCE-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-01 09:00:00', 'date_echeance' => '2026-10-01']);
+            ->update(['numero' => 'TK-RELANCE-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-01 09:00:00')), 'date_echeance' => '2026-10-01']);
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
-        $this->travelTo('2026-10-08 09:00:00');
+        $this->travelTo(self::aParis('2026-10-08 09:00:00'));
         app(TenantContext::class)->clear();
 
         $this->artisan('app:relancer-factures-impayees')
@@ -209,7 +209,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_un_magasin_aux_relances_desactivees_ne_relance_rien(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->magasinQuiRelance();
         $magasin->update(['relances_automatiques' => false]);
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
@@ -223,7 +223,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_un_magasin_suspendu_ne_relance_rien(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = $this->magasinQuiRelance();
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
         $magasin->forceFill(['suspendu_le' => now()])->save();
@@ -240,7 +240,7 @@ class RelancerFacturesImpayeesTest extends TestCase
     public function test_chaque_magasin_relance_selon_ses_reglages_et_ses_factures(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasinA = $this->magasinQuiRelance();
         $factureDeA = $this->factureImpayee($magasinA, 'a@exemple.fr');
         $magasinB = $this->magasinQuiRelance();
@@ -267,10 +267,10 @@ class RelancerFacturesImpayeesTest extends TestCase
         // Le planning de bootstrap/app.php s'enregistre au démarrage
         // d'Artisan, comme sur le serveur avant schedule:run.
         $this->artisan('schedule:list')->assertSuccessful();
-        $this->travelTo(Carbon::parse('2026-10-15 07:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-15 07:00:00'));
         $this->assertTrue($this->relanceDue());
 
-        $this->travelTo(Carbon::parse('2026-10-15 09:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-15 09:00:00'));
         $this->assertFalse($this->relanceDue());
     }
 
@@ -314,7 +314,7 @@ class RelancerFacturesImpayeesTest extends TestCase
 
     private function relancerLe(string $jour): void
     {
-        $this->travelTo("{$jour} 09:00:00");
+        $this->travelTo(self::aParis("{$jour} 09:00:00"));
         app(TenantContext::class)->clear();
 
         $this->artisan('app:relancer-factures-impayees')->assertSuccessful();

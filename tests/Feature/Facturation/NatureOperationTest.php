@@ -65,7 +65,7 @@ class NatureOperationTest extends TestCase
      */
     private function magasin(array $attributs = []): Magasin
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $deLaSociete = ['numero_tva', 'regime_tva'];
         $magasin = Magasin::factory()
             ->avecLaSociete(array_intersect_key($attributs, array_flip($deLaSociete)))
@@ -98,16 +98,17 @@ class NatureOperationTest extends TestCase
 
     /**
      * Une vérification VIES de ce client, écrite comme l'écrit
-     * VerifierNumeroTvaAction, à cet instant de Paris.
+     * VerifierNumeroTvaAction, à cet instant, le 9 octobre à 9 h à Paris
+     * sans autre précision.
      */
-    private function consultation(Client $client, string $instantAParis = '2026-10-09 09:00', bool $valide = true): ConsultationVies
+    private function consultation(Client $client, ?CarbonImmutable $consulteeLe = null, bool $valide = true): ConsultationVies
     {
         return ConsultationVies::forceCreate([
             'client_id' => $client->id,
             'numero_tva' => $client->numero_tva,
             'valide' => $valide,
             'identifiant_consultation' => 'WAPIAAAAW1234567',
-            'consultee_le' => CarbonImmutable::parse($instantAParis, 'Europe/Paris'),
+            'consultee_le' => $consulteeLe ?? self::aParis('2026-10-09 09:00'),
             'reponse' => '{"valid":'.($valide ? 'true' : 'false').'}',
         ]);
     }
@@ -383,7 +384,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
         $client = $this->clientAllemand($numeroTva);
-        $this->consultation($client, $verifieLe, $valide);
+        $this->consultation($client, self::aParis($verifieLe), $valide);
         $brouillon = $this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::LivraisonIntracommunautaire, [...self::LIVRAISON_BERLIN, ...$livraison]);
 
         $this->assertEmissionRefusee($brouillon, "Impossible d'émettre en « Livraison intracommunautaire à un professionnel » : {$manquement}. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.");
@@ -409,8 +410,8 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
         $client = $this->clientAllemand();
-        $this->consultation($client, '2026-10-09 08:00');
-        $this->consultation($client, '2026-10-09 09:30', valide: false);
+        $this->consultation($client, self::aParis('2026-10-09 08:00'));
+        $this->consultation($client, self::aParis('2026-10-09 09:30'), valide: false);
         $brouillon = $this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN);
 
         $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Livraison intracommunautaire à un professionnel » : le n° de TVA DE123456789 n\'a pas été trouvé valide sur VIES le 09/10/2026. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
@@ -424,8 +425,8 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
         $client = $this->clientAllemand();
-        $this->consultation($client, '2026-10-09 08:00', valide: false);
-        $derniere = $this->consultation($client, '2026-10-09 09:30');
+        $this->consultation($client, self::aParis('2026-10-09 08:00'), valide: false);
+        $derniere = $this->consultation($client, self::aParis('2026-10-09 09:30'));
 
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN));
 

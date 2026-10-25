@@ -17,7 +17,6 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
@@ -255,7 +254,7 @@ class SelecteurDeProduitsTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste Secret']);
-        $this->travelTo(CarbonImmutable::parse('2026-09-03 10:00'));
+        $this->travelTo(self::aParis('2026-09-03 10:00'));
         $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '12.00', 'suivi_stock' => true, 'stock_quantite' => 37, 'seuil_alerte' => 11, 'fournisseur_id' => $fournisseur->getKey()]);
         $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'suivi_stock' => true, 'stock_quantite' => 0]);
         $this->travelBack();
@@ -450,9 +449,9 @@ class SelecteurDeProduitsTest extends TestCase
     public function test_le_tri_plus_recents_d_abord_suit_la_date_d_entree_du_produit(): void
     {
         $this->ouvrirLeMagasinEnTantQueResponsable();
-        $this->travelTo(CarbonImmutable::parse('2026-10-01 09:00'));
+        $this->travelTo(self::aParis('2026-10-01 09:00'));
         $ancien = Produit::factory()->create(['nom' => 'Agrafeuse']);
-        $this->travelTo(CarbonImmutable::parse('2026-10-10 09:00'));
+        $this->travelTo(self::aParis('2026-10-10 09:00'));
         $recent = Produit::factory()->create(['nom' => 'Zip']);
         $this->travelBack();
 

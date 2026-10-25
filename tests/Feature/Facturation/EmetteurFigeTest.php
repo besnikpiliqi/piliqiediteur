@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -476,7 +477,7 @@ class EmetteurFigeTest extends TestCase
     {
         $magasin = $this->magasinDuPort();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-PORT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-PORT-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         $this->assertThrows(
             fn () => app(FacturePdfGenerator::class)->generer($brouillon->fresh()),

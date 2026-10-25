@@ -201,7 +201,7 @@ class ProprietaireSansVenteTest extends TestCase
 
     public function test_le_proprietaire_garde_la_consultation_la_cloture_du_jour_la_fermeture_d_une_caisse_la_contre_passation_et_l_envoi(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -231,7 +231,7 @@ class ProprietaireSansVenteTest extends TestCase
      */
     public function test_le_proprietaire_contre_passe_un_paiement_mais_n_enregistre_pas_le_bon_paiement(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsableDeTest($magasin);

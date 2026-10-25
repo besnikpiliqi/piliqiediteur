@@ -467,7 +467,7 @@ class IdentifiantsTest extends TestCase
      */
     public function test_la_limite_du_jour_compte_par_auteur_et_suit_le_nombre_de_magasins(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $societe = $magasin->societe;
         $proprietaire = $this->proprietaireDe($magasin);
@@ -484,7 +484,7 @@ class IdentifiantsTest extends TestCase
         $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'De trop'], RoleMagasin::Vendeur), ValidationException::class, CreationDesComptes::messageDeLaLimite(30));
         $this->assertTrue(app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Par le responsable'], RoleMagasin::Vendeur)->exists);
 
-        $this->travel(1)->day();
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
         $this->assertTrue(app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Le lendemain'], RoleMagasin::Vendeur)->exists);
     }
 

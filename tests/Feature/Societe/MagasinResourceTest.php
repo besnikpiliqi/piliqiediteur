@@ -343,6 +343,7 @@ class MagasinResourceTest extends TestCase
      */
     public function test_au_dela_de_la_limite_la_page_ne_consulte_plus_le_repertoire(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $repertoire = $this->repertoireQuiCompte();
         $societe = $this->inscrireUneSociete();
         $repertoire->rendreInjoignable();
@@ -614,9 +615,9 @@ class MagasinResourceTest extends TestCase
      */
     public function test_un_magasin_sans_vente_garde_son_code_modifiable_apres_les_commandes_de_la_nuit(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'regime_tva' => RegimeTva::ReelSimplifie]);
-        $this->travelTo('2026-10-10 01:00:00');
+        $this->travelTo(self::aParis('2026-10-10 01:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         $this->ouvrirLaFiche($magasin)->fillForm(['code' => 'LYON1'])->call('save')->assertHasNoFormErrors();

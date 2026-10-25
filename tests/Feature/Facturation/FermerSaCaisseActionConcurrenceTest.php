@@ -61,7 +61,7 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $seconde = ClotureCaissePersonnelle::query()->whereKeyNot($premiere->id)->sole();
         $this->assertSame([1, 0], [$premiere->fresh()->nombre_ventes, $seconde->nombre_ventes]);
-        $this->assertSame($premiere->fresh()->jusqu_au->format('Y-m-d H:i:s'), $seconde->periode_debut->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant($premiere->fresh()->jusqu_au, $seconde->periode_debut);
         $this->assertSame(1, DB::table('clotures_caisse_personnelles_factures')->count());
         $this->assertSame(1, DB::table('clotures_caisse_personnelles_paiements')->count());
     }

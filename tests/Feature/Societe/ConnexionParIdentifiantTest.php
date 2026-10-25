@@ -156,6 +156,7 @@ class ConnexionParIdentifiantTest extends TestCase
      */
     public function test_une_adresse_en_attente_ou_d_une_inscription_close_coute_comme_une_adresse_inconnue(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->saisirLeCodeCommeUneAutrePersonne($this->inscrireUneSociete(null, 'inscrit@example.test'), 'representante@example.test');
         $close = $this->inscrireUneSociete(null, 'jeanne@example.test');
         app(TenantContext::class)->clear();
@@ -272,15 +273,15 @@ class ConnexionParIdentifiantTest extends TestCase
 
     public function test_la_personne_voit_sa_connexion_precedente_a_chaque_connexion(): void
     {
-        $this->travelTo('2026-10-12 09:15:00');
+        $this->travelTo(self::aParis('2026-10-12 09:15:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
 
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors()->assertNotNotified('Votre connexion précédente : le 12/10/2026 à 09:15');
-        $this->travelTo('2026-10-13 14:40:00');
+        $this->travelTo(self::aParis('2026-10-13 14:40:00'));
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertNotified('Votre connexion précédente : le 12/10/2026 à 09:15');
-        $this->travelTo('2026-10-14 08:05:00');
+        $this->travelTo(self::aParis('2026-10-14 08:05:00'));
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertNotified('Votre connexion précédente : le 13/10/2026 à 14:40');
     }
 

@@ -23,7 +23,6 @@ use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -83,7 +82,7 @@ class InventaireOuvertureTest extends TestCase
      */
     public function test_un_produit_nait_de_la_validation_d_un_inventaire_d_ouverture_avec_son_cout(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-18 10:00:00'));
+        $this->travelTo(self::aParis('2026-10-18 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $brouillon = $this->saisir([
             ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20', 'seuil_alerte' => 3], 'quantite' => 12, 'cout_unitaire_ht' => '1.50'],

@@ -16,7 +16,6 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -67,9 +66,9 @@ class SelecteurDeClientsTest extends TestCase
     {
         $this->ouvrirLeMagasinEnTantQueResponsable();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $this->travelTo(CarbonImmutable::parse('2026-09-01 09:00'));
+        $this->travelTo(self::aParis('2026-09-01 09:00'));
         $ancien = Client::factory()->create(['nom' => 'Albert Ancien']);
-        $this->travelTo(CarbonImmutable::parse('2026-09-15 09:00'));
+        $this->travelTo(self::aParis('2026-09-15 09:00'));
         $recent = Client::factory()->create(['nom' => 'Zoé Récente']);
         $this->travelBack();
 
@@ -110,9 +109,10 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_le_client_comptoir_reste_choisi_par_defaut(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->ouvrirLeMagasinEnTantQueResponsable();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $this->travelTo(now()->addDay());
+        $this->travelTo(self::aParis('2026-10-10 10:00:00'));
         $recent = Client::factory()->create(['nom' => 'Lucie Bernard']);
 
         Livewire::test(SelecteurDeClients::class)

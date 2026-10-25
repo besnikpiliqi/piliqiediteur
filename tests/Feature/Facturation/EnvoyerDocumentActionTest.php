@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -29,6 +30,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -168,7 +170,7 @@ class EnvoyerDocumentActionTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasin();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-ENVOI-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-ENVOI-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         $this->assertThrows(
             fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $brouillon->fresh(), 'client@exemple.fr', null),
@@ -267,7 +269,7 @@ class EnvoyerDocumentActionTest extends TestCase
 
     public function test_relancer_une_facture_echue_rappelle_son_montant_son_echeance_et_son_reste(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin('Ma Boutique');
         $facture = $this->emettreFactureEchueLe(Client::factory()->professionnel()->create(), '2026-09-30');
@@ -291,7 +293,7 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     public function test_la_relance_d_un_ticket_de_caisse_parle_du_ticket(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin('Ma Boutique');
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
@@ -306,12 +308,12 @@ class EnvoyerDocumentActionTest extends TestCase
 
     public function test_une_relance_manuelle_suit_la_derniere(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
-        $this->travelTo('2026-10-16 10:00:00');
+        $this->travelTo(self::aParis('2026-10-16 10:00:00'));
 
         $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
@@ -325,12 +327,12 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     public function test_une_facture_ne_se_relance_qu_une_fois_par_jour(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
-        $this->travelTo('2026-10-15 23:59:00');
+        $this->travelTo(self::aParis('2026-10-15 23:59:00'));
 
         $this->assertThrows(
             fn () => app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr'),
@@ -349,7 +351,7 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     public function test_une_relance_en_echec_repart_a_son_niveau_vers_l_adresse_corrigee(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $magasin = $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         $expediteur = $this->responsable($magasin);
@@ -363,15 +365,15 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->app->forgetInstance('mail.manager');
         Mail::clearResolvedInstance('mail.manager');
         Mail::fake();
-        $this->travelTo('2026-10-15 16:00:00');
+        $this->travelTo(self::aParis('2026-10-15 16:00:00'));
 
         $relance = app(EnvoyerDocumentAction::class)->relancer($expediteur, $facture, 'client@exemple.fr');
 
         $this->assertTrue($relance->is($enEchec));
         $relance->refresh();
         $this->assertSame(
-            [1, 'client@exemple.fr', StatutEnvoi::Envoye, null, $expediteur->id, '2026-10-15 16:00:00'],
-            [$relance->niveau_relance, $relance->destinataire, $relance->statut, $relance->erreur, $relance->envoye_par, $relance->created_at->format('Y-m-d H:i:s')],
+            [1, 'client@exemple.fr', StatutEnvoi::Envoye, null, $expediteur->id, self::aParis('2026-10-15 16:00:00')->getTimestamp()],
+            [$relance->niveau_relance, $relance->destinataire, $relance->statut, $relance->erreur, $relance->envoye_par, $relance->created_at->getTimestamp()],
         );
         $this->assertSame(1, $facture->envois()->count());
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr') && $mail->hasSubject("Relance n°1 : Ticket de caisse {$facture->numero} — {$facture->magasin->nom}"));
@@ -384,7 +386,7 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     public function test_la_facture_d_un_client_archive_s_envoie_et_se_relance(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin('Ma Boutique');
         $client = Client::factory()->professionnel()->create();
@@ -405,7 +407,7 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     public function test_un_membre_envoie_au_plus_60_e_mails_par_heure(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $membre = $this->responsable($this->magasin());
         $facture = $this->emettreFacture(Client::factory()->create());
@@ -422,7 +424,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->assertSame(60, $facture->envois()->count());
 
         app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
-        $this->travelTo('2026-10-15 11:00:01');
+        $this->travelTo(self::aParis('2026-10-15 11:00:01'));
         app(EnvoyerDocumentAction::class)->handle($membre, $facture, 'client@exemple.fr', null);
 
         $this->assertSame(62, $facture->envois()->count());
@@ -435,7 +437,7 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     public function test_un_magasin_envoie_au_plus_200_e_mails_par_heure(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
@@ -459,7 +461,7 @@ class EnvoyerDocumentActionTest extends TestCase
 
     public function test_une_facture_pas_encore_echue_ne_se_relance_pas(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-10-15');
@@ -475,7 +477,7 @@ class EnvoyerDocumentActionTest extends TestCase
 
     public function test_une_facture_echue_mais_payee_ne_se_relance_pas(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
@@ -514,16 +516,16 @@ class EnvoyerDocumentActionTest extends TestCase
 
     /**
      * Une facture de 120,00 € TTC émise le jour de son échéance, à un client
-     * payable comptant (délai de 0 jour, B7) ; le test reprend ensuite à
-     * l'instant où il en était.
+     * payable comptant (délai de 0 jour, B7) ; l'horloge revient ensuite
+     * telle qu'elle était, figée au même instant ou libre.
      */
     private function emettreFactureEchueLe(Client $client, string $echeance): Facture
     {
-        $maintenant = now()->toImmutable();
+        $horloge = Carbon::getTestNow();
         $client->update(['delai_paiement_jours' => 0]);
-        $this->travelTo("{$echeance} 10:00:00");
+        $this->travelTo(self::aParis("{$echeance} 10:00:00"));
         $facture = $this->emettreFacture($client);
-        $this->travelTo($maintenant);
+        $horloge === null ? $this->travelBack() : $this->travelTo($horloge);
 
         return $facture;
     }

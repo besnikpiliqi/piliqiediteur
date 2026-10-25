@@ -31,11 +31,11 @@ class PurgerTracesTest extends TestCase
 
     /**
      * Un événement technique que le magasin inscrit par une requête HTTP à
-     * cet instant (heure de Paris), avec sa trace.
+     * cet instant, avec sa trace.
      */
-    private function evenementTraceLe(Magasin $magasin, string $instant): EnregistrementFiscal
+    private function evenementTraceLe(Magasin $magasin, CarbonImmutable $instant): EnregistrementFiscal
     {
-        $this->travelTo(CarbonImmutable::parse($instant, 'Europe/Paris'));
+        $this->travelTo($instant);
         Route::get("/test/journaliser/{$magasin->id}", function () use ($magasin): int {
             app(TenantContext::class)->set($magasin);
 
@@ -66,11 +66,11 @@ class PurgerTracesTest extends TestCase
         Log::spy();
         $lyon = Magasin::factory()->create();
         $nantes = Magasin::factory()->create();
-        $ancienneDeLyon = $this->evenementTraceLe($lyon, '2024-03-01 10:00:00');
-        $ancienneDeNantes = $this->evenementTraceLe($nantes, '2024-03-01 11:00:00');
-        $recente = $this->evenementTraceLe($lyon, '2024-06-01 10:00:00');
+        $ancienneDeLyon = $this->evenementTraceLe($lyon, self::aParis('2024-03-01 10:00:00'));
+        $ancienneDeNantes = $this->evenementTraceLe($nantes, self::aParis('2024-03-01 11:00:00'));
+        $recente = $this->evenementTraceLe($lyon, self::aParis('2024-06-01 10:00:00'));
         $nantes->forceFill(['statut' => StatutMagasin::Ferme])->save();
-        $this->travelTo(CarbonImmutable::parse('2025-03-02 04:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2025-03-02 04:00:00'));
 
         $this->artisan('app:purger-traces')
             ->expectsOutput('4 trace(s) technique(s) effacée(s).')
@@ -95,7 +95,7 @@ class PurgerTracesTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $ancienne = $this->traceQuiExpireLe($this->maintenantSelonLaBase()->subYear());
+        $ancienne = $this->traceQuiExpireLe($this->maintenantSelonLaBase()->subHours(24 * 365));
         $presqueExpiree = $this->traceQuiExpireLe($this->maintenantSelonLaBase()->addMinutes(30));
         $this->travelTo($this->maintenantSelonLaBase()->addHour());
 

@@ -30,7 +30,6 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -153,7 +152,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_la_serie_se_lit_dans_le_premier_segment_du_numero(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(self::auteur(),
             app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]])
@@ -168,7 +167,7 @@ class EmettreFactureActionTest extends TestCase
 
     public function test_les_tickets_et_les_factures_ont_des_numerotations_independantes(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $clientParticulier = Client::factory()->create();
         $clientPro = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -192,7 +191,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_une_vente_a_0_h_30_le_1er_janvier_a_paris_est_datee_et_numerotee_sur_la_nouvelle_annee(): void
     {
-        $this->travelTo(Carbon::parse('2026-12-31 23:30:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-12-31 23:30:00'));
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
@@ -202,7 +201,7 @@ class EmettreFactureActionTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame('TK-LYON1-2027-000001', $facture->numero);
-        $this->assertSame('2027-01-01 00:30', $facture->fresh()->date_emission->format('Y-m-d H:i'));
+        $this->assertMemeInstant(self::aParis('2027-01-01 00:30'), $facture->fresh()->date_emission);
     }
 
     /**
@@ -309,21 +308,21 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_un_ticket_est_refuse_apres_la_cloture_de_sa_journee_puis_emis_le_lendemain(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         $magasin = app(TenantContext::class)->magasin();
         app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $this->travelTo('2026-10-09 19:30:00');
+        $this->travelTo(self::aParis('2026-10-09 19:30:00'));
 
         $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
 
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
         $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', TypeDocument::TicketCaisse->value)->exists());
 
-        $this->travelTo('2026-10-10 00:01:00');
+        $this->travelTo(self::aParis('2026-10-10 00:01:00'));
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
@@ -335,7 +334,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_une_facture_a_un_professionnel_s_emet_encore_apres_la_cloture_de_la_journee(): void
     {
-        $this->travelTo('2026-10-09 19:00:00');
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
         app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
@@ -358,7 +357,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_le_refus_apres_la_cloture_se_fonde_sur_la_journee_notee_sous_le_verrou_du_registre(): void
     {
-        $this->travelTo('2026-10-09 19:30:00');
+        $this->travelTo(self::aParis('2026-10-09 19:30:00'));
         (new TeteRegistreFiscal)->forceFill(['derniere_journee_cloturee' => '2026-10-09'])->save();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
@@ -390,7 +389,7 @@ class EmettreFactureActionTest extends TestCase
     #[DataProvider('delaisDePaiement')]
     public function test_l_echeance_est_la_date_d_emission_plus_le_delai_du_client_sinon_celui_du_magasin(?int $delaiDuClient, int $delaiDuMagasin, string $echeance): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->magasin()->update(['delai_paiement_jours' => $delaiDuMagasin]);
         $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => $delaiDuClient]);
 
@@ -406,9 +405,9 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_l_echeance_d_un_brouillon_se_calcule_le_jour_de_son_emission(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-01 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), $this->uneLigne());
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
@@ -424,7 +423,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_une_facture_a_un_professionnel_attend_l_identite_complete_du_magasin(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->magasinSansIdentiteLegale();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->uneLigne());
 
@@ -451,7 +450,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_un_ticket_s_emet_sans_identite_legale_du_magasin(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasinSansIdentiteLegale();
 
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), $this->uneLigne()));
@@ -465,7 +464,7 @@ class EmettreFactureActionTest extends TestCase
      */
     public function test_un_magasin_en_franchise_sans_numero_de_tva_facture_un_professionnel(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['regime_tva' => RegimeTva::FranchiseEnBase, 'numero_tva' => null]);
 
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->uneLigne()));
@@ -475,7 +474,7 @@ class EmettreFactureActionTest extends TestCase
 
     public function test_un_magasin_redevable_de_la_tva_sans_numero_de_tva_ne_facture_pas_un_professionnel(): void
     {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['regime_tva' => RegimeTva::ReelNormalMensuel, 'numero_tva' => null]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->uneLigne());
 

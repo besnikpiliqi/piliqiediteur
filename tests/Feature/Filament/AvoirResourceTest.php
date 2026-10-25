@@ -280,7 +280,7 @@ class AvoirResourceTest extends TestCase
      */
     public function test_un_client_archive_recoit_un_avoir_couvrant_deux_de_ses_factures(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
@@ -555,7 +555,7 @@ class AvoirResourceTest extends TestCase
      */
     public function test_le_retour_se_cherche_par_le_numero_du_document_et_affiche_son_client(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $magasin = $this->ouvrirLeMagasinDuProprietaire();
         $client = Client::factory()->create(['nom' => 'Mme Durand']);
         $ticket = $this->emettreFactureDepuisLePanneau($client);
@@ -583,11 +583,11 @@ class AvoirResourceTest extends TestCase
      */
     public function test_avec_le_client_comptoir_seul_le_ticket_cherche_est_propose(): void
     {
-        $this->travelTo('2026-10-17 09:15:00');
+        $this->travelTo(self::aParis('2026-10-17 09:15:00'));
         $magasin = $this->ouvrirLeMagasinDuProprietaire();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $this->emettreUnTicketDansLeMagasin($magasin, $comptoir);
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $ticketCherche = $this->emettreUnTicketDansLeMagasin($magasin, $comptoir);
 
         $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $ticketCherche->numero);
@@ -671,7 +671,7 @@ class AvoirResourceTest extends TestCase
      */
     public function test_un_numero_saisi_sans_les_zeros_de_son_rang_est_retrouve(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $this->ouvrirLeMagasinDuProprietaire();
         $ticket = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
 
@@ -689,12 +689,12 @@ class AvoirResourceTest extends TestCase
      */
     public function test_le_client_affiche_est_celui_que_l_avoir_fige_quand_il_corrige_plusieurs_documents(): void
     {
-        $this->travelTo('2026-10-10 09:00:00');
+        $this->travelTo(self::aParis('2026-10-10 09:00:00'));
         $this->ouvrirLeMagasinDuProprietaire();
         $client = Client::factory()->create(['nom' => 'Mme Durand']);
         $ancien = $this->emettreFactureDepuisLePanneau($client);
         $client->update(['nom' => 'Mme Martin']);
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $recent = $this->emettreFactureDepuisLePanneau($client);
 
         $formulaire = $this->chercher($this->chercher(Livewire::test(CreateAvoir::class), $ancien->numero), $recent->numero);
@@ -733,7 +733,7 @@ class AvoirResourceTest extends TestCase
      */
     public function test_un_numero_d_un_autre_magasin_est_introuvable(): void
     {
-        $this->travelTo('2026-10-17 10:32:00');
+        $this->travelTo(self::aParis('2026-10-17 10:32:00'));
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON1']);
         $ticketDeVilleurbanne = $this->emettreUnTicketDansLeMagasin($this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne', 'code' => 'VILL1']));
         $ticketDUneAutreSociete = $this->emettreUnTicketDansLeMagasin($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON1']));

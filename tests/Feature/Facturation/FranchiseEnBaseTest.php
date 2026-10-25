@@ -171,7 +171,7 @@ class FranchiseEnBaseTest extends TestCase
      */
     public function test_le_brouillon_reenregistre_apres_le_passage_en_franchise_s_emet_a_zero_pour_cent(): void
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $magasin = $this->magasin(RegimeTva::ReelNormalMensuel);
         $client = Client::factory()->create();
         $produit = $this->produitA12Euros();

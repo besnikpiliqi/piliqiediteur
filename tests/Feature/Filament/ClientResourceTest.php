@@ -23,7 +23,7 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
-use Carbon\CarbonImmutable;
+use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -281,7 +281,7 @@ class ClientResourceTest extends TestCase
             'numero_tva' => 'DE123456789',
             'valide' => true,
             'identifiant_consultation' => 'WAPI1',
-            'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
+            'consultee_le' => self::enUtc('2026-10-09 12:32:10'),
             'reponse' => '{"valid":true,"requestIdentifier":"WAPI1"}',
         ]);
     }
@@ -350,7 +350,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_le_ticket_d_un_client_archive_reste_lisible_et_telechargeable(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->connecterLeResponsable();
         $client = Client::factory()->create(['nom' => 'Jeanne Martin']);
         $produit = Produit::factory()->create(['nom' => 'Coque', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -938,7 +938,7 @@ class ClientResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
-        $this->travelTo('2026-10-09 14:32:10');
+        $this->travelTo(self::aParis('2026-10-09 14:32:10'));
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'ACME GMBH', 'address' => '---'])]);
 
@@ -1009,7 +1009,7 @@ class ClientResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
-        $this->travelTo('2026-10-09 14:32:10');
+        $this->travelTo(self::aParis('2026-10-09 14:32:10'));
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true, 'requestIdentifier' => 'WAPI1'])]);
 
@@ -1063,16 +1063,16 @@ class ClientResourceTest extends TestCase
      * Un magasin suspendu ou fermé reste consultable : ses vérifications
      * VIES aussi, mais il n'en fait plus, même par une requête forgée.
      *
-     * @param  array<string, mixed>  $situation
+     * @param  Closure(): array<string, mixed>  $situation
      */
     #[DataProvider('situationsEnLectureSeule')]
-    public function test_les_verifications_vies_restent_consultables_dans_un_magasin_en_lecture_seule(array $situation): void
+    public function test_les_verifications_vies_restent_consultables_dans_un_magasin_en_lecture_seule(Closure $situation): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->consultationValide($allemand);
-        $magasin->forceFill($situation)->save();
+        $magasin->forceFill($situation())->save();
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true])]);
 
@@ -1091,13 +1091,13 @@ class ClientResourceTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: array<string, mixed>}>
+     * @return array<string, array{0: Closure(): array<string, mixed>}>
      */
     public static function situationsEnLectureSeule(): array
     {
         return [
-            'suspendu' => [['suspendu_le' => '2026-10-01 00:00:00']],
-            'fermé' => [['statut' => StatutMagasin::Ferme]],
+            'suspendu' => [static fn (): array => ['suspendu_le' => self::aParis('2026-10-01 00:00:00')]],
+            'fermé' => [static fn (): array => ['statut' => StatutMagasin::Ferme]],
         ];
     }
 
@@ -1154,7 +1154,7 @@ class ClientResourceTest extends TestCase
             'numero_tva' => 'DE123456789',
             'valide' => true,
             'nom' => '<script>alert(1)</script>',
-            'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
+            'consultee_le' => self::enUtc('2026-10-09 12:32:10'),
             'reponse' => '{"valid":true}',
         ]);
 

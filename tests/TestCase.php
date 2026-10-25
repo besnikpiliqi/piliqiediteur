@@ -52,23 +52,30 @@ use Carbon\CarbonImmutable;
 use Closure;
 use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
+use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Foundation\Testing\Wormhole;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\MailFake;
 use Illuminate\Testing\TestResponse;
+use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
 use Livewire\Features\SupportTesting\Testable;
+use LogicException;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
 
@@ -168,6 +175,160 @@ abstract class TestCase extends BaseTestCase
         return fn (int $longueur): string => $longueur > 0
             ? $hasard->getBytesFromString('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', $longueur)
             : '';
+    }
+
+    /**
+     * L'instant d'une heure murale de Paris (« AAAA-MM-JJ HH:MM » ou
+     * « AAAA-MM-JJ HH:MM:SS »), au fuseau de l'application, comme now() :
+     * une heure écrite dans un test dit toujours de quel fuseau elle est,
+     * et ne se relit jamais dans le fuseau par défaut. Une heure qui
+     * n'existe pas à Paris (sautée au passage à l'heure d'été) ou qui s'y
+     * répète (au passage à l'heure d'hiver) est refusée : elle ne désigne
+     * pas un seul instant, qui s'écrit alors en UTC (voir enUtc()).
+     *
+     * @throws InvalidArgumentException
+     */
+    protected static function aParis(string $heure): CarbonImmutable
+    {
+        $fuseau = new DateTimeZone('Europe/Paris');
+        $murale = self::heureEcrite($heure)->getTimestamp();
+        $instants = [];
+
+        foreach ($fuseau->getTransitions($murale - 2 * 86400, $murale + 2 * 86400) as $transition) {
+            $instant = $murale - $transition['offset'];
+
+            if ($fuseau->getOffset(new DateTimeImmutable('@'.$instant)) === $transition['offset']) {
+                $instants[$instant] = true;
+            }
+        }
+
+        if (count($instants) !== 1) {
+            throw new InvalidArgumentException(sprintf('%s %s à Paris : écrivez cet instant en UTC (enUtc()).', $heure, $instants === [] ? "n'existe pas" : 'se répète'));
+        }
+
+        return CarbonImmutable::createFromTimestamp(array_key_first($instants))->setTimezone(date_default_timezone_get());
+    }
+
+    /**
+     * L'instant d'une heure UTC (« AAAA-MM-JJ HH:MM » ou « AAAA-MM-JJ
+     * HH:MM:SS »), au fuseau de l'application, comme now().
+     *
+     * @throws InvalidArgumentException
+     */
+    protected static function enUtc(string $heure): CarbonImmutable
+    {
+        return CarbonImmutable::instance(self::heureEcrite($heure))->setTimezone(date_default_timezone_get());
+    }
+
+    /**
+     * L'heure écrite, lue en UTC à la seconde : « AAAA-MM-JJ HH:MM » ou
+     * « AAAA-MM-JJ HH:MM:SS », une date du calendrier.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function heureEcrite(string $heure): DateTimeImmutable
+    {
+        $format = strlen($heure) === 16 ? 'Y-m-d H:i' : 'Y-m-d H:i:s';
+        $lue = DateTimeImmutable::createFromFormat('!'.$format, $heure, new DateTimeZone('UTC'));
+
+        if ($lue === false || $lue->format($format) !== $heure) {
+            throw new InvalidArgumentException("{$heure} n'est pas une heure « AAAA-MM-JJ HH:MM[:SS] ».");
+        }
+
+        return $lue;
+    }
+
+    /**
+     * Le même instant, quel que soit le fuseau de chacun : un instant
+     * attendu se compare comme un instant, jamais au texte d'une date mise
+     * en forme dans son fuseau.
+     */
+    protected function assertMemeInstant(DateTimeInterface $attendu, ?DateTimeInterface $obtenu, string $message = ''): void
+    {
+        $enUtc = static fn (DateTimeInterface $instant): string => CarbonImmutable::instance($instant)->utc()->format('Y-m-d\TH:i:s.u\Z');
+
+        $this->assertSame($enUtc($attendu), $obtenu === null ? null : $enUtc($obtenu), $message);
+    }
+
+    /**
+     * Un voyage relatif part de l'horloge figée du test, jamais de l'heure
+     * réelle : sans horloge figée, il dépendrait de l'instant où la suite
+     * tourne.
+     *
+     * @param  int  $value
+     *
+     * @throws LogicException
+     */
+    public function travel($value): Wormhole
+    {
+        $this->exigerUneHorlogeFigee('travel()');
+
+        return parent::travel($value);
+    }
+
+    /**
+     * Figer l'horloge à l'heure réelle ferait dépendre le test de l'instant
+     * où la suite tourne : l'horloge se fige d'abord à un instant écrit.
+     *
+     * @throws LogicException
+     */
+    public function freezeTime($callback = null): mixed
+    {
+        $this->exigerUneHorlogeFigee('freezeTime()');
+
+        return parent::freezeTime($callback);
+    }
+
+    /**
+     * Comme freezeTime().
+     *
+     * @throws LogicException
+     */
+    public function freezeSecond($callback = null): mixed
+    {
+        $this->exigerUneHorlogeFigee('freezeSecond()');
+
+        return parent::freezeSecond($callback);
+    }
+
+    /**
+     * @throws LogicException
+     */
+    private function exigerUneHorlogeFigee(string $voyage): void
+    {
+        if (! Carbon::hasTestNow()) {
+            throw new LogicException("{$voyage} partirait de l'heure réelle : figez d'abord l'horloge à un instant écrit, travelTo(self::aParis('…')) ou travelTo(self::enUtc('…')).");
+        }
+    }
+
+    /**
+     * Fige l'horloge à l'heure que relisent les fichiers : la date de
+     * modification de ce fichier témoin, ou d'un fichier tout juste écrit.
+     * Un test qui compare l'horloge à la date d'un fichier (un envoi que
+     * Livewire croit vieux, une pièce de vérification restée) la lit ainsi
+     * comme le code la lit, même quand faketime décale la date que relit
+     * un fichier (stat) sans décaler celle qu'on y écrit (touch).
+     */
+    protected function figerALHeureDesFichiers(?string $temoin = null): CarbonImmutable
+    {
+        $ecrit = $temoin === null;
+        $temoin ??= storage_path('framework/testing/horloge-'.getmypid());
+
+        if ($ecrit) {
+            File::ensureDirectoryExists(dirname($temoin));
+            File::put($temoin, '');
+        }
+
+        clearstatcache(true, $temoin);
+        $instant = CarbonImmutable::createFromTimestamp((int) filemtime($temoin))->setTimezone(date_default_timezone_get());
+
+        if ($ecrit) {
+            File::delete($temoin);
+        }
+
+        $this->travelTo($instant);
+
+        return $instant;
     }
 
     /**
@@ -432,14 +593,15 @@ abstract class TestCase extends BaseTestCase
      * opération du test : un test qui voyage ensuite dans le temps ne
      * trouve pas le registre du magasin verrouillé à une heure postérieure
      * à ses ventes. La société du magasin reçoit son propriétaire si elle
-     * n'en a pas encore.
+     * n'en a pas encore. L'horloge revient ensuite telle qu'elle était :
+     * figée au même instant, ou libre.
      *
      * @param  list<string>|null  $autorisations
      */
     protected function vendeurDeLaPremiereHeure(Magasin $magasin, ?array $autorisations = null): User
     {
-        $maintenant = CarbonImmutable::now();
-        $this->travelTo(CarbonImmutable::parse(MagasinFactory::DEBUT_D_ACTIVITE, config('app.timezone')));
+        $horloge = Carbon::getTestNow();
+        $this->travelTo(self::aParis(MagasinFactory::DEBUT_D_ACTIVITE));
 
         try {
             if ($magasin->societe()->firstOrFail()->proprietaire()->doesntExist()) {
@@ -448,7 +610,7 @@ abstract class TestCase extends BaseTestCase
 
             return $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
         } finally {
-            $this->travelTo($maintenant);
+            $horloge === null ? $this->travelBack() : $this->travelTo($horloge);
         }
     }
 

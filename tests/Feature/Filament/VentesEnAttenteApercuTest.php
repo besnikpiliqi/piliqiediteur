@@ -51,7 +51,7 @@ class VentesEnAttenteApercuTest extends TestCase
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
         Filament::setTenant($magasin);
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier(Client::factory()->create()); // 50 € HT, TVA 20 % => 60 € TTC
 
         Livewire::test(VentesEnAttenteApercu::class)
@@ -66,7 +66,7 @@ class VentesEnAttenteApercuTest extends TestCase
         $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->emettreFactureParticulier($client); // 60 € TTC
         $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
 
@@ -84,9 +84,9 @@ class VentesEnAttenteApercuTest extends TestCase
         $responsable = $this->responsableDeTest($magasin);
         $this->actingAs($responsable);
         Filament::setTenant($magasin);
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $this->emettreFactureParticulier(Client::factory()->create()); // 60 € TTC
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         Livewire::test(VentesEnAttenteApercu::class)
             ->assertSee('Journées du 08/10/2026 (oubliée) et 09/10/2026 · 60,00 € au total');

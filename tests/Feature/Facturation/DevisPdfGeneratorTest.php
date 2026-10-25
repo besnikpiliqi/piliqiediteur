@@ -177,7 +177,7 @@ class DevisPdfGeneratorTest extends TestCase
 
     private function devisEnvoye(): Devis
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
             'raison_sociale' => 'Martin et Fils',
             'forme_juridique' => FormeJuridique::Sarl,

@@ -71,7 +71,7 @@ class ActionsUniquesTest extends TestCase
 
     public function test_un_paiement_repete_n_est_enregistre_qu_une_fois(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon());
         $jeton = (string) Str::uuid();
@@ -227,15 +227,15 @@ class ActionsUniquesTest extends TestCase
 
     public function test_les_jetons_de_plus_de_30_jours_sont_effaces(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $ancienDeA = $this->vendreAuComptoir(self::auteur(), (string) Str::uuid());
         app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
         $ancienDeB = $this->vendreAuComptoir(self::auteur(), (string) Str::uuid());
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $recentDeB = $this->vendreAuComptoir(self::auteur(), (string) Str::uuid());
-        $this->travelTo('2026-11-01 10:00:01');
+        $this->travelTo(self::aParis('2026-11-01 10:00:01'));
         app(TenantContext::class)->clear();
 
         $this->artisan('app:purger-actions-traitees')->assertSuccessful();
@@ -249,7 +249,7 @@ class ActionsUniquesTest extends TestCase
 
     public function test_une_cloture_manuelle_repetee_ne_cree_qu_une_cloture(): void
     {
-        $this->travelTo('2026-10-09 18:00:00');
+        $this->travelTo(self::aParis('2026-10-09 18:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->vendreAuComptoir(self::auteur(), null);
         $jeton = (string) Str::uuid();

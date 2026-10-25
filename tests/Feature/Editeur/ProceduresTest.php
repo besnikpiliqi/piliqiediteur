@@ -223,14 +223,15 @@ class ProceduresTest extends TestCase
 
     /**
      * Une inscription dont les deux courriers ne sont pas parvenus : le
-     * premier, puis le nouveau courrier demandé au quinzième jour ; son
-     * propriétaire a déposé un extrait Kbis pour que l'éditeur traite son
-     * cas à la main.
+     * premier, le 5 octobre, puis le nouveau courrier demandé au quinzième
+     * jour ; son propriétaire a déposé un extrait Kbis pour que l'éditeur
+     * traite son cas à la main.
      */
     private function societeAvecUnePiece(): Societe
     {
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
-        $this->travel(15)->days();
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
         app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Kbis, 'Extrait Kbis');
         app(TenantContext::class)->clear();

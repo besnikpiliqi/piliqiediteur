@@ -106,7 +106,7 @@ class InseeSireneTest extends TestCase
      */
     public function test_les_etablissements_actifs_d_une_entreprise_se_lisent_par_une_recherche(): void
     {
-        $this->travelTo('2026-10-17 00:30:00');
+        $this->travelTo(self::aParis('2026-10-17 00:30:00'));
         $etablissement = fn (string $siret, bool $siege, string $etat, array $periode = [], string $siren = '000000018'): array => [
             'siren' => $siren,
             'siret' => $siret,

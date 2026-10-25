@@ -9,7 +9,6 @@ use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -36,23 +35,23 @@ class EffacerPiecesVerificationTest extends TestCase
     public function test_une_piece_s_efface_au_dernier_passage_avant_ses_trente_jours(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
-        $this->travelTo('2026-10-18 10:00:00');
+        $this->travelTo(self::aParis('2026-10-18 10:00:00'));
         $societe = $this->inscrireUneSociete();
-        $this->travelTo('2026-11-02 10:00:00');
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
         $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Identite, 'Carte d\'identité de Jeanne Dupont');
         $chemin = (string) $piece->chemin;
 
-        $this->travelTo('2026-12-02 08:00:00');
+        $this->travelTo(self::aParis('2026-12-02 08:00:00'));
         $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
         Storage::disk(PiecesDeVerification::DISQUE)->assertExists($chemin);
 
-        $this->travelTo('2026-12-02 09:00:00');
+        $this->travelTo(self::aParis('2026-12-02 09:00:00'));
         $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
 
         Storage::disk(PiecesDeVerification::DISQUE)->assertMissing($chemin);
         $piece = app(TenantContext::class)->runAsSociete($societe, fn () => $piece->fresh());
-        $this->assertSame([null, '2026-12-02 09:00:00'], [$piece->chemin, $piece->effacee_le->format('Y-m-d H:i:s')]);
+        $this->assertSame([null, self::aParis('2026-12-02 09:00:00')->getTimestamp()], [$piece->chemin, $piece->effacee_le->getTimestamp()]);
     }
 
     /**
@@ -62,8 +61,9 @@ class EffacerPiecesVerificationTest extends TestCase
     public function test_toutes_les_pieces_echues_s_effacent_en_un_passage_meme_au_dela_d_un_lot(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
+        $this->travelTo(self::aParis('2026-12-02 09:00:00'));
         $societe = $this->inscrireUneSociete();
-        $deposeeLe = now()->subDays(PieceVerification::CONSERVATION_EN_JOURS + 1);
+        $deposeeLe = self::aParis('2026-11-01 09:00:00');
         DB::table('pieces_verification')->insert(array_fill(0, 1001, [
             'societe_id' => $societe->id,
             'type' => TypePiece::Kbis->value,
@@ -88,13 +88,15 @@ class EffacerPiecesVerificationTest extends TestCase
      * cours restent. Les dossiers d'examen sont ceux du disque
      * « verification » simulé, propre au processus de test.
      *
-     * L'heure de l'application se cale sur l'heure de modification que
-     * relisent les fichiers : faketime décale celle-ci (stat) sans décaler
-     * celle qu'on y écrit (touch), et seuls les écarts entre fichiers
-     * restent exacts.
+     * Les heures écrites sur les fichiers partent d'un instant écrit, puis
+     * l'heure de l'application se fige à l'heure de modification que
+     * relit l'envoi en cours (voir figerALHeureDesFichiers()) : faketime
+     * décale celle-ci (stat) sans décaler celle qu'on y écrit (touch), et
+     * seuls les écarts entre fichiers restent exacts.
      */
     public function test_les_envois_abandonnes_et_les_dossiers_d_examen_restes_s_effacent_apres_une_heure(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Storage::fake(PiecesDeVerification::DISQUE);
         $envois = FileUploadConfiguration::storage();
         $envois->put(FileUploadConfiguration::path('abandonne.pdf'), 'CNI EN CLAIR');
@@ -111,8 +113,7 @@ class EffacerPiecesVerificationTest extends TestCase
         touch($reste, $maintenant - 61 * 60);
         touch($envoiEnCours, $maintenant);
         touch($examenEnCours, $maintenant);
-        clearstatcache();
-        $this->travelTo(CarbonImmutable::createFromTimestamp(filemtime($envoiEnCours)));
+        $this->figerALHeureDesFichiers($envoiEnCours);
 
         $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
 

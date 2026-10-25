@@ -31,7 +31,6 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
@@ -190,7 +189,7 @@ class EmissionSigneeTest extends TestCase
 
     public function test_un_ticket_au_comptoir_signe_ses_lignes_sa_ventilation_son_emetteur_son_client_et_son_reglement(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif([
             'nom' => 'Boutique Lefèvre',
             'raison_sociale' => 'Lefèvre et Fils',
@@ -392,7 +391,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_une_livraison_intracommunautaire_signe_sa_nature_sa_livraison_et_sa_verification_vies(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $magasin = $this->magasinActif();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
         $consultation = ConsultationVies::forceCreate([
@@ -400,7 +399,7 @@ class EmissionSigneeTest extends TestCase
             'numero_tva' => 'DE123456789',
             'valide' => true,
             'identifiant_consultation' => 'WAPIAAAAW1234567',
-            'consultee_le' => CarbonImmutable::parse('2026-10-09 09:00:00', 'Europe/Paris'),
+            'consultee_le' => self::aParis('2026-10-09 09:00:00'),
             'reponse' => '{"valid":true}',
         ]);
         $facture = $this->emettre($client, [[$this->produit('VIS-001', 'Vis à bois', 25), 12]], [
@@ -435,14 +434,14 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_la_date_d_emission_est_l_horodatage_signe(): void
     {
-        $this->travelTo('2027-01-01 00:30:12');
+        $this->travelTo(self::aParis('2027-01-01 00:30:12'));
         $this->magasinActif();
         $produit = $this->produit('CAF-250', 'Café moulu 250 g', 12);
 
         $ticket = $this->encaisser(Client::factory()->create(), [[$produit, 1]]);
 
         $vente = $this->enregistrementDe($ticket, ChaineFiscale::Vente);
-        $this->assertSame('2027-01-01 00:30:12', $ticket->date_emission->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::aParis('2027-01-01 00:30:12'), $ticket->date_emission);
         $this->assertTrue($ticket->date_emission->equalTo($vente->horodatage));
         $this->assertSame('20261231233012Z', $this->contenu($vente)['horodatage']);
         $this->assertSame('TK-LYON1-2027-000001', $ticket->numero);
@@ -461,9 +460,9 @@ class EmissionSigneeTest extends TestCase
         $this->magasinActif();
         $client = Client::factory()->create();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
-        $this->travelTo(CarbonImmutable::parse('2026-10-25 00:30:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-25 00:30:00'));
         $ticket = $this->encaisser($client, [[$produit, 1]]);
-        $this->travelTo(CarbonImmutable::parse('2026-10-25 01:10:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-25 01:10:00'));
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
 
@@ -478,7 +477,7 @@ class EmissionSigneeTest extends TestCase
 
     public function test_une_facture_professionnelle_sans_reglement_signe_son_echeance_et_aucun_reglement(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
         $produit = $this->produit('CAF-250', 'Café moulu 250 g', 12);
@@ -536,7 +535,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_le_client_signe_est_la_copie_figee_que_la_fiche_modifiee_ne_change_pas(): void
     {
-        $this->freezeTime();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
         $facture = $this->emettre($client, [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
@@ -558,7 +557,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_les_grands_totaux_avancent_a_chaque_ticket_et_a_chaque_avoir(): void
     {
-        $this->freezeTime();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasinActif();
         $client = Client::factory()->create();
         $centEuros = $this->produit('A-100', 'Article à 100 €', 100);
@@ -581,7 +580,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_un_avoir_sur_un_ticket_signe_en_negatif_ses_lignes_d_origine_et_journalise_l_annulation(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif();
         $vendeur = $this->responsableDeTest(app(TenantContext::class)->magasin());
         $this->actingAs($vendeur);
@@ -647,7 +646,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_un_avoir_sur_une_facture_signe_son_imputation_sans_annulation_de_ticket(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
@@ -667,7 +666,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_une_vente_couverte_par_un_credit_d_avoir_signe_le_credit_et_aucun_reglement(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif();
         $client = Client::factory()->create();
         $produit = $this->produit('A-060', 'Article à 60 €', 60);
@@ -686,7 +685,7 @@ class EmissionSigneeTest extends TestCase
 
     public function test_un_paiement_de_trois_factures_signe_un_encaissement_avec_ses_trois_imputations(): void
     {
-        $this->travelTo('2026-10-09 10:15:30');
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
@@ -749,7 +748,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_une_vente_n_ecrit_que_dans_le_registre_de_son_magasin(): void
     {
-        $this->freezeTime();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasinB = $this->magasinActif(['code' => 'LYON2']);
         $this->encaisser(Client::factory()->create(), [[$this->produit('B-050', 'Article de B', 50), 1]]);
         $registreDeB = fn (): array => DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinB->id)->orderBy('id')->get()->map(fn (object $ligne): array => (array) $ligne)->all();

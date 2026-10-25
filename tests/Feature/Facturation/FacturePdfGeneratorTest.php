@@ -479,7 +479,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_un_avoir_impute_par_une_contre_passation_apres_l_emission_n_est_pas_nomme(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
         $client = Client::factory()->create();
         $article = fn (float $prixTtc): Produit => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -715,7 +715,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_une_vente_sans_tva_francaise_ticket_ou_facture_n_imprime_que_les_colonnes_ht_et_sa_note_ne_cite_aucune_colonne_absente(): void
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         app(TenantContext::class)->set(Magasin::factory()->create());
         $export = $this->emettre(Client::factory()->create(), [['produit_id' => $this->produitAVingtPourCent('EXP-01', '7.00')->id, 'quantite' => 3]], [
             'nature_operation' => NatureOperation::ExportHorsUe,
@@ -744,7 +744,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_les_reglements_de_l_emission_s_impriment_par_mode(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->ouvrirUneSociete(['code' => 'LYON1']);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $article = fn (float $prix): array => [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
@@ -880,7 +880,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_un_taux_a_zero_imprime_son_motif_dans_le_tableau_de_tva(): void
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $tableauDeLaTva = fn (string $motif, string $base): string => '<thead><tr><th>Taux TVA</th><th>Motif</th><th class="montant">Base HT</th><th class="montant">TVA</th><th class="montant">Total TTC</th></tr></thead>'
             .'<tbody><tr><td>0 %</td><td class="motif">'.e($motif).'</td><td class="montant">'.$base.'</td><td class="montant">0,00 €</td><td class="montant">'.$base.'</td></tr></tbody>';
         app(TenantContext::class)->set(Magasin::factory()->create());
@@ -898,7 +898,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_un_ticket_paye_a_la_caisse_n_imprime_pas_d_echeance(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
 
@@ -916,7 +916,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_une_facture_a_un_professionnel_payee_a_l_emission_imprime_son_echeance(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
 

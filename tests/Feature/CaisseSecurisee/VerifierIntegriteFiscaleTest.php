@@ -13,7 +13,6 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,7 +74,7 @@ class VerifierIntegriteFiscaleTest extends TestCase
 
     public function test_un_registre_intact_fait_reussir_la_commande_qui_inscrit_son_controle(): void
     {
-        $this->travelTo('2026-10-02 03:00:00');
+        $this->travelTo(self::aParis('2026-10-02 03:00:00'));
         $magasin = $this->magasinQuiAVendu(['nom' => 'Boutique Lefèvre']);
 
         $this->artisan('caisse:verifier')
@@ -91,7 +90,7 @@ class VerifierIntegriteFiscaleTest extends TestCase
 
     public function test_la_moindre_anomalie_fait_echouer_la_commande_et_l_affiche(): void
     {
-        $this->travelTo('2026-10-02 03:00:00');
+        $this->travelTo(self::aParis('2026-10-02 03:00:00'));
         $magasin = $this->magasinQuiAVendu(['nom' => 'Boutique Lefèvre']);
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 3]);
 
@@ -180,15 +179,15 @@ class VerifierIntegriteFiscaleTest extends TestCase
      */
     public function test_la_verification_planifiee_est_complete_au_jour_du_magasin_et_incrementale_les_autres_jours(): void
     {
-        $this->travelTo('2026-10-02 03:00:00');
+        $this->travelTo(self::aParis('2026-10-02 03:00:00'));
         $magasin = $this->magasinQuiAVendu(['id' => 31]);
         $this->artisan('caisse:verifier')->assertSuccessful();
 
-        $this->travelTo('2026-10-03 03:00:00');
+        $this->travelTo(self::aParis('2026-10-03 03:00:00'));
         $this->artisan('caisse:verifier')->assertSuccessful();
-        $this->travelTo('2026-10-04 03:00:00');
+        $this->travelTo(self::aParis('2026-10-04 03:00:00'));
         $this->artisan('caisse:verifier')->assertSuccessful();
-        $this->travelTo('2026-11-03 03:00:00');
+        $this->travelTo(self::aParis('2026-11-03 03:00:00'));
         $this->artisan('caisse:verifier')->assertSuccessful();
 
         $this->assertSame(['complete', 'complete', 'incrementale', 'complete'], array_column($this->controlesDe($magasin), 'verification'));
@@ -196,10 +195,10 @@ class VerifierIntegriteFiscaleTest extends TestCase
 
     public function test_complet_verifie_tout_le_registre_quel_que_soit_le_jour(): void
     {
-        $this->travelTo('2026-10-02 03:00:00');
+        $this->travelTo(self::aParis('2026-10-02 03:00:00'));
         $magasin = $this->magasinQuiAVendu(['id' => 31]);
         $this->artisan('caisse:verifier')->assertSuccessful();
-        $this->travelTo('2026-10-04 03:00:00');
+        $this->travelTo(self::aParis('2026-10-04 03:00:00'));
 
         $this->artisan('caisse:verifier', ['--complet' => true])->assertSuccessful();
 
@@ -214,10 +213,10 @@ class VerifierIntegriteFiscaleTest extends TestCase
         // Le planning de bootstrap/app.php s'enregistre au démarrage
         // d'Artisan, comme sur le serveur avant schedule:run.
         $this->artisan('schedule:list')->assertSuccessful();
-        $this->travelTo(CarbonImmutable::parse('2026-10-15 01:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-15 01:00:00'));
         $this->assertTrue($this->verificationDue());
 
-        $this->travelTo(CarbonImmutable::parse('2026-10-15 03:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-10-15 03:00:00'));
         $this->assertFalse($this->verificationDue());
     }
 

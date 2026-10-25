@@ -78,23 +78,23 @@ class ModifierDevisActionTest extends TestCase
      */
     public function test_un_devis_envoye_modifie_repasse_en_brouillon_et_repart_sous_son_numero(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $this->envoyerUnDevis($client, $produit);
         $this->envoyerUnDevis($client, $produit);
         $devis = $this->envoyerUnDevis($client, $produit);
-        $this->travelTo('2026-10-07 15:00:00');
+        $this->travelTo(self::aParis('2026-10-07 15:00:00'));
 
         $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Brouillon, '2026-10-05 10:00'], [$modifie->numero, $modifie->statut, $modifie->date_emission->format('Y-m-d H:i')]);
+        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Brouillon, self::aParis('2026-10-05 10:00')->getTimestamp()], [$modifie->numero, $modifie->statut, $modifie->date_emission->getTimestamp()]);
         $this->assertSame(['100.00', '20.00', '120.00'], [$modifie->total_ht, $modifie->total_tva, $modifie->total_ttc]);
 
         $renvoye = app(EmettreDevisAction::class)->handle(self::auteur(), $modifie);
         $suivant = $this->envoyerUnDevis($client, $produit);
 
-        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Envoye, '2026-10-07 15:00'], [$renvoye->numero, $renvoye->statut, $renvoye->date_emission->format('Y-m-d H:i')]);
+        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Envoye, self::aParis('2026-10-07 15:00')->getTimestamp()], [$renvoye->numero, $renvoye->statut, $renvoye->date_emission->getTimestamp()]);
         $this->assertSame('DEV-MABOUT-2026-000004', $suivant->numero);
     }
 
@@ -141,11 +141,11 @@ class ModifierDevisActionTest extends TestCase
 
     public function test_un_devis_expire_n_est_plus_modifiable(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerUnDevis($client, $produit, '2026-10-08');
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
         $this->artisan(ExpirerDevis::class)->assertSuccessful();
         app(TenantContext::class)->set($devis->magasin);
 
@@ -165,11 +165,11 @@ class ModifierDevisActionTest extends TestCase
      */
     public function test_un_devis_envoye_a_la_validite_depassee_n_est_plus_modifiable_avant_meme_son_expiration(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerUnDevis($client, $produit, '2026-10-08');
-        $this->travelTo('2026-10-09 00:10:00');
+        $this->travelTo(self::aParis('2026-10-09 00:10:00'));
 
         $this->assertThrows(
             fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),

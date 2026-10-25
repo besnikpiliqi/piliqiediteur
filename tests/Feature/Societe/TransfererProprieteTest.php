@@ -168,6 +168,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_un_lien_de_transmission_expire_annule_deja_suivi_ou_ouvert_par_un_autre_compte_ne_change_rien(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $administrateur = $this->administrateurPretAReprendre($magasin);
@@ -225,16 +226,16 @@ class TransfererProprieteTest extends TestCase
     public function test_une_transmission_demandee_avant_la_cloture_de_l_inscription_ne_s_accepte_plus_apres(): void
     {
         Notification::fake();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $magasin = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire()->sole();
         $administrateur = $this->administrateurPretAReprendre($magasin, 'admin@exemple.fr');
-        $this->travelTo('2026-11-04 09:00:00');
+        $this->travelTo(self::aParis('2026-11-04 09:00:00'));
         $jeton = $this->demanderLaTransmission($proprietaire, $administrateur, self::MOT_DE_PASSE_CHOISI);
         app(TenantContext::class)->clear();
 
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
 
         $this->assertNotNull(app(TenantContext::class)->runAsSociete($societe, fn () => TransmissionPropriete::query()->where('destinataire_id', $administrateur->id)->sole()->annulee_le));
@@ -260,6 +261,7 @@ class TransfererProprieteTest extends TestCase
     public function test_la_propriete_d_une_inscription_close_ne_se_transmet_plus(): void
     {
         Mail::fake();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $magasin = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire()->sole();
@@ -671,7 +673,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_le_nouveau_proprietaire_qui_avait_vendu_voit_sa_caisse_fermee_par_la_cloture_du_jour(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', PermissionRegistry::toutes());
@@ -703,7 +705,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_le_nouveau_proprietaire_ferme_lui_meme_sa_caisse_puis_contre_passe_dans_un_autre_magasin(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -750,7 +752,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_un_brouillon_de_l_administrateur_devenu_proprietaire_devient_a_son_emission_la_vente_de_qui_l_emet(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->administrateurPretAReprendre($magasin, 'repreneur@example.test', PermissionRegistry::toutes());

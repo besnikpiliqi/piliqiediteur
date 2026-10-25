@@ -136,7 +136,7 @@ class ChangementDeRoleTest extends TestCase
      */
     public function test_un_changement_de_role_s_inscrit_au_journal_d_audit_avec_l_ancien_et_le_nouveau_role_la_date_et_l_auteur(): void
     {
-        $this->travelTo('2026-10-12 09:30:00');
+        $this->travelTo(self::aParis('2026-10-12 09:30:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);

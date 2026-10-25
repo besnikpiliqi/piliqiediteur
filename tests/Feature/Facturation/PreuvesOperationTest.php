@@ -23,7 +23,6 @@ use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -60,7 +59,7 @@ class PreuvesOperationTest extends TestCase
      */
     private function magasin(): Magasin
     {
-        $this->travelTo('2026-10-09 10:15:00');
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $proprietaire = User::factory()->create();
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
@@ -121,7 +120,7 @@ class PreuvesOperationTest extends TestCase
             'numero_tva' => 'DE123456789',
             'valide' => true,
             'identifiant_consultation' => 'WAPIAAAAW1234567',
-            'consultee_le' => CarbonImmutable::parse('2026-10-09 09:00', 'Europe/Paris'),
+            'consultee_le' => self::aParis('2026-10-09 09:00'),
             'reponse' => '{"valid":true}',
         ]);
 
@@ -203,7 +202,7 @@ class PreuvesOperationTest extends TestCase
         $this->ajouter($livraison, TypePreuve::TransportA, 'CMR-2026-0042');
         $this->ajouter($livraison, TypePreuve::TransportA, 'FRET-2026-0007');
 
-        $this->travelTo('2026-11-11 08:00:00');
+        $this->travelTo(self::aParis('2026-11-11 08:00:00'));
 
         $this->assertSame(['Attestation de réception de l\'acquéreur, attendue au plus tard le 10/11/2026 : délai dépassé'], $this->manquantes($livraison));
     }

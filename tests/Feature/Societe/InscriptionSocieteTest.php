@@ -40,6 +40,7 @@ use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
@@ -128,7 +129,7 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_la_confirmation_cree_la_societe_qui_attend_son_code_et_envoie_le_courrier(): void
     {
-        $this->travelTo('2026-10-12 10:00:00');
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         Mail::fake();
         $this->demander();
         $lien = $this->lienEnvoye();
@@ -151,8 +152,8 @@ class InscriptionSocieteTest extends TestCase
         );
         $code = CodeConfirmation::withoutGlobalScopes()->sole();
         $this->assertSame(
-            [(int) $societe->id, self::SIREN, MotifCode::Verification, '2026-10-12 10:00:00', '2026-11-11 10:00:00', null, null],
-            [(int) $code->societe_id, $code->siren, $code->motif, $code->envoye_le->format('Y-m-d H:i:s'), $code->expire_le->format('Y-m-d H:i:s'), $code->utilise_le, $code->annule_le],
+            [(int) $societe->id, self::SIREN, MotifCode::Verification, self::aParis('2026-10-12 10:00:00')->getTimestamp(), self::aParis('2026-11-11 10:00:00')->getTimestamp(), null, null],
+            [(int) $code->societe_id, $code->siren, $code->motif, $code->envoye_le->getTimestamp(), $code->expire_le->getTimestamp(), $code->utilise_le, $code->annule_le],
         );
         $this->assertSame(
             [0, 0, 0, 0, 0],
@@ -171,7 +172,7 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_apres_le_lien_le_proprietaire_arrive_sur_la_liste_de_ses_premieres_etapes(): void
     {
-        $this->travelTo('2026-10-12 10:00:00');
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         Mail::fake();
         $this->demander();
 
@@ -388,6 +389,7 @@ class InscriptionSocieteTest extends TestCase
     public function test_une_inscription_close_ou_une_societe_revoquee_libere_le_siren(Closure $liberer): void
     {
         Mail::fake();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $avant = $this->inscrireUneSociete(self::SIREN, 'premier@ailleurs.fr');
         app(TenantContext::class)->clear();
         $liberer($avant->fresh());
@@ -481,6 +483,7 @@ class InscriptionSocieteTest extends TestCase
     public function test_l_adresse_d_une_inscription_close_recoit_le_lien_d_une_nouvelle_inscription(): void
     {
         Mail::fake();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $close = $this->inscrireUneSociete(self::SIREN, 'jeanne@maboutique.fr');
         app(TenantContext::class)->clear();
         app(CloreLInscriptionAction::class)->cloreSansCode($close->fresh(), now()->toImmutable());
@@ -608,6 +611,7 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_une_seule_des_deux_demandes_du_meme_siren_devient_une_inscription(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $this->demander();
         $premierLien = $this->lienEnvoye();
@@ -632,7 +636,7 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_au_dela_de_cinq_courriers_par_jour_depuis_une_adresse_ip_la_confirmation_attend(): void
     {
-        $this->travelTo('2026-10-12 10:00:00');
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         Mail::fake();
 
         foreach (range(1, ConfirmerInscriptionController::COURRIERS_PAR_JOUR_ET_PAR_ADRESSE_IP) as $rang) {
@@ -650,7 +654,7 @@ class InscriptionSocieteTest extends TestCase
         $this->assertSame([5, 5], [Societe::query()->count(), count(app(ServiceEnvoiRecommande::class)->envois())]);
         $this->assertNull(DemandeInscription::query()->where('email', 'sixieme@exemple.fr')->sole()->consommee_le);
 
-        $this->travelTo('2026-10-13 10:03:00');
+        $this->travelTo(self::aParis('2026-10-13 10:03:00'));
         $this->post($lien)->assertRedirect();
 
         $this->assertSame([6, 6], [Societe::query()->count(), count(app(ServiceEnvoiRecommande::class)->envois())]);
@@ -658,6 +662,7 @@ class InscriptionSocieteTest extends TestCase
 
     public function test_le_lien_expire_apres_24_heures(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $this->demander();
         $lien = $this->lienEnvoye();
@@ -719,6 +724,7 @@ class InscriptionSocieteTest extends TestCase
     public function test_le_quatrieme_essai_dans_l_heure_pour_un_meme_siren_et_une_meme_adresse_est_refuse(): void
     {
         Mail::fake();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         foreach (range(1, 3) as $essai) {
             $this->demander()->assertHasNoFormErrors();
@@ -738,6 +744,7 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_un_tiers_ne_sature_pas_le_siren_d_une_entreprise(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
 
         foreach (range(1, 4) as $essai) {
@@ -782,6 +789,7 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_une_confirmation_refusee_ne_laisse_ni_societe_ni_compte(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $this->demander();
         $premierLien = $this->lienEnvoye();
@@ -812,18 +820,18 @@ class InscriptionSocieteTest extends TestCase
      */
     public function test_les_demandes_expirees_sont_purgees(): void
     {
-        $this->travelTo('2026-10-09 12:00:00');
-        $demande = fn (string $expireLe, ?string $consommeeLe = null): DemandeInscription => tap((new DemandeInscription)->forceFill([
+        $this->travelTo(self::aParis('2026-10-09 12:00:00'));
+        $demande = fn (CarbonImmutable $expireLe, ?CarbonImmutable $consommeeLe = null): DemandeInscription => tap((new DemandeInscription)->forceFill([
             'email' => fake()->unique()->safeEmail(),
             'jeton_hache' => hash('sha256', fake()->unique()->uuid()),
             'donnees' => ['siren' => self::SIREN],
             'expire_le' => $expireLe,
             'consommee_le' => $consommeeLe,
         ]))->save();
-        $expireeDepuis49Heures = $demande('2026-10-07 11:00:00');
-        $confirmeeEtExpireeDepuis49Heures = $demande('2026-10-07 11:00:00', '2026-10-06 12:00:00');
-        $expireeDepuis47Heures = $demande('2026-10-07 13:00:00');
-        $valable = $demande('2026-10-10 11:00:00');
+        $expireeDepuis49Heures = $demande(self::aParis('2026-10-07 11:00:00'));
+        $confirmeeEtExpireeDepuis49Heures = $demande(self::aParis('2026-10-07 11:00:00'), self::aParis('2026-10-06 12:00:00'));
+        $expireeDepuis47Heures = $demande(self::aParis('2026-10-07 13:00:00'));
+        $valable = $demande(self::aParis('2026-10-10 11:00:00'));
 
         $this->artisan('app:purger-demandes-inscription')
             ->expectsOutput('2 demande(s) d\'inscription effacée(s).')

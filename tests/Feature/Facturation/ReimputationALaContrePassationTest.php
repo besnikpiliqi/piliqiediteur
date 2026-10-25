@@ -39,7 +39,7 @@ class ReimputationALaContrePassationTest extends TestCase
 
     private function magasin(): Magasin
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
 
         return $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
     }

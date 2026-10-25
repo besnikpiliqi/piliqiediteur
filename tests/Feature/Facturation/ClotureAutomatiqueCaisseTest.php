@@ -29,7 +29,6 @@ use Carbon\CarbonInterface;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Exceptions;
 use RuntimeException;
@@ -83,9 +82,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         // L'émission se date à l'instant du registre fiscal (voir
         // EmettreFactureAction), et une facture émise ne se modifie plus :
         // une vente d'hier s'émet hier.
-        $this->travelTo('2026-10-08 15:00:00');
+        $this->travelTo(self::aParis('2026-10-08 15:00:00'));
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
-        $this->travelTo('2026-10-09 15:00:00');
+        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
 
         return $facture;
     }
@@ -127,7 +126,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
      */
     public function test_cloture_meme_si_le_vendeur_na_pas_ferme_sa_caisse_personnelle(): void
     {
-        $this->travelTo('2026-10-09 15:00:00');
+        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
@@ -138,14 +137,14 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $this->travelTo('2026-10-08 15:00:00');
+        $this->travelTo(self::aParis('2026-10-08 15:00:00'));
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
-        $this->travelTo('2026-10-09 15:00:00');
+        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
 
         // Le vendeur n'a jamais fermé sa caisse personnelle (voir
         // VerificateurCaissesPersonnelles) : ça ne doit rien changer ici.
         $this->assertTrue(
-            app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id)
+            app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::aParis('2026-10-08 15:00:00'))->contains('id', $vendeur->id)
         );
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
@@ -161,7 +160,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->emettreFactureHier($magasin);
 
         app(TenantContext::class)->set($magasin);
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now()->subDay());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, self::aParis('2026-10-08 15:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -171,10 +170,10 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
     public function test_ne_cloture_jamais_le_jour_meme(): void
     {
-        $this->travelTo('2026-10-08 15:00:00');
+        $this->travelTo(self::aParis('2026-10-08 15:00:00'));
         $magasin = Magasin::factory()->create();
         $venteDHier = $this->emettreUneVente($magasin);
-        $this->travelTo('2026-10-09 15:00:00');
+        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
         $venteDuJour = $this->emettreUneVente($magasin);
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
@@ -194,7 +193,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
      */
     public function test_aucune_journee_n_est_cloturee_avant_la_premiere_vente(): void
     {
-        $this->travelTo('2026-10-09 15:00:00');
+        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
         $magasinSansVente = Magasin::factory()->create();
         $magasinVendantAujourdHui = Magasin::factory()->create();
         $this->emettreUneVente($magasinVendantAujourdHui);
@@ -222,9 +221,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $this->travelTo(Carbon::parse('2026-07-14 21:30:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-07-14 21:30:00'));
         app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
-        $this->travelTo(Carbon::parse('2026-07-14 22:00:30', 'UTC'));
+        $this->travelTo(self::enUtc('2026-07-14 22:00:30'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -239,7 +238,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         // Le planning de bootstrap/app.php s'enregistre au démarrage
         // d'Artisan, comme sur le serveur avant schedule:run.
         $this->artisan('schedule:list')->assertSuccessful();
-        $this->travelTo(Carbon::parse('2026-07-14 22:00:00', 'UTC'));
+        $this->travelTo(self::enUtc('2026-07-14 22:00:00'));
 
         $evenementsDus = app(Schedule::class)->dueEvents($this->app);
 
@@ -287,12 +286,12 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     public function test_la_cloture_du_31_decembre_est_numerotee_dans_la_serie_de_son_annee(): void
     {
         $magasin = Magasin::factory()->create(['nom' => 'Ma Boutique']);
-        $this->travelTo('2026-12-31 18:00:00');
+        $this->travelTo(self::aParis('2026-12-31 18:00:00'));
         $this->vendreUnTicketDe12Euros($magasin);
 
-        $this->travelTo('2027-01-01 00:00:00');
+        $this->travelTo(self::aParis('2027-01-01 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
-        $this->travelTo('2027-01-02 00:00:00');
+        $this->travelTo(self::aParis('2027-01-02 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
@@ -310,14 +309,14 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     public function test_rattrape_dans_l_ordre_les_journees_que_la_commande_a_manquees(): void
     {
         $magasin = Magasin::factory()->create(['nom' => 'Ma Boutique']);
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicketDe12Euros($magasin);
-        $this->travelTo('2026-10-06 00:00:00');
+        $this->travelTo(self::aParis('2026-10-06 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
-        $this->travelTo('2026-10-07 15:00:00');
+        $this->travelTo(self::aParis('2026-10-07 15:00:00'));
         $venteDu7 = $this->vendreUnTicketDe12Euros($magasin);
 
-        $this->travelTo('2026-10-09 00:00:00');
+        $this->travelTo(self::aParis('2026-10-09 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')
             ->expectsOutputToContain('3 clôture(s) automatique(s) effectuée(s) jusqu\'au 08/10/2026.')
             ->assertSuccessful();
@@ -338,9 +337,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     public function test_la_cloture_de_minuit_inscrit_l_evenement_50_sans_operateur(): void
     {
         $magasin = Magasin::factory()->create();
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $this->vendreUnTicketDe12Euros($magasin);
-        $this->travelTo('2026-10-09 00:00:00');
+        $this->travelTo(self::aParis('2026-10-09 00:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -361,9 +360,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     public function test_chaque_journee_rattrapee_inscrit_son_evenement_50(): void
     {
         $magasin = Magasin::factory()->create(['nom' => 'Ma Boutique']);
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicketDe12Euros($magasin);
-        $this->travelTo('2026-10-08 00:00:00');
+        $this->travelTo(self::aParis('2026-10-08 00:00:00'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -385,18 +384,18 @@ class ClotureAutomatiqueCaisseTest extends TestCase
      */
     public function test_les_clotures_commencent_le_jour_de_la_premiere_vente(): void
     {
-        $this->travelTo('2026-10-01 09:00:00');
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
         $magasin = Magasin::factory()->create();
         foreach (['2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'] as $jour) {
-            $this->travelTo("{$jour} 00:00:00");
+            $this->travelTo(self::aParis("{$jour} 00:00:00"));
             $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
         }
         app(TenantContext::class)->set($magasin);
         $avantLaPremiereVente = ClotureCaisse::query()->count();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->vendreUnTicketDe12Euros($magasin);
 
-        $this->travelTo('2026-10-06 00:00:00');
+        $this->travelTo(self::aParis('2026-10-06 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
@@ -413,10 +412,10 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     {
         $magasinEnPanne = Magasin::factory()->create();
         $autreMagasin = Magasin::factory()->create();
-        $this->travelTo('2026-10-08 10:00:00');
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
         $this->vendreUnTicketDe12Euros($magasinEnPanne);
         $this->vendreUnTicketDe12Euros($autreMagasin);
-        $this->travelTo('2026-10-09 00:00:00');
+        $this->travelTo(self::aParis('2026-10-09 00:00:00'));
         Exceptions::fake([RuntimeException::class]);
         $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RecapitulatifDeCloture::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class), $magasinEnPanne->id) extends CloturerCaisseAction
         {
@@ -445,7 +444,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->assertSame(0, app(TenantContext::class)->runAs($magasinEnPanne, fn (): int => ClotureCaisse::query()->count()));
 
         $this->app->forgetInstance(CloturerCaisseAction::class);
-        $this->travelTo('2026-10-10 00:00:00');
+        $this->travelTo(self::aParis('2026-10-10 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         $this->assertSame(

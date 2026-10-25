@@ -40,9 +40,9 @@ class PageDuLienTest extends TestCase
      */
     public function test_la_page_de_lien_n_ouvre_aucune_session(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
-        $proprietaire->forceFill(['email_verified_at' => now()->subYear()])->save();
+        $proprietaire->forceFill(['email_verified_at' => self::aParis('2025-10-15 10:00:00')])->save();
         $jeton = Password::broker()->createToken($proprietaire);
 
         $this->get(Filament::getPanel('app')->getResetPasswordUrl($jeton, $proprietaire))->assertOk()->assertSee('Choisissez votre nouveau mot de passe.');
@@ -55,7 +55,7 @@ class PageDuLienTest extends TestCase
         $this->assertGuest();
         $proprietaire->refresh();
         $this->assertTrue(Hash::check('mon-nouveau-mot-de-passe', $proprietaire->password));
-        $this->assertSame('2026-10-15 10:00:00', $proprietaire->email_verified_at?->toDateTimeString());
+        $this->assertMemeInstant(self::aParis('2026-10-15 10:00:00'), $proprietaire->email_verified_at);
         $this->assertFalse(Password::broker()->tokenExists($proprietaire, $jeton));
     }
 

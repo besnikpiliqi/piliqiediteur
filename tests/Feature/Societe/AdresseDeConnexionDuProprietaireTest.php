@@ -86,14 +86,14 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     {
         Mail::fake();
         Notification::fake();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'inscrit@exemple.fr');
 
         $nouveau = $this->saisirLeCodeCommeUneAutrePersonne($societe, 'Representante@Exemple.FR');
 
         $this->assertSame(
-            [null, null, self::ADRESSE_CHOISIE, '2026-10-16 10:00:00', false],
-            [$nouveau->email, $nouveau->email_verified_at, $nouveau->nouvelle_adresse, $nouveau->nouvelle_adresse_expire_le?->toDateTimeString(), $nouveau->aUneAdresseDeConnexion()],
+            [null, null, self::ADRESSE_CHOISIE, self::aParis('2026-10-16 10:00:00')->getTimestamp(), false],
+            [$nouveau->email, $nouveau->email_verified_at, $nouveau->nouvelle_adresse, $nouveau->nouvelle_adresse_expire_le?->getTimestamp(), $nouveau->aUneAdresseDeConnexion()],
         );
         $lien = Mail::sent(ConfirmationNouvelleAdresseMail::class, fn (ConfirmationNouvelleAdresseMail $mail): bool => $mail->hasTo(self::ADRESSE_CHOISIE))->sole();
         $this->assertTrue($lien->premiereAdresse);
@@ -146,7 +146,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_un_lien_qui_ne_part_pas_a_la_saisie_du_code_laisse_la_personne_connectee_avec_son_identifiant(): void
     {
         Exceptions::fake();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'inscrit@exemple.fr');
         $code = $this->codeDuCourrier($societe);
         app(TenantContext::class)->clear();
@@ -194,7 +194,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_le_lien_de_l_adresse_choisie_ne_se_suit_que_connecte_a_ce_compte(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'inscrit@exemple.fr');
         $nouveau = $this->saisirLeCodeCommeUneAutrePersonne($societe, self::ADRESSE_CHOISIE);
         $autreProprietaire = $this->inscrireUneSociete(null, 'autre@exemple.fr')->proprietaire()->sole();
@@ -219,7 +219,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
             ->assertSeeText('Votre adresse de connexion est désormais '.self::ADRESSE_CHOISIE);
 
         $nouveau->refresh();
-        $this->assertSame([self::ADRESSE_CHOISIE, '2026-10-15 10:00:00', null, true], [$nouveau->email, $nouveau->email_verified_at?->toDateTimeString(), $nouveau->nouvelle_adresse, $nouveau->aUneAdresseDeConnexion()]);
+        $this->assertSame([self::ADRESSE_CHOISIE, self::aParis('2026-10-15 10:00:00')->getTimestamp(), null, true], [$nouveau->email, $nouveau->email_verified_at?->getTimestamp(), $nouveau->nouvelle_adresse, $nouveau->aUneAdresseDeConnexion()]);
         Mail::assertNotSent(AdresseChangeeMail::class);
         [$entree] = $this->entreesDAudit($societe, ActionAuditee::AdresseDeConnexionChangee);
         $this->assertSame(['compte' => ['id' => $nouveau->id, 'nom' => $nouveau->name]], $entree->nouvelles_valeurs);
@@ -262,12 +262,12 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_un_lien_expire_se_redemande_depuis_le_profil(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'inscrit@exemple.fr');
         $nouveau = $this->saisirLeCodeCommeUneAutrePersonne($societe, self::ADRESSE_CHOISIE);
         $expire = $this->jetonDeLAdresseEnAttente(self::ADRESSE_CHOISIE);
 
-        $this->travelTo('2026-10-16 10:01:00');
+        $this->travelTo(self::aParis('2026-10-16 10:01:00'));
         $this->actingAs($nouveau)->get(route('profil.adresse.afficher', ['jeton' => $expire]))->assertStatus(410);
         Livewire::test(ModifierProfil::class)
             ->assertSee('Le lien envoyé à '.self::ADRESSE_CHOISIE.' a expiré')
@@ -277,7 +277,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
 
         $nouveauJeton = $this->jetonDeLAdresseEnAttente(self::ADRESSE_CHOISIE);
         $this->assertNotSame($expire, $nouveauJeton);
-        $this->assertSame('2026-10-17 10:01:00', $nouveau->refresh()->nouvelle_adresse_expire_le?->toDateTimeString());
+        $this->assertMemeInstant(self::aParis('2026-10-17 10:01:00'), $nouveau->refresh()->nouvelle_adresse_expire_le);
         $this->actingAs($nouveau)->post(route('profil.adresse.confirmer', ['jeton' => $nouveauJeton]))->assertOk();
         $this->assertSame(self::ADRESSE_CHOISIE, $nouveau->refresh()->email);
     }
@@ -295,7 +295,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_la_cloture_sans_code_retire_l_adresse_de_connexion_et_le_compte_s_ouvre_par_son_identifiant(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $proprietaire = $societe->proprietaire()->sole();
         Password::broker()->createToken($proprietaire);
@@ -303,7 +303,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
         $jeton = $this->jetonDeLAdresseEnAttente('jeanne.nouvelle@exemple.fr');
         app(TenantContext::class)->clear();
 
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
 
         $proprietaire->refresh();
@@ -336,12 +336,12 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_la_cloture_previent_par_e_mail_l_adresse_retiree_sans_dire_l_identifiant(): void
     {
         Mail::fake();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $identifiant = (string) $societe->proprietaire()->sole()->identifiantDeConnexion();
         app(TenantContext::class)->clear();
 
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
 
         $avis = Mail::sent(InscriptionCloseMail::class, fn (InscriptionCloseMail $mail): bool => $mail->hasTo('jeanne@exemple.fr'))->sole();
@@ -361,13 +361,13 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_un_e_mail_de_cloture_qui_ne_part_pas_n_empeche_pas_la_cloture(): void
     {
         Exceptions::fake();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $proprietaire = $societe->proprietaire()->sole();
         app(TenantContext::class)->clear();
         Event::listen(MessageSending::class, fn () => throw new TransportException('Connexion au serveur de messagerie impossible.'));
 
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
 
         Exceptions::assertReported(TransportException::class);
@@ -383,6 +383,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
      */
     public function test_une_adresse_en_attente_ne_se_confirme_pas_dans_une_inscription_close(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $proprietaire = $societe->proprietaire()->sole();
         app(TenantContext::class)->clear();
@@ -429,6 +430,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
      */
     public function test_une_nouvelle_inscription_avec_l_adresse_d_une_inscription_close_reussit(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $close = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $ancien = $close->proprietaire()->sole();
         app(TenantContext::class)->clear();
@@ -453,6 +455,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     public function test_le_proprietaire_d_une_inscription_close_ne_demande_plus_d_adresse_de_connexion(): void
     {
         Mail::fake();
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $proprietaire = $societe->proprietaire()->sole();
         app(TenantContext::class)->clear();

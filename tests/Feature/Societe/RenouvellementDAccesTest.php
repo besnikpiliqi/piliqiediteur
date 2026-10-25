@@ -511,21 +511,21 @@ class RenouvellementDAccesTest extends TestCase
      */
     public function test_la_personne_voit_l_acces_redonne_et_sa_derniere_connexion_a_sa_connexion_suivante(): void
     {
-        $this->travelTo('2026-10-12 09:15:00');
+        $this->travelTo(self::aParis('2026-10-12 09:15:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->membre($magasin, RoleMagasin::Responsable, null, ['name' => 'Julie Morel']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
 
-        $this->travelTo('2026-10-13 18:20:00');
+        $this->travelTo(self::aParis('2026-10-13 18:20:00'));
         app(RedonnerLAccesAction::class)->handle($responsable, $vendeur->refresh(), true, self::NOUVEAU_MOT_DE_PASSE, (string) Str::uuid());
-        $this->travelTo('2026-10-14 08:05:00');
+        $this->travelTo(self::aParis('2026-10-14 08:05:00'));
 
         $this->seConnecter($identifiant, self::NOUVEAU_MOT_DE_PASSE)->assertHasNoErrors();
         $this->assertSame(['Votre connexion précédente : le 12/10/2026 à 09:15', 'Votre accès a été redonné le 13/10/2026 à 18:20 par Julie Morel, en votre présence.'], $this->titresDesAvisALaPersonne());
 
-        $this->travelTo('2026-10-15 08:00:00');
+        $this->travelTo(self::aParis('2026-10-15 08:00:00'));
         $this->seConnecter($identifiant, self::NOUVEAU_MOT_DE_PASSE)->assertHasNoErrors();
         $this->assertSame(['Votre connexion précédente : le 14/10/2026 à 08:05'], $this->titresDesAvisALaPersonne());
     }

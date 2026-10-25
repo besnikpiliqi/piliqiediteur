@@ -166,7 +166,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         self::responsableDeTest($magasin);
         $parametres = $this->preparer($geste);
@@ -209,7 +209,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         self::responsableDeTest($magasin);
         $parametres = $this->preparer($geste);
@@ -256,7 +256,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = self::responsableDeTest($magasin);
         $parametres = $this->preparer($geste);

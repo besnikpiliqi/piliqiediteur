@@ -15,7 +15,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -41,13 +40,13 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
      */
     public function test_le_proprietaire_voit_une_ligne_par_magasin_reel(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-01 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne Gratte-Ciel']);
         $this->facture($lyon, 'Atelier Martin', 50);
-        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $this->facture($lyon, 'Garage Durand', 120);
-        $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         $proprietaire = $this->proprietaireDe($lyon);
         $this->dansLEspaceDeLaSociete($lyon->societe, $proprietaire);
 

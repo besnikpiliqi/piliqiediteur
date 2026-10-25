@@ -301,11 +301,12 @@ class EquipeDuMagasinTest extends TestCase
      */
     public function test_la_liste_de_l_equipe_signale_au_responsable_un_mot_de_passe_encore_egal_a_l_identifiant_et_un_compte_jamais_connecte(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
         [$nouveau, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
         $ancien = $this->membre($magasin, RoleMagasin::Observateur);
-        $ancien->forceFill(['premiere_connexion_le' => now()->subDay(), 'derniere_connexion_le' => now()->subDay()])->save();
+        $ancien->forceFill(['premiere_connexion_le' => self::aParis('2026-10-08 10:00:00'), 'derniere_connexion_le' => self::aParis('2026-10-08 10:00:00')])->save();
         $ligneDuNouveau = Affectation::query()->where('user_id', $nouveau->id)->sole();
         $ligneDeLAncien = Affectation::query()->where('user_id', $ancien->id)->sole();
 

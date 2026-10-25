@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
@@ -78,8 +79,8 @@ class TraceEvenementTest extends TestCase
     public function test_une_trace_ne_se_modifie_jamais(): void
     {
         $this->magasinActif();
-        $active = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addYear());
-        $expiree = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->subDay());
+        $active = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addHours(24 * 365));
+        $expiree = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->subHours(24));
 
         foreach ([$active, $expiree] as $trace) {
             $this->assertThrows(
@@ -102,7 +103,7 @@ class TraceEvenementTest extends TestCase
     public function test_une_trace_ne_se_reecrit_pas_par_une_insertion_qui_la_remplace(): void
     {
         $this->magasinActif();
-        $trace = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addYear());
+        $trace = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addHours(24 * 365));
         $ligne = fn (): array => (array) DB::table('traces_evenements')->where('enregistrement_fiscal_id', $trace->getKey())->first();
         $avant = $ligne();
         $valeurs = '(?, ?, ?, ?, ?, ?)';
@@ -112,7 +113,7 @@ class TraceEvenementTest extends TestCase
             : "INSERT OR REPLACE INTO traces_evenements {$colonnes} VALUES {$valeurs}";
 
         $this->assertThrows(
-            $this->dansUnPointDeSauvegarde(fn () => DB::statement($remplacement, [$trace->getKey(), $trace->magasin_id, '0.0.0.0', 'falsifié', '2000-01-01 00:00:00', '2000-01-01 00:00:00'])),
+            $this->dansUnPointDeSauvegarde(fn () => DB::statement($remplacement, [$trace->getKey(), $trace->magasin_id, '0.0.0.0', 'falsifié', HorodatageUtc::enBase(self::enUtc('2000-01-01 00:00:00')), HorodatageUtc::enBase(self::enUtc('2000-01-01 00:00:00'))])),
             QueryException::class,
             'traces_evenements : ',
         );
@@ -158,12 +159,12 @@ class TraceEvenementTest extends TestCase
      */
     public function test_une_trace_expire_apres_la_duree_de_conservation_reglee(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         config(['conservation.traces_en_mois' => 6]);
         $magasin = $this->magasinActif();
 
         $evenement = $this->evenementTrace($magasin);
 
-        $this->assertSame('2027-04-09 08:00:00', $evenement->trace->expire_le->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::enUtc('2027-04-09 08:00:00'), $evenement->trace->expire_le);
     }
 }

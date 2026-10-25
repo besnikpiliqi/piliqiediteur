@@ -73,7 +73,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     public function test_une_vente_simultanee_a_la_fermeture_est_faite_avant_ou_refusee_apres(bool $laVenteDAbord): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         self::responsableDeTest($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);

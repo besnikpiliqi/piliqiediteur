@@ -8,7 +8,6 @@ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
-use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
@@ -151,20 +150,21 @@ class TransmissionConcurrenceTest extends TestCase
     public function test_une_transmission_acceptee_pendant_la_cloture_de_l_inscription_ne_garde_aucune_adresse_de_connexion(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'inscrite@example.test');
         $administrateur = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($societe), 'repreneur@example.test');
-        $this->travelTo('2026-11-04 09:00:00');
+        $this->travelTo(self::aParis('2026-11-04 09:00:00'));
         $jeton = $this->demanderLaTransmission($societe->proprietaire()->sole(), $administrateur, self::MOT_DE_PASSE_CHOISI);
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         app(TenantContext::class)->clear();
         $societeId = (int) $societe->getKey();
+        $limite = self::aParis('2026-10-05 10:00:00')->getTimestamp();
         $connexionDuTest = DB::getDefaultConnection();
         $cloture = null;
-        DB::listen(function (QueryExecuted $requete) use (&$cloture, $connexionDuTest, $societeId): void {
+        DB::listen(function (QueryExecuted $requete) use (&$cloture, $connexionDuTest, $societeId, $limite): void {
             if ($cloture === null && $requete->connectionName === $connexionDuTest && str_starts_with($requete->sql, 'update "users" set "role_societe"')) {
-                $cloture = $this->demarrerUnProcessusConcurrent(static function () use ($societeId): void {
-                    if (! app(CloreLInscriptionAction::class)->cloreSansCode(Societe::query()->findOrFail($societeId), CarbonImmutable::now()->subDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS))) {
+                $cloture = $this->demarrerUnProcessusConcurrent(static function () use ($societeId, $limite): void {
+                    if (! app(CloreLInscriptionAction::class)->cloreSansCode(Societe::query()->findOrFail($societeId), CarbonImmutable::createFromTimestamp($limite, date_default_timezone_get()))) {
                         throw new LogicException('L\'inscription n\'a pas été close.');
                     }
                 });

@@ -46,13 +46,13 @@ class EReportingResourceTest extends TestCase
      */
     private function journee(Magasin $magasin, string $jour, array $lignes): ClotureCaisse
     {
-        $this->travelTo("{$jour} 10:00:00");
+        $this->travelTo(self::aParis("{$jour} 10:00:00"));
 
         if ($lignes !== []) {
             self::vendreAuComptant($this->responsableDeTest($magasin), Client::factory()->create(), $lignes, ModePaiement::Especes);
         }
 
-        $this->travelTo("{$jour} 19:00:00");
+        $this->travelTo(self::aParis("{$jour} 19:00:00"));
 
         return app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $jour);
     }
@@ -64,7 +64,7 @@ class EReportingResourceTest extends TestCase
      */
     public function test_la_liste_montre_chaque_journee_ayant_des_operations_avec_son_apercu(): void
     {
-        $this->travelTo('2026-10-05 09:00:00');
+        $this->travelTo(self::aParis('2026-10-05 09:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $duCinq = $this->journee($magasin, '2026-10-05', [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
         $duSix = $this->journee($magasin, '2026-10-06', []);
@@ -85,7 +85,7 @@ class EReportingResourceTest extends TestCase
      */
     public function test_la_fiche_d_une_journee_montre_son_apercu(): void
     {
-        $this->travelTo('2026-10-05 09:00:00');
+        $this->travelTo(self::aParis('2026-10-05 09:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $cloture = $this->journee($magasin, '2026-10-05', [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
 

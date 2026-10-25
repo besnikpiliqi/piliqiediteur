@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -32,6 +33,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Mailables\Attachment;
@@ -78,7 +80,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_l_e_mail_presente_le_document_puis_le_message_de_l_expediteur(): void
     {
-        $this->travelTo('2026-10-31 10:00:00');
+        $this->travelTo(self::aParis('2026-10-31 10:00:00'));
         $this->magasin(['nom' => 'Ma Boutique', 'telephone' => '01 23 45 67 89']);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => "Bonjour Paul,\n\nVoici la facture de la réparation."]);
@@ -102,7 +104,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_l_e_mail_d_une_facture_reglee_a_son_emission_ne_demande_pas_de_la_regler(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $this->magasin();
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(),
             app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]),
@@ -159,7 +161,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
     public function test_le_devis_part_avec_son_pdf_et_sa_date_de_validite(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $this->magasin();
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
@@ -193,7 +195,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_une_relance_part_avec_son_rappel_et_la_facture(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
@@ -227,7 +229,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_une_relance_ne_part_pas_si_la_facture_a_ete_reglee_entre_temps(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
@@ -271,7 +273,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_le_rappel_d_une_relance_dit_ce_qu_il_reste_a_payer_quand_elle_part(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         $magasin = $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
@@ -340,7 +342,7 @@ class EnvoyerDocumentJobTest extends TestCase
         Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
         $envoi = EnvoiDocument::factory()->for($brouillon->fresh(), 'document')->create(['destinataire' => 'client@exemple.fr']);
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
@@ -496,7 +498,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_une_relance_manuelle_d_un_membre_suspendu_entre_temps_ne_part_pas(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
@@ -518,7 +520,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_une_relance_automatique_ne_depend_d_aucun_auteur(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
@@ -579,7 +581,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_un_devis_modifie_avant_le_depart_de_son_envoi_ne_part_pas(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $this->actingAs($this->proprietaireDe($magasin));
@@ -606,14 +608,14 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_un_devis_modifie_puis_renvoye_ne_part_qu_avec_son_dernier_envoi(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $produit = $this->produit();
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
         Queue::fake([EnvoyerDocumentJob::class]);
         $premier = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', 'Voici le devis pour un article.');
-        $this->travelTo('2026-10-09 10:20:00');
+        $this->travelTo(self::aParis('2026-10-09 10:20:00'));
         $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
         $second = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $modifie, 'client@exemple.fr', 'Voici le devis pour cinq articles.');
 
@@ -689,16 +691,16 @@ class EnvoyerDocumentJobTest extends TestCase
 
     /**
      * Une facture de 120,00 € TTC émise le jour de son échéance, à un client
-     * payable comptant (délai de 0 jour, B7) ; le test reprend ensuite à
-     * l'instant où il en était.
+     * payable comptant (délai de 0 jour, B7) ; l'horloge revient ensuite
+     * telle qu'elle était, figée au même instant ou libre.
      */
     private function emettreFactureEchueLe(Client $client, string $echeance): Facture
     {
-        $maintenant = now()->toImmutable();
+        $horloge = Carbon::getTestNow();
         $client->update(['delai_paiement_jours' => 0]);
-        $this->travelTo("{$echeance} 10:00:00");
+        $this->travelTo(self::aParis("{$echeance} 10:00:00"));
         $facture = $this->emettreFacture($client);
-        $this->travelTo($maintenant);
+        $horloge === null ? $this->travelBack() : $this->travelTo($horloge);
 
         return $facture;
     }

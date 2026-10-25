@@ -124,7 +124,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_le_courrier_part_au_representant_legal_du_registre_a_l_adresse_officielle_du_siege(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $siren = (string) $societe->siren;
         $this->assertSame(['Jeanne DUPONT', "ENTREPRISE {$siren}", '1 RUE DE LA REPUBLIQUE', '75001 PARIS'], collect($this->envois()->envois())->sole()['destinataire']->lignes());
@@ -133,7 +133,7 @@ class VerificationSocieteTest extends TestCase
             new RepresentantRne('MARTIN', null, ['Paul'], '1975-02', 'Directeur général délégué', false, null, '2021-01-01'),
             new RepresentantRne('BERNARD', 'LEROY', ['Claire', 'Anne'], '1982-06', 'Présidente', true, null, '2026-09-01'),
         ]);
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
 
         $second = app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe->fresh());
 
@@ -203,7 +203,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_le_courrier_est_une_page_a4_avec_le_code_l_adresse_courte_et_un_qr_code_qui_n_ouvre_que_la_page(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $siren = (string) $societe->siren;
         $envoi = collect($this->envois()->envois())->sole();
@@ -218,7 +218,7 @@ class VerificationSocieteTest extends TestCase
         $adresse = CourrierDeCode::adresseDeLaPage($siren);
         $this->assertSame(rtrim((string) config('app.url'), '/')."/code/{$siren}", $adresse);
         $this->assertSame(rtrim(preg_replace('#^https?://#', '', (string) config('app.url')), '/').'/code', CourrierDeCode::adresseCourte());
-        $html = app(CourrierDeCode::class)->html($envoi['destinataire'], $siren, MotifCode::Verification, $code, now()->addDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
+        $html = app(CourrierDeCode::class)->html($envoi['destinataire'], $siren, MotifCode::Verification, $code, self::aParis('2026-11-04 10:00:00'));
         $this->assertStringContainsString('src="'.QrCode::uriDeDonnees($adresse).'"', $html);
         $this->assertSame(QrCode::svg($adresse), base64_decode(substr(QrCode::uriDeDonnees($adresse), strlen('data:image/svg+xml;base64,')), true));
         $this->assertStringNotContainsString(str_replace('-', '', $code), $adresse);
@@ -231,7 +231,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_le_code_vaut_jusqu_au_jour_et_a_l_heure_que_le_courrier_imprime(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $code = $this->codeDuCourrier($societe);
         $actif = $this->codeActif($societe);
@@ -242,7 +242,7 @@ class VerificationSocieteTest extends TestCase
         $this->assertStringContainsString('Sans code saisi d\'ici là, l\'inscription sera close.', $html);
         $this->assertSame(1, substr_count($html, '04/11/2026'));
 
-        $this->travelTo('2026-11-04 09:59:59');
+        $this->travelTo(self::aParis('2026-11-04 09:59:59'));
         $this->saisirCommeLInscrit($societe, $code);
 
         $this->assertTrue($societe->fresh()->estValidee());
@@ -257,7 +257,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_le_code_est_hache_unique_valable_trente_jours_et_a_usage_unique(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $code = $this->codeDuCourrier($societe);
         $actif = $this->codeActif($societe);
@@ -267,10 +267,10 @@ class VerificationSocieteTest extends TestCase
         $this->assertStringNotContainsString(str_replace('-', '', $code), $base);
         $this->assertStringNotContainsString($code, $base);
         $this->assertTrue(Hash::check(str_replace('-', '', $code), $actif->code_hache));
-        $this->assertSame('2026-11-04 10:00:00', $actif->expire_le->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s'));
+        $this->assertMemeInstant(self::aParis('2026-11-04 10:00:00'), $actif->expire_le);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => app(TenantContext::class)->runAsSociete($societe, fn (): bool => $actif->replicate()->save())), UniqueConstraintViolationException::class);
 
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $this->assertThrows(fn () => $this->saisirCommeLInscrit($societe, $code), fn (ValidationException $refus): bool => $refus->errors() === ['code' => [SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX]]);
 
         $autre = $this->inscrireUneSociete();
@@ -293,7 +293,7 @@ class VerificationSocieteTest extends TestCase
         $conserverJusquAu = fn (CarbonImmutable $fin): int => DB::table('codes_confirmation')->where('id', $code->id)->update(['conserver_jusqu_au' => $fin->utc()->format('Y-m-d H:i:s')]);
 
         $this->assertThrows($effacer, QueryException::class, 'codes_confirmation : suppression refusée avant la fin de la conservation');
-        $this->assertSame(1, $conserverJusquAu($this->maintenantSelonLaBase()->addDay()));
+        $this->assertSame(1, $conserverJusquAu($this->maintenantSelonLaBase()->addHours(24)));
         $this->assertThrows($effacer, QueryException::class, 'codes_confirmation : suppression refusée avant la fin de la conservation');
         $this->assertSame(1, $conserverJusquAu($this->maintenantSelonLaBase()->subMinute()));
 
@@ -697,16 +697,16 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_sans_code_trente_jours_apres_le_courrier_l_inscription_se_clot_et_libere_le_siren(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $magasin = $this->creerLeMagasinDuSiege($societe);
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
 
-        $this->travelTo('2026-11-04 09:59:00');
+        $this->travelTo(self::aParis('2026-11-04 09:59:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('0 inscription(s) close(s).')->assertSuccessful();
         $this->assertTrue($societe->fresh()->attendSonCode());
 
-        $this->travelTo('2026-11-04 10:00:00');
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
 
         $close = $societe->fresh();
@@ -725,16 +725,16 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_un_nouveau_courrier_repousse_la_cloture_a_trente_jours_apres_lui(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
 
-        $this->travelTo('2026-11-19 09:00:00');
+        $this->travelTo(self::aParis('2026-11-19 09:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->assertSuccessful();
         $this->assertTrue($societe->fresh()->attendSonCode());
 
-        $this->travelTo('2026-11-19 10:00:00');
+        $this->travelTo(self::aParis('2026-11-19 10:00:00'));
         $this->artisan('app:clore-inscriptions-sans-code')->assertSuccessful();
         $this->assertTrue($societe->fresh()->estClose());
     }
@@ -747,13 +747,13 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_la_cloture_sans_code_ne_touche_que_les_inscriptions_echues_de_chaque_societe(): void
     {
-        $this->travelTo('2026-10-01 10:00:00');
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
         $echue = $this->inscrireUneSociete();
         $validee = $this->inscrireUneSociete();
         $this->saisirLeCodeDuCourrier($validee);
-        $this->travelTo('2026-10-25 10:00:00');
+        $this->travelTo(self::aParis('2026-10-25 10:00:00'));
         $recente = $this->inscrireUneSociete();
-        $this->travelTo('2026-11-01 10:00:00');
+        $this->travelTo(self::aParis('2026-11-01 10:00:00'));
 
         $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
 
@@ -771,17 +771,17 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_un_seul_nouveau_courrier_au_plus_tot_quinze_jours_apres_le_premier(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $premierCode = $this->codeDuCourrier($societe);
         $proprietaire = $societe->proprietaire()->sole();
         $nouvelEnvoi = fn () => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe->fresh());
 
-        $this->travelTo('2026-10-20 09:59:59');
+        $this->travelTo(self::aParis('2026-10-20 09:59:59'));
         $this->assertThrows($nouvelEnvoi, VerificationRefuseeException::class, sprintf(EnvoyerCodeDeConfirmationAction::MESSAGE_PAS_ENCORE, '20/10/2026 à 10:00'));
         $this->assertCount(1, $this->envois()->envois());
 
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $nouvelEnvoi();
 
         $this->assertCount(2, $this->envois()->envois());
@@ -807,11 +807,11 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_un_nouveau_courrier_ne_part_que_pour_une_entreprise_encore_active_au_repertoire(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->sole();
         $nouvelEnvoi = fn () => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe->fresh());
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
 
         $this->repertoire()->rendreInjoignable();
         $this->assertThrows($nouvelEnvoi, VerificationRefuseeException::class, EnvoyerCodeDeConfirmationAction::MESSAGE_REPERTOIRE_INDISPONIBLE);
@@ -836,7 +836,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_la_page_de_la_verification_montre_le_courrier_et_ne_propose_un_nouveau_courrier_qu_au_quinzieme_jour(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $magasin = $this->creerLeMagasinDuSiege($societe);
         $administrateur = $this->administrateur($magasin);
@@ -849,7 +849,7 @@ class VerificationSocieteTest extends TestCase
             ->assertActionHidden('demanderUnNouveauCourrier')
             ->assertActionHidden('deposerUnePiece');
 
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         $this->ouvrirLaPageDeVerification($societe, $administrateur);
         Livewire::test(PageDeVerification::class)->assertActionHidden('demanderUnNouveauCourrier');
         $this->ouvrirLaPageDeVerification($societe, $proprietaire);
@@ -873,12 +873,12 @@ class VerificationSocieteTest extends TestCase
     public function test_les_pieces_ne_se_deposent_qu_apres_le_nouveau_courrier(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->sole();
 
         $this->assertThrows(fn () => app(DeposerUnePieceAction::class)->handle($proprietaire, $societe, TypePiece::Kbis, 'Extrait Kbis'), VerificationRefuseeException::class, DeposerUnePieceAction::MESSAGE_PAS_ENCORE);
-        $this->travelTo('2026-10-20 10:00:00');
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe);
 
         app(DeposerUnePieceAction::class)->handle($proprietaire, $societe->fresh(), TypePiece::Kbis, 'Extrait Kbis');
@@ -926,7 +926,7 @@ class VerificationSocieteTest extends TestCase
 
         $autre = $this->societeDontLesCourriersNeSontPasParvenus();
         $oubliee = app(DeposerUnePieceAction::class)->handle($autre->proprietaire, $autre, TypePiece::Identite, 'Carte d\'identité');
-        $this->travel(PieceVerification::CONSERVATION_EN_JOURS + 1)->days();
+        $this->travelTo(self::aParis('2026-11-20 10:00:00'));
         $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
         Storage::disk(PiecesDeVerification::DISQUE)->assertMissing((string) $oubliee->chemin);
         $this->assertNotNull(app(TenantContext::class)->runAsSociete($autre, fn () => $oubliee->fresh()->effacee_le));
@@ -935,12 +935,16 @@ class VerificationSocieteTest extends TestCase
     /**
      * Le fichier envoyé au formulaire de dépôt ne reste jamais en clair
      * dans le dossier temporaire des envois : ni après un dépôt accepté,
-     * ni après un dépôt refusé (dix pièces attendent déjà l'éditeur).
+     * ni après un dépôt refusé (dix pièces attendent déjà l'éditeur). Le
+     * dépôt se fait à l'heure que relisent les fichiers : Livewire efface
+     * un envoi qu'il croit vieux de plus d'un jour selon l'heure de
+     * l'application.
      */
     public function test_un_depot_accepte_ou_refuse_ne_laisse_aucun_fichier_temporaire(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
         $societe = $this->societeDontLesCourriersNeSontPasParvenus();
+        $this->figerALHeureDesFichiers();
         $this->ouvrirLaPageDeVerification($societe, $societe->proprietaire);
         $envois = FileUploadConfiguration::storage();
 
@@ -1019,7 +1023,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_l_avis_d_un_courrier_revenu_dit_ce_que_le_proprietaire_peut_encore_faire(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $tot = $this->inscrireUneSociete();
         $tard = $this->inscrireUneSociete();
         $retourner = function (Societe $societe): void {
@@ -1029,7 +1033,7 @@ class VerificationSocieteTest extends TestCase
         $avis = fn (Societe $societe): array => $societe->proprietaire->notifications()->reorder('created_at')->get()->pluck('data.body')->all();
         $revenu = 'Le courrier recommandé n\'a pas été retiré au bureau de poste et son code ne vaut plus. ';
 
-        $this->travelTo('2026-10-06 10:00:00');
+        $this->travelTo(self::aParis('2026-10-06 10:00:00'));
         $retourner($tot);
 
         $this->assertSame([$revenu.'Un nouveau courrier pourra être demandé depuis la page de la vérification à partir du 20/10/2026 à 10:00.'], $avis($tot));
@@ -1038,7 +1042,7 @@ class VerificationSocieteTest extends TestCase
             ->assertSeeText('Ce courrier est revenu sans avoir été retiré au bureau de poste : son code ne vaut plus. Sans nouveau courrier, l\'inscription sera close le 04/11/2026 à 10:00 et le SIREN libéré.', false)
             ->assertDontSeeText('Son code est valable');
 
-        $this->travelTo('2026-10-21 10:00:00');
+        $this->travelTo(self::aParis('2026-10-21 10:00:00'));
         $retourner($tard);
 
         $this->assertSame([$revenu.'Demandez un nouveau courrier depuis la page de la vérification.'], $avis($tard));
@@ -1161,17 +1165,15 @@ class VerificationSocieteTest extends TestCase
 
     /**
      * Une inscription dont les deux courriers ne sont pas parvenus : le
-     * premier, inscrit quinze jours plus tôt, puis le nouveau courrier,
-     * demandé maintenant ; son propriétaire peut déposer des pièces pour
-     * l'éditeur. L'heure du test revient où elle était : le dossier des
-     * envois du formulaire de dépôt efface les fichiers plus vieux d'un
-     * jour selon l'heure de l'application.
+     * premier, inscrit le 5 octobre à 10 h, puis le nouveau courrier,
+     * demandé quinze jours plus tard, à l'heure où l'horloge reste figée ;
+     * son propriétaire peut déposer des pièces pour l'éditeur.
      */
     private function societeDontLesCourriersNeSontPasParvenus(): Societe
     {
-        $this->travel(-CourriersDeVerification::JOURS_AVANT_UN_NOUVEL_ENVOI)->days();
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete();
-        $this->travel(CourriersDeVerification::JOURS_AVANT_UN_NOUVEL_ENVOI)->days();
+        $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
         app(TenantContext::class)->clear();
 

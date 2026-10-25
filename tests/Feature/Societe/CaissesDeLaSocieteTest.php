@@ -36,7 +36,7 @@ class CaissesDeLaSocieteTest extends TestCase
 
     public function test_le_proprietaire_voit_les_releves_et_les_caisses_ouvertes_de_chaque_magasin_reel(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris']);
         $paul = $this->vendeurQuiVend($lyon, 'Paul', 12);
@@ -116,7 +116,7 @@ class CaissesDeLaSocieteTest extends TestCase
      */
     public function test_la_lecture_ne_rend_que_les_champs_du_releve(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
         $vente = app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($vendeur, Client::factory()->create(['nom' => 'Atelier Martin']), $this->lignes(12), ModePaiement::CarteBancaire));

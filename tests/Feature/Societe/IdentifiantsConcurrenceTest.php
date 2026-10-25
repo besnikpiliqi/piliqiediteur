@@ -144,7 +144,7 @@ class IdentifiantsConcurrenceTest extends TestCase
     public function test_des_creations_simultanees_d_un_meme_auteur_ne_depassent_pas_la_limite_du_jour(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-12 10:00:00');
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $limite = CreationDesComptes::limiteDuJour($magasin->societe);

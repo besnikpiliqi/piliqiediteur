@@ -145,7 +145,7 @@ class PorteDeValidationTest extends TestCase
      */
     public function test_un_magasin_dont_l_etablissement_n_est_pas_verifie_ne_vend_pas(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']);
         $magasin->forceFill(['etablissement_verifie_le' => null])->save();
         $ticket = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);

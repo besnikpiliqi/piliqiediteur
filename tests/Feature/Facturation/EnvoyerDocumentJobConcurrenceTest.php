@@ -110,7 +110,7 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
     public function test_un_devis_modifie_pendant_le_depart_de_son_e_mail_part_tel_qu_il_a_ete_demande_ou_ne_part_pas(bool $leDepartDAbord): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -323,7 +323,7 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
     private function programmerLeDepart(Magasin $magasin, string $depart, User $responsable): EnvoiDocument
     {
         if ($depart === 'devis') {
-            $this->travelTo('2026-10-15 10:00:00');
+            $this->travelTo(self::aParis('2026-10-15 10:00:00'));
             $devis = app(CreerDevisAction::class)->handle($responsable, Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
             Queue::fake([EnvoyerDocumentJob::class]);
 
@@ -437,12 +437,12 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
      */
     private function factureEchueLe30Septembre(Magasin $magasin): Facture
     {
-        $this->travelTo('2026-09-30 10:00:00');
+        $this->travelTo(self::aParis('2026-09-30 10:00:00'));
         $responsable = self::responsableDeTest($magasin);
         $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(['delai_paiement_jours' => 0]), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
         ]));
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo(self::aParis('2026-10-15 10:00:00'));
 
         return $facture;
     }

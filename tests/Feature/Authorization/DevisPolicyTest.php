@@ -104,7 +104,7 @@ class DevisPolicyTest extends TestCase
     #[DataProvider('statutsDesDevisNumerotes')]
     public function test_un_devis_numerote_ne_se_supprime_plus(StatutDevis $statut): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $envoye = app(EmettreDevisAction::class)->handle(self::auteur(), $this->creerUnDevis(['date_validite' => '2026-10-08']));
@@ -131,7 +131,7 @@ class DevisPolicyTest extends TestCase
      */
     public function test_un_devis_numerote_apres_son_chargement_ne_se_supprime_pas(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $chargeBrouillon = $this->creerUnDevis();
         app(EmettreDevisAction::class)->handle(self::auteur(), $chargeBrouillon);
@@ -149,14 +149,14 @@ class DevisPolicyTest extends TestCase
      */
     public function test_accepter_un_devis_n_est_plus_permis_une_fois_sa_validite_depassee(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $devis = app(EmettreDevisAction::class)->handle(self::auteur(), $this->creerUnDevis(['date_validite' => '2026-10-08']));
 
-        $this->travelTo('2026-10-08 23:59:00');
+        $this->travelTo(self::aParis('2026-10-08 23:59:00'));
         $leDernierJour = $proprietaire->can('accepter', $devis);
-        $this->travelTo('2026-10-09 00:01:00');
+        $this->travelTo(self::aParis('2026-10-09 00:01:00'));
         $leLendemain = $proprietaire->can('accepter', $devis);
 
         $this->assertSame([true, false], [$leDernierJour, $leLendemain]);
@@ -221,7 +221,7 @@ class DevisPolicyTest extends TestCase
      */
     private function expirer(Devis $devis): Devis
     {
-        $this->travelTo('2026-10-09 00:30:00');
+        $this->travelTo(self::aParis('2026-10-09 00:30:00'));
         app(ExpirerLesDevisAction::class)->handle($devis->magasin);
 
         return $devis->fresh();

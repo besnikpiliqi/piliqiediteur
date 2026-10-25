@@ -60,11 +60,8 @@ class MarquerFacturesEnRetard extends Command
             ->whereIn('statut', [StatutFacture::Emise, StatutFacture::Envoyee, StatutFacture::PartiellementPayee])
             ->whereDate('date_echeance', '<', now());
 
-        // update() via le query builder ne passe PAS par les casts Eloquent
-        // (contrairement à un forceFill()->save() unitaire) : il faut donc
-        // fournir la valeur scalaire de l'enum explicitement.
         $marquees = $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
-            ->filter(fn (string $numero, int $id): bool => $echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard->value]) === 1);
+            ->filter(fn (string $numero, int $id): bool => $echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1);
 
         if ($marquees->isNotEmpty()) {
             Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees->values()->all()));

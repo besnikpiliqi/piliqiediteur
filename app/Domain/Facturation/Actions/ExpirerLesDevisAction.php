@@ -24,12 +24,10 @@ class ExpirerLesDevisAction
      */
     public function handle(Magasin $magasin): int
     {
-        // update() en masse ne passe pas par les casts Eloquent : la valeur
-        // de l'enum est fournie telle quelle.
         return Devis::query()
             ->where('magasin_id', $magasin->getKey())
             ->where('statut', StatutDevis::Envoye)
             ->whereDate('date_validite', '<', today())
-            ->update(['statut' => StatutDevis::Expire->value]);
+            ->update(['statut' => StatutDevis::Expire]);
     }
 }

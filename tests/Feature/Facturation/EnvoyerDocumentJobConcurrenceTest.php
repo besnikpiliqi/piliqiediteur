@@ -64,7 +64,14 @@ use Tests\TestCase;
  * La fermeture ou la réouverture du magasin, l'émission d'une facture, la
  * validation d'une facture d'achat ou la suspension de la personne qui a
  * demandé l'envoi, au même instant : la seconde attend la première, sans
- * interblocage.
+ * interblocage. La saisie du code, qui valide la société, et le refus de
+ * l'éditeur, qui clôt son inscription, ne se rencontrent jamais avec un
+ * départ : l'une et l'autre ne portent que sur une société qui attend son
+ * code, où aucun envoi ne se demande, ni dans un magasin réel avant la
+ * validation (voir Magasin::refusDeVente()), ni jamais dans le magasin de
+ * démonstration (voir Magasin::refusDEcrireAuxClients()) ; leur
+ * face-à-face avec le passage en retard, qui touche aussi la
+ * démonstration, est vérifié par MarquerFacturesEnRetardConcurrenceTest.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.

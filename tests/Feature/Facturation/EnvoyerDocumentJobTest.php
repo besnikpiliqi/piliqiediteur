@@ -354,6 +354,31 @@ class EnvoyerDocumentJobTest extends TestCase
     }
 
     /**
+     * Un document introuvable au départ de son envoi -- un brouillon de
+     * devis jamais numéroté, supprimé après qu'un envoi lui a été rattaché
+     * directement en base, état qu'aucun écran ne produit -- ne fait pas
+     * retenter le job : l'envoi échoue aussitôt, comme pour tout autre
+     * refus du départ, le magasin sait pourquoi, et le propriétaire en est
+     * prévenu.
+     */
+    public function test_un_envoi_dont_le_document_n_existe_plus_echoue_sans_nouvelle_tentative(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        $devis->delete();
+
+        EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id);
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'Ce document n\'existe pas, ou plus, dans ce magasin. L\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
+        $notification = $this->proprietaireDe($magasin)->notifications()->sole();
+        $this->assertSame(['Ma Boutique : Échec de l\'envoi : document supprimé', 'L\'e-mail à client@exemple.fr n\'est pas parti. Ce document n\'existe pas, ou plus, dans ce magasin. L\'e-mail n\'est pas parti.'], [$notification->data['title'], $notification->data['body']]);
+    }
+
+    /**
      * Toutes les tentatives ont échoué : l'envoi passe en échec avec une
      * explication pour le magasin -- jamais la réponse du serveur, qui
      * peut contenir un identifiant -- et l'expéditeur est prévenu, dans

@@ -17,12 +17,17 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
+use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Events\QueryExecuted;
@@ -44,7 +49,10 @@ use Tests\TestCase;
  * pendant le passage en retard. La fermeture ou la réouverture du
  * magasin, l'émission d'une facture ou la validation d'une facture d'achat
  * au même instant : les deux passent, sans interblocage, et les statuts
- * suivent leurs échéances, même dans un magasin fermé.
+ * suivent leurs échéances, même dans un magasin fermé. De même pour la
+ * saisie du code du courrier, qui valide la société, et le refus de
+ * l'éditeur, qui clôt son inscription : chacun ferme ensuite le magasin de
+ * démonstration, dont un ticket échu passe en retard.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -188,6 +196,76 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
     }
 
     /**
+     * La fin de l'inscription, et qui passe le premier.
+     *
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function finsDeLInscriptionEtOrdres(): array
+    {
+        return [
+            'le passage en retard avant la saisie du code' => ['saisirLeCode', true],
+            'la saisie du code avant le passage en retard' => ['saisirLeCode', false],
+            'le passage en retard avant le refus de l\'inscription' => ['refuser', true],
+            'le refus de l\'inscription avant le passage en retard' => ['refuser', false],
+        ];
+    }
+
+    /**
+     * Un ticket du magasin de démonstration d'une société qui attend son
+     * code, échu le 01/10, et le 06/10, au même instant, le passage en
+     * retard et la fin de l'inscription : la saisie du code, qui valide la
+     * société (voir ValiderLaSocieteAction), ou le refus de l'éditeur, qui
+     * clôt l'inscription (voir CloreLInscriptionAction::refuser()) ; l'une
+     * comme l'autre ferme ensuite la démonstration, sous le verrou de son
+     * registre, puis de sa ligne, puis des factures des journées qu'elle
+     * clôture (voir FermerLaDemonstrationAction). Le passage en retard ne
+     * verrouille que le ticket, le temps de sa mise à jour. Le second
+     * démarre dès que la fermeture de la démonstration verrouille le
+     * ticket, ou, le passage en retard d'abord, dès sa première mise à
+     * jour. Les deux passent, sans interblocage ; le ticket passe en retard
+     * dans la démonstration fermée et est annoncé. Un interblocage dont
+     * PostgreSQL sacrifierait la fermeture de la démonstration laisserait
+     * celle-ci ouverte : son échec est signalé sans empêcher la validation
+     * ni la clôture de l'inscription.
+     */
+    #[DataProvider('finsDeLInscriptionEtOrdres')]
+    #[Group('concurrence')]
+    public function test_le_passage_en_retard_pendant_la_validation_ou_le_refus_de_la_societe_passe_sans_interblocage(string $fin, bool $leRetardDAbord): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $this->travelTo('2026-10-01 10:00:00');
+        $societe = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe);
+        $echu = $this->ticketPayableComptant($demonstration);
+        $this->travelTo('2026-10-06 10:00:00');
+        $finir = $this->finDeLInscription($fin, $societe);
+        $marquer = static function (): void {
+            self::marquerLesFacturesEnRetard();
+        };
+        $concurrente = null;
+
+        if ($leRetardDAbord) {
+            $this->concurrencerApresLaPremiereMiseEnRetard($finir, $concurrente);
+        } else {
+            $this->concurrencerDesQueLaLigneEstVerrouillee('factures', 'for update', $marquer, $concurrente);
+        }
+
+        $leRetardDAbord ? $marquer() : $finir();
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $societe = Societe::query()->findOrFail($societe->id);
+        $this->assertTrue($fin === 'saisirLeCode' ? $societe->estValidee() : $societe->estClose());
+        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
+        app(TenantContext::class)->set($demonstration->fresh());
+        $this->assertSame(StatutFacture::EnRetard, $echu->fresh()->statut);
+        $notification = $this->proprietaireDe($demonstration)->notifications()->where('type', FacturesPasseesEnRetard::class)->sole();
+        $this->assertSame("Échéance dépassée sans règlement complet : {$echu->numero}.", $notification->data['body']);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($demonstration)->anomalies());
+    }
+
+    /**
      * Prépare l'autre geste, avant toute concurrence : le magasin fermé
      * avant sa réouverture, le brouillon de facture à émettre, la facture
      * d'achat à valider ; rend ce dont il a besoin, en valeurs simples.
@@ -241,6 +319,31 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
             'rouvrir' => $this->assertSame(StatutMagasin::Actif, $magasin->statut),
             'emettre' => $this->assertSame(StatutFacture::Emise, Facture::query()->findOrFail($parametres['id'])->statut),
             'validerUnAchat' => $this->assertSame(StatutFactureAchat::Validee, FactureAchat::query()->findOrFail($parametres['id'])->statut),
+        };
+    }
+
+    /**
+     * La fin de l'inscription, dans le processus du test ou dans le sien :
+     * le propriétaire inscrit saisit le code de son courrier, lu avant
+     * toute concurrence, ou l'éditeur refuse l'inscription.
+     *
+     * @return Closure(): void
+     */
+    private function finDeLInscription(string $fin, Societe $societe): Closure
+    {
+        if ($fin === 'refuser') {
+            $societeId = $societe->id;
+
+            return static function () use ($societeId): void {
+                app(CloreLInscriptionAction::class)->refuser(Societe::query()->findOrFail($societeId), new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-2026-0070', ['alice']));
+            };
+        }
+
+        [$siren, $code, $email] = [(string) $societe->siren, $this->codeDuCourrier($societe), (string) $societe->proprietaire()->firstOrFail()->email];
+
+        return static function () use ($siren, $code, $email): void {
+            app(TenantContext::class)->clear();
+            app(SaisirCodeDeConfirmationAction::class)->handle($siren, $code, $email, self::MOT_DE_PASSE_CHOISI, '', '127.0.0.1');
         };
     }
 

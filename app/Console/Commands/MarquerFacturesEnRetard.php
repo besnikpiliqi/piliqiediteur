@@ -40,27 +40,36 @@ class MarquerFacturesEnRetard extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Chaque facture échue passe en retard par sa propre mise à jour,
+     * sous les mêmes conditions qu'à la lecture, et seules celles qu'elle a
+     * réellement passées en retard sont annoncées au propriétaire et
+     * comptées : une facture réglée entre-temps n'est ni touchée ni
+     * annoncée. Sous PostgreSQL, une mise à jour qui trouve la facture
+     * verrouillée par un paiement, une contre-passation ou l'imputation
+     * d'un avoir attend qu'il soit validé, puis relit ses conditions sur la
+     * facture qu'il a laissée. Chacune ne verrouille qu'une facture, le
+     * temps de sa mise à jour : aucune n'attend en tenant une autre facture,
+     * quel que soit l'ordre dans lequel un paiement de plusieurs factures
+     * les verrouille. Les factures sont celles du magasin actif (voir
+     * MagasinScope), à la lecture comme à chaque mise à jour.
+     */
     private function marquerLesFacturesDe(Magasin $magasin): int
     {
         $echues = fn (): Builder => Facture::query()
             ->whereIn('statut', [StatutFacture::Emise, StatutFacture::Envoyee, StatutFacture::PartiellementPayee])
             ->whereDate('date_echeance', '<', now());
 
-        $numeros = $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id');
+        // update() via le query builder ne passe PAS par les casts Eloquent
+        // (contrairement à un forceFill()->save() unitaire) : il faut donc
+        // fournir la valeur scalaire de l'enum explicitement.
+        $marquees = $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
+            ->filter(fn (string $numero, int $id): bool => $echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard->value]) === 1);
 
-        if ($numeros->isEmpty()) {
-            return 0;
+        if ($marquees->isNotEmpty()) {
+            Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees->values()->all()));
         }
 
-        // update() en masse via le query builder ne passe PAS par les casts
-        // Eloquent (contrairement à un forceFill()->save() unitaire) : il
-        // faut donc fournir la valeur scalaire de l'enum explicitement. Les
-        // mêmes conditions qu'à la lecture : une facture réglée entre-temps
-        // n'est pas touchée.
-        $marquees = $echues()->whereKey($numeros->keys())->update(['statut' => StatutFacture::EnRetard->value]);
-
-        Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $numeros->values()->all()));
-
-        return $marquees;
+        return $marquees->count();
     }
 }

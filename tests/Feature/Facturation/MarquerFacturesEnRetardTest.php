@@ -16,7 +16,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -260,6 +262,34 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->assertSame('Échéance dépassée sans règlement complet : '.$numeros->take(10)->implode(', ').' et 1 autre(s).', $notification->data['body']);
     }
 
+    /**
+     * Une facture réglée entre la lecture des factures échues et leur
+     * passage en retard ne passe pas en retard, et la notification du
+     * propriétaire ne l'annonce pas : elle ne nomme que les factures que la
+     * commande a réellement passées en retard, et la commande les compte de
+     * même.
+     */
+    public function test_une_facture_payee_pendant_le_passage_en_retard_n_est_pas_annoncee(): void
+    {
+        $this->travelTo('2026-10-01 10:00:00');
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $payee = $this->emettreFacture($magasin, 0);
+        $enRetard = $this->emettreFacture($magasin, 0);
+        app(TenantContext::class)->clear();
+        $this->travelTo('2026-10-06 10:00:00');
+        $this->payerApresLaLectureDesFacturesEchues($payee);
+
+        $this->artisan('app:marquer-factures-en-retard')
+            ->expectsOutput('1 facture(s) passée(s) au statut en_retard.')
+            ->assertSuccessful();
+
+        $this->assertSame([StatutFacture::Payee, StatutFacture::EnRetard], [$payee->fresh()->statut, $enRetard->fresh()->statut]);
+        $notification = $proprietaire->notifications()->sole();
+        $this->assertSame('Ma Boutique : 1 facture passée en retard', $notification->data['title']);
+        $this->assertSame("Échéance dépassée sans règlement complet : {$enRetard->numero}.", $notification->data['body']);
+    }
+
     public function test_traite_plusieurs_magasins_independamment(): void
     {
         $this->travelTo('2026-10-01 10:00:00');
@@ -273,5 +303,28 @@ class MarquerFacturesEnRetardTest extends TestCase
 
         $this->assertSame(StatutFacture::EnRetard, $factureA->fresh()->statut);
         $this->assertSame(StatutFacture::EnRetard, $factureB->fresh()->statut);
+    }
+
+    /**
+     * Le responsable de test encaisse toute la facture juste après que la
+     * commande a lu les factures échues, avant qu'elle ne les passe en
+     * retard : un encaissement validé à la caisse au même instant.
+     */
+    private function payerApresLaLectureDesFacturesEchues(Facture $facture): void
+    {
+        $paye = false;
+
+        DB::listen(function (QueryExecuted $requete) use (&$paye, $facture): void {
+            if ($paye || ! str_starts_with($requete->sql, 'select') || ! str_contains($requete->sql, 'from "factures"') || ! str_contains($requete->sql, '"date_echeance"')) {
+                return;
+            }
+
+            $paye = true;
+            app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
+                'mode_paiement' => ModePaiement::Especes,
+                'montant' => 120,
+                'recu_le' => today()->toDateString(),
+            ], [['facture_id' => $facture->id, 'montant' => 120]]);
+        });
     }
 }

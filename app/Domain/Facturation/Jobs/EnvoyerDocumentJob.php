@@ -2,7 +2,10 @@
 
 namespace App\Domain\Facturation\Jobs;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutEnvoi;
@@ -16,7 +19,10 @@ use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Concerns\WithTenantContext;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -24,9 +30,10 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use LogicException;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mime\Exception\RfcComplianceException;
 use Throwable;
@@ -38,14 +45,16 @@ use Throwable;
  * base, et un serveur d'envoi lent ou indisponible ne retarde jamais le
  * geste du magasin.
  *
- * Le document est relu au moment de partir : une relance ne part que si
- * la facture est toujours échue et impayée, et son rappel dit ce qu'il
- * reste à payer à cet instant ; l'objet de l'e-mail se relit aussi, sur
- * l'émetteur que l'e-mail présente et que son PDF imprime (voir
- * DocumentMail), quoi qu'ait changé le magasin depuis la demande. Il
- * existe toujours : une facture ou un avoir émis le reste pour toujours
- * (une correction est un avoir à part), et un devis, numéroté dès son
- * premier envoi, ne se supprime plus (voir Devis::estSupprimable()).
+ * Le document est relu au moment de partir, sous verrou, dans une
+ * transaction courte rendue avant le PDF et l'envoi (voir
+ * relireAvantLeDepart()) : une relance ne part que si la facture est
+ * toujours échue et impayée, et son rappel dit ce qu'il reste à payer à
+ * cet instant ; l'objet de l'e-mail se relit aussi, sur l'émetteur que
+ * l'e-mail présente et que son PDF imprime (voir DocumentMail), quoi
+ * qu'ait changé le magasin depuis la demande. Il existe toujours : une
+ * facture ou un avoir émis le reste pour toujours (une correction est un
+ * avoir à part), et un devis, numéroté dès son premier envoi, ne se
+ * supprime plus (voir Devis::estSupprimable()).
  *
  * Un devis, lui, se modifie après son envoi (voir ModifierDevisAction) :
  * modifié depuis la demande d'envoi, qu'il soit encore en brouillon ou
@@ -57,11 +66,12 @@ use Throwable;
  * démonstration, jamais. Dans ces cas, l'envoi échoue sans partir, et le
  * magasin sait pourquoi.
  *
- * La personne qui a demandé l'envoi se relit aussi au moment de partir :
- * sans plus accès au magasin, ou sans plus le droit d'envoyer ce
- * document, l'e-mail ne part pas, sans nouvelle tentative, et le
- * propriétaire de la société en est prévenu. Une relance automatique, que
- * personne n'a demandée, n'en dépend pas.
+ * La personne qui a demandé l'envoi se relit aussi au moment de partir,
+ * sous le verrou de sa ligne (voir LecteurDesDroits) : sans plus accès au
+ * magasin, ou sans plus le droit d'envoyer ce document, l'e-mail ne part
+ * pas, sans nouvelle tentative, et le propriétaire de la société en est
+ * prévenu. Une relance automatique, que personne n'a demandée, n'en
+ * dépend pas.
  *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
@@ -110,37 +120,10 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if (! $envoi->magasin->peutEcrireAuxClients()) {
-            $motif = $envoi->magasin->motifDeLectureSeule('Le magasin');
-            $this->echouer($envoi, $motif === null
-                ? "{$envoi->magasin->refusDEcrireAuxClients()} L'e-mail n'est pas parti."
-                : "{$motif} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
+        $document = DB::transaction(fn (): Facture|Devis|Avoir|null => $this->relireAvantLeDepart($envoi));
 
+        if ($document === null) {
             return;
-        }
-
-        $document = $envoi->document;
-
-        if ($envoi->envoye_par !== null && ! $this->lExpediteurPeutEncoreLEnvoyer($envoi, $document)) {
-            $this->echouer($envoi, self::MOTIF_EXPEDITEUR_SANS_DROIT, collect([$envoi->magasin->societe->proprietaire]));
-
-            return;
-        }
-
-        if ($document instanceof Devis && $this->devisModifieDepuisLaDemande($document, $envoi)) {
-            $this->echouer($envoi, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.');
-
-            return;
-        }
-
-        if ($document instanceof Facture && $envoi->nature === NatureEnvoi::Relance) {
-            if (! $document->estEchueEtImpayee()) {
-                $this->echouer($envoi, 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.');
-
-                return;
-            }
-
-            $envoi->forceFill(['message' => $document->messageDeRelance()])->save();
         }
 
         $generateur = match (true) {
@@ -180,6 +163,91 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
+     * Ce qui décide du départ, relu dans la transaction de l'appelant, dans
+     * l'ordre des verrous de tous les gestes du magasin : sa ligne sous un
+     * verrou partagé (une fermeture ou une réouverture, qui la
+     * verrouillent, voir FermerMagasinAction et RouvrirMagasinAction,
+     * passent tout entières avant ou après cette lecture ; le magasin relu
+     * devient celui du contexte, auquel répondent les droits de
+     * l'expéditeur, voir ControleDesDroits), puis la personne qui a demandé
+     * l'envoi sous le verrou de la sienne (voir LecteurDesDroits : une
+     * modification de ses droits passe de même avant ou après), puis le
+     * document sous un verrou partagé, avec ce que son PDF imprime. Une
+     * modification du devis (ModifierDevisAction), un paiement, une
+     * contre-passation ou l'imputation d'un avoir sur la facture
+     * (EnregistrerPaiementAction, EncaisserEnPlusieursModesAction,
+     * ContrePasserPaiementAction, ImputationDuCredit), qui verrouillent le
+     * document avant de l'écrire, passent donc avant cette lecture, qui les
+     * voit, ou après elle : un devis part avec les lignes et les totaux
+     * d'une même version, et le rappel d'une relance dit ce qui restait dû
+     * au moment où elle a été décidée.
+     *
+     * Les verrous sont rendus avec la transaction, avant le PDF et l'envoi
+     * SMTP : ils ne font jamais attendre le magasin pendant qu'un serveur
+     * d'envoi répond. Une écriture qui passe entre cette lecture et l'envoi
+     * laisse partir l'e-mail tel qu'il a été décidé, comme s'il était parti
+     * juste avant elle.
+     *
+     * Rend le document relu, que porte l'e-mail (voir DocumentMail), ou
+     * null quand l'envoi échoue sans partir, le magasin sachant pourquoi.
+     *
+     * @throws LogicException un document qui n'existe plus dans le magasin
+     */
+    private function relireAvantLeDepart(EnvoiDocument $envoi): Facture|Devis|Avoir|null
+    {
+        $magasin = Magasin::query()->whereKey($envoi->magasin_id)->sharedLock()->firstOrFail();
+        app(TenantContext::class)->set($magasin);
+
+        if (! $magasin->peutEcrireAuxClients()) {
+            $motif = $magasin->motifDeLectureSeule('Le magasin');
+            $this->echouer($envoi, $motif === null
+                ? "{$magasin->refusDEcrireAuxClients()} L'e-mail n'est pas parti."
+                : "{$motif} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
+
+            return null;
+        }
+
+        /** @var class-string<Facture|Devis|Avoir> $classe */
+        $classe = $envoi->getActualClassNameForMorph($envoi->document_type);
+        $lecteur = app(LecteurDesDroits::class);
+
+        try {
+            $expediteur = $envoi->envoye_par === null ? null : $lecteur->exigerSousVerrou($envoi->envoyePar, self::autorisationDEnvoyer($classe), $magasin);
+            $document = $classe::query()->whereKey($envoi->document_id)->sharedLock()->with(['client', 'lignes'])->first()
+                ?? throw new LogicException(EnvoyerDocumentAction::REFUS_INTROUVABLE);
+
+            if ($expediteur !== null) {
+                $lecteur->exiger($expediteur, 'envoyer', $magasin, $document);
+            }
+        } catch (AuthorizationException) {
+            $this->echouer($envoi, self::MOTIF_EXPEDITEUR_SANS_DROIT, collect([$magasin->societe->proprietaire]));
+
+            return null;
+        }
+
+        if ($document instanceof Devis && $this->devisModifieDepuisLaDemande($document, $envoi)) {
+            $this->echouer($envoi, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.');
+
+            return null;
+        }
+
+        if ($document instanceof Facture && $envoi->nature === NatureEnvoi::Relance) {
+            if (! $document->estEchueEtImpayee()) {
+                $this->echouer($envoi, 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.');
+
+                return null;
+            }
+
+            $envoi->forceFill(['message' => $document->messageDeRelance()])->save();
+        }
+
+        $document->setRelation('magasin', $magasin);
+        $envoi->setRelation('document', $document);
+
+        return $document;
+    }
+
+    /**
      * Toutes les tentatives ont échoué : l'envoi passe en échec, avec une
      * explication pour le magasin -- jamais le message technique du
      * serveur d'envoi, qui peut contenir des identifiants ou des adresses
@@ -203,21 +271,21 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * La personne qui a demandé cet envoi, relue en base au moment de
-     * partir, est-elle toujours un compte de la société du magasin, qui
-     * l'ouvre et qui a le droit d'envoyer ce document-là, dans le contexte
-     * du magasin que le job a restauré ? Un compte retiré du magasin ou de
-     * la société, suspendu, refusé, privé de l'autorisation d'envoyer, ou
-     * qui ne voit plus ce document, ne fait rien partir.
+     * L'autorisation d'envoyer ce genre de document, que sa policy demande
+     * aussi (voir FacturePolicy::envoyer(), DevisPolicy::envoyer() et
+     * AvoirPolicy::envoyer()) : la question posée sous le verrou de la
+     * ligne de l'expéditeur, avant celui du document, auquel la policy
+     * répond ensuite.
+     *
+     * @param  class-string<Facture|Devis|Avoir>  $classe
      */
-    private function lExpediteurPeutEncoreLEnvoyer(EnvoiDocument $envoi, Facture|Devis|Avoir $document): bool
+    private static function autorisationDEnvoyer(string $classe): string
     {
-        $expediteur = User::query()->find($envoi->envoye_par);
-
-        return $expediteur !== null
-            && (int) $expediteur->societe_id === (int) $envoi->magasin->societe_id
-            && $expediteur->peutOuvrir($envoi->magasin)
-            && Gate::forUser($expediteur)->allows('envoyer', $document);
+        return match ($classe) {
+            Facture::class => PermissionRegistry::FACTURE_ENVOYER,
+            Devis::class => PermissionRegistry::DEVIS_ENVOYER,
+            Avoir::class => PermissionRegistry::AVOIR_ENVOYER,
+        };
     }
 
     /**

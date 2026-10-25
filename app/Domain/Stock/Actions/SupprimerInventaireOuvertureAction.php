@@ -20,15 +20,18 @@ use LogicException;
  * InventaireOuverturePolicy::delete()).
  *
  * Comme pour sa modification (voir ModifierInventaireOuvertureAction), la
- * ligne du magasin se relit sous un verrou partagé (un magasin suspendu ou
- * fermé ne supprime plus rien, voir Magasin::verifierQuIlEstOuvert()) et
- * son auteur en base (voir LecteurDesDroits), avant l'inventaire, relu
+ * ligne du magasin se relit sous un verrou partagé (un magasin suspendu,
+ * fermé ou cédé, ou dont la société est en lecture seule, ne supprime plus
+ * rien, voir Magasin::verifierQuIlEstOuvert()), puis son auteur sous le
+ * verrou de sa ligne (voir LecteurDesDroits), avant l'inventaire, relu
  * sous son propre verrou. Une validation simultanée, qui tient ce verrou
  * jusqu'à sa fin (voir ValiderInventaireOuvertureAction), passe donc tout
  * entière avant la suppression, qui est alors refusée, ou après elle, et
  * ne trouve plus l'inventaire : un inventaire validé ne disparaît jamais
  * en laissant ses produits, son stock, son numéro et son entrée d'audit.
- * L'auteur doit pouvoir supprimer cet inventaire relu.
+ * Un inventaire déjà supprimé par une autre requête est refusé. L'auteur
+ * relu doit pouvoir supprimer l'inventaire relu ; la suppression se fait
+ * à son nom (voir OperateurCourant).
  */
 class SupprimerInventaireOuvertureAction
 {
@@ -46,9 +49,10 @@ class SupprimerInventaireOuvertureAction
         DB::transaction(function () use ($auteur, $inventaire): void {
             $magasin = app(TenantContext::class)->magasin();
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
-            $compte = $this->lecteur->exiger($auteur, 'deleteAny', $magasin, InventaireOuverture::class);
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'deleteAny', $magasin, InventaireOuverture::class);
 
-            $inventaire = InventaireOuverture::query()->whereKey($inventaire->getKey())->lockForUpdate()->firstOrFail();
+            $inventaire = InventaireOuverture::query()->whereKey($inventaire->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(InventaireOuverture::REFUS_INTROUVABLE);
 
             if (! $inventaire->estBrouillon()) {
                 throw new LogicException(InventaireOuverture::REFUS_VALIDE);

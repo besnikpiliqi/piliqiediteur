@@ -26,7 +26,7 @@ class EditFactureAchat extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            FactureAchatResource::actionSupprimer(Actions\DeleteAction::make()),
         ];
     }
 

@@ -5,7 +5,6 @@ namespace App\Filament\App\Resources\DevisResource\Pages;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
-use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RecoitLeClientChoisi;
@@ -30,15 +29,12 @@ class EditDevis extends EditRecord
 
     /**
      * Supprimer : seul un brouillon jamais envoyé (voir
-     * DevisPolicy::delete()). Numéroté par une autre requête depuis
-     * l'ouverture de la page, il reste, et la page dit pourquoi (voir
-     * Devis::delete()).
+     * DevisPolicy::delete() et DevisResource::actionSupprimer()).
      */
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make()
-                ->using(fn (Devis $record): ?bool => static::executerOuInterrompre(fn (): ?bool => $record->delete())),
+            DevisResource::actionSupprimer(Actions\DeleteAction::make()),
         ];
     }
 

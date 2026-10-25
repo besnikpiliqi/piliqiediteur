@@ -27,6 +27,10 @@ class Devis extends Model implements DocumentEnvoyable
     /** @use HasFactory<DevisFactory> */
     use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, NoteSaNatureDOperation, SoftDeletes, VentileLaTvaParTaux;
 
+    public const REFUS_SUPPRESSION = 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.';
+
+    public const REFUS_INTROUVABLE = 'Ce devis n\'existe pas, ou plus, dans ce magasin.';
+
     protected $table = 'devis';
 
     // numero, statut, date_emission, les totaux, le type du client, la
@@ -74,7 +78,8 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le dernier rempart, derrière DevisPolicy::delete() : un devis
+     * Le dernier rempart, derrière SupprimerDevisAction et
+     * DevisPolicy::delete() : un devis
      * numéroté reste, quel que soit le chemin qui tente de le supprimer.
      * Son état est relu en base, sous un verrou tenu jusqu'à l'écriture de
      * la suppression : un devis chargé brouillon (lignes cochées d'une
@@ -89,10 +94,11 @@ class Devis extends Model implements DocumentEnvoyable
     public function delete(): ?bool
     {
         return DB::transaction(function (): ?bool {
-            $enBase = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
+            $enBase = static::query()->whereKey($this->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(self::REFUS_INTROUVABLE);
 
-            if ($enBase === null || ! $enBase->estSupprimable()) {
-                throw new LogicException('Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
+            if (! $enBase->estSupprimable()) {
+                throw new LogicException(self::REFUS_SUPPRESSION);
             }
 
             return parent::delete();

@@ -16,10 +16,12 @@ use Closure;
  *   une fermeture d'office, une relance automatique, un devis qui expire ;
  *   l'opérateur signé est nul, même pendant une requête authentifiée ;
  * - rien de posé : seuls les événements techniques hors action
- *   (ouverture et fin de session, abandon d'une vente, ligne retirée du
- *   panier) s'inscrivent alors au nom de la personne connectée (voir
- *   actuel()) ; une vente, un avoir, un encaissement ou une clôture est
- *   refusé (voir RegistreFiscal).
+ *   (ouverture et fin de session) s'inscrivent alors au nom de la personne
+ *   connectée (voir actuel()) ; une vente, un avoir, un encaissement ou une
+ *   clôture est refusé (voir RegistreFiscal). L'abandon d'une vente et une
+ *   ligne retirée s'inscrivent au nom du vendeur relu par le panier de la
+ *   caisse (voir PanierDeCaisse) ou de l'auteur relu par l'action du
+ *   brouillon (voir SupprimerFactureAction et ModifierFactureAction).
  *
  * Lié en scoped() (voir AppServiceProvider), comme TenantContext : chaque
  * requête et chaque job repart de rien. Chaque état posé se restaure à la

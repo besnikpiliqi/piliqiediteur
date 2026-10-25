@@ -48,6 +48,11 @@ use LogicException;
  * avant ou après la validation ; une cession ne laisse aucune réception
  * entrer dans le stock qu'elle a sorti.
  *
+ * Une facture d'achat brouillon supprimée pendant que son écran restait
+ * ouvert, ou par une suppression qui passe avant la validation (voir
+ * SupprimerFactureAchatAction), est refusée : la validation ne trouve plus
+ * rien à valider, et le dit.
+ *
  * Son auteur est relu sous le verrou de sa ligne, avant la facture d'achat
  * et ses produits (voir LecteurDesDroits) : il doit pouvoir la valider,
  * et, quand elle crée des produits, en créer (voir ProduitPolicy::create()),
@@ -102,7 +107,8 @@ class ValiderFactureAchatAction
      */
     private function valider(User $compte, FactureAchat $factureAchat): FactureAchat
     {
-        $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
+        $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->first()
+            ?? throw new LogicException(FactureAchat::REFUS_INTROUVABLE);
 
         if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
             throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");

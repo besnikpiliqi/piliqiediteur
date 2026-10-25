@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\SupprimerFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -42,6 +43,7 @@ use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SaisitUnReglementEnParts;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Actions\Action;
@@ -694,17 +696,16 @@ class FactureResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 // Un brouillon n'a jamais reçu de numéro légal : il reste
                 // librement modifiable (lignes comprises, voir EditFacture)
-                // et supprimable (voir FacturePolicy), sa suppression
-                // inscrite au journal des événements (voir
+                // et supprimable (voir FacturePolicy et actionSupprimer()),
+                // sa suppression inscrite au journal des événements (voir
                 // Facture::delete()). Dès l'émission, ces deux actions
                 // disparaissent définitivement : une facture émise se
                 // corrige par un avoir, jamais en la modifiant ou en la
                 // supprimant.
                 Tables\Actions\EditAction::make()
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
-                Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon)
-                    ->using(fn (Facture $record): ?bool => static::executerOuInterrompre(fn (): ?bool => $record->delete())),
+                self::actionSupprimer(Tables\Actions\DeleteAction::make())
+                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
                 self::emettre(),
                 self::encaisser(Tables\Actions\Action::make('encaisser')),
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
@@ -760,9 +761,32 @@ class FactureResource extends Resource
             // corrige par un avoir (voir l'action "avoir" ci-dessus).
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(),
+                    static::suppressionEnMasse(fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(auth()->user(), $facture)),
                 ]),
             ]);
+    }
+
+    /**
+     * « Supprimer » un brouillon, depuis la liste ou la page de
+     * modification : par l'action du domaine, qui relit sous verrou le
+     * registre, le magasin, l'auteur et le brouillon, et inscrit l'abandon
+     * de la vente au journal des événements (voir SupprimerFactureAction et
+     * Facture::delete()). Un refus (brouillon émis ou supprimé entre-temps,
+     * magasin fermé, droit retiré, journal qui ne s'écrit pas) se lit en
+     * notification, et le brouillon reste.
+     *
+     * @template TAction of DeleteAction|Tables\Actions\DeleteAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
+    {
+        return $action->using(fn (Facture $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            app(SupprimerFactureAction::class)->handle(auth()->user(), $record);
+
+            return true;
+        }));
     }
 
     /**

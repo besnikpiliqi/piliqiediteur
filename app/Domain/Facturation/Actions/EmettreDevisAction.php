@@ -3,6 +3,8 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Devis;
@@ -36,7 +38,8 @@ use LogicException;
  * et ContexteDeVente::refuserSiLeRegimeAChange()).
  *
  * L'émission demandée par une personne porte un jeton (R3, voir
- * ActionsUniques), cherché sous le verrou de la ligne de son auteur :
+ * ActionsUniques), cherché sous le verrou partagé de la ligne du magasin
+ * puis sous celui de la ligne de son auteur :
  * répétée après une réponse perdue, elle rend le devis déjà émis. Un envoi
  * (voir EnvoyerDocumentAction) l'appelle sans jeton : il porte le sien.
  */
@@ -45,13 +48,18 @@ class EmettreDevisAction
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
         private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
-     * Le magasin actif, relu, doit pouvoir vendre ; puis son auteur, relu
-     * sous le verrou de sa ligne avant celui du devis (voir
-     * LecteurDesDroits), doit pouvoir envoyer ce devis.
+     * Le magasin actif, relu sous un verrou partagé, doit pouvoir vendre ;
+     * puis son auteur, relu sous le verrou de sa ligne avant celui du devis
+     * (voir LecteurDesDroits), doit pouvoir envoyer le devis relu. Une
+     * fermeture du magasin, qui verrouille sa ligne (voir
+     * FermerMagasinAction), passe tout entière avant ou après l'émission :
+     * aucun numéro de devis ne se consomme dans un magasin déjà fermé. Un
+     * devis supprimé entre-temps est refusé.
      *
      * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      *
@@ -60,11 +68,18 @@ class EmettreDevisAction
      */
     public function handle(User $auteur, Devis $devis, ?string $jeton = null): Devis
     {
-        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_DEVIS, $auteur, ['devis_id' => $devis->getKey()], ActionsUniques::verrouDe($auteur), fn (): Devis => DB::transaction(function () use ($auteur, $devis) {
-            $magasin = Magasin::query()->findOrFail(app(TenantContext::class)->id());
-            $magasin->verifierQuIlPeutVendre();
-            $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $magasin, $devis);
-            $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
+        $magasin = app(TenantContext::class)->magasin();
+        $verrou = function () use ($magasin, $auteur): void {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
+            ActionsUniques::verrouDe($auteur)();
+        };
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_DEVIS, $auteur, ['devis_id' => $devis->getKey()], $verrou, fn (): Devis => DB::transaction(function () use ($auteur, $devis, $magasin) {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::DEVIS_ENVOYER, $magasin);
+            $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(Devis::REFUS_INTROUVABLE);
+            $this->lecteur->exiger($compte, 'envoyer', $magasin, $devis);
 
             if (! $devis->statut->peutTransitionnerVers(StatutDevis::Envoye)) {
                 throw new LogicException("Impossible d'envoyer un devis au statut [{$devis->statut->value}].");
@@ -81,13 +96,11 @@ class EmettreDevisAction
             ContexteDeVente::refuserSiLeTypeDeClientAChange($devis);
             ContexteDeVente::refuserSiLeRegimeAChange($devis);
 
-            $devis->forceFill([
-                'numero' => $devis->numero ?? $this->numerotation->suivant($devis->magasin, TypeDocument::Devis, now()->format('Y')),
+            return $this->operateur->pendant($compte, fn (): Devis => tap($devis->forceFill([
+                'numero' => $devis->numero ?? $this->numerotation->suivant($magasin, TypeDocument::Devis, now()->format('Y')),
                 'statut' => StatutDevis::Envoye,
                 'date_emission' => now(),
-            ])->save();
-
-            return $devis;
+            ]))->save());
         }));
     }
 }

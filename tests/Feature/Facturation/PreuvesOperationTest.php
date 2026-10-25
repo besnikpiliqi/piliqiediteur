@@ -460,7 +460,9 @@ class PreuvesOperationTest extends TestCase
     /**
      * En production, le compte de l'application n'a pas le droit de
      * modifier une table en ajout seul, que PostgreSQL exige pour un
-     * SELECT ... FOR UPDATE : seule la facture se verrouille.
+     * SELECT ... FOR UPDATE : aucune preuve ne se verrouille. Chaque
+     * geste ne verrouille que des lignes modifiables : celle du magasin
+     * (verrou partagé), celle de son auteur, puis la facture.
      */
     public function test_enregistrer_une_preuve_ne_verrouille_aucune_preuve(): void
     {
@@ -480,8 +482,10 @@ class PreuvesOperationTest extends TestCase
         $this->ajouter($livraison, TypePreuve::TransportA, 'CMR-2026-0042');
         $this->ajouter($livraison, TypePreuve::TransportB, 'POLICE-778');
 
-        $this->assertCount(2, $verrous);
-        $this->assertSame([], array_filter($verrous, fn (string $sql): bool => ! str_starts_with($sql, 'select * from "factures"')));
+        $this->assertSame(
+            ['magasins for share', 'users for no key update', 'factures for update', 'magasins for share', 'users for no key update', 'factures for update'],
+            array_map(fn (string $sql): string => preg_replace('/^select \* from "(\w+)" .* (for (?:share|no key update|update))$/s', '$1 $2', $sql), $verrous),
+        );
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\SupprimerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
@@ -28,7 +29,9 @@ use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -761,6 +764,36 @@ class FactureAchatResourceTest extends TestCase
         $this->assertSame(StatutFactureAchat::Validee, $factureAchat->statut);
         $this->assertNotNull($factureAchat->numero);
         $this->assertSame(5, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Un brouillon que le bouton « Valider la réception » a chargé, supprimé
+     * par une autre requête avant que la validation ne le relise, est
+     * refusé par une notification qui le dit, au lieu d'une page
+     * introuvable ; rien n'entre en stock.
+     */
+    public function test_valider_un_brouillon_supprime_entre_temps_le_dit_au_lieu_d_une_page_introuvable(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20]]);
+        $ecran = Livewire::test(ListFacturesAchat::class)->mountTableAction('valider', $factureAchat);
+        $supprimeEntreTemps = false;
+        DB::listen(function (QueryExecuted $requete) use (&$supprimeEntreTemps, $factureAchat, $proprietaire): void {
+            if (! $supprimeEntreTemps && str_contains($requete->sql, 'from "factures_achat"')) {
+                $supprimeEntreTemps = true;
+                app(SupprimerFactureAchatAction::class)->handle($proprietaire, FactureAchat::query()->findOrFail($factureAchat->getKey()));
+            }
+        });
+
+        $ecran->callMountedTableAction()->assertNotified(FactureAchat::REFUS_INTROUVABLE);
+
+        $this->assertTrue($supprimeEntreTemps);
+        $this->assertModelMissing($factureAchat);
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
     }
 
     public function test_un_brouillon_reste_modifiable_et_supprimable(): void

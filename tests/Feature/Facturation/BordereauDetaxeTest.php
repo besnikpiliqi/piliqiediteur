@@ -426,7 +426,9 @@ class BordereauDetaxeTest extends TestCase
     /**
      * En production, le compte de l'application n'a pas le droit de
      * modifier une table en ajout seul, que PostgreSQL exige pour un
-     * SELECT ... FOR UPDATE : seul le ticket se verrouille.
+     * SELECT ... FOR UPDATE : aucun bordereau ne se verrouille. Chaque
+     * geste ne verrouille que des lignes modifiables : celle du magasin
+     * (verrou partagé), celle de son auteur, puis le ticket.
      */
     public function test_noter_un_bordereau_ne_verrouille_aucun_bordereau(): void
     {
@@ -446,8 +448,10 @@ class BordereauDetaxeTest extends TestCase
         $this->noter($ticket, '2026FR000123465');
         $this->noter($ticket, '2026FR000123456');
 
-        $this->assertCount(2, $verrous);
-        $this->assertSame([], array_filter($verrous, fn (string $sql): bool => ! str_starts_with($sql, 'select * from "factures"')));
+        $this->assertSame(
+            ['magasins for share', 'users for no key update', 'factures for update', 'magasins for share', 'users for no key update', 'factures for update'],
+            array_map(fn (string $sql): string => preg_replace('/^select \* from "(\w+)" .* (for (?:share|no key update|update))$/s', '$1 $2', $sql), $verrous),
+        );
     }
 
     public function test_un_bordereau_ne_se_modifie_ni_ne_se_supprime(): void

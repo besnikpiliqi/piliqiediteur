@@ -82,6 +82,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Finder\SplFileInfo;
 use Tests\TestCase;
@@ -433,8 +434,8 @@ class TenantIsolationTest extends TestCase
         ]));
         $contexte->set($memeSociete);
 
-        $this->assertThrows(fn () => app(AjouterPreuveOperationAction::class)->handle(self::auteur(), $export, TypePreuve::Mrn, '26FR000000123456E1'), ModelNotFoundException::class);
-        $this->assertThrows(fn () => app(NoterBordereauDetaxeAction::class)->handle(self::auteur(), $ticket, '2026FR000123456'), ModelNotFoundException::class);
+        $this->assertThrows(fn () => app(AjouterPreuveOperationAction::class)->handle(self::auteur(), $export, TypePreuve::Mrn, '26FR000000123456E1'), LogicException::class, Facture::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(NoterBordereauDetaxeAction::class)->handle(self::auteur(), $ticket, '2026FR000123456'), LogicException::class, Facture::REFUS_INTROUVABLE);
 
         $this->assertSame(0, PreuveOperation::query()->withoutGlobalScope(MagasinScope::class)->count());
         $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());

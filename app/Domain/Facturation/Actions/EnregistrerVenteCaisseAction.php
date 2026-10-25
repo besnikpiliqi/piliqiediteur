@@ -53,8 +53,10 @@ use LogicException;
  * vendues et chaque prix vendu plus bas que son prix arrêté (voir
  * PanierDeCaisse::encaisser()).
  *
- * Son auteur, le vendeur, est relu sous le verrou de sa ligne après celui
- * du registre (voir LecteurDesDroits) : il doit pouvoir créer et émettre
+ * La ligne du magasin se relit sous un verrou partagé après le registre :
+ * le magasin doit pouvoir vendre (voir Magasin::verifierQuIlPeutVendre()).
+ * Son auteur, le vendeur, est relu ensuite sous le verrou de sa ligne
+ * (voir LecteurDesDroits) : il doit pouvoir créer et émettre
  * une facture et enregistrer un paiement dans ce magasin. Les actions
  * qu'elle compose reçoivent ce même auteur, relu : c'est lui que la vente
  * enregistre et que le registre signe. Une ligne remisée, ou à un autre
@@ -116,7 +118,7 @@ class EnregistrerVenteCaisseAction
     {
         return DB::transaction(function () use ($auteur, $magasin, $client, $lignes, $reglement, $confirmation) {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
             $vendeur = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_CREATE, $magasin);
 
             foreach ([PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER] as $autorisation) {

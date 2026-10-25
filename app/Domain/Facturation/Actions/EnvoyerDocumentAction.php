@@ -14,9 +14,12 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\DebitDesEmails;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -59,12 +62,15 @@ use LogicException;
  * auteur.
  *
  * Un envoi ou une relance demandé par une personne porte un jeton (R3,
- * voir ActionsUniques), cherché sous le verrou de la ligne de son auteur :
+ * voir ActionsUniques), cherché sous le verrou partagé de la ligne du
+ * magasin puis sous celui de la ligne de son auteur :
  * répété après une réponse perdue, il rend l'envoi déjà noté, et
  * l'e-mail ne part qu'une fois.
  */
 class EnvoyerDocumentAction
 {
+    public const REFUS_INTROUVABLE = 'Ce document n\'existe pas, ou plus, dans ce magasin.';
+
     public function __construct(
         private readonly EmettreDevisAction $emettreDevis,
         private readonly LecteurDesDroits $lecteur,
@@ -90,7 +96,7 @@ class EnvoyerDocumentAction
         $destinataire = $this->destinataireValide($destinataire);
         $parametres = ['document' => [$document->getMorphClass(), $document->getKey()], 'destinataire' => $destinataire, 'message' => $message];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENVOYER_DOCUMENT, $auteur, $parametres, ActionsUniques::verrouDe($auteur), fn (): EnvoiDocument => DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENVOYER_DOCUMENT, $auteur, $parametres, self::premierVerrou($auteur), fn (): EnvoiDocument => DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
             $expediteur = $this->expediteur($auteur, $document);
             $document = $this->verrouiller($document);
             $this->verifierLeDebit($document, $expediteur);
@@ -141,7 +147,7 @@ class EnvoyerDocumentAction
     {
         $destinataire = $this->destinataireValide($destinataire);
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::RELANCER_FACTURE, $auteur, ['facture_id' => $facture->getKey(), 'destinataire' => $destinataire], ActionsUniques::verrouDe($auteur), fn (): EnvoiDocument => DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture))));
+        return $this->actionsUniques->executer($jeton, ActionsUniques::RELANCER_FACTURE, $auteur, ['facture_id' => $facture->getKey(), 'destinataire' => $destinataire], self::premierVerrou($auteur), fn (): EnvoiDocument => DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture))));
     }
 
     /**
@@ -209,10 +215,30 @@ class EnvoyerDocumentAction
     }
 
     /**
+     * Le premier verrou d'un envoi ou d'une relance demandé par une
+     * personne, sous lequel son jeton se cherche (voir ActionsUniques) : la
+     * ligne du magasin actif, sous un verrou partagé, puis celle de
+     * l'auteur, dans l'ordre de leur relecture (voir expediteur()).
+     */
+    private static function premierVerrou(User $auteur): Closure
+    {
+        $magasin = app(TenantContext::class)->magasin();
+
+        return function () use ($magasin, $auteur): void {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
+            ActionsUniques::verrouDe($auteur)();
+        };
+    }
+
+    /**
      * La personne qui demande l'envoi ou la relance, relue sous le verrou de
-     * sa ligne, avant celui du document : le document, lu par la requête du
-     * magasin actif (un document d'un autre magasin n'existe pas ici), puis
-     * son magasin, qui doit pouvoir écrire à ses clients, puis son droit
+     * sa ligne, avant celui du document : la ligne du magasin actif, relue
+     * sous un verrou partagé, doit pouvoir écrire à ses clients (une
+     * fermeture du magasin, qui la verrouille, voir FermerMagasinAction,
+     * passe tout entière avant ou après l'envoi : aucun envoi ne se note
+     * dans un magasin déjà fermé) ; puis le document, relu par la requête
+     * du magasin actif (un document d'un autre magasin n'existe pas ici, un
+     * devis supprimé entre-temps est refusé), et le droit de l'auteur
      * d'envoyer ce document-là.
      *
      * @throws AuthorizationException
@@ -220,10 +246,10 @@ class EnvoyerDocumentAction
      */
     private function expediteur(User $auteur, DocumentEnvoyable $document): User
     {
-        $document = $document::query()->whereKey($document->getKey())->firstOrFail();
-        $document->magasin->verifierQuIlPeutEcrireAuxClients();
+        $magasin = app(TenantContext::class)->magasin();
+        Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutEcrireAuxClients();
 
-        return $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $document->magasin, $document);
+        return $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $magasin, $this->relire($document, false));
     }
 
     /**
@@ -234,10 +260,32 @@ class EnvoyerDocumentAction
      *
      * @param  TDocument  $document
      * @return TDocument
+     *
+     * @throws LogicException
      */
     private function verrouiller(DocumentEnvoyable $document): DocumentEnvoyable
     {
-        return $document::query()->whereKey($document->getKey())->lockForUpdate()->firstOrFail();
+        return $this->relire($document, true);
+    }
+
+    /**
+     * Le document relu par la requête du magasin actif, sous verrou ou non :
+     * un devis brouillon supprimé entre-temps, ou un document d'un autre
+     * magasin, est refusé.
+     *
+     * @template TDocument of Model&DocumentEnvoyable
+     *
+     * @param  TDocument  $document
+     * @return TDocument
+     *
+     * @throws LogicException
+     */
+    private function relire(DocumentEnvoyable $document, bool $sousVerrou): DocumentEnvoyable
+    {
+        $requete = $document::query()->whereKey($document->getKey());
+
+        return ($sousVerrou ? $requete->lockForUpdate() : $requete)->first()
+            ?? throw new LogicException(self::REFUS_INTROUVABLE);
     }
 
     /**

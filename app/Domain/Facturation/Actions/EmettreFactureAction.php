@@ -100,7 +100,7 @@ use LogicException;
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
  *     lecture, la facture et la numérotation (voir RegistreFiscal) ; il
  *     donne l'instant de l'émission ; le jeton se cherche sous ce verrou ;
- *     le magasin, relu, doit pouvoir vendre ;
+ *     le magasin, relu sous un verrou partagé, doit pouvoir vendre ;
  *  2. l'auteur est relu sous le verrou de sa ligne (voir
  *     LecteurDesDroits::exigerSousVerrou()) : il doit pouvoir émettre
  *     cette facture, et, pour une vente au comptoir réglée à l'émission,
@@ -109,7 +109,8 @@ use LogicException;
  *     fois : sa caisse personnelle d'un autre magasin de la société doit
  *     être fermée (voir VerificateurCaissesPersonnelles). Le registre signe
  *     l'émission à son nom (voir OperateurCourant) ;
- *  3. la facture, relue verrouillée, devient la vente de qui l'émet si
+ *  3. la facture, relue verrouillée (un brouillon supprimé entre-temps
+ *     est refusé, voir SupprimerFactureAction), devient la vente de qui l'émet si
  *     son auteur est devenu propriétaire de la société depuis la création
  *     du brouillon (voir reprendreLeBrouillonDuProprietaire()), puis prend
  *     la copie de son client (nom,
@@ -191,7 +192,7 @@ class EmettreFactureAction
             'reglement' => $reglement?->enTableau(),
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $reglement, $confirmation, $magasin) {
             $instant = $this->registre->verrouiller($magasin);
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'emettre', $magasin, $facture);
 
             if ($reglement !== null) {
@@ -213,7 +214,8 @@ class EmettreFactureAction
      */
     private function emettre(User $compte, Facture $facture, ?ReglementComptant $reglement, ?ConfirmationVenteSansStock $confirmation, InstantFiscal $instant): Facture
     {
-        $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
+        $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
+            ?? throw new LogicException(Facture::REFUS_INTROUVABLE);
 
         if (! $facture->statut->peutTransitionnerVers(StatutFacture::Emise)) {
             throw new LogicException("Impossible d'émettre une facture au statut [{$facture->statut->value}].");

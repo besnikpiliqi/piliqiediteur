@@ -423,7 +423,7 @@ class CloturerCaisseActionTest extends TestCase
     public function test_la_cloture_inscrit_la_baisse_d_un_prix_pas_encore_arrete_avant_d_abandonner_la_vente(): void
     {
         $this->travelTo('2026-10-09 18:00:00');
-        $vendeur = User::factory()->create();
+        $vendeur = self::responsableDeTest($this->magasin);
         $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 150, 'taux_tva' => 20]);
         $jeton = (string) Str::uuid();
         $lignes = fn (string $prix): array => ['ligne' => ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 3, 'prix_unitaire_ttc' => $prix, 'taux_tva' => '20', 'remise_pourcentage' => '0']];

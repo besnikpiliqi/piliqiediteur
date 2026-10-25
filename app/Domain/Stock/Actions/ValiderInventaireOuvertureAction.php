@@ -60,6 +60,10 @@ use LogicException;
  * Produit::verrouillerPourLeStock()), et se relisent jamais reçus : une
  * facture d'achat qui les a reçus depuis la saisie refuse la validation.
  *
+ * Un brouillon supprimé entre-temps (voir
+ * SupprimerInventaireOuvertureAction) est refusé : la validation ne trouve
+ * plus rien à valider, et le dit.
+ *
  * La validation demandée par une personne porte un jeton (R3, voir
  * ActionsUniques) : répétée après une réponse perdue, elle rend
  * l'inventaire déjà validé, sans créer ses produits ni faire entrer son
@@ -116,7 +120,8 @@ class ValiderInventaireOuvertureAction
      */
     private function valider(User $compte, Magasin $magasin, InventaireOuverture $inventaire): InventaireOuverture
     {
-        $inventaire = InventaireOuverture::query()->whereKey($inventaire->getKey())->lockForUpdate()->firstOrFail();
+        $inventaire = InventaireOuverture::query()->whereKey($inventaire->getKey())->lockForUpdate()->first()
+            ?? throw new LogicException(InventaireOuverture::REFUS_INTROUVABLE);
 
         if (! $inventaire->estBrouillon()) {
             throw new LogicException(self::REFUS_DEJA_VALIDE);

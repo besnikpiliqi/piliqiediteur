@@ -94,8 +94,7 @@ use LogicException;
  * un encaissement ne s'inscrit qu'une fois l'un ou l'autre posé : une
  * action qui oublierait de poser son auteur échoue au lieu de signer au
  * hasard. Seul un événement technique hors action (ouverture et fin de
- * session, vente abandonnée, ligne retirée du panier) s'inscrit, sans rien
- * de posé, au nom de la personne connectée.
+ * session) s'inscrit, sans rien de posé, au nom de la personne connectée.
  *
  * Lié en scoped() (voir AppServiceProvider) : l'instant que donne le verrou
  * vaut pour toutes les écritures fiscales de la transaction, transactions

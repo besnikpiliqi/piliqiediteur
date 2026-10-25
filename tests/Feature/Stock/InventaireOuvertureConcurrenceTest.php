@@ -8,6 +8,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Stock\Actions\ModifierInventaireOuvertureAction;
 use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
@@ -17,19 +18,16 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Closure;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
-use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
- * La validation d'un inventaire d'ouverture et un autre geste au même
- * instant, chacun dans son processus, sur une vraie base PostgreSQL.
+ * Un geste sur un inventaire d'ouverture (sa validation, sa saisie ou sa
+ * modification) et un autre geste au même instant, chacun dans son
+ * processus, sur une vraie base PostgreSQL.
  *
  * La première vente du magasin : toutes deux verrouillent d'abord le
  * registre fiscal du magasin, et la seconde attend la première. Une
@@ -41,7 +39,13 @@ use Tests\TestCase;
  * la seconde attend la première. Une suppression qui attendait la
  * validation est refusée, et l'inventaire reste validé, avec ses lignes,
  * son produit et son stock ; une validation qui attendait la suppression
- * ne trouve plus l'inventaire, et rien ne naît.
+ * ne trouve plus l'inventaire et le dit, et rien ne naît.
+ *
+ * La saisie ou la modification d'un brouillon et la première vente :
+ * toutes deux verrouillent d'abord le registre fiscal du magasin, et
+ * la saisie relit sous lui la première vente ; un brouillon saisi ou
+ * modifié avant la vente reste, et une saisie qui attendait la vente est
+ * refusée.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -132,7 +136,7 @@ class InventaireOuvertureConcurrenceTest extends TestCase
             self::supprimer($magasinId, $inventaireId);
         };
         $concurrente = null;
-        $this->concurrencerDesQueLInventaireEstVerrouille($laValidationDAbord ? $supprimer : $valider, $concurrente);
+        $this->concurrencerDesQueLaLigneEstVerrouillee('inventaires_ouverture', 'for update', $laValidationDAbord ? $supprimer : $valider, $concurrente);
 
         $laValidationDAbord ? $valider() : $supprimer();
 
@@ -146,7 +150,7 @@ class InventaireOuvertureConcurrenceTest extends TestCase
             $this->assertSame([StatutInventaireOuverture::Valide, 1], [$inventaire->fresh()->statut, $inventaire->lignes()->count()]);
             $this->assertSame([10, 1], [Produit::query()->where('reference', 'CARNET-A5')->sole()->stock_quantite, MouvementStock::query()->count()]);
         } else {
-            $this->assertStringContainsString(ModelNotFoundException::class, $resultat->errorOutput());
+            $this->assertStringContainsString(InventaireOuverture::REFUS_INTROUVABLE, $resultat->errorOutput());
             $this->assertSame(
                 [0, 0, 0, 0],
                 [InventaireOuverture::query()->count(), LigneInventaireOuverture::query()->count(), Produit::query()->count(), MouvementStock::query()->count()],
@@ -155,27 +159,79 @@ class InventaireOuvertureConcurrenceTest extends TestCase
     }
 
     /**
-     * Démarre l'opération concurrente dès que l'opération du test tient le
-     * verrou de l'inventaire, et attend qu'elle attende ce verrou : la
-     * seconde passe après la première. $concurrente reçoit le processus
-     * démarré.
+     * La saisie ou la modification du brouillon, et qui passe le premier.
      *
-     * @param  Closure(): void  $operationConcurrente
+     * @return array<string, array{0: string, 1: bool}>
      */
-    private function concurrencerDesQueLInventaireEstVerrouille(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    public static function saisiesEtOrdres(): array
     {
-        $connexionDuTest = DB::getDefaultConnection();
+        return [
+            'la saisie avant la première vente' => ['saisir', true],
+            'la saisie après la première vente' => ['saisir', false],
+            'la modification avant la première vente' => ['modifier', true],
+            'la modification après la première vente' => ['modifier', false],
+        ];
+    }
 
-        DB::listen(function (QueryExecuted $requete) use (&$concurrente, $operationConcurrente, $connexionDuTest): void {
-            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
-                return;
-            }
+    #[DataProvider('saisiesEtOrdres')]
+    #[Group('concurrence')]
+    public function test_un_brouillon_saisi_pendant_la_premiere_vente_passe_avant_elle_ou_est_refuse_apres(string $geste, bool $laSaisieDAbord): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $inventaireId = $geste === 'modifier' ? app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [self::carnets(10)])->id : null;
+        $magasinId = $magasin->id;
+        $venduId = $vendu->id;
+        $saisir = static function () use ($magasinId, $inventaireId): void {
+            self::saisir($magasinId, $inventaireId);
+        };
+        $vendre = static function () use ($magasinId, $venduId): void {
+            self::vendre($magasinId, $venduId);
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille($laSaisieDAbord ? $vendre : $saisir, $concurrente);
 
-            if (str_contains($requete->sql, '"inventaires_ouverture"') && str_contains($requete->sql, 'for update')) {
-                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
-                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
-            }
-        });
+        $laSaisieDAbord ? $saisir() : $vendre();
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertSame(! $laSaisieDAbord, $resultat->failed(), $resultat->errorOutput());
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(1, Facture::query()->count());
+        $quantites = LigneInventaireOuverture::query()->orderBy('id')->pluck('quantite')->all();
+
+        if ($laSaisieDAbord) {
+            $this->assertSame([12], $quantites);
+        } else {
+            $this->assertStringContainsString(InventaireOuverture::REFUS_APRES_LA_PREMIERE_VENTE, $resultat->errorOutput());
+            $this->assertSame($geste === 'modifier' ? [10] : [], $quantites);
+        }
+    }
+
+    /**
+     * Le responsable de test du magasin saisit un brouillon de douze
+     * carnets, ou y modifie la quantité du brouillon déjà saisi.
+     */
+    private static function saisir(int $magasinId, ?int $inventaireId): void
+    {
+        $magasin = Magasin::query()->findOrFail($magasinId);
+        app(TenantContext::class)->set($magasin);
+        $auteur = self::responsableDeTest($magasin);
+
+        $inventaireId === null
+            ? app(CreerInventaireOuvertureAction::class)->handle($auteur, [self::carnets(12)])
+            : app(ModifierInventaireOuvertureAction::class)->handle($auteur, InventaireOuverture::query()->findOrFail($inventaireId), [self::carnets(12)]);
+    }
+
+    /**
+     * Une ligne d'inventaire d'ouverture de carnets, en cette quantité.
+     *
+     * @return array<string, mixed>
+     */
+    private static function carnets(int $quantite): array
+    {
+        return ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => $quantite, 'cout_unitaire_ht' => '2.00'];
     }
 
     /**

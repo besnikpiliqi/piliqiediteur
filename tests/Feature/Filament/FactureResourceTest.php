@@ -3,7 +3,9 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
@@ -16,6 +18,7 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\SupprimerFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -37,6 +40,7 @@ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
@@ -1327,6 +1331,37 @@ class FactureResourceTest extends TestCase
 
         $this->assertModelExists($brouillon);
         Exceptions::assertReported(ModuleFiscalNonConfigureException::class);
+    }
+
+    /**
+     * Un brouillon coché, supprimé par une autre requête après que la
+     * suppression groupée l'a chargé, n'est pas supprimé une seconde fois :
+     * la ligne reste cochée, l'écran le signale, et l'abandon de la vente
+     * ne s'inscrit qu'une fois au journal des événements.
+     */
+    public function test_un_brouillon_coche_supprime_entre_temps_est_signale_sans_s_inscrire_deux_fois(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $ecran = Livewire::test(ListFactures::class)->mountTableBulkAction('delete', [$brouillon->getKey()]);
+        $supprimeEntreTemps = false;
+        DB::listen(function (QueryExecuted $requete) use (&$supprimeEntreTemps, $brouillon, $responsable): void {
+            if (! $supprimeEntreTemps && str_contains($requete->sql, 'from "factures"') && str_contains($requete->sql, '"id" in')) {
+                $supprimeEntreTemps = true;
+                app(SupprimerFactureAction::class)->handle($responsable, Facture::query()->findOrFail($brouillon->getKey()));
+            }
+        });
+
+        $ecran->callMountedTableBulkAction()
+            ->assertNotified('1 ligne cochée n\'a pas été supprimée')
+            ->assertNotDispatched('deselectAllTableRecords');
+
+        $this->assertTrue($supprimeEntreTemps);
+        $this->assertModelMissing($brouillon);
+        $this->assertSame(1, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', '320')->count());
     }
 
     /**

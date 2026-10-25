@@ -6,6 +6,7 @@ use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Actions\SupprimerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
@@ -182,6 +183,53 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame([0, 0], [Produit::withTrashed()->count(), LigneAchat::query()->count()]);
         $this->assertFalse(SequenceDocument::query()->where('magasin_id', app(TenantContext::class)->id())->exists());
+    }
+
+    /**
+     * Un brouillon lu avant sa validation par une autre requête (deux
+     * onglets, une liste restée ouverte) ne se supprime plus une fois
+     * validé, ni par son action ni par le modèle : la facture d'achat
+     * validée garde ses lignes, son numéro, sa réception en stock et le
+     * produit qu'elle a créé.
+     */
+    public function test_un_brouillon_lu_avant_sa_validation_ne_se_supprime_plus_une_fois_valide(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
+        ]);
+        $copie = FactureAchat::query()->findOrFail($factureAchat->id);
+
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
+
+        $this->assertThrows(fn () => app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $copie), LogicException::class, FactureAchat::REFUS_VALIDEE);
+        $this->assertThrows(fn () => $copie->delete(), LogicException::class, FactureAchat::REFUS_VALIDEE);
+        $validee = FactureAchat::query()->findOrFail($factureAchat->id);
+        $this->assertSame(StatutFactureAchat::Validee, $validee->statut);
+        $this->assertNotNull($validee->numero);
+        $this->assertSame(1, LigneAchat::query()->where('facture_achat_id', $validee->id)->count());
+        $this->assertSame(2, Produit::query()->where('nom', 'Coque')->sole()->stock_quantite);
+    }
+
+    /**
+     * Un brouillon déjà supprimé par une autre requête ne se supprime pas
+     * une seconde fois, ni ne se modifie ni ne se valide : chaque geste le
+     * dit, au lieu d'une page introuvable.
+     */
+    public function test_un_brouillon_deja_supprime_est_refuse_par_chaque_geste(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
+        ]);
+        $copie = FactureAchat::query()->findOrFail($factureAchat->id);
+
+        app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
+
+        $this->assertThrows(fn () => app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $copie), LogicException::class, FactureAchat::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => $copie->delete(), LogicException::class, FactureAchat::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(ModifierFactureAchatAction::class)->handle(self::auteur(), $copie, $fournisseur, [['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 2]]), LogicException::class, FactureAchat::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(ValiderFactureAchatAction::class)->handle(self::auteur(), $copie), LogicException::class, FactureAchat::REFUS_INTROUVABLE);
+        $this->assertSame([0, 0, 0], [FactureAchat::query()->count(), Produit::withTrashed()->count(), MouvementStock::query()->count()]);
     }
 
     /**

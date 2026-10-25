@@ -46,8 +46,9 @@ class DevisPolicy extends MagasinPolicy
     }
 
     /**
-     * Le bouton de suppression en masse ; chaque devis coché repasse
-     * ensuite par delete() (voir SupprimeEnMasseLigneParLigne).
+     * Le bouton de suppression en masse, et la première question que pose
+     * la suppression d'un devis à son auteur relu sous verrou ; chaque
+     * devis, relu, repasse ensuite par delete() (voir SupprimerDevisAction).
      */
     public function deleteAny(User $user): bool
     {

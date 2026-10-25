@@ -38,7 +38,9 @@ use Throwable;
  *   nouveau courrier et une demande ou une confirmation d'adresse de
  *   connexion, mais pas une insertion qui la référence, comme l'entrée du
  *   journal d'audit d'une transmission acceptée au même instant, qui tient
- *   déjà les comptes que la clôture attend (voir cloreSousVerrou()) : la
+ *   déjà les comptes que la clôture attend ; puis sous celui des lignes de
+ *   ses magasins réels, qui exclut tout geste en cours dans l'un d'eux
+ *   (voir cloreSousVerrou()) : la
  *   clôture
  *   (close_le, motif_cloture) s'inscrit au journal d'audit avec son motif
  *   et, pour l'éditeur, sa justification ; les pièces déposées s'effacent,
@@ -122,15 +124,30 @@ class CloreLInscriptionAction
 
     /**
      * Clôt l'inscription, dans la transaction de l'appelant, sa ligne
-     * verrouillée et elle-même la société active, qui attend son code :
-     * sous le verrou des lignes de ses comptes, puis de celles de ses
-     * transmissions en attente, dans le même ordre que l'acceptation d'une
-     * transmission (les comptes, puis la demande).
+     * verrouillée et elle-même la société active, qui attend son code.
+     * Les lignes de ses magasins réels se verrouillent d'abord, par
+     * identifiant croissant (« for no key update ») : un geste qui
+     * écrit dans un magasin réel avant la validation (une facture d'achat
+     * validée, un inventaire d'ouverture, un brouillon), qui relit la ligne
+     * de son magasin sous un verrou partagé et le dit ouvert tant que
+     * l'inscription ne l'est pas (voir Magasin::verifierQuIlEstOuvert()),
+     * passe tout entier avant la clôture, ou après elle, et la voit : rien
+     * ne s'écrit dans une société close. Les magasins se verrouillent après
+     * la société, comme à leur réouverture (voir RouvrirMagasinAction), et
+     * avant les comptes, comme le font ces gestes (le magasin, puis leur
+     * auteur). Viennent ensuite les lignes de ses comptes, puis celles de
+     * ses transmissions en attente, dans le même ordre que l'acceptation
+     * d'une transmission (les comptes, puis la demande). Le magasin de
+     * démonstration, qui se ferme après la clôture (voir apresLaCloture()),
+     * ne se verrouille pas ici : une vente de démonstration verrouille la
+     * ligne de son vendeur avant celle de son magasin quand elle crée une
+     * série de numérotation (voir DocumentNumberingService).
      *
      * @return array{adresseRetiree: string|null, destinataires: list<int>} l'adresse de connexion retirée au propriétaire, et les comptes à qui une transmission annulée proposait la propriété
      */
     private function cloreSousVerrou(Societe $verrouillee, MotifCloture $motif, ?InterventionDeLEditeur $editeur = null): array
     {
+        $verrouillee->magasinsReels()->orderBy('id')->lock('for no key update')->get();
         $verrouillee->forceFill(['close_le' => now(), 'motif_cloture' => $motif])->save();
         $this->journalAudit->inscrire(ActionAuditee::InscriptionClose, null, null, null, ['motif' => $motif->value], $verrouillee, $editeur);
         $this->pieces->effacerToutes($verrouillee, PiecesDeVerification::MOTIF_DECISION, $editeur);

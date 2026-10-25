@@ -3,8 +3,12 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -16,14 +20,26 @@ use LogicException;
  * convertir en facture (voir CreerFactureDepuisDevisAction). Jamais une
  * fois sa date de validité dépassée, même avant que le devis soit passé à
  * « Expiré » dans la nuit (voir ExpirerLesDevisAction).
+ *
+ * Dans une transaction, la ligne du magasin se relit sous un verrou
+ * partagé (un magasin suspendu, fermé ou cédé, ou dont la société est en
+ * lecture seule, ne constate plus rien, voir
+ * Magasin::verifierQuIlEstOuvert()), puis son auteur sous le verrou de sa
+ * ligne (voir LecteurDesDroits), puis le devis sous le sien : une
+ * fermeture du magasin, qui verrouille cette ligne (voir
+ * FermerMagasinAction), passe tout entière avant ou après le constat.
  */
 class AccepterDevisAction
 {
-    public function __construct(private readonly LecteurDesDroits $lecteur) {}
+    public function __construct(
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
+    ) {}
 
     /**
-     * Son auteur, relu en base après le verrou du devis, doit pouvoir
-     * constater l'acceptation (voir DevisPolicy::accepter()).
+     * L'auteur relu doit pouvoir constater l'acceptation du devis relu
+     * (voir DevisPolicy::accepter()) ; le constat se fait à son nom (voir
+     * OperateurCourant).
      *
      * @throws AuthorizationException
      * @throws LogicException
@@ -31,7 +47,12 @@ class AccepterDevisAction
     public function handle(User $auteur, Devis $devis): Devis
     {
         return DB::transaction(function () use ($auteur, $devis) {
-            $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
+            $magasin = app(TenantContext::class)->magasin();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::DEVIS_ENVOYER, $magasin);
+
+            $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(Devis::REFUS_INTROUVABLE);
 
             if (! $devis->statut->peutTransitionnerVers(StatutDevis::Accepte)) {
                 throw new LogicException("Impossible d'accepter un devis au statut [{$devis->statut->value}].");
@@ -41,11 +62,9 @@ class AccepterDevisAction
                 throw new LogicException("La date de validité de ce devis est dépassée ({$devis->date_validite->format('d/m/Y')}) : il ne peut plus être accepté.");
             }
 
-            $this->lecteur->exiger($auteur, 'accepter', $devis->magasin, $devis);
+            $this->lecteur->exiger($compte, 'accepter', $magasin, $devis);
 
-            $devis->forceFill(['statut' => StatutDevis::Accepte])->save();
-
-            return $devis;
+            return $this->operateur->pendant($compte, fn (): Devis => tap($devis->forceFill(['statut' => StatutDevis::Accepte]))->save());
         });
     }
 }

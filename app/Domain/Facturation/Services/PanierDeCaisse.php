@@ -2,19 +2,26 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Le panier de la caisse de chaque vendeur, enregistré côté serveur à
@@ -45,7 +52,10 @@ use InvalidArgumentException;
  *
  * Toutes ces écritures se font sous le verrou du registre fiscal du
  * magasin, puis du panier : un panier ouvert dans deux onglets ne perd
- * rien entre les deux sans trace.
+ * rien entre les deux sans trace. Celles que demande le vendeur relisent
+ * en plus, entre les deux, le magasin et le vendeur (voir sousVerrou()) :
+ * un magasin fermé ou un vendeur qui ne peut plus vendre n'écrit plus
+ * rien.
  *
  * Le panier porte le jeton de sa vente (R3, voir ActionsUniques), que la
  * page de la caisse lui donne à sa création et reprend de lui ensuite :
@@ -67,6 +77,8 @@ class PanierDeCaisse
         private readonly CalculateurLigne $calculateur,
         private readonly ConstructeurLigneDocument $constructeurLigne,
         private readonly ActionsUniques $actionsUniques,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -99,6 +111,8 @@ class PanierDeCaisse
      * @return PanierCaisse|null le panier enregistré, dont la caisse reprend le jeton ; null sans panier
      *
      * @throws InvalidArgumentException quand le jeton n'est pas un identifiant unique, ou quand le panier compterait plus d'articles qu'un entier n'en compte
+     * @throws AuthorizationException quand le vendeur ne peut plus vendre dans ce magasin
+     * @throws LogicException quand le magasin est en lecture seule
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
@@ -119,7 +133,7 @@ class PanierDeCaisse
             return null;
         }
 
-        return $this->registre->sousVerrou(app(TenantContext::class)->magasin(), function () use ($vendeur, $jeton, $clientId, $lignes): ?PanierCaisse {
+        return $this->sousVerrou($vendeur, function (User $vendeur) use ($jeton, $clientId, $lignes): ?PanierCaisse {
             $panier = PanierCaisse::query()->where('user_id', $vendeur->getKey())->lockForUpdate()->first();
             $nouvelles = $this->lignesAEnregistrer($lignes, $panier->lignes ?? []);
             $prixArretes = $this->suivre($panier, $nouvelles, $this->prixEnSaisie($lignes), false, ['origine' => 'caisse']);
@@ -151,12 +165,14 @@ class PanierDeCaisse
      * @param  string  $jeton  le jeton de la vente que montre la caisse
      * @param  array<array-key, mixed>  $lignes  les lignes du formulaire de la caisse, par clé du répéteur
      *
+     * @throws AuthorizationException quand le vendeur ne peut plus vendre dans ce magasin
+     * @throws LogicException quand le magasin est en lecture seule
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
     public function abandonner(User $vendeur, string $jeton, mixed $clientId, array $lignes): void
     {
-        $this->registre->sousVerrou(app(TenantContext::class)->magasin(), function () use ($vendeur, $jeton, $clientId, $lignes): void {
+        $this->sousVerrou($vendeur, function (User $vendeur) use ($jeton, $clientId, $lignes): void {
             $this->enregistrer($vendeur, $jeton, $clientId, $lignes);
 
             $panier = PanierCaisse::query()->where('user_id', $vendeur->getKey())->lockForUpdate()->first();
@@ -174,6 +190,45 @@ class PanierDeCaisse
             ]);
 
             $panier->delete();
+        });
+    }
+
+    /**
+     * Exécute une écriture du panier demandée par son vendeur, sous le
+     * verrou du registre fiscal du magasin, premier verrou de sa
+     * transaction, que prennent aussi la fermeture du magasin (voir
+     * FermerMagasinAction), qui abandonne les ventes ouvertes, et toute
+     * modification des droits du vendeur (voir JournalDesDroits) : la
+     * ligne du magasin se relit ensuite sous un verrou partagé (un magasin
+     * suspendu, fermé ou cédé, ou dont la société est en lecture seule,
+     * n'enregistre plus de panier, voir Magasin::verifierQuIlEstOuvert()),
+     * puis le vendeur sous le verrou de sa ligne, qui doit encore pouvoir
+     * vendre dans ce magasin (voir LecteurDesDroits). Une fermeture ou un
+     * droit retiré validé pendant que la caisse restait ouverte est vu :
+     * aucun panier ne se recrée après la fermeture du magasin, et aucune
+     * ligne retirée ni vente abandonnée ne s'inscrit après elle, ni au nom
+     * d'un vendeur qui ne peut plus vendre. L'écriture reçoit le vendeur
+     * relu et s'inscrit à son nom (voir OperateurCourant).
+     *
+     * @template TResultat
+     *
+     * @param  Closure(User): TResultat  $ecriture
+     * @return TResultat
+     *
+     * @throws AuthorizationException quand le vendeur ne peut plus vendre dans ce magasin
+     * @throws LogicException quand le magasin est en lecture seule
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    private function sousVerrou(User $vendeur, Closure $ecriture): mixed
+    {
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $this->registre->sousVerrou($magasin, function () use ($vendeur, $ecriture, $magasin): mixed {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $relu = $this->lecteur->exigerSousVerrou($vendeur, PermissionRegistry::FACTURE_CREATE, $magasin);
+
+            return $this->operateur->pendant($relu, fn (): mixed => $ecriture($relu));
         });
     }
 

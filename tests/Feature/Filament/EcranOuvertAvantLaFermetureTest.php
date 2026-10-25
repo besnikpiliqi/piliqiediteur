@@ -1,0 +1,158 @@
+<?php
+
+namespace Tests\Feature\Filament;
+
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Enums\MotifFermeture;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\ClientResource\Pages\EditClient;
+use App\Filament\App\Resources\ClientResource\Pages\ListClients;
+use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
+use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
+use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
+use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
+use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
+use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
+use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
+use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
+use App\Models\User;
+use Closure;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
+
+/**
+ * Le bouton d'un brouillon ou d'une fiche, sur la liste, la page de
+ * modification ou dans une action groupée, ouvert avant que le magasin ne
+ * ferme ou que son auteur ne soit suspendu, et confirmé après : l'écran a
+ * lu le magasin et son auteur à l'ouverture, encore ouvert et encore
+ * autorisé, mais le geste passe par l'action du domaine, qui les relit en
+ * base sous verrou au moment d'écrire. Le refus se lit en notification,
+ * et le document ou la fiche reste tel qu'il était ; une ligne cochée que
+ * l'action groupée n'a pas pu retirer reste cochée.
+ */
+class EcranOuvertAvantLaFermetureTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private const MAGASIN_FERME = 'Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.';
+
+    /**
+     * Le document ou la fiche ; l'écran et son bouton ouverts ; ce qui doit
+     * en rester ; le bouton : sur une ligne de la liste, sur la page, ou
+     * une action groupée.
+     *
+     * @return array<string, array{0: Closure(): Model, 1: Closure(Model): Testable, 2: Closure(Model): void, 3: string}>
+     */
+    public static function boutons(): array
+    {
+        $brouillonDAchat = static fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]);
+        $brouillonDeFacture = static fn (): Facture => app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20])->id, 'quantite' => 1]]);
+        $devis = static fn (): Devis => app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20])->id, 'quantite' => 1]]);
+        $archive = static fn (Model $fiche): Model => tap($fiche, fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(self::auteur(), $fiche));
+        $existe = static fn (string $classe): Closure => static fn (Model $document) => self::assertTrue($classe::query()->whereKey($document->getKey())->exists());
+        $actif = static fn (Model $fiche) => self::assertFalse($fiche->fresh()->trashed());
+        $archivee = static fn (Model $fiche) => self::assertTrue($fiche->fresh()->trashed());
+
+        return [
+            'supprimer un brouillon de facture d\'achat depuis la liste' => [$brouillonDAchat, static fn (Model $document) => Livewire::test(ListFacturesAchat::class)->mountTableAction('delete', $document), $existe(FactureAchat::class), 'ligne'],
+            'supprimer un brouillon de facture d\'achat depuis sa modification' => [$brouillonDAchat, static fn (Model $document) => Livewire::test(EditFactureAchat::class, ['record' => $document->getRouteKey()])->mountAction('delete'), $existe(FactureAchat::class), 'page'],
+            'supprimer des brouillons de facture d\'achat en masse' => [$brouillonDAchat, static fn (Model $document) => Livewire::test(ListFacturesAchat::class)->mountTableBulkAction('delete', [$document->getKey()]), $existe(FactureAchat::class), 'suppression en masse'],
+            'supprimer un brouillon de facture depuis la liste' => [$brouillonDeFacture, static fn (Model $document) => Livewire::test(ListFactures::class)->mountTableAction('delete', $document), $existe(Facture::class), 'ligne'],
+            'supprimer un brouillon de facture depuis sa modification' => [$brouillonDeFacture, static fn (Model $document) => Livewire::test(EditFacture::class, ['record' => $document->getRouteKey()])->mountAction('delete'), $existe(Facture::class), 'page'],
+            'supprimer des brouillons de facture en masse' => [$brouillonDeFacture, static fn (Model $document) => Livewire::test(ListFactures::class)->mountTableBulkAction('delete', [$document->getKey()]), $existe(Facture::class), 'suppression en masse'],
+            'supprimer un devis depuis sa modification' => [$devis, static fn (Model $document) => Livewire::test(EditDevis::class, ['record' => $document->getRouteKey()])->mountAction('delete'), $existe(Devis::class), 'page'],
+            'supprimer des devis en masse' => [$devis, static fn (Model $document) => Livewire::test(ListDevis::class)->mountTableBulkAction('delete', [$document->getKey()]), $existe(Devis::class), 'suppression en masse'],
+            'archiver un client depuis sa modification' => [static fn (): Client => Client::factory()->create(), static fn (Model $fiche) => Livewire::test(EditClient::class, ['record' => $fiche->getRouteKey()])->mountAction('archiver'), $actif, 'page'],
+            'archiver des clients en masse' => [static fn (): Client => Client::factory()->create(), static fn (Model $fiche) => Livewire::test(ListClients::class)->mountTableBulkAction('archiver', [$fiche->getKey()]), $actif, 'archivage en masse'],
+            'restaurer un client depuis la liste' => [static fn (): Model => $archive(Client::factory()->create()), static fn (Model $fiche) => Livewire::test(ListClients::class)->filterTable('trashed', false)->mountTableAction('restore', $fiche), $archivee, 'ligne'],
+            'archiver un produit depuis sa modification' => [static fn (): Produit => Produit::factory()->create(), static fn (Model $fiche) => Livewire::test(EditProduit::class, ['record' => $fiche->getRouteKey()])->mountAction('archiver'), $actif, 'page'],
+            'restaurer un produit depuis la liste' => [static fn (): Model => $archive(Produit::factory()->create()), static fn (Model $fiche) => Livewire::test(ListProduits::class)->filterTable('trashed', false)->mountTableAction('restore', $fiche), $archivee, 'ligne'],
+            'restaurer un fournisseur depuis la liste' => [static fn (): Model => $archive(Fournisseur::factory()->create()), static fn (Model $fiche) => Livewire::test(ListFournisseurs::class)->filterTable('trashed', false)->mountTableAction('restore', $fiche), $archivee, 'ligne'],
+        ];
+    }
+
+    /**
+     * @param  Closure(): Model  $creer
+     * @param  Closure(Model): Testable  $ouvrir
+     * @param  Closure(Model): void  $resteTelQuIlEtait
+     */
+    #[DataProvider('boutons')]
+    public function test_un_bouton_confirme_apres_la_fermeture_du_magasin_est_refuse_et_le_dit(Closure $creer, Closure $ouvrir, Closure $resteTelQuIlEtait, string $bouton): void
+    {
+        [$magasin, $responsable] = $this->dansLaBoutique();
+        $enregistrement = $creer();
+        $ecran = $ouvrir($enregistrement);
+
+        app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), Magasin::query()->findOrFail($magasin->id), MotifFermeture::Temporaire, 'password');
+        $this->assertFalse(app(TenantContext::class)->magasin()->estFerme());
+
+        $this->confirmer($ecran, $bouton, self::MAGASIN_FERME);
+        $resteTelQuIlEtait($enregistrement);
+    }
+
+    /**
+     * @param  Closure(): Model  $creer
+     * @param  Closure(Model): Testable  $ouvrir
+     * @param  Closure(Model): void  $resteTelQuIlEtait
+     */
+    #[DataProvider('boutons')]
+    public function test_un_bouton_confirme_apres_la_suspension_de_son_auteur_est_refuse_et_le_dit(Closure $creer, Closure $ouvrir, Closure $resteTelQuIlEtait, string $bouton): void
+    {
+        [$magasin, $responsable] = $this->dansLaBoutique();
+        $enregistrement = $creer();
+        $ecran = $ouvrir($enregistrement);
+
+        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), User::query()->findOrFail($responsable->id));
+        $this->assertTrue(auth()->user()->estActif());
+
+        $this->confirmer($ecran, $bouton, LecteurDesDroits::REFUS);
+        $resteTelQuIlEtait($enregistrement);
+    }
+
+    /**
+     * Le responsable de la boutique, connecté dans son panneau.
+     *
+     * @return array{0: Magasin, 1: User}
+     */
+    private function dansLaBoutique(): array
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = self::responsableDeTest($magasin);
+        $this->dansLeMagasin($magasin, $responsable);
+
+        return [$magasin, $responsable];
+    }
+
+    /**
+     * Confirme le bouton ouvert : le refus de l'action se lit en
+     * notification ; une action groupée dit combien de lignes cochées
+     * sont restées, et ne les décoche pas.
+     */
+    private function confirmer(Testable $ecran, string $bouton, string $refus): void
+    {
+        match ($bouton) {
+            'ligne' => $ecran->callMountedTableAction()->assertNotified($refus),
+            'page' => $ecran->callMountedAction()->assertNotified($refus),
+            'suppression en masse' => $ecran->callMountedTableBulkAction()->assertNotified('1 ligne cochée n\'a pas été supprimée')->assertNotDispatched('deselectAllTableRecords'),
+            'archivage en masse' => $ecran->callMountedTableBulkAction()->assertNotified('1 ligne cochée n\'a pas été archivée')->assertNotDispatched('deselectAllTableRecords'),
+        };
+    }
+}

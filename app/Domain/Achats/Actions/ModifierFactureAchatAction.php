@@ -57,8 +57,9 @@ use LogicException;
  *
  * Son auteur est relu sous le verrou de sa ligne, après le magasin et
  * avant la facture d'achat et ses produits : il doit pouvoir saisir les
- * factures d'achat ; puis, la facture relue verrouillée et encore
- * modifiable, pouvoir la modifier (voir LecteurDesDroits et
+ * factures d'achat ; puis, la facture relue verrouillée (un brouillon
+ * supprimé entre-temps est refusé) et encore modifiable, pouvoir la
+ * modifier (voir LecteurDesDroits et
  * FactureAchatPolicy::update()) : le droit de valider, retiré pendant que
  * son écran restait ouvert, ne corrige plus une facture validée.
  */
@@ -92,7 +93,8 @@ class ModifierFactureAchatAction
             // Verrouillée comme à sa validation (voir
             // ValiderFactureAchatAction) : une validation simultanée ne peut
             // ni être ignorée ni être appliquée deux fois.
-            $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
+            $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(FactureAchat::REFUS_INTROUVABLE);
 
             if (! $factureAchat->estModifiable()) {
                 throw new LogicException('Cette facture d\'achat n\'est plus modifiable.');

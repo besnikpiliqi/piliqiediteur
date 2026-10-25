@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
+use App\Domain\Facturation\Actions\SupprimerDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\PiedDePage;
@@ -16,6 +17,7 @@ use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Section;
@@ -192,9 +194,25 @@ class DevisResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(),
+                    static::suppressionEnMasse(fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(auth()->user(), $devis)),
                 ]),
             ]);
+    }
+
+    /**
+     * « Supprimer » un brouillon jamais numéroté, depuis la page de
+     * modification : par l'action du domaine, qui relit sous verrou le
+     * magasin, l'auteur et le devis (voir SupprimerDevisAction) ; numéroté
+     * ou supprimé par une autre requête depuis l'ouverture de la page, ou
+     * dans un magasin fermé entre-temps, il reste, et la page dit pourquoi.
+     */
+    public static function actionSupprimer(DeleteAction $action): DeleteAction
+    {
+        return $action->using(fn (Devis $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            app(SupprimerDevisAction::class)->handle(auth()->user(), $record);
+
+            return true;
+        }));
     }
 
     public static function getPages(): array

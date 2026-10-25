@@ -37,6 +37,8 @@ class InventaireOuverture extends Model
 
     public const REFUS_VALIDE = 'Cet inventaire d\'ouverture est validé : il ne se modifie ni ne se supprime plus.';
 
+    public const REFUS_INTROUVABLE = 'Cet inventaire d\'ouverture n\'existe pas, ou plus, dans ce magasin.';
+
     public const REFUS_APRES_LA_PREMIERE_VENTE = 'Ce magasin a déjà vendu : un inventaire d\'ouverture ne se saisit que jusqu\'à sa première vente. Un produit oublié entre par une facture d\'achat.';
 
     protected $table = 'inventaires_ouverture';
@@ -101,7 +103,10 @@ class InventaireOuverture extends Model
 
     /**
      * Un inventaire d'ouverture se saisit et se valide jusqu'à la première
-     * vente du magasin (voir Magasin::aVendu()).
+     * vente du magasin (voir Magasin::aVendu()), lue sous le verrou du
+     * registre fiscal du magasin, que l'appelante a pris en premier, comme
+     * toute vente : la première vente passe tout entière avant la saisie
+     * ou la validation, qui est alors refusée, ou après elle.
      *
      * @throws LogicException
      */

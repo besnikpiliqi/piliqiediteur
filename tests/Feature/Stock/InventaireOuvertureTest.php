@@ -25,7 +25,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -326,8 +325,8 @@ class InventaireOuvertureTest extends TestCase
         $inventaireDeA = $this->saisir([self::ligneDUnNouveauCarnet()]);
         $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'Boutique B']);
 
-        $this->assertThrows(fn () => $this->valider($inventaireDeA), ModelNotFoundException::class);
-        $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaireDeA, [self::ligneDUnNouveauCarnet()]), ModelNotFoundException::class);
+        $this->assertThrows(fn () => $this->valider($inventaireDeA), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaireDeA, [self::ligneDUnNouveauCarnet()]), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
         $this->assertThrows(fn () => $this->saisir([['produit_id' => $tasseDeA->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), InvalidArgumentException::class, 'Ce produit est introuvable dans le magasin.');
         $this->assertSame([0, 0], [InventaireOuverture::query()->count(), Produit::query()->count()]);
 

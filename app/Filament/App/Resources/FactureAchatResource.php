@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\SupprimerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
@@ -21,6 +22,7 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
@@ -210,10 +212,10 @@ class FactureAchatResource extends Resource
                 // reste (voir FactureAchat::estModifiable()) -- une
                 // récupérée par API ne l'est jamais. La suppression, elle,
                 // reste interdite sans exception dès la validation (voir
-                // FactureAchatPolicy::delete()).
+                // FactureAchatPolicy::delete() et actionSupprimer()).
                 Tables\Actions\EditAction::make()
                     ->visible(fn (FactureAchat $record) => $record->estModifiable()),
-                Tables\Actions\DeleteAction::make()
+                self::actionSupprimer(Tables\Actions\DeleteAction::make())
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon),
                 Tables\Actions\Action::make('valider')
                     ->label('Valider la réception')
@@ -228,9 +230,31 @@ class FactureAchatResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(),
+                    static::suppressionEnMasse(fn (FactureAchat $factureAchat) => app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $factureAchat)),
                 ]),
             ]);
+    }
+
+    /**
+     * « Supprimer » un brouillon, depuis la liste ou la page de
+     * modification : par l'action du domaine, qui relit sous verrou le
+     * magasin, l'auteur et la facture d'achat (voir
+     * SupprimerFactureAchatAction) ; un refus (brouillon validé ou supprimé
+     * entre-temps, magasin fermé, droit retiré) se lit en notification, et
+     * la facture d'achat reste.
+     *
+     * @template TAction of DeleteAction|Tables\Actions\DeleteAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
+    {
+        return $action->using(fn (FactureAchat $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $record);
+
+            return true;
+        }));
     }
 
     /**

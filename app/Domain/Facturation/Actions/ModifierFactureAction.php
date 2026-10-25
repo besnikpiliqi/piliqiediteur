@@ -17,6 +17,8 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\LignesRetirees;
 use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
@@ -36,8 +38,15 @@ use LogicException;
  * LignesRetirees),
  * comme sa suppression y inscrit l'abandon de la vente (voir
  * Facture::delete()). Tout se fait donc sous le verrou du registre fiscal
- * du magasin, le brouillon relu verrouillé : si le journal ne s'écrit pas,
- * le brouillon reste tel quel.
+ * du magasin, premier verrou de sa transaction, puis la ligne du magasin
+ * sous un verrou partagé (un magasin suspendu, fermé ou cédé, ou dont la
+ * société est en lecture seule, ne modifie plus rien, voir
+ * Magasin::verifierQuIlEstOuvert()), puis son auteur sous le verrou de sa
+ * ligne, puis le brouillon sous le sien : une fermeture du magasin, qui
+ * prend le même registre (voir FermerMagasinAction), passe tout entière
+ * avant ou après la modification, et aucune ligne retirée ne s'inscrit
+ * après elle. Un brouillon supprimé ou émis entre-temps est refusé ; si
+ * le journal ne s'écrit pas, le brouillon reste tel quel.
  *
  * Dès l'émission, cette action redevient interdite (voir
  * FacturePolicy::update()) : une facture numérotée se corrige par un avoir,
@@ -52,9 +61,9 @@ use LogicException;
  * réenregistré après un changement de régime de la société s'émet de nouveau
  * (voir EmettreFactureAction).
  *
- * Son auteur, relu en base après le verrou du brouillon, doit pouvoir le
- * modifier (voir FacturePolicy::update() et LecteurDesDroits) ; le
- * journal des événements l'inscrit à son nom. Une remise ou un prix
+ * Son auteur, relu sous le verrou de sa ligne avant le brouillon, doit
+ * pouvoir modifier le brouillon relu (voir FacturePolicy::update() et
+ * LecteurDesDroits) ; le journal des événements l'inscrit à son nom. Une remise ou un prix
  * dérogatoire qu'il introduit, ligne nouvelle ou changée, exige qu'il soit
  * autorisé à accorder des remises et fixer les prix ; une ligne reprise
  * telle quelle garde l'accord déjà donné (R2, voir DerogationsDePrix).
@@ -84,14 +93,20 @@ class ModifierFactureAction
     {
         PiedDePage::verifierLesConditionsDePaiement($attributs['conditions_paiement'] ?? null);
 
-        return $this->registre->sousVerrou($facture->magasin, function () use ($auteur, $facture, $client, $lignes, $attributs): Facture {
-            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $this->registre->sousVerrou($magasin, function () use ($auteur, $facture, $client, $lignes, $attributs, $magasin): Facture {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);
+
+            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(Facture::REFUS_INTROUVABLE);
 
             if ($facture->statut !== StatutFacture::Brouillon) {
                 throw new LogicException('Seule une facture brouillon peut être modifiée.');
             }
 
-            $compte = $this->lecteur->exiger($auteur, 'update', $facture->magasin, $facture);
+            $this->lecteur->exiger($compte, 'update', $magasin, $facture);
 
             return $this->operateur->pendant($compte, fn (): Facture => $this->modifier($compte, $facture, $client, $lignes, $attributs));
         });

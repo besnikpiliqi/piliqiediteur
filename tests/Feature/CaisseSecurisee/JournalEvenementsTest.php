@@ -5,6 +5,7 @@ namespace Tests\Feature\CaisseSecurisee;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
@@ -12,7 +13,9 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
+use App\Domain\Facturation\Actions\SupprimerFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
@@ -521,6 +524,79 @@ class JournalEvenementsTest extends TestCase
         $this->assertModelMissing($brouillon);
         $this->assertSame(['260', '320'], $this->codes($magasin));
         $this->assertSame(['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'nombre_lignes' => 1, 'nombre_articles' => 2, 'total_ttc' => 2500], $this->details($magasin, CodeEvenement::TransactionAbandonnee));
+    }
+
+    /**
+     * Le brouillon, supprimé par son action, s'inscrit au nom de son
+     * auteur relu, que le registre signe.
+     */
+    public function test_supprimer_un_brouillon_par_son_action_inscrit_l_abandon_au_nom_de_son_auteur(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20])->id, 'quantite' => 2]]);
+
+        app(SupprimerFactureAction::class)->handle(self::auteur(), $brouillon);
+
+        $this->assertModelMissing($brouillon);
+        $this->assertSame(['260', '320'], $this->codes($magasin));
+        $this->assertSame(['id' => self::auteur()->id, 'nom' => 'Responsable de test'], $this->dernier($magasin, CodeEvenement::TransactionAbandonnee)->contenuSigne()['operateur']);
+    }
+
+    /**
+     * Un brouillon lu avant sa suppression par une autre requête (deux
+     * onglets, une confirmation envoyée deux fois) ne se supprime pas une
+     * seconde fois, et l'abandon de la vente ne s'inscrit qu'une fois.
+     */
+    public function test_un_brouillon_deja_supprime_ne_s_inscrit_pas_une_seconde_fois(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $copie = Facture::query()->findOrFail($brouillon->id);
+
+        $brouillon->delete();
+
+        $this->assertThrows(fn () => $copie->delete(), LogicException::class, Facture::REFUS_INTROUVABLE);
+        $this->assertThrows(fn () => app(SupprimerFactureAction::class)->handle(self::auteur(), $copie), LogicException::class, Facture::REFUS_INTROUVABLE);
+        $this->assertSame(['260', '320'], $this->codes($magasin));
+        $this->assertSame(['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'nombre_lignes' => 1, 'nombre_articles' => 2, 'total_ttc' => 2500], $this->details($magasin, CodeEvenement::TransactionAbandonnee));
+    }
+
+    /**
+     * Un brouillon modifié depuis que sa suppression l'a lu s'inscrit
+     * avec ses montants en base, ceux du moment de sa suppression.
+     */
+    public function test_un_brouillon_modifie_depuis_sa_lecture_s_inscrit_avec_ses_montants_en_base(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $copie = Facture::query()->findOrFail($brouillon->id);
+
+        app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $brouillon->client, [['produit_id' => $produit->id, 'quantite' => 3]]);
+        $copie->delete();
+
+        $this->assertSame(['260', '320'], $this->codes($magasin));
+        $this->assertSame(['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'nombre_lignes' => 1, 'nombre_articles' => 3, 'total_ttc' => 3750], $this->details($magasin, CodeEvenement::TransactionAbandonnee));
+    }
+
+    /**
+     * Un brouillon émis depuis que sa suppression l'a lu ne se supprime
+     * plus : la garde des documents numérotés le refuse, par le modèle
+     * comme par l'action, et aucun abandon ne s'inscrit.
+     */
+    public function test_un_brouillon_emis_depuis_sa_lecture_ne_se_supprime_plus(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 2]]);
+        $copie = Facture::query()->findOrFail($brouillon->id);
+
+        app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
+
+        $this->assertThrows(fn () => app(SupprimerFactureAction::class)->handle(self::auteur(), $copie), LogicException::class, Facture::REFUS_SUPPRESSION);
+        $this->assertThrows(fn () => $copie->delete(), DonneeFiscaleInalterableException::class);
+        $this->assertNotContains('320', $this->codes($magasin));
+        $this->assertNotNull(Facture::query()->findOrFail($brouillon->id)->numero);
     }
 
     public function test_sans_cle_de_signature_un_brouillon_ne_se_supprime_pas(): void

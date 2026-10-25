@@ -190,8 +190,9 @@ class Caisse extends Page implements HasForms
      * Juste avant l'affichage, à chaque requête de la page : le panier
      * enregistré suit celui que voit le vendeur, et ce qu'il a perdu
      * s'inscrit au journal des événements (voir PanierDeCaisse). Si le
-     * journal ne s'écrit pas, le vendeur en lit la raison et retrouve le
-     * panier enregistré : aucun retrait n'échappe au journal.
+     * journal ne s'écrit pas, ou que le magasin vient de fermer ou que le
+     * vendeur ne peut plus vendre, le vendeur en lit la raison et retrouve
+     * le panier enregistré : aucun retrait n'échappe au journal.
      *
      * Pour un vendeur qui n'est pas autorisé à fixer les prix, chaque ligne
      * que l'encaissement refuserait reprend d'abord le prix du catalogue
@@ -209,7 +210,7 @@ class Caisse extends Page implements HasForms
 
         try {
             $this->enregistrerLePanier();
-        } catch (LogicException|RefusFiscalException $refus) {
+        } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
             static::notifierLeRefus($refus);
 
             $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(auth()->user()), $this->data['parts'] ?? null);
@@ -252,6 +253,7 @@ class Caisse extends Page implements HasForms
      * le jeton du panier enregistré.
      *
      * @throws LogicException
+     * @throws AuthorizationException
      * @throws RefusFiscalException
      */
     private function enregistrerLePanier(): void
@@ -447,7 +449,7 @@ class Caisse extends Page implements HasForms
                 ->action(function (): void {
                     try {
                         app(PanierDeCaisse::class)->abandonner(auth()->user(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
-                    } catch (LogicException|RefusFiscalException $refus) {
+                    } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
                         return;

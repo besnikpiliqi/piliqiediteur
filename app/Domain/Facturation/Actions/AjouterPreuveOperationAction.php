@@ -3,11 +3,14 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
@@ -28,14 +31,18 @@ use LogicException;
  * qu'exige une livraison intracommunautaire, ou vaudrait à la fois la
  * déclaration et le document de transport d'une livraison vers un DOM.
  *
- * La facture se relit, verrouillée, dans le magasin actif (MagasinScope) :
- * celle d'un autre magasin est introuvable, et deux enregistrements de la
- * même preuve ne passent pas l'un à côté de l'autre. Un magasin suspendu
- * ou fermé n'enregistre plus rien (voir Magasin::verifierQuIlEstOuvert()).
- * La facture elle-même ne change pas : la preuve s'écrit à côté de son
- * contenu signé. Son auteur, relu en base après le verrou de la facture,
- * doit pouvoir la justifier (voir FacturePolicy::justifier()) ; la preuve
- * note son nom figé.
+ * Dans une transaction, la ligne du magasin se relit sous un verrou
+ * partagé (un magasin suspendu, fermé ou cédé, ou dont la société est en
+ * lecture seule, n'enregistre plus rien, voir
+ * Magasin::verifierQuIlEstOuvert() ; une fermeture du magasin, qui la
+ * verrouille, voir FermerMagasinAction, passe tout entière avant ou
+ * après), puis son auteur sous le verrou de sa ligne (voir
+ * LecteurDesDroits), puis la facture sous le sien, dans le magasin actif
+ * (MagasinScope) : celle d'un autre magasin est introuvable, et deux
+ * enregistrements de la même preuve ne passent pas l'un à côté de
+ * l'autre. La facture elle-même ne change pas : la preuve s'écrit à côté
+ * de son contenu signé. L'auteur relu doit pouvoir justifier la facture
+ * relue (voir FacturePolicy::justifier()) ; la preuve note son nom figé.
  */
 class AjouterPreuveOperationAction
 {
@@ -65,9 +72,12 @@ class AjouterPreuveOperationAction
         $dateDocument = blank($dateDocument) ? null : $this->dateDuDocument($dateDocument);
 
         return DB::transaction(function () use ($auteur, $facture, $type, $reference, $dateDocument, $emetteur): PreuveOperation {
-            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
-            $facture->magasin->verifierQuIlEstOuvert();
-            $compte = $this->lecteur->exiger($auteur, 'justifier', $facture->magasin, $facture);
+            $magasin = app(TenantContext::class)->magasin();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_JUSTIFIER, $magasin);
+            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(Facture::REFUS_INTROUVABLE);
+            $this->lecteur->exiger($compte, 'justifier', $magasin, $facture);
 
             if (($refus = self::refusPour($facture)) !== null) {
                 throw new LogicException($refus);

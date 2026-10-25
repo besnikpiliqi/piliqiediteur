@@ -53,8 +53,10 @@ class ClientPolicy extends MagasinPolicy
     }
 
     /**
-     * Le bouton d'archivage en masse ; chaque ligne cochée repasse ensuite
-     * par delete() (voir SupprimeEnMasseLigneParLigne).
+     * Le bouton d'archivage en masse, et la première question que pose
+     * l'archivage ou la restauration d'une fiche à son auteur relu sous
+     * verrou ; chaque fiche, relue, repasse ensuite par delete() ou
+     * restore() (voir ArchiverUneFicheAction).
      */
     public function deleteAny(User $user): bool
     {

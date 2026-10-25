@@ -3,11 +3,14 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -41,11 +44,16 @@ use LogicException;
  * dernier noté faisant foi ; noter de nouveau celui qui fait déjà foi est
  * refusé.
  *
- * Le ticket se relit, verrouillé, dans le magasin actif (MagasinScope) :
- * celui d'un autre magasin est introuvable. Un magasin suspendu ou fermé
- * ne note plus rien (voir Magasin::verifierQuIlEstOuvert()). Son auteur,
- * relu en base après le verrou du ticket, doit pouvoir le justifier (voir
- * FacturePolicy::justifier()) ; le bordereau note son nom figé.
+ * Dans une transaction, la ligne du magasin se relit sous un verrou
+ * partagé (un magasin suspendu, fermé ou cédé, ou dont la société est en
+ * lecture seule, ne note plus rien, voir Magasin::verifierQuIlEstOuvert()
+ * ; une fermeture du magasin, qui la verrouille, voir
+ * FermerMagasinAction, passe tout entière avant ou après), puis son
+ * auteur sous le verrou de sa ligne (voir LecteurDesDroits), puis le
+ * ticket sous le sien, dans le magasin actif (MagasinScope) : celui d'un
+ * autre magasin est introuvable. L'auteur relu doit pouvoir justifier le
+ * ticket relu (voir FacturePolicy::justifier()) ; le bordereau note son
+ * nom figé.
  */
 class NoterBordereauDetaxeAction
 {
@@ -64,9 +72,12 @@ class NoterBordereauDetaxeAction
         }
 
         return DB::transaction(function () use ($auteur, $facture, $numero): BordereauDetaxe {
-            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
-            $facture->magasin->verifierQuIlEstOuvert();
-            $compte = $this->lecteur->exiger($auteur, 'justifier', $facture->magasin, $facture);
+            $magasin = app(TenantContext::class)->magasin();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_JUSTIFIER, $magasin);
+            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(Facture::REFUS_INTROUVABLE);
+            $this->lecteur->exiger($compte, 'justifier', $magasin, $facture);
 
             if (($refus = self::refusPour($facture)) !== null) {
                 throw new LogicException($refus);

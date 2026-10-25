@@ -75,6 +75,10 @@ class Facture extends Model implements DocumentEnvoyable
 {
     use FigeLeNomDeSesAuteurs;
 
+    public const REFUS_SUPPRESSION = 'Ce brouillon a été émis entre-temps : une facture émise ne se supprime plus, elle se corrige par un avoir.';
+
+    public const REFUS_INTROUVABLE = 'Cette facture n\'existe pas, ou plus, dans ce magasin.';
+
     /**
      * @return array<string, string>
      */
@@ -132,8 +136,10 @@ class Facture extends Model implements DocumentEnvoyable
             $facture->devise ??= 'EUR';
         });
 
-        // Après la garde de ProtegeLesDonneesValidees, qui refuse la
-        // suppression d'une facture émise : seul un brouillon arrive ici.
+        // Après delete(), qui relit le brouillon sous verrou, et la garde
+        // de ProtegeLesDonneesValidees, qui refuse la suppression d'une
+        // facture émise : seul un brouillon encore en base arrive ici,
+        // avec ses montants en base.
         static::deleting(function (Facture $facture) {
             app(RegistreFiscal::class)->journaliser(CodeEvenement::TransactionAbandonnee, [
                 'origine' => 'brouillon',
@@ -151,8 +157,17 @@ class Facture extends Model implements DocumentEnvoyable
      * RegistreFiscal::sousVerrou()), la vente abandonnée avant validation
      * (JET 320) : son nombre de lignes, son nombre d'articles et son total
      * TTC en centimes. Si le journal ne s'écrit pas, le brouillon reste.
-     * Une facture émise ne se supprime jamais (voir
-     * ProtegeLesDonneesValidees).
+     *
+     * Le dernier rempart, derrière SupprimerFactureAction : la facture se
+     * relit en base sous le verrou du registre puis sous le sien, et cette
+     * instance prend ses valeurs en base. Un brouillon déjà supprimé par
+     * une autre requête est refusé, et un brouillon émis entre-temps (voir
+     * EmettreFactureAction, qui prend le même verrou du registre) l'est par
+     * la garde des documents numérotés (voir ProtegeLesDonneesValidees) :
+     * une seule vente abandonnée s'inscrit pour un brouillon, avec les
+     * montants qu'il a au moment de sa suppression, même modifié depuis le
+     * chargement de cette instance, et une facture émise ne se supprime
+     * jamais.
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
@@ -160,7 +175,14 @@ class Facture extends Model implements DocumentEnvoyable
      */
     public function delete(): ?bool
     {
-        return app(RegistreFiscal::class)->sousVerrou($this->magasin, fn (): ?bool => parent::delete());
+        return app(RegistreFiscal::class)->sousVerrou($this->magasin, function (): ?bool {
+            $enBase = static::query()->whereKey($this->getKey())->lockForUpdate()->first()
+                ?? throw new LogicException(self::REFUS_INTROUVABLE);
+
+            $this->setRawAttributes($enBase->getAttributes(), true);
+
+            return parent::delete();
+        });
     }
 
     /**

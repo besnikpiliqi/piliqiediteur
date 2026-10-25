@@ -10,11 +10,13 @@ use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Crée une facture brouillon pour un client déjà résolu par une requête
@@ -28,9 +30,16 @@ use InvalidArgumentException;
  * ContexteDeVente::pourEnregistrer()), dont les autres conditions se
  * contrôlent à l'émission (voir ControleNatureOperation).
  *
- * Son auteur, relu en base au moment où elle écrit, doit pouvoir créer une
- * facture dans le magasin actif (voir LecteurDesDroits) : c'est lui que le
- * brouillon enregistre comme auteur, avec son nom figé. Une ligne remisée,
+ * Un magasin suspendu, fermé ou cédé, ou dont la société est en lecture
+ * seule, n'en crée plus (voir Magasin::verifierQuIlEstOuvert()) : sa ligne
+ * se relit sous un verrou partagé, premier verrou de la transaction (ou
+ * juste après le registre, que la vente à la caisse a déjà verrouillé et
+ * sous lequel elle a déjà relu cette ligne, voir
+ * EnregistrerVenteCaisseAction), et une fermeture du magasin, qui la
+ * verrouille (voir FermerMagasinAction), passe tout entière avant ou après
+ * la création. Son auteur, relu ensuite sous le verrou de sa ligne, doit
+ * pouvoir créer une facture dans le magasin actif (voir LecteurDesDroits) :
+ * c'est lui que le brouillon enregistre comme auteur, avec son nom figé. Une ligne remisée,
  * ou à un autre prix que celui de la fiche du produit ou du prix de
  * référence du service, exige en plus qu'il soit autorisé à accorder des
  * remises et fixer les prix (R2, voir DerogationsDePrix).
@@ -50,6 +59,7 @@ class CreerFactureAction
      *
      * @throws AuthorizationException quand l'auteur ne peut pas créer de facture, ou introduit une remise ou un prix sans y être autorisé
      * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
+     * @throws LogicException quand le magasin est en lecture seule
      */
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Facture
     {
@@ -57,7 +67,8 @@ class CreerFactureAction
 
         return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
             $magasin = app(TenantContext::class)->magasin();
-            $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Facture::class);
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);
 
             return $this->operateur->pendant($compte, fn (): Facture => $this->creer($compte, $client, $lignes, $attributs));
         });

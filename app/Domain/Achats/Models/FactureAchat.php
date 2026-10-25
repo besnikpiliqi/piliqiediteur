@@ -18,11 +18,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Enregistre une facture reçue d'un fournisseur (réception de
- * marchandise) : jamais supprimée une fois validée (voir
+ * marchandise) : jamais supprimée une fois validée (voir delete() et
  * FactureAchatPolicy), au même titre qu'une facture de vente émise. Sa
  * modification après validation dépend en revanche de sa source -- voir
  * estModifiable() -- une correction peut aussi toujours passer par un
@@ -31,6 +33,10 @@ use InvalidArgumentException;
 class FactureAchat extends Model
 {
     use FigeLeNomDeSesAuteurs;
+
+    public const REFUS_VALIDEE = 'Cette facture d\'achat est validée : elle ne se supprime plus.';
+
+    public const REFUS_INTROUVABLE = 'Cette facture d\'achat n\'existe pas, ou plus, dans ce magasin.';
 
     /**
      * @return array<string, string>
@@ -96,6 +102,36 @@ class FactureAchat extends Model
             if ($escompte < 0 || $escompte > 100) {
                 throw new InvalidArgumentException('L\'escompte doit être compris entre 0 et 100 %.');
             }
+        });
+    }
+
+    /**
+     * Le dernier rempart, derrière SupprimerFactureAchatAction et
+     * FactureAchatPolicy::delete() : seul un brouillon se supprime, quel
+     * que soit le chemin qui le demande. Son statut est relu en base, sous
+     * un verrou tenu jusqu'à la suppression : un brouillon chargé, puis
+     * validé par une autre requête avant d'être supprimé (voir
+     * ValiderFactureAchatAction, qui le relit sous le même verrou), reste,
+     * avec son numéro, ses lignes, sa réception en stock et ses nouveaux
+     * produits. Une facture d'achat déjà supprimée ne se supprime pas une
+     * seconde fois.
+     *
+     * @throws LogicException
+     */
+    public function delete(): ?bool
+    {
+        return DB::transaction(function (): ?bool {
+            $enBase = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
+
+            if ($enBase === null) {
+                throw new LogicException(self::REFUS_INTROUVABLE);
+            }
+
+            if ($enBase->statut !== StatutFactureAchat::Brouillon) {
+                throw new LogicException(self::REFUS_VALIDEE);
+            }
+
+            return parent::delete();
         });
     }
 

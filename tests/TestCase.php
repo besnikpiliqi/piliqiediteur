@@ -1162,6 +1162,31 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Démarre l'opération concurrente dès que l'opération du test a
+     * verrouillé une ligne de cette table (sa requête porte ce verrou :
+     * « for update », « for share », « for no key update »), et attend
+     * qu'elle attende un verrou que tient le test : la seconde passe après
+     * la première. $concurrente reçoit le processus démarré.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    protected function concurrencerDesQueLaLigneEstVerrouillee(string $table, string $verrou, Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+
+        DB::listen(function (QueryExecuted $requete) use ($table, $verrou, &$concurrente, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            if (str_contains($requete->sql, "from \"{$table}\"") && str_ends_with($requete->sql, $verrou)) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
+    }
+
+    /**
      * Attend que l'autre processus attende un verrou que tient le test, ou
      * qu'il ait fini, dix secondes au plus. L'attente se lit dans
      * pg_stat_activity par une connexion à part, hors de la transaction du

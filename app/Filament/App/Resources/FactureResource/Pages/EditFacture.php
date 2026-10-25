@@ -4,7 +4,6 @@ namespace App\Filament\App\Resources\FactureResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
-use App\Domain\Facturation\Models\Facture;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -30,14 +29,13 @@ class EditFacture extends EditRecord
 
     /**
      * Supprimer le brouillon inscrit l'abandon de la vente au journal des
-     * événements (voir Facture::delete()) : un refus du registre fiscal se
+     * événements (voir FactureResource::actionSupprimer()) : un refus se
      * lit en notification, et le brouillon reste.
      */
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make()
-                ->using(fn (Facture $record): ?bool => static::executerOuInterrompre(fn (): ?bool => $record->delete())),
+            FactureResource::actionSupprimer(Actions\DeleteAction::make()),
         ];
     }
 

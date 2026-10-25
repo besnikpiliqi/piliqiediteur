@@ -29,7 +29,6 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -258,7 +257,8 @@ class EnvoyerDocumentActionTest extends TestCase
 
         $this->assertThrows(
             fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $factureDuMagasinA, 'client@exemple.fr', null),
-            ModelNotFoundException::class,
+            LogicException::class,
+            EnvoyerDocumentAction::REFUS_INTROUVABLE,
         );
 
         $this->assertSame(0, EnvoiDocument::query()->withoutGlobalScopes()->count());

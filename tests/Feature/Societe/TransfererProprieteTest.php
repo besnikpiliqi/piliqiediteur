@@ -24,7 +24,9 @@ use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\AnnulerLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
+use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -50,6 +52,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -212,6 +215,67 @@ class TransfererProprieteTest extends TestCase
     }
 
     /**
+     * Une transmission demandée avant la clôture de l'inscription (trente
+     * jours sans code) s'annule avec elle : l'annulation s'inscrit au
+     * journal d'audit, l'administrateur en est prévenu, et le lien suivi
+     * après la clôture, encore dans ses 24 heures, ne change rien. Le propriétaire de l'inscription
+     * close reste sans adresse de connexion, l'adresse de l'administrateur
+     * n'en devient pas une et sert à une nouvelle inscription.
+     */
+    public function test_une_transmission_demandee_avant_la_cloture_de_l_inscription_ne_s_accepte_plus_apres(): void
+    {
+        Notification::fake();
+        $this->travelTo('2026-10-05 10:00:00');
+        $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
+        $magasin = $this->creerLeMagasinDuSiege($societe);
+        $proprietaire = $societe->proprietaire()->sole();
+        $administrateur = $this->administrateurPretAReprendre($magasin, 'admin@exemple.fr');
+        $this->travelTo('2026-11-04 09:00:00');
+        $jeton = $this->demanderLaTransmission($proprietaire, $administrateur, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        $this->travelTo('2026-11-04 10:00:00');
+        $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
+
+        $this->assertNotNull(app(TenantContext::class)->runAsSociete($societe, fn () => TransmissionPropriete::query()->where('destinataire_id', $administrateur->id)->sole()->annulee_le));
+        [$annulation] = $this->entreesDAudit($societe, ActionAuditee::TransmissionAnnulee);
+        $this->assertSame([null, ['destinataire' => ['id' => $administrateur->id, 'nom' => $administrateur->name]]], [$annulation->auteur_id, $annulation->nouvelles_valeurs]);
+        Notification::assertSentTo($administrateur, AvisDeLEquipe::class, fn (AvisDeLEquipe $avis): bool => $avis->titre === 'Transmission de la propriété annulée' && str_contains($avis->texte, 'est close'));
+
+        $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, self::MOT_DE_PASSE_CHOISI), LogicException::class, AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN);
+        $this->assertSame([RoleSociete::Proprietaire, null], [$proprietaire->refresh()->role_societe, $proprietaire->email]);
+        $this->assertSame(RoleSociete::Administrateur, $administrateur->refresh()->role_societe);
+        $this->assertSame([], $this->entreesDAudit($societe, ActionAuditee::ProprieteTransferee));
+        $this->assertFalse(Auth::validate(['login' => 'admin@exemple.fr', 'password' => self::MOT_DE_PASSE_CHOISI]));
+        app(TenantContext::class)->clear();
+        $nouvelle = app(CreerSocieteAction::class)->handle((string) $societe->siren, 'admin@exemple.fr', self::MOT_DE_PASSE_CHOISI);
+        $this->assertSame('admin@exemple.fr', $nouvelle->proprietaire()->sole()->email);
+    }
+
+    /**
+     * La propriété d'une inscription close ne se transmet plus : la fiche
+     * de l'administrateur ne le propose pas au propriétaire, et la demande
+     * est refusée avec son message, sans rien écrire.
+     */
+    public function test_la_propriete_d_une_inscription_close_ne_se_transmet_plus(): void
+    {
+        Mail::fake();
+        $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
+        $magasin = $this->creerLeMagasinDuSiege($societe);
+        $proprietaire = $societe->proprietaire()->sole();
+        $administrateur = $this->administrateurPretAReprendre($magasin, 'admin@exemple.fr');
+        app(TenantContext::class)->clear();
+        app(CloreLInscriptionAction::class)->cloreSansCode($societe->fresh(), now()->toImmutable());
+
+        $this->dansLEspaceDeLaSociete($societe->fresh(), $proprietaire->refresh());
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])->assertActionHidden('transmettreLaPropriete');
+        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, self::MOT_DE_PASSE_CHOISI), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_INSCRIPTION_CLOSE);
+
+        $this->assertSame(0, app(TenantContext::class)->runAsSociete($societe, fn (): int => TransmissionPropriete::query()->count()));
+        Mail::assertNotSent(TransmissionDeLaProprieteMail::class);
+    }
+
+    /**
      * La transmission exige un administrateur actif qui a renseigné
      * lui-même son adresse : à la demande, chacun avec son message, et de
      * nouveau à l'acceptation.
@@ -329,7 +393,8 @@ class TransfererProprieteTest extends TestCase
 
     /**
      * L'ancien propriétaire garde son identifiant et se connecte avec lui ;
-     * son adresse n'est plus qu'un contact, qui n'ouvre plus son compte ;
+     * son adresse n'est plus qu'un contact, sans date de confirmation, qui
+     * n'ouvre plus son compte ;
      * ses sessions sont fermées, son « Se souvenir de moi » ne vaut plus et
      * son lien « Mot de passe oublié » en attente est effacé.
      */
@@ -347,6 +412,7 @@ class TransfererProprieteTest extends TestCase
 
         $ancien = $proprietaire->refresh();
         $this->assertSame($identifiant, $ancien->identifiantDeConnexion());
+        $this->assertNull($ancien->email_verified_at);
         $this->assertSessionsFermees($ancien);
         $this->assertNull(auth()->getProvider()->retrieveByToken($ancien->id, 'jeton-de-rappel-de-l-ancien-proprietaire'));
         $this->assertNull(auth()->getProvider()->retrieveByToken($ancien->id, (string) $ancien->remember_token));

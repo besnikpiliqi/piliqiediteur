@@ -39,9 +39,9 @@ use LogicException;
  * doit être libre parmi les propriétaires, sans que le refus dise à qui
  * elle appartient. Le propriétaire qui n'a encore aucune adresse de
  * connexion (celle qu'il a choisie en saisissant le code du courrier
- * attend son lien) y lit où en est ce lien et en redemande un, pour cette
- * adresse ou une autre ; celui d'une inscription close n'en a plus et
- * n'en demande plus. L'adresse de tout autre compte n'est qu'un contact,
+ * attend son lien, ou ce lien n'a pas pu partir) y lit où en est ce lien
+ * et en redemande un, pour cette adresse ou une autre ; celui d'une
+ * inscription close n'en a plus et n'en demande plus. L'adresse de tout autre compte n'est qu'un contact,
  * facultatif, qui s'enregistre aussitôt, sans confirmation, et peut être
  * celle d'un autre compte : c'est le seul endroit où elle s'écrit, jamais
  * par qui a créé le compte. Elle s'enregistre en minuscules (voir

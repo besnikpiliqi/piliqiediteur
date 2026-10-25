@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,8 +26,10 @@ use Illuminate\Validation\ValidationException;
  *   les siens ; une autre personne choisit les siens et devient
  *   propriétaire. Le bon code connecte le propriétaire et le mène au
  *   tableau de bord de sa société ; une autre personne y lit que le lien
- *   de l'adresse qu'elle a choisie vient de partir, et qu'elle se connecte
- *   d'ici là avec son identifiant, qui lui est montré.
+ *   de l'adresse qu'elle a choisie vient de partir, ou, quand il n'a pas
+ *   pu partir (l'adresse ne l'attend plus), qu'il se redemande depuis son
+ *   profil, et qu'elle se connecte d'ici là avec son identifiant, qui lui
+ *   est montré.
  * - Le courrier d'une procédure de l'éditeur (/code/{objet},
  *   /code/{objet}/{siren}) : on y saisit le SIREN et le code (voir
  *   SaisirCodeDeConfirmationAction::saisirUnCodeDeProcedure()) ; le bon
@@ -80,9 +83,13 @@ class CodeDuCourrierController
         $requete->session()->regenerate();
 
         if (! $proprietaire->aUneAdresseDeConnexion()) {
+            $identifiant = "D'ici là, connectez-vous avec votre identifiant de connexion, {$proprietaire->identifiantDeConnexion()}, que montre aussi votre profil, et votre mot de passe.";
+
             Notification::make()
                 ->title('Confirmez votre adresse de connexion')
-                ->body("Un lien valable 24 heures vient d'être envoyé à {$proprietaire->nouvelle_adresse} : suivez-le en étant connecté à ce compte pour en faire votre adresse de connexion. D'ici là, connectez-vous avec votre identifiant de connexion, {$proprietaire->identifiantDeConnexion()}, que montre aussi votre profil, et votre mot de passe.")
+                ->body($proprietaire->nouvelle_adresse !== null
+                    ? "Un lien valable 24 heures vient d'être envoyé à {$proprietaire->nouvelle_adresse} : suivez-le en étant connecté à ce compte pour en faire votre adresse de connexion. {$identifiant}"
+                    : 'Le lien de confirmation n\'a pas pu être envoyé à '.User::normaliserEmail($donnees['email'])." : saisissez cette adresse dans votre profil et enregistrez pour en recevoir un. {$identifiant}")
                 ->warning()
                 ->persistent()
                 ->send();

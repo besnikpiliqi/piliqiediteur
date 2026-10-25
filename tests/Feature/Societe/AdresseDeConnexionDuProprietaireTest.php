@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Mail\AdresseChangeeMail;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
+use App\Domain\Tenancy\Mail\InscriptionCloseMail;
 use App\Domain\Tenancy\Notifications\LienPourChoisirSonMotDePasse;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
@@ -20,14 +21,18 @@ use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Societe\Pages\TableauDeBord;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use LogicException;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 /**
@@ -50,8 +55,10 @@ use Tests\TestCase;
  * Le refus d'une adresse prise au moment du choix est essayé dans
  * VerificationSocieteTest, le coût d'un essai de connexion par une telle
  * adresse dans ConnexionParIdentifiantTest, deux confirmations simultanées
- * dans AdresseDeConnexionConcurrenceTest, l'isolation des sociétés dans
- * IsolationDesSocietesTest.
+ * et une demande d'adresse pendant la clôture dans
+ * AdresseDeConnexionConcurrenceTest, la transmission de la propriété
+ * d'une inscription close dans TransfererProprieteTest, l'isolation des
+ * sociétés dans IsolationDesSocietesTest.
  */
 class AdresseDeConnexionDuProprietaireTest extends TestCase
 {
@@ -125,6 +132,54 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
         $this->assertSame('Confirmez votre adresse de connexion', $avis['title']);
         $this->assertStringContainsString(self::ADRESSE_CHOISIE, $avis['body']);
         $this->assertStringContainsString((string) $proprietaire->identifiantDeConnexion(), $avis['body']);
+    }
+
+    /**
+     * Une messagerie en panne au moment d'envoyer le lien de l'adresse
+     * choisie ne défait rien et ne bloque pas l'accès : la société est
+     * validée, l'échec est signalé, la page connecte quand même la
+     * personne, lui montre son identifiant et lui dit que le lien n'est
+     * pas parti ; l'adresse ne l'attend plus, et le profil ne dit pas
+     * qu'un lien est parti. Le lien se redemande depuis le profil et lui
+     * sert.
+     */
+    public function test_un_lien_qui_ne_part_pas_a_la_saisie_du_code_laisse_la_personne_connectee_avec_son_identifiant(): void
+    {
+        Exceptions::fake();
+        $this->travelTo('2026-10-15 10:00:00');
+        $societe = $this->inscrireUneSociete(null, 'inscrit@exemple.fr');
+        $code = $this->codeDuCourrier($societe);
+        app(TenantContext::class)->clear();
+        $messagerieEnPanne = true;
+        Event::listen(MessageSending::class, function () use (&$messagerieEnPanne): void {
+            if ($messagerieEnPanne) {
+                throw new TransportException('Connexion au serveur de messagerie impossible.');
+            }
+        });
+
+        $reponse = $this->post(route('code.saisir'), ['siren' => $societe->siren, 'code' => $code, 'email' => self::ADRESSE_CHOISIE, 'password' => self::MOT_DE_PASSE_CHOISI, 'password_confirmation' => self::MOT_DE_PASSE_CHOISI]);
+
+        $proprietaire = $societe->proprietaire()->sole();
+        $reponse->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $societe));
+        $this->assertAuthenticatedAs($proprietaire);
+        $this->assertTrue($societe->fresh()->estValidee());
+        Exceptions::assertReported(TransportException::class);
+        $this->assertSame([null, null, null], [$proprietaire->email, $proprietaire->nouvelle_adresse, $proprietaire->nouvelle_adresse_jeton_hache]);
+        $avis = collect(session('filament.notifications'))->sole();
+        $this->assertStringContainsString('Le lien de confirmation n\'a pas pu être envoyé à '.self::ADRESSE_CHOISIE, $avis['body']);
+        $this->assertStringContainsString((string) $proprietaire->identifiantDeConnexion(), $avis['body']);
+        $this->assertStringContainsString('dans votre profil', $avis['body']);
+
+        $messagerieEnPanne = false;
+        Mail::fake();
+        Livewire::test(ModifierProfil::class)
+            ->assertSee('Votre compte n\'a pas encore d\'adresse de connexion : saisissez-la ici et enregistrez')
+            ->assertDontSee('le lien envoyé à')
+            ->fillForm(['email' => self::ADRESSE_CHOISIE, 'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->actingAs($proprietaire)->post(route('profil.adresse.confirmer', ['jeton' => $this->jetonDeLAdresseEnAttente(self::ADRESSE_CHOISIE)]))->assertOk();
+        $this->assertSame(self::ADRESSE_CHOISIE, $proprietaire->refresh()->email);
     }
 
     /**
@@ -272,13 +327,87 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
     }
 
     /**
+     * La clôture prévient par e-mail l'adresse qu'elle retire, après sa
+     * transaction : l'inscription est close, avec son motif, l'adresse
+     * peut servir à une nouvelle inscription, dont l'e-mail donne le lien,
+     * et le compte clos ne s'ouvre plus qu'avec son identifiant, que montre
+     * son profil ; l'e-mail ne dit jamais cet identifiant.
+     */
+    public function test_la_cloture_previent_par_e_mail_l_adresse_retiree_sans_dire_l_identifiant(): void
+    {
+        Mail::fake();
+        $this->travelTo('2026-10-05 10:00:00');
+        $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
+        $identifiant = (string) $societe->proprietaire()->sole()->identifiantDeConnexion();
+        app(TenantContext::class)->clear();
+
+        $this->travelTo('2026-11-04 10:00:00');
+        $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
+
+        $avis = Mail::sent(InscriptionCloseMail::class, fn (InscriptionCloseMail $mail): bool => $mail->hasTo('jeanne@exemple.fr'))->sole();
+        $texte = $avis->render();
+        $this->assertSame('aucun code saisi dans les trente jours du dernier courrier', $avis->motif);
+        $this->assertStringContainsString('elle peut servir à une nouvelle inscription', $texte);
+        $this->assertStringContainsString(route('filament.app.auth.register'), $texte);
+        $this->assertStringContainsString('ne s\'ouvre plus qu\'avec son identifiant de connexion, que montre son profil', $texte);
+        $this->assertStringNotContainsString($identifiant, $texte);
+    }
+
+    /**
+     * Un e-mail de clôture qui ne part pas (une messagerie en panne) est
+     * signalé sans rien défaire : l'inscription est close et l'adresse
+     * retirée ; la commande ne compte aucun échec.
+     */
+    public function test_un_e_mail_de_cloture_qui_ne_part_pas_n_empeche_pas_la_cloture(): void
+    {
+        Exceptions::fake();
+        $this->travelTo('2026-10-05 10:00:00');
+        $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
+        $proprietaire = $societe->proprietaire()->sole();
+        app(TenantContext::class)->clear();
+        Event::listen(MessageSending::class, fn () => throw new TransportException('Connexion au serveur de messagerie impossible.'));
+
+        $this->travelTo('2026-11-04 10:00:00');
+        $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
+
+        Exceptions::assertReported(TransportException::class);
+        $this->assertTrue($societe->fresh()->estClose());
+        $this->assertNull($proprietaire->refresh()->email);
+    }
+
+    /**
+     * Une adresse qui attend sur le compte du propriétaire d'une
+     * inscription close, quelle que soit la façon dont elle s'y est mise,
+     * ne se confirme pas : la confirmation le dit, efface l'adresse en
+     * attente et son lien, et le compte reste sans adresse de connexion.
+     */
+    public function test_une_adresse_en_attente_ne_se_confirme_pas_dans_une_inscription_close(): void
+    {
+        $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
+        $proprietaire = $societe->proprietaire()->sole();
+        app(TenantContext::class)->clear();
+        app(CloreLInscriptionAction::class)->cloreSansCode($societe->fresh(), now()->toImmutable());
+        app(TenantContext::class)->clear();
+        $proprietaire->refresh();
+        $jeton = app(DemanderUneNouvelleAdresseAction::class)->mettreEnAttente($proprietaire, 'jeanne.b@exemple.fr');
+        $proprietaire->save();
+
+        $this->actingAs($proprietaire)->post(route('profil.adresse.confirmer', ['jeton' => $jeton]))->assertSeeText(DemanderUneNouvelleAdresseAction::MESSAGE_INSCRIPTION_CLOSE);
+
+        $proprietaire->refresh();
+        $this->assertSame([null, null, null], [$proprietaire->email, $proprietaire->nouvelle_adresse, $proprietaire->nouvelle_adresse_jeton_hache]);
+        $this->assertNull(ConfirmerNouvelleAdresseAction::compteEnAttente($jeton));
+    }
+
+    /**
      * Le refus de l'éditeur clôt l'inscription de la même façon : l'adresse
-     * de son propriétaire cesse d'être une adresse de connexion, et le
-     * retrait s'inscrit au journal d'audit avec l'intervention de
-     * l'éditeur.
+     * de son propriétaire cesse d'être une adresse de connexion, le retrait
+     * s'inscrit au journal d'audit avec l'intervention de l'éditeur, et
+     * l'e-mail de la clôture en donne le motif.
      */
     public function test_le_refus_de_l_editeur_retire_aussi_l_adresse_de_connexion(): void
     {
+        Mail::fake();
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');
         $proprietaire = $societe->proprietaire()->sole();
         app(TenantContext::class)->clear();
@@ -289,6 +418,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
         $this->assertSame([null, false], [$proprietaire->refresh()->email, Auth::validate(['login' => 'jeanne@exemple.fr', 'password' => self::MOT_DE_PASSE_CHOISI])]);
         [$retrait] = $this->entreesDAudit($societe, ActionAuditee::AdresseDeConnexionRetiree);
         $this->assertSame(['alice'], $retrait->operateur['operateurs']);
+        Mail::assertSent(InscriptionCloseMail::class, fn (InscriptionCloseMail $mail): bool => $mail->hasTo('jeanne@exemple.fr') && $mail->motif === 'refus de l\'éditeur');
     }
 
     /**

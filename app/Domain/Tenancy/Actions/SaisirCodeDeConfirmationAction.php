@@ -35,6 +35,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use SensitiveParameter;
+use Throwable;
 
 /**
  * La saisie du code d'un courrier recommandé, sur la page publique que le
@@ -86,7 +87,11 @@ use SensitiveParameter;
  * réservé entre-temps ailleurs) laisse le code valable et prévient
  * l'éditeur. Ensuite, la démonstration se ferme, le propriétaire est
  * prévenu (voir ValiderLaSocieteAction::apresLaValidation()) et le lien de
- * l'adresse choisie par une autre personne part.
+ * l'adresse choisie par une autre personne part (voir
+ * envoyerLeLienDeLAdresseChoisie()) : un envoi qui échoue ne défait rien
+ * et n'empêche pas la page de connecter la personne et de lui montrer son
+ * identifiant ; l'adresse en attente s'efface, et le lien se redemande
+ * depuis le profil.
  *
  * Le code d'un courrier d'une procédure de l'éditeur (voir
  * saisirUnCodeDeProcedure()) se saisit seul, sur la page de son motif : il
@@ -159,7 +164,7 @@ class SaisirCodeDeConfirmationAction
         }
 
         try {
-            [$proprietaire, $lien] = $this->servir($societe, $code, $memePersonne ? null : ['email' => $email, 'password' => Hash::make($motDePasse), 'nom' => (string) ($code->destinataire['nom'] ?? $email)]);
+            [$proprietaire, $jeton] = $this->servir($societe, $code, $memePersonne ? null : ['email' => $email, 'password' => Hash::make($motDePasse), 'nom' => (string) ($code->destinataire['nom'] ?? $email)]);
         } catch (SiretDejaReserveException) {
             $this->alerteEditeur->alerter($societe, 'Validation impossible à la saisie du code du courrier', [
                 'Le code du courrier est juste, mais l\'un des magasins de la société a un SIRET déjà réservé par une autre société : rien n\'a été validé, et le code reste valable.',
@@ -171,11 +176,31 @@ class SaisirCodeDeConfirmationAction
         $societe = $societe->fresh();
         $this->validerLaSociete->apresLaValidation($societe, $proprietaire);
 
-        if ($lien !== null) {
-            $this->adresseEnAttente->envoyer($proprietaire, $lien);
+        if ($jeton !== null) {
+            $this->envoyerLeLienDeLAdresseChoisie($societe, $proprietaire, $jeton);
         }
 
         return $proprietaire;
+    }
+
+    /**
+     * Envoie, une fois la société validée, le lien de l'adresse que la
+     * nouvelle propriétaire a choisie. Un envoi qui échoue (une messagerie
+     * en panne) est signalé sans rien défaire : l'adresse en attente et son
+     * lien s'effacent, pour que le profil ne dise pas qu'un lien est parti,
+     * et la personne, que la page connecte quand même et à qui elle montre
+     * son identifiant, redemande le lien depuis son profil (voir
+     * CodeDuCourrierController).
+     */
+    private function envoyerLeLienDeLAdresseChoisie(Societe $societe, User $proprietaire, string $jeton): void
+    {
+        try {
+            $this->adresseEnAttente->envoyer($proprietaire, $jeton);
+        } catch (Throwable $erreur) {
+            report($erreur);
+            app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(fn () => ConfirmerNouvelleAdresseAction::oublierLAdresseEnAttente($proprietaire, $jeton)));
+            $proprietaire->refresh();
+        }
     }
 
     /**
@@ -317,7 +342,7 @@ class SaisirCodeDeConfirmationAction
      * verrou de la société, quelques fois au plus.
      *
      * @param  array{email: string, password: string, nom: string}|null  $nouveauCompte  le compte que choisit une autre personne que celle qui a inscrit la société
-     * @return array{0: User, 1: string|null} le propriétaire, et le lien de l'adresse en attente sur son nouveau compte
+     * @return array{0: User, 1: string|null} le propriétaire, et le jeton du lien de l'adresse en attente sur son nouveau compte
      *
      * @throws ValidationException
      * @throws SiretDejaReserveException
@@ -340,14 +365,14 @@ class SaisirCodeDeConfirmationAction
                         throw ValidationException::withMessages(['code' => self::MESSAGE_CODE_FAUX]);
                     }
 
-                    [$proprietaire, $lien] = $nouveauCompte === null
+                    [$proprietaire, $jeton] = $nouveauCompte === null
                         ? [User::query()->where('societe_id', $verrouillee->getKey())->where('role_societe', RoleSociete::Proprietaire->value)->lockForUpdate()->firstOrFail(), null]
                         : $this->reprendreLaSociete($verrouillee, $nouveauCompte);
 
                     $this->noterLeCodeJuste($verrouillee, $verrouille, $proprietaire);
                     $this->validerLaSociete->valider($verrouillee, $proprietaire, PreuveDeValidation::CodeDuCourrier);
 
-                    return [$proprietaire, $lien];
+                    return [$proprietaire, $jeton];
                 });
 
                 if (is_array($resultat)) {
@@ -366,15 +391,17 @@ class SaisirCodeDeConfirmationAction
      * JournalDesDroits::modifier(), qui s'inscrit au JET 130 de chaque
      * magasin et au journal d'audit). Dans cet ordre, à cause de l'index
      * d'un seul propriétaire par société : la personne inscrite devient
-     * administrateur, sans portée ni autorisation ; le nouveau propriétaire
-     * est créé, avec son identifiant, sans adresse de connexion : celle
-     * qu'il a choisie attend la confirmation de son lien ; chaque compte
-     * d'avant est retiré par lui, ses droits supprimés, ses notifications
-     * effacées, ses sessions fermées, et le lien « Mot de passe oublié » de
-     * l'ancienne adresse de connexion s'efface.
+     * administrateur, sans portée ni autorisation, et sa date de
+     * confirmation d'adresse s'efface (son adresse n'est plus qu'un
+     * contact) ; le nouveau propriétaire est créé, avec son identifiant,
+     * sans adresse de connexion : celle qu'il a choisie attend la
+     * confirmation de son lien ; chaque compte d'avant est retiré par lui,
+     * ses droits supprimés, ses notifications effacées, ses sessions
+     * fermées, et le lien « Mot de passe oublié » de l'ancienne adresse de
+     * connexion s'efface.
      *
      * @param  array{email: string, password: string, nom: string}  $nouveauCompte
-     * @return array{0: User, 1: string} le nouveau propriétaire, et le lien de son adresse en attente
+     * @return array{0: User, 1: string} le nouveau propriétaire, et le jeton du lien de son adresse en attente
      */
     private function reprendreLaSociete(Societe $verrouillee, array $nouveauCompte): array
     {
@@ -387,6 +414,7 @@ class SaisirCodeDeConfirmationAction
             if ($inscrit !== null) {
                 $inscrit->forceFill([
                     'role_societe' => RoleSociete::Administrateur,
+                    'email_verified_at' => null,
                     'nouvelle_adresse' => null,
                     'nouvelle_adresse_jeton_hache' => null,
                     'nouvelle_adresse_expire_le' => null,
@@ -402,7 +430,7 @@ class SaisirCodeDeConfirmationAction
                 'role_societe' => RoleSociete::Proprietaire,
                 'statut' => StatutCompte::Actif,
             ]);
-            $lien = $this->adresseEnAttente->mettreEnAttente($nouveau, $nouveauCompte['email']);
+            $jeton = $this->adresseEnAttente->mettreEnAttente($nouveau, $nouveauCompte['email']);
             $nouveau->save();
             $this->generateur->attribuer($nouveau, motDePasseHache: $nouveauCompte['password']);
 
@@ -413,9 +441,9 @@ class SaisirCodeDeConfirmationAction
                 $this->sessions->fermer($compte);
             }
 
-            return ['compte' => $nouveau, 'lien' => $lien];
+            return ['compte' => $nouveau, 'jeton' => $jeton];
         });
 
-        return [$resultat['compte'], $resultat['lien']];
+        return [$resultat['compte'], $resultat['jeton']];
     }
 }

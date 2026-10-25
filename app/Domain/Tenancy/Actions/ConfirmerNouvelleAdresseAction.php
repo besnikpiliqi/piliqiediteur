@@ -25,9 +25,12 @@ use Illuminate\Validation\ValidationException;
  * connexion, avec la date de sa confirmation, et ne sert qu'une fois. Le
  * changement s'inscrit au journal d'audit de la société, sans aucune
  * adresse. Un compte qui n'est plus propriétaire (après une transmission
- * de la propriété) ne confirme plus rien, et la clôture d'une inscription
+ * de la propriété) ne confirme plus rien. La clôture d'une inscription
  * efface le lien en attente de son propriétaire (voir
- * CloreLInscriptionAction).
+ * CloreLInscriptionAction), et la confirmation relit la société sous un
+ * verrou partagé avant le compte, dans le même ordre que la clôture : dans
+ * une inscription close, elle est refusée et l'adresse en attente
+ * s'efface, quelle que soit la façon dont elle s'est mise en attente.
  *
  * - Une nouvelle adresse demandée dans le profil remplace l'ancienne,
  *   qui en est prévenue ; un lien « Mot de passe oublié » déjà envoyé à
@@ -109,12 +112,12 @@ class ConfirmerNouvelleAdresseAction
         } catch (UniqueConstraintViolationException) {
             // Un autre propriétaire a pris l'adresse depuis le contrôle : la
             // même réponse, et le lien ne sert plus.
-            app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(fn () => $this->oublierLAdresseEnAttente($compte, $jeton)));
-            $resultat = ['confirmee' => false, 'ancienne' => null];
+            app(TenantContext::class)->runAsSociete($societe, fn () => DB::transaction(fn () => self::oublierLAdresseEnAttente($compte, $jeton)));
+            $resultat = ['refus' => self::MESSAGE_ADRESSE_INUTILISABLE, 'ancienne' => null];
         }
 
-        if (! $resultat['confirmee']) {
-            throw ValidationException::withMessages(['email' => self::MESSAGE_ADRESSE_INUTILISABLE]);
+        if ($resultat['refus'] !== null) {
+            throw ValidationException::withMessages(['email' => $resultat['refus']]);
         }
 
         $compte->refresh();
@@ -127,15 +130,17 @@ class ConfirmerNouvelleAdresseAction
     }
 
     /**
-     * La confirmation, dans la transaction de l'appelant, la ligne du
-     * compte relue sous son verrou.
+     * La confirmation, dans la transaction de l'appelant, la ligne de la
+     * société relue sous un verrou partagé, puis celle du compte sous son
+     * verrou.
      *
-     * @return array{confirmee: bool, ancienne: string|null} l'adresse est-elle confirmée, et l'adresse de connexion qu'elle remplace
+     * @return array{refus: string|null, ancienne: string|null} le motif du refus de l'adresse, ou null quand elle est confirmée, et l'adresse de connexion qu'elle remplace
      *
      * @throws AuthorizationException
      */
     private function confirmerSousVerrou(User $compte, string $jeton, ?Authenticatable $connecte): array
     {
+        $close = Societe::query()->whereKey($compte->societe_id)->sharedLock()->value('close_le') !== null;
         $relu = User::query()->whereKey($compte->getKey())->lockForUpdate()->firstOrFail();
 
         if (! self::estEnAttente($relu, $jeton)) {
@@ -148,11 +153,16 @@ class ConfirmerNouvelleAdresseAction
 
         $nouvelle = (string) $relu->nouvelle_adresse;
         $ancienne = $relu->email;
+        $refus = match (true) {
+            $close => DemanderUneNouvelleAdresseAction::MESSAGE_INSCRIPTION_CLOSE,
+            User::query()->where('role_societe', RoleSociete::Proprietaire->value)->where('email', $nouvelle)->whereKeyNot($relu->getKey())->exists() => self::MESSAGE_ADRESSE_INUTILISABLE,
+            default => null,
+        };
 
-        if (User::query()->where('role_societe', RoleSociete::Proprietaire->value)->where('email', $nouvelle)->whereKeyNot($relu->getKey())->exists()) {
-            $this->oublierLAdresseEnAttente($relu, $jeton);
+        if ($refus !== null) {
+            self::oublierLAdresseEnAttente($relu, $jeton);
 
-            return ['confirmee' => false, 'ancienne' => null];
+            return ['refus' => $refus, 'ancienne' => null];
         }
 
         if ($ancienne !== null) {
@@ -170,14 +180,16 @@ class ConfirmerNouvelleAdresseAction
             'compte' => ['id' => $relu->getKey(), 'nom' => $relu->name],
         ]);
 
-        return ['confirmee' => true, 'ancienne' => $ancienne];
+        return ['refus' => null, 'ancienne' => $ancienne];
     }
 
     /**
      * Efface l'adresse en attente du compte et son lien, si ce lien est
-     * encore le sien, dans la transaction de l'appelant.
+     * encore le sien, dans la transaction de l'appelant et dans la société
+     * du compte : une adresse refusée, ou dont le lien n'a pas pu partir
+     * (voir SaisirCodeDeConfirmationAction).
      */
-    private function oublierLAdresseEnAttente(User $compte, string $jeton): void
+    public static function oublierLAdresseEnAttente(User $compte, string $jeton): void
     {
         $relu = User::query()->whereKey($compte->getKey())->lockForUpdate()->firstOrFail();
 

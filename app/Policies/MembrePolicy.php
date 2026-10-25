@@ -146,11 +146,14 @@ class MembrePolicy
      * passe du propriétaire, sans aucune preuve de qualité de
      * représentant) : le propriétaire seul, jamais à un expert-comptable ni
      * à un membre. Un geste sur l'équipe : permis dans une société
-     * suspendue, jamais dans une société révoquée (voir ControleDesDroits).
+     * suspendue, jamais dans une société révoquée (voir ControleDesDroits),
+     * ni dans une inscription close, dont le propriétaire n'a plus
+     * d'adresse de connexion (voir CloreLInscriptionAction).
      */
     public function transmettreLaPropriete(User $user, User $administrateur): bool
     {
         return $this->creerUnAdministrateur($user)
+            && ! $user->societe->estClose()
             && $administrateur->estAdministrateur()
             && $administrateur->estActif()
             && (int) $administrateur->societe_id === (int) $user->societe_id;

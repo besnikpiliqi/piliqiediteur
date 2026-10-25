@@ -46,9 +46,11 @@ Route::post('/rappels/recommande', [RappelsDesPrestatairesController::class, 're
     ->middleware('throttle:60,1')
     ->name('rappels.recommande');
 
-// La confirmation d'une nouvelle adresse de connexion demandée par le
-// propriétaire dans son profil (voir ConfirmerNouvelleAdresseController) :
-// l'ouverture du lien ne change rien, le bouton confirme.
+// La confirmation d'une adresse de connexion en attente (voir
+// ConfirmerNouvelleAdresseController), demandée par le propriétaire dans
+// son profil ou choisie en saisissant le code du courrier, cette dernière
+// ne se suivant que connecté au compte : l'ouverture du lien ne change
+// rien, le bouton confirme.
 Route::get('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::class, 'afficher'])
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->name('profil.adresse.afficher');

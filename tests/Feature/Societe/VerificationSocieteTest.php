@@ -436,7 +436,7 @@ class VerificationSocieteTest extends TestCase
             $this->assertSame([StatutCompte::Retire, $nouveau->id], [$compte->statut, (int) $compte->statut_change_par]);
             $this->assertSessionsFermees($compte);
         }
-        $this->assertSame(RoleSociete::Administrateur, $inscrit->role_societe);
+        $this->assertSame([RoleSociete::Administrateur, null], [$inscrit->role_societe, $inscrit->email_verified_at]);
         $this->assertSame([$nouveau->id], User::query()->where('societe_id', $societe->id)->where('role_societe', RoleSociete::Proprietaire->value)->pluck('id')->all());
         $this->assertCount(1, $this->audit($societe, ActionAuditee::ProprieteReprise));
         $this->assertSame($nouveau->id, $this->audit($societe, ActionAuditee::SocieteValidee)->sole()->nouvelles_valeurs['proprietaire']['id']);

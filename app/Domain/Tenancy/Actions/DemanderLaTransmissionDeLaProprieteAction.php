@@ -34,13 +34,15 @@ use SensitiveParameter;
  *
  * Les conditions, relues sous le verrou des lignes du propriétaire et de
  * l'administrateur, chacune avec son message à l'écran du propriétaire
- * (voir exigerLesConditions()) : l'administrateur est actif, sans aucune
- * preuve de qualité de représentant (décision de l'éditeur) ; son mot de
- * passe n'est plus son identifiant, que le propriétaire a connu à sa
- * création ; il a renseigné lui-même son adresse, jamais saisie par le
- * propriétaire ;
- * cette adresse n'est pas celle du propriétaire, dont « Mot de passe
- * oublié » réinitialiserait ensuite le compte du nouveau propriétaire.
+ * (voir exigerLesConditions()) : l'inscription de la société n'est pas
+ * close (son propriétaire n'a plus d'adresse de connexion, et la clôture
+ * annule les transmissions en attente, voir CloreLInscriptionAction) ;
+ * l'administrateur est actif, sans aucune preuve de qualité de
+ * représentant (décision de l'éditeur) ; son mot de passe n'est plus son
+ * identifiant, que le propriétaire a connu à sa création ; il a renseigné
+ * lui-même son adresse, jamais saisie par le propriétaire ; cette adresse
+ * n'est pas celle du propriétaire, dont « Mot de passe oublié »
+ * réinitialiserait ensuite le compte du nouveau propriétaire.
  *
  * Une demande encore valable pour le même administrateur et la même
  * adresse est rendue telle quelle, sans nouveau lien ni nouvelle entrée
@@ -76,6 +78,8 @@ class DemanderLaTransmissionDeLaProprieteAction
     public const MESSAGE_AUCUNE_DEMANDE = 'Aucune transmission de la propriété n\'attend pour cet administrateur.';
 
     public const MESSAGE_ADRESSE_CHANGEE = 'L\'adresse de cet administrateur a changé depuis la demande : demandez de nouveau la transmission.';
+
+    public const MESSAGE_INSCRIPTION_CLOSE = 'L\'inscription de la société est close : sa propriété ne se transmet plus.';
 
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
@@ -196,6 +200,10 @@ class DemanderLaTransmissionDeLaProprieteAction
      */
     public static function exigerLesConditions(User $proprietaire, User $administrateur, Societe $societe): void
     {
+        if (Societe::query()->whereKey($societe->getKey())->value('close_le') !== null) {
+            throw new LogicException(self::MESSAGE_INSCRIPTION_CLOSE);
+        }
+
         if ($administrateur->is($proprietaire) || ! $administrateur->estAdministrateur() || ! $administrateur->estActif() || (int) $administrateur->societe_id !== $societe->getKey()) {
             throw new AuthorizationException(self::MESSAGE_ADMINISTRATEUR);
         }

@@ -4,17 +4,24 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\AnnulerLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
+use App\Domain\Tenancy\Services\FournisseurDesComptes;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use LogicException;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -27,7 +34,8 @@ use Tests\TestCase;
  * même ordre, sans interblocage. Une seule issue
  * à chaque course : jamais une propriété transmise par un lien annulé,
  * jamais deux fois, jamais à un administrateur dont l'accès vient d'être
- * redonné.
+ * redonné, jamais une adresse de connexion gardée par le propriétaire
+ * d'une inscription close au même instant.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -128,6 +136,51 @@ class TransmissionConcurrenceTest extends TestCase
         $this->assertStringContainsString(DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE, $this->attendreLEchec($acceptation));
         $this->assertSame([RoleSociete::Administrateur, RoleSociete::Proprietaire], [User::query()->findOrFail($administrateurId)->role_societe, User::query()->findOrFail($proprietaireId)->role_societe]);
         $this->assertNull(TransmissionPropriete::withoutGlobalScopes()->where('destinataire_id', $administrateurId)->sole()->acceptee_le);
+    }
+
+    /**
+     * L'inscription se clôt (trente jours sans code) pendant que
+     * l'administrateur accepte la transmission : l'acceptation tient les
+     * deux comptes, la clôture tient la société sans empêcher l'entrée du
+     * journal d'audit de l'acceptation de la référencer, et attend ces
+     * comptes ; l'acceptation passe, puis la clôture voit le nouveau
+     * propriétaire et lui retire l'adresse de connexion que la
+     * transmission venait de lui donner. Aucun interblocage.
+     */
+    #[Group('concurrence')]
+    public function test_une_transmission_acceptee_pendant_la_cloture_de_l_inscription_ne_garde_aucune_adresse_de_connexion(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $this->travelTo('2026-10-05 10:00:00');
+        $societe = $this->inscrireUneSociete(null, 'inscrite@example.test');
+        $administrateur = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($societe), 'repreneur@example.test');
+        $this->travelTo('2026-11-04 09:00:00');
+        $jeton = $this->demanderLaTransmission($societe->proprietaire()->sole(), $administrateur, self::MOT_DE_PASSE_CHOISI);
+        $this->travelTo('2026-11-04 10:00:00');
+        app(TenantContext::class)->clear();
+        $societeId = (int) $societe->getKey();
+        $connexionDuTest = DB::getDefaultConnection();
+        $cloture = null;
+        DB::listen(function (QueryExecuted $requete) use (&$cloture, $connexionDuTest, $societeId): void {
+            if ($cloture === null && $requete->connectionName === $connexionDuTest && str_starts_with($requete->sql, 'update "users" set "role_societe"')) {
+                $cloture = $this->demarrerUnProcessusConcurrent(static function () use ($societeId): void {
+                    if (! app(CloreLInscriptionAction::class)->cloreSansCode(Societe::query()->findOrFail($societeId), CarbonImmutable::now()->subDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS))) {
+                        throw new LogicException('L\'inscription n\'a pas été close.');
+                    }
+                });
+                $this->attendreQueLeProcessusAttendeUnVerrou($cloture);
+            }
+        });
+
+        app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, self::MOT_DE_PASSE_CHOISI);
+
+        $this->assertInstanceOf(InvokedProcess::class, $cloture);
+        $resultat = $cloture->wait();
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $this->assertTrue(Societe::query()->findOrFail($societeId)->estClose());
+        $nouveau = User::query()->findOrFail($administrateur->id);
+        $this->assertSame([RoleSociete::Proprietaire, null, null], [$nouveau->role_societe, $nouveau->email, $nouveau->email_verified_at]);
+        $this->assertNull(FournisseurDesComptes::proprietaireDeLAdresse('repreneur@example.test'));
     }
 
     /**

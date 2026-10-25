@@ -71,7 +71,10 @@ return new class extends Migration
             // envoyé à son adresse de connexion actuelle : celui de
             // l'inscription, de la confirmation d'une adresse, de la
             // transmission de la propriété ou du « Mot de passe oublié » ;
-            // nulle sans adresse de connexion.
+            // nulle pour un propriétaire sans adresse de connexion et pour
+            // tout autre compte (effacée quand le propriétaire cesse de
+            // l'être, par une transmission ou par la reprise de la société
+            // à la saisie du code).
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             // Le mot de passe est-il encore l'identifiant du compte ? Vrai à

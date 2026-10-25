@@ -40,12 +40,12 @@ use SensitiveParameter;
  * valable ; le propriétaire l'est toujours et gère encore son équipe, dans
  * une société qui n'est pas révoquée (voir PorteeDesDroits::gereSonEquipe(),
  * comme la demande et l'annulation) ; l'administrateur remplit toujours les
- * conditions de la demande (actif, mot de passe qui n'est plus son
- * identifiant, adresse renseignée par lui, différente de celle du
- * propriétaire), sans aucune preuve de qualité de représentant ; son
- * adresse est celle de la demande et n'est l'adresse de connexion d'aucun
- * propriétaire. L'index unique des adresses de connexion des propriétaires
- * refuse en dernier lieu une adresse prise entre-temps.
+ * conditions de la demande (inscription qui n'est pas close, compte actif,
+ * mot de passe qui n'est plus son identifiant, adresse renseignée par lui,
+ * différente de celle du propriétaire), sans aucune preuve de qualité de
+ * représentant ; son adresse est celle de la demande et n'est l'adresse de
+ * connexion d'aucun propriétaire. L'index unique des adresses de connexion
+ * des propriétaires refuse en dernier lieu une adresse prise entre-temps.
  *
  * Dans cet ordre, à cause des gardes de la base et de l'index d'un seul
  * propriétaire par société (voir GardesDesDroits) : le nouveau propriétaire
@@ -57,13 +57,13 @@ use SensitiveParameter;
  * PermissionRegistry::duProprietaire()), que le nouveau propriétaire peut
  * lui cocher, et toutes celles de la société. L'ancien propriétaire garde
  * son identifiant et ne se connecte plus qu'avec lui (son adresse n'est
- * plus qu'un contact) ; ses sessions se ferment, son « se souvenir de moi »
- * est coupé, son lien « Mot de passe oublié » en attente s'efface, et la
- * saisie du code du courrier qu'il avait faite ne compte plus : devenu
- * propriétaire par une transmission, le nouveau comme lui s'il le
- * redevient signe les attestations à la main (voir
- * User::signeLesAttestationsDansLApplication()). Le changement s'inscrit
- * au JET 130 de chaque magasin et au journal d'audit (ProprieteTransferee,
+ * plus qu'un contact, sans date de confirmation) ; ses sessions se
+ * ferment, son « se souvenir de moi » est coupé, son lien « Mot de passe
+ * oublié » en attente s'efface, et la saisie du code du courrier qu'il
+ * avait faite ne compte plus : devenu propriétaire par une transmission,
+ * le nouveau comme lui s'il le redevient signe les attestations à la main
+ * (voir User::signeLesAttestationsDansLApplication()). Le changement
+ * s'inscrit au JET 130 de chaque magasin et au journal d'audit (ProprieteTransferee,
  * voir JournalDesDroits), et chacun des deux en est prévenu. Le nouveau propriétaire ne vend plus : une caisse qu'il avait
  * ouverte comme administrateur se ferme comme celle de tout vendeur, par
  * lui-même (voir ClotureCaissePersonnellePolicy::fermer()), pour lui par
@@ -131,6 +131,7 @@ class AccepterLaTransmissionDeLaProprieteAction
                     $this->porteeDesAdministrateurs->effacer($nouveauRelu);
                     $ancienRelu->forceFill([
                         'role_societe' => RoleSociete::Administrateur,
+                        'email_verified_at' => null,
                         'code_du_courrier_saisi_le' => null,
                         'nouvelle_adresse' => null,
                         'nouvelle_adresse_jeton_hache' => null,

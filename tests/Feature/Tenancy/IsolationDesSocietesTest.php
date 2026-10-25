@@ -559,6 +559,37 @@ class IsolationDesSocietesTest extends TestCase
     }
 
     /**
+     * La clôture d'une inscription n'annule que les transmissions de la
+     * propriété de sa société, et n'inscrit leur annulation qu'à son
+     * journal d'audit : celle d'une inscription récente reste valable, et
+     * son administrateur devient propriétaire en suivant son lien.
+     */
+    public function test_la_cloture_d_une_inscription_n_annule_que_les_transmissions_de_sa_societe(): void
+    {
+        $this->travelTo('2026-10-01 10:00:00');
+        $echue = $this->inscrireUneSociete(null, 'echue@exemple.fr');
+        $this->travelTo('2026-10-25 10:00:00');
+        $recente = $this->inscrireUneSociete(null, 'recente@exemple.fr');
+        $administrateurDeLEchue = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($echue), 'admin.echue@exemple.fr');
+        $administrateurDeLaRecente = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($recente), 'admin.recente@exemple.fr');
+        $this->travelTo('2026-11-01 09:00:00');
+        $this->demanderLaTransmission($echue->proprietaire()->sole(), $administrateurDeLEchue, self::MOT_DE_PASSE_CHOISI);
+        $jetonDeLaRecente = $this->demanderLaTransmission($recente->proprietaire()->sole(), $administrateurDeLaRecente, self::MOT_DE_PASSE_CHOISI);
+        $this->travelTo('2026-11-01 10:00:00');
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:clore-inscriptions-sans-code')->expectsOutput('1 inscription(s) close(s).')->assertSuccessful();
+
+        $this->assertSame(
+            [1, 0],
+            [count($this->entreesDAudit($echue, ActionAuditee::TransmissionAnnulee)), count($this->entreesDAudit($recente, ActionAuditee::TransmissionAnnulee))],
+        );
+        app(TenantContext::class)->clear();
+        app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateurDeLaRecente->refresh(), $jetonDeLaRecente, self::MOT_DE_PASSE_CHOISI);
+        $this->assertTrue($recente->proprietaire()->sole()->is($administrateurDeLaRecente));
+    }
+
+    /**
      * Dans une même société, ce qu'un magasin crée (client, produit, vente,
      * mouvement de stock) reste invisible dans l'autre.
      */

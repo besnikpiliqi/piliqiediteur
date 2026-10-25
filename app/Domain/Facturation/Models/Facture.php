@@ -3,7 +3,6 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -12,6 +11,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -339,7 +339,7 @@ class Facture extends Model implements DocumentEnvoyable
     {
         $premiere = static::query()->emises()->min('date_emission');
 
-        return $premiere === null ? null : Calendrier::deParis()->jourDe(HorodatageUtc::depuisLaBase($premiere));
+        return $premiere === null ? null : Calendrier::deParis()->jourDe(Instant::depuisLaBase($premiere));
     }
 
     /**

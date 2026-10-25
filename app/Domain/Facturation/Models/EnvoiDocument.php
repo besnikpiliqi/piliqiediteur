@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutEnvoi;
@@ -63,7 +64,7 @@ class EnvoiDocument extends Model
         'nature' => NatureEnvoi::class,
         'statut' => StatutEnvoi::class,
         'niveau_relance' => 'integer',
-        'envoye_le' => 'datetime',
+        'envoye_le' => Instant::class,
     ];
 
     protected static function booted(): void

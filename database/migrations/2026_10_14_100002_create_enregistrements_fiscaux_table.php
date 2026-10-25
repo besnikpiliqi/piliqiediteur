@@ -36,7 +36,7 @@ return new class extends Migration
             $table->unsignedBigInteger('document_id')->nullable();
             // Null : le système, sans utilisateur connecté.
             $table->foreignId('operateur_id')->nullable()->constrained('users')->restrictOnDelete();
-            // En UTC à la seconde (voir HorodatageUtc).
+            // Instant en UTC (cast Instant).
             $table->dateTime('horodatage');
             // Le JSON exact qui est signé, relu tel quel pour vérifier la
             // signature : un texte, jamais une colonne jsonb, qui réordonne
@@ -48,7 +48,7 @@ return new class extends Migration
             $table->string('algorithme', 10);
             $table->char('cle_id', 64);
             $table->string('version_module', 10);
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->unique(['magasin_id', 'chaine', 'sequence']);
             $table->index(['magasin_id', 'chaine', 'horodatage']);

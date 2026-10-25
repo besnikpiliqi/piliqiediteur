@@ -7,6 +7,8 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Connexions\ConnexionPostgres;
+use App\Domain\Calendrier\Connexions\ConnexionSqlite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
@@ -59,6 +61,7 @@ use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
@@ -91,6 +94,9 @@ class AppServiceProvider extends ServiceProvider
      * Une connexion réussie mène à l'accueil du panneau, même pour un
      * compte qui n'a encore aucun magasin (voir ReponseDeConnexion), à la
      * place de la réponse de Filament.
+     *
+     * Les connexions SQLite et PostgreSQL lient leurs dates en UTC (voir
+     * LieLesDatesEnUtc).
      */
     public function register(): void
     {
@@ -98,6 +104,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(OrigineDesProduits::class);
         $this->app->bind('db.connector.sqlite', ConnecteurSqlite::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
+        Connection::resolverFor('sqlite', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionSqlite => new ConnexionSqlite($pdo, $base, $prefixe, $configuration));
+        Connection::resolverFor('pgsql', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres => new ConnexionPostgres($pdo, $base, $prefixe, $configuration));
     }
 
     /**
@@ -105,6 +113,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Calendrier::exigerUnFuseauUtc();
+
         // Les modèles vivent sous App\Domain\<Domaine>\Models\... plutôt
         // qu'à plat sous App\Models. La convention par défaut de Laravel
         // chercherait la factory au même chemin sous Database\Factories

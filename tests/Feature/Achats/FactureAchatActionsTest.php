@@ -17,6 +17,7 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\SequenceDocument;
@@ -1135,7 +1136,7 @@ class FactureAchatActionsTest extends TestCase
         ]);
 
         $this->assertSame(['9.0000', $chezB->id], [$produit->fresh()->cmup_ht, $produit->fresh()->fournisseur_id]);
-        $this->assertSame(['2026-10-25 02:59:30 +02:00', '2026-10-25 02:00:30 +01:00'], [$f2->fresh()->date_validation->format('Y-m-d H:i:s P'), $f1->fresh()->date_validation->format('Y-m-d H:i:s P')]);
+        $this->assertSame(['2026-10-25 02:59:30 +02:00', '2026-10-25 02:00:30 +01:00'], [Calendrier::deParis()->afficher($f2->fresh()->date_validation, 'Y-m-d H:i:s P'), Calendrier::deParis()->afficher($f1->fresh()->date_validation, 'Y-m-d H:i:s P')]);
     }
 
     /**

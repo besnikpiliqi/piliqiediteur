@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -85,9 +86,9 @@ class ClotureCaissePersonnelle extends Model
 
     protected $casts = [
         'mode_fermeture' => ModeFermetureCaisse::class,
-        'periode_debut' => 'datetime',
-        'jusqu_au' => 'datetime',
-        'cloturee_a' => 'datetime',
+        'periode_debut' => Instant::class,
+        'jusqu_au' => Instant::class,
+        'cloturee_a' => Instant::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',

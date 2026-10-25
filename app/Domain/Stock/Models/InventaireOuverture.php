@@ -2,6 +2,7 @@
 
 namespace App\Domain\Stock\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -51,7 +52,7 @@ class InventaireOuverture extends Model
 
     protected $casts = [
         'statut' => StatutInventaireOuverture::class,
-        'date_validation' => 'datetime',
+        'date_validation' => Instant::class,
         'valeur_ht' => 'decimal:2',
     ];
 

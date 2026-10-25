@@ -27,10 +27,10 @@ use LogicException;
  * Même logique que EmettreAvoirAction côté vente : l'avoir fournisseur ne
  * reçoit son numéro qu'à l'émission, moment où le stock est décrémenté
  * (voir AvoirFournisseurEmis/DecrementerStockApresEmissionAvoirFournisseur).
- * L'instant de l'émission se prend et s'enregistre en UTC (voir
- * AvoirFournisseur::casts()) : l'heure de Paris se répète la nuit du
- * passage à l'heure d'hiver, et les avoirs d'une facture d'achat se lisent
- * dans l'ordre de leur émission (voir FactureAchat::avoirsFournisseurEmis()).
+ * L'instant de l'émission s'enregistre en UTC (voir Instant) : les avoirs
+ * d'une facture d'achat se lisent dans l'ordre de leur émission (voir
+ * FactureAchat::avoirsFournisseurEmis()), et le numéro prend l'année du
+ * calendrier de cet instant.
  * Un magasin suspendu ou fermé n'en émet plus (voir
  * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit sous un verrou
  * partagé, premier verrou de la transaction, et la fermeture du magasin,
@@ -91,7 +91,7 @@ class EmettreAvoirFournisseurAction
         $this->arreterLesMontants($avoirFournisseur);
         $avoirFournisseur->verifierQueLeStockSuffit();
 
-        $maintenant = CarbonImmutable::now('UTC');
+        $maintenant = CarbonImmutable::now();
         $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, Calendrier::deParis()->anneeDe($maintenant));
 
         $avoirFournisseur->forceFill([

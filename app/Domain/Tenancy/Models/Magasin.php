@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
@@ -140,8 +141,8 @@ class Magasin extends Model implements HasName
         'statut' => StatutMagasin::class,
         'motif_fermeture' => MotifFermeture::class,
         'est_demonstration' => 'boolean',
-        'etablissement_verifie_le' => 'datetime',
-        'suspendu_le' => 'datetime',
+        'etablissement_verifie_le' => Instant::class,
+        'suspendu_le' => Instant::class,
         'references_acheteur' => 'array',
         'est_etablissement_principal' => 'boolean',
         'prix_vente_automatique' => 'boolean',

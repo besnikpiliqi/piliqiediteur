@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
@@ -113,7 +113,7 @@ class TraceEvenementTest extends TestCase
             : "INSERT OR REPLACE INTO traces_evenements {$colonnes} VALUES {$valeurs}";
 
         $this->assertThrows(
-            $this->dansUnPointDeSauvegarde(fn () => DB::statement($remplacement, [$trace->getKey(), $trace->magasin_id, '0.0.0.0', 'falsifié', HorodatageUtc::enBase(self::enUtc('2000-01-01 00:00:00')), HorodatageUtc::enBase(self::enUtc('2000-01-01 00:00:00'))])),
+            $this->dansUnPointDeSauvegarde(fn () => DB::statement($remplacement, [$trace->getKey(), $trace->magasin_id, '0.0.0.0', 'falsifié', Instant::enBase(self::enUtc('2000-01-01 00:00:00')), Instant::enBase(self::enUtc('2000-01-01 00:00:00'))])),
             QueryException::class,
             'traces_evenements : ',
         );

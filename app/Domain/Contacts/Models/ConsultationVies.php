@@ -2,9 +2,9 @@
 
 namespace App\Domain\Contacts\Models;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,9 +18,9 @@ use Illuminate\Database\Eloquent\Model;
  * s'écrit qu'une fois, par forceCreate() depuis l'action, d'où un
  * $fillable vide.
  *
- * consultee_le est enregistrée en UTC et relue à l'heure de Paris (voir
- * HorodatageUtc) : le jour d'une vérification est celui de Paris, de
- * minuit à minuit (voir scopeDuJour()). L'instant de la vérification est
+ * consultee_le est un instant en UTC (voir Instant) : le jour d'une
+ * vérification est celui du calendrier, de minuit à minuit (voir
+ * scopeDuJour()). L'instant de la vérification est
  * aussi celui de son enregistrement : la table n'a pas d'autre date.
  */
 class ConsultationVies extends Model
@@ -50,7 +50,7 @@ class ConsultationVies extends Model
     {
         return [
             'valide' => 'boolean',
-            'consultee_le' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau(),
+            'consultee_le' => Instant::class,
         ];
     }
 
@@ -77,8 +77,8 @@ class ConsultationVies extends Model
     /**
      * Les vérifications faites tel jour du calendrier, de minuit à minuit,
      * qu'elles aient trouvé le n° valide ou non : la dernière décide (voir
-     * ControleNatureOperation::consultationDuJour()). La colonne étant en
-     * UTC, ses bornes se comparent comme des instants (voir HorodatageUtc).
+     * ControleNatureOperation::consultationDuJour()), entre les instants
+     * de ses bornes.
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
@@ -87,6 +87,6 @@ class ConsultationVies extends Model
     {
         [$minuit, $minuitSuivant] = Calendrier::deParis()->bornesDuJour($jour);
 
-        return $query->where('consultee_le', '>=', HorodatageUtc::enBase($minuit))->where('consultee_le', '<', HorodatageUtc::enBase($minuitSuivant));
+        return $query->where('consultee_le', '>=', $minuit)->where('consultee_le', '<', $minuitSuivant);
     }
 }

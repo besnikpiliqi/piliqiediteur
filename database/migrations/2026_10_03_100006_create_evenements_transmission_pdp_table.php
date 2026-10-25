@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('statut', 20);
             $table->json('charge_utile')->nullable();
             // Append-only : pas d'updated_at, un événement ne se corrige pas.
-            $table->timestamp('survenu_le')->useCurrent();
+            $table->timestamp('survenu_le');
 
             // Nom explicite : celui que Laravel dériverait dépasse les 63
             // caractères d'un identifiant PostgreSQL.

@@ -2,8 +2,8 @@
 
 namespace App\Domain\CaisseSecurisee\Models;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -45,7 +45,7 @@ class TraceEvenement extends Model
     protected $fillable = [];
 
     protected $casts = [
-        'expire_le' => HorodatageUtc::class,
+        'expire_le' => Instant::class,
     ];
 
     /**

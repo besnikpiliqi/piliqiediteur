@@ -2,11 +2,11 @@
 
 namespace App\Domain\CaisseSecurisee\Models;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -52,7 +52,7 @@ class EnregistrementFiscal extends Model
     protected $casts = [
         'chaine' => ChaineFiscale::class,
         'sequence' => 'integer',
-        'horodatage' => HorodatageUtc::class,
+        'horodatage' => Instant::class,
     ];
 
     /**
@@ -103,10 +103,10 @@ class EnregistrementFiscal extends Model
 
         return $query
             ->when(filled($du), fn (Builder $enregistrements): Builder => $enregistrements->where(
-                'horodatage', '>=', HorodatageUtc::enBase($calendrier->debutDuJour($du)),
+                'horodatage', '>=', $calendrier->debutDuJour($du),
             ))
             ->when(filled($au), fn (Builder $enregistrements): Builder => $enregistrements->where(
-                'horodatage', '<', HorodatageUtc::enBase($calendrier->bornesDuJour($au)[1]),
+                'horodatage', '<', $calendrier->bornesDuJour($au)[1],
             ));
     }
 

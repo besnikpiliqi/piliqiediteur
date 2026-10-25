@@ -116,10 +116,10 @@ use LogicException;
  *     du brouillon (voir reprendreLeBrouillonDuProprietaire()), puis prend
  *     la copie de son client (nom,
  *     adresse, identifiants), la vérification VIES que retient sa nature,
- *     son numéro, dans la série et l'année de cet
- *     instant à l'heure de Paris, cet instant, en UTC, pour date
- *     d'émission (voir HorodateSonEmission), et son échéance : le jour de
- *     cet instant à Paris plus le délai de paiement du client, sinon celui
+ *     son numéro, dans la série et l'année du calendrier de cet
+ *     instant, cet instant, en UTC, pour date d'émission (voir
+ *     HorodateSonEmission), et son échéance : le jour du calendrier de
+ *     cet instant plus le délai de paiement du client, sinon celui
  *     du magasin (B7, voir Magasin::delaiDePaiementPour()), jamais dans le
  *     passé : un brouillon n'en a pas. Un ticket n'est plus émis une fois
  *     sa journée clôturée, jusqu'à minuit (voir

@@ -5,8 +5,7 @@ namespace App\Domain\Achats\Models;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
-use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -69,8 +68,8 @@ class FactureAchat extends Model
     ];
 
     /**
-     * date_validation est l'instant de la validation, enregistré en UTC et
-     * relu à l'heure de Paris (voir HorodatageUtc) ; rang_validation, son
+     * date_validation est l'instant de la validation, en UTC (voir
+     * Instant) ; rang_validation, son
      * rang parmi les validations du magasin (voir
      * ValiderFactureAchatAction).
      *
@@ -82,7 +81,7 @@ class FactureAchat extends Model
             'statut' => StatutFactureAchat::class,
             'source' => SourceFactureAchat::class,
             'date_facture' => JourCivil::class,
-            'date_validation' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau(),
+            'date_validation' => Instant::class,
             'rang_validation' => 'integer',
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',

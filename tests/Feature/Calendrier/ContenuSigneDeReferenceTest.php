@@ -25,8 +25,9 @@ use Tests\TestCase;
 /**
  * Le contenu signé d'un ticket, de son encaissement, d'une livraison
  * intracommunautaire avec sa vérification VIES et d'un avoir, à des
- * instants où le jour de Paris n'est pas celui de l'UTC : il reste octet
- * pour octet celui que fixent les fichiers de référence
+ * instants où le jour de Paris n'est pas celui de l'UTC, et aux deux
+ * passages de l'heure qui se répète au passage à l'heure d'hiver : il
+ * reste octet pour octet celui que fixent les fichiers de référence
  * (tests/Fixtures/contenu-signe), écrits en clair. Seuls les identifiants
  * que tire la base ou le hasard (identifiants, uuid du magasin, clé et
  * signature précédente) y sont remplacés par « … ».
@@ -51,6 +52,8 @@ class ContenuSigneDeReferenceTest extends TestCase
             'nuit d\'été' => [self::enUtc('2026-07-14 22:30:00'), '2026-07-15', 'nuit-d-ete'],
             'nuit d\'hiver' => [self::enUtc('2026-11-15 23:30:00'), '2026-11-16', 'nuit-d-hiver'],
             'nouvel an' => [self::enUtc('2026-12-31 23:30:00'), '2027-01-01', 'nouvel-an'],
+            'premier passage de l\'heure répétée' => [self::enUtc('2026-10-25 00:30:00'), '2026-10-25', 'premier-passage'],
+            'second passage de l\'heure répétée' => [self::enUtc('2026-10-25 01:30:00'), '2026-10-25', 'second-passage'],
         ];
     }
 

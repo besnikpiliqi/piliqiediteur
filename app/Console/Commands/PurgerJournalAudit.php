@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
@@ -85,7 +84,7 @@ class PurgerJournalAudit extends Command
                 $identifiants = $expirees->pluck('id')->all();
                 $effacables = EntreeAudit::query()
                     ->whereKey($identifiants)
-                    ->where('expire_le', '<=', HorodatageUtc::enBase(now()))
+                    ->where('expire_le', '<=', now())
                     ->whereRaw(DeclencheursDeProtection::conditionDExpiration())
                     ->count();
 

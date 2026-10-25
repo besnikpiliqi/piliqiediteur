@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Pdp\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
 use Illuminate\Database\Eloquent\Model;
@@ -31,8 +32,8 @@ class TransmissionPdp extends Model
 
     protected $casts = [
         'statut' => StatutTransmissionPdp::class,
-        'soumise_le' => 'datetime',
-        'statut_maj_le' => 'datetime',
+        'soumise_le' => Instant::class,
+        'statut_maj_le' => Instant::class,
     ];
 
     protected static function booted(): void

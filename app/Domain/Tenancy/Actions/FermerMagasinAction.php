@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
@@ -193,7 +194,7 @@ class FermerMagasinAction
         }
 
         $principalRetire = $motif === MotifFermeture::Cession && $verrouille->est_etablissement_principal;
-        $this->cloturerLesJournees->parLeSysteme($verrouille, $instant);
+        $this->cloturerLesJournees->parLeSysteme($verrouille, Calendrier::deParis()->jourDe($instant));
         $verrouille->forceFill([
             'statut' => StatutMagasin::Ferme,
             'motif_fermeture' => $motif,

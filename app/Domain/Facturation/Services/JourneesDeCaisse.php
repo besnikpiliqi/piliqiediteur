@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PeriodesDActivite;
 use Illuminate\Support\Collection;
+use LogicException;
 
 /**
  * Le calendrier des journées de caisse d'un magasin : chaque jour du
@@ -36,9 +37,15 @@ class JourneesDeCaisse
      * @param  string  $fin  AAAA-MM-JJ
      * @param  string|null  $derniereCloturee  AAAA-MM-JJ, la dernière journée clôturée du magasin
      * @return Collection<int, string> les journées, AAAA-MM-JJ
+     *
+     * @throws LogicException quand $fin n'est pas un jour du calendrier
      */
     public function aCloturer(Magasin $magasin, string $fin, ?string $derniereCloturee): Collection
     {
+        if (Calendrier::jourValide($fin) === null) {
+            throw new LogicException("« {$fin} » n'est pas une journée : une journée s'écrit AAAA-MM-JJ.");
+        }
+
         $premiereVente = Facture::jourDeLaPremiereVente();
 
         if ($premiereVente === null) {

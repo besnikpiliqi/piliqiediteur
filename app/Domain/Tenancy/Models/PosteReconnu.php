@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Illuminate\Database\Eloquent\Model;
@@ -37,7 +38,7 @@ class PosteReconnu extends Model
     protected $hidden = ['jeton_hache'];
 
     protected $casts = [
-        'retire_le' => 'datetime',
+        'retire_le' => Instant::class,
     ];
 
     /**

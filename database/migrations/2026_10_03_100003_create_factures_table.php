@@ -95,9 +95,8 @@ return new class extends Migration
             $table->string('cree_par_nom')->nullable();
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
-            // L'instant du registre fiscal à l'émission, en UTC à la seconde
-            // (voir HorodateSonEmission) : une date et une heure sans fuseau,
-            // écrites et relues telles quelles.
+            // L'instant du registre fiscal à l'émission, en UTC (cast
+            // Instant, voir HorodateSonEmission).
             $table->dateTime('date_emission')->nullable();
             $table->date('date_echeance')->nullable();
             $table->string('devise', 3)->default('EUR');

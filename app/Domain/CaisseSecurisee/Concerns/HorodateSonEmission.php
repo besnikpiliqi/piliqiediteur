@@ -2,26 +2,25 @@
 
 namespace App\Domain\CaisseSecurisee\Concerns;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Un document signé au registre fiscal à son émission (ticket, facture,
- * avoir) : sa date d'émission est l'instant du registre, enregistrée en
- * UTC et relue à l'heure de Paris (voir HorodatageUtc), pour que ce qu'il
- * signe se relise au même instant toute l'année, heure qui se répète au
- * passage à l'heure d'hiver comprise.
+ * avoir) : sa date d'émission est l'instant du registre, en UTC (voir
+ * Instant), qui se relit au même instant toute l'année, heure qui se
+ * répète au passage à l'heure d'hiver comprise.
  *
- * La colonne étant en UTC, une période de jours du calendrier se cherche
- * par les instants de ses bornes (emisDuAu(), emisLe(), emisJusquA()).
+ * Une période de jours du calendrier se cherche par les instants de ses
+ * bornes (emisDuAu(), emisLe(), emisJusquA()).
  */
 trait HorodateSonEmission
 {
     public function initializeHorodateSonEmission(): void
     {
-        $this->mergeCasts(['date_emission' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau()]);
+        $this->mergeCasts(['date_emission' => Instant::class]);
     }
 
     /**
@@ -33,8 +32,8 @@ trait HorodateSonEmission
         $calendrier = Calendrier::deParis();
 
         return $query
-            ->where('date_emission', '>=', HorodatageUtc::enBase($calendrier->debutDuJour($du)))
-            ->where('date_emission', '<', HorodatageUtc::enBase($calendrier->bornesDuJour($au)[1]));
+            ->where('date_emission', '>=', $calendrier->debutDuJour($du))
+            ->where('date_emission', '<', $calendrier->bornesDuJour($au)[1]);
     }
 
     /**
@@ -43,7 +42,7 @@ trait HorodateSonEmission
      */
     public function scopeEmisJusquA(Builder $query, CarbonInterface $instant): Builder
     {
-        return $query->where('date_emission', '<=', HorodatageUtc::enBase($instant));
+        return $query->where('date_emission', '<=', $instant);
     }
 
     /**

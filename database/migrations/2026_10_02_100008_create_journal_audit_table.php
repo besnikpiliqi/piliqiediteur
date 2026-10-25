@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Schema;
  * DeclencheursDeProtection::effacementApresExpiration()). L'adresse IP et
  * le navigateur sont rangés à part (traces_audit).
  *
- * expire_le et created_at sont en UTC à la seconde (voir HorodatageUtc) :
+ * expire_le et created_at sont des instants en UTC (cast Instant) :
  * l'empreinte les signe, et les déclencheurs comparent expire_le à
  * l'heure UTC du serveur de base de données.
  */

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Stock\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -50,7 +51,7 @@ class MouvementStock extends Model
         'type' => TypeMouvementStock::class,
         'quantite' => 'integer',
         'cout_unitaire_ht' => 'decimal:4',
-        'survenu_le' => 'datetime',
+        'survenu_le' => Instant::class,
     ];
 
     /**

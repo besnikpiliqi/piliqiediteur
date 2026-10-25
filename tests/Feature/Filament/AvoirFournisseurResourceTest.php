@@ -9,6 +9,7 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -404,7 +405,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $page->assertSeeHtmlInOrder(['Retourné : 1 (avoir', 'AF-MABOUT-2026-000001</a> du 25/10/2026)', 'Retourné : 2 (avoir', 'AF-MABOUT-2026-000002</a> du 25/10/2026)']);
         $this->assertSame(
             ['2026-10-25 02:50:00 +02:00', '2026-10-25 02:10:00 +01:00'],
-            [$premier->fresh()->date_emission->format('Y-m-d H:i:s P'), $second->fresh()->date_emission->format('Y-m-d H:i:s P')],
+            [Calendrier::deParis()->afficher($premier->fresh()->date_emission, 'Y-m-d H:i:s P'), Calendrier::deParis()->afficher($second->fresh()->date_emission, 'Y-m-d H:i:s P')],
         );
     }
 

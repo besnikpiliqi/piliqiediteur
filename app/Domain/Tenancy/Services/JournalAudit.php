@@ -2,8 +2,8 @@
 
 namespace App\Domain\Tenancy\Services;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
@@ -178,8 +178,8 @@ class JournalAudit
             'justification' => $entree->justification,
             'operateur' => $entree->operateur === null ? null : self::trier($entree->operateur),
             'cle_id' => $entree->cle_id,
-            'expire_le' => $entree->expire_le === null ? null : HorodatageUtc::enBase($entree->expire_le),
-            'created_at' => HorodatageUtc::enBase($entree->created_at),
+            'expire_le' => $entree->expire_le === null ? null : Instant::enBase($entree->expire_le),
+            'created_at' => Instant::enBase($entree->created_at),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
 

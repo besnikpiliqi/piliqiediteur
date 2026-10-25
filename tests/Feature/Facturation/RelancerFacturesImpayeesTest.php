@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Facturation;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -191,7 +191,7 @@ class RelancerFacturesImpayeesTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $sansEnregistrement = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['email' => 'anomalie@exemple.fr', 'delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $sansEnregistrement->id)
-            ->update(['numero' => 'TK-RELANCE-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-01 09:00:00')), 'date_echeance' => '2026-10-01']);
+            ->update(['numero' => 'TK-RELANCE-2026-000009', 'statut' => 'emise', 'date_emission' => Instant::enBase(self::enUtc('2026-10-01 09:00:00')), 'date_echeance' => '2026-10-01']);
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
         $this->travelTo(self::aParis('2026-10-08 09:00:00'));
         app(TenantContext::class)->clear();

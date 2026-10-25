@@ -45,7 +45,6 @@ class VerificationSociete extends Model
         'resultat' => ResultatVerification::class,
         'details' => 'array',
         'operateur' => 'array',
-        'created_at' => 'datetime',
     ];
 
     protected static function booted(): void

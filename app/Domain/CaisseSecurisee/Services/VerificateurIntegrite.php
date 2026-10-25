@@ -2,12 +2,12 @@
 
 namespace App\Domain\CaisseSecurisee\Services;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -1322,7 +1322,7 @@ class VerificateurIntegrite
             return;
         }
 
-        $anneeDEmission = Calendrier::deParis()->anneeDe(HorodatageUtc::depuisLaBase($emission));
+        $anneeDEmission = Calendrier::deParis()->anneeDe(Instant::depuisLaBase($emission));
 
         if ($anneeDEmission !== $serie->period_key) {
             $this->rapport->signaler(AnomalieFiscale::defaut('numerotation', sprintf(
@@ -1556,7 +1556,7 @@ class VerificateurIntegrite
     }
 
     /**
-     * Un horodatage tel qu'il s'écrit en base (voir HorodatageUtc), ou null
+     * Un horodatage tel qu'il s'écrit en base (voir Instant), ou null
      * s'il n'en a pas la forme : deux horodatages de cette forme se
      * comparent comme des chaînes.
      */
@@ -1581,7 +1581,7 @@ class VerificateurIntegrite
      */
     private static function enClair(string $horodatageEnBase): string
     {
-        return Calendrier::deParis()->afficher(HorodatageUtc::depuisLaBase($horodatageEnBase), 'd/m/Y à H:i:s');
+        return Calendrier::deParis()->afficher(Instant::depuisLaBase($horodatageEnBase), 'd/m/Y à H:i:s');
     }
 
     /**

@@ -2,7 +2,7 @@
 
 namespace App\Domain\CaisseSecurisee\Models;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Carbon\CarbonImmutable;
@@ -34,7 +34,7 @@ class TeteRegistreFiscal extends Model
     protected $fillable = [];
 
     protected $casts = [
-        'dernier_horodatage' => HorodatageUtc::class,
+        'dernier_horodatage' => Instant::class,
         'derniere_journee_cloturee' => JourCivil::class,
         'chaines' => 'array',
     ];

@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -90,7 +91,7 @@ class FermerLaDemonstrationAction
                 return false;
             }
 
-            $this->cloturerLesJournees->parLeSysteme($verrouille, $maintenant);
+            $this->cloturerLesJournees->parLeSysteme($verrouille, Calendrier::deParis()->jourDe($maintenant));
             $this->registre->journaliser(CodeEvenement::SortieDuModeDemonstration, ['motif' => $motif->value]);
             $verrouille->forceFill(['statut' => StatutMagasin::Ferme, 'motif_fermeture' => $motif])->save();
             $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [

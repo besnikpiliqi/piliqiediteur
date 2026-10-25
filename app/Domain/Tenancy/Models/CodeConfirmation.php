@@ -2,7 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\MotifCode;
@@ -50,14 +50,14 @@ class CodeConfirmation extends Model
     protected $casts = [
         'motif' => MotifCode::class,
         'destinataire' => 'array',
-        'envoye_le' => 'datetime',
-        'remis_le' => 'datetime',
-        'retourne_le' => 'datetime',
-        'expire_le' => 'datetime',
+        'envoye_le' => Instant::class,
+        'remis_le' => Instant::class,
+        'retourne_le' => Instant::class,
+        'expire_le' => Instant::class,
         'tentatives' => 'integer',
-        'utilise_le' => 'datetime',
-        'annule_le' => 'datetime',
-        'conserver_jusqu_au' => HorodatageUtc::class,
+        'utilise_le' => Instant::class,
+        'annule_le' => Instant::class,
+        'conserver_jusqu_au' => Instant::class,
     ];
 
     /**

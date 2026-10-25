@@ -3,12 +3,12 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -1662,7 +1662,7 @@ class FactureResourceTest extends TestCase
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['nom' => 'Jean Ancien']), [['produit_id' => $produit->id, 'quantite' => 1]]);
         $intacte = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['nom' => 'Paul Tiers']));
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:00'))]);
         $numerote = $brouillon->fresh();
 
         Livewire::test(ListFactures::class)
@@ -2301,8 +2301,8 @@ class FactureResourceTest extends TestCase
     {
         $this->magasinQuiVendHorsDeFrance();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
-        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW0000001', 'consultee_le' => now()->setTime(8, 0), 'reponse' => '{"valid":true}']);
-        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => false, 'identifiant_consultation' => null, 'consultee_le' => now()->setTime(9, 0), 'reponse' => '{"valid":false}']);
+        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW0000001', 'consultee_le' => self::aParis('2026-10-09 08:00:00'), 'reponse' => '{"valid":true}']);
+        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => false, 'identifiant_consultation' => null, 'consultee_le' => self::aParis('2026-10-09 09:00:00'), 'reponse' => '{"valid":false}']);
         $brouillon = $this->brouillonDeLivraisonIntracommunautaire($client);
         Http::preventStrayRequests();
         Http::fake(['https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number' => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'MUSTER GMBH', 'address' => '---'])]);

@@ -61,12 +61,13 @@ class ReglesDuCalendrierTest extends TestCase
 
     /**
      * Les casts qui liraient une colonne de date ou d'heure dans le fuseau
-     * de l'application.
+     * de l'application, et les heures par défaut qu'écrirait la base.
      *
      * @var array<string, string>
      */
     private const MOTIFS_DES_CASTS = [
         'cast de jour qui porte une heure (JourCivil::class)' => "/=> '(?:date|immutable_date)(?::[^']*)?'/",
+        'cast d\'instant dans le fuseau de l\'application (Instant::class)' => "/=> '(?:datetime|immutable_datetime)(?::[^']*)?'|HorodatageUtc/",
     ];
 
     /**
@@ -83,15 +84,8 @@ class ReglesDuCalendrierTest extends TestCase
             'Carbon::create(2000, $mois)->translatedFormat(\'F\')' => 'le nom de chacun des douze mois, tiré d\'une date fixe sans heure',
         ],
         'app/Domain/CaisseSecurisee/Services/RegistreFiscal.php' => [
-            'CarbonImmutable::now(\'UTC\')' => 'tant que l\'application est à l\'heure de Paris, seule une horloge lue en UTC donne sans ambiguïté le premier passage de l\'heure répétée ; la bascule écrira now()',
             '\'instant\' => $instant->utc->toIso8601String()' => 'journal technique d\'une horloge qui recule (Log::critical), en UTC',
             '\'dernier_verrou\' => $dernierVerrou->toIso8601String()' => 'journal technique d\'une horloge qui recule (Log::critical), en UTC',
-        ],
-        'app/Domain/Achats/Actions/ValiderFactureAchatAction.php' => [
-            '$maintenant = CarbonImmutable::now(\'UTC\');' => 'tant que l\'application est à l\'heure de Paris, seule une horloge lue en UTC donne sans ambiguïté le premier passage de l\'heure répétée ; la bascule écrira now()',
-        ],
-        'app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php' => [
-            '$maintenant = CarbonImmutable::now(\'UTC\');' => 'tant que l\'application est à l\'heure de Paris, seule une horloge lue en UTC donne sans ambiguïté le premier passage de l\'heure répétée ; la bascule écrira now()',
         ],
         'app/Domain/CaisseSecurisee/Exceptions/HorlogeRegressiveException.php' => [
             '$instant->format(\'d/m/Y H:i:s\')' => 'message d\'une horloge du serveur qui recule, qui dit l\'heure UTC',
@@ -102,17 +96,6 @@ class ReglesDuCalendrierTest extends TestCase
         ],
         'app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php' => [
             'AT TIME ZONE \'UTC\'' => 'les déclencheurs de purge comparent déjà à l\'heure UTC du serveur de base',
-        ],
-        'app/Domain/CaisseSecurisee/Casts/HorodatageUtc.php' => [
-            'CarbonImmutable::instance($instant)->utc()->format(self::FORMAT)' => 'le format en base d\'un horodatage, en UTC, que la bascule reprend dans Instant',
-            'CarbonImmutable::createFromFormat(\'!\'.self::FORMAT, $texte, \'UTC\')' => 'la lecture en UTC d\'un horodatage en base, que la bascule reprend dans Instant',
-            'self::depuisLaBase($value)->setTimezone($this->fuseauDeLecture)' => 'le fuseau de lecture du cast, que la bascule retire',
-        ],
-        'app/Domain/Tenancy/Services/JetonsDuLien.php' => [
-            'CarbonImmutable::parse($ligne->created_at)' => 'texte brut d\'une table de Laravel, à l\'heure de l\'application jusqu\'à la bascule, qui le relira par Instant::depuisLaBase()',
-        ],
-        'app/Console/Commands/FermerDemonstrationsInactives.php' => [
-            'CarbonImmutable::parse($instant)' => 'agrégat brut, à l\'heure de l\'application jusqu\'à la bascule, qui le relira par Instant::depuisLaBase()',
         ],
     ];
 
@@ -188,12 +171,27 @@ class ReglesDuCalendrierTest extends TestCase
     }
 
     /**
-     * Une colonne de jour a le cast JourCivil, jamais un cast de date qui
-     * la lirait comme un minuit du fuseau de l'application.
+     * Une colonne de jour a le cast JourCivil, une colonne d'instant le
+     * cast Instant, jamais un cast qui les lirait dans le fuseau de
+     * l'application ; aucune migration ne donne à une colonne l'heure de
+     * la base pour valeur par défaut : l'application écrit chaque
+     * instant.
      */
     public function test_les_colonnes_de_date_ont_les_casts_du_calendrier_et_aucune_heure_par_defaut(): void
     {
         $this->assertSame([], $this->violationsDansLApplication(self::MOTIFS_DES_CASTS));
+
+        $heuresParDefaut = [];
+
+        foreach (File::allFiles(base_path('database/migrations')) as $fichier) {
+            foreach (explode("\n", $fichier->getContents()) as $numero => $ligne) {
+                if (preg_match('/useCurrent(?:OnUpdate)?\\(|CURRENT_TIMESTAMP|now\\(\\)/i', $ligne) === 1) {
+                    $heuresParDefaut[] = sprintf('%s:%d  %s', $this->cheminDansLeDepot($fichier), $numero + 1, trim($ligne));
+                }
+            }
+        }
+
+        $this->assertSame([], $heuresParDefaut);
     }
 
     /**
@@ -237,8 +235,8 @@ class ReglesDuCalendrierTest extends TestCase
 
     /**
      * Aucun test ne voyage en jours, semaines, mois ou années, ni ne
-     * calcule ainsi sur un instant : ce calcul dépendrait du fuseau de
-     * l'application. Aucun voyage ne part de l'heure réelle ni de celle du
+     * calcule ainsi sur un instant, ni n'y règle une heure murale : ce
+     * calcul dépendrait du fuseau de l'application. Aucun voyage ne part de l'heure réelle ni de celle du
      * serveur de base, sauf l'exception listée.
      */
     public function test_aucun_test_ne_voyage_en_jours_ni_ne_part_de_l_heure_reelle(): void
@@ -246,6 +244,7 @@ class ReglesDuCalendrierTest extends TestCase
         $violations = $this->violationsDansLesTests(static fn (string $ligne): array => array_values(array_filter([
             preg_match('/travel\([^;]*\)->(?:day|days|week|weeks|month|months|year|years)\(/', $ligne) === 1 ? 'voyage en jours' : null,
             preg_match('/->(?:add|sub)(?:Day|Days|Week|Weeks|Month|Months|MonthsNoOverflow|Year|Years)\(/', $ligne) === 1 ? 'calcul en jours sur un instant' : null,
+            preg_match('/->(?:setTime|setHour|setMinute|setDate|setDay|startOfDay|endOfDay)\\(/', $ligne) === 1 ? 'heure murale réglée sur un instant' : null,
             preg_match('/travelTo\(\s*(?:now\(|[\\\\\w]*::now\(|\$this->maintenantSelonLaBase\()/', $ligne) === 1 ? 'voyage parti de l\'heure réelle' : null,
         ])), self::VOYAGES_PERMIS);
 

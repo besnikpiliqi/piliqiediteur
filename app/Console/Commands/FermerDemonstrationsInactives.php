@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -78,6 +79,8 @@ class FermerDemonstrationsInactives extends Command
             ->whereIn('chaine', [ChaineFiscale::Vente->value, ChaineFiscale::Encaissement->value])
             ->max('horodatage');
 
-        return collect([$ouverture, $derniereOperation])->filter()->every(fn ($instant): bool => CarbonImmutable::parse($instant)->lessThan($limite));
+        return collect([$ouverture, $derniereOperation === null ? null : Instant::depuisLaBase($derniereOperation)])
+            ->filter()
+            ->every(fn (CarbonImmutable $instant): bool => $instant->lessThan($limite));
     }
 }

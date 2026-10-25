@@ -27,7 +27,6 @@ class EvenementTransmissionPdp extends Model
 
     protected $casts = [
         'charge_utile' => 'array',
-        'survenu_le' => 'datetime',
     ];
 
     public function transmission(): BelongsTo

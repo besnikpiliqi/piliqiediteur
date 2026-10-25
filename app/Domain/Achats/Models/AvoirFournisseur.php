@@ -4,8 +4,7 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
-use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -58,8 +57,7 @@ class AvoirFournisseur extends Model
     ];
 
     /**
-     * date_emission est l'instant de l'émission, enregistré en UTC et relu
-     * à l'heure de Paris (voir HorodatageUtc).
+     * date_emission est l'instant de l'émission, en UTC (voir Instant).
      *
      * @return array<string, string>
      */
@@ -68,7 +66,7 @@ class AvoirFournisseur extends Model
         return [
             'statut' => StatutAvoirFournisseur::class,
             'source' => SourceAvoirFournisseur::class,
-            'date_emission' => HorodatageUtc::class.':'.Calendrier::deParis()->fuseau(),
+            'date_emission' => Instant::class,
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',

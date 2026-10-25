@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\TypePiece;
@@ -45,8 +46,8 @@ class PieceVerification extends Model
 
     protected $casts = [
         'type' => TypePiece::class,
-        'deposee_le' => 'datetime',
-        'effacee_le' => 'datetime',
+        'deposee_le' => Instant::class,
+        'effacee_le' => Instant::class,
     ];
 
     protected static function booted(): void

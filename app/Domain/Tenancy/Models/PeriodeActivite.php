@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use Illuminate\Database\Eloquent\Model;
@@ -37,8 +38,8 @@ class PeriodeActivite extends Model
     protected $fillable = [];
 
     protected $casts = [
-        'debut' => 'datetime',
-        'fin' => 'datetime',
+        'debut' => Instant::class,
+        'fin' => Instant::class,
         'motif_fin' => MotifFermeture::class,
     ];
 

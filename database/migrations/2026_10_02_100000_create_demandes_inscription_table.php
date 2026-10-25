@@ -27,7 +27,7 @@ return new class extends Migration
             $table->text('donnees');
             $table->timestamp('expire_le');
             $table->timestamp('consommee_le')->nullable();
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->index('expire_le');
         });

@@ -42,7 +42,7 @@ return new class extends Migration
             $table->text('note')->nullable();
             // Ledger immuable : pas d'updated_at, un mouvement ne se
             // modifie jamais, il se compense par un mouvement inverse.
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'produit_id', 'survenu_le']);
         });

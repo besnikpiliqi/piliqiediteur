@@ -51,7 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule): void {
         // À minuit pile, heure de Paris comme tous les horaires ci-dessous
-        // (voir config/app.php) : clôture, dans l'ordre, les journées de
+        // (schedule_timezone, voir config/app.php) : clôture, dans l'ordre, les journées de
         // caisse encore ouvertes jusqu'à la veille, celle qui vient de finir
         // et toute journée manquée, pour tout magasin qui ne l'a pas fait
         // lui-même (voir ClotureAutomatiqueCaisse). Puis, 15 minutes plus

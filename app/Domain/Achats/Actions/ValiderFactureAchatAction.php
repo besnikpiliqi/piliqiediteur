@@ -31,9 +31,8 @@ use LogicException;
  * DocumentNumberingService::rangSuivant()), qui ne recule jamais, même
  * quand deux validations tombent dans la même seconde : le dernier achat
  * d'un produit se choisit par lui (voir Produit::achatsValides()), et non
- * par l'instant de la validation, qui se prend et s'enregistre en UTC
- * (voir FactureAchat::casts()), l'heure de Paris se répétant la nuit du
- * passage à l'heure d'hiver.
+ * par l'instant de la validation, qui s'enregistre en UTC (voir
+ * Instant).
  * Chacun de ses produits existants doit encore être au catalogue : une
  * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
  * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
@@ -139,7 +138,7 @@ class ValiderFactureAchatAction
 
         $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
 
-        $maintenant = CarbonImmutable::now('UTC');
+        $maintenant = CarbonImmutable::now();
         $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, Calendrier::deParis()->anneeDe($maintenant));
 
         $factureAchat->forceFill([

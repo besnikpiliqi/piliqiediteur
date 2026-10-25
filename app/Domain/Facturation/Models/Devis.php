@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -64,7 +65,7 @@ class Devis extends Model implements DocumentEnvoyable
         'nature_operation' => NatureOperation::class,
         'livraison_date' => JourCivil::class,
         'transport_par' => TransportPar::class,
-        'date_emission' => 'datetime',
+        'date_emission' => Instant::class,
         'date_validite' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',

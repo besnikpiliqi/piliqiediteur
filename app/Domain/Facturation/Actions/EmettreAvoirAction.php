@@ -45,7 +45,7 @@ use LogicException;
  *     montants, prend la copie du client figée sur le document qu'il
  *     corrige, le plus récent s'il en corrige plusieurs (voir
  *     Avoir::clientAFiger()), reçoit son numéro,
- *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
+ *     dans l'année du calendrier de cet instant, et cet instant, en
  *     UTC, pour date d'émission (voir HorodateSonEmission) --
  *     un avoir sur des tickets, que compte la clôture de sa journée (voir
  *     Avoir::corrigeDesTickets()), n'est plus émis une fois cette journée

@@ -3,7 +3,6 @@
 namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\Authorization\OperateurCourant;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -13,6 +12,7 @@ use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -360,7 +360,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:01'))]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:01'))]);
 
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
@@ -449,7 +449,7 @@ class VerificateurIntegriteTest extends TestCase
         $initialisation = $this->enregistrement(ChaineFiscale::Evenement, 1);
         $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_update');
 
-        DB::table('enregistrements_fiscaux')->where('magasin_id', $initialisation->magasin_id)->where('id', $initialisation->id)->update(['horodatage' => HorodatageUtc::enBase(self::enUtc('2026-10-09 07:00:00'))]);
+        DB::table('enregistrements_fiscaux')->where('magasin_id', $initialisation->magasin_id)->where('id', $initialisation->id)->update(['horodatage' => Instant::enBase(self::enUtc('2026-10-09 07:00:00'))]);
 
         $this->assertSame([
             [90, 'Enregistrement n° 1 du journal des événements : l\'en-tête signé diffère de ses colonnes (horodatage).'],
@@ -474,7 +474,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->reecrireEtResigner(
             $deuxiemeExport,
             static fn (string $contenu): string => str_replace('"horodatage":"20261009090000Z"', '"horodatage":"20261009075959Z"', $contenu),
-            ['horodatage' => HorodatageUtc::enBase(self::enUtc('2026-10-09 07:59:59'))],
+            ['horodatage' => Instant::enBase(self::enUtc('2026-10-09 07:59:59'))],
         );
 
         $this->assertSame([
@@ -576,7 +576,7 @@ class VerificateurIntegriteTest extends TestCase
                 'La ligne de tête ne note pas la version du module et la clé du dernier enregistrement du registre.',
             ],
             'dernier verrou' => [
-                static fn (array $chaines): array => ['dernier_horodatage' => HorodatageUtc::enBase(self::enUtc('2026-10-09 07:59:59'))],
+                static fn (array $chaines): array => ['dernier_horodatage' => Instant::enBase(self::enUtc('2026-10-09 07:59:59'))],
                 'La ligne de tête date le dernier verrou du registre du 09/10/2026 à 09:59:59, avant son enregistrement le plus récent (09/10/2026 à 10:00:00).',
             ],
         ];
@@ -724,7 +724,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->activite();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-LYON1-2026-000003', 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-LYON1-2026-000003', 'statut' => 'emise', 'date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000003 n\'a aucun enregistrement de la chaîne des ventes.'],
@@ -799,7 +799,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->activite();
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => $numero, 'statut' => 'emise', 'date_emission' => HorodatageUtc::enBase(self::enUtc('2026-10-09 08:00:00'))]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => $numero, 'statut' => 'emise', 'date_emission' => Instant::enBase(self::enUtc('2026-10-09 08:00:00'))]);
 
         $this->assertSame([95, $anomalie], $this->anomalies($this->verifier())[1]);
     }
@@ -933,7 +933,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => HorodatageUtc::enBase(self::enUtc('2025-12-31 12:00:00'))]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => Instant::enBase(self::enUtc('2025-12-31 12:00:00'))]);
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],

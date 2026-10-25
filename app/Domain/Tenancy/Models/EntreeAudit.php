@@ -2,7 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
@@ -31,7 +31,7 @@ class EntreeAudit extends Model
 
     /**
      * Son instant s'écrit par JournalAudit, en UTC à la seconde (voir
-     * HorodatageUtc), et entre dans son empreinte : jamais par Eloquent.
+     * Instant), et entre dans son empreinte : jamais par Eloquent.
      */
     public $timestamps = false;
 
@@ -44,8 +44,8 @@ class EntreeAudit extends Model
         'anciennes_valeurs' => 'array',
         'nouvelles_valeurs' => 'array',
         'operateur' => 'array',
-        'expire_le' => HorodatageUtc::class,
-        'created_at' => HorodatageUtc::class,
+        'expire_le' => Instant::class,
+        'created_at' => Instant::class,
     ];
 
     protected static function booted(): void

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -37,9 +38,9 @@ class TransmissionPropriete extends Model
     protected $hidden = ['jeton_hache'];
 
     protected $casts = [
-        'expire_le' => 'datetime',
-        'annulee_le' => 'datetime',
-        'acceptee_le' => 'datetime',
+        'expire_le' => Instant::class,
+        'annulee_le' => Instant::class,
+        'acceptee_le' => Instant::class,
     ];
 
     /**

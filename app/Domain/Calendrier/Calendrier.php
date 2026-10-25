@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Le calendrier d'un fuseau, seule classe de l'application qui connaît un
@@ -227,6 +228,22 @@ final class Calendrier
     public static function horodatageSigne(DateTimeInterface $instant): string
     {
         return CarbonImmutable::instance($instant)->utc()->format('YmdHis').'Z';
+    }
+
+    /**
+     * L'invariant du démarrage : l'application et PHP sont en UTC, fuseau
+     * de tous les instants (voir Casts\Instant). Un autre fuseau décalerait
+     * en silence chaque instant écrit, lu ou comparé.
+     *
+     * @throws LogicException
+     */
+    public static function exigerUnFuseauUtc(): void
+    {
+        foreach (["config('app.timezone')" => config('app.timezone'), 'date_default_timezone_get()' => date_default_timezone_get()] as $source => $fuseau) {
+            if ($fuseau !== 'UTC') {
+                throw new LogicException("Le fuseau de l'application doit être UTC : {$source} vaut « {$fuseau} ». Le calendrier de chaque magasin passe par la classe Calendrier.");
+            }
+        }
     }
 
     /**

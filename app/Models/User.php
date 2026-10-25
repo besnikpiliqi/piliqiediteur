@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -107,19 +108,19 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'code_du_courrier_saisi_le' => 'datetime',
+            'email_verified_at' => Instant::class,
+            'code_du_courrier_saisi_le' => Instant::class,
             'password' => 'hashed',
             'role_societe' => RoleSociete::class,
             'statut' => StatutCompte::class,
             'statut_decide_par_le_proprietaire' => 'boolean',
             'mot_de_passe_est_l_identifiant' => 'boolean',
             'signaler_le_prochain_mot_de_passe' => 'boolean',
-            'premiere_connexion_le' => 'datetime',
-            'derniere_connexion_le' => 'datetime',
-            'acces_redonne_le' => 'datetime',
+            'premiere_connexion_le' => Instant::class,
+            'derniere_connexion_le' => Instant::class,
+            'acces_redonne_le' => Instant::class,
             'acces_redonne_en_presence' => 'boolean',
-            'nouvelle_adresse_expire_le' => 'datetime',
+            'nouvelle_adresse_expire_le' => Instant::class,
         ];
     }
 

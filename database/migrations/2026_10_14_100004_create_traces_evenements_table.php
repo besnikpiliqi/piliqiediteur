@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\Schema;
  * trace désigne. Un événement inscrit par une commande ou un job, sans
  * visiteur, n'a pas de trace.
  *
- * expire_le est en UTC à la seconde (voir HorodatageUtc) : les
- * déclencheurs le comparent à l'heure UTC du serveur de base de données.
+ * expire_le est un instant en UTC (cast Instant) : les déclencheurs le
+ * comparent à l'heure UTC du serveur de base de données.
  */
 return new class extends Migration
 {
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->string('ip', 45)->nullable();
             $table->string('agent_utilisateur', 255)->nullable();
             $table->dateTime('expire_le');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'expire_le']);
         });

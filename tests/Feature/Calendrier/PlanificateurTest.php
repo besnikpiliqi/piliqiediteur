@@ -54,15 +54,19 @@ class PlanificateurTest extends TestCase
 
     /**
      * Chaque tâche quotidienne part à son heure de Paris, une seule fois
-     * dans la journée, en été et en hiver ; la tâche mensuelle part le 1er
-     * à 5 h à Paris, en hiver comme en été ; les tâches horaires partent à
-     * chaque heure ronde, aux deux passages de l'heure répétée compris.
+     * dans la journée, en été, en hiver et les jours de changement d'heure
+     * (25 heures le 25 octobre 2026, 23 heures le 28 mars 2027) ; la tâche
+     * mensuelle part le 1er à 5 h à Paris, en hiver comme en été ; les
+     * tâches horaires partent à chaque heure ronde, aux deux passages de
+     * l'heure répétée compris.
      */
-    public function test_les_taches_quotidiennes_et_mensuelles_partent_a_l_heure_de_paris_en_ete_et_en_hiver(): void
+    public function test_les_taches_quotidiennes_et_mensuelles_partent_a_l_heure_de_paris_en_ete_en_hiver_et_les_jours_de_changement_d_heure(): void
     {
         $journees = [
             'été' => [self::enUtc('2026-07-13 22:00:00'), 24, [self::enUtc('2026-07-13 22:00:00'), self::enUtc('2026-07-14 01:00:00'), self::enUtc('2026-07-14 07:00:00')]],
             'hiver' => [self::enUtc('2026-12-14 23:00:00'), 24, [self::enUtc('2026-12-14 23:00:00'), self::enUtc('2026-12-15 02:00:00'), self::enUtc('2026-12-15 08:00:00')]],
+            'passage à l\'heure d\'hiver' => [self::enUtc('2026-10-24 22:00:00'), 25, [self::enUtc('2026-10-24 22:00:00'), self::enUtc('2026-10-25 02:00:00'), self::enUtc('2026-10-25 08:00:00')]],
+            'passage à l\'heure d\'été' => [self::enUtc('2027-03-27 23:00:00'), 23, [self::enUtc('2027-03-27 23:00:00'), self::enUtc('2027-03-28 01:00:00'), self::enUtc('2027-03-28 07:00:00')]],
         ];
 
         foreach ($journees as $journee => [$minuit, $heures, $attendus]) {

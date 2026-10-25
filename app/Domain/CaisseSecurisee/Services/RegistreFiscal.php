@@ -3,7 +3,6 @@
 namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\Authorization\OperateurCourant;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
@@ -285,7 +284,7 @@ class RegistreFiscal
         return EnregistrementFiscal::query()
             ->where('chaine', $chaine->value)
             ->when($apres !== null, fn (Builder $enregistrements): Builder => $enregistrements->where('sequence', '>', $apres))
-            ->where('horodatage', '<=', HorodatageUtc::enBase($jusquA))
+            ->where('horodatage', '<=', $jusquA)
             ->orderBy('sequence')
             ->get();
     }
@@ -448,7 +447,7 @@ class RegistreFiscal
         $verrouTenu = $this->verrous[$magasinId] ?? null;
         $instant = $verrouTenu !== null && $verrouTenu['transaction'] === $transaction
             ? $verrouTenu['instant']
-            : new InstantFiscal(CarbonImmutable::now('UTC')->startOfSecond());
+            : new InstantFiscal(CarbonImmutable::now()->startOfSecond());
         $dernierVerrou = $tete->dernier_horodatage;
 
         if ($dernierVerrou !== null && $instant->utc->lessThan($dernierVerrou)) {

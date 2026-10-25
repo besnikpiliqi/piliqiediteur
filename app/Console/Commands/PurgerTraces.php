@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -50,7 +50,7 @@ class PurgerTraces extends Command
 
     public function handle(TenantContext $tenantContext): int
     {
-        $limite = HorodatageUtc::enBase(now());
+        $limite = CarbonImmutable::now();
         $effacees = 0;
         $enEchec = 0;
 
@@ -88,9 +88,9 @@ class PurgerTraces extends Command
      * Les traces expirées du magasin ou de la société actifs, lot par lot.
      *
      * @param  Closure(): Builder<Model>  $traces  la requête des traces, sous le scope du magasin ou de la société actifs
-     * @param  string  $limite  maintenant, à l'heure de l'application, tel que expire_le s'écrit en base (UTC)
+     * @param  CarbonImmutable  $limite  l'instant du passage
      */
-    private function effacerLesTracesExpirees(Closure $traces, string $cle, string $limite): int
+    private function effacerLesTracesExpirees(Closure $traces, string $cle, CarbonImmutable $limite): int
     {
         $expirees = fn (): Builder => $traces()
             ->where('expire_le', '<=', $limite)

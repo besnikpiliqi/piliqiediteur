@@ -3,7 +3,6 @@
 namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\Authorization\OperateurCourant;
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
@@ -16,6 +15,7 @@ use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -228,7 +228,7 @@ class RegistreFiscalTest extends TestCase
 
         $enregistrement = $enregistrement->fresh();
         $this->assertSame('2026-10-09T08:15:30+00:00', $enregistrement->horodatage->toIso8601String());
-        $this->assertSame(HorodatageUtc::enBase(self::enUtc('2026-10-09 08:15:30')), DB::table('enregistrements_fiscaux')->where('id', $enregistrement->id)->value('horodatage'));
+        $this->assertSame(Instant::enBase(self::enUtc('2026-10-09 08:15:30')), DB::table('enregistrements_fiscaux')->where('id', $enregistrement->id)->value('horodatage'));
         $this->assertSame('facture', $enregistrement->document_type);
         $this->assertTrue($enregistrement->document->is($facture));
         $this->assertTrue($enregistrement->operateur->is($vendeuse));

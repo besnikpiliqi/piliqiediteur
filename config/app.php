@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\Calendrier\Calendrier;
+
 return [
 
     /*
@@ -59,15 +61,21 @@ return [
     | Application Timezone
     |--------------------------------------------------------------------------
     |
-    | L'heure légale française, été comme hiver : c'est elle qui donne la
-    | date d'une facture, la journée de caisse à laquelle appartient une
-    | vente, l'année de sa numérotation et l'heure des tâches planifiées
-    | (clôture de minuit). En UTC, une vente faite à 0 h 30 le 1er janvier
-    | serait datée et numérotée sur l'année d'avant.
+    | L'application travaille en UTC : chaque instant s'enregistre, se
+    | compare et se calcule en UTC, sans aucune ambiguïté aux changements
+    | d'heure (voir App\Domain\Calendrier\Casts\Instant), et l'application
+    | refuse de démarrer à un autre fuseau (voir
+    | Calendrier::exigerUnFuseauUtc()). Le calendrier (journée de caisse,
+    | échéances, année des numéros, affichage) suit l'heure de Paris par la
+    | classe Calendrier, seule à connaître un fuseau, et le planificateur
+    | par schedule_timezone : les horaires de bootstrap/app.php sont à
+    | l'heure de Paris.
     |
     */
 
-    'timezone' => 'Europe/Paris',
+    'timezone' => 'UTC',
+
+    'schedule_timezone' => Calendrier::deParis()->fuseau(),
 
     /*
     |--------------------------------------------------------------------------

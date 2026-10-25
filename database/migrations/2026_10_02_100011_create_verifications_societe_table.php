@@ -38,7 +38,7 @@ return new class extends Migration
             $table->string('auteur_nom')->nullable();
             $table->json('operateur')->nullable();
             $table->dateTime('expire_le')->nullable();
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->foreign(['societe_id', 'magasin_id'])->references(['societe_id', 'id'])->on('magasins')->restrictOnDelete();
             $table->index(['societe_id', 'type']);

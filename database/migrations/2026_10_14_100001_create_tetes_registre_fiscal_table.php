@@ -21,7 +21,7 @@ return new class extends Migration
         Schema::create('tetes_registre_fiscal', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->unique()->constrained('magasins')->restrictOnDelete();
-            // En UTC (voir HorodatageUtc) : l'instant du dernier verrou du
+            // Instant en UTC (cast Instant) : celui du dernier verrou du
             // registre du magasin, sous lequel l'horloge ne recule jamais.
             $table->dateTime('dernier_horodatage')->nullable();
             // La tête de chaque chaîne du magasin : la séquence et la

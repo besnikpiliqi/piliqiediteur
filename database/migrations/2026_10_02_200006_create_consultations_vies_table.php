@@ -18,8 +18,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * numero_tva est le n° vérifié, tel que la fiche l'avait alors : la
  * vérification reste celle de ce n°, même quand la fiche en change.
- * consultee_le est l'instant de la vérification, en UTC à la seconde
- * (voir HorodatageUtc) ; identifiant_consultation, le n° que VIES donne à
+ * consultee_le est l'instant de la vérification, en UTC (cast
+ * Instant) ; identifiant_consultation, le n° que VIES donne à
  * la consultation quand le magasin s'est identifié par son propre n° de
  * TVA ; reponse, la réponse de VIES telle qu'elle a été reçue.
  */

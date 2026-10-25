@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('ip', 45)->nullable();
             $table->string('agent_utilisateur', 255)->nullable();
             $table->dateTime('expire_le');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->index(['societe_id', 'expire_le']);
         });

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
@@ -25,9 +26,9 @@ class SiretMagasin extends Model
     protected $fillable = [];
 
     protected $casts = [
-        'reserve_le' => 'datetime',
-        'retire_le' => 'datetime',
-        'libere_le' => 'datetime',
+        'reserve_le' => Instant::class,
+        'retire_le' => Instant::class,
+        'libere_le' => Instant::class,
     ];
 
     /**

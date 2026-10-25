@@ -28,8 +28,8 @@ use Illuminate\Support\Str;
  * (voir EnregistrementFiscalPolicy) : une ligne ne s'écrit que par
  * RegistreFiscal.
  *
- * Les horodatages, enregistrés et signés en UTC, s'affichent à l'heure de
- * Paris. La fiche montre le contenu signé mis en forme, puis son texte
+ * Les horodatages, enregistrés et signés en UTC, s'affichent à l'heure du
+ * calendrier. La fiche montre le contenu signé mis en forme, puis son texte
  * exact, à copier pour vérifier la signature hors de l'application ;
  * l'export CSV du journal des événements (voir ListEnregistrementsFiscaux)
  * reprend aussi ce texte pour chaque événement technique.

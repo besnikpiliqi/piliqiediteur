@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -75,7 +76,7 @@ class ClotureCaisse extends Model
         'recapitulatif' => 'array',
         'derniere_sequence_vente' => 'integer',
         'derniere_sequence_encaissement' => 'integer',
-        'cloturee_a' => 'datetime',
+        'cloturee_a' => Instant::class,
     ];
 
     /**

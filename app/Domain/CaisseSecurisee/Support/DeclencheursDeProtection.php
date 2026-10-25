@@ -21,7 +21,7 @@ use RuntimeException;
  *   jamais et ne s'efface qu'une fois sa colonne expire_le passée (les
  *   traces techniques, voir TraceEvenement) ; elle ne se vide pas. L'heure
  *   de comparaison est celle du serveur de base de données, en UTC, comme
- *   expire_le (voir HorodatageUtc) ;
+ *   expire_le (voir Instant) ;
  * - suppressionApresConservation() : table dont une ligne se modifie (son
  *   suivi), mais ne s'efface qu'une fois passée la fin de sa conservation,
  *   une colonne nulle tant qu'elle n'est pas fixée (les codes de courrier,
@@ -217,7 +217,7 @@ final class DeclencheursDeProtection
      * Une ligne expirée : sa colonne d'expiration, en UTC, renseignée et
      * passée à l'heure UTC du serveur de base, now() AT TIME ZONE 'UTC'
      * sous PostgreSQL, CURRENT_TIMESTAMP sous SQLite (« AAAA-MM-JJ
-     * HH:MM:SS », le format de ces colonnes en base, voir HorodatageUtc).
+     * HH:MM:SS », le format de ces colonnes en base, voir Instant).
      *
      * @param  'pgsql'|'sqlite'  $pilote
      * @param  string  $colonne  la colonne (expire_le), ou celle de la ligne qu'un déclencheur efface (OLD.expire_le)

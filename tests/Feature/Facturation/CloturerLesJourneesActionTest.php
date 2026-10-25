@@ -195,6 +195,22 @@ class CloturerLesJourneesActionTest extends TestCase
     }
 
     /**
+     * Les journées en attente se comptent jusqu'à un jour du calendrier :
+     * un instant écrit à la place de ce jour est refusé, jamais comparé
+     * tel quel aux journées, et rien ne se clôture.
+     */
+    public function test_refuse_un_instant_a_la_place_du_jour(): void
+    {
+        $magasin = $this->magasin();
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
+        $this->vendreUnTicket();
+        $instant = (string) self::enUtc('2026-10-08 22:30:00');
+
+        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, $instant), LogicException::class, "« {$instant} » n'est pas une journée : une journée s'écrit AAAA-MM-JJ.");
+        $this->assertSame(0, ClotureCaisse::query()->count());
+    }
+
+    /**
      * Les ventes et les clôtures se lisent sous MagasinScope : les journées
      * d'un magasin ne se clôturent que depuis ce magasin, jamais avec les
      * ventes d'un autre.

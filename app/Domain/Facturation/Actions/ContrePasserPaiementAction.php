@@ -51,7 +51,7 @@ use LogicException;
  * qui les signe avec les siennes. On saisit ensuite le bon paiement, qui
  * ne règle que ce qui reste dû.
  *
- * Elle est datée du jour où elle est faite, à l'heure de Paris, jamais
+ * Elle est datée du jour du calendrier où elle est faite, jamais
  * d'une journée déjà clôturée : une fois la journée clôturée, elle attend
  * le lendemain. Un paiement ne se contre-passe qu'une fois, et une
  * contre-passation ne se contre-passe pas.

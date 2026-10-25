@@ -63,8 +63,9 @@ return new class extends Migration
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('demande_par_nom')->nullable();
-            // La fin de sa conservation, en UTC : cinq ans après la fin de
-            // la relation avec la société (Q4), nulle jusque-là.
+            // La fin de sa conservation, instant en UTC (cast Instant) :
+            // cinq ans après la fin de la relation avec la société (Q4),
+            // nulle jusque-là.
             $table->dateTime('conserver_jusqu_au')->nullable();
             $table->timestamps();
 

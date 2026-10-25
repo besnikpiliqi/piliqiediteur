@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -32,8 +33,8 @@ class DemandeInscription extends Model
 
     protected $casts = [
         'donnees' => 'encrypted:array',
-        'expire_le' => 'datetime',
-        'consommee_le' => 'datetime',
+        'expire_le' => Instant::class,
+        'consommee_le' => Instant::class,
     ];
 
     /**

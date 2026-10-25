@@ -80,7 +80,10 @@ class CloturerLesJourneesAction
      * (voir JourneesDeCaisse) : un magasin fermé ne produit plus de ticket
      * Z, et aucun n'est produit pour ses jours de fermeture.
      *
+     * @param  string  $jour  AAAA-MM-JJ
      * @return Collection<int, string> les journées, AAAA-MM-JJ
+     *
+     * @throws LogicException quand $jour n'est pas un jour du calendrier
      */
     public function journeesEnAttente(string $jour): Collection
     {

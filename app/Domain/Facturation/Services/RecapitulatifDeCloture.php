@@ -45,7 +45,7 @@ use Illuminate\Support\Collection;
  * RegistreFiscal::enregistrementsJusquA()) : les enregistrements des
  * chaînes des ventes et des encaissements qui suivent ceux de la clôture
  * précédente (ses dernières séquences) et dont l'horodatage ne dépasse pas
- * la fin de la journée, à l'heure de Paris. Chaque document et chaque
+ * la fin de la journée du calendrier. Chaque document et chaque
  * paiement comptent ainsi dans une seule clôture, sans rien écrire sur
  * eux : un paiement ou une facture à un professionnel enregistrés après
  * la clôture de leur journée comptent dans la suivante, et un paiement

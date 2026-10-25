@@ -2,8 +2,8 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -63,7 +63,7 @@ final class JetonsDuLien
             return false;
         }
 
-        $expireLe = CarbonImmutable::parse($ligne->created_at)->addMinutes((int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'));
+        $expireLe = Instant::depuisLaBase((string) $ligne->created_at)->addMinutes((int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'));
 
         return $expireLe->isFuture() && Hash::check($jeton, $ligne->token);
     }

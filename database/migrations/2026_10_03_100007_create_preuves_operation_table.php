@@ -38,7 +38,7 @@ return new class extends Migration
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('note_par_nom')->nullable();
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->index(['magasin_id', 'facture_id']);
         });

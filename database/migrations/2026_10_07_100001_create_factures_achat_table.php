@@ -31,9 +31,7 @@ return new class extends Migration
             $table->string('numero_fournisseur', 60)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->date('date_facture')->nullable();
-            // L'instant de la validation, en UTC (voir HorodatageUtc) :
-            // l'heure de Paris se répète la nuit du passage à l'heure
-            // d'hiver.
+            // L'instant de la validation, en UTC (cast Instant).
             $table->dateTime('date_validation')->nullable();
             // Son rang de validation dans le magasin (1, 2, 3…, toutes
             // années confondues), pris sous verrou à la validation (voir

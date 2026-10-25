@@ -312,8 +312,8 @@ class FactureAchatResource extends Resource
      * de l'avoir pour qui peut la voir ; rien pour une ligne jamais
      * retournée. Les retours se lisent dans l'ordre de leur émission, comme
      * les avoirs de la facture (voir FactureAchat::avoirsFournisseurEmis()) :
-     * par instant d'émission, en UTC, qui ne recule pas quand l'heure de
-     * Paris se répète, puis par numéro.
+     * par instant d'émission, en UTC, qui ne recule pas quand une heure
+     * se répète au passage à l'heure d'hiver, puis par numéro.
      */
     public static function retoursDeLaLigne(LigneAchat $ligne): ?Htmlable
     {

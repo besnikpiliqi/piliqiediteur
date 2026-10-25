@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Enums\StatutMandatPdp;
 use App\Models\User;
 use Database\Factories\MandatPdpFactory;
@@ -40,9 +41,9 @@ class MandatPdp extends Model
 
     protected $casts = [
         'statut' => StatutMandatPdp::class,
-        'consentement_a' => 'datetime',
-        'active_a' => 'datetime',
-        'revoque_a' => 'datetime',
+        'consentement_a' => Instant::class,
+        'active_a' => Instant::class,
+        'revoque_a' => Instant::class,
         'reponse_brute' => 'array',
     ];
 

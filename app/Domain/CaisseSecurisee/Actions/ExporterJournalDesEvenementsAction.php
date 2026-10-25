@@ -24,12 +24,12 @@ use InvalidArgumentException;
 
 /**
  * Exporte en CSV le journal des événements techniques (JET) du magasin
- * actif sur une période, du jour $du au jour $au à l'heure de Paris, et
+ * actif sur une période, du jour $du au jour $au du calendrier, et
  * inscrit d'abord cet export au journal (JET 110) : l'export d'une période
  * qui comprend aujourd'hui contient sa propre trace.
  *
  * Une ligne par événement, dans l'ordre de la chaîne : sa séquence, son
- * horodatage (à l'heure de Paris, puis tel qu'il est signé, en UTC), son
+ * horodatage (à l'heure du calendrier, puis tel qu'il est signé, en UTC), son
  * code et son libellé, son opérateur, ses détails, l'adresse IP et le
  * navigateur, le document qu'il référence, puis de quoi le vérifier hors
  * de l'application : la signature précédente, sa signature, l'algorithme,

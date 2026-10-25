@@ -172,7 +172,7 @@ class CloturerCaisseAction
 
         $cloture->forceFill([
             'numero' => $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, substr($journee, 0, 4)),
-            'cloturee_a' => now(),
+            'cloturee_a' => $instant->utc,
         ])->save();
 
         // Seule écriture, avec le statut, encore faite sur des documents

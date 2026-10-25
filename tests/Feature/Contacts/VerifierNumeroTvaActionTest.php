@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Contacts;
 
-use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
@@ -94,7 +94,7 @@ class VerifierNumeroTvaActionTest extends TestCase
             'consultee_par' => $consultation->fresh()->consultee_par,
         ]);
         $this->assertSame(self::reponseVies(['name' => 'ACME GMBH', 'address' => "MUSTERSTRASSE 1\n10115 BERLIN"]), json_decode($consultation->fresh()->reponse, true));
-        $this->assertSame(HorodatageUtc::enBase(self::enUtc('2026-10-09 12:32:10')), DB::table('consultations_vies')->value('consultee_le'));
+        $this->assertSame(Instant::enBase(self::enUtc('2026-10-09 12:32:10')), DB::table('consultations_vies')->value('consultee_le'));
         Http::assertSent(fn (Request $requete): bool => $requete->url() === self::URL_VIES
             && $requete->method() === 'POST'
             && $requete->data() === ['countryCode' => 'DE', 'vatNumber' => '123456789', 'requesterMemberStateCode' => 'FR', 'requesterNumber' => '88100000009']);

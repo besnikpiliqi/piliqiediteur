@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCloture;
@@ -121,8 +122,8 @@ class Societe extends Model implements HasName
         'option_debits_tva' => 'boolean',
         'mois_fin_exercice' => 'integer',
         'statut' => StatutSociete::class,
-        'validee_le' => 'datetime',
-        'close_le' => 'datetime',
+        'validee_le' => Instant::class,
+        'close_le' => Instant::class,
         'motif_cloture' => MotifCloture::class,
     ];
 

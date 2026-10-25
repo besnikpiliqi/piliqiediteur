@@ -293,7 +293,10 @@ class InventaireOuvertureResource extends Resource
      * brouillon : par l'action du domaine, qui relit l'inventaire sous son
      * verrou (voir SupprimerInventaireOuvertureAction), pour qu'un
      * brouillon validé entre-temps par une autre personne reste validé,
-     * et que la page dise pourquoi.
+     * et que la page dise pourquoi. Un brouillon supprimé avant le clic
+     * n'est plus dans l'écran : la liste le dit (voir
+     * SignaleUneLigneDisparue), et sa page revient à la liste, qui le dit
+     * aussi (voir ReponseAUnDocumentDisparu).
      *
      * @template TAction of DeleteAction|Tables\Actions\DeleteAction
      *

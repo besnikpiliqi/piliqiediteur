@@ -139,9 +139,13 @@ class CloreLInscriptionAction
      * ses transmissions en attente, dans le même ordre que l'acceptation
      * d'une transmission (les comptes, puis la demande). Le magasin de
      * démonstration, qui se ferme après la clôture (voir apresLaCloture()),
-     * ne se verrouille pas ici : une vente de démonstration verrouille la
-     * ligne de son vendeur avant celle de son magasin quand elle crée une
-     * série de numérotation (voir DocumentNumberingService).
+     * ne se verrouille pas ici : un retour (voir EmettreAvoirAction) et la
+     * clôture du jour (voir CloturerCaisseAction) y verrouillent la ligne
+     * de leur auteur avant de relire celle du magasin sous un verrou
+     * partagé, quand ils créent la série de numérotation de l'année (voir
+     * DocumentNumberingService::prefixe()) ; verrouiller ici ce magasin,
+     * après les magasins réels et avant les comptes, les interbloquerait
+     * avec la clôture de l'inscription.
      *
      * @return array{adresseRetiree: string|null, destinataires: list<int>} l'adresse de connexion retirée au propriétaire, et les comptes à qui une transmission annulée proposait la propriété
      */

@@ -78,6 +78,7 @@ class GesteCommenceAvantLaFermetureTest extends TestCase
     public static function gestes(): array
     {
         return [
+            'créer une facture d\'achat' => ['creerUneFactureDAchat'],
             'supprimer un brouillon de facture d\'achat' => ['supprimerUnBrouillonDAchat'],
             'supprimer un brouillon de facture' => ['supprimerUnBrouillonDeFacture'],
             'modifier un brouillon de facture' => ['modifierUnBrouillonDeFacture'],
@@ -164,6 +165,22 @@ class GesteCommenceAvantLaFermetureTest extends TestCase
     private function produit(): Produit
     {
         return Produit::factory()->create(['nom' => 'Coque rouge', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+    }
+
+    /**
+     * @return array{0: Closure(): mixed, 1: Closure(): void}
+     */
+    private function creerUneFactureDAchat(): array
+    {
+        $produit = $this->produit();
+        $fournisseur = Fournisseur::factory()->create();
+
+        return [
+            fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
+                ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
+            ]),
+            fn () => $this->assertSame(0, FactureAchat::query()->count()),
+        ];
     }
 
     /**

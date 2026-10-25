@@ -38,10 +38,12 @@ use Tests\TestCase;
 /**
  * Un geste sur un document que l'écran a lu, mais qui n'est plus dans ce
  * magasin quand l'action le relit sous son verrou : un brouillon supprimé
- * entre-temps par une autre requête, ou un document d'un autre magasin
- * de la société. L'action le refuse par une exception métier qui le dit,
- * que les boutons, les actions groupées et les pages affichent en
- * notification, jamais par une page introuvable, et rien ne s'écrit.
+ * par une autre requête pendant celle du geste, ou un document d'un autre
+ * magasin de la société. L'action le refuse par une exception métier qui
+ * le dit, que les boutons, les actions groupées et les pages affichent en
+ * notification, jamais par une page introuvable, et rien ne s'écrit. Un
+ * brouillon supprimé avant le geste n'arrive pas jusqu'à l'action : la
+ * page ou la liste le dit (voir DocumentDisparuDeLEcranTest).
  */
 class DocumentIntrouvableTest extends TestCase
 {

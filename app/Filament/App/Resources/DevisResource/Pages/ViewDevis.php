@@ -3,11 +3,14 @@
 namespace App\Filament\App\Resources\DevisResource\Pages;
 
 use App\Filament\App\Resources\DevisResource;
+use App\Filament\Concerns\RevientALaListeSiLeDocumentEstSupprime;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewDevis extends ViewRecord
 {
+    use RevientALaListeSiLeDocumentEstSupprime;
+
     protected static string $resource = DevisResource::class;
 
     protected function getHeaderActions(): array

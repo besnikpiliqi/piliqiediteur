@@ -1336,8 +1336,9 @@ class FactureResourceTest extends TestCase
     /**
      * Un brouillon coché, supprimé par une autre requête après que la
      * suppression groupée l'a chargé, n'est pas supprimé une seconde fois :
-     * la ligne reste cochée, l'écran le signale, et l'abandon de la vente
-     * ne s'inscrit qu'une fois au journal des événements.
+     * l'écran signale la ligne refusée, qui ne reste pas cochée puisqu'elle
+     * n'est plus dans le magasin, et l'abandon de la vente ne s'inscrit
+     * qu'une fois au journal des événements.
      */
     public function test_un_brouillon_coche_supprime_entre_temps_est_signale_sans_s_inscrire_deux_fois(): void
     {
@@ -1357,11 +1358,43 @@ class FactureResourceTest extends TestCase
 
         $ecran->callMountedTableBulkAction()
             ->assertNotified('1 ligne cochée n\'a pas été supprimée')
+            ->assertDispatched(FactureResource::LIGNES_GARDEES, composant: $ecran->id(), cles: [])
             ->assertNotDispatched('deselectAllTableRecords');
 
         $this->assertTrue($supprimeEntreTemps);
         $this->assertModelMissing($brouillon);
         $this->assertSame(1, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', '320')->count());
+    }
+
+    /**
+     * Une suppression groupée en partie refusée : le brouillon coché part,
+     * la facture émise cochée à côté reste ; l'écran compte et signale la
+     * ligne refusée, qui seule reste cochée, par l'événement que reprend
+     * chaque tableau du magasin (le tableau de Filament ne sait que tout
+     * décocher).
+     */
+    public function test_une_suppression_groupee_en_partie_refusee_ne_garde_cochee_que_la_ligne_refusee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $emise = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $ecran = Livewire::test(ListFactures::class);
+
+        $ecran->callTableBulkAction('delete', [$brouillon, $emise])
+            ->assertNotified('1 ligne cochée n\'a pas été supprimée')
+            ->assertDispatched(FactureResource::LIGNES_GARDEES, composant: $ecran->id(), cles: [(string) $emise->getKey()])
+            ->assertNotDispatched('deselectAllTableRecords');
+
+        $this->assertModelMissing($brouillon);
+        $this->assertModelExists($emise);
+        $this->get(FactureResource::getUrl('index', tenant: $magasin))
+            ->assertOk()
+            ->assertSee('x-on:lignes-cochees-gardees.window="if ($event.detail.composant === livewireId) { selectedRecords = $event.detail.cles }"', false);
     }
 
     /**

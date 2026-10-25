@@ -16,12 +16,14 @@ use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
+use App\Http\Responses\ReponseAUnDocumentDisparu;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -109,4 +111,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+        // Une page d'un document du magasin restée ouverte pendant qu'une
+        // autre requête supprimait ce document : au lieu d'une page
+        // introuvable, retour à la liste, qui dit pourquoi (voir
+        // ReponseAUnDocumentDisparu). Laravel a déjà changé l'absence du
+        // modèle en NotFoundHttpException, qui la garde comme précédente.
+        $exceptions->render(fn (NotFoundHttpException $exception, Request $request) => ReponseAUnDocumentDisparu::pour($exception, $request));
     })->create();

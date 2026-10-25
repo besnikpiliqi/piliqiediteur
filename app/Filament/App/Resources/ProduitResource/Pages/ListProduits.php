@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ProduitResource\Pages;
 
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Widgets\ValeurStockApercu;
+use App\Filament\Concerns\SignaleUneLigneDisparue;
 use Filament\Resources\Pages\ListRecords;
 
 /**
@@ -13,6 +14,8 @@ use Filament\Resources\Pages\ListRecords;
  */
 class ListProduits extends ListRecords
 {
+    use SignaleUneLigneDisparue;
+
     protected static string $resource = ProduitResource::class;
 
     public function getSubheading(): string

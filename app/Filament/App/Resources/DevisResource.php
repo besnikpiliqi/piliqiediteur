@@ -203,8 +203,11 @@ class DevisResource extends Resource
      * « Supprimer » un brouillon jamais numéroté, depuis la page de
      * modification : par l'action du domaine, qui relit sous verrou le
      * magasin, l'auteur et le devis (voir SupprimerDevisAction) ; numéroté
-     * ou supprimé par une autre requête depuis l'ouverture de la page, ou
-     * dans un magasin fermé entre-temps, il reste, et la page dit pourquoi.
+     * par une autre requête depuis l'ouverture de la page, ou dans un
+     * magasin fermé entre-temps, il reste, et la page dit pourquoi. Un
+     * devis supprimé par une autre requête depuis l'ouverture de la page
+     * n'y est plus : la page revient à la liste, qui le dit (voir
+     * RevientALaListeSiLeDocumentEstSupprime).
      */
     public static function actionSupprimer(DeleteAction $action): DeleteAction
     {

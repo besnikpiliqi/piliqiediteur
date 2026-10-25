@@ -771,9 +771,12 @@ class FactureResource extends Resource
      * modification : par l'action du domaine, qui relit sous verrou le
      * registre, le magasin, l'auteur et le brouillon, et inscrit l'abandon
      * de la vente au journal des événements (voir SupprimerFactureAction et
-     * Facture::delete()). Un refus (brouillon émis ou supprimé entre-temps,
-     * magasin fermé, droit retiré, journal qui ne s'écrit pas) se lit en
-     * notification, et le brouillon reste.
+     * Facture::delete()). Un refus (brouillon émis ou supprimé pendant la
+     * requête, magasin fermé, droit retiré, journal qui ne s'écrit pas) se
+     * lit en notification, et le brouillon reste. Un brouillon supprimé
+     * avant le clic n'est plus dans l'écran : la liste le dit (voir
+     * SignaleUneLigneDisparue), et sa page revient à la liste, qui le dit
+     * aussi (voir ReponseAUnDocumentDisparu).
      *
      * @template TAction of DeleteAction|Tables\Actions\DeleteAction
      *

@@ -333,9 +333,11 @@ class ClientResourceTest extends TestCase
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $client = Client::factory()->create();
 
-        Livewire::test(ListClients::class)
-            ->callTableBulkAction('archiver', [$comptoir, $client])
-            ->assertNotified('1 ligne cochée n\'a pas été archivée');
+        $ecran = Livewire::test(ListClients::class);
+
+        $ecran->callTableBulkAction('archiver', [$comptoir, $client])
+            ->assertNotified('1 ligne cochée n\'a pas été archivée')
+            ->assertDispatched(ClientResource::LIGNES_GARDEES, composant: $ecran->id(), cles: [(string) $comptoir->getKey()]);
 
         $this->assertNotSoftDeleted($comptoir);
         $this->assertSoftDeleted($client);

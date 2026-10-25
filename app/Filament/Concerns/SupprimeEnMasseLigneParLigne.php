@@ -31,12 +31,23 @@ use LogicException;
  * (voir Client::booted()), un journal des événements qui ne s'écrit pas
  * pour un brouillon de facture (voir Facture::delete()), un incident du
  * serveur alors signalé au journal de l'application (voir
- * GereLesExceptionsMetier). Les lignes refusées restent cochées, et
- * l'utilisateur sait combien ne sont pas parties.
+ * GereLesExceptionsMetier). L'utilisateur sait combien ne sont pas
+ * parties, et seules les lignes refusées restent cochées : le tableau de
+ * Filament garde les lignes cochées dans le navigateur et ne sait que
+ * toutes les décocher, sur l'événement deselectAllTableRecords ; l'action
+ * envoie donc à la place l'événement LIGNES_GARDEES avec les seules clés
+ * refusées encore dans le magasin, que le tableau de ce composant reprend
+ * comme sa sélection (voir la vue filament.app.lignes-cochees-gardees,
+ * posée dans chaque tableau du panneau du magasin par AppPanelProvider).
+ * Les lignes supprimées ou archivées, par l'action ou par une autre
+ * requête, et celles qui avaient déjà quitté la liste, ne restent pas
+ * cochées.
  */
 trait SupprimeEnMasseLigneParLigne
 {
     use GereLesExceptionsMetier;
+
+    public const LIGNES_GARDEES = 'lignes-cochees-gardees';
 
     /**
      * @param  Closure(Model): void  $supprimer  l'action du domaine qui supprime une ligne cochée, au nom de la personne connectée
@@ -66,7 +77,8 @@ trait SupprimeEnMasseLigneParLigne
      */
     private static function retirerLigneParLigne(DeleteBulkAction $action, Collection $records, Closure $retirer, string $participe, string $participePluriel, string $raison, string $raisonPluriel): void
     {
-        $conservees = $records->reject(fn (Model $record): bool => self::retirerSansCasser($retirer, $record))->count();
+        $refusees = $records->reject(fn (Model $record): bool => self::retirerSansCasser($retirer, $record));
+        $conservees = $refusees->count();
 
         if ($conservees === 0) {
             $action->success();
@@ -75,6 +87,8 @@ trait SupprimeEnMasseLigneParLigne
         }
 
         $action->deselectRecordsAfterCompletion(false);
+        $tableau = $action->getLivewire();
+        $tableau->dispatch(self::LIGNES_GARDEES, composant: $tableau->getId(), cles: self::clesEncoreDansLeMagasin($refusees));
 
         Notification::make()
             ->title($conservees === 1
@@ -83,6 +97,25 @@ trait SupprimeEnMasseLigneParLigne
             ->body($conservees === 1 ? $raison : $raisonPluriel)
             ->warning()
             ->send();
+    }
+
+    /**
+     * Les clés des lignes refusées encore dans le magasin, qui restent
+     * cochées : une ligne refusée parce qu'une autre requête l'a supprimée
+     * ou archivée entre-temps ne l'est plus.
+     *
+     * @param  Collection<int, Model>  $refusees
+     * @return list<string>
+     */
+    private static function clesEncoreDansLeMagasin(Collection $refusees): array
+    {
+        $modele = $refusees->first();
+
+        return $modele->newQuery()->whereKey($refusees->modelKeys())->pluck($modele->getQualifiedKeyName())
+            ->map(fn (mixed $cle): string => (string) $cle)
+            ->sort()
+            ->values()
+            ->all();
     }
 
     /**

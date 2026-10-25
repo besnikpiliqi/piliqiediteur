@@ -31,10 +31,13 @@ use LogicException;
  * la création, qui est refusée, ou après elle, le brouillon déjà
  * enregistré restant consultable dans le magasin fermé.
  *
- * Son auteur, relu en base après ces verrous (voir LecteurDesDroits), doit
- * pouvoir enregistrer une facture d'achat, et, pour chaque ligne qui crée
- * ou corrige un produit, le faire au catalogue ; la facture l'enregistre
- * comme auteur, avec son nom figé.
+ * Son auteur se relit ensuite en base sous le verrou de sa ligne (voir
+ * LecteurDesDroits::exigerSousVerrou()), comme dans tous les gestes sur
+ * les brouillons : sa suspension au même instant, qui verrouille cette
+ * ligne (voir JournalDesDroits), passe tout entière avant la création, qui
+ * est alors refusée, ou après elle. Il doit pouvoir enregistrer une facture
+ * d'achat, et, pour chaque ligne qui crée ou corrige un produit, le faire
+ * au catalogue ; la facture l'enregistre comme auteur, avec son nom figé.
  */
 class CreerFactureAchatAction
 {
@@ -57,7 +60,7 @@ class CreerFactureAchatAction
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
             $magasin = app(TenantContext::class)->magasin();
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
-            $compte = $this->lecteur->exiger($auteur, 'create', $magasin, FactureAchat::class);
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, FactureAchat::class);
 
             return $this->operateur->pendant($compte, function () use ($compte, $fournisseur, $lignes, $attributs): FactureAchat {
                 $factureAchat = (new FactureAchat([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]))->forceFill(['cree_par' => $compte->getKey()]);

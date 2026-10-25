@@ -25,6 +25,7 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -138,6 +139,10 @@ class AppPanelProvider extends PanelProvider
             // Tant que la société n'est pas validée, ce qui reste désactivé ;
             // dans le magasin de démonstration, que ses documents n'ont
             // aucune valeur.
-            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => Filament::getTenant(), 'societe' => Filament::getTenant()?->societe]));
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => Filament::getTenant(), 'societe' => Filament::getTenant()?->societe]))
+            // Dans chaque tableau : après une action groupée en partie
+            // refusée, seules les lignes refusées restent cochées (voir
+            // SupprimeEnMasseLigneParLigne).
+            ->renderHook(TablesRenderHook::HEADER_BEFORE, fn (): View => view('filament.app.lignes-cochees-gardees'));
     }
 }

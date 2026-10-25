@@ -94,6 +94,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
      * @var array<string, array{0: string, 1: bool}>
      */
     private const GESTES = [
+        'créer une facture d\'achat' => ['creerUneFactureDAchat', false],
         'supprimer un brouillon de facture d\'achat' => ['supprimerUnBrouillonDAchat', false],
         'supprimer un brouillon de facture' => ['supprimerUnBrouillonDeFacture', true],
         'modifier un brouillon de facture' => ['modifierUnBrouillonDeFacture', true],
@@ -294,6 +295,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         $carnet = ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'];
 
         return match ($geste) {
+            'creerUneFactureDAchat' => ['fournisseur' => Fournisseur::factory()->create()->id, 'produit' => $produit->id],
             'supprimerUnBrouillonDAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]])->id],
             'supprimerUnBrouillonDeFacture', 'modifierUnBrouillonDeFacture' => ['id' => app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]])->id, 'produit' => $produit->id],
             'creerUneFacture', 'creerUnDevis' => ['client' => Client::factory()->create()->id, 'produit' => $produit->id],
@@ -328,6 +330,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         $carnet = ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 12, 'cout_unitaire_ht' => '2.00'];
 
         match ($geste) {
+            'creerUneFactureDAchat' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::query()->findOrFail($parametres['fournisseur']), [['produit_id' => $parametres['produit'], 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]),
             'supprimerUnBrouillonDAchat' => app(SupprimerFactureAchatAction::class)->handle($auteur, FactureAchat::query()->findOrFail($parametres['id'])),
             'supprimerUnBrouillonDeFacture' => app(SupprimerFactureAction::class)->handle($auteur, Facture::query()->findOrFail($parametres['id'])),
             'modifierUnBrouillonDeFacture' => app(ModifierFactureAction::class)->handle($auteur, $brouillon = Facture::query()->findOrFail($parametres['id']), $brouillon->client, [['produit_id' => $parametres['produit'], 'quantite' => 1]]),
@@ -360,6 +363,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     private function verifier(string $geste, bool $fait, array $parametres): void
     {
         match ($geste) {
+            'creerUneFactureDAchat' => $this->assertSame($fait ? 1 : 0, FactureAchat::query()->count()),
             'supprimerUnBrouillonDAchat' => $this->assertSame($fait ? 0 : 1, FactureAchat::query()->count()),
             'supprimerUnBrouillonDeFacture' => $this->assertSame([$fait ? 0 : 1, $fait ? 1 : 0], [Facture::query()->count(), $this->nombreDEvenements('320', 'brouillon')]),
             'modifierUnBrouillonDeFacture' => $this->assertSame([$fait ? 1 : 2, $fait ? 1 : 0], [Facture::query()->findOrFail($parametres['id'])->lignes()->sole()->quantite, $this->nombreDEvenements('323', 'brouillon')]),

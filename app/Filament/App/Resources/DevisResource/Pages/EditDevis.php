@@ -10,6 +10,7 @@ use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RecoitLeClientChoisi;
 use App\Filament\Concerns\RecoitLesProduitsChoisis;
 use App\Filament\Concerns\RevientALaListe;
+use App\Filament\Concerns\RevientALaListeSiLeDocumentEstSupprime;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EditDevis extends EditRecord
 {
-    use GereLesExceptionsMetier, RecoitLeClientChoisi, RecoitLesProduitsChoisis, RevientALaListe;
+    use GereLesExceptionsMetier, RecoitLeClientChoisi, RecoitLesProduitsChoisis, RevientALaListe, RevientALaListeSiLeDocumentEstSupprime;
 
     protected static string $resource = DevisResource::class;
 

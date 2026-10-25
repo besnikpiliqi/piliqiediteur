@@ -240,8 +240,11 @@ class FactureAchatResource extends Resource
      * modification : par l'action du domaine, qui relit sous verrou le
      * magasin, l'auteur et la facture d'achat (voir
      * SupprimerFactureAchatAction) ; un refus (brouillon validé ou supprimé
-     * entre-temps, magasin fermé, droit retiré) se lit en notification, et
-     * la facture d'achat reste.
+     * pendant la requête, magasin fermé, droit retiré) se lit en
+     * notification, et la facture d'achat reste. Un brouillon supprimé
+     * avant le clic n'est plus dans l'écran : la liste le dit (voir
+     * SignaleUneLigneDisparue), et sa page revient à la liste, qui le dit
+     * aussi (voir ReponseAUnDocumentDisparu).
      *
      * @template TAction of DeleteAction|Tables\Actions\DeleteAction
      *

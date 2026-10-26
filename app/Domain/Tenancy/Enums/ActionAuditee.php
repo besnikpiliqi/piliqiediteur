@@ -32,6 +32,7 @@ enum ActionAuditee: string implements HasLabel
     case MagasinCede = 'magasin_cede';
     case MagasinRouvert = 'magasin_rouvert';
     case TerritoireCorrige = 'territoire_corrige';
+    case SiretLibere = 'siret_libere';
     case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
     case DemonstrationOuverte = 'demonstration_ouverte';
     case DemonstrationFermee = 'demonstration_fermee';
@@ -90,6 +91,7 @@ enum ActionAuditee: string implements HasLabel
             self::MagasinCede => 'Magasin cédé après sa fermeture',
             self::MagasinRouvert => 'Magasin rouvert',
             self::TerritoireCorrige => 'Territoire du magasin corrigé par l\'éditeur',
+            self::SiretLibere => 'SIRET du magasin libéré par l\'éditeur',
             self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
             self::DemonstrationFermee => 'Magasin de démonstration fermé',
@@ -175,6 +177,11 @@ enum ActionAuditee: string implements HasLabel
             // correction par la procédure de l'éditeur (voir
             // CorrigerLeTerritoireAction).
             self::TerritoireCorrige => ['territoire'],
+            // Le SIRET libéré d'un magasin fermé pour cessation, le motif de
+            // sa libération, le territoire du magasin, qui ne change pas, et
+            // celui où le répertoire Sirene situe son établissement (voir
+            // LibererLeSiretAction).
+            self::SiretLibere => ['siret', 'motif', 'territoire', 'territoire_lu'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son
             // nom au moment de l'opération, son rôle de société et ses rôles

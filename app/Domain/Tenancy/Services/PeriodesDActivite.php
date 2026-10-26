@@ -2,7 +2,6 @@
 
 namespace App\Domain\Tenancy\Services;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;

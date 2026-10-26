@@ -24,6 +24,7 @@ use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -55,7 +56,8 @@ use LogicException;
  * JournaliseSesParametresDeConformite). Une fois sa société validée, il
  * ne change que par un déménagement (voir ChangerSiretAction), qui passe
  * par le registre des SIRET réservés (voir SiretsDesMagasins), et un
- * SIRET réservé ne sert jamais à un autre magasin.
+ * SIRET réservé ne sert jamais à un autre magasin, sauf libération par la
+ * procédure de l'éditeur (voir aLibereSonSiret()).
  *
  * Son territoire (voir Territoire) donne son taux de TVA par défaut, son
  * département d'outre-mer et son calendrier. Il se fixe au premier
@@ -67,10 +69,12 @@ use LogicException;
  * répertoire, tant que le magasin n'a numéroté aucun document (voir
  * corrigerLeTerritoire()) ; la base refuse elle aussi de l'effacer, et de
  * le changer une fois un document numéroté (voir
- * DeclencheursDeProtection::colonneFigee()). Sa fixation sur un magasin
- * qui existe déjà et sa correction s'inscrivent à son journal des
- * événements (JET 270). Un magasin réel dont l'établissement n'a jamais
- * été confirmé n'a pas encore de territoire : il ne vend pas et ne
+ * DeclencheursDeProtection::colonneFigee()). Ensuite, la société le ferme
+ * pour cessation, puis l'éditeur libère son SIRET pour un nouveau magasin
+ * sur le même établissement (voir LibererLeSiretAction). Sa fixation sur
+ * un magasin qui existe déjà et sa correction s'inscrivent à son journal
+ * des événements (JET 270). Un magasin réel dont l'établissement n'a
+ * jamais été confirmé n'a pas encore de territoire : il ne vend pas et ne
  * numérote aucun document (voir REFUS_TERRITOIRE_INCONNU).
  *
  * Son code court (voir CodeMagasin) figure dans tous les numéros de ses
@@ -176,6 +180,7 @@ class Magasin extends Model implements HasName
         'est_demonstration' => 'boolean',
         'etablissement_verifie_le' => Instant::class,
         'suspendu_le' => Instant::class,
+        'siret_libere_le' => Instant::class,
         'references_acheteur' => 'array',
         'est_etablissement_principal' => 'boolean',
         'prix_vente_automatique' => 'boolean',
@@ -275,6 +280,14 @@ class Magasin extends Model implements HasName
 
             if ($magasin->isDirty('territoire') && $magasin->getOriginal('territoire') !== null && ! $magasin->correctionDuTerritoire) {
                 throw new LogicException('Le territoire d\'un magasin ne change plus une fois fixé : un déménagement vers un autre territoire passe par un nouveau magasin.');
+            }
+
+            if ($magasin->isDirty('siret_libere_le') && ($magasin->getOriginal('siret_libere_le') !== null || ! $magasin->estFermePourCessation() || $magasin->isDirty(['statut', 'motif_fermeture', 'siret']))) {
+                throw new LogicException('Seul le SIRET d\'un magasin fermé pour cessation se libère, une seule fois.');
+            }
+
+            if ($magasin->getOriginal('siret_libere_le') !== null && $magasin->isDirty(['statut', 'siret'])) {
+                throw new LogicException('Un magasin dont le SIRET a été libéré ne se rouvre jamais et garde son SIRET.');
             }
         });
     }
@@ -414,6 +427,40 @@ class Magasin extends Model implements HasName
     public function aEteCede(): bool
     {
         return $this->motif_fermeture === MotifFermeture::Cession;
+    }
+
+    /**
+     * Est-il fermé pour cessation d'activité (voir FermerMagasinAction) ?
+     * Seul un tel magasin peut voir son SIRET libéré par l'éditeur (voir
+     * aLibereSonSiret()).
+     */
+    public function estFermePourCessation(): bool
+    {
+        return $this->estFerme() && $this->motif_fermeture === MotifFermeture::Cessation;
+    }
+
+    /**
+     * L'éditeur a-t-il libéré son SIRET pour un nouveau magasin de la
+     * société sur le même établissement (voir LibererLeSiretAction) ? Il le
+     * garde, mais ne se rouvre plus et ne change plus de SIRET (voir
+     * booted()).
+     */
+    public function aLibereSonSiret(): bool
+    {
+        return $this->siret_libere_le !== null;
+    }
+
+    /**
+     * Les magasins qui portent ce SIRET sans que l'éditeur l'ait libéré
+     * (voir aLibereSonSiret()) : au plus un par société (index
+     * magasins_siret_par_societe), que l'appelant filtre explicitement.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopePortantLeSiret(Builder $query, string $siret): Builder
+    {
+        return $query->where('siret', $siret)->whereNull('siret_libere_le');
     }
 
     /**

@@ -3,9 +3,7 @@
 namespace App\Console\Commands\Editeur;
 
 use App\Domain\Tenancy\Actions\CorrigerLeTerritoireAction;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -25,7 +23,7 @@ class CorrigerLeTerritoire extends ProcedureDeLEditeur
 {
     protected function resume(Societe $societe): array
     {
-        $magasin = $this->magasin($societe);
+        $magasin = self::magasinDeLaSociete($societe, (string) $this->argument('magasin'));
 
         return [
             $magasin === null
@@ -37,23 +35,9 @@ class CorrigerLeTerritoire extends ProcedureDeLEditeur
 
     protected function executer(Societe $societe, InterventionDeLEditeur $editeur): string
     {
-        $magasin = $this->magasin($societe) ?? throw new LogicException('Ce magasin n\'existe pas dans cette société : donnez son code.');
+        $magasin = self::magasinDeLaSociete($societe, (string) $this->argument('magasin')) ?? throw new LogicException(self::MESSAGE_MAGASIN_INTROUVABLE);
         $territoire = app(CorrigerLeTerritoireAction::class)->handle($magasin, $editeur);
 
         return "Territoire du magasin {$magasin->code} corrigé : {$territoire->getLabel()}.";
-    }
-
-    /**
-     * Le magasin de ce code dans la société, le code se lisant comme il
-     * s'enregistre (voir CodeMagasin::normaliser()) ; null s'il n'y en a
-     * aucun. La table des magasins n'a pas de scope global : le filtre par
-     * société est explicite.
-     */
-    private function magasin(Societe $societe): ?Magasin
-    {
-        return Magasin::query()
-            ->where('societe_id', $societe->getKey())
-            ->where('code', CodeMagasin::normaliser((string) $this->argument('magasin')))
-            ->first();
     }
 }

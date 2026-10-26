@@ -3,7 +3,6 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;

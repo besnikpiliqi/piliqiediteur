@@ -27,8 +27,9 @@ use LogicException;
  * Magasin::aNumeroteUnDocument()) : aucune date ni aucune année signée ne
  * dépend encore de son territoire, et la correction ne fausse rien.
  * Ensuite, son territoire ne change plus (la base le refuse elle-même,
- * voir DeclencheursDeProtection::colonneFigee()) : la société ouvre un
- * nouveau magasin et ferme celui-ci pour cessation.
+ * voir DeclencheursDeProtection::colonneFigee()) : la société ferme ce
+ * magasin pour cessation, puis l'éditeur libère son SIRET pour un nouveau
+ * magasin sur le même établissement (voir LibererLeSiretAction).
  *
  * Sous le verrou du registre du magasin, premier verrou de la
  * transaction, puis de sa ligne, relue (une numérotation crée sa première
@@ -49,7 +50,7 @@ class CorrigerLeTerritoireAction
 
     public const MESSAGE_MEME_TERRITOIRE = 'Le répertoire Sirene situe l\'établissement dans le territoire du magasin : rien n\'est à corriger.';
 
-    public const MESSAGE_DOCUMENT_NUMEROTE = 'Ce magasin a déjà numéroté des documents : son territoire ne se corrige plus. La société ouvre un nouveau magasin, puis ferme celui-ci pour cessation.';
+    public const MESSAGE_DOCUMENT_NUMEROTE = 'Ce magasin a déjà numéroté des documents : son territoire ne se corrige plus. La société ferme ce magasin pour cessation, puis l\'éditeur libère son SIRET (editeur:liberer-siret) pour un nouveau magasin sur le même établissement.';
 
     public const MESSAGE_CONTROLE_PERIME = 'Le SIRET du magasin a changé pendant son contrôle au répertoire Sirene : relancez la procédure.';
 

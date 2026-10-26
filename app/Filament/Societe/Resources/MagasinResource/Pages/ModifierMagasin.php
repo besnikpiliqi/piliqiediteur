@@ -30,11 +30,12 @@ use Illuminate\Validation\ValidationException;
 /**
  * Un magasin réel de la société, pour qui gère les magasins de sa portée
  * (voir MagasinDeLaSocietePolicy::update()) : son nom, son code tant qu'il
- * n'a numéroté aucun document, son adresse sans changer de territoire de
- * TVA et, avant la validation de la société, son NIC (voir
- * ModifierEtablissementAction) ; puis les gestes de son cycle de vie, chacun
- * offert selon la policy et l'état du magasin :
- * - changer de SIRET, une fois la société validée (voir ChangerSiretAction) ;
+ * n'a numéroté aucun document, son adresse sans changer de territoire et,
+ * avant la validation de la société, son NIC, sauf si l'éditeur a libéré
+ * son SIRET (voir ModifierEtablissementAction) ; puis les gestes de son
+ * cycle de vie, chacun offert selon la policy et l'état du magasin :
+ * - changer de SIRET, une fois la société validée (voir ChangerSiretAction),
+ *   sauf si l'éditeur a libéré son SIRET ;
  * - l'indiquer comme établissement principal, ou retirer cette indication
  *   (voir ChoisirEtablissementPrincipalAction) ;
  * - le fermer, temporairement ou pour cessation d'activité (voir
@@ -42,7 +43,8 @@ use Illuminate\Validation\ValidationException;
  *   société validée, le céder en retapant son nom, qu'il soit ouvert ou
  *   déjà fermé ;
  * - le rouvrir, avant comme après la validation de la société, sauf après
- *   une cession (voir RouvrirMagasinAction).
+ *   une cession ou la libération de son SIRET par l'éditeur (voir
+ *   RouvrirMagasinAction).
  * Les gestes graves (SIRET, fermeture, cession, réouverture) redemandent
  * le mot de passe.
  *
@@ -101,7 +103,7 @@ class ModifierMagasin extends EditRecord
                         ->helperText('Les 5 derniers chiffres du SIRET, après le SIREN : il se corrige tant que votre société n\'est pas validée, contrôlé au répertoire Sirene.')
                         ->required()
                         ->maxLength(5)
-                        ->visible(fn (): bool => ! $this->magasin()->societe->estValidee()),
+                        ->visible(fn (): bool => ! $this->magasin()->societe->estValidee() && ! $this->magasin()->aLibereSonSiret()),
                     TextInput::make('adresse')->label('Adresse')->maxLength(255)->columnSpanFull(),
                     TextInput::make('complement_adresse')->label('Complément d\'adresse')->maxLength(255)->columnSpanFull(),
                     TextInput::make('code_postal')->label('Code postal')->maxLength(10),
@@ -194,7 +196,7 @@ class ModifierMagasin extends EditRecord
         return Action::make('changerLeSiret')
             ->label('Changer de SIRET')
             ->icon('heroicon-o-truck')
-            ->visible(fn (): bool => $this->peut('changerLeSiret') && $this->magasin()->societe->estValidee() && ! $this->estCede())
+            ->visible(fn (): bool => $this->peut('changerLeSiret') && $this->magasin()->societe->estValidee() && ! $this->estCede() && ! $this->magasin()->aLibereSonSiret())
             ->modalDescription('Le magasin déménage : son nouvel établissement, du même SIREN, est contrôlé au répertoire Sirene et prend effet aujourd\'hui. Le magasin garde ses documents, son stock, son équipe et son historique ; l\'ancien SIRET reste réservé et figure toujours sur les documents déjà émis. Un déménagement dans un autre territoire de TVA passe par un nouveau magasin.')
             ->form([
                 TextInput::make('nic')->label('NIC du nouvel établissement')->required()->maxLength(5),
@@ -290,7 +292,7 @@ class ModifierMagasin extends EditRecord
         return Action::make('rouvrir')
             ->label('Rouvrir le magasin')
             ->icon('heroicon-o-lock-open')
-            ->visible(fn (): bool => $this->peut('rouvrirLeMagasin') && $this->magasin()->estFerme() && ! $this->estCede())
+            ->visible(fn (): bool => $this->peut('rouvrirLeMagasin') && $this->magasin()->estFerme() && ! $this->estCede() && ! $this->magasin()->aLibereSonSiret())
             ->modalDescription(fn (): string => $this->magasin()->societe->estValidee()
                 ? 'Son établissement est contrôlé au répertoire Sirene. Sa caisse reprend au premier jour non clôturé, avec le même registre, les mêmes séries et les mêmes grands totaux ; aucun ticket Z n\'est produit pour ses jours de fermeture. Une suspension décidée par l\'éditeur reste en place.'
                 : 'Son établissement est contrôlé au répertoire Sirene. Votre société n\'étant pas encore validée, le magasin rouvert ne vend qu\'après sa validation, qui le met en activité avec vos autres magasins ouverts.')

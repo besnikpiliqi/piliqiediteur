@@ -3,7 +3,9 @@
 namespace App\Console\Commands\Editeur;
 
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Console\Command;
@@ -29,6 +31,8 @@ use LogicException;
  */
 abstract class ProcedureDeLEditeur extends Command
 {
+    public const MESSAGE_MAGASIN_INTROUVABLE = 'Ce magasin n\'existe pas dans cette société : donnez son code.';
+
     public const OPTIONS_COMMUNES = '{--justification= : Pourquoi l\'éditeur intervient, en vingt caractères au moins} {--piece= : La référence de la pièce qui fonde l\'intervention} {--confirmer= : La valeur attendue, retapée d\'avance (le SIREN de la société)}';
 
     /**
@@ -94,5 +98,21 @@ abstract class ProcedureDeLEditeur extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Le magasin de ce code dans la société, pour une procédure qui porte
+     * sur l'un de ses magasins, le code se lisant comme il s'enregistre
+     * (voir CodeMagasin::normaliser()) ; null s'il n'y en a aucun. La table
+     * des magasins n'a pas de scope global : le filtre par société est
+     * explicite, et le code d'un magasin d'une autre société ne désigne
+     * rien.
+     */
+    protected static function magasinDeLaSociete(Societe $societe, string $code): ?Magasin
+    {
+        return Magasin::query()
+            ->where('societe_id', $societe->getKey())
+            ->where('code', CodeMagasin::normaliser($code))
+            ->first();
     }
 }

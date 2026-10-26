@@ -213,21 +213,39 @@ class ReverificationSirene
      * commune, corrigée depuis), à une revérification ou à une
      * réouverture (voir RouvrirMagasinAction) : le propriétaire et
      * l'éditeur sont prévenus, et rien ne change, ni le territoire du
-     * magasin ni ses ventes. Tant que le magasin n'a numéroté aucun
-     * document, l'éditeur corrige son territoire par sa procédure (voir
-     * CorrigerLeTerritoireAction) ; ensuite, la société ouvre un nouveau
-     * magasin et ferme celui-ci pour cessation.
+     * magasin ni ses ventes. L'avis dit la seule suite possible :
+     * - un territoire que le logiciel ne gère pas (Guyane, Mayotte,
+     *   collectivité d'outre-mer, étranger), ou qu'aucune commune ne
+     *   situe : aucune correction, ni par la procédure de l'éditeur ni par
+     *   un nouveau magasin, qui serait refusé ; l'éditeur décide ;
+     * - tant que le magasin n'a numéroté aucun document : l'éditeur
+     *   corrige son territoire (voir CorrigerLeTerritoireAction) ;
+     * - ensuite : la société ferme ce magasin pour cessation, puis
+     *   l'éditeur libère son SIRET (voir LibererLeSiretAction), et la
+     *   société crée un nouveau magasin sur le même établissement.
+     * Seule l'alerte à l'éditeur nomme ses procédures.
      */
     public function signalerUnAutreTerritoire(Magasin $magasin, ?Territoire $lu): void
     {
         $ecart = "{$magasin->nom} (SIRET {$magasin->siret}) : le répertoire Sirene situe désormais son établissement ".($lu?->lieu() ?? 'hors des territoires que le logiciel gère').', et non '.($magasin->territoire?->lieu() ?? 'dans son territoire').' ; son territoire, qui fixe son taux de TVA par défaut et son heure, ne change pas.';
-        $suite = $magasin->aNumeroteUnDocument()
-            ? 'Le magasin a déjà numéroté des documents : son territoire ne se corrige plus, et la société ouvre un nouveau magasin, puis ferme celui-ci pour cessation.'
-            : 'Le magasin n\'a numéroté aucun document : l\'éditeur peut corriger son territoire (editeur:corriger-territoire).';
+        [$suitePourLeProprietaire, $suitePourLEditeur] = match (true) {
+            $lu === null || ! $lu->estPrisEnCharge() => [
+                'Le logiciel ne gère pas ce territoire : aucune correction n\'est possible, ni du territoire du magasin ni par un nouveau magasin sur cet établissement.',
+                'Territoire que le logiciel ne gère pas : ni editeur:corriger-territoire ni editeur:liberer-siret ne s\'appliquent ; à vous de décider.',
+            ],
+            $magasin->aNumeroteUnDocument() => [
+                'Le magasin a déjà numéroté des documents : son territoire ne se corrige plus. Pour vendre sous le bon territoire, fermez ce magasin pour cessation ; l\'éditeur libérera alors son SIRET, et vous créerez un nouveau magasin sur cet établissement.',
+                'Le magasin a déjà numéroté des documents : son territoire ne se corrige plus. Une fois le magasin fermé pour cessation par la société, libérez son SIRET (editeur:liberer-siret) pour un nouveau magasin sur cet établissement.',
+            ],
+            default => [
+                'Le magasin n\'a numéroté aucun document : l\'éditeur peut corriger son territoire.',
+                'Le magasin n\'a numéroté aucun document : corrigez son territoire (editeur:corriger-territoire).',
+            ],
+        };
 
         Log::warning('Revérification Sirene : établissement situé dans un autre territoire.', ['magasin_id' => $magasin->getKey(), 'territoire' => $magasin->territoire?->value, 'territoire_lu' => $lu?->value]);
-        $this->alerteEditeur->alerter($magasin->societe, 'Revérification Sirene : établissement situé dans un autre territoire', [$ecart, $suite]);
-        $magasin->societe->proprietaire?->notify(new AvisDeVerification($magasin->societe, 'Territoire de votre magasin au répertoire Sirene', "{$ecart} {$suite} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
+        $this->alerteEditeur->alerter($magasin->societe, 'Revérification Sirene : établissement situé dans un autre territoire', [$ecart, $suitePourLEditeur]);
+        $magasin->societe->proprietaire?->notify(new AvisDeVerification($magasin->societe, 'Territoire de votre magasin au répertoire Sirene', "{$ecart} {$suitePourLeProprietaire} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
     }
 
     /**

@@ -29,7 +29,9 @@ use SensitiveParameter;
 /**
  * La société rouvre l'un de ses magasins réels fermés temporairement ou
  * pour cessation d'activité, avant comme après sa validation ; un magasin
- * cédé ne se rouvre jamais (voir Magasin::aEteCede()).
+ * cédé ne se rouvre jamais (voir Magasin::aEteCede()), ni un magasin dont
+ * l'éditeur a libéré le SIRET pour un nouveau magasin sur le même
+ * établissement (voir Magasin::aLibereSonSiret()).
  *
  * Qui : le propriétaire, ou un administrateur autorisé à gérer les
  * magasins, pour un magasin de sa portée, dans une société qui n'est pas
@@ -102,6 +104,8 @@ class RouvrirMagasinAction
     public const MESSAGE_PAS_FERME = 'Ce magasin n\'est pas fermé.';
 
     public const MESSAGE_CEDE = 'Ce magasin a été cédé : il ne se rouvre pas.';
+
+    public const MESSAGE_SIRET_LIBERE = 'Le SIRET de ce magasin a été libéré pour un nouveau magasin sur le même établissement : il ne se rouvre pas.';
 
     public const MESSAGE_CONTROLE_PERIME = 'Le SIRET du magasin a changé pendant son contrôle au répertoire Sirene : recommencez la réouverture, qui contrôlera le nouveau.';
 
@@ -239,6 +243,10 @@ class RouvrirMagasinAction
 
         if ($magasin->aEteCede()) {
             throw new LogicException(self::MESSAGE_CEDE);
+        }
+
+        if ($magasin->aLibereSonSiret()) {
+            throw new LogicException(self::MESSAGE_SIRET_LIBERE);
         }
     }
 }

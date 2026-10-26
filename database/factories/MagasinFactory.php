@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;

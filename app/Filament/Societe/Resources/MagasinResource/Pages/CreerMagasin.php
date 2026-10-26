@@ -320,7 +320,8 @@ class CreerMagasin extends CreateRecord
 
     /**
      * Pourquoi cet établissement de la liste ne se choisit pas : il est déjà
-     * un magasin de la société, ou dans un territoire que le logiciel ne
+     * un magasin de la société, dont l'éditeur n'a pas libéré le SIRET (voir
+     * Magasin::aLibereSonSiret()), ou dans un territoire que le logiciel ne
      * gère pas encore ; null s'il se choisit. Seuls les SIRET des magasins
      * de la société se lisent ici, une fois par requête.
      */
@@ -330,7 +331,7 @@ class CreerMagasin extends CreateRecord
             return null;
         }
 
-        $this->siretsDesMagasins ??= array_flip($this->societe()->magasins()->whereNotNull('siret')->pluck('siret')->all());
+        $this->siretsDesMagasins ??= array_flip($this->societe()->magasins()->whereNotNull('siret')->whereNull('siret_libere_le')->pluck('siret')->all());
 
         return match (true) {
             array_key_exists($choix, $this->siretsDesMagasins) => self::MARQUE_DEJA_UN_MAGASIN,

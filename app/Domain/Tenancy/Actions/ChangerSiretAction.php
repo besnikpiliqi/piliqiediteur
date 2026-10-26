@@ -38,11 +38,12 @@ use SensitiveParameter;
  * magasins, pour un magasin réel de sa portée, tant que la société n'est
  * pas en lecture seule (voir MagasinDeLaSocietePolicy::changerLeSiret()),
  * en redonnant son mot de passe (voir MotDePasseRedemande) ; jamais pour
- * un magasin cédé.
+ * un magasin cédé, ni pour un magasin dont l'éditeur a libéré le SIRET.
  *
  * Contrôles, avant toute écriture : le NIC forme avec le SIREN de la
  * société un SIRET valide, différent du sien, qu'aucun autre magasin de la
- * société ne porte et qu'aucun magasin n'a réservé, même autrefois (voir
+ * société ne porte et qu'aucun magasin n'a réservé, même autrefois, sauf
+ * libération par l'éditeur (voir LibererLeSiretAction et
  * SiretsDesMagasins, dont le refus ne dit rien de qui l'a) ; le
  * répertoire Sirene, consulté tout de suite, doit confirmer un
  * établissement actif rattaché au même SIREN (voir ControleSirene) : un
@@ -72,6 +73,8 @@ class ChangerSiretAction
     public const MESSAGE_SOCIETE_A_VERIFIER = 'Avant la validation de la société, le NIC d\'un magasin se corrige en modifiant le magasin.';
 
     public const MESSAGE_CEDE = 'Ce magasin a été cédé : son SIRET ne change plus.';
+
+    public const MESSAGE_SIRET_LIBERE = 'Le SIRET de ce magasin a été libéré pour un nouveau magasin sur le même établissement : il ne change plus.';
 
     public const MESSAGE_MEME_SIRET = 'C\'est déjà le SIRET de ce magasin.';
 
@@ -109,9 +112,7 @@ class ChangerSiretAction
                 throw new LogicException(self::MESSAGE_SOCIETE_A_VERIFIER);
             }
 
-            if ($magasin->aEteCede()) {
-                throw new LogicException(self::MESSAGE_CEDE);
-            }
+            self::verifierQueSonSiretPeutChanger($magasin);
 
             $siret = $societe->siren.$this->valider($societe, $magasin, $nic);
             $consultation = $this->controleSirene->etablissement($siret, (string) $societe->siren);
@@ -147,10 +148,7 @@ class ChangerSiretAction
     private function changer(User $auteur, Magasin $magasin, string $siret, array $consultation, EtablissementSirene $etablissement, Territoire $territoire): Magasin
     {
         $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
-
-        if ($verrouille->aEteCede()) {
-            throw new LogicException(self::MESSAGE_CEDE);
-        }
+        self::verifierQueSonSiretPeutChanger($verrouille);
 
         if ($verrouille->territoire !== null && $verrouille->territoire !== $territoire) {
             throw ValidationException::withMessages(['nic' => self::MESSAGE_TERRITOIRE_CHANGE]);
@@ -167,6 +165,24 @@ class ChangerSiretAction
         $this->journalAudit->inscrireLesChangements(ActionAuditee::SiretChange, $auteur, $verrouille, $avant, self::valeursAuditees($verrouille), $verrouille);
 
         return $verrouille;
+    }
+
+    /**
+     * Le magasin, tel qu'il est lu, peut-il changer de SIRET ? Jamais une
+     * fois cédé, ni une fois son SIRET libéré par l'éditeur pour un nouveau
+     * magasin sur le même établissement (voir Magasin::aLibereSonSiret()).
+     *
+     * @throws LogicException
+     */
+    private static function verifierQueSonSiretPeutChanger(Magasin $magasin): void
+    {
+        if ($magasin->aEteCede()) {
+            throw new LogicException(self::MESSAGE_CEDE);
+        }
+
+        if ($magasin->aLibereSonSiret()) {
+            throw new LogicException(self::MESSAGE_SIRET_LIBERE);
+        }
     }
 
     /**
@@ -196,7 +212,7 @@ class ChangerSiretAction
 
                     $refus ??= match (true) {
                         $siret === $magasin->siret => self::MESSAGE_MEME_SIRET,
-                        $societe->magasins()->where('siret', $siret)->exists(), SiretsDesMagasins::estReserve($siret) => SiretsDesMagasins::MESSAGE_SIRET_RESERVE,
+                        $societe->magasins()->portantLeSiret($siret)->exists(), SiretsDesMagasins::estReserve($siret) => SiretsDesMagasins::MESSAGE_SIRET_RESERVE,
                         default => null,
                     };
 

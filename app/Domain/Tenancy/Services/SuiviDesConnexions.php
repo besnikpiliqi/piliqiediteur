@@ -2,7 +2,6 @@
 
 namespace App\Domain\Tenancy\Services;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Models\User;

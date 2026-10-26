@@ -84,6 +84,16 @@ return new class extends Migration
             // fermeture : jamais levée par une réouverture (voir
             // Magasin::estEnLectureSeule()).
             $table->timestamp('suspendu_le')->nullable();
+            // La libération de son SIRET par la procédure de l'éditeur (voir
+            // LibererLeSiretAction), une fois le magasin fermé pour
+            // cessation, son territoire ayant été mal lu au répertoire
+            // Sirene après son premier document numéroté : il garde son
+            // SIRET, que ses documents ont signé, et un nouveau magasin de
+            // la société peut s'ouvrir sur le même établissement. Posée une
+            // fois, elle ne s'efface plus (voir
+            // DeclencheursDeProtection::colonneFigee()), et le magasin ne se
+            // rouvre plus ni ne change de SIRET (voir Magasin::booted()).
+            $table->timestamp('siret_libere_le')->nullable();
             // Barème de prix de vente (voir BaremePrixDeVente) : chaque
             // magasin démarre avec l'exemple du logiciel, désactivé (voir
             // Magasin::booted()), qu'il active et règle s'il le veut.
@@ -113,10 +123,6 @@ return new class extends Migration
             // CodeMagasin) : deux magasins d'une même société ne produisent
             // jamais le même numéro de document.
             $table->unique(['societe_id', 'code']);
-            // Un SIRET n'appartient qu'à un seul magasin de la société ; le
-            // registre des SIRET réservés le refuse en plus à tout autre
-            // magasin du logiciel (voir SiretsDesMagasins).
-            $table->unique(['societe_id', 'siret']);
             // La cible des clés étrangères composites (societe_id,
             // magasin_id) des tables propres à une société : une ligne n'y
             // désigne jamais le magasin d'une autre société.
@@ -128,6 +134,13 @@ return new class extends Migration
         // société.
         DB::statement('CREATE UNIQUE INDEX magasins_une_demonstration_par_societe ON magasins (societe_id) WHERE est_demonstration');
         DB::statement('CREATE UNIQUE INDEX magasins_un_principal_par_societe ON magasins (societe_id) WHERE est_etablissement_principal');
+
+        // Un SIRET n'appartient qu'à un seul magasin de la société, sauf
+        // celui d'un magasin dont l'éditeur l'a libéré pour un nouveau
+        // magasin (siret_libere_le) ; le registre des SIRET réservés le
+        // refuse en plus à tout autre magasin du logiciel (voir
+        // SiretsDesMagasins).
+        DB::statement('CREATE UNIQUE INDEX magasins_siret_par_societe ON magasins (societe_id, siret) WHERE siret_libere_le IS NULL');
 
         // Un magasin ne s'efface jamais : ses documents se conservent dix
         // ans et son SIRET reste réservé. La base refuse elle-même sa
@@ -141,6 +154,10 @@ return new class extends Migration
         // produits, voir Magasin::aNumeroteUnDocument()), la date et
         // l'année de ses documents signés en dépendant.
         DeclencheursDeProtection::colonneFigee('magasins', 'territoire', remplacableTantQue: "NOT EXISTS (SELECT 1 FROM sequences_documents WHERE sequences_documents.magasin_id = OLD.id AND sequences_documents.type_document <> 'produit')");
+
+        // Un SIRET libéré par l'éditeur ne se reprend pas : la base refuse
+        // d'effacer ou de changer sa libération.
+        DeclencheursDeProtection::colonneFigee('magasins', 'siret_libere_le');
     }
 
     public function down(): void
@@ -148,5 +165,6 @@ return new class extends Migration
         Schema::dropIfExists('magasins');
         DeclencheursDeProtection::retirer('magasins');
         DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'territoire');
+        DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'siret_libere_le');
     }
 };

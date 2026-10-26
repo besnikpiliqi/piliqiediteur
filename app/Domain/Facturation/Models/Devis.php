@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Models;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Contacts\Enums\TypeClient;

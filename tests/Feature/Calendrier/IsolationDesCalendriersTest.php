@@ -14,7 +14,6 @@ use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\ClotureCaisse;
-use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;

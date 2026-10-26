@@ -38,13 +38,15 @@ use LogicException;
  *   lecture seule (voir SocietePolicy::creerUnMagasin()) ; jamais dans une
  *   autre société que celle déjà active ;
  * - le NIC, qui forme avec le SIREN de la société un SIRET valide, libre
- *   dans la société et, dans une société validée, qu'aucun magasin n'a
- *   réservé, même autrefois (voir SiretsDesMagasins) : le refus ne dit
- *   rien de qui l'a. Avant la validation, rien n'est réservé pour la
- *   société et rien ne lui dit qu'un SIRET l'est par une autre : la
- *   réservation se joue à la validation, et une société en cours de
- *   vérification ne se voit jamais refuser un magasin parce qu'une autre
- *   société a réservé ce SIRET ; le code, libre dans la société (voir
+ *   dans la société (celui d'un magasin dont l'éditeur l'a libéré l'est,
+ *   voir LibererLeSiretAction) et, dans une société validée, qu'aucun
+ *   magasin n'a réservé, même autrefois, sauf libération (voir
+ *   SiretsDesMagasins) : le refus ne dit rien de qui l'a. Avant la
+ *   validation, rien n'est réservé pour la société et rien ne lui dit
+ *   qu'un SIRET l'est par une autre : la réservation se joue à la
+ *   validation, et une société en cours de vérification ne se voit jamais
+ *   refuser un magasin parce qu'une autre société a réservé ce SIRET ; le
+ *   code, libre dans la société (voir
  *   CodeMagasinLibre), ou proposé depuis le nom s'il n'est pas choisi, et
  *   que le modèle enregistre en majuscules (voir Magasin::code()) ;
  * - le répertoire Sirene de l'INSEE, consulté tout de suite (voir
@@ -206,7 +208,7 @@ class CreerEtablissementAction
                         $refus = $message;
                     });
 
-                    if ($refus === null && ($societe->magasins()->where('siret', $siret)->exists() || ($societe->estValidee() && SiretsDesMagasins::estReserve($siret)))) {
+                    if ($refus === null && ($societe->magasins()->portantLeSiret($siret)->exists() || ($societe->estValidee() && SiretsDesMagasins::estReserve($siret)))) {
                         $refus = SiretsDesMagasins::MESSAGE_SIRET_RESERVE;
                     }
 

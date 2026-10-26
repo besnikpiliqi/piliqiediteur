@@ -119,7 +119,9 @@ class MagasinResource extends RessourceDuPanneauSociete
      * L'état du magasin tel que la société le lit : ouvert ; en lecture
      * seule, suspendu par l'éditeur ou à cause de sa société (voir
      * Magasin::motifDeLectureSeule()) ; fermé, avec le motif de sa
-     * fermeture, et la suspension de l'éditeur qui reste en place.
+     * fermeture, la libération de son SIRET par l'éditeur pour un nouveau
+     * magasin (voir Magasin::aLibereSonSiret()) et la suspension de
+     * l'éditeur qui reste en place.
      */
     public static function etat(Magasin $magasin): string
     {
@@ -131,6 +133,10 @@ class MagasinResource extends RessourceDuPanneauSociete
             default => 'Fermé',
         };
 
-        return $magasin->estFerme() && $magasin->suspendu_le !== null ? "{$etat} ; suspendu par l'éditeur" : $etat;
+        return implode(' ; ', array_filter([
+            $etat,
+            $magasin->aLibereSonSiret() ? 'SIRET libéré pour un nouveau magasin' : null,
+            $magasin->estFerme() && $magasin->suspendu_le !== null ? 'suspendu par l\'éditeur' : null,
+        ]));
     }
 }

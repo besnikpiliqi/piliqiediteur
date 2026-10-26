@@ -69,6 +69,8 @@ class ModifierEtablissementAction
 
     public const MESSAGE_CEDE = 'Ce magasin a été cédé : il ne se modifie plus.';
 
+    public const MESSAGE_SIRET_LIBERE = 'Le SIRET de ce magasin a été libéré pour un nouveau magasin sur le même établissement : son NIC ne change plus.';
+
     private const CHAMPS_DE_L_ADRESSE = ['adresse', 'complement_adresse', 'code_postal', 'ville', 'pays'];
 
     public function __construct(
@@ -106,6 +108,10 @@ class ModifierEtablissementAction
             if (isset($valides['nic']) && $societe->siren.$valides['nic'] !== $magasin->siret) {
                 if ($societe->estValidee()) {
                     throw new LogicException(self::MESSAGE_SIRET_SOCIETE_VALIDEE);
+                }
+
+                if ($magasin->aLibereSonSiret()) {
+                    throw new LogicException(self::MESSAGE_SIRET_LIBERE);
                 }
 
                 $consultation = $this->controleSirene->etablissement($societe->siren.$valides['nic'], $societe->siren);
@@ -165,6 +171,10 @@ class ModifierEtablissementAction
         }
 
         if ($consultation !== null) {
+            if ($enregistre->aLibereSonSiret()) {
+                throw new LogicException(self::MESSAGE_SIRET_LIBERE);
+            }
+
             $enregistre->forceFill([
                 'siret' => $enregistre->societe->siren.$valides['nic'],
                 'etablissement_verifie_le' => $etablissement === null ? null : now(),
@@ -184,9 +194,10 @@ class ModifierEtablissementAction
     }
 
     /**
-     * Une adresse saisie reste dans le territoire du magasin : son code
-     * postal ne donne pas un autre territoire, ni aucun (collectivité
-     * d'outre-mer, pays étranger). Une adresse sans code postal passe, et
+     * Une adresse saisie reste dans le territoire du magasin : elle est en
+     * France, et son code postal ne donne pas un autre territoire, ni aucun
+     * (collectivité d'outre-mer). Une adresse en France sans code postal
+     * passe, jamais une adresse dans un autre pays, même sans code postal ;
      * un magasin qui n'a pas encore de territoire ne le reçoit jamais d'une
      * adresse saisie : seul le répertoire Sirene le fixe.
      *
@@ -194,12 +205,14 @@ class ModifierEtablissementAction
      */
     private function verifierLAdresseSaisie(Magasin $enregistre): void
     {
-        if ($enregistre->territoire === null || array_intersect(self::CHAMPS_DE_L_ADRESSE, array_keys($enregistre->getDirty())) === [] || blank($enregistre->code_postal)) {
+        if ($enregistre->territoire === null || array_intersect(self::CHAMPS_DE_L_ADRESSE, array_keys($enregistre->getDirty())) === []) {
             return;
         }
 
-        if (Territoire::depuisCodePostal($enregistre->pays, $enregistre->code_postal) !== $enregistre->territoire) {
-            throw ValidationException::withMessages(['code_postal' => self::MESSAGE_TERRITOIRE_CHANGE]);
+        $horsDuTerritoire = $enregistre->pays !== 'FR' || (filled($enregistre->code_postal) && Territoire::depuisCodePostal($enregistre->pays, $enregistre->code_postal) !== $enregistre->territoire);
+
+        if ($horsDuTerritoire) {
+            throw ValidationException::withMessages([($enregistre->pays !== 'FR' ? 'pays' : 'code_postal') => self::MESSAGE_TERRITOIRE_CHANGE]);
         }
     }
 
@@ -237,7 +250,7 @@ class ModifierEtablissementAction
                         $refus = $message;
                     });
 
-                    if ($refus === null && $societe->magasins()->where('siret', $siret)->whereKeyNot($magasin->getKey())->exists()) {
+                    if ($refus === null && $societe->magasins()->portantLeSiret($siret)->whereKeyNot($magasin->getKey())->exists()) {
                         $refus = SiretsDesMagasins::MESSAGE_SIRET_RESERVE;
                     }
 

@@ -20,8 +20,9 @@ use Illuminate\Support\Facades\DB;
  * société validée (voir MiseEnActiviteDesMagasins : la validation de la
  * société pour ses magasins actifs, la création d'un magasin dans une
  * société validée, une réouverture) et à un changement de SIRET (voir
- * remplacer()). Le message de refus ne dit rien du magasin ni de la
- * société qui a réservé ce SIRET.
+ * remplacer()) ; elle ne prend fin que par la procédure de l'éditeur qui
+ * la libère (voir liberer()). Le message de refus ne dit rien du magasin
+ * ni de la société qui a réservé ce SIRET.
  */
 class SiretsDesMagasins
 {
@@ -61,6 +62,25 @@ class SiretsDesMagasins
         } catch (UniqueConstraintViolationException) {
             throw new SiretDejaReserveException;
         }
+    }
+
+    /**
+     * Libère le SIRET du magasin au registre, avec son motif, par la
+     * procédure de l'éditeur (voir LibererLeSiretAction), sous les verrous
+     * de son registre et de sa ligne, pris par l'appelant : il peut alors
+     * se réserver pour un autre magasin. Le magasin d'une société qui n'a
+     * jamais été validée, ou qui était fermé à sa validation, n'a rien de
+     * réservé : rien ne change ici.
+     */
+    public function liberer(Magasin $magasin, string $motif): void
+    {
+        SiretMagasin::query()
+            ->where('magasin_id', $magasin->getKey())
+            ->where('siret', $magasin->siret)
+            ->whereNull('libere_le')
+            ->lockForUpdate()
+            ->get()
+            ->each(fn (SiretMagasin $reservation): bool => $reservation->forceFill(['libere_le' => now(), 'motif_liberation' => $motif])->save());
     }
 
     /**

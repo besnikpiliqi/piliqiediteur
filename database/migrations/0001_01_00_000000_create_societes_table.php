@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +13,9 @@ use Illuminate\Support\Facades\Schema;
  * que ses magasins impriment (raison sociale, forme juridique, capital,
  * immatriculation, siège, n° de TVA) et ses réglages fiscaux communs
  * (régime de TVA, option pour les débits, mois de fin d'exercice) ; chacun
- * de ses magasins est un de ses établissements, un SIRET.
+ * de ses magasins est un de ses établissements, un SIRET. Son type
+ * d'activité, choisi à son inscription, ne change jamais (voir
+ * TypeDActivite) ; un cabinet d'expertise comptable n'a aucun magasin.
  *
  * Un SIREN n'appartient qu'à une seule société dans tout le logiciel :
  * une inscription qui attend le code de son courrier recommandé, ou une
@@ -29,6 +32,11 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->string('siren', 9);
+            // Le type d'activité choisi à l'inscription (voir
+            // TypeDActivite), sans valeur par défaut : définitif dès la
+            // création, la base refuse un type inconnu et toute
+            // modification (voir GardesDesTypesDActivite).
+            $table->string('type_activite', 20);
             // Préremplies depuis le répertoire Sirene à l'inscription,
             // complétées dans l'administration de la société (voir
             // IdentiteSociete) : incomplètes, elles n'empêchent que les
@@ -91,10 +99,14 @@ return new class extends Migration
         DB::statement("CREATE UNIQUE INDEX societes_siren_unique ON societes (siren) WHERE close_le IS NULL AND statut <> 'revoquee'");
 
         DeclencheursDeProtection::sansSuppression('societes');
+
+        // Le type d'activité est connu et ne change jamais.
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::TYPE_FIXE);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::TYPE_FIXE);
         Schema::dropIfExists('societes');
         DeclencheursDeProtection::retirer('societes');
     }

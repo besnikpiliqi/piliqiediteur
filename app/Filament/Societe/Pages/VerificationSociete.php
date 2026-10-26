@@ -40,6 +40,13 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
  * Le code se saisit sur sa page publique (voir CodeDuCourrierController),
  * depuis le téléphone qui scanne le QR code comme depuis cette page.
  *
+ * Tant que le code n'est pas saisi, elle rappelle le type d'activité de la
+ * société (voir la vue partielle filament.rappel-du-type) : s'il est faux,
+ * l'éditeur clôt l'inscription, ce qui libère le SIREN. Pour un cabinet
+ * d'expertise comptable, qui n'a ni magasin ni démonstration, son état ne
+ * parle ni de l'un ni de l'autre, jusqu'à l'espace des cabinets qui le
+ * remplacera.
+ *
  * Elle montre aussi les établissements que le répertoire Sirene doit
  * encore confirmer, avec le bouton qui reprend leur contrôle.
  */

@@ -4,6 +4,8 @@
 
 Vous avez demandé l'inscription de votre société. Pour la confirmer et créer votre compte, ouvrez ce lien puis cliquez sur « Confirmer l'inscription » : un courrier recommandé partira alors au représentant légal de votre entreprise, à l'adresse officielle de son siège, avec le code qui valide l'inscription.
 
+Type d'activité choisi : {{ $libelleDuType }}. Vous pourrez encore le changer en confirmant votre inscription ; il sera ensuite définitif.
+
 <x-mail::button :url="$lien">
 Confirmer l'inscription
 </x-mail::button>

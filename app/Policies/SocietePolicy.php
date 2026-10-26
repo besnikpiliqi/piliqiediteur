@@ -14,7 +14,9 @@ use App\Models\User;
  * - ses paramètres (identité légale, fiscalité) : le propriétaire et un
  *   administrateur de tous les magasins autorisé à les gérer, qui les
  *   consultent même en lecture seule et ne les modifient qu'en dehors ;
- * - ses magasins : qui est autorisé à les gérer, dans sa portée (les
+ * - ses magasins, sauf pour un cabinet d'expertise comptable, qui n'en a
+ *   aucun (voir TypeDActivite::aDesMagasins()) : qui est autorisé à les
+ *   gérer, dans sa portée (les
  *   modifier, changer leur SIRET, les fermer et les rouvrir, voir
  *   MagasinDeLaSocietePolicy, qui y ajoute la portée et réserve la
  *   cession au propriétaire) ; en créer, seulement avec tous les magasins
@@ -74,13 +76,15 @@ class SocietePolicy
     public function gererLesMagasins(User $user, Societe $societe): bool
     {
         return $this->view($user, $societe)
+            && $societe->type_activite->aDesMagasins()
             && ! $societe->estEnLectureSeule()
             && $user->aLAutorisationDeSociete(AutorisationsSociete::MAGASINS_GERER);
     }
 
     /**
      * Créer un magasin : qui gère les magasins avec tous les magasins dans
-     * sa portée.
+     * sa portée ; jamais dans un cabinet d'expertise comptable (voir
+     * gererLesMagasins()).
      */
     public function creerUnMagasin(User $user, Societe $societe): bool
     {
@@ -102,11 +106,13 @@ class SocietePolicy
     /**
      * Ouvrir, ou rouvrir, le magasin de démonstration : son propriétaire, ou
      * un administrateur de tous les magasins autorisé à les gérer, tant que
-     * la société n'est ni validée ni close, ni en lecture seule.
+     * la société n'est ni validée ni close, ni en lecture seule ; jamais
+     * dans un cabinet d'expertise comptable, qui n'a aucun magasin.
      */
     public function ouvrirLaDemonstration(User $user, Societe $societe): bool
     {
         return $this->view($user, $societe)
+            && $societe->type_activite->aDesMagasins()
             && ! $societe->estEnLectureSeule()
             && ! $societe->estValidee()
             && ($user->estProprietaire() || ($user->administreTousLesMagasins() && $user->aLAutorisationDeSociete(AutorisationsSociete::MAGASINS_GERER)));

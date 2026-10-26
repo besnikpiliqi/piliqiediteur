@@ -28,8 +28,8 @@ use function Laravel\Prompts\pause;
  * (processus tué sans pouvoir réagir) s'efface au plus tard une heure
  * après (voir app:effacer-pieces-verification). La consultation s'inscrit
  * au journal d'audit. La décision se prend ensuite par
- * editeur:societe:examiner (un nouveau courrier) ou editeur:societe:refuser
- * (la clôture de l'inscription).
+ * editeur:societe:examiner (un nouveau courrier) ou editeur:societe:clore
+ * --motif=refus (la clôture de l'inscription).
  */
 #[Signature('editeur:societe:pieces {societe : Identifiant ou uuid de la société} '.ProcedureDeLEditeur::OPTIONS_COMMUNES)]
 #[Description('Déchiffre le temps de l\'examen les pièces déposées par une société, et journalise la consultation')]

@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -389,7 +390,7 @@ class MagasinResourceTest extends TestCase
         $close = $this->inscrireUneSociete($siren);
         app(TenantContext::class)->runAsSociete($close, fn (): bool => $close->forceFill(['raison_sociale' => 'Concurrente SAS'])->save());
         $this->ouvrirUneSociete(['nom' => 'Boutique concurrente', 'code' => 'CONCUR', 'nic' => substr(FauxRepertoireSirene::siretDeLaBoutique($siren), 9), 'a_verifier' => true], $close->proprietaire()->sole());
-        app(CloreLInscriptionAction::class)->refuser($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0062', ['alice']));
+        app(CloreLInscriptionAction::class)->parLEditeur($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0062', ['alice']), MotifCloture::Refus);
         $societe = $this->inscrireUneSociete($siren);
 
         $this->ouvrirLaCreation($societe)

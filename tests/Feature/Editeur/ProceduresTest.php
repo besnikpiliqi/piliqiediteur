@@ -7,8 +7,11 @@ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Mail\InscriptionCloseMail;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
@@ -19,6 +22,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
@@ -115,9 +119,10 @@ class ProceduresTest extends TestCase
      * Une procédure refusée après l'authentification de son opérateur
      * n'écrit rien non plus : un motif de courrier inconnu, un courrier qui
      * ne peut pas partir après l'examen des pièces (qui restent, pour un
-     * nouvel examen), une inscription déjà validée qui n'attend plus de
-     * code, ni son refus ni son courrier de vérification (sans consulter
-     * le répertoire Sirene).
+     * nouvel examen), une clôture sans motif de l'éditeur (absent, inconnu,
+     * ou le délai expiré, qui n'est pas le sien), une inscription déjà
+     * validée qui n'attend plus de code, ni sa clôture ni son courrier de
+     * vérification (sans consulter le répertoire Sirene).
      */
     public function test_une_procedure_refusee_n_ecrit_rien(): void
     {
@@ -131,6 +136,11 @@ class ProceduresTest extends TestCase
             ->assertFailed();
         app(ServiceEnvoiRecommande::class)->rendreInjoignable();
         $this->procedure('editeur:societe:examiner', $societe)->assertFailed();
+        foreach ([[], ['--motif' => 'motif_invente'], ['--motif' => MotifCloture::DelaiExpire->value]] as $motif) {
+            $this->procedure('editeur:societe:clore', $societe, $motif)
+                ->expectsOutputToContain(CloreLInscriptionAction::MESSAGE_MOTIF_INCONNU)
+                ->assertFailed();
+        }
 
         $this->assertSame($avant, $this->ecritures());
         $piece = app(TenantContext::class)->runAsSociete($societe, fn () => $piece->fresh());
@@ -141,7 +151,7 @@ class ProceduresTest extends TestCase
         $validee = $this->inscrireUneSociete();
         $this->saisirLeCodeDuCourrier($validee);
         $avant = $this->ecritures();
-        $this->procedure('editeur:societe:refuser', $validee)
+        $this->procedure('editeur:societe:clore', $validee, ['--motif' => 'refus'])
             ->expectsOutputToContain(CloreLInscriptionAction::MESSAGE_N_ATTEND_PLUS)
             ->assertFailed();
         $this->procedure('editeur:courrier:envoyer', $validee, ['--motif' => 'verification'])
@@ -191,6 +201,57 @@ class ProceduresTest extends TestCase
         $this->assertSame([TypeVerification::SireneUnite->value, 'editeur', self::JUSTIFICATION, $operateur], [$consultation->nouvelles_valeurs['type'], $consultation->origine, $consultation->justification, $consultation->operateur]);
         $this->assertCount($courriers + 1, app(ServiceEnvoiRecommande::class)->envois());
         $this->assertSame([0, true], [app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceVerification::query()->whereNull('effacee_le')->count()), $societe->fresh()->attendSonCode()]);
+    }
+
+    /**
+     * La clôture pour un type d'activité choisi par erreur, à la demande du
+     * propriétaire : l'inscription est close avec ce motif, inscrite au
+     * journal d'audit au nom de l'éditeur, son SIREN libéré ; le
+     * propriétaire est prévenu dans l'espace de sa société et par e-mail,
+     * à l'adresse qu'il perd, qu'il peut inscrire de nouveau son entreprise
+     * avec le bon type, la même adresse et le même SIREN.
+     */
+    public function test_editeur_societe_clore_au_motif_type_errone_clot_l_inscription_et_previent_le_proprietaire(): void
+    {
+        Mail::fake();
+        $societe = $this->inscrireUneSociete(email: 'jeanne@maboutique.fr');
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        app(TenantContext::class)->clear();
+
+        $this->procedure('editeur:societe:clore', $societe, ['--motif' => MotifCloture::TypeErrone->value])
+            ->expectsOutputToContain('Inscription close : Type d\'activité choisi par erreur, à la demande du propriétaire.')
+            ->assertSuccessful();
+
+        $close = $societe->fresh();
+        $this->assertSame([true, MotifCloture::TypeErrone, false], [$close->estClose(), $close->motif_cloture, Societe::sirenPris((string) $societe->siren)]);
+        $cloture = app(TenantContext::class)->runAsSociete($societe, fn (): EntreeAudit => EntreeAudit::query()->where('action', ActionAuditee::InscriptionClose->value)->sole());
+        $this->assertSame([MotifCloture::TypeErrone->value, 'editeur', self::JUSTIFICATION], [$cloture->nouvelles_valeurs['motif'], $cloture->origine, $cloture->justification]);
+        $reinscription = 'Votre entreprise peut s\'inscrire de nouveau avec le bon type d\'activité, avec la même adresse e-mail et le même SIREN, tous deux libérés';
+        $avis = $proprietaire->notifications()->sole()->data;
+        $this->assertSame('L\'inscription de votre société est close', $avis['title']);
+        $this->assertStringContainsString($reinscription, $avis['body']);
+        $mail = Mail::sent(InscriptionCloseMail::class)->sole();
+        $this->assertTrue($mail->hasTo('jeanne@maboutique.fr'));
+        $mail->assertSeeInText($reinscription);
+    }
+
+    /**
+     * Une société validée n'attend plus de code : sa clôture pour un type
+     * d'activité choisi par erreur est refusée, et rien ne s'écrit ; son
+     * type ne change jamais.
+     */
+    public function test_editeur_societe_clore_au_motif_type_errone_refuse_une_societe_validee(): void
+    {
+        $validee = $this->inscrireUneSociete();
+        $this->saisirLeCodeDuCourrier($validee);
+        $avant = $this->ecritures();
+
+        $this->procedure('editeur:societe:clore', $validee, ['--motif' => MotifCloture::TypeErrone->value])
+            ->expectsOutputToContain(CloreLInscriptionAction::MESSAGE_N_ATTEND_PLUS)
+            ->assertFailed();
+
+        $this->assertSame($avant, $this->ecritures());
+        $this->assertSame([true, false, TypeDActivite::Commerce], [$validee->fresh()->estValidee(), $validee->fresh()->estClose(), $validee->fresh()->type_activite]);
     }
 
     public function test_une_societe_inconnue_est_refusee(): void

@@ -4,6 +4,7 @@
 
     @param \App\Integrations\EnvoiRecommande\DestinataireDuCourrier $destinataire
     @param string $siren
+    @param \App\Domain\Tenancy\Enums\TypeDActivite $type le type d'activité de la société, que seul un courrier de vérification rappelle
     @param \App\Domain\Tenancy\Enums\MotifCode $motif
     @param string $code
     @param string $expireLe le jour et l'heure (heure de Paris) où le code expire
@@ -62,6 +63,7 @@
         <p>Ce code est valable jusqu'au {{ $expireLe }} (heure de Paris) et ne sert qu'une fois. Pour le saisir, scannez le QR code avec votre téléphone, ou rendez-vous sur <strong>{{ $adresseCourte }}</strong>, puis saisissez le SIREN {{ $siren }} et ce code.</p>
 
         @if ($motif === \App\Domain\Tenancy\Enums\MotifCode::Verification)
+            <p>Type d'activité choisi à l'inscription : {{ $type->getLabel() }}. Il ne pourra plus changer. S'il ne convient pas, ne saisissez pas ce code et contactez l'éditeur : l'inscription sera close et votre entreprise pourra s'inscrire de nouveau avec le bon type.</p>
             <p>La personne qui saisit ce code devient propriétaire de l'inscription et choisit alors son adresse e-mail et son mot de passe. Si vous n'êtes pas à l'origine de cette inscription, saisissez ce code vous-même : les comptes créés par la personne qui l'a faite en seront retirés. Sans code saisi d'ici là, l'inscription sera close.</p>
         @else
             <p>Une fois ce code saisi, l'éditeur poursuit la procédure et vous contacte.</p>

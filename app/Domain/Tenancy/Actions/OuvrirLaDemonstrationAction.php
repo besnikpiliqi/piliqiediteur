@@ -25,7 +25,10 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Ouvre le magasin de démonstration d'une société en cours de vérification
- * (voir SocietePolicy::ouvrirLaDemonstration()) : au plus un par société
+ * (voir SocietePolicy::ouvrirLaDemonstration()), jamais d'un cabinet
+ * d'expertise comptable, qui n'a aucun magasin (refusé avec
+ * CreerEtablissementAction::MESSAGE_CABINET_SANS_MAGASIN, et par la base, voir
+ * GardesDesTypesDActivite) : au plus un par société
  * (index unique partiel magasins_une_demonstration_par_societe), jamais
  * créé d'office, nommé « Démonstration », code DEMO, sans SIRET ni identité
  * réelle (voir Emetteur::deDemonstration()), avec son client comptoir et
@@ -67,6 +70,10 @@ class OuvrirLaDemonstrationAction
      */
     public function handle(User $auteur, Societe $societe): Magasin
     {
+        if (! $societe->type_activite->aDesMagasins()) {
+            throw new VerificationRefuseeException(CreerEtablissementAction::MESSAGE_CABINET_SANS_MAGASIN);
+        }
+
         return app(TenantContext::class)->runAsSociete($societe, function () use ($auteur, $societe): Magasin {
             $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'ouvrirLaDemonstration', $societe, $societe, new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION));
 

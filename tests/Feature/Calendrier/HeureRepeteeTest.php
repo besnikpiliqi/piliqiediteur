@@ -25,6 +25,7 @@ use App\Domain\Tenancy\Actions\DemanderUneNouvelleAdresseAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\DemandeInscription;
@@ -101,7 +102,7 @@ class HeureRepeteeTest extends TestCase
         $this->travelTo(self::enUtc('2026-10-25 00:30:00'));
         Mail::fake();
         Livewire::test(InscriptionSociete::class)
-            ->fillForm(['siren' => SocieteFactory::sirenFictif(), 'email' => 'nouvelle@exemple.fr', 'password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
+            ->fillForm(['siren' => SocieteFactory::sirenFictif(), 'type_activite' => TypeDActivite::Commerce->value, 'email' => 'nouvelle@exemple.fr', 'password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
             ->call('register');
         $mail = Mail::sent(DemandeInscriptionMail::class)->sole();
 

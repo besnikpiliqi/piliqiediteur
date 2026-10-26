@@ -3,6 +3,7 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
 use App\Models\User;
@@ -39,13 +40,13 @@ class InscriptionConcurrenceTest extends TestCase
         DB::listen(function (QueryExecuted $requete) use (&$concurrente, $siren): void {
             if ($concurrente === null && str_starts_with($requete->sql, 'insert into "societes"')) {
                 $concurrente = $this->demarrerUnProcessusConcurrent(static function () use ($siren): void {
-                    app(CreerSocieteAction::class)->handle($siren, 'seconde@exemple.fr', 'un-mot-de-passe-sur');
+                    app(CreerSocieteAction::class)->handle($siren, TypeDActivite::Commerce, 'seconde@exemple.fr', 'un-mot-de-passe-sur');
                 });
                 $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
             }
         });
 
-        $premiere = app(CreerSocieteAction::class)->handle($siren, 'premiere@exemple.fr', 'un-mot-de-passe-sur');
+        $premiere = app(CreerSocieteAction::class)->handle($siren, TypeDActivite::Commerce, 'premiere@exemple.fr', 'un-mot-de-passe-sur');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

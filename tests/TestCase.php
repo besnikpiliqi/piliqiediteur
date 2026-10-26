@@ -33,6 +33,7 @@ use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
@@ -342,22 +343,27 @@ abstract class TestCase extends BaseTestCase
      * les tests. Avec ['a_verifier' => true], la société reste en cours de
      * vérification. Le magasin devient le magasin actif.
      *
-     * Les options nom, code, nic et email sont celles du magasin ; l'option
-     * siren est celui de la société, qu'elle a dès sa création (il ne change
-     * jamais) ; toute autre, sauf a_verifier, se règle sur la société avant
-     * la création du magasin (regime_tva...). Avec $proprietaire, le
-     * propriétaire d'une société sans magasin (voir UserFactory), le magasin
-     * s'ouvre dans la société de ce compte, sans option siren.
+     * Les options nom, code, nic et email sont celles du magasin ; les
+     * options siren et type (son type d'activité, un TypeDActivite,
+     * « Commerce ou atelier » sans elle) sont celles de la société, qu'elle a
+     * dès sa création (ils ne changent jamais) ; toute autre, sauf
+     * a_verifier, se règle sur la société avant la création du magasin
+     * (regime_tva...). Avec $proprietaire, le propriétaire d'une société sans
+     * magasin (voir UserFactory), le magasin s'ouvre dans la société de ce
+     * compte, sans option siren ni type.
      *
      * @param  array<string, mixed>  $options
      */
     protected function ouvrirUneSociete(array $options = [], ?User $proprietaire = null): Magasin
     {
         app(TenantContext::class)->clear();
-        $this->assertFalse($proprietaire !== null && array_key_exists('siren', $options), 'Le SIREN d\'une société existante ne change jamais.');
-        $proprietaire ??= User::factory()->create(array_key_exists('siren', $options) ? ['societe_id' => Societe::factory()->state(['siren' => $options['siren']])->commeApresLInscription()] : []);
+        $this->assertFalse($proprietaire !== null && (array_key_exists('siren', $options) || array_key_exists('type', $options)), 'Le SIREN et le type d\'activité d\'une société existante ne changent jamais.');
+        $proprietaire ??= User::factory()->create(['societe_id' => Societe::factory()->state([
+            ...(array_key_exists('siren', $options) ? ['siren' => $options['siren']] : []),
+            'type_activite' => $options['type'] ?? TypeDActivite::Commerce,
+        ])->commeApresLInscription()]);
         $societe = $proprietaire->societe;
-        $reglages = Arr::except($options, ['nom', 'code', 'nic', 'email', 'a_verifier', 'siren']);
+        $reglages = Arr::except($options, ['nom', 'code', 'nic', 'email', 'a_verifier', 'siren', 'type']);
 
         if ($reglages !== []) {
             app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill($reglages)->save());
@@ -432,14 +438,15 @@ abstract class TestCase extends BaseTestCase
      * sans magasin : son entreprise contrôlée au répertoire Sirene factice,
      * son propriétaire au nom de Jeanne DUPONT, la présidente que donne le
      * registre national factice, son mot de passe MOT_DE_PASSE_CHOISI, et
-     * son premier courrier parti par le prestataire factice. Aucun magasin
-     * n'est le magasin actif.
+     * son premier courrier parti par le prestataire factice, avec ce type
+     * d'activité, « Commerce ou atelier » sauf autre type, qu'elle a dès sa
+     * création. Aucun magasin n'est le magasin actif.
      */
-    protected function inscrireUneSociete(?string $siren = null, ?string $email = null): Societe
+    protected function inscrireUneSociete(?string $siren = null, ?string $email = null, TypeDActivite $type = TypeDActivite::Commerce): Societe
     {
         app(TenantContext::class)->clear();
 
-        return app(CreerSocieteAction::class)->handle($siren ?? SocieteFactory::sirenFictif(), $email ?? fake()->unique()->safeEmail(), self::MOT_DE_PASSE_CHOISI);
+        return app(CreerSocieteAction::class)->handle($siren ?? SocieteFactory::sirenFictif(), $type, $email ?? fake()->unique()->safeEmail(), self::MOT_DE_PASSE_CHOISI);
     }
 
     /**

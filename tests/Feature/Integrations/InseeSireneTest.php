@@ -71,7 +71,7 @@ class InseeSireneTest extends TestCase
         ]);
         $repertoire = new InseeSirene;
 
-        $this->assertEquals(new UniteSirene('000000018', true, 'SOCIETE FICTIVE', '5710', '00012', false), $repertoire->unite('000000018'));
+        $this->assertEquals(new UniteSirene('000000018', true, 'SOCIETE FICTIVE', '5710', '00012', false, null, null), $repertoire->unite('000000018'));
         $this->assertEquals(new EtablissementSirene('00000001800012', '000000018', false, '7 B RUE DES LILAS', 'BATIMENT C', '69003', '69383', 'LYON', false, 'LES LILAS', true), $repertoire->etablissement('00000001800012'));
         $this->assertEquals(new EtablissementSirene('00000001800020', '000000018', true, 'DU PORT', null, '13002', null, 'MARSEILLE', false, null, false), $repertoire->etablissement('00000001800020'));
         Http::assertSentCount(3);
@@ -103,9 +103,40 @@ class InseeSireneTest extends TestCase
         ]);
         $repertoire = new InseeSirene;
 
-        $this->assertEquals(new UniteSirene('000000026', true, 'JEANNE DUPONT', '1000', '00015', false), $repertoire->unite('000000026'));
-        $this->assertEquals(new UniteSirene('000000034', true, null, '5710', '00010', true), $repertoire->unite('000000034'));
+        $this->assertEquals(new UniteSirene('000000026', true, 'JEANNE DUPONT', '1000', '00015', false, null, null), $repertoire->unite('000000026'));
+        $this->assertEquals(new UniteSirene('000000034', true, null, '5710', '00010', true, null, null), $repertoire->unite('000000034'));
         $this->assertEquals(new EtablissementSirene('00000003400010', '000000034', true, null, null, null, '97209', 'FORT-DE-FRANCE', true, null, false), $repertoire->etablissement('00000003400010'));
+    }
+
+    /**
+     * Le code d'activité principale et sa nomenclature se lisent dans la
+     * période en cours de l'unité légale, jamais dans une période passée ;
+     * absents de la période en cours, ils ne valent rien, sans rendre la
+     * réponse illisible.
+     */
+    public function test_l_activite_principale_et_sa_nomenclature_se_lisent_dans_la_periode_en_cours(): void
+    {
+        Http::fake([
+            self::URL.'/siren/000000018' => Http::response(['uniteLegale' => [
+                'periodesUniteLegale' => [
+                    ['etatAdministratifUniteLegale' => 'A', 'denominationUniteLegale' => 'CABINET FICTIF', 'activitePrincipaleUniteLegale' => '69.20Z', 'nomenclatureActivitePrincipaleUniteLegale' => 'NAFRev2'],
+                    ['etatAdministratifUniteLegale' => 'A', 'activitePrincipaleUniteLegale' => '74.1A', 'nomenclatureActivitePrincipaleUniteLegale' => 'NAFRev1'],
+                ],
+            ]]),
+            self::URL.'/siren/000000026' => Http::response(['uniteLegale' => [
+                'periodesUniteLegale' => [
+                    ['etatAdministratifUniteLegale' => 'A', 'denominationUniteLegale' => 'SANS ACTIVITE'],
+                    ['etatAdministratifUniteLegale' => 'A', 'activitePrincipaleUniteLegale' => '47.11B', 'nomenclatureActivitePrincipaleUniteLegale' => 'NAFRev2'],
+                ],
+            ]]),
+        ]);
+        $repertoire = new InseeSirene;
+
+        $cabinet = $repertoire->unite('000000018');
+        $sansActivite = $repertoire->unite('000000026');
+
+        $this->assertSame(['69.20Z', 'NAFRev2'], [$cabinet?->activitePrincipale, $cabinet?->nomenclatureActivite]);
+        $this->assertSame([true, null, null], [$sansActivite?->active, $sansActivite?->activitePrincipale, $sansActivite?->nomenclatureActivite]);
     }
 
     /**

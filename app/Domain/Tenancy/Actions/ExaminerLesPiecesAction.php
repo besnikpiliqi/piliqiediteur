@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\DB;
  * la société, des pièces ne la valident jamais. Tout se fait en une
  * transaction : si le courrier ne peut pas partir, rien n'est inscrit et
  * les pièces restent, pour un nouvel examen. Pour refuser, l'éditeur clôt
- * l'inscription (voir editeur:societe:refuser).
+ * l'inscription (voir editeur:societe:clore --motif=refus).
  */
 class ExaminerLesPiecesAction
 {

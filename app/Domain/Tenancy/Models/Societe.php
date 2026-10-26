@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -48,6 +49,12 @@ use LogicException;
  * celle dont l'inscription attend le code de son courrier recommandé, ou
  * qui est validée (index unique partiel societes_siren_unique) ; une
  * inscription close (voir estClose()) ou une société révoquée le libère.
+ *
+ * Son type d'activité (voir TypeDActivite), choisi à son inscription, ne
+ * s'écrit qu'à sa création (voir CreerSocieteAction), jamais par un
+ * formulaire (il n'est pas dans $fillable), et ne change jamais : la base
+ * refuse un type inconnu et toute modification (voir
+ * GardesDesTypesDActivite).
  *
  * Ses gardes, quel que soit l'écran ou la commande qui l'enregistre :
  * - jamais validée et close à la fois ;
@@ -121,6 +128,7 @@ class Societe extends Model implements HasName
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
         'mois_fin_exercice' => 'integer',
+        'type_activite' => TypeDActivite::class,
         'statut' => StatutSociete::class,
         'validee_le' => Instant::class,
         'close_le' => Instant::class,
@@ -275,6 +283,15 @@ class Societe extends Model implements HasName
     public function attendSonCode(): bool
     {
         return ! $this->estValidee() && ! $this->estClose() && $this->statut !== StatutSociete::Revoquee;
+    }
+
+    /**
+     * Est-ce un cabinet d'expertise comptable ? Il n'a aucun magasin, ni
+     * démonstration (voir TypeDActivite::aDesMagasins()).
+     */
+    public function estUnCabinet(): bool
+    {
+        return $this->type_activite === TypeDActivite::Cabinet;
     }
 
     /**

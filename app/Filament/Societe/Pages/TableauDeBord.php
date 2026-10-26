@@ -77,7 +77,10 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * L'état de la vérification de la société, tel que l'écran le dit.
+     * L'état de la vérification de la société, tel que l'écran le dit ;
+     * pour un cabinet d'expertise comptable qui attend son code, sans
+     * magasins, catalogue, achats ni démonstration, qu'il n'a pas : un
+     * texte provisoire, que l'espace des cabinets remplacera.
      */
     public function etatDeLaVerification(): string
     {
@@ -86,6 +89,7 @@ class TableauDeBord extends Dashboard
         return match (true) {
             $societe->estClose() => 'L\'inscription de votre société est close.',
             $societe->estValidee() => 'Votre société est validée depuis le '.Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y').'.',
+            $societe->estUnCabinet() => 'Votre cabinet attend le code de son courrier recommandé. L\'espace des cabinets s\'ouvrira avec la validation.',
             default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
         };
     }
@@ -103,7 +107,9 @@ class TableauDeBord extends Dashboard
      * magasins ni celui des comptes de la société. Les magasins et les
      * comptes se comptent dans la portée du propriétaire (voir
      * User::magasinsDeSaPortee() et MembreResource::getEloquentQuery()) :
-     * toute la société, sans son propre compte.
+     * toute la société, sans son propre compte. Un cabinet d'expertise
+     * comptable, sans magasin ni démonstration, n'a que l'étape du code :
+     * une liste provisoire, que l'espace des cabinets remplacera.
      *
      * @return list<array{titre: string, faite: bool, etat: string, url: string|null}>
      */
@@ -116,17 +122,23 @@ class TableauDeBord extends Dashboard
         }
 
         $societe = $this->societe();
+        $codeDuCourrier = [
+            'titre' => self::ETAPE_CODE_DU_COURRIER,
+            'faite' => $societe->estValidee(),
+            'etat' => $this->prochaineEtapeDeLaVerification(),
+            'url' => VerificationSociete::getUrl(),
+        ];
+
+        if ($societe->estUnCabinet()) {
+            return [$codeDuCourrier];
+        }
+
         $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->count();
         $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->count();
         $demonstration = $societe->demonstration()->first();
 
         return [
-            [
-                'titre' => self::ETAPE_CODE_DU_COURRIER,
-                'faite' => $societe->estValidee(),
-                'etat' => $this->prochaineEtapeDeLaVerification(),
-                'url' => VerificationSociete::getUrl(),
-            ],
+            $codeDuCourrier,
             [
                 'titre' => self::ETAPE_PREMIER_MAGASIN,
                 'faite' => $magasins > 0,

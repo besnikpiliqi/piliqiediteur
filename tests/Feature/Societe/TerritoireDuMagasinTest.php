@@ -390,7 +390,7 @@ class TerritoireDuMagasinTest extends TestCase
 
         $this->assertSame(Territoire::Martinique, $magasin->fresh()->territoire);
         Mail::assertSent(AlerteEditeurMail::class, fn (AlerteEditeurMail $mail): bool => $mail->objet === 'Revérification Sirene : établissement situé dans un autre territoire');
-        $this->assertSame(['Écart au répertoire Sirene', 'Territoire de votre magasin au répertoire Sirene'], $this->titresDesAvis($magasin->societe));
+        $this->assertSame(['Territoire de votre magasin au répertoire Sirene', 'Écart au répertoire Sirene'], $this->titresDesAvis($magasin->societe));
 
         app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), MotifFermeture::Temporaire, self::MOT_DE_PASSE_DU_PROPRIETAIRE);
         app(RouvrirMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), self::MOT_DE_PASSE_DU_PROPRIETAIRE);
@@ -723,13 +723,14 @@ class TerritoireDuMagasinTest extends TestCase
 
     /**
      * Les titres des avis reçus par le propriétaire de la société, dans
-     * l'ordre.
+     * l'ordre alphabétique : deux avis envoyés à la même seconde n'ont pas
+     * d'ordre en base, leur identifiant étant un uuid.
      *
      * @return list<string>
      */
     private function titresDesAvis(Societe $societe): array
     {
-        return $societe->proprietaire->notifications()->oldest()->get()->map(fn ($avis): string => $avis->data['title'])->all();
+        return $societe->proprietaire->notifications()->get()->map(fn ($avis): string => $avis->data['title'])->sort()->values()->all();
     }
 
     private function corrigerLeTerritoire(Magasin $magasin): PendingCommand

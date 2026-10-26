@@ -24,6 +24,7 @@ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -128,7 +129,7 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
             self::faire($geste, $magasinId, $documentId);
         };
         $refuser = static function () use ($societeId): void {
-            app(CloreLInscriptionAction::class)->refuser(Societe::query()->findOrFail($societeId), new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-2026-0070', ['alice']));
+            app(CloreLInscriptionAction::class)->parLEditeur(Societe::query()->findOrFail($societeId), new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-2026-0070', ['alice']), MotifCloture::Refus);
         };
         $concurrente = null;
         $this->concurrencerDesQueLaLigneEstVerrouillee('users', 'for no key update', $leGesteDAbord ? $refuser : $faire, $concurrente);

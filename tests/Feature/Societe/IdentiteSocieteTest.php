@@ -65,7 +65,8 @@ class IdentiteSocieteTest extends TestCase
         $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $societe))
             ->assertOk()
             ->assertSee('Identité légale')
-            ->assertSee($societe->siren);
+            ->assertSee($societe->siren)
+            ->assertSeeText(['Type d\'activité', 'Commerce ou atelier', 'Choisi à l\'inscription, il ne change jamais.']);
     }
 
     /**

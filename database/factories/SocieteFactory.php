@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Models\User;
@@ -11,8 +12,10 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * @extends Factory<Societe>
  *
- * Une société à l'identité légale complète, active et en cours de
- * vérification : validee() la valide, commeApresLInscription() lui donne
+ * Une société « Commerce ou atelier » à l'identité légale complète,
+ * active et en cours de vérification : services() et cabinet() lui donnent
+ * un autre type d'activité, à sa création (il ne change jamais ensuite),
+ * validee() la valide, commeApresLInscription() lui donne
  * l'identité que le répertoire Sirene préremplit à l'inscription (sans
  * capital ni immatriculation), sansIdentiteLegale() n'en laisse que le
  * SIREN, avecProprietaire() lui crée son propriétaire. Son SIREN est
@@ -30,6 +33,7 @@ class SocieteFactory extends Factory
 
         return [
             'siren' => $siren,
+            'type_activite' => TypeDActivite::Commerce,
             'raison_sociale' => fake()->company(),
             'forme_juridique' => FormeJuridique::Sas,
             'capital_social' => '10000.00',
@@ -50,6 +54,22 @@ class SocieteFactory extends Factory
     public static function sirenFictif(): string
     {
         return IdentifiantsInsee::avecSaCle('1'.fake()->unique()->numerify('#######'));
+    }
+
+    /**
+     * Une société « Services, sans vente d'articles ».
+     */
+    public function services(): static
+    {
+        return $this->state(fn (): array => ['type_activite' => TypeDActivite::Services]);
+    }
+
+    /**
+     * Un cabinet d'expertise comptable, qui n'a aucun magasin.
+     */
+    public function cabinet(): static
+    {
+        return $this->state(fn (): array => ['type_activite' => TypeDActivite::Cabinet]);
     }
 
     public function validee(): static

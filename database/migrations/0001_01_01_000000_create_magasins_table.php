@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -158,10 +159,15 @@ return new class extends Migration
         // Un SIRET libéré par l'éditeur ne se reprend pas : la base refuse
         // d'effacer ou de changer sa libération.
         DeclencheursDeProtection::colonneFigee('magasins', 'siret_libere_le');
+
+        // Un cabinet d'expertise comptable n'a aucun magasin, démonstration
+        // comprise (voir TypeDActivite::aDesMagasins()).
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::MAGASINS);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::MAGASINS);
         Schema::dropIfExists('magasins');
         DeclencheursDeProtection::retirer('magasins');
         DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'territoire');

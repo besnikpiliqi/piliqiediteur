@@ -219,7 +219,7 @@ class VerificationSocieteTest extends TestCase
         $adresse = CourrierDeCode::adresseDeLaPage($siren);
         $this->assertSame(rtrim((string) config('app.url'), '/')."/code/{$siren}", $adresse);
         $this->assertSame(rtrim(preg_replace('#^https?://#', '', (string) config('app.url')), '/').'/code', CourrierDeCode::adresseCourte());
-        $html = app(CourrierDeCode::class)->html($envoi['destinataire'], $siren, MotifCode::Verification, $code, self::aParis('2026-11-04 10:00:00'));
+        $html = app(CourrierDeCode::class)->html($envoi['destinataire'], $siren, $societe->type_activite, MotifCode::Verification, $code, self::aParis('2026-11-04 10:00:00'));
         $this->assertStringContainsString('src="'.QrCode::uriDeDonnees($adresse).'"', $html);
         $this->assertSame(QrCode::svg($adresse), base64_decode(substr(QrCode::uriDeDonnees($adresse), strlen('data:image/svg+xml;base64,')), true));
         $this->assertStringNotContainsString(str_replace('-', '', $code), $adresse);
@@ -237,7 +237,7 @@ class VerificationSocieteTest extends TestCase
         $code = $this->codeDuCourrier($societe);
         $actif = $this->codeActif($societe);
 
-        $html = app(CourrierDeCode::class)->html(DestinataireDuCourrier::depuisTableau($actif->destinataire), (string) $societe->siren, MotifCode::Verification, $code, $actif->expire_le);
+        $html = app(CourrierDeCode::class)->html(DestinataireDuCourrier::depuisTableau($actif->destinataire), (string) $societe->siren, $societe->type_activite, MotifCode::Verification, $code, $actif->expire_le);
 
         $this->assertStringContainsString('Ce code est valable jusqu\'au 04/11/2026 à 10:00 (heure de Paris) et ne sert qu\'une fois.', $html);
         $this->assertStringContainsString('Sans code saisi d\'ici là, l\'inscription sera close.', $html);
@@ -546,7 +546,7 @@ class VerificationSocieteTest extends TestCase
         $adresse = CourrierDeCode::adresseDeLaPage($siren, MotifCode::Recuperation);
         $this->assertSame(rtrim((string) config('app.url'), '/')."/code/recuperation/{$siren}", $adresse);
         $this->assertStringContainsString(CourrierDeCode::adresseCourte(MotifCode::Recuperation), $this->texteDuPdf($this->envois()->envois()[$courrier->reference_envoi]['pdf']));
-        $html = app(CourrierDeCode::class)->html(DestinataireDuCourrier::depuisTableau($courrier->destinataire), $siren, MotifCode::Recuperation, $code, $courrier->expire_le);
+        $html = app(CourrierDeCode::class)->html(DestinataireDuCourrier::depuisTableau($courrier->destinataire), $siren, $societe->type_activite, MotifCode::Recuperation, $code, $courrier->expire_le);
         $this->assertStringContainsString('src="'.QrCode::uriDeDonnees($adresse).'"', $html);
         $this->assertStringContainsString('Une fois ce code saisi, l\'éditeur poursuit la procédure et vous contacte.', $html);
         $this->assertStringNotContainsString('devient propriétaire', $html);
@@ -979,7 +979,7 @@ class VerificationSocieteTest extends TestCase
         $societe = $this->societeDontLesCourriersNeSontPasParvenus();
         $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, 'Extrait Kbis');
 
-        $this->procedureDeLEditeur('editeur:societe:refuser', $societe)->expectsOutputToContain('Inscription refusée et close.')->assertSuccessful();
+        $this->procedureDeLEditeur('editeur:societe:clore', $societe, ['--motif' => 'refus'])->expectsOutputToContain('Inscription close : Refus de l\'éditeur.')->assertSuccessful();
 
         $close = $societe->fresh();
         $this->assertSame([true, MotifCloture::Refus], [$close->estClose(), $close->motif_cloture]);
@@ -1231,7 +1231,7 @@ class VerificationSocieteTest extends TestCase
      */
     private function refuserParLEditeur(Societe $societe): void
     {
-        app(CloreLInscriptionAction::class)->refuser($societe, self::editeur());
+        app(CloreLInscriptionAction::class)->parLEditeur($societe, self::editeur(), MotifCloture::Refus);
     }
 
     /**
@@ -1271,13 +1271,17 @@ class VerificationSocieteTest extends TestCase
      * Une procédure de l'éditeur sur la société, lancée par l'opératrice
      * alice avec sa justification, sa pièce et le SIREN retapé.
      */
-    private function procedureDeLEditeur(string $commande, Societe $societe): PendingCommand
+    /**
+     * @param  array<string, mixed>  $options  les options propres à la commande
+     */
+    private function procedureDeLEditeur(string $commande, Societe $societe, array $options = []): PendingCommand
     {
         return $this->artisan($commande, [
             'societe' => $societe->id,
             '--justification' => 'Examen du dossier de vérification par l\'éditeur',
             '--piece' => 'DOSSIER-2026-0001',
             '--confirmer' => $societe->siren,
+            ...$options,
         ])
             ->expectsQuestion('Nom de l\'opérateur', 'alice')
             ->expectsQuestion('Secret de l\'opérateur', 'secret-d-alice');

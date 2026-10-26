@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Actions\DemanderUneNouvelleAdresseAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\AdresseChangeeMail;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Mail\InscriptionCloseMail;
@@ -413,7 +414,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
         $proprietaire = $societe->proprietaire()->sole();
         app(TenantContext::class)->clear();
 
-        app(CloreLInscriptionAction::class)->refuser($societe, new InterventionDeLEditeur('Examen du dossier de vérification par l\'éditeur', 'DOSSIER-2026-0001', ['alice']));
+        app(CloreLInscriptionAction::class)->parLEditeur($societe, new InterventionDeLEditeur('Examen du dossier de vérification par l\'éditeur', 'DOSSIER-2026-0001', ['alice']), MotifCloture::Refus);
 
         $this->assertSame(MotifCloture::Refus, $societe->fresh()->motif_cloture);
         $this->assertSame([null, false], [$proprietaire->refresh()->email, Auth::validate(['login' => 'jeanne@exemple.fr', 'password' => self::MOT_DE_PASSE_CHOISI])]);
@@ -437,7 +438,7 @@ class AdresseDeConnexionDuProprietaireTest extends TestCase
         app(CloreLInscriptionAction::class)->cloreSansCode($close->fresh(), now()->toImmutable());
         app(TenantContext::class)->clear();
 
-        $nouvelle = app(CreerSocieteAction::class)->handle((string) $close->siren, 'Jeanne@Exemple.FR', self::MOT_DE_PASSE_CHOISI);
+        $nouvelle = app(CreerSocieteAction::class)->handle((string) $close->siren, TypeDActivite::Commerce, 'Jeanne@Exemple.FR', self::MOT_DE_PASSE_CHOISI);
 
         $this->assertTrue($nouvelle->attendSonCode());
         $proprietaire = $nouvelle->proprietaire()->sole();

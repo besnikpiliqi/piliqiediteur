@@ -7,12 +7,21 @@
     <x-filament::section icon="heroicon-o-shield-check">
         <x-slot name="heading">Où en est votre société</x-slot>
 
+        {{-- Les textes du cabinet sont provisoires : l'espace des cabinets les remplacera. --}}
         @if ($societe->estValidee())
             <p>Votre société est validée depuis le {{ \App\Domain\Calendrier\Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y') }}.</p>
+        @elseif ($societe->estClose() && $societe->estUnCabinet())
+            <p>L'inscription de votre cabinet est close ({{ $societe->motif_cloture?->getLabel() }}) : son espace reste consultable, en lecture seule.</p>
         @elseif ($societe->estClose())
             <p>L'inscription de votre société est close ({{ $societe->motif_cloture?->getLabel() }}) : vos magasins restent consultables, en lecture seule.</p>
+        @elseif ($societe->estUnCabinet())
+            <p>Votre cabinet attend le code de son courrier recommandé.</p>
         @else
             <p>Société en attente du code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu'à sa validation. Configurez-la et essayez {{ config('app.name') }} dans le magasin de démonstration, depuis le tableau de bord.</p>
+        @endif
+
+        @if ($societe->attendSonCode())
+            @include('filament.rappel-du-type', ['societe' => $societe])
         @endif
     </x-filament::section>
 

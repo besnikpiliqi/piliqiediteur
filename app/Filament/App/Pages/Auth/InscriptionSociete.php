@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\CompteExistantMail;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
@@ -12,28 +13,46 @@ use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Get;
 use Filament\Http\Responses\Auth\Contracts\RegistrationResponse;
 use Filament\Pages\Auth\Register;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
  * L'inscription d'une société, en deux temps. Ici, la demande : le SIREN
- * de l'entreprise, l'adresse e-mail et le mot de passe de son propriétaire,
- * rien de plus ; aucun magasin : tous se créent ensuite dans l'espace de
- * la société (voir CreerMagasin). Rien n'est créé : un lien valable 24
- * heures part à l'adresse donnée, et c'est sa confirmation qui crée la
- * société et fait partir le courrier recommandé à son représentant légal
- * (voir ConfirmerInscriptionController et CreerSocieteAction).
+ * de l'entreprise, son type d'activité, l'adresse e-mail et le mot de
+ * passe de son propriétaire, rien de plus ; aucun magasin : tous se créent
+ * ensuite dans l'espace de la société (voir CreerMagasin). Rien n'est
+ * créé : un lien valable 24 heures part à l'adresse donnée, et c'est sa
+ * confirmation qui crée la société et fait partir le courrier recommandé
+ * à son représentant légal (voir ConfirmerInscriptionController et
+ * CreerSocieteAction).
+ *
+ * Le type d'activité se choisit dans un menu sans valeur par défaut (voir
+ * TypeDActivite), chaque entrée avec sa ligne d'exemples, l'aide de
+ * l'entrée choisie et le rappel que le choix sera définitif sous le menu ;
+ * il peut encore changer sur la page du lien, puis devient définitif à la
+ * création de la société. Le code d'activité de l'entreprise, lu au
+ * répertoire Sirene avec le reste de son unité (jamais pendant la saisie),
+ * est gardé dans la demande avec le type choisi, pour les avertissements
+ * de la page du lien (voir AvertissementsDuCodeDActivite), et s'efface
+ * avec elle : un cabinet d'expertise comptable dont le répertoire donne
+ * un autre code que 69.20Z en NAF rév. 2 est refusé sur le champ du type
+ * (voir ControleSirene::exerceLesActivitesComptables()), et rien n'est
+ * demandé ni envoyé.
  *
  * Un SIREN n'appartient qu'à une seule société : un SIREN déjà pris (une
  * inscription qui attend son code, ou une société validée) est refusé par
@@ -91,6 +110,7 @@ class InscriptionSociete extends Register
                 $this->makeForm()
                     ->schema([
                         $this->getSirenFormComponent(),
+                        $this->getTypeDActiviteFormComponent(),
                         $this->getEmailFormComponent(),
                         $this->getPasswordFormComponent(),
                         $this->getPasswordConfirmationFormComponent(),
@@ -123,7 +143,12 @@ class InscriptionSociete extends Register
             throw ValidationException::withMessages(['data.siren' => CreerSocieteAction::MESSAGE_SIREN_PRIS]);
         }
 
-        $this->refuserCeQueSireneRefuse($donnees['siren']);
+        $type = TypeDActivite::from($donnees['type_activite']);
+        $unite = $this->refuserCeQueSireneRefuse($donnees['siren']);
+
+        if ($type === TypeDActivite::Cabinet && $unite !== null && ControleSirene::exerceLesActivitesComptables($unite) === false) {
+            throw ValidationException::withMessages(['data.type_activite' => ControleSirene::MOTIF_ACTIVITE_NON_COMPTABLE]);
+        }
 
         if (FournisseurDesComptes::proprietaireDeLAdresse($email) !== null) {
             $panneau = Filament::getPanel('app');
@@ -142,12 +167,15 @@ class InscriptionSociete extends Register
             'jeton_hache' => DemandeInscription::empreinte($jeton),
             'donnees' => [
                 'siren' => $donnees['siren'],
+                'type_activite' => $type->value,
+                'code_activite' => $unite?->activitePrincipale,
+                'nomenclature_activite' => $unite?->nomenclatureActivite,
                 'mot_de_passe' => $donnees['password'],
             ],
             'expire_le' => now()->addHours(DemandeInscription::DUREE_DE_VALIDITE_EN_HEURES),
         ]))->save();
 
-        Mail::to($email)->send(new DemandeInscriptionMail(self::lienDeConfirmation($jeton), $demande->expire_le));
+        Mail::to($email)->send(new DemandeInscriptionMail(self::lienDeConfirmation($jeton), $demande->expire_le, $type));
         $this->terminer();
 
         return null;
@@ -183,6 +211,29 @@ class InscriptionSociete extends Register
             ->maxLength(9)
             ->rule(new SirenValide)
             ->autofocus();
+    }
+
+    /**
+     * Le type d'activité de la société, dans un menu sans valeur par
+     * défaut, chaque entrée avec sa ligne d'exemples ; sous le menu, l'aide
+     * de l'entrée choisie et, toujours, le rappel que le choix sera
+     * définitif.
+     */
+    protected function getTypeDActiviteFormComponent(): Component
+    {
+        return Select::make('type_activite')
+            ->label('Votre activité')
+            ->placeholder('Choisissez votre activité')
+            ->options(TypeDActivite::optionsDuMenu(TypeDActivite::cases()))
+            ->allowHtml()
+            ->native(false)
+            ->required()
+            ->in(array_map(fn (TypeDActivite $type): string => $type->value, TypeDActivite::cases()))
+            ->live()
+            ->helperText(fn (Get $get): HtmlString => new HtmlString(implode('<br>', array_map(e(...), array_filter([
+                TypeDActivite::tryFrom((string) $get('type_activite'))?->aide(),
+                TypeDActivite::rappelDuChoixDefinitif(),
+            ])))));
     }
 
     /**
@@ -238,17 +289,19 @@ class InscriptionSociete extends Register
     /**
      * Une entreprise cessée ou inconnue d'après le répertoire public :
      * refusée avec le motif du répertoire. L'INSEE qui ne répond pas
-     * n'empêche rien.
+     * n'empêche rien. Rend l'unité lue, null quand l'INSEE n'a pas répondu.
      *
      * @throws ValidationException
      */
-    private function refuserCeQueSireneRefuse(string $siren): void
+    private function refuserCeQueSireneRefuse(string $siren): ?UniteSirene
     {
-        $unite = app(ControleSirene::class)->unite($siren);
+        $consultation = app(ControleSirene::class)->unite($siren);
 
-        if ($unite['resultat'] === ResultatVerification::Negative) {
-            throw ValidationException::withMessages(['data.siren' => $unite['motif']]);
+        if ($consultation['resultat'] === ResultatVerification::Negative) {
+            throw ValidationException::withMessages(['data.siren' => $consultation['motif']]);
         }
+
+        return $consultation['unite'];
     }
 
     private function terminer(): void

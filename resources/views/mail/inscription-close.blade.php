@@ -2,9 +2,13 @@
 <x-mail::message>
 # L'inscription de votre société est close
 
-L'inscription de {{ $societe }} sur {{ config('app.name') }} est close : {{ $motif }}. Ses magasins restent consultables, en lecture seule.
+L'inscription de {{ $societe }} sur {{ config('app.name') }} est close : {{ $motif }}. {{ $consultable }}
 
 Cette adresse e-mail n'est plus une adresse de connexion : elle peut servir à une nouvelle inscription.
+@if ($reinscription !== null)
+
+{{ $reinscription }}
+@endif
 
 <x-mail::button :url="$urlInscription">
 Inscrire une société

@@ -2,13 +2,16 @@
 
 namespace App\Integrations\Sirene;
 
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
+use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 
 /**
  * Le répertoire Sirene factice du développement et des tests, sans aucune
  * requête (voir VerificationServiceProvider) : toute entreprise d'un SIREN
- * valide y est active, une société par actions simplifiée, et tout
+ * valide y est active, une société par actions simplifiée, d'activité
+ * 47.11B en NAFRev2 (une supérette), et tout
  * établissement d'un SIRET valide y est actif, rattaché à son SIREN, à
  * Paris (75001, commune 75056) ; celui du NIC 0001 est son siège. Ses établissements actifs
  * (voir etablissementsActifs()) sont son siège et, sauf pour un
@@ -24,9 +27,12 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
  *   ses établissements n'ont ni adresse ni code postal, seulement leur
  *   commune ;
  * - SIREN_ENTREPRENEUR_INDIVIDUEL, un entrepreneur individuel ;
+ * - SIREN_CABINET, un cabinet d'expertise comptable, d'activité 69.20Z en
+ *   NAFRev2 (activités comptables) ;
  * - tout établissement dont le NIC commence par 9, fermé.
  *
  * Un test règle en plus ses propres réponses (voir fermer(), cesser(),
+ * exercer(),
  * oublier(), deplacer(), situerHorsDeFrance(), nommer(),
  * ajouterUnEtablissement(), rattacherA(), listerEnPartie(),
  * rendreInjoignable()) sur l'instance du conteneur.
@@ -42,6 +48,10 @@ class FauxRepertoireSirene implements RepertoireSirene
     public const SIREN_DIFFUSION_PARTIELLE = '000000968';
 
     public const SIREN_ENTREPRENEUR_INDIVIDUEL = '000000950';
+
+    public const SIREN_CABINET = '000000943';
+
+    public const ACTIVITE_PAR_DEFAUT = '47.11B';
 
     public const ENSEIGNE_DE_LA_BOUTIQUE = 'BOUTIQUE REPUBLIQUE';
 
@@ -73,6 +83,9 @@ class FauxRepertoireSirene implements RepertoireSirene
     /** @var array<string, string> le SIREN auquel le répertoire rattache ces établissements, par SIRET */
     private array $rattachements = [];
 
+    /** @var array<string, array{0: string|null, 1: string|null}> le code d'activité et sa nomenclature de ces entreprises, par SIREN */
+    private array $activites = [];
+
     public function unite(string $siren): ?UniteSirene
     {
         $this->repondre($siren);
@@ -83,6 +96,7 @@ class FauxRepertoireSirene implements RepertoireSirene
 
         $diffusionPartielle = $siren === self::SIREN_DIFFUSION_PARTIELLE;
         $entrepreneurIndividuel = $siren === self::SIREN_ENTREPRENEUR_INDIVIDUEL;
+        $activite = $this->activites[$siren] ?? [$siren === self::SIREN_CABINET ? ControleSirene::CODE_ACTIVITES_COMPTABLES : self::ACTIVITE_PAR_DEFAUT, AvertissementsDuCodeDActivite::NOMENCLATURE];
 
         return new UniteSirene(
             siren: $siren,
@@ -96,6 +110,8 @@ class FauxRepertoireSirene implements RepertoireSirene
             categorieJuridique: $entrepreneurIndividuel ? '1000' : '5710',
             nicDuSiege: substr(self::siretDuSiege($siren), 9),
             diffusionPartielle: $diffusionPartielle,
+            activitePrincipale: $activite[0],
+            nomenclatureActivite: $activite[1],
         );
     }
 
@@ -231,6 +247,16 @@ class FauxRepertoireSirene implements RepertoireSirene
     public function listerEnPartie(bool $enPartie = true): void
     {
         $this->enPartie = $enPartie;
+    }
+
+    /**
+     * Une entreprise que le répertoire dit exercer cette activité, dans
+     * cette nomenclature : un code ou une nomenclature null, comme un
+     * répertoire qui ne les donne pas.
+     */
+    public function exercer(string $siren, ?string $code, ?string $nomenclature = AvertissementsDuCodeDActivite::NOMENCLATURE): void
+    {
+        $this->activites[$siren] = [$code, $nomenclature];
     }
 
     public function cesser(string $siren): void

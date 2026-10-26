@@ -147,7 +147,10 @@ enum ActionAuditee: string implements HasLabel
     public function champsAudites(): array
     {
         return match ($this) {
-            self::SocieteInscrite => ['siren', 'raison_sociale', 'forme_juridique', 'proprietaire'],
+            // Le type d'activité choisi, et le code d'activité lu au
+            // répertoire Sirene à la confirmation avec sa nomenclature,
+            // enregistrés nulle part ailleurs sur la société.
+            self::SocieteInscrite => ['siren', 'type_activite', 'code_activite', 'nomenclature_activite', 'raison_sociale', 'forme_juridique', 'proprietaire'],
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
             self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],

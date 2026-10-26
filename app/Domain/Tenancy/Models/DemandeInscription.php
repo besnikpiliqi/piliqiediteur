@@ -9,13 +9,17 @@ use Illuminate\Database\Eloquent\Model;
  * Une demande d'inscription d'une société, avant toute société (voir
  * InscriptionSociete et ConfirmerInscriptionController) : le lien envoyé à
  * l'adresse du futur propriétaire porte son jeton, dont seule l'empreinte
- * SHA-256 est gardée (jeton_hache) ; ses données, chiffrées (le SIREN et
- * le mot de passe déjà haché), sont celles que la confirmation enregistre
- * (voir CreerSocieteAction). Elle vaut 24 heures, ne sert qu'une fois, et
- * s'efface 48 heures après son expiration (voir
- * app:purger-demandes-inscription).
+ * SHA-256 est gardée (jeton_hache) ; ses données, chiffrées, sont celles
+ * que la confirmation enregistre (voir CreerSocieteAction) : le SIREN, le
+ * type d'activité choisi, que la page du lien laisse encore changer, le
+ * code d'activité de l'entreprise et sa nomenclature lus au répertoire
+ * Sirene à la demande (nuls s'il n'a pas répondu), que cette page relit
+ * pour ses avertissements sans appeler l'INSEE, et le mot de passe déjà
+ * haché. Elle vaut 24 heures, ne sert qu'une fois, et s'efface 48 heures
+ * après son expiration (voir app:purger-demandes-inscription), son code
+ * d'activité avec elle.
  *
- * @property array{siren: string, mot_de_passe: string} $donnees
+ * @property array{siren: string, type_activite: string, code_activite: string|null, nomenclature_activite: string|null, mot_de_passe: string} $donnees
  */
 class DemandeInscription extends Model
 {

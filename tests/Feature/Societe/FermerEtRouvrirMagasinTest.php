@@ -31,6 +31,7 @@ use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
@@ -690,7 +691,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
     {
         return [
             'inscription refusée et close avant sa validation' => [true, static function (Societe $societe): void {
-                app(CloreLInscriptionAction::class)->refuser($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-2026-0042', ['alice']));
+                app(CloreLInscriptionAction::class)->parLEditeur($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-2026-0042', ['alice']), MotifCloture::Refus);
             }],
             'société validée suspendue' => [false, static function (Societe $societe): void {
                 $societe->fresh()->forceFill(['statut' => StatutSociete::Suspendue])->save();

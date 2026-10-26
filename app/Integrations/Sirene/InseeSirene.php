@@ -31,7 +31,10 @@ use Throwable;
  * La réponse se lit avec tolérance : un champ absent ou d'un autre type ne
  * fait jamais croire à une entreprise ou à un établissement actif.
  * - 200 : la période en cours (la première de periodesUniteLegale ou de
- *   periodesEtablissement) dit l'état administratif, « A » pour actif ;
+ *   periodesEtablissement) dit l'état administratif, « A » pour actif, et,
+ *   pour une unité légale, son activité principale et sa nomenclature
+ *   (activitePrincipaleUniteLegale et
+ *   nomenclatureActivitePrincipaleUniteLegale), null quand elles manquent ;
  * - 404 : le répertoire ne connaît pas ce numéro, ou aucun établissement
  *   ne répond à la recherche ;
  * - toute autre réponse, une réponse illisible, ou un service injoignable
@@ -69,6 +72,8 @@ class InseeSirene implements RepertoireSirene
             categorieJuridique: $this->texte($periode, 'categorieJuridiqueUniteLegale'),
             nicDuSiege: $this->texte($periode, 'nicSiegeUniteLegale'),
             diffusionPartielle: ($unite['statutDiffusionUniteLegale'] ?? null) === 'P',
+            activitePrincipale: $this->texte($periode, 'activitePrincipaleUniteLegale'),
+            nomenclatureActivite: $this->texte($periode, 'nomenclatureActivitePrincipaleUniteLegale'),
         );
     }
 

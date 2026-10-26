@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\SirenValide;
@@ -36,15 +37,20 @@ use SensitiveParameter;
  * n'appartient à aucune autre société (une inscription qui attend son
  * code, ou une société validée, voir Societe::sirenPris()), refusé par le
  * seul MESSAGE_SIREN_PRIS ; l'entreprise existe et est active au répertoire
- * Sirene de l'INSEE ; le registre national des entreprises de l'INPI donne
- * son représentant légal et l'adresse officielle de son siège (voir
- * DestinataireOfficiel). Une entreprise cessée ou inconnue est refusée
- * avec le motif du répertoire ; un répertoire, un registre ou un
+ * Sirene de l'INSEE, et, pour un cabinet d'expertise comptable, le
+ * répertoire ne lui donne pas un autre code d'activité que 69.20Z en NAF
+ * rév. 2 (voir ControleSirene::exerceLesActivitesComptables() ; un code
+ * absent ou d'une autre nomenclature ne refuse rien) ; le registre
+ * national des entreprises de l'INPI donne son représentant légal et
+ * l'adresse officielle de son siège (voir DestinataireOfficiel). Une
+ * entreprise cessée ou inconnue, ou un cabinet hors du code 69.20Z, est
+ * refusé avec le motif du répertoire ; un répertoire, un registre ou un
  * prestataire d'envoi qui ne répond pas fait réessayer plus tard, et rien
  * n'est créé : une inscription n'existe jamais sans son courrier.
  *
- * La transaction : la société, en attente de son code, préremplie depuis
- * le répertoire Sirene (raison sociale, forme juridique tirée de la
+ * La transaction : la société, en attente de son code, avec son type
+ * d'activité, définitif dès cet instant (voir TypeDActivite), préremplie
+ * depuis le répertoire Sirene (raison sociale, forme juridique tirée de la
  * catégorie juridique, siège, n° de TVA proposé), sans aucun magasin ; le
  * compte de son propriétaire, son adresse de connexion confirmée par le
  * lien de l'inscription, au nom du représentant légal que donne le
@@ -52,7 +58,9 @@ use SensitiveParameter;
  * son identifiant de connexion, tiré au hasard, jamais égal au mot de
  * passe qu'il a déjà choisi (voir GenerateurDIdentifiants) ; le contrôle
  * Sirene de l'entreprise au registre des vérifications ; l'inscription au
- * journal d'audit ; le courrier recommandé et son code (voir
+ * journal d'audit, avec le type et le code d'activité lu au répertoire et
+ * sa nomenclature, enregistrés nulle part ailleurs ; le courrier
+ * recommandé et son code (voir
  * EnvoyerCodeDeConfirmationAction::premier()). Deux confirmations
  * simultanées du même SIREN n'en créent qu'une : l'index unique partiel
  * societes_siren_unique refuse la seconde, qui lit MESSAGE_SIREN_PRIS.
@@ -86,7 +94,7 @@ class CreerSocieteAction
      *
      * @throws ValidationException
      */
-    public function handle(string $siren, string $email, #[SensitiveParameter] string $motDePasse): Societe
+    public function handle(string $siren, TypeDActivite $type, string $email, #[SensitiveParameter] string $motDePasse): Societe
     {
         $valides = Validator::make(['siren' => $siren, 'email' => $email, 'password' => $motDePasse], [
             'siren' => ['required', 'string', new SirenValide],
@@ -110,14 +118,20 @@ class CreerSocieteAction
             throw ValidationException::withMessages(['siren' => $consultation['motif'] ?? self::MESSAGE_REPERTOIRE_INDISPONIBLE]);
         }
 
+        $unite = $consultation['unite'];
+
+        if ($type === TypeDActivite::Cabinet && ControleSirene::exerceLesActivitesComptables($unite) === false) {
+            throw ValidationException::withMessages(['type_activite' => ControleSirene::MOTIF_ACTIVITE_NON_COMPTABLE]);
+        }
+
         try {
             $destinataire = $this->destinataireOfficiel->du($siren);
-            $identite = $this->controleSirene->identiteDepuisSirene($consultation['unite']);
+            $identite = $this->controleSirene->identiteDepuisSirene($unite);
 
-            return DB::transaction(function () use ($siren, $identite, $consultation, $destinataire, $email, $motDePasseHache): Societe {
-                $nouvelle = tap((new Societe)->forceFill(['siren' => $siren, ...$identite]))->save();
+            return DB::transaction(function () use ($siren, $type, $identite, $consultation, $unite, $destinataire, $email, $motDePasseHache): Societe {
+                $nouvelle = tap((new Societe)->forceFill(['siren' => $siren, 'type_activite' => $type, ...$identite]))->save();
 
-                return app(TenantContext::class)->runAsSociete($nouvelle, function () use ($nouvelle, $consultation, $destinataire, $email, $motDePasseHache): Societe {
+                return app(TenantContext::class)->runAsSociete($nouvelle, function () use ($nouvelle, $consultation, $unite, $destinataire, $email, $motDePasseHache): Societe {
                     $proprietaire = tap((new User([
                         'name' => $destinataire->nom,
                         'email' => $email,
@@ -133,6 +147,9 @@ class CreerSocieteAction
                     $this->controleSirene->noterUnite($nouvelle, $consultation, $proprietaire);
                     $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, $proprietaire, null, null, [
                         'siren' => $nouvelle->siren,
+                        'type_activite' => JournalAudit::valeur($nouvelle->type_activite),
+                        'code_activite' => $unite->activitePrincipale,
+                        'nomenclature_activite' => $unite->nomenclatureActivite,
                         'raison_sociale' => $nouvelle->raison_sociale,
                         'forme_juridique' => JournalAudit::valeur($nouvelle->forme_juridique),
                         'proprietaire' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],

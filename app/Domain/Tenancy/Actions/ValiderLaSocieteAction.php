@@ -52,7 +52,8 @@ use Throwable;
  * démonstration se ferme pour de bon et ses comptes d'entraînement sont
  * retirés, même s'il était déjà fermé pour inactivité (un échec n'empêche
  * rien : il ne vend plus, la société étant validée, et la commande
- * quotidienne le reprend), et le propriétaire est prévenu.
+ * quotidienne le reprend), et le propriétaire est prévenu, sans parler de
+ * magasins à un cabinet d'expertise comptable, qui n'en a aucun.
  */
 class ValiderLaSocieteAction
 {
@@ -115,8 +116,10 @@ class ValiderLaSocieteAction
             $proprietaire->notify(new AvisDeVerification(
                 $societe,
                 'Votre société est validée',
-                'La vente, les e-mails aux clients, les PDF et les transmissions sont ouverts dans vos magasins.'
-                    .($demonstrationOuverte ? ' Le magasin de démonstration est terminé et reste consultable.' : ''),
+                $societe->estUnCabinet()
+                    ? 'Votre cabinet est validé.'
+                    : 'La vente, les e-mails aux clients, les PDF et les transmissions sont ouverts dans vos magasins.'
+                        .($demonstrationOuverte ? ' Le magasin de démonstration est terminé et reste consultable.' : ''),
                 AvisDeVerification::SUCCES,
             ));
         });

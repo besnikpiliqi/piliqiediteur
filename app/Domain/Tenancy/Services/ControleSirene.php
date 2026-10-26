@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementSirene;
@@ -65,6 +66,15 @@ class ControleSirene
 
     public const MOTIF_TERRITOIRE_NON_GERE = 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.';
 
+    /**
+     * Le code d'activité, en NAF rév. 2, des activités comptables : le seul
+     * qu'un cabinet d'expertise comptable peut avoir au répertoire (voir
+     * exerceLesActivitesComptables()).
+     */
+    public const CODE_ACTIVITES_COMPTABLES = '69.20Z';
+
+    public const MOTIF_ACTIVITE_NON_COMPTABLE = 'Le code d\'activité de cette entreprise au répertoire Sirene n\'est pas 69.20Z (activités comptables) : elle ne peut pas s\'inscrire comme cabinet d\'expertise comptable.';
+
     public const MOTIF_TERRITOIRE_INCONNU = 'Le répertoire Sirene de l\'INSEE ne situe cet établissement dans aucune commune française : son taux de TVA et son heure ne peuvent pas être fixés.';
 
     public function __construct(
@@ -90,6 +100,24 @@ class ControleSirene
             ! $unite->active => ['resultat' => ResultatVerification::Negative, 'unite' => $unite, 'motif' => self::MOTIF_ENTREPRISE_CESSEE],
             default => ['resultat' => ResultatVerification::Concluante, 'unite' => $unite, 'motif' => null],
         };
+    }
+
+    /**
+     * L'entreprise exerce-t-elle les activités comptables, d'après le code
+     * d'activité principale que lui donne le répertoire ? Vrai pour 69.20Z
+     * en NAF rév. 2, faux pour tout autre code de cette nomenclature ; null
+     * quand le code manque ou relève d'une autre nomenclature : le
+     * répertoire ne dit alors rien qui refuse l'inscription d'un cabinet
+     * d'expertise comptable (voir InscriptionSociete et
+     * CreerSocieteAction).
+     */
+    public static function exerceLesActivitesComptables(UniteSirene $unite): ?bool
+    {
+        if ($unite->activitePrincipale === null || $unite->nomenclatureActivite !== AvertissementsDuCodeDActivite::NOMENCLATURE) {
+            return null;
+        }
+
+        return $unite->activitePrincipale === self::CODE_ACTIVITES_COMPTABLES;
     }
 
     /**

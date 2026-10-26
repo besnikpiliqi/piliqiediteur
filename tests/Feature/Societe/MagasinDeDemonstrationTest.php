@@ -35,6 +35,7 @@ use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -395,7 +396,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $societe = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
 
-        app(CloreLInscriptionAction::class)->refuser($societe, new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-42', ['alice']));
+        app(CloreLInscriptionAction::class)->parLEditeur($societe, new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-42', ['alice']), MotifCloture::Refus);
 
         $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
         $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh()), VerificationRefuseeException::class, OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION);

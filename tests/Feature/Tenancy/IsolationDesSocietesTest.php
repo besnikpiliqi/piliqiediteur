@@ -22,6 +22,7 @@ use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeVerification;
@@ -489,7 +490,7 @@ class IsolationDesSocietesTest extends TestCase
     {
         $close = $this->inscrireUneSociete();
         app(TenantContext::class)->runAsSociete($close, fn (): bool => $close->forceFill(['raison_sociale' => 'Raison choisie par l\'autre', 'regime_tva' => 'franchise_en_base', 'immatriculation' => 'RCS Nantes'])->save());
-        app(CloreLInscriptionAction::class)->refuser($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0060', ['alice']));
+        app(CloreLInscriptionAction::class)->parLEditeur($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0060', ['alice']), MotifCloture::Refus);
 
         $nouvelle = $this->inscrireUneSociete($close->siren);
 
@@ -508,7 +509,7 @@ class IsolationDesSocietesTest extends TestCase
     {
         $close = $this->inscrireUneSociete();
         $premiere = $this->ouvrirUneSociete(['nom' => 'Première', 'a_verifier' => true], $close->proprietaire()->sole());
-        app(CloreLInscriptionAction::class)->refuser($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0061', ['alice']));
+        app(CloreLInscriptionAction::class)->parLEditeur($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0061', ['alice']), MotifCloture::Refus);
         $nouvelle = $this->inscrireUneSociete($close->siren);
         $seconde = $this->ouvrirUneSociete(['nom' => 'Seconde', 'a_verifier' => true, 'nic' => substr(FauxRepertoireSirene::siretDeLaBoutique((string) $close->siren), 9)], $nouvelle->proprietaire()->sole());
         app(TenantContext::class)->clear();

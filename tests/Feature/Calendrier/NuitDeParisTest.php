@@ -42,6 +42,7 @@ use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CreationDesComptes;
@@ -332,7 +333,7 @@ class NuitDeParisTest extends TestCase
     {
         $this->travelTo(self::enUtc('2026-12-31 23:30:00'));
 
-        $mail = new DemandeInscriptionMail('https://piliqi.test/inscription/confirmer/jeton', now()->addHours(24));
+        $mail = new DemandeInscriptionMail('https://piliqi.test/inscription/confirmer/jeton', now()->addHours(24), TypeDActivite::Commerce);
 
         $mail->assertSeeInHtml('© 2027')->assertSeeInText('© 2027')->assertDontSeeInHtml('© 2026')->assertDontSeeInText('© 2026');
     }

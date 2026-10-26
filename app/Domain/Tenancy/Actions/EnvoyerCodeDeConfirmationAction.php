@@ -176,7 +176,7 @@ class EnvoyerCodeDeConfirmationAction
                     'demande_par' => $proprietaire?->getKey(),
                 ]))->save();
 
-                $reference = $this->envoi->envoyerCourrier($destinataire, $this->courrier->pdf($destinataire, (string) $societe->siren, $motif, $code, $expireLe), remiseEnPersonne: true);
+                $reference = $this->envoi->envoyerCourrier($destinataire, $this->courrier->pdf($destinataire, (string) $societe->siren, $societe->type_activite, $motif, $code, $expireLe), remiseEnPersonne: true);
                 $confirmation->forceFill(['reference_envoi' => $reference])->save();
 
                 $this->journalAudit->inscrire(ActionAuditee::CodeEnvoye, $proprietaire, null, null, [

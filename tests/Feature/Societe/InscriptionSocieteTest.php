@@ -8,11 +8,13 @@ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Mail\CompteExistantMail;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
@@ -79,6 +81,12 @@ class InscriptionSocieteTest extends TestCase
      */
     private const SIREN = '100000009';
 
+    /**
+     * Ce qu'envoie le formulaire de la page du lien : le type d'activité
+     * choisi à la demande, confirmé avec la case du choix définitif.
+     */
+    private const CONFIRMATION = ['type_activite' => TypeDActivite::Commerce->value, 'choix_definitif' => '1'];
+
     public function test_la_demande_envoie_un_lien_et_ne_cree_rien_avant_sa_confirmation(): void
     {
         Mail::fake();
@@ -97,16 +105,18 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
-     * La demande ne porte que le SIREN, l'adresse e-mail et le mot de passe
-     * du propriétaire, rien de plus : ni nom, ni champ de magasin (nom,
-     * code, NIC), et rien d'autre dans la demande enregistrée.
+     * La demande ne porte que le SIREN, le type d'activité, l'adresse
+     * e-mail et le mot de passe du propriétaire, rien de plus : ni nom, ni
+     * champ de magasin (nom, code, NIC) ; la demande enregistrée y ajoute
+     * seulement le code d'activité lu au répertoire et sa nomenclature.
      */
-    public function test_la_demande_ne_demande_que_le_siren_l_adresse_et_le_mot_de_passe(): void
+    public function test_la_demande_ne_demande_que_le_siren_le_type_d_activite_l_adresse_et_le_mot_de_passe(): void
     {
         Mail::fake();
 
         $this->demander()
             ->assertFormFieldExists('siren')
+            ->assertFormFieldExists('type_activite')
             ->assertFormFieldExists('email')
             ->assertFormFieldExists('password')
             ->assertFormFieldExists('passwordConfirmation')
@@ -115,7 +125,7 @@ class InscriptionSocieteTest extends TestCase
             ->assertFormFieldDoesNotExist('code')
             ->assertFormFieldDoesNotExist('nic');
 
-        $this->assertSame(['mot_de_passe', 'siren'], collect(DemandeInscription::query()->sole()->donnees)->keys()->sort()->values()->all());
+        $this->assertSame(['code_activite', 'mot_de_passe', 'nomenclature_activite', 'siren', 'type_activite'], collect(DemandeInscription::query()->sole()->donnees)->keys()->sort()->values()->all());
     }
 
     /**
@@ -134,7 +144,7 @@ class InscriptionSocieteTest extends TestCase
         $this->demander();
         $lien = $this->lienEnvoye();
 
-        $reponse = $this->post($lien);
+        $reponse = $this->post($lien, self::CONFIRMATION);
 
         $societe = Societe::query()->sole();
         $proprietaire = User::query()->sole();
@@ -176,7 +186,7 @@ class InscriptionSocieteTest extends TestCase
         Mail::fake();
         $this->demander();
 
-        $this->followingRedirects()->post($this->lienEnvoye())
+        $this->followingRedirects()->post($this->lienEnvoye(), self::CONFIRMATION)
             ->assertOk()
             ->assertSeeTextInOrder(['Vos premières étapes', TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION])
             ->assertSee([PageDeVerification::getUrl(panel: 'societe', tenant: Societe::query()->sole()), MagasinResource::getUrl('create', panel: 'societe', tenant: Societe::query()->sole())], false)
@@ -189,7 +199,7 @@ class InscriptionSocieteTest extends TestCase
         Mail::fake();
         $this->demander();
 
-        $this->post($this->lienEnvoye());
+        $this->post($this->lienEnvoye(), self::CONFIRMATION);
 
         $societe = Societe::query()->sole();
         $this->assertSame([
@@ -267,7 +277,7 @@ class InscriptionSocieteTest extends TestCase
         $this->demander()->assertHasNoFormErrors();
         $situation();
 
-        $this->post($this->lienEnvoye())->assertOk()->assertSee($motif);
+        $this->post($this->lienEnvoye(), self::CONFIRMATION)->assertOk()->assertSee($motif);
 
         $this->assertSame([0, 0, 0], [Societe::query()->count(), User::query()->count(), CodeConfirmation::withoutGlobalScopes()->count()]);
         $this->assertSame([], app(ServiceEnvoiRecommande::class)->envois());
@@ -288,10 +298,10 @@ class InscriptionSocieteTest extends TestCase
         $repertoire->rendreInjoignable();
         $this->demander()->assertHasNoFormErrors();
         $lien = $this->lienEnvoye();
-        $this->post($lien)->assertOk()->assertSee(CreerSocieteAction::MESSAGE_REPERTOIRE_INDISPONIBLE);
+        $this->post($lien, self::CONFIRMATION)->assertOk()->assertSee(CreerSocieteAction::MESSAGE_REPERTOIRE_INDISPONIBLE);
         $repertoire->rendreInjoignable(false);
 
-        $this->post($lien)->assertRedirect();
+        $this->post($lien, self::CONFIRMATION)->assertRedirect();
 
         $societe = Societe::query()->sole();
         $this->assertSame(['SOCIETE FICTIVE 100000009', FormeJuridique::Sas, '1 RUE DE LA REPUBLIQUE', true], [$societe->raison_sociale, $societe->forme_juridique, $societe->siege_adresse, $societe->attendSonCode()]);
@@ -373,7 +383,7 @@ class InscriptionSocieteTest extends TestCase
     {
         return [
             'inscription close sans code' => [static fn (Societe $societe): mixed => app(CloreLInscriptionAction::class)->cloreSansCode($societe, now()->toImmutable())],
-            'inscription refusée par l\'éditeur' => [static fn (Societe $societe): mixed => app(CloreLInscriptionAction::class)->refuser($societe, new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-2026-0050', ['alice']))],
+            'inscription refusée par l\'éditeur' => [static fn (Societe $societe): mixed => app(CloreLInscriptionAction::class)->parLEditeur($societe, new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-2026-0050', ['alice']), MotifCloture::Refus)],
             'société révoquée' => [static fn (Societe $societe): mixed => $societe->forceFill(['statut' => StatutSociete::Revoquee])->save()],
         ];
     }
@@ -396,7 +406,7 @@ class InscriptionSocieteTest extends TestCase
         app(TenantContext::class)->clear();
 
         $this->demander()->assertHasNoFormErrors();
-        $this->post($this->lienEnvoye())->assertRedirect();
+        $this->post($this->lienEnvoye(), self::CONFIRMATION)->assertRedirect();
 
         $nouvelle = Societe::query()->whereKeyNot($avant->id)->sole();
         $this->assertSame([self::SIREN, true, false], [$nouvelle->siren, $nouvelle->attendSonCode(), $avant->fresh()->attendSonCode()]);
@@ -435,7 +445,7 @@ class InscriptionSocieteTest extends TestCase
         $lien = $this->lienEnvoye();
         $gardien = Societe::factory()->create(['siren' => self::SIREN, 'raison_sociale' => 'LES DELICES DE JEANNE']);
 
-        $this->post($lien)->assertOk()->assertSee(CreerSocieteAction::MESSAGE_SIREN_PRIS)->assertDontSee('LES DELICES DE JEANNE');
+        $this->post($lien, self::CONFIRMATION)->assertOk()->assertSee(CreerSocieteAction::MESSAGE_SIREN_PRIS)->assertDontSee('LES DELICES DE JEANNE');
 
         $this->assertSame([(int) $gardien->id], Societe::query()->pluck('id')->map(intval(...))->all());
         $this->assertSame([0, []], [User::query()->count(), app(ServiceEnvoiRecommande::class)->envois()]);
@@ -492,7 +502,7 @@ class InscriptionSocieteTest extends TestCase
         $this->demander()->assertHasNoFormErrors()->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
 
         Mail::assertNotSent(CompteExistantMail::class);
-        $this->post($this->lienEnvoye());
+        $this->post($this->lienEnvoye(), self::CONFIRMATION);
         $nouvelle = Societe::query()->whereKeyNot($close->id)->sole();
         $this->assertSame([self::SIREN, true, 'jeanne@maboutique.fr'], [$nouvelle->siren, $nouvelle->attendSonCode(), $nouvelle->proprietaire()->sole()->email]);
         $this->assertNull($close->proprietaire()->sole()->email);
@@ -563,7 +573,7 @@ class InscriptionSocieteTest extends TestCase
         Mail::fake();
         $this->demander();
 
-        $this->post($this->lienEnvoye());
+        $this->post($this->lienEnvoye(), self::CONFIRMATION);
 
         $societe = Societe::query()->sole();
         $proprietaire = User::query()->sole();
@@ -590,7 +600,7 @@ class InscriptionSocieteTest extends TestCase
         app(RepertoireSirene::class)->nommer(self::SIREN, 'EI SOLUTIONS');
         $this->demander();
 
-        $this->post($this->lienEnvoye())->assertRedirect();
+        $this->post($this->lienEnvoye(), self::CONFIRMATION)->assertRedirect();
 
         $societe = Societe::query()->sole();
         $this->assertSame(['EI SOLUTIONS', FormeJuridique::Sas], [$societe->raison_sociale, $societe->forme_juridique]);
@@ -619,9 +629,9 @@ class InscriptionSocieteTest extends TestCase
         $this->demander(['email' => 'paul@autre.fr']);
         $secondLien = $this->lienEnvoye();
 
-        $this->post($premierLien)->assertRedirect();
+        $this->post($premierLien, self::CONFIRMATION)->assertRedirect();
         auth()->logout();
-        $this->post($secondLien)->assertOk()->assertSee(CreerSocieteAction::MESSAGE_SIREN_PRIS);
+        $this->post($secondLien, self::CONFIRMATION)->assertOk()->assertSee(CreerSocieteAction::MESSAGE_SIREN_PRIS);
 
         $this->assertSame([self::SIREN], Societe::query()->pluck('siren')->all());
         $this->assertSame(['jeanne@maboutique.fr'], User::query()->pluck('email')->all());
@@ -641,7 +651,7 @@ class InscriptionSocieteTest extends TestCase
 
         foreach (range(1, ConfirmerInscriptionController::COURRIERS_PAR_JOUR_ET_PAR_ADRESSE_IP) as $rang) {
             $this->demander(['siren' => SocieteFactory::sirenFictif(), 'email' => "societe{$rang}@exemple.fr"])->assertHasNoFormErrors();
-            $this->post($this->lienEnvoye())->assertRedirect();
+            $this->post($this->lienEnvoye(), self::CONFIRMATION)->assertRedirect();
             auth()->logout();
             $this->travel(61)->seconds();
         }
@@ -649,13 +659,13 @@ class InscriptionSocieteTest extends TestCase
         $this->demander(['email' => 'sixieme@exemple.fr'])->assertHasNoFormErrors();
         $lien = $this->lienEnvoye();
 
-        $this->post($lien)->assertOk()->assertSee(ConfirmerInscriptionController::MESSAGE_TROP_DE_COURRIERS);
+        $this->post($lien, self::CONFIRMATION)->assertOk()->assertSee(ConfirmerInscriptionController::MESSAGE_TROP_DE_COURRIERS);
 
         $this->assertSame([5, 5], [Societe::query()->count(), count(app(ServiceEnvoiRecommande::class)->envois())]);
         $this->assertNull(DemandeInscription::query()->where('email', 'sixieme@exemple.fr')->sole()->consommee_le);
 
         $this->travelTo(self::aParis('2026-10-13 10:03:00'));
-        $this->post($lien)->assertRedirect();
+        $this->post($lien, self::CONFIRMATION)->assertRedirect();
 
         $this->assertSame([6, 6], [Societe::query()->count(), count(app(ServiceEnvoiRecommande::class)->envois())]);
     }
@@ -670,7 +680,7 @@ class InscriptionSocieteTest extends TestCase
         $this->travel(1)->seconds();
 
         $this->get($lien)->assertStatus(410)->assertSee(ConfirmerInscriptionController::MESSAGE_LIEN_INVALIDE);
-        $this->post($lien)->assertStatus(410)->assertSee(ConfirmerInscriptionController::MESSAGE_LIEN_INVALIDE);
+        $this->post($lien, self::CONFIRMATION)->assertStatus(410)->assertSee(ConfirmerInscriptionController::MESSAGE_LIEN_INVALIDE);
 
         $this->assertSame(0, Societe::query()->count());
         $this->assertGuest();
@@ -690,10 +700,10 @@ class InscriptionSocieteTest extends TestCase
         $this->get($lien)->assertOk()->assertSeeText('Confirmer l\'inscription')->assertHeader('Referrer-Policy', 'no-referrer');
         $this->get($lien)->assertOk();
         $this->assertSame([0, null], [Societe::query()->count(), DemandeInscription::query()->sole()->consommee_le]);
-        $this->post($lien)->assertRedirect();
+        $this->post($lien, self::CONFIRMATION)->assertRedirect();
         auth()->logout();
 
-        $this->post($lien)->assertStatus(410)->assertSee(ConfirmerInscriptionController::MESSAGE_LIEN_INVALIDE);
+        $this->post($lien, self::CONFIRMATION)->assertStatus(410)->assertSee(ConfirmerInscriptionController::MESSAGE_LIEN_INVALIDE);
 
         $this->assertSame(1, Societe::query()->count());
     }
@@ -796,10 +806,10 @@ class InscriptionSocieteTest extends TestCase
         $this->travel(61)->seconds();
         $this->demander(['siren' => '200000008']);
         $secondLien = $this->lienEnvoye();
-        $this->post($premierLien);
+        $this->post($premierLien, self::CONFIRMATION);
         auth()->logout();
 
-        $this->post($secondLien)->assertOk()->assertSee('Cette adresse e-mail ne peut pas être utilisée.');
+        $this->post($secondLien, self::CONFIRMATION)->assertOk()->assertSee('Cette adresse e-mail ne peut pas être utilisée.');
 
         $this->assertSame([1, 1, 0], [Societe::query()->count(), User::query()->count(), Magasin::query()->count()]);
         $this->assertNull(DemandeInscription::query()->where('jeton_hache', DemandeInscription::empreinte(basename(parse_url($secondLien, PHP_URL_PATH))))->sole()->consommee_le);
@@ -850,6 +860,7 @@ class InscriptionSocieteTest extends TestCase
     {
         return [
             'siren' => self::SIREN,
+            'type_activite' => TypeDActivite::Commerce->value,
             'email' => 'jeanne@maboutique.fr',
             'password' => 'mot-de-passe-sur',
             'passwordConfirmation' => 'mot-de-passe-sur',

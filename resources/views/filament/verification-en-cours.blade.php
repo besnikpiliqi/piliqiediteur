@@ -1,8 +1,10 @@
 {{--
     Bandeau des deux panneaux tant que la société n'est pas validée (voir
     AppPanelProvider et SocietePanelProvider) : ce qui reste désactivé, et
-    le magasin de démonstration pour s'essayer. Dans le magasin de
-    démonstration, le rappel que ses documents n'ont aucune valeur.
+    le magasin de démonstration pour s'essayer ; pour un cabinet d'expertise
+    comptable, qui n'a ni magasin ni démonstration, seulement qu'il attend
+    son code. Dans le magasin de démonstration, le rappel que ses documents
+    n'ont aucune valeur.
 
     @param \App\Domain\Tenancy\Models\Societe|null $societe
     @param \App\Domain\Tenancy\Models\Magasin|null $magasin le magasin du panneau, null dans l'administration de la société
@@ -15,6 +17,12 @@
 
         <x-slot name="description">
             Ses ventes, ses numéros et ses clôtures lui sont propres : rien n'en passe à vos magasins réels.
+        </x-slot>
+    </x-filament::section>
+@elseif ($societe !== null && $societe->attendSonCode() && $societe->estUnCabinet())
+    <x-filament::section icon="heroicon-o-shield-exclamation" icon-color="warning" compact>
+        <x-slot name="heading">
+            Cabinet en attente du code de son courrier recommandé.
         </x-slot>
     </x-filament::section>
 @elseif ($societe !== null && $societe->attendSonCode())

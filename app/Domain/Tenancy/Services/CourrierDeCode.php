@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\QrCode;
 use App\Integrations\EnvoiRecommande\DestinataireDuCourrier;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -19,8 +20,9 @@ use Carbon\CarbonInterface;
  * le code, le jour et l'heure de son expiration, et son usage unique ;
  * l'adresse courte de la page de son motif où le saisir et un QR code qui
  * l'ouvre avec le SIREN déjà rempli, sans jamais porter le code (voir QrCode
- * et CodeDuCourrierController) ; pour une vérification, ce que fait
- * quelqu'un qui n'est pas à l'origine de l'inscription, et pour une
+ * et CodeDuCourrierController) ; pour une vérification, le type
+ * d'activité choisi à l'inscription, qui ne pourra plus changer, et ce que
+ * fait quelqu'un qui n'est pas à l'origine de l'inscription, et pour une
  * procédure de l'éditeur, qu'il la poursuit une fois le code saisi ; et
  * l'adresse de l'éditeur. Rien de ce que le compte a saisi n'y figure. Le
  * code en clair n'existe que dans ce PDF, que le prestataire reçoit et que
@@ -31,16 +33,20 @@ class CourrierDeCode
     /**
      * Le PDF du courrier, tel que le prestataire l'imprime.
      */
-    public function pdf(DestinataireDuCourrier $destinataire, string $siren, MotifCode $motif, string $code, CarbonInterface $expireLe): string
+    public function pdf(DestinataireDuCourrier $destinataire, string $siren, TypeDActivite $type, MotifCode $motif, string $code, CarbonInterface $expireLe): string
     {
-        return Pdf::loadHTML($this->html($destinataire, $siren, $motif, $code, $expireLe))->setPaper('a4', 'portrait')->output();
+        return Pdf::loadHTML($this->html($destinataire, $siren, $type, $motif, $code, $expireLe))->setPaper('a4', 'portrait')->output();
     }
 
-    public function html(DestinataireDuCourrier $destinataire, string $siren, MotifCode $motif, string $code, CarbonInterface $expireLe): string
+    /**
+     * @param  TypeDActivite  $type  le type d'activité de la société, que seul un courrier de vérification rappelle
+     */
+    public function html(DestinataireDuCourrier $destinataire, string $siren, TypeDActivite $type, MotifCode $motif, string $code, CarbonInterface $expireLe): string
     {
         return view('courriers.code', [
             'destinataire' => $destinataire,
             'siren' => $siren,
+            'type' => $type,
             'motif' => $motif,
             'code' => $code,
             'expireLe' => Calendrier::deParis()->afficher($expireLe, 'd/m/Y à H:i'),

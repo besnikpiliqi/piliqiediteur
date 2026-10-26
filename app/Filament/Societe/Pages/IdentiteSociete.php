@@ -27,7 +27,9 @@ use Illuminate\Validation\ValidationException;
  * raison sociale, forme juridique, capital, immatriculation, n° de TVA et
  * siège (voir ModifierIdentiteSocieteAction, qui la valide et
  * l'enregistre). Le SIREN s'y lit sans se saisir : c'est celui de
- * l'inscription, que vérifie le courrier recommandé, et il ne change pas.
+ * l'inscription, que vérifie le courrier recommandé, et il ne change pas ;
+ * le type d'activité aussi, choisi à l'inscription et définitif (voir
+ * TypeDActivite).
  * Un encadré dit les mentions
  * qui manquent pour facturer un professionnel, et la raison sociale
  * rappelle la dénomination que donne le répertoire Sirene quand elle en
@@ -90,6 +92,10 @@ class IdentiteSociete extends Page implements HasForms
                     Placeholder::make('siren')
                         ->label('SIREN')
                         ->content(fn (): string => (string) $this->societe()->siren),
+                    Placeholder::make('type_activite')
+                        ->label('Type d\'activité')
+                        ->helperText('Choisi à l\'inscription, il ne change jamais.')
+                        ->content(fn (): string => $this->societe()->type_activite->getLabel()),
                     TextInput::make('raison_sociale')
                         ->label('Raison sociale')
                         ->helperText(fn (): ?string => $this->ecartAvecSirene())

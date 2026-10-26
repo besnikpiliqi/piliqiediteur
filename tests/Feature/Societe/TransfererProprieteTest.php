@@ -34,6 +34,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -250,7 +251,7 @@ class TransfererProprieteTest extends TestCase
         $this->assertSame([], $this->entreesDAudit($societe, ActionAuditee::ProprieteTransferee));
         $this->assertFalse(Auth::validate(['login' => 'admin@exemple.fr', 'password' => self::MOT_DE_PASSE_CHOISI]));
         app(TenantContext::class)->clear();
-        $nouvelle = app(CreerSocieteAction::class)->handle((string) $societe->siren, 'admin@exemple.fr', self::MOT_DE_PASSE_CHOISI);
+        $nouvelle = app(CreerSocieteAction::class)->handle((string) $societe->siren, TypeDActivite::Commerce, 'admin@exemple.fr', self::MOT_DE_PASSE_CHOISI);
         $this->assertSame('admin@exemple.fr', $nouvelle->proprietaire()->sole()->email);
     }
 

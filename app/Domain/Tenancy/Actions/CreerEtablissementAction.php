@@ -33,6 +33,9 @@ use LogicException;
  * établissements actifs de son SIREN lus au répertoire Sirene).
  *
  * Contrôles, avant toute écriture :
+ * - jamais dans un cabinet d'expertise comptable, qui n'a aucun magasin
+ *   (MESSAGE_CABINET_SANS_MAGASIN ; la base le refuse aussi, voir
+ *   GardesDesTypesDActivite) ;
  * - le propriétaire de la société, ou un administrateur de tous ses
  *   magasins autorisé à les gérer, dans une société qui n'est pas en
  *   lecture seule (voir SocietePolicy::creerUnMagasin()) ; jamais dans une
@@ -89,6 +92,8 @@ class CreerEtablissementAction
 {
     public const MESSAGE_SANS_AUTORISATION = 'Seuls le propriétaire et un administrateur de tous les magasins autorisé à les gérer créent un magasin, tant que la société n\'est pas en lecture seule.';
 
+    public const MESSAGE_CABINET_SANS_MAGASIN = 'Un cabinet d\'expertise comptable n\'a pas de magasin.';
+
     public function __construct(
         private readonly ControleSirene $controleSirene,
         private readonly MiseEnActiviteDesMagasins $miseEnActivite,
@@ -108,6 +113,10 @@ class CreerEtablissementAction
 
         if ($contexte->aUneSociete() && $contexte->societe()->getKey() !== $societe->getKey()) {
             throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
+        }
+
+        if (! $societe->type_activite->aDesMagasins()) {
+            throw new LogicException(self::MESSAGE_CABINET_SANS_MAGASIN);
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $donnees): Magasin {

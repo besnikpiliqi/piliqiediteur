@@ -27,8 +27,10 @@ use Throwable;
 /**
  * Clôt, pour toujours, une inscription qui attend encore son code (voir
  * MotifCloture) : sans code saisi trente jours après son dernier courrier
- * (voir app:clore-inscriptions-sans-code), ou par le refus de l'éditeur
- * (voir editeur:societe:refuser). La société n'est jamais supprimée :
+ * (voir app:clore-inscriptions-sans-code), ou par la procédure de
+ * l'éditeur (voir editeur:societe:clore), pour un refus ou pour un type
+ * d'activité choisi par erreur, à la demande du propriétaire, qui
+ * s'inscrit alors de nouveau avec le bon type. La société n'est jamais supprimée :
  * elle reste close, en lecture seule, sans accès commercial, et son SIREN
  * est libéré (voir l'index unique partiel societes_siren_unique) ; une
  * nouvelle inscription de ce SIREN peut alors se faire. Toutes les
@@ -65,6 +67,8 @@ class CloreLInscriptionAction
 {
     public const MESSAGE_N_ATTEND_PLUS = 'Cette inscription n\'attend plus de code : elle est déjà validée, close ou révoquée.';
 
+    public const MESSAGE_MOTIF_INCONNU = 'Motif inconnu : refus ou type_errone.';
+
     public function __construct(
         private readonly JournalAudit $journalAudit,
         private readonly PiecesDeVerification $pieces,
@@ -74,23 +78,29 @@ class CloreLInscriptionAction
     ) {}
 
     /**
-     * Le refus de l'éditeur.
+     * La clôture par la procédure de l'éditeur, pour l'un de ses motifs
+     * (voir MotifCloture::parLEditeur()) : son refus, ou un type d'activité
+     * choisi par erreur.
      *
      * @throws VerificationRefuseeException
      */
-    public function refuser(Societe $societe, InterventionDeLEditeur $editeur): void
+    public function parLEditeur(Societe $societe, InterventionDeLEditeur $editeur, MotifCloture $motif): void
     {
-        $cloture = app(TenantContext::class)->runAsSociete($societe, fn (): array => DB::transaction(function () use ($societe, $editeur): array {
+        if (! in_array($motif, MotifCloture::parLEditeur(), true)) {
+            throw new VerificationRefuseeException(self::MESSAGE_MOTIF_INCONNU);
+        }
+
+        $cloture = app(TenantContext::class)->runAsSociete($societe, fn (): array => DB::transaction(function () use ($societe, $editeur, $motif): array {
             $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
 
             if (! $verrouillee->attendSonCode()) {
                 throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
             }
 
-            return $this->cloreSousVerrou($verrouillee, MotifCloture::Refus, $editeur);
+            return $this->cloreSousVerrou($verrouillee, $motif, $editeur);
         }));
 
-        $this->apresLaCloture($societe->fresh(), MotifCloture::Refus, $cloture['adresseRetiree'], $cloture['destinataires']);
+        $this->apresLaCloture($societe->fresh(), $motif, $cloture['adresseRetiree'], $cloture['destinataires']);
     }
 
     /**
@@ -254,7 +264,11 @@ class CloreLInscriptionAction
      * propriétaire est prévenu dans l'espace de sa société, avec le motif
      * de la clôture (la justification de l'éditeur reste interne) et le
      * retrait de son adresse de connexion, et par e-mail à l'adresse
-     * retirée, sans son identifiant (voir InscriptionCloseMail) ; chaque
+     * retirée, sans son identifiant (voir InscriptionCloseMail), sans
+     * parler de magasins à un cabinet d'expertise comptable, qui n'en a
+     * aucun ; pour un type d'activité choisi par erreur, ils lui disent que
+     * l'entreprise peut s'inscrire de nouveau avec le bon type, la même
+     * adresse et le même SIREN, tous deux libérés ; chaque
      * administrateur à qui une transmission annulée proposait la propriété
      * en est prévenu dans sa cloche.
      *
@@ -276,7 +290,13 @@ class CloreLInscriptionAction
             $societe->proprietaire?->notify(new AvisDeVerification(
                 $societe,
                 'L\'inscription de votre société est close',
-                "{$motif->getLabel()}. Vos magasins restent consultables, en lecture seule. Votre adresse e-mail n'est plus une adresse de connexion : ce compte s'ouvre seulement avec votre identifiant, et l'adresse peut servir à une nouvelle inscription. Pour toute question, contactez l'éditeur.",
+                implode(' ', array_filter([
+                    "{$motif->getLabel()}.",
+                    $societe->estUnCabinet() ? 'Son espace reste consultable, en lecture seule.' : 'Vos magasins restent consultables, en lecture seule.',
+                    'Votre adresse e-mail n\'est plus une adresse de connexion : ce compte s\'ouvre seulement avec votre identifiant, et l\'adresse peut servir à une nouvelle inscription.',
+                    $motif === MotifCloture::TypeErrone ? self::reinscriptionAvecLeBonType() : null,
+                    'Pour toute question, contactez l\'éditeur.',
+                ])),
                 AvisDeVerification::REFUS,
             ));
 
@@ -292,11 +312,24 @@ class CloreLInscriptionAction
                         $societe->getFilamentName(),
                         lcfirst($motif->getLabel()),
                         rtrim((string) config('app.url'), '/').route('filament.app.auth.register', absolute: false),
+                        $societe->estUnCabinet() ? 'Son espace reste consultable, en lecture seule.' : 'Ses magasins restent consultables, en lecture seule.',
+                        $motif === MotifCloture::TypeErrone ? self::reinscriptionAvecLeBonType() : null,
                     ));
                 } catch (Throwable $erreur) {
                     report($erreur);
                 }
             }
         });
+    }
+
+    /**
+     * Ce que l'avis et l'e-mail d'une clôture pour un type d'activité
+     * choisi par erreur disent de la nouvelle inscription : une autre
+     * société, sous un autre compte, rien ne passant de l'inscription
+     * close.
+     */
+    private static function reinscriptionAvecLeBonType(): string
+    {
+        return 'Votre entreprise peut s\'inscrire de nouveau avec le bon type d\'activité, avec la même adresse e-mail et le même SIREN, tous deux libérés : la nouvelle inscription crée une autre société et un autre compte, avec un autre identifiant, et un nouveau courrier recommandé partira.';
     }
 }

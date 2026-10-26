@@ -87,7 +87,7 @@ class DeposerUnePieceAction
 
         $this->alerteEditeur->alerter($societe, 'Pièces déposées pour un courrier recommandé non reçu', [
             "Une pièce ({$type->getLabel()}) attend votre examen : php artisan editeur:societe:pieces {$societe->getKey()}",
-            "Ensuite, un nouveau courrier : php artisan editeur:societe:examiner {$societe->getKey()} ; ou la clôture de l'inscription : php artisan editeur:societe:refuser {$societe->getKey()}",
+            "Ensuite, un nouveau courrier : php artisan editeur:societe:examiner {$societe->getKey()} ; ou la clôture de l'inscription : php artisan editeur:societe:clore {$societe->getKey()} --motif=refus",
         ]);
 
         return $piece;

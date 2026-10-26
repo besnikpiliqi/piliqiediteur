@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 17:15 UTC par pilotage-sync.sh : « PU poussé ; chaîne relancée avec TA, EC, L1, A7, S9-L, S9-A, 21 ».
+Mis à jour le 26/10/2026 à 17:15 UTC par pilotage-sync.sh : « Fiche : PU passé dans « Fait » ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -137,7 +137,7 @@ L'état précis (commits, travail en cours, dernière course) est dans `ETAT.md`
 
 ### Fait (étape 1 en cours)
 
-- Lots de décisions 1 à 20 ; architecture société A0 à A6 (+ A4b, A5c) ; série 8 : R6, S8-T, S8-A, S8-P, S8-R, S8-C, S8-E, S8-L, S8-F, S8-O, S8-V, A4c ; T1 (tests déterministes) ; V2 (vérification par courrier) et V2b ; FA1, FA2, FA3 (brouillons et fiches face aux validations simultanées) ; T2 (horodatages en UTC, classe Calendrier) ; T3 (heure locale de chaque magasin : trois commits, puis la correction de relecture `fa83824`, poussée le 26/10/2026 à 12 h 44 UTC, dont la consigne, `t3/consigne-correction-t3.md`, portait les 6 défauts confirmés par les deux relectures).
+- Lots de décisions 1 à 20 ; architecture société A0 à A6 (+ A4b, A5c) ; série 8 : R6, S8-T, S8-A, S8-P, S8-R, S8-C, S8-E, S8-L, S8-F, S8-O, S8-V, A4c ; T1 (tests déterministes) ; V2 (vérification par courrier) et V2b ; FA1, FA2, FA3 (brouillons et fiches face aux validations simultanées) ; T2 (horodatages en UTC, classe Calendrier) ; T3 (heure locale de chaque magasin : trois commits, puis la correction de relecture `fa83824`, poussée le 26/10/2026 à 12 h 44 UTC, dont la consigne, `t3/consigne-correction-t3.md`, portait les 6 défauts confirmés par les deux relectures) ; PU (prix unitaires affichés au centime, calcul inchangé : e70f18e et sa relecture 89f092f).
 - M0 et M1 poussés par une autre session le 20/10 ont été annulés (5cbe4e2) : la chaîne TVA les refera selon son plan.
 
 ### Reste dans la chaîne, dans cet ordre (celui de `LOTS`)

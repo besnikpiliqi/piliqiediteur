@@ -4109,3 +4109,15 @@ Le fichier VERIFICATION.md je la vois nulle part
 
 Donc encore un agent neuf a trouvé des erreurs! C’est bizarre car deja il existe mais sans savoir qu’ils existent
 
+## 296. 2026-10-26 21:58 UTC
+
+Moi je comprends pas pourquoi tu dit qu’il reste bcp de temps « jusqu’à deux mois à finir le logiciel » alors le logiciel il fonctionnel et marche presque parfaitement, dont la caisse sécurisé les factures et pdf et les inscriptions et les connexions et toi tu dis qu’il reste bcp à faire. J’ai l’impression que tu te trompes caf normalement tu dois finir bcp plus vite
+
+## 297. 2026-10-26 22:06 UTC
+
+Mais moi je vois que t’as créé la grande partie et meme peut être jusqu’à 70% et toi la semaine dernière t’as fait le travail bcp plus rapide et avancé bcp plus vite et cette semaine t’as fait le travaille vraiment doucement
+
+## 298. 2026-10-26 22:08 UTC
+
+Et si tu peux arrêter pour l’instant le travail car la session va terminer car il est 99% de la semaine. Donc tu commences quand je te dis fin semaine
+

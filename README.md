@@ -9,6 +9,18 @@ Cette branche (`claude/pilotage-reprise`) ne contient que les notes de pilotage 
 
 Le code est sur la branche de travail `claude/saas-invoice-editor-architecture-q6eizh` (PR #1 de besnikpiliqi/piliqiediteur, dépôt privé). `CLAUDE.md` de cette branche fait foi pour les règles du projet, sauf sur les sujets où une décision plus récente de l'éditeur l'emporte en attendant le lot qui la reporte dans `CLAUDE.md` (liste au § 7).
 
+## ⏸ EN PAUSE depuis le 26/10/2026, 22 h 10 UTC, à la demande de l'éditeur
+
+L'éditeur a demandé d'arrêter le travail (limite hebdomadaire de son compte à 99 %) et de ne reprendre que lorsqu'il le dira. Rien ne tourne : la course `wf_a77da96f-9ee` (tâche `w653339bs`) est arrêtée, le point de suivi `trig_01R9o92piWf4TaPthh3UwFER` est désactivé.
+
+État exact à la pause :
+- Branche de travail poussée jusqu'à `89f092f` (PU, CI verte).
+- Lot TA : ses trois commits sont faits (`7832bb0`, `ad19e0b`, `e2d790a`, suites vertes selon son compte rendu) mais NON relus et NON poussés. Ils sont aussi sauvés dans `notes/reprises/lot-TA-3-commits-non-relus.patch` (au cas où le conteneur serait repris pendant la pause).
+- Pour reprendre, quand l'éditeur le dit :
+  1. Dans le même conteneur, si `git log` montre encore ces trois commits : relancer la course par `resumeFromRunId: "wf_a77da96f-9ee"` avec les mêmes `args` `{"ouverts": ["TA", "EC", "L1", "A7", "S9-L", "S9-A", "21"]}`, à condition que `serie8-lots.js` n'ait pas changé (TA:implementation se rejoue depuis le cache, les deux relectures reprennent).
+  2. Sinon (conteneur neuf ou autre compte) : appliquer le correctif sur `89f092f` (`git am notes/reprises/lot-TA-3-commits-non-relus.patch`), puis faire relire ces trois commits (relectures, correction, poussée, fiche, notes) par un script de reprise comme ceux de `notes/reprises/`, puis la chaîne avec `EC, L1, A7, S9-L, S9-A, 21`. Si le correctif ne s'applique pas proprement, refaire TA en entier.
+  3. Réactiver ou recréer un point de suivi, et reposer à l'éditeur Q-AF10, Q-AF12 et Q-AF13 avant S9-A.
+
 ## 0. Par où commencer
 
 ### Pour l'éditeur, sur l'autre compte

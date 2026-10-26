@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 21:44 UTC par pilotage-sync.sh : « Redémarrage du conteneur : chaîne reprise aux relectures de TA ».
+Mis à jour le 26/10/2026 à 22:09 UTC par pilotage-sync.sh : « Pause à la demande de l'éditeur : état exact et commits de TA sauvés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -50,4 +50,5 @@ Course `wf_a77da96f-9ee`, étapes commencées (de la plus ancienne à la plus r�
 TA:implementation
 TA:relecture1
 TA:relecture2
+TA:correction
 ```

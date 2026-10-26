@@ -12,25 +12,26 @@ use Illuminate\Support\Str;
  * l'imprime : l'identité légale de la société (raison sociale, forme
  * juridique, capital social, SIREN, immatriculation, n° de TVA, siège ou,
  * pour un entrepreneur individuel, adresse de l'entreprise), ses réglages
- * fiscaux (régime de TVA, option pour les débits), et l'établissement qui
- * vend : le nom du magasin, son SIRET, son adresse, ses coordonnées et les
+ * fiscaux (régime de TVA, option pour les débits) et son assurance
+ * professionnelle quand elle est renseignée, et l'établissement qui vend :
+ * le nom du magasin, son SIRET, son adresse, ses coordonnées et les
  * mentions de ses factures entre professionnels (voir IdentiteSociete,
  * ParametresFiscauxSociete et ParametresFactures). L'établissement
  * s'imprime en tête du document (voir lignesDeLEtablissement()),
- * l'identité de la société dans le pied de chaque page (voir
- * lignesDeLaSociete() et PiedDePage).
+ * l'identité de la société et son assurance dans le pied de chaque page
+ * (voir lignesDeLaSociete(), ligneDeLAssurance() et PiedDePage).
  *
  * Un ticket, une facture ou un avoir signe son émetteur au registre
  * fiscal à son émission (voir ContenuFiscal) et l'imprime ensuite tel
  * qu'il l'a signé, pour toujours, quoi que deviennent la société et le
- * magasin -- siège, forme et capital compris (voir duContenuSigne() et
- * FigeSonEmetteur) ; un brouillon ou un devis l'imprime tel qu'ils sont
- * aujourd'hui (voir duMagasin()).
+ * magasin -- siège, forme, capital et assurance compris (voir
+ * duContenuSigne() et FigeSonEmetteur) ; un brouillon ou un devis
+ * l'imprime tel qu'ils sont aujourd'hui (voir duMagasin()).
  *
- * Le magasin de démonstration imprime une identité fictive, sans SIREN ni
- * SIRET ni aucun champ libre du magasin, et chacun de ses documents porte
- * « DÉMONSTRATION — SANS VALEUR » (voir deDemonstration(), filigrane() et
- * bandeauDeDemonstration()).
+ * Le magasin de démonstration imprime une identité fictive, sans SIREN,
+ * SIRET, assurance ni aucun champ libre du magasin, et chacun de ses
+ * documents porte « DÉMONSTRATION — SANS VALEUR » (voir deDemonstration(),
+ * filigrane() et bandeauDeDemonstration()).
  */
 final readonly class Emetteur
 {
@@ -69,6 +70,10 @@ final readonly class Emetteur
         public ?RegimeTva $regimeTva,
         public bool $optionDebitsTva,
         public array $mentionsEntreProfessionnels,
+        public ?string $assuranceAssureur,
+        public ?string $assuranceAdresse,
+        public ?string $assuranceContrat,
+        public ?string $assuranceCouverture,
         public bool $estDemonstration = false,
     ) {}
 
@@ -112,13 +117,17 @@ final readonly class Emetteur
             regimeTva: $societe->regime_tva,
             optionDebitsTva: (bool) $societe->option_debits_tva,
             mentionsEntreProfessionnels: $magasin->mentionsEntreProfessionnels(),
+            assuranceAssureur: $societe->assurance_assureur,
+            assuranceAdresse: $societe->assurance_adresse,
+            assuranceContrat: $societe->assurance_contrat,
+            assuranceCouverture: $societe->assurance_couverture,
         );
     }
 
     /**
      * L'émetteur fictif du magasin de démonstration : la dénomination
      * « ENTREPRISE DE DÉMONSTRATION », aucun SIREN, SIRET, immatriculation,
-     * n° de TVA, adresse ni coordonnée, et les mentions entre
+     * n° de TVA, adresse, coordonnée ni assurance, et les mentions entre
      * professionnels du logiciel, jamais celles qu'un magasin a saisies ;
      * seuls le régime de TVA et l'option pour les débits de la société,
      * qui règlent ses calculs, sont les siens.
@@ -156,6 +165,10 @@ final readonly class Emetteur
                 'indemnite_recouvrement' => Magasin::MENTION_INDEMNITE_PAR_DEFAUT,
                 'escompte' => Magasin::MENTION_ESCOMPTE_PAR_DEFAUT,
             ],
+            assuranceAssureur: null,
+            assuranceAdresse: null,
+            assuranceContrat: null,
+            assuranceCouverture: null,
             estDemonstration: true,
         );
     }
@@ -194,6 +207,10 @@ final readonly class Emetteur
             regimeTva: $emetteur['regime_tva'] === null ? null : RegimeTva::from($emetteur['regime_tva']),
             optionDebitsTva: $emetteur['option_debits_tva'],
             mentionsEntreProfessionnels: $emetteur['mentions'],
+            assuranceAssureur: $emetteur['assurance']['assureur'],
+            assuranceAdresse: $emetteur['assurance']['adresse'],
+            assuranceContrat: $emetteur['assurance']['contrat'],
+            assuranceCouverture: $emetteur['assurance']['couverture'],
             estDemonstration: $emetteur['demonstration'] ?? false,
         );
     }
@@ -237,6 +254,12 @@ final readonly class Emetteur
             'regime_tva' => $this->regimeTva?->value,
             'option_debits_tva' => $this->optionDebitsTva,
             'mentions' => $this->mentionsEntreProfessionnels,
+            'assurance' => [
+                'assureur' => $this->assuranceAssureur,
+                'adresse' => $this->assuranceAdresse,
+                'contrat' => $this->assuranceContrat,
+                'couverture' => $this->assuranceCouverture,
+            ],
             ...($this->estDemonstration ? ['demonstration' => true] : []),
         ];
     }
@@ -331,6 +354,30 @@ final readonly class Emetteur
             filled($this->siren) ? "SIREN : {$this->siren}" : null,
             $this->immatriculation,
             filled($this->numeroTva) ? "TVA intracommunautaire : {$this->numeroTva}" : null,
+        ], filled(...)));
+    }
+
+    /**
+     * L'assurance professionnelle de la société, imprimée dans le pied de
+     * chaque page sous son identité (voir PiedDePage), sans les champs
+     * vides : « Assurance professionnelle : contrat n° {contrat},
+     * {assureur}, {adresse}, couverture : {couverture} » ; null sans
+     * assureur ni garant, qui ne s'enregistre jamais sans lui (voir
+     * ModifierIdentiteSocieteAction). La loi impose cette mention, sur
+     * chaque devis et chaque facture, aux artisans dont l'activité exige
+     * une assurance (art. 22-2 de la loi n° 96-603 du 5 juillet 1996).
+     */
+    public function ligneDeLAssurance(): ?string
+    {
+        if (blank($this->assuranceAssureur)) {
+            return null;
+        }
+
+        return 'Assurance professionnelle : '.implode(', ', array_filter([
+            filled($this->assuranceContrat) ? "contrat n° {$this->assuranceContrat}" : null,
+            $this->assuranceAssureur,
+            $this->assuranceAdresse,
+            filled($this->assuranceCouverture) ? "couverture : {$this->assuranceCouverture}" : null,
         ], filled(...)));
     }
 

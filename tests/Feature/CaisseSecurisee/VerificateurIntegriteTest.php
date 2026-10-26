@@ -402,6 +402,36 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
+     * L'assurance professionnelle de la société entre dans l'émetteur
+     * signé à l'émission, à la version 1.4 du module fiscal : la facture se
+     * vérifie sans anomalie, et une assurance réécrite dans son contenu
+     * signé ne se vérifie plus avec sa signature.
+     */
+    public function test_l_assurance_signee_dans_l_emetteur_se_verifie_et_sa_reecriture_est_detectee(): void
+    {
+        $magasin = $this->magasinActif();
+        $this->reglerLaSociete($magasin, [
+            'assurance_assureur' => 'Mutuelle du Littoral',
+            'assurance_adresse' => '4 rue Paradis, 13001 Marseille',
+            'assurance_contrat' => 'RC-2026-118',
+            'assurance_couverture' => 'France métropolitaine',
+        ]);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit('VIS', 1)->id, 'quantite' => 10]]));
+        $vente = $this->enregistrementDe($facture, ChaineFiscale::Vente);
+        $contenu = json_decode($vente->contenu, true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame('1.4', $contenu['version_module']);
+        $this->assertSame(['assureur' => 'Mutuelle du Littoral', 'adresse' => '4 rue Paradis, 13001 Marseille', 'contrat' => 'RC-2026-118', 'couverture' => 'France métropolitaine'], $contenu['donnees']['contexte']['emetteur']['assurance']);
+        $this->assertSame([], $this->anomalies($this->verifier()));
+
+        $this->falsifierLEnregistrement($vente, ['contenu' => str_replace('"contrat":"RC-2026-118"', '"contrat":"RC-2027-001"', $vente->contenu)]);
+
+        $this->assertSame([
+            [90, 'Enregistrement n° 1 de la chaîne des ventes : sa signature ne correspond pas à son contenu signé.'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
      * Une signature valide pour une autre clé que les clés épinglées ne
      * prouve rien : celui qui l'a produite n'est pas l'éditeur.
      */

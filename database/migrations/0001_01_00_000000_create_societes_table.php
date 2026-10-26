@@ -63,6 +63,18 @@ return new class extends Migration
             $table->string('siege_complement_adresse')->nullable();
             $table->string('siege_code_postal', 10)->nullable();
             $table->string('siege_ville', 100)->nullable();
+            // L'assurance professionnelle, facultative dans tous les types
+            // qui ont un magasin (jamais pour un cabinet d'expertise
+            // comptable) : l'assureur ou le garant, son adresse, le n° de
+            // contrat et la couverture géographique, imprimés dans le pied
+            // des documents de vente quand l'assureur est renseigné et figés
+            // dans l'émetteur signé (voir Emetteur::ligneDeLAssurance()) ;
+            // un champ renseigné sans assureur est refusé (voir
+            // ModifierIdentiteSocieteAction).
+            $table->string('assurance_assureur', 200)->nullable();
+            $table->string('assurance_adresse', 300)->nullable();
+            $table->string('assurance_contrat', 100)->nullable();
+            $table->string('assurance_couverture', 200)->nullable();
             // Nullable : tant qu'il n'est pas choisi dans les paramètres
             // fiscaux de la société, elle ne vend pas en franchise en base
             // (voir Societe::estEnFranchiseDeTva()).

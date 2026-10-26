@@ -82,8 +82,8 @@ class Societe extends Model implements HasName
     /**
      * Les champs de son identité légale, tels que le journal d'audit en
      * retient les changements (voir identiteAuditee()) : ceux que le
-     * propriétaire saisit, et la catégorie juridique lue au répertoire
-     * Sirene.
+     * propriétaire saisit, son assurance professionnelle comprise, et la
+     * catégorie juridique lue au répertoire Sirene.
      */
     public const CHAMPS_DE_L_IDENTITE = [
         'raison_sociale',
@@ -99,6 +99,10 @@ class Societe extends Model implements HasName
         'siege_complement_adresse',
         'siege_code_postal',
         'siege_ville',
+        'assurance_assureur',
+        'assurance_adresse',
+        'assurance_contrat',
+        'assurance_couverture',
     ];
 
     protected $fillable = [
@@ -114,6 +118,10 @@ class Societe extends Model implements HasName
         'siege_complement_adresse',
         'siege_code_postal',
         'siege_ville',
+        'assurance_assureur',
+        'assurance_adresse',
+        'assurance_contrat',
+        'assurance_couverture',
         'regime_tva',
         'option_debits_tva',
         'mois_fin_exercice',

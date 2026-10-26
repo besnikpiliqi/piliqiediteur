@@ -11,12 +11,13 @@ use InvalidArgumentException;
  * Le pied fixé en bas de chaque page d'un PDF de vente (point 4), au-dessus
  * de « Page x sur y » (voir MiseEnPageA4) : l'identité légale de la société
  * sur une ligne (voir Emetteur::lignesDeLaSociete()), puis, une par ligne,
- * les conditions de paiement saisies sur une facture ou un devis, les
- * mentions entre professionnels d'une facture à un professionnel
- * (pénalités, indemnité forfaitaire, escompte), les mentions fiscales du
- * document (catégorie de l'opération, exonération, franchise ou option
- * pour les débits, voir MentionsFiscales) et la mention du bon d'avoir
- * d'un avoir fait au client comptoir. Le magasin qui vend reste en tête
+ * son assurance professionnelle quand elle est renseignée (voir
+ * Emetteur::ligneDeLAssurance()), les conditions de paiement saisies sur
+ * une facture ou un devis, les mentions entre professionnels d'une facture
+ * à un professionnel (pénalités, indemnité forfaitaire, escompte), les
+ * mentions fiscales du document (catégorie de l'opération, exonération,
+ * franchise ou option pour les débits, voir MentionsFiscales) et la
+ * mention du bon d'avoir d'un avoir fait au client comptoir. Le magasin qui vend reste en tête
  * (voir Emetteur::lignesDeLEtablissement()).
  *
  * Le pied d'une page ne recouvre jamais ses lignes : la marge du bas de la
@@ -54,7 +55,7 @@ final readonly class PiedDePage
 
     /**
      * @param  string  $identite  l'identité de la société, sur une ligne
-     * @param  list<string>  $lignes  les conditions de paiement et les mentions, dans l'ordre où elles s'impriment
+     * @param  list<string>  $lignes  l'assurance professionnelle, les conditions de paiement et les mentions, dans l'ordre où elles s'impriment
      */
     public function __construct(
         public string $identite,
@@ -71,6 +72,7 @@ final readonly class PiedDePage
         return new self(
             implode(' · ', $emetteur->lignesDeLaSociete()),
             array_values(array_filter([
+                $emetteur->ligneDeLAssurance(),
                 $document instanceof Avoir ? null : $document->conditions_paiement,
                 ...($document instanceof Facture && $document->estPourUnProfessionnel() ? array_values($emetteur->mentionsEntreProfessionnels) : []),
                 ...app(MentionsFiscales::class)->pour($document, $emetteur),

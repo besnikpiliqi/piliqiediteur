@@ -90,6 +90,7 @@ class TypeDActiviteTest extends TestCase
 
         $page->fillForm(['type_activite' => TypeDActivite::Services->value])
             ->assertSeeText(TypeDActivite::Services->aide())
+            ->assertSeeText('Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale des travaux du bâtiment, par exemple), renseignez-la dans l\'identité de votre société : '.config('app.name').' l\'imprime sur vos devis et vos factures. Ce choix ne permet pas de vendre des articles.')
             ->assertDontSeeText(TypeDActivite::Commerce->aide());
     }
 
@@ -449,7 +450,7 @@ class TypeDActiviteTest extends TestCase
             'services et 47.42Z' => [TypeDActivite::Services, '47.42Z', 'Votre code d\'activité au répertoire Sirene est 47.42Z : ces entreprises vendent en général des articles. Avec « Services, sans vente d\'articles », vous ne pourrez pas en vendre.'],
             'services et 95.12Z' => [TypeDActivite::Services, '95.12Z', 'Votre code d\'activité au répertoire Sirene est 95.12Z : ces entreprises vendent en général des articles.'],
             'commerce et 10.71C' => [TypeDActivite::Commerce, '10.71C', 'Votre code d\'activité est 10.71C, une activité de fabrication'],
-            'commerce et 43.22A' => [TypeDActivite::Commerce, '43.22A', 'Votre code d\'activité est 43.22A, une activité du bâtiment.'],
+            'commerce et 43.22A' => [TypeDActivite::Commerce, '43.22A', 'Votre code d\'activité est 43.22A, une activité du bâtiment. Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale, par exemple), renseignez-la dans l\'identité de votre société :'],
             'services et 43.22A' => [TypeDActivite::Services, '43.22A', 'ne prend pas encore en charge la sous-traitance où la TVA est due par le donneur d\'ordre (autoliquidation), les factures d\'acompte et de situation, ni la retenue de garantie.'],
             'services et 69.20Z' => [TypeDActivite::Services, '69.20Z', 'Votre code d\'activité est 69.20Z (activités comptables) : si vous êtes inscrit à l\'Ordre des experts-comptables, choisissez « Cabinet d\'expertise comptable ».'],
             'commerce et 86.90D' => [TypeDActivite::Commerce, '86.90D', 'Si votre activité est exonérée de TVA (soins, enseignement, assurance, services financiers…)'],
@@ -525,9 +526,9 @@ class TypeDActiviteTest extends TestCase
     public static function types(): array
     {
         return [
-            'commerce' => [TypeDActivite::Commerce],
-            'services' => [TypeDActivite::Services],
-            'cabinet' => [TypeDActivite::Cabinet],
+            'commerce ou atelier' => [TypeDActivite::Commerce],
+            'services sans vente d\'articles' => [TypeDActivite::Services],
+            'cabinet d\'expertise comptable' => [TypeDActivite::Cabinet],
         ];
     }
 

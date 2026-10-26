@@ -49,7 +49,8 @@ use Tests\TestCase;
  * puis devient la Boutique des Quais, puis, quand un troisième émetteur
  * est nécessaire, la Boutique du Canal : chacune change tout ce qui se
  * change de l'identité de la société (dénomination, forme, capital,
- * immatriculation, n° de TVA, siège), de ses réglages fiscaux, et des
+ * immatriculation, n° de TVA, siège, assurance professionnelle), de ses
+ * réglages fiscaux, et des
  * coordonnées et des mentions du magasin. Le SIREN d'une société validée
  * et le SIRET d'un magasin, eux, ne se changent pas ici.
  */
@@ -72,11 +73,24 @@ class EmetteurFigeTest extends TestCase
     private const OPTION_DEBITS = 'Option pour le paiement de la taxe d\'après les débits';
 
     /**
+     * L'assurance professionnelle de la société du Port (voir
+     * magasinDuPort()), sous son identité dans le pied de chaque page.
+     */
+    private const ASSURANCE_DU_PORT = 'Assurance professionnelle : contrat n° RC-2026-118, Mutuelle du Littoral, 4 rue Paradis, 13001 Marseille, couverture : France métropolitaine';
+
+    /**
+     * L'assurance professionnelle de la société des Quais (voir
+     * IDENTITE_DES_QUAIS).
+     */
+    private const ASSURANCE_DES_QUAIS = 'Assurance professionnelle : contrat n° DEC-77-0042, Assurances du Rhône, 10 quai Saint-Antoine, 69002 Lyon, couverture : France et Union européenne';
+
+    /**
      * Ce que règle la société, et non le magasin, dans une identité.
      */
     private const CHAMPS_DE_LA_SOCIETE = [
         'siren', 'raison_sociale', 'forme_juridique', 'forme_juridique_autre', 'capital_social', 'capital_variable', 'immatriculation', 'numero_tva',
         'siege_adresse', 'siege_complement_adresse', 'siege_code_postal', 'siege_ville', 'regime_tva', 'option_debits_tva',
+        'assurance_assureur', 'assurance_adresse', 'assurance_contrat', 'assurance_couverture',
     ];
 
     /**
@@ -103,6 +117,10 @@ class EmetteurFigeTest extends TestCase
         'email' => 'bonjour@boutique-des-quais.fr',
         'regime_tva' => RegimeTva::ReelNormalTrimestriel,
         'option_debits_tva' => false,
+        'assurance_assureur' => 'Assurances du Rhône',
+        'assurance_adresse' => '10 quai Saint-Antoine, 69002 Lyon',
+        'assurance_contrat' => 'DEC-77-0042',
+        'assurance_couverture' => 'France et Union européenne',
         'mention_escompte' => self::ESCOMPTE_DES_QUAIS,
     ];
 
@@ -127,6 +145,10 @@ class EmetteurFigeTest extends TestCase
         'email' => 'contact@boutique-du-canal.fr',
         'regime_tva' => RegimeTva::ReelSimplifie,
         'option_debits_tva' => true,
+        'assurance_assureur' => 'Garantie Parisienne',
+        'assurance_adresse' => '2 rue de la Paix, 75002 Paris',
+        'assurance_contrat' => 'GP-2027-9',
+        'assurance_couverture' => 'France',
         'mention_escompte' => self::ESCOMPTE_DU_CANAL,
     ];
 
@@ -169,7 +191,7 @@ class EmetteurFigeTest extends TestCase
 
         $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
         $this->assertSame(self::SOCIETE_DU_PORT, $this->societe($html));
-        $this->assertSame([self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DU_PORT, self::CATEGORIE, self::OPTION_DEBITS], $this->pieds($html));
+        $this->assertSame([self::ASSURANCE_DU_PORT, self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DU_PORT, self::CATEGORIE, self::OPTION_DEBITS], $this->pieds($html));
         $this->assertSame(RegimeTva::ReelNormalMensuel, $facture->fresh()->emetteur()->regimeTva);
     }
 
@@ -183,7 +205,7 @@ class EmetteurFigeTest extends TestCase
 
         $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
         $this->assertSame(self::SOCIETE_DU_PORT, $this->societe($html));
-        $this->assertSame([self::CATEGORIE, self::OPTION_DEBITS], $this->pieds($html));
+        $this->assertSame([self::ASSURANCE_DU_PORT, self::CATEGORIE, self::OPTION_DEBITS], $this->pieds($html));
     }
 
     /**
@@ -205,7 +227,7 @@ class EmetteurFigeTest extends TestCase
         $htmlDeLaFacture = app(FacturePdfGenerator::class)->html($facture->fresh());
 
         $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDeLAvoir), $this->societe($htmlDeLAvoir)]);
-        $this->assertSame([self::CATEGORIE], $this->pieds($htmlDeLAvoir));
+        $this->assertSame([self::ASSURANCE_DES_QUAIS, self::CATEGORIE], $this->pieds($htmlDeLAvoir));
         $this->assertSame([self::EN_TETE_DU_PORT, self::SOCIETE_DU_PORT], [$this->enTete($htmlDeLaFacture), $this->societe($htmlDeLaFacture)]);
     }
 
@@ -226,8 +248,9 @@ class EmetteurFigeTest extends TestCase
         $htmlDuDevis = app(DevisPdfGenerator::class)->html($devis->fresh());
 
         $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDuBrouillon), $this->societe($htmlDuBrouillon)]);
-        $this->assertSame([self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DES_QUAIS, self::CATEGORIE], $this->pieds($htmlDuBrouillon));
+        $this->assertSame([self::ASSURANCE_DES_QUAIS, self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DES_QUAIS, self::CATEGORIE], $this->pieds($htmlDuBrouillon));
         $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDuDevis), $this->societe($htmlDuDevis)]);
+        $this->assertSame(self::ASSURANCE_DES_QUAIS, $this->pieds($htmlDuDevis)[0]);
     }
 
     /**
@@ -278,6 +301,12 @@ class EmetteurFigeTest extends TestCase
                 'penalites_retard' => self::PENALITES,
                 'indemnite_recouvrement' => self::INDEMNITE,
                 'escompte' => self::ESCOMPTE_DU_PORT,
+            ],
+            'assurance' => [
+                'assureur' => 'Mutuelle du Littoral',
+                'adresse' => '4 rue Paradis, 13001 Marseille',
+                'contrat' => 'RC-2026-118',
+                'couverture' => 'France métropolitaine',
             ],
         ], $emetteursImprimes->sole()->enTableau());
     }
@@ -523,9 +552,9 @@ class EmetteurFigeTest extends TestCase
     }
 
     /**
-     * Le magasin d'une société à l'identité légale complète, qui a opté
-     * pour le paiement de la TVA d'après les débits ; son siège n'est pas
-     * à l'adresse du magasin. Ces attributs remplacent ceux de la société
+     * Le magasin d'une société à l'identité légale complète, assurance
+     * professionnelle comprise, qui a opté pour le paiement de la TVA
+     * d'après les débits ; son siège n'est pas à l'adresse du magasin. Ces attributs remplacent ceux de la société
      * ou du magasin (CHAMPS_DE_LA_SOCIETE).
      *
      * @param  array<string, mixed>  $attributs
@@ -544,6 +573,10 @@ class EmetteurFigeTest extends TestCase
             'siege_ville' => 'Marseille',
             'regime_tva' => RegimeTva::ReelNormalMensuel,
             'option_debits_tva' => true,
+            'assurance_assureur' => 'Mutuelle du Littoral',
+            'assurance_adresse' => '4 rue Paradis, 13001 Marseille',
+            'assurance_contrat' => 'RC-2026-118',
+            'assurance_couverture' => 'France métropolitaine',
             ...array_intersect_key($attributs, array_flip(self::CHAMPS_DE_LA_SOCIETE)),
         ])->create([
             'nom' => 'Boutique du Port',

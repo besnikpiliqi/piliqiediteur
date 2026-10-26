@@ -30,7 +30,7 @@ use Tests\TestCase;
  * L'identité légale de la société (voir IdentiteSociete et
  * ModifierIdentiteSocieteAction), la seule que tous ses magasins
  * impriment : raison sociale, forme juridique, capital, immatriculation,
- * n° de TVA, siège.
+ * n° de TVA, siège et, facultative, assurance professionnelle.
  */
 class IdentiteSocieteTest extends TestCase
 {
@@ -41,7 +41,13 @@ class IdentiteSocieteTest extends TestCase
         $societe = $this->ouvrirLAdministration();
 
         Livewire::test(IdentiteSociete::class)
-            ->fillForm(self::identiteComplete())
+            ->fillForm([
+                ...self::identiteComplete(),
+                'assurance_assureur' => 'Mutuelle du Littoral',
+                'assurance_adresse' => '4 rue Paradis, 13001 Marseille',
+                'assurance_contrat' => 'RC-2026-118',
+                'assurance_couverture' => 'France métropolitaine',
+            ])
             ->call('save')
             ->assertHasNoFormErrors()
             ->assertNotified('Identité de la société enregistrée');
@@ -55,7 +61,11 @@ class IdentiteSocieteTest extends TestCase
             'siege_adresse' => '1 rue de la République',
             'siege_code_postal' => '13001',
             'siege_ville' => 'Marseille',
-        ], $societe->fresh()->only(['raison_sociale', 'forme_juridique', 'capital_social', 'immatriculation', 'numero_tva', 'siege_adresse', 'siege_code_postal', 'siege_ville']));
+            'assurance_assureur' => 'Mutuelle du Littoral',
+            'assurance_adresse' => '4 rue Paradis, 13001 Marseille',
+            'assurance_contrat' => 'RC-2026-118',
+            'assurance_couverture' => 'France métropolitaine',
+        ], $societe->fresh()->only(['raison_sociale', 'forme_juridique', 'capital_social', 'immatriculation', 'numero_tva', 'siege_adresse', 'siege_code_postal', 'siege_ville', 'assurance_assureur', 'assurance_adresse', 'assurance_contrat', 'assurance_couverture']));
     }
 
     public function test_le_proprietaire_ouvre_la_page_de_l_identite(): void
@@ -66,7 +76,8 @@ class IdentiteSocieteTest extends TestCase
             ->assertOk()
             ->assertSee('Identité légale')
             ->assertSee($societe->siren)
-            ->assertSeeText(['Type d\'activité', 'Commerce ou atelier', 'Choisi à l\'inscription, il ne change jamais.']);
+            ->assertSeeText(['Type d\'activité', 'Commerce ou atelier', 'Choisi à l\'inscription, il ne change jamais.'])
+            ->assertSeeText(['Assurance professionnelle', 'Assureur ou garant', 'Adresse de l\'assureur ou du garant', 'N° de contrat', 'Couverture géographique']);
     }
 
     /**
@@ -330,6 +341,7 @@ class IdentiteSocieteTest extends TestCase
             'immatriculation de 101 caractères' => [['immatriculation' => str_repeat('R', 101)], 'immatriculation', 'Le champ immatriculation ne doit pas dépasser 100 caractères.'],
             'mention EI pour une SARL' => [['raison_sociale' => 'Martin EI'], 'raison_sociale', ModifierIdentiteSocieteAction::MESSAGE_MENTION_EI],
             'mention (EI) pour une SARL' => [['raison_sociale' => 'Martin (EI)'], 'raison_sociale', ModifierIdentiteSocieteAction::MESSAGE_MENTION_EI],
+            'adresse de l\'assureur de 301 caractères' => [['assurance_assureur' => 'Mutuelle du Littoral', 'assurance_adresse' => str_repeat('A', 301)], 'assurance_adresse', 'Le champ adresse de l\'assureur ou du garant ne doit pas dépasser 300 caractères.'],
         ];
     }
 

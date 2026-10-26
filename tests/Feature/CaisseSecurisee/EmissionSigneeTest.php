@@ -309,6 +309,12 @@ class EmissionSigneeTest extends TestCase
                         'indemnite_recouvrement' => 'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.',
                         'escompte' => 'Pas d\'escompte pour paiement anticipé.',
                     ],
+                    'assurance' => [
+                        'assureur' => null,
+                        'adresse' => null,
+                        'contrat' => null,
+                        'couverture' => null,
+                    ],
                 ],
                 'categorie_operation' => 'livraison_de_biens',
                 'mentions' => ["Catégorie de l'opération : Livraison de biens"],

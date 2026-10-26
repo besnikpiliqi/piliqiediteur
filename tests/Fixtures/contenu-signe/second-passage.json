@@ -15,7 +15,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.3",
+        "version_module": "1.4",
         "cle_id": "…",
         "signature_precedente": null,
         "gt": {
@@ -129,6 +129,12 @@
                         "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
                         "indemnite_recouvrement": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.",
                         "escompte": "Pas d'escompte pour paiement anticipé."
+                    },
+                    "assurance": {
+                        "assureur": null,
+                        "adresse": null,
+                        "contrat": null,
+                        "couverture": null
                     }
                 },
                 "categorie_operation": "livraison_de_biens",
@@ -164,7 +170,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.3",
+        "version_module": "1.4",
         "cle_id": "…",
         "signature_precedente": null,
         "document": {
@@ -223,7 +229,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.3",
+        "version_module": "1.4",
         "cle_id": "…",
         "signature_precedente": "…",
         "gt": {
@@ -337,6 +343,12 @@
                         "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
                         "indemnite_recouvrement": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.",
                         "escompte": "Pas d'escompte pour paiement anticipé."
+                    },
+                    "assurance": {
+                        "assureur": null,
+                        "adresse": null,
+                        "contrat": null,
+                        "couverture": null
                     }
                 },
                 "categorie_operation": "livraison_de_biens",
@@ -371,7 +383,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.3",
+        "version_module": "1.4",
         "cle_id": "…",
         "signature_precedente": "…",
         "gt": {
@@ -483,6 +495,12 @@
                         "penalites_retard": "Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.",
                         "indemnite_recouvrement": "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.",
                         "escompte": "Pas d'escompte pour paiement anticipé."
+                    },
+                    "assurance": {
+                        "assureur": null,
+                        "adresse": null,
+                        "contrat": null,
+                        "couverture": null
                     }
                 },
                 "categorie_operation": "livraison_de_biens",

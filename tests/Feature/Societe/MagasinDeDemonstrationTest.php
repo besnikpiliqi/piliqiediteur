@@ -129,7 +129,7 @@ class MagasinDeDemonstrationTest extends TestCase
                 ['DEMO-CARNET' => 20, 'DEMO-STYLO' => 50, 'DEMO-TASSE' => 10],
                 1,
             ],
-            'services' => [
+            'services sans vente d\'articles' => [
                 TypeDActivite::Services,
                 ['Atelier d\'une demi-journée' => '450.00', 'Forfait déplacement' => '30.00', 'Heure de conseil' => '72.00'],
                 [],

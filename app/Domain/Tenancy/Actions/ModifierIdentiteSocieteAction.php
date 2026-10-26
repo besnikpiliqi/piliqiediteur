@@ -23,9 +23,17 @@ use LogicException;
  * impriment (voir Emetteur) : raison sociale, forme juridique (et, pour
  * une autre forme, si la société est commerciale), capital social,
  * immatriculation, n° de TVA intracommunautaire, siège (ou adresse de
- * l'entreprise d'un entrepreneur individuel). Le SIREN ne s'y saisit
- * jamais : c'est celui de l'inscription, que vérifie le courrier
- * recommandé, et il ne change pas (voir Societe).
+ * l'entreprise d'un entrepreneur individuel), et son assurance
+ * professionnelle, facultative (assureur ou garant, son adresse, n° de
+ * contrat, couverture géographique), qu'un cabinet d'expertise comptable,
+ * sans magasin ni document de vente, n'a pas : ses champs ne s'écrivent
+ * jamais pour lui. Le SIREN ne s'y saisit jamais : c'est celui de
+ * l'inscription, que vérifie le courrier recommandé, et il ne change pas
+ * (voir Societe).
+ *
+ * Rien de l'assurance n'est exigé, dans aucun type : seul un champ
+ * renseigné sans l'assureur ou le garant est refusé, pour qu'aucune ligne
+ * incomplète ne s'imprime (voir Emetteur::ligneDeLAssurance()).
  *
  * Toute société commerciale indique son capital (art. R123-238 du Code de
  * commerce, voir FormeJuridique::exigeUnCapital()) ; un entrepreneur
@@ -61,7 +69,17 @@ class ModifierIdentiteSocieteAction
         'siege_complement_adresse',
         'siege_code_postal',
         'siege_ville',
+        'assurance_assureur',
+        'assurance_adresse',
+        'assurance_contrat',
+        'assurance_couverture',
     ];
+
+    /**
+     * Les champs de l'assurance professionnelle, que seul un type qui a des
+     * magasins écrit.
+     */
+    public const CHAMPS_DE_L_ASSURANCE = ['assurance_assureur', 'assurance_adresse', 'assurance_contrat', 'assurance_couverture'];
 
     public const CAPITAL_MAXIMUM = 999999999999.99;
 
@@ -74,6 +92,8 @@ class ModifierIdentiteSocieteAction
     public const MESSAGE_MENTION_EI = 'La mention « EI » est réservée à un entrepreneur individuel : retirez-la de la raison sociale, ou choisissez cette forme juridique.';
 
     public const MESSAGE_SANS_AUTORISATION = 'Seul le propriétaire de la société modifie ses paramètres, tant qu\'elle n\'est pas en lecture seule.';
+
+    public const MESSAGE_ASSUREUR_EXIGE = 'Indiquez l\'assureur ou le garant.';
 
     public function __construct(
         private readonly RegistreFiscal $registre,
@@ -127,7 +147,7 @@ class ModifierIdentiteSocieteAction
      */
     private function valider(Societe $societe, array $donnees): array
     {
-        $recus = array_intersect_key($donnees, array_flip(self::CHAMPS));
+        $recus = array_intersect_key($donnees, array_flip($societe->type_activite->aDesMagasins() ? self::CHAMPS : array_diff(self::CHAMPS, self::CHAMPS_DE_L_ASSURANCE)));
         $saisie = [...array_map(JournalAudit::valeur(...), $societe->only(self::CHAMPS)), ...$recus];
         $forme = FormeJuridique::tryFrom((string) ($saisie['forme_juridique'] ?? ''));
         $commerciale = $saisie['societe_commerciale'] === null || $saisie['societe_commerciale'] === ''
@@ -147,6 +167,10 @@ class ModifierIdentiteSocieteAction
             'siege_complement_adresse' => ['nullable', 'string', 'max:255'],
             'siege_code_postal' => ['nullable', 'string', 'max:10'],
             'siege_ville' => ['nullable', 'string', 'max:100'],
+            'assurance_assureur' => ['nullable', 'string', 'max:200'],
+            'assurance_adresse' => ['nullable', 'string', 'max:300'],
+            'assurance_contrat' => ['nullable', 'string', 'max:100'],
+            'assurance_couverture' => ['nullable', 'string', 'max:200'],
         ], [
             'capital_social.numeric' => 'Le capital social est un montant en euros.',
             'capital_social.decimal' => 'Le capital social se saisit au centime près.',
@@ -157,6 +181,10 @@ class ModifierIdentiteSocieteAction
             'forme_juridique' => 'forme juridique',
             'forme_juridique_autre' => 'libellé de la forme juridique',
             'immatriculation' => 'immatriculation',
+            'assurance_assureur' => 'assureur ou garant',
+            'assurance_adresse' => 'adresse de l\'assureur ou du garant',
+            'assurance_contrat' => 'n° de contrat',
+            'assurance_couverture' => 'couverture géographique',
         ]);
 
         $validateur->after(function (ValidatorDeLaravel $validateur) use ($societe, $saisie, $recus, $forme, $commerciale): void {
@@ -172,6 +200,10 @@ class ModifierIdentiteSocieteAction
                 $validateur->errors()->add('capital_social', self::MESSAGE_CAPITAL_D_UN_ENTREPRENEUR);
             } elseif ($forme?->exigeUnCapital($commerciale) === true && blank($saisie['capital_social'])) {
                 $validateur->errors()->add('capital_social', self::MESSAGE_CAPITAL_EXIGE);
+            }
+
+            if (blank($saisie['assurance_assureur']) && collect(['assurance_adresse', 'assurance_contrat', 'assurance_couverture'])->contains(fn (string $champ): bool => filled($saisie[$champ]))) {
+                $validateur->errors()->add('assurance_assureur', self::MESSAGE_ASSUREUR_EXIGE);
             }
         });
 

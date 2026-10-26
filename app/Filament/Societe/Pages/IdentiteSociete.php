@@ -24,16 +24,16 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * L'identité légale de la société, celle que tous ses magasins impriment :
- * raison sociale, forme juridique, capital, immatriculation, n° de TVA et
- * siège (voir ModifierIdentiteSocieteAction, qui la valide et
- * l'enregistre). Le SIREN s'y lit sans se saisir : c'est celui de
- * l'inscription, que vérifie le courrier recommandé, et il ne change pas ;
- * le type d'activité aussi, choisi à l'inscription et définitif (voir
- * TypeDActivite).
- * Un encadré dit les mentions
- * qui manquent pour facturer un professionnel, et la raison sociale
- * rappelle la dénomination que donne le répertoire Sirene quand elle en
- * diffère.
+ * raison sociale, forme juridique, capital, immatriculation, n° de TVA,
+ * siège et, dans les types qui ont un magasin, l'assurance professionnelle
+ * facultative (voir ModifierIdentiteSocieteAction, qui la valide et
+ * l'enregistre, et Emetteur::ligneDeLAssurance()). Le SIREN s'y lit sans
+ * se saisir : c'est celui de l'inscription, que vérifie le courrier
+ * recommandé, et il ne change pas ; le type d'activité aussi, choisi à
+ * l'inscription et définitif (voir TypeDActivite). Un encadré dit les
+ * mentions qui manquent pour facturer un professionnel, et la raison
+ * sociale rappelle la dénomination que donne le répertoire Sirene quand
+ * elle en diffère.
  *
  * Consultable par le propriétaire et un administrateur de tous les
  * magasins autorisé à gérer les paramètres de la société (voir
@@ -87,7 +87,7 @@ class IdentiteSociete extends Page implements HasForms
                 ])
                 ->visible(fn (): bool => $this->societe()->mentionsLegalesManquantes() !== []),
             Section::make('Identité légale')
-                ->description('Imprimée en tête des devis, factures et avoirs de tous vos magasins.')
+                ->description('Imprimée dans le pied des devis, factures, tickets et avoirs de tous vos magasins.')
                 ->schema([
                     Placeholder::make('siren')
                         ->label('SIREN')
@@ -143,6 +143,28 @@ class IdentiteSociete extends Page implements HasForms
                     TextInput::make('siege_ville')->label('Ville')->maxLength(100),
                 ])
                 ->columns(2),
+            Section::make('Assurance professionnelle')
+                ->description('Facultative. Renseignée, elle s\'imprime dans le pied des devis, factures, tickets et avoirs de tous vos magasins. La loi impose cette mention, sur chaque devis et chaque facture, aux artisans dont l\'activité exige une assurance professionnelle, notamment la garantie décennale des travaux du bâtiment.')
+                ->schema([
+                    TextInput::make('assurance_assureur')
+                        ->label('Assureur ou garant')
+                        ->helperText('Obligatoire dès qu\'un autre champ de l\'assurance est renseigné.')
+                        ->maxLength(200),
+                    TextInput::make('assurance_contrat')
+                        ->label('N° de contrat')
+                        ->maxLength(100),
+                    TextInput::make('assurance_adresse')
+                        ->label('Adresse de l\'assureur ou du garant')
+                        ->maxLength(300)
+                        ->columnSpanFull(),
+                    TextInput::make('assurance_couverture')
+                        ->label('Couverture géographique')
+                        ->placeholder('France métropolitaine')
+                        ->maxLength(200)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->hidden(fn (): bool => ! $this->societe()->type_activite->aDesMagasins()),
         ])
             ->statePath('data')
             ->disabled(fn (): bool => ! $this->peutModifier());

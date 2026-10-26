@@ -1,0 +1,9 @@
+# Réponses de l'éditeur aux points laissés par la relecture du lot V2 (24/10/2026)
+
+Ce fichier fait foi. Il complète `decision-verification-courrier.md`.
+
+1. Nom du compte inscrit (constat 3) : on garde le nom du représentant légal lu au registre national (INPI) ; une personne morale dirigeante donne sa dénomination. Le compte créé par une autre personne qui saisit le code prend le nom du destinataire du courrier. La personne peut changer son nom dans son profil. Aucun changement de code.
+2. Adresse choisie par une autre personne qui saisit le code (constat 10) : elle ne sert à la connexion et à « Mot de passe oublié » qu'après confirmation par un lien envoyé à cette adresse, valable 24 heures, suivi en étant connecté à ce compte ; en attendant, la personne se connecte avec son identifiant de 8 chiffres (et le mot de passe qu'elle a choisi en saisissant le code). Un lien expiré se redemande depuis le profil. Une adresse déjà adresse de connexion d'un autre propriétaire est refusée au moment du choix, sans rien révéler d'autre que le refus, et revérifiée à la confirmation.
+3. Adresse du propriétaire d'une inscription close (constats 2 et 9) : à la clôture de l'inscription (30 jours sans code, ou refus par l'éditeur), l'adresse cesse d'être une adresse de connexion : le compte de l'inscription close ne se connecte plus qu'avec son identifiant, et l'adresse peut servir à une nouvelle inscription. L'e-mail envoyé à une adresse déjà prise reste celui de V2 pour une inscription non close.
+4. Essais faux (choix de V2) : un code n'est jamais annulé après des saisies fausses ; les essais restent limités par adresse IP et comptés. Le code compte 12 caractères de l'alphabet de Crockford. Aucun changement de code.
+5. Transmission de la propriété (choix de V2) : déjà écrit dans CLAUDE.md : un propriétaire devenu propriétaire par transmission signe les attestations à la main. Aucun changement de code.

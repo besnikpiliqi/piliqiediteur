@@ -144,6 +144,7 @@ class InseeSirene implements RepertoireSirene
             adresse: $voie === '' ? null : $voie,
             complementAdresse: $this->texte($adresse, 'complementAdresseEtablissement'),
             codePostal: $this->texte($adresse, 'codePostalEtablissement'),
+            codeCommune: $this->texte($adresse, 'codeCommuneEtablissement'),
             ville: $this->texte($adresse, 'libelleCommuneEtablissement'),
             diffusionPartielle: ($etablissement['statutDiffusionEtablissement'] ?? null) === 'P',
             enseigne: $this->texte($periode, 'enseigne1Etablissement') ?? $this->texte($periode, 'denominationUsuelleEtablissement'),

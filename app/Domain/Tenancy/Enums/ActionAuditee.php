@@ -31,6 +31,7 @@ enum ActionAuditee: string implements HasLabel
     case MagasinFerme = 'magasin_ferme';
     case MagasinCede = 'magasin_cede';
     case MagasinRouvert = 'magasin_rouvert';
+    case TerritoireCorrige = 'territoire_corrige';
     case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
     case DemonstrationOuverte = 'demonstration_ouverte';
     case DemonstrationFermee = 'demonstration_fermee';
@@ -88,6 +89,7 @@ enum ActionAuditee: string implements HasLabel
             self::MagasinFerme => 'Magasin fermé',
             self::MagasinCede => 'Magasin cédé après sa fermeture',
             self::MagasinRouvert => 'Magasin rouvert',
+            self::TerritoireCorrige => 'Territoire du magasin corrigé par l\'éditeur',
             self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
             self::DemonstrationFermee => 'Magasin de démonstration fermé',
@@ -158,8 +160,8 @@ enum ActionAuditee: string implements HasLabel
             // en activité.
             self::SocieteValidee => ['preuve', 'proprietaire', 'sirets'],
             self::InscriptionClose, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
-            self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
-            self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'etablissement_verifie'],
+            self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'territoire', 'etablissement_verifie'],
+            self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'territoire', 'etablissement_verifie'],
             // Pour une cession, l'indication d'établissement principal
             // retirée, s'il la portait, la valeur hors taxe du stock sorti
             // au coût moyen, le nombre de produits sortis et ceux restés en
@@ -168,7 +170,11 @@ enum ActionAuditee: string implements HasLabel
             // fermeture, de l'ancien à la cession.
             self::MagasinFerme => ['statut', 'motif', 'est_etablissement_principal', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
             self::MagasinCede => ['motif', 'est_etablissement_principal', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
-            self::MagasinRouvert => ['statut', 'etablissement_verifie'],
+            self::MagasinRouvert => ['statut', 'territoire', 'etablissement_verifie'],
+            // Le territoire mal lu au répertoire Sirene, avant et après sa
+            // correction par la procédure de l'éditeur (voir
+            // CorrigerLeTerritoireAction).
+            self::TerritoireCorrige => ['territoire'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son
             // nom au moment de l'opération, son rôle de société et ses rôles

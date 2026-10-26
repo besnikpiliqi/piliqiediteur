@@ -129,6 +129,26 @@ class VerificationSociete extends Page
         return $this->societe()->magasinsReels()->where('statut', 'actif')->whereNull('etablissement_verifie_le')->orderBy('nom')->get();
     }
 
+    /**
+     * Pourquoi le dernier contrôle de l'établissement de ce magasin, sous
+     * son SIRET actuel, ne l'a pas confirmé (établissement fermé, ou d'un
+     * autre territoire que le magasin, voir ReverificationSirene) : la
+     * société corrige alors son NIC. Null quand ce contrôle n'est pas
+     * négatif (l'INSEE n'a pas encore répondu). Lu dans la société active.
+     */
+    public function refusDuDernierControle(Magasin $magasin): ?string
+    {
+        $dernier = LigneDeVerification::query()
+            ->where('magasin_id', $magasin->getKey())
+            ->where('type', TypeVerification::SireneEtablissement->value)
+            ->orderByDesc('id')
+            ->first();
+
+        return $dernier?->resultat === ResultatVerification::Negative && ($dernier->details['siret'] ?? null) === $magasin->siret
+            ? ($dernier->details['motif'] ?? null)
+            : null;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

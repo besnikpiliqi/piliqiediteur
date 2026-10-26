@@ -195,7 +195,7 @@ class ParametresFiscauxSocieteTest extends TestCase
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $nic = substr(IdentifiantsInsee::avecSaCle($lyon->societe->siren.'0002'), 9);
-        app(RepertoireSirene::class)->deplacer($lyon->societe->siren.$nic, '97200', 'FORT-DE-FRANCE');
+        app(RepertoireSirene::class)->deplacer($lyon->societe->siren.$nic, '97200', 'FORT-DE-FRANCE', '97209');
         $martinique = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Fort-de-France', 'nic' => $nic]);
         $service = Service::factory()->create(['nom' => 'Pose écran']);
         $this->actingAs($this->responsableDeTest($martinique));

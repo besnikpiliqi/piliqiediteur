@@ -50,12 +50,15 @@ use LogicException;
  * - le répertoire Sirene de l'INSEE, consulté tout de suite (voir
  *   ControleSirene) : un établissement fermé, inconnu ou rattaché à une
  *   autre entreprise est refusé, et rien n'est créé ; un établissement
- *   confirmé donne au magasin son adresse et le rend vérifié ; quand
- *   l'INSEE ne répond pas, le magasin est créé « établissement à
- *   vérifier », sans adresse, et ne vend pas avant la reprise du contrôle
- *   (voir app:reverifier-sirene) ;
- * - un établissement hors des territoires que le logiciel gère est
- *   refusé (voir TerritoireTva::estPrisEnCharge()).
+ *   confirmé donne au magasin son adresse et son territoire, lu à sa
+ *   commune (voir ControleSirene::territoireDe()), qu'il garde pour
+ *   toujours, et le rend vérifié ; quand l'INSEE ne répond pas, le magasin
+ *   est créé « établissement à vérifier », sans adresse ni territoire, et
+ *   ne vend ni ne numérote rien avant la reprise du contrôle (voir
+ *   app:reverifier-sirene), qui les fixe ;
+ * - un établissement hors des territoires que le logiciel gère (Guyane,
+ *   Mayotte, collectivité d'outre-mer), ou qu'aucune commune française ne
+ *   situe, est refusé (voir Territoire::estPrisEnCharge()).
  *
  * Puis, dans une transaction ouverte sous le verrou de la ligne de la
  * société (FOR NO KEY UPDATE sous PostgreSQL : il attend la validation,
@@ -117,11 +120,13 @@ class CreerEtablissementAction
                 throw ValidationException::withMessages(['nic' => $consultation['motif']]);
             }
 
-            if ($etablissement !== null && ! ControleSirene::estDansUnTerritoireGere($etablissement)) {
-                throw ValidationException::withMessages(['nic' => ControleSirene::MOTIF_TERRITOIRE_NON_GERE]);
+            $territoire = $etablissement === null ? null : ControleSirene::territoireDe($etablissement);
+
+            if ($territoire !== null && $territoire['motif'] !== null) {
+                throw ValidationException::withMessages(['nic' => $territoire['motif']]);
             }
 
-            return $this->operateur->pendant($auteur, fn (): Magasin => DB::transaction(function () use ($auteur, $societe, $donnees, $valides, $siret, $consultation, $etablissement): Magasin {
+            return $this->operateur->pendant($auteur, fn (): Magasin => DB::transaction(function () use ($auteur, $societe, $donnees, $valides, $siret, $consultation, $etablissement, $territoire): Magasin {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
                 $this->valider($verrouillee, $donnees);
                 $magasin = Magasin::forceCreate([
@@ -131,6 +136,7 @@ class CreerEtablissementAction
                     'email' => filled($valides['email'] ?? null) ? $valides['email'] : null,
                     'siret' => $siret,
                     'etablissement_verifie_le' => $etablissement === null ? null : now(),
+                    'territoire' => $territoire['territoire'] ?? null,
                     ...($etablissement === null ? [] : ControleSirene::adresseDe($etablissement)),
                 ]);
 
@@ -164,6 +170,7 @@ class CreerEtablissementAction
                     'code_postal' => $magasin->code_postal,
                     'ville' => $magasin->ville,
                     'pays' => $magasin->pays,
+                    'territoire' => $magasin->territoire?->value,
                     'etablissement_verifie' => $magasin->etablissement_verifie_le !== null,
                 ], $magasin);
 

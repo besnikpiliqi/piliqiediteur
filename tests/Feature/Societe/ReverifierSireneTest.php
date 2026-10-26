@@ -90,7 +90,7 @@ class ReverifierSireneTest extends TestCase
         $societe = $magasin->societe;
         $proprietaire = $this->proprietaireDe($magasin);
         app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill(['categorie_juridique_insee' => '5499'])->save());
-        app(RepertoireSirene::class)->deplacer((string) $magasin->siret, '69001', 'LYON');
+        app(RepertoireSirene::class)->deplacer((string) $magasin->siret, '69001', 'LYON', '69381');
 
         $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
 

@@ -26,7 +26,12 @@ use RuntimeException;
  *   suivi), mais ne s'efface qu'une fois passée la fin de sa conservation,
  *   une colonne nulle tant qu'elle n'est pas fixée (les codes de courrier,
  *   voir CodeConfirmation) ; elle ne se vide pas. Même heure de
- *   comparaison.
+ *   comparaison ;
+ * - colonneFigee() : une colonne qui, une fois renseignée, ne s'efface
+ *   plus et ne change plus, sauf, si la migration le dit, tant qu'une
+ *   condition sur la ligne tient encore (le territoire d'un magasin, voir
+ *   Territoire, que la procédure de l'éditeur corrige tant que le magasin
+ *   n'a numéroté aucun document) ; le reste de la ligne se modifie.
  *
  * Seuls PostgreSQL (production) et SQLite (développement et tests) sont
  * pris en charge : sur tout autre pilote, la migration échoue au lieu de
@@ -61,7 +66,8 @@ use RuntimeException;
  *
  * Les déclencheurs disparaissent avec leur table ; la fonction de refus,
  * propre à la table sous PostgreSQL, se retire par retirer() dans le
- * down() de la migration, après la table.
+ * down() de la migration, après la table, et celle d'une colonne figée par
+ * retirerLaColonneFigee().
  */
 final class DeclencheursDeProtection
 {
@@ -100,6 +106,61 @@ final class DeclencheursDeProtection
             'DELETE' => "{$table} : suppression refusée avant la fin de la conservation",
             'TRUNCATE' => "{$table} : vidage refusé",
         ], colonneDExpiration: $colonne);
+    }
+
+    /**
+     * Une colonne qui, une fois renseignée, ne s'efface plus et ne change
+     * plus : la base refuse toute modification qui l'efface ou lui donne
+     * une autre valeur, même par une requête qui ne passe pas par le
+     * modèle ; elle laisse poser une valeur sur une colonne nulle, et
+     * modifier le reste de la ligne. Sous PostgreSQL, une fonction plpgsql
+     * propre à la colonne (refus_<table>_<colonne>) et un déclencheur
+     * BEFORE UPDATE OF <colonne> ; sous SQLite, un déclencheur BEFORE
+     * UPDATE OF <colonne>.
+     *
+     * @param  string|null  $remplacableTantQue  une condition SQL sur l'ancienne ligne (OLD), valable sous les deux moteurs, tant que tient laquelle une valeur renseignée peut encore être remplacée par une autre (jamais effacée) ; null pour ne jamais la remplacer
+     */
+    public static function colonneFigee(string $table, string $colonne, ?string $remplacableTantQue = null): void
+    {
+        self::verifierLeNom($table);
+        self::verifierLeNom($colonne);
+
+        $message = "{$table}.{$colonne} : valeur figée, changement refusé";
+        $remplacementRefuse = $remplacableTantQue === null ? '1 = 1' : "NOT ({$remplacableTantQue})";
+        $connexion = DB::connection();
+
+        $instructions = match ($pilote = $connexion->getDriverName()) {
+            'pgsql' => [
+                "CREATE OR REPLACE FUNCTION refus_{$table}_{$colonne}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN "
+                ."IF OLD.{$colonne} IS NOT NULL AND (NEW.{$colonne} IS NULL OR (NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne} AND {$remplacementRefuse})) "
+                ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; RETURN NEW; END \$\$",
+                "CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} FOR EACH ROW EXECUTE FUNCTION refus_{$table}_{$colonne}('{$message}')",
+            ],
+            'sqlite' => [
+                "CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} "
+                ."WHEN OLD.{$colonne} IS NOT NULL AND (NEW.{$colonne} IS NULL OR (NEW.{$colonne} <> OLD.{$colonne} AND {$remplacementRefuse})) "
+                ."BEGIN SELECT RAISE(ABORT, '{$message}'); END",
+            ],
+            default => throw new RuntimeException("La colonne {$table}.{$colonne} doit refuser de changer une fois renseignée : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
+        };
+
+        foreach ($instructions as $instruction) {
+            $connexion->unprepared($instruction);
+        }
+    }
+
+    /**
+     * Retire la fonction de refus d'une colonne figée (voir colonneFigee())
+     * une fois sa table supprimée : sous PostgreSQL seulement.
+     */
+    public static function retirerLaColonneFigee(string $table, string $colonne): void
+    {
+        self::verifierLeNom($table);
+        self::verifierLeNom($colonne);
+
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            DB::connection()->unprepared("DROP FUNCTION IF EXISTS refus_{$table}_{$colonne}()");
+        }
     }
 
     /**

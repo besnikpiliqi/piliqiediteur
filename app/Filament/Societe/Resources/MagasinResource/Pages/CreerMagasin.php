@@ -93,7 +93,7 @@ class CreerMagasin extends CreateRecord
      * Les établissements actifs du SIREN, tels que le répertoire les a
      * listés, par SIRET (voir listeDuRepertoire()).
      *
-     * @var array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, territoire_gere: bool}>
+     * @var array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>
      */
     #[Locked]
     public array $etablissements = [];
@@ -243,7 +243,7 @@ class CreerMagasin extends CreateRecord
      * Null, sans rien garder, quand le répertoire ne répond pas ou que la
      * société a atteint sa limite de consultations.
      *
-     * @return array{etablissements: array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, territoire_gere: bool}>, complete: bool}|null
+     * @return array{etablissements: array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>, complete: bool}|null
      */
     private function listeDuRepertoire(): ?array
     {
@@ -273,7 +273,7 @@ class CreerMagasin extends CreateRecord
                 'adresse' => ControleSirene::adresseEnUneLigne($etablissement),
                 'ville' => $etablissement->ville,
                 'siege' => $etablissement->estSiege,
-                'territoire_gere' => ControleSirene::estDansUnTerritoireGere($etablissement),
+                'refus_du_territoire' => ControleSirene::territoireDe($etablissement)['motif'],
             ]])->all(),
         ];
         Cache::put($cle, $liste, now()->addMinutes(self::MINUTES_DE_LA_LISTE));
@@ -334,7 +334,7 @@ class CreerMagasin extends CreateRecord
 
         return match (true) {
             array_key_exists($choix, $this->siretsDesMagasins) => self::MARQUE_DEJA_UN_MAGASIN,
-            ! $this->etablissements[$choix]['territoire_gere'] => ControleSirene::MOTIF_TERRITOIRE_NON_GERE,
+            $this->etablissements[$choix]['refus_du_territoire'] !== null => $this->etablissements[$choix]['refus_du_territoire'],
             default => null,
         };
     }

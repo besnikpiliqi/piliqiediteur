@@ -40,6 +40,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Affectation;
@@ -55,7 +56,10 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -101,7 +105,7 @@ class MagasinDeDemonstrationTest extends TestCase
             $this->assertSame(3, Client::query()->count());
         });
         $this->assertThrows(
-            $this->dansUnPointDeSauvegarde(fn () => Magasin::forceCreate(['societe_id' => $societe->id, 'nom' => 'Seconde', 'code' => 'DEMO2', 'est_demonstration' => true, 'siret' => null])),
+            $this->dansUnPointDeSauvegarde(fn () => Magasin::forceCreate(['societe_id' => $societe->id, 'nom' => 'Seconde', 'code' => 'DEMO2', 'est_demonstration' => true, 'siret' => null, 'territoire' => Territoire::Metropole])),
             QueryException::class,
         );
         $vendeur = $this->membre($reel, RoleMagasin::Vendeur);
@@ -420,6 +424,34 @@ class MagasinDeDemonstrationTest extends TestCase
         app(TenantContext::class)->runAs($demonstration, fn () => $this->assertSame(3, Produit::query()->count()));
     }
 
+    /**
+     * La démonstration prend le territoire du siège de la société, lu à
+     * son code postal : en Martinique, elle propose 8,5 % ; fermée pour
+     * inactivité puis rouverte, elle le garde. Un siège inconnu, ou dans
+     * une collectivité d'outre-mer (Saint-Barthélemy), donne la métropole.
+     */
+    public function test_la_demonstration_prend_le_territoire_du_siege_et_le_garde(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $martinique = $this->societeAuSiege('97200', 'FORT-DE-FRANCE', '97209');
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($martinique);
+
+        $this->assertSame([Territoire::Martinique, 8.5], [$demonstration->territoire, $demonstration->tauxTvaParDefaut()]);
+        app(TenantContext::class)->runAs($demonstration, fn () => $this->assertSame(['8.50'], Produit::query()->distinct()->pluck('taux_tva')->all()));
+
+        $this->travelTo(self::aParis('2026-11-09 10:00:00'));
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        $rouverte = app(OuvrirLaDemonstrationAction::class)->handle($martinique->proprietaire, $martinique->fresh());
+        $this->assertSame([$demonstration->id, Territoire::Martinique], [$rouverte->id, $rouverte->fresh()->territoire]);
+
+        $sansSiege = $this->inscrireUneSociete();
+        app(TenantContext::class)->runAsSociete($sansSiege, fn (): bool => $sansSiege->forceFill(['siege_adresse' => null, 'siege_code_postal' => null, 'siege_ville' => null])->save());
+        $saintBarthelemy = $this->societeAuSiege('97133', 'SAINT-BARTHELEMY', '97701');
+
+        $this->assertSame(Territoire::Metropole, app(OuvrirLaDemonstrationAction::class)->handle($sansSiege->proprietaire, $sansSiege->fresh())->territoire);
+        $this->assertSame(Territoire::Metropole, app(OuvrirLaDemonstrationAction::class)->handle($saintBarthelemy->proprietaire, $saintBarthelemy)->territoire);
+    }
+
     public function test_le_verificateur_d_integrite_controle_aussi_la_demonstration(): void
     {
         $societe = $this->inscrireUneSociete();
@@ -603,6 +635,23 @@ class MagasinDeDemonstrationTest extends TestCase
         $proprietaire = Societe::query()->findOrFail($demonstration->societe_id)->proprietaire;
 
         return $this->choisirSonMotDePasse(app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur)));
+    }
+
+    /**
+     * Une société inscrite dont le répertoire Sirene factice situe le siège
+     * à ce code postal, dans cette ville, de cette commune : l'adresse de
+     * son siège en est reprise.
+     */
+    private function societeAuSiege(string $codePostal, string $ville, string $codeCommune): Societe
+    {
+        $siren = SocieteFactory::sirenFictif();
+        $repertoire = app(RepertoireSirene::class);
+        $this->assertInstanceOf(FauxRepertoireSirene::class, $repertoire);
+        $repertoire->deplacer(FauxRepertoireSirene::siretDuSiege($siren), $codePostal, $ville, $codeCommune);
+        $societe = $this->inscrireUneSociete($siren);
+        $this->assertSame($codePostal, $societe->siege_code_postal);
+
+        return $societe;
     }
 
     /**

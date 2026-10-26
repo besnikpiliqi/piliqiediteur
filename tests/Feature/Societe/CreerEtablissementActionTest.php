@@ -364,6 +364,7 @@ class CreerEtablissementActionTest extends TestCase
             'nom' => 'Lyon 2',
             'pays' => 'FR',
             'siret' => $premier->societe->siren.$nic,
+            'territoire' => 'metropole',
             'ville' => 'PARIS',
         ], $entree->nouvelles_valeurs);
     }
@@ -439,7 +440,7 @@ class CreerEtablissementActionTest extends TestCase
     {
         $premier = $this->ouvrirUneSociete(['nom' => 'Lyon centre']);
         $nic = $this->nic($premier->societe, '0002');
-        app(RepertoireSirene::class)->deplacer($premier->societe->siren.$nic, '97300', 'CAYENNE');
+        app(RepertoireSirene::class)->deplacer($premier->societe->siren.$nic, '97300', 'CAYENNE', '97302');
 
         $this->assertThrows(
             fn () => $this->creer($premier, ['nom' => 'Cayenne', 'nic' => $nic]),

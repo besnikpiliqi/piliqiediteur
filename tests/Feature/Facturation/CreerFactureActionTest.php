@@ -12,6 +12,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -196,7 +197,7 @@ class CreerFactureActionTest extends TestCase
      */
     public function test_une_ligne_de_service_sans_taux_prend_celui_du_territoire_du_magasin(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create(['code_postal' => '97200']));
+        app(TenantContext::class)->set(Magasin::factory()->dansLeTerritoire(Territoire::Martinique)->create());
         $client = Client::factory()->create();
         $service = Service::factory()->create();
 

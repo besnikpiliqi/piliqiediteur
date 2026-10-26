@@ -46,7 +46,8 @@
             <x-slot name="heading">Établissements à confirmer par l'INSEE</x-slot>
 
             @foreach ($this->etablissementsAVerifier() as $magasin)
-                <p>{{ $magasin->nom }} (SIRET {{ $magasin->siret }}) : établissement pas encore confirmé par le répertoire Sirene ; il ne vendra qu'après sa confirmation.</p>
+                @php($refus = $this->refusDuDernierControle($magasin))
+                <p>{{ $magasin->nom }} (SIRET {{ $magasin->siret }}) : établissement pas encore confirmé par le répertoire Sirene ; il ne vendra qu'après sa confirmation.@if ($refus !== null) Dernier contrôle : {{ $refus }} Corrigez son NIC.@endif</p>
             @endforeach
         </x-filament::section>
     @endif

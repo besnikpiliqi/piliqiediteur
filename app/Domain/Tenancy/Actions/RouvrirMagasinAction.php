@@ -9,12 +9,14 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
+use App\Domain\Tenancy\Services\ReverificationSirene;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
@@ -39,10 +41,18 @@ use SensitiveParameter;
  *
  * Son établissement se contrôle d'abord au répertoire Sirene, avant toute
  * écriture (voir ControleSirene) : fermé, inconnu ou rattaché à une autre
- * entreprise, la réouverture est refusée, et rien ne change ; confirmé, le
- * magasin redevient vendable, une fois sa société validée ; quand l'INSEE
- * ne répond pas, il rouvre « établissement à vérifier » et ne vend pas
- * avant la reprise du contrôle (voir app:reverifier-sirene). L'adresse ne
+ * entreprise, la réouverture est refusée, et rien ne change, comme pour un
+ * établissement que le logiciel ne gère pas (voir
+ * ControleSirene::territoireDe()) ; confirmé, le magasin redevient
+ * vendable, une fois sa société validée, et un magasin qui n'avait jamais
+ * été confirmé reçoit son territoire (JET 270) ; quand l'INSEE ne répond
+ * pas, il rouvre « établissement à vérifier » et ne vend pas avant la
+ * reprise du contrôle (voir app:reverifier-sirene). Un établissement d'un
+ * autre territoire que celui déjà fixé du magasin refuse la réouverture
+ * s'il n'avait jamais été confirmé sous ce SIRET (un NIC corrigé pendant
+ * une panne) ; déjà confirmé, il ne change rien au magasin, qui rouvre,
+ * et l'écart se signale au propriétaire et à l'éditeur (voir
+ * ReverificationSirene::signalerUnAutreTerritoire()). L'adresse ne
  * se reprend du répertoire que pour un établissement qu'il n'avait jamais
  * confirmé sous ce SIRET (voir ControleSirene::etablissementDejaConfirme()),
  * à la réouverture comme à la reprise du contrôle (voir
@@ -101,6 +111,7 @@ class RouvrirMagasinAction
         private readonly MiseEnActiviteDesMagasins $miseEnActivite,
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
+        private readonly ReverificationSirene $reverification,
     ) {}
 
     /**
@@ -129,15 +140,23 @@ class RouvrirMagasinAction
                 throw new LogicException((string) $consultation['motif']);
             }
 
-            if ($etablissement !== null && ! ControleSirene::estDansUnTerritoireGere($etablissement)) {
-                throw new LogicException(ControleSirene::MOTIF_TERRITOIRE_NON_GERE);
+            $refusDuTerritoire = $etablissement === null ? null : ControleSirene::territoireDe($etablissement)['motif'];
+
+            if ($refusDuTerritoire !== null) {
+                throw new LogicException($refusDuTerritoire);
             }
 
             try {
-                return $contexte->runAs($magasin, fn (): Magasin => $this->operateur->pendant($auteur, fn (): Magasin => $this->registre->sousVerrou($magasin, fn (): Magasin => $this->rouvrir($auteur, $magasin, $siret, $consultation))));
+                [$rouvert, $autreTerritoire] = $contexte->runAs($magasin, fn (): array => $this->operateur->pendant($auteur, fn (): array => $this->registre->sousVerrou($magasin, fn (): array => $this->rouvrir($auteur, $magasin, $siret, $consultation))));
             } catch (SiretDejaReserveException) {
                 throw new LogicException(SiretsDesMagasins::MESSAGE_SIRET_RESERVE);
             }
+
+            if ($autreTerritoire !== null) {
+                $this->reverification->signalerUnAutreTerritoire($rouvert, $autreTerritoire);
+            }
+
+            return $rouvert;
         });
     }
 
@@ -147,12 +166,13 @@ class RouvrirMagasinAction
      * SIREN.
      *
      * @param  array{resultat: ResultatVerification, etablissement: EtablissementSirene|null, motif: string|null}  $consultation
+     * @return array{0: Magasin, 1: Territoire|null} le magasin rouvert, et l'autre territoire où le répertoire situe son établissement déjà confirmé, à signaler
      *
      * @throws AuthorizationException quand la société est passée en lecture seule entre-temps
      * @throws LogicException
      * @throws SiretDejaReserveException quand le SIRET d'un magasin fermé avant la validation a été réservé entre-temps par un autre
      */
-    private function rouvrir(User $auteur, Magasin $magasin, string $siret, array $consultation): Magasin
+    private function rouvrir(User $auteur, Magasin $magasin, string $siret, array $consultation): array
     {
         $societe = Societe::query()->whereKey($magasin->societe_id)->lock('for no key update')->firstOrFail();
 
@@ -170,10 +190,19 @@ class RouvrirMagasinAction
         $verrouille->setRelation('societe', $societe);
         $etablissement = $consultation['etablissement'];
         $jamaisConfirme = ! ControleSirene::etablissementDejaConfirme($verrouille);
+        $territoire = $etablissement === null ? null : ControleSirene::territoireDe($etablissement)['territoire'];
+        $autreTerritoire = $territoire !== null && $verrouille->territoire !== null && $territoire !== $verrouille->territoire;
+
+        if ($autreTerritoire && $jamaisConfirme) {
+            throw new LogicException(ChangerSiretAction::MESSAGE_TERRITOIRE_CHANGE);
+        }
+
+        $avant = ['statut' => StatutMagasin::Ferme->value, 'territoire' => $verrouille->territoire?->value];
         $verrouille->forceFill([
             'statut' => StatutMagasin::Actif,
             'motif_fermeture' => null,
             'etablissement_verifie_le' => $etablissement === null ? null : now(),
+            'territoire' => $verrouille->territoire ?? $territoire,
             ...($etablissement !== null && $jamaisConfirme ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : []),
         ])->save();
         $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
@@ -188,12 +217,13 @@ class RouvrirMagasinAction
             $this->miseEnActivite->mettreEnActivite($verrouille, $auteur);
         }
 
-        $this->journalAudit->inscrire(ActionAuditee::MagasinRouvert, $auteur, $verrouille, ['statut' => StatutMagasin::Ferme->value], [
+        $this->journalAudit->inscrire(ActionAuditee::MagasinRouvert, $auteur, $verrouille, $avant, [
             'statut' => StatutMagasin::Actif->value,
+            'territoire' => $verrouille->territoire?->value,
             'etablissement_verifie' => $verrouille->etablissement_verifie_le !== null,
         ], $verrouille);
 
-        return $verrouille;
+        return [$verrouille, $autreTerritoire ? $territoire : null];
     }
 
     /**

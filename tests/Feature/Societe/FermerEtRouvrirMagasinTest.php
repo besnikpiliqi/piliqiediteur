@@ -589,7 +589,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
             [$evenement['donnees']['details'], $evenement['operateur']['id']],
         );
         $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinRouvert)[0];
-        $this->assertSame([['statut' => 'ferme'], ['etablissement_verifie' => true, 'statut' => 'actif'], $proprietaire->id], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, (int) $entree->auteur_id]);
+        $this->assertSame([['statut' => 'ferme', 'territoire' => 'metropole'], ['etablissement_verifie' => true, 'statut' => 'actif', 'territoire' => 'metropole'], $proprietaire->id], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, (int) $entree->auteur_id]);
     }
 
     /**

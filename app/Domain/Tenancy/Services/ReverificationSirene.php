@@ -4,14 +4,17 @@ namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -27,8 +30,13 @@ use Illuminate\Support\Facades\Log;
  *   jamais été confirmé sous ce SIRET (créé ou corrigé pendant la panne) ;
  *   rouvert pendant une panne après une confirmation, il garde l'adresse
  *   que la société a enregistrée (voir
- *   ControleSirene::etablissementDejaConfirme()). Un contrôle négatif
- *   s'inscrit, et le magasin reste à vérifier. L'entreprise d'une
+ *   ControleSirene::etablissementDejaConfirme()). Sa confirmation fixe le
+ *   territoire d'un magasin qui n'en avait pas encore (JET 270, sous le
+ *   verrou de son registre) ; un établissement que le logiciel ne gère
+ *   pas, ou d'un autre territoire que celui déjà fixé du magasin (un NIC
+ *   corrigé pendant la panne), n'est pas confirmé : le contrôle s'inscrit
+ *   négatif, avec son motif, et l'adresse ne change pas. Un contrôle
+ *   négatif s'inscrit, et le magasin reste à vérifier. L'entreprise d'une
  *   inscription n'a pas de contrôle à reprendre : l'inscription n'existe
  *   qu'une fois son entreprise confirmée active (voir CreerSocieteAction) ;
  * - avec $toutes, une société validée et ses magasins réels actifs. Rien
@@ -37,9 +45,12 @@ use Illuminate\Support\Facades\Log;
  *   catégorie juridique lue au répertoire suit sa dernière lecture. Un
  *   écart (entreprise cessée, catégorie juridique différente,
  *   établissement fermé ou inconnu, adresse d'un magasin qui n'est plus
- *   celle de son établissement) s'inscrit au registre des vérifications et
- *   se signale au propriétaire et à l'éditeur, sans rien bloquer : ni les
- *   ventes ni les paiements ne s'arrêtent ; l'éditeur décide.
+ *   celle de son établissement, établissement que le répertoire situe
+ *   désormais dans un autre territoire) s'inscrit au registre des
+ *   vérifications et se signale au propriétaire et à l'éditeur, sans rien
+ *   bloquer : ni les ventes ni les paiements ne s'arrêtent, et le
+ *   territoire du magasin ne change pas ; l'éditeur décide (pour le
+ *   territoire, voir signalerUnAutreTerritoire()).
  *
  * Ce qui s'écrit sur la société (catégorie lue) s'inscrit à son journal
  * d'audit, le système pour auteur, avec les anciennes et les nouvelles
@@ -124,8 +135,18 @@ class ReverificationSirene
      * son propre contrôle, inscrit par le geste qui l'a changé, que la
      * reprise suivante reprend s'il est resté impossible et que la
      * revérification mensuelle revoit. Sinon le contrôle s'inscrit ; un
-     * établissement à vérifier que le répertoire confirme devient vérifié ;
-     * un établissement qui l'était déjà signale ses écarts.
+     * établissement à vérifier que le répertoire confirme dans un
+     * territoire géré devient vérifié et fixe le territoire qui manquait,
+     * sauf s'il n'avait jamais été confirmé sous ce SIRET et qu'il est dans
+     * un autre territoire que celui déjà fixé du magasin (un NIC corrigé
+     * pendant une panne) : le contrôle s'inscrit alors négatif ; un
+     * établissement qui l'était déjà signale ses écarts, et un
+     * établissement déjà confirmé que le répertoire situe désormais dans un
+     * autre territoire se signale, le territoire du magasin ne changeant
+     * pas. Un magasin à vérifier se reprend sous le
+     * verrou de son registre, premier verrou de la transaction, que la
+     * fixation de son territoire s'inscrive à son journal des événements
+     * (voir JournaliseSesParametresDeConformite).
      */
     private function reverifierLEtablissement(Magasin $magasin): void
     {
@@ -133,31 +154,44 @@ class ReverificationSirene
         $siret = (string) $magasin->siret;
         $consultation = $this->controle->etablissement($siret, (string) $societe->siren);
         $etablissement = $consultation['etablissement'];
+        $lu = $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null ? ControleSirene::territoireDe($etablissement) : null;
 
-        $verifie = DB::transaction(function () use ($magasin, $siret, $consultation, $etablissement): ?Magasin {
+        $reprise = function () use ($magasin, $siret, $consultation, $etablissement, $lu): array {
             $relu = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
 
             if ($relu->siret !== $siret) {
-                return null;
+                return [null, null];
             }
 
             $dejaVerifie = $relu->etablissement_verifie_le !== null;
-            $confirme = ! $dejaVerifie && $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::estDansUnTerritoireGere($etablissement);
-            $adresseDuRepertoire = $confirme && ! ControleSirene::etablissementDejaConfirme($relu);
-            $this->controle->noterEtablissement($relu, $consultation);
+            $jamaisConfirme = ! ControleSirene::etablissementDejaConfirme($relu);
+            $autreTerritoire = $lu !== null && $relu->territoire !== null && $lu['territoire'] !== $relu->territoire;
+            $refus = match (true) {
+                $dejaVerifie || $lu === null => null,
+                $lu['motif'] !== null => $lu['motif'],
+                $autreTerritoire && $jamaisConfirme => ChangerSiretAction::MESSAGE_TERRITOIRE_CHANGE,
+                default => null,
+            };
+            $confirme = ! $dejaVerifie && $lu !== null && $refus === null;
+            $this->controle->noterEtablissement($relu, $refus === null ? $consultation : ['resultat' => ResultatVerification::Negative, 'etablissement' => $etablissement, 'motif' => $refus]);
 
             if ($confirme) {
-                $relu->forceFill(['etablissement_verifie_le' => now(), ...($adresseDuRepertoire ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : [])])->save();
+                $relu->forceFill([
+                    'etablissement_verifie_le' => now(),
+                    'territoire' => $relu->territoire ?? $lu['territoire'],
+                    ...($jamaisConfirme ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : []),
+                ])->save();
             }
 
-            return $dejaVerifie ? $relu : null;
-        });
+            return [$dejaVerifie ? $relu : null, $autreTerritoire && ($dejaVerifie || $confirme) ? $relu : null];
+        };
 
-        if ($verifie === null) {
-            return;
-        }
+        [$verifie, $situeAilleurs] = $magasin->etablissement_verifie_le === null
+            ? $this->registre->sousVerrouDesMagasins(new Collection([$magasin]), $reprise)
+            : DB::transaction($reprise);
 
         $ecart = match (true) {
+            $verifie === null => null,
             $consultation['resultat'] === ResultatVerification::Negative => $consultation['motif'],
             $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::adresseDiffere($verifie, $etablissement) => 'L\'adresse du magasin n\'est plus celle que le répertoire donne de son établissement : '.ControleSirene::adresseEnUneLigne($etablissement).'.',
             default => null,
@@ -167,6 +201,33 @@ class ReverificationSirene
             Log::warning('Revérification Sirene : écart sur un établissement vérifié.', ['magasin_id' => $verifie->getKey(), 'motif' => $ecart]);
             $this->signalerLEcart($societe, "{$verifie->nom} (SIRET {$verifie->siret}) : {$ecart}", $consultation['resultat'] === ResultatVerification::Negative);
         }
+
+        if ($situeAilleurs !== null) {
+            $this->signalerUnAutreTerritoire($situeAilleurs, Territoire::depuisLeRepertoire($etablissement->codeCommune, $etablissement->codePostal));
+        }
+    }
+
+    /**
+     * Le répertoire situe désormais l'établissement déjà confirmé d'un
+     * magasin dans un autre territoire que le sien (une erreur de sa
+     * commune, corrigée depuis), à une revérification ou à une
+     * réouverture (voir RouvrirMagasinAction) : le propriétaire et
+     * l'éditeur sont prévenus, et rien ne change, ni le territoire du
+     * magasin ni ses ventes. Tant que le magasin n'a numéroté aucun
+     * document, l'éditeur corrige son territoire par sa procédure (voir
+     * CorrigerLeTerritoireAction) ; ensuite, la société ouvre un nouveau
+     * magasin et ferme celui-ci pour cessation.
+     */
+    public function signalerUnAutreTerritoire(Magasin $magasin, ?Territoire $lu): void
+    {
+        $ecart = "{$magasin->nom} (SIRET {$magasin->siret}) : le répertoire Sirene situe désormais son établissement ".($lu?->lieu() ?? 'hors des territoires que le logiciel gère').', et non '.($magasin->territoire?->lieu() ?? 'dans son territoire').' ; son territoire, qui fixe son taux de TVA par défaut et son heure, ne change pas.';
+        $suite = $magasin->aNumeroteUnDocument()
+            ? 'Le magasin a déjà numéroté des documents : son territoire ne se corrige plus, et la société ouvre un nouveau magasin, puis ferme celui-ci pour cessation.'
+            : 'Le magasin n\'a numéroté aucun document : l\'éditeur peut corriger son territoire (editeur:corriger-territoire).';
+
+        Log::warning('Revérification Sirene : établissement situé dans un autre territoire.', ['magasin_id' => $magasin->getKey(), 'territoire' => $magasin->territoire?->value, 'territoire_lu' => $lu?->value]);
+        $this->alerteEditeur->alerter($magasin->societe, 'Revérification Sirene : établissement situé dans un autre territoire', [$ecart, $suite]);
+        $magasin->societe->proprietaire?->notify(new AvisDeVerification($magasin->societe, 'Territoire de votre magasin au répertoire Sirene', "{$ecart} {$suite} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
     }
 
     /**

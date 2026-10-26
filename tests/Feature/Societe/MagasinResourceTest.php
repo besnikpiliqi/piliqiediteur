@@ -203,7 +203,7 @@ class MagasinResourceTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $lyon = IdentifiantsInsee::avecSaCle($societe->siren.'0004');
-        $this->repertoire()->deplacer($lyon, '69002', 'LYON');
+        $this->repertoire()->deplacer($lyon, '69002', 'LYON', '69382');
 
         $this->ouvrirLaCreation($societe)
             ->fillForm(['etablissement' => $this->siege($societe)])
@@ -699,15 +699,15 @@ class MagasinResourceTest extends TestCase
     }
 
     /**
-     * Une adresse, ou un nouvel établissement, qui change le territoire de
-     * TVA du magasin (son taux par défaut et ses règles de vente) est
+     * Une adresse, ou un nouvel établissement, qui change le territoire du
+     * magasin (son taux de TVA, son heure et ses numéros en dépendent) est
      * refusé : un tel déménagement passe par un nouveau magasin.
      */
     public function test_un_changement_d_adresse_qui_change_le_territoire_de_tva_est_refuse(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $fortDeFrance = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
-        $this->repertoire()->deplacer($fortDeFrance, '97200', 'FORT-DE-FRANCE');
+        $this->repertoire()->deplacer($fortDeFrance, '97200', 'FORT-DE-FRANCE', '97209');
 
         $this->ouvrirLaFiche($magasin)
             ->fillForm(['code_postal' => '97200', 'ville' => 'Fort-de-France'])
@@ -776,7 +776,7 @@ class MagasinResourceTest extends TestCase
         $ancien = (string) $magasin->siret;
         $ferme = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'9005');
         $nouveau = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
-        $this->repertoire()->deplacer($nouveau, '75011', 'PARIS');
+        $this->repertoire()->deplacer($nouveau, '75011', 'PARIS', '75111');
         $fiche = $this->ouvrirLaFiche($magasin);
 
         $fiche->callAction('changerLeSiret', ['nic' => substr($nouveau, 9), 'mot_de_passe' => 'devine-au-hasard'])->assertNotified(MotDePasseRedemande::MESSAGE);

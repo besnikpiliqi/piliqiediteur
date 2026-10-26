@@ -16,6 +16,7 @@ use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\CodeMagasin;
@@ -54,6 +55,22 @@ use LogicException;
  * ne change que par un déménagement (voir ChangerSiretAction), qui passe
  * par le registre des SIRET réservés (voir SiretsDesMagasins), et un
  * SIRET réservé ne sert jamais à un autre magasin.
+ *
+ * Son territoire (voir Territoire) donne son taux de TVA par défaut, son
+ * département d'outre-mer et son calendrier. Il se fixe au premier
+ * contrôle Sirene concluant de son établissement, d'après sa commune
+ * (voir ControleSirene::territoireDe()), puis ne change plus : un
+ * établissement ou une adresse d'un autre territoire est refusé, un
+ * déménagement vers un autre territoire passant par un nouveau magasin.
+ * Seule la procédure de l'éditeur corrige un territoire mal lu au
+ * répertoire, tant que le magasin n'a numéroté aucun document (voir
+ * corrigerLeTerritoire()) ; la base refuse elle aussi de l'effacer, et de
+ * le changer une fois un document numéroté (voir
+ * DeclencheursDeProtection::colonneFigee()). Sa fixation sur un magasin
+ * qui existe déjà et sa correction s'inscrivent à son journal des
+ * événements (JET 270). Un magasin réel dont l'établissement n'a jamais
+ * été confirmé n'a pas encore de territoire : il ne vend pas et ne
+ * numérote aucun document (voir REFUS_TERRITOIRE_INCONNU).
  *
  * Son code court (voir CodeMagasin) figure dans tous les numéros de ses
  * documents : unique dans la société, proposé depuis son nom s'il n'est
@@ -116,6 +133,20 @@ class Magasin extends Model implements HasName
 
     private const REFUS_DEMONSTRATION_SANS_ENVOI = 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.';
 
+    /**
+     * Le refus de numéroter un document dans un magasin sans territoire
+     * (voir DocumentNumberingService) : l'année de ses numéros suit son
+     * calendrier, que seul son territoire donne.
+     */
+    public const REFUS_TERRITOIRE_INCONNU = 'L\'établissement de ce magasin n\'est pas encore confirmé par le répertoire Sirene de l\'INSEE : PILIQI ne connaît pas encore son territoire, donc ni son heure ni l\'année de ses numéros. Aucun document numéroté avant sa confirmation.';
+
+    /**
+     * La procédure de l'éditeur corrige-t-elle son territoire (voir
+     * corrigerLeTerritoire()) ? Le seul changement d'un territoire
+     * renseigné que le modèle laisse passer.
+     */
+    private bool $correctionDuTerritoire = false;
+
     protected $fillable = [
         'nom',
         'code',
@@ -140,6 +171,7 @@ class Magasin extends Model implements HasName
     protected $casts = [
         'statut' => StatutMagasin::class,
         'motif_fermeture' => MotifFermeture::class,
+        'territoire' => Territoire::class,
         'est_demonstration' => 'boolean',
         'etablissement_verifie_le' => Instant::class,
         'suspendu_le' => Instant::class,
@@ -213,6 +245,10 @@ class Magasin extends Model implements HasName
             if (! $magasin->estFerme() && $magasin->motif_fermeture !== null) {
                 throw new LogicException('Un magasin ouvert n\'a pas de motif de fermeture : sa réouverture l\'efface.');
             }
+
+            if ($magasin->territoire === null && ($magasin->est_demonstration || $magasin->etablissement_verifie_le !== null)) {
+                throw new LogicException('Un magasin dont l\'établissement est confirmé, comme le magasin de démonstration, a toujours un territoire.');
+            }
         });
 
         static::updating(function (Magasin $magasin) {
@@ -235,7 +271,32 @@ class Magasin extends Model implements HasName
             if ($magasin->isDirty('siret')) {
                 $magasin->verifierQueSonSiretEstReserve();
             }
+
+            if ($magasin->isDirty('territoire') && $magasin->getOriginal('territoire') !== null && ! $magasin->correctionDuTerritoire) {
+                throw new LogicException('Le territoire d\'un magasin ne change plus une fois fixé : un déménagement vers un autre territoire passe par un nouveau magasin.');
+            }
         });
+    }
+
+    /**
+     * La correction de son territoire mal lu au répertoire Sirene, par la
+     * seule procédure de l'éditeur (voir CorrigerLeTerritoireAction), sous
+     * le verrou de son registre, tant qu'il n'a numéroté aucun document :
+     * la base refuse elle-même le changement ensuite. Elle s'inscrit à son
+     * journal des événements (JET 270, voir
+     * JournaliseSesParametresDeConformite).
+     *
+     * @throws LogicException
+     */
+    public function corrigerLeTerritoire(Territoire $territoire): void
+    {
+        $this->correctionDuTerritoire = true;
+
+        try {
+            $this->forceFill(['territoire' => $territoire])->save();
+        } finally {
+            $this->correctionDuTerritoire = false;
+        }
     }
 
     /**
@@ -538,22 +599,21 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Le territoire de TVA du magasin, d'après son adresse (voir
-     * TerritoireTva::depuisAdresse()) : null hors des territoires que le
-     * logiciel connaît, que la création d'un magasin refuse (voir
-     * CreerEtablissementAction).
+     * Le territoire de TVA du magasin, celui de son territoire (voir
+     * Territoire::tva()) : null tant que son établissement n'a jamais été
+     * confirmé.
      */
     public function territoireTva(): ?TerritoireTva
     {
-        return TerritoireTva::depuisAdresse($this->pays, $this->code_postal);
+        return $this->territoire?->tva();
     }
 
     /**
      * Le taux proposé pour une vente ou un nouveau produit, saisi ensuite
      * librement (B2) : le taux normal de son territoire, 20 % en métropole,
-     * 8,5 % en Guadeloupe, en Martinique ou à La Réunion. Un magasin hors
-     * des territoires connus, que sa création refuse, retombe sur celui de
-     * la métropole.
+     * 8,5 % en Guadeloupe, en Martinique ou à La Réunion. Un magasin sans
+     * territoire, qui ne vend pas encore, retombe sur celui de la
+     * métropole.
      */
     public function tauxTvaParDefaut(): float
     {
@@ -632,7 +692,7 @@ class Magasin extends Model implements HasName
 
     public static function parametresDeConformite(): array
     {
-        return ['siret'];
+        return ['siret', 'territoire'];
     }
 
     /**
@@ -647,7 +707,7 @@ class Magasin extends Model implements HasName
         $contexte = app(TenantContext::class);
 
         if ($contexte->aUneSociete() && $contexte->societe()->getKey() !== (int) $this->societe_id) {
-            throw new LogicException('Le SIRET d\'un magasin ne se modifie que dans le contexte de sa société.');
+            throw new LogicException('Le SIRET et le territoire d\'un magasin ne se modifient que dans le contexte de sa société.');
         }
 
         return new Collection([$this]);

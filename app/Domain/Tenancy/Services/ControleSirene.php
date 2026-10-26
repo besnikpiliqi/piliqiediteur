@@ -2,9 +2,9 @@
 
 namespace App\Domain\Tenancy\Services;
 
-use App\Domain\Facturation\Enums\TerritoireTva;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -64,6 +64,8 @@ class ControleSirene
     ];
 
     public const MOTIF_TERRITOIRE_NON_GERE = 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.';
+
+    public const MOTIF_TERRITOIRE_INCONNU = 'Le répertoire Sirene de l\'INSEE ne situe cet établissement dans aucune commune française : son taux de TVA et son heure ne peuvent pas être fixés.';
 
     public function __construct(
         private readonly RepertoireSirene $repertoire,
@@ -188,10 +190,16 @@ class ControleSirene
      * Inscrit le contrôle de l'établissement du magasin au registre des
      * vérifications de sa société, qui doit être la société active.
      *
+     * Un contrôle négatif retient son motif, que montre la page de la
+     * vérification tant que l'établissement attend sa confirmation (un
+     * établissement fermé, ou d'un autre territoire que le magasin, voir
+     * ReverificationSirene).
+     *
      * @param  array{resultat: ResultatVerification, etablissement: EtablissementSirene|null, motif: string|null}  $consultation  ce qu'a rendu etablissement()
-     * @param  User|null  $auteur  la personne dont l'action a demandé le contrôle ; null pour le système
+     * @param  User|null  $auteur  la personne dont l'action a demandé le contrôle ; null pour le système ou l'éditeur
+     * @param  InterventionDeLEditeur|null  $editeur  l'intervention de l'éditeur qui a demandé le contrôle (voir CorrigerLeTerritoireAction)
      */
-    public function noterEtablissement(Magasin $magasin, array $consultation, ?User $auteur = null): VerificationSociete
+    public function noterEtablissement(Magasin $magasin, array $consultation, ?User $auteur = null, ?InterventionDeLEditeur $editeur = null): VerificationSociete
     {
         $etablissement = $consultation['etablissement'];
 
@@ -202,7 +210,8 @@ class ControleSirene
                 'rattache' => $etablissement->estRattacheA($magasin->societe->siren),
                 'adresse' => self::adresseEnUneLigne($etablissement),
             ]),
-        ], $auteur);
+            ...($consultation['resultat'] === ResultatVerification::Negative && $consultation['motif'] !== null ? ['motif' => $consultation['motif']] : []),
+        ], $auteur, $editeur);
     }
 
     /**
@@ -266,13 +275,27 @@ class ControleSirene
     }
 
     /**
-     * Le magasin de ce SIRET est-il dans un territoire que le logiciel gère
-     * (voir TerritoireTva::estPrisEnCharge()) ? Un établissement dont le
-     * répertoire ne diffuse pas le code postal compte en métropole.
+     * Le territoire de l'établissement, lu à sa commune, à défaut à son
+     * code postal (voir Territoire::depuisLeRepertoire()), quand le
+     * logiciel le gère ; sinon le motif du refus : la Guyane, Mayotte ou
+     * une collectivité d'outre-mer (MOTIF_TERRITOIRE_NON_GERE), ou aucune
+     * commune française, comme pour un établissement à l'étranger
+     * (MOTIF_TERRITOIRE_INCONNU). Le magasin qui le reçoit le garde pour
+     * toujours (voir Magasin) : son taux de TVA par défaut et son
+     * calendrier en dépendent.
+     *
+     * @return array{territoire: Territoire, motif: null}|array{territoire: null, motif: string}
      */
-    public static function estDansUnTerritoireGere(EtablissementSirene $etablissement): bool
+    public static function territoireDe(EtablissementSirene $etablissement): array
     {
-        return TerritoireTva::depuisAdresse('FR', $etablissement->codePostal)?->estPrisEnCharge() ?? false;
+        $territoire = Territoire::depuisLeRepertoire($etablissement->codeCommune, $etablissement->codePostal);
+        $horsDeFrance = $etablissement->codeCommune === null ? $etablissement->codePostal === null : str_starts_with($etablissement->codeCommune, '99');
+
+        return match (true) {
+            $horsDeFrance => ['territoire' => null, 'motif' => self::MOTIF_TERRITOIRE_INCONNU],
+            $territoire === null, ! $territoire->estPrisEnCharge() => ['territoire' => null, 'motif' => self::MOTIF_TERRITOIRE_NON_GERE],
+            default => ['territoire' => $territoire, 'motif' => null],
+        };
     }
 
     /**

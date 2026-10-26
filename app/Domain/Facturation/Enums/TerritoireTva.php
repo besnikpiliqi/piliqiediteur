@@ -2,9 +2,6 @@
 
 namespace App\Domain\Facturation\Enums;
 
-use App\Domain\Facturation\Services\TerritoireFiscal;
-use Illuminate\Support\Str;
-
 /**
  * Le territoire de TVA où un magasin établi en France vend : il fixe son
  * taux normal, proposé par défaut (20 % en métropole et en Corse, 8,5 % en
@@ -12,13 +9,14 @@ use Illuminate\Support\Str;
  * en Guyane et à Mayotte, art. 294 du CGI), et les taux en vigueur qu'un
  * taux saisi librement est censé reprendre (voir aideSiTauxInhabituel()).
  *
- * Il se déduit de l'adresse du magasin (voir depuisAdresse()). Les
+ * Il se déduit du territoire du magasin (voir Territoire::tva()), où la
+ * Guadeloupe, la Martinique et La Réunion ont les mêmes taux. Les
  * collectivités d'outre-mer (Saint-Barthélemy, Saint-Martin,
  * Saint-Pierre-et-Miquelon, Polynésie française, Nouvelle-Calédonie,
  * Wallis-et-Futuna) sont hors du territoire de TVA français, et le
  * logiciel ne gère pas encore la Guyane et Mayotte (voir
- * estPrisEnCharge()) : leurs taux propres viendront avec la table des
- * taux par territoire, à valider par un expert-comptable.
+ * Territoire::estPrisEnCharge()) : leurs taux propres viendront avec la
+ * table des taux par territoire, à valider par un expert-comptable.
  */
 enum TerritoireTva: string
 {
@@ -26,38 +24,6 @@ enum TerritoireTva: string
     case Corse = 'corse';
     case AntillesReunion = 'antilles_reunion';
     case GuyaneMayotte = 'guyane_mayotte';
-
-    /**
-     * Le territoire d'une adresse en France, d'après son code postal : 20
-     * pour la Corse ; le département d'outre-mer, 971 (Guadeloupe), 972
-     * (Martinique) et 974 (La Réunion), 973 (Guyane) et 976 (Mayotte),
-     * comme pour une livraison (voir TerritoireFiscal::departementDom()) ;
-     * aucun pour une collectivité d'outre-mer (voir
-     * TerritoireFiscal::estUneCollectiviteDOutreMer()) ni pour une adresse
-     * hors de France. Tout autre code postal, ou aucun, est en métropole.
-     */
-    public static function depuisAdresse(?string $pays, ?string $codePostal): ?self
-    {
-        if (Str::upper(trim((string) $pays)) !== 'FR' || TerritoireFiscal::estUneCollectiviteDOutreMer('FR', $codePostal)) {
-            return null;
-        }
-
-        return match (TerritoireFiscal::departementDom('FR', $codePostal)) {
-            '971', '972', '974' => self::AntillesReunion,
-            '973', '976' => self::GuyaneMayotte,
-            default => str_starts_with((string) preg_replace('/\s+/', '', (string) $codePostal), '20') ? self::Corse : self::Metropole,
-        };
-    }
-
-    /**
-     * Le logiciel gère-t-il un magasin de ce territoire ? Pas encore en
-     * Guyane ni à Mayotte, où la TVA n'est pas applicable et où les
-     * documents suivent d'autres règles (voir CreerEtablissementAction).
-     */
-    public function estPrisEnCharge(): bool
-    {
-        return $this !== self::GuyaneMayotte;
-    }
 
     /**
      * Le taux proposé par défaut pour une vente (B2).

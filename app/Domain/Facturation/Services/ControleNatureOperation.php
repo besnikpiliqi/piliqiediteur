@@ -36,7 +36,9 @@ use Illuminate\Support\Collection;
  *   d'outre-mer, qui a sa propre nature (voir TerritoireFiscal).
  * - Livraison vers un DOM (art. 294 du CGI) : des biens, et leurs frais
  *   accessoires, expédiés par le magasin à une adresse complète dans un
- *   département d'outre-mer autre que celui du magasin.
+ *   département d'outre-mer autre que celui du magasin, que dit son
+ *   territoire (voir Territoire::departement()), jamais son code postal,
+ *   que le répertoire Sirene peut ne pas diffuser.
  * - Livraison intracommunautaire (art. 262 ter I du CGI) : des biens, et
  *   leurs frais accessoires, livrés à un professionnel à une adresse
  *   complète d'un autre État membre (l'Irlande du Nord comprise), à une
@@ -100,7 +102,7 @@ class ControleNatureOperation
 
         return array_values(array_filter([
             ...match (true) {
-                $nature->porteSurDesBiens() => $this->manquementsDeLaLivraison($facture, $lignes, $emetteur),
+                $nature->porteSurDesBiens() => $this->manquementsDeLaLivraison($facture, $lignes),
                 $nature->porteSurDesServices() => $this->manquementsDeLaPrestation($facture, $client, $lignes),
             },
             ...($nature->exigeVies() ? $this->manquementsDuNumeroTva($nature, $client, $jour) : []),
@@ -141,7 +143,7 @@ class ControleNatureOperation
      * @param  Collection<int, LigneFacture>  $lignes
      * @return list<string|null>
      */
-    private function manquementsDeLaLivraison(Facture $facture, Collection $lignes, Emetteur $emetteur): array
+    private function manquementsDeLaLivraison(Facture $facture, Collection $lignes): array
     {
         $nature = $facture->nature_operation;
         $pays = $facture->livraison_pays;
@@ -155,7 +157,7 @@ class ControleNatureOperation
 
         return [
             $adresseComplete ? null : 'indiquez l\'adresse de livraison complète (adresse, code postal, ville et pays)',
-            ...($adresseComplete ? [$this->manquementDeLaDestination($nature, $pays, $codePostal, $emetteur)] : []),
+            ...($adresseComplete ? [$this->manquementDeLaDestination($nature, $pays, $codePostal, $facture->magasin->territoire?->departement())] : []),
             match (true) {
                 $nature === NatureOperation::LivraisonIntracommunautaire && $facture->livraison_date === null => 'indiquez la date de livraison',
                 default => null,
@@ -169,7 +171,10 @@ class ControleNatureOperation
         ];
     }
 
-    private function manquementDeLaDestination(NatureOperation $nature, string $pays, string $codePostal, Emetteur $emetteur): ?string
+    /**
+     * @param  string|null  $departementDuMagasin  le département d'outre-mer du magasin (voir Territoire::departement()), aucun en métropole ni en Corse
+     */
+    private function manquementDeLaDestination(NatureOperation $nature, string $pays, string $codePostal, ?string $departementDuMagasin): ?string
     {
         $departement = TerritoireFiscal::departementDom($pays, $codePostal);
 
@@ -182,7 +187,7 @@ class ControleNatureOperation
             },
             NatureOperation::LivraisonDom => match (true) {
                 $departement === null => 'la livraison doit aller dans un département d\'outre-mer (Guadeloupe, Martinique, Guyane, La Réunion ou Mayotte)',
-                $departement === TerritoireFiscal::departementDom($emetteur->pays, $emetteur->codePostal) => 'la livraison reste dans le département d\'outre-mer du magasin',
+                $departement === $departementDuMagasin => 'la livraison reste dans le département d\'outre-mer du magasin',
                 default => null,
             },
             default => TerritoireFiscal::estDestinationUePourDesBiens($pays, $codePostal) ? null : 'la livraison doit arriver dans un autre État membre de l\'Union européenne',

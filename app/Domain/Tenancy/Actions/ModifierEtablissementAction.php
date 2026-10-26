@@ -7,6 +7,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Rules\NicValide;
@@ -25,14 +26,21 @@ use Illuminate\Validation\ValidationException;
 use LogicException;
 
 /**
- * Modifie un magasin de la société : son nom ; son adresse, sans changer
- * de territoire de TVA (son taux par défaut et ses règles de vente en
- * dépendent) ; son code, tant qu'il n'a numéroté aucun document (voir
+ * Modifie un magasin de la société : son nom ; son adresse, jamais hors de
+ * son territoire (voir Territoire : son taux de TVA, son heure et ses
+ * numéros en dépendent), une adresse sans code postal passant, et une
+ * adresse saisie ne fixant jamais le territoire d'un magasin qui n'en a
+ * pas encore ; son code, tant qu'il n'a numéroté aucun document (voir
  * Magasin::aNumeroteUnDocument()) ; son NIC, tant que la société n'est pas
  * validée, avec un nouveau contrôle Sirene synchrone (voir
- * CreerEtablissementAction) : une fois la société validée, le SIRET d'un
- * magasin ne change que par un changement de SIRET (voir
- * ChangerSiretAction), qui passe par le registre des SIRET réservés.
+ * CreerEtablissementAction) : un établissement que le logiciel ne gère
+ * pas, ou d'un autre territoire que celui du magasin, est refusé ; le
+ * premier établissement confirmé d'un magasin qui n'a pas encore de
+ * territoire le fixe (JET 270) ; quand l'INSEE ne répond pas, le NIC est
+ * accepté en attente, et la reprise du contrôle compare son territoire à
+ * celui du magasin (voir ReverificationSirene). Une fois la société
+ * validée, le SIRET d'un magasin ne change que par un changement de SIRET
+ * (voir ChangerSiretAction), qui passe par le registre des SIRET réservés.
  *
  * Réservé à qui gère les magasins de la société, pour un magasin réel de
  * sa portée (voir MagasinDeLaSocietePolicy::update()), jamais un
@@ -40,10 +48,12 @@ use LogicException;
  * modifie pas. Un magasin fermé, temporairement ou pour cessation, se
  * modifie encore (il peut rouvrir) ; un magasin cédé ne se modifie plus
  * (voir Magasin::aEteCede()). Tout se fait sous le verrou du registre du
- * magasin, qui reçoit un changement de SIRET à son journal des événements
- * (JET 270), et la ligne du magasin se relit verrouillée : un code devenu
- * définitif pendant la saisie n'est pas modifié, le reste l'est ; un
- * magasin cédé pendant la saisie n'est pas modifié. Un code ou un SIRET
+ * magasin, qui reçoit un changement de SIRET ou la fixation de son
+ * territoire à son journal des événements (JET 270), et la ligne du
+ * magasin se relit verrouillée : un code devenu définitif pendant la
+ * saisie n'est pas modifié, le reste l'est ; un magasin cédé pendant la
+ * saisie n'est pas modifié ; le territoire se compare à celui de la ligne
+ * relue. Un code ou un SIRET
  * pris par un autre magasin de la société entre la validation et
  * l'enregistrement est refusé comme par la validation. La modification
  * s'inscrit au journal d'audit, avec les anciennes et les nouvelles
@@ -53,7 +63,7 @@ class ModifierEtablissementAction
 {
     public const MESSAGE_SANS_AUTORISATION = 'Seuls le propriétaire et un administrateur autorisé à gérer les magasins modifient un magasin de leur portée, tant que la société n\'est pas en lecture seule.';
 
-    public const MESSAGE_TERRITOIRE_CHANGE = 'Cette adresse change le territoire de TVA du magasin : son taux par défaut et ses règles de vente en dépendent. Elle ne peut pas être enregistrée.';
+    public const MESSAGE_TERRITOIRE_CHANGE = 'Cette adresse n\'est pas dans le territoire du magasin : son taux de TVA, son heure et ses numéros en dépendent. Elle ne peut pas être enregistrée.';
 
     public const MESSAGE_SIRET_SOCIETE_VALIDEE = 'Le SIRET d\'un magasin d\'une société validée ne change que par un changement de SIRET.';
 
@@ -103,6 +113,12 @@ class ModifierEtablissementAction
                 if ($consultation['resultat'] === ResultatVerification::Negative) {
                     throw ValidationException::withMessages(['nic' => $consultation['motif']]);
                 }
+
+                $refusDuTerritoire = $consultation['etablissement'] === null ? null : ControleSirene::territoireDe($consultation['etablissement'])['motif'];
+
+                if ($refusDuTerritoire !== null) {
+                    throw ValidationException::withMessages(['nic' => $refusDuTerritoire]);
+                }
             }
 
             try {
@@ -128,25 +144,32 @@ class ModifierEtablissementAction
         }
 
         $avant = $this->valeursAuditees($enregistre);
-        $territoire = $enregistre->territoireTva();
 
         if (isset($valides['code']) && $enregistre->aNumeroteUnDocument()) {
             unset($valides['code']);
         }
 
         $enregistre->fill(array_intersect_key($valides, array_flip(['nom', 'code', ...self::CHAMPS_DE_L_ADRESSE])));
+        $etablissement = $consultation['etablissement'] ?? null;
+
+        if ($etablissement === null) {
+            $this->verifierLAdresseSaisie($enregistre);
+        } else {
+            $territoire = ControleSirene::territoireDe($etablissement)['territoire'];
+
+            if ($enregistre->territoire !== null && $territoire !== $enregistre->territoire) {
+                throw ValidationException::withMessages(['nic' => ChangerSiretAction::MESSAGE_TERRITOIRE_CHANGE]);
+            }
+
+            $enregistre->forceFill(['territoire' => $territoire]);
+        }
 
         if ($consultation !== null) {
-            $etablissement = $consultation['etablissement'];
             $enregistre->forceFill([
                 'siret' => $enregistre->societe->siren.$valides['nic'],
                 'etablissement_verifie_le' => $etablissement === null ? null : now(),
                 ...($etablissement === null ? [] : [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR']),
             ]);
-        }
-
-        if (array_intersect(self::CHAMPS_DE_L_ADRESSE, array_keys($enregistre->getDirty())) !== [] && $enregistre->territoireTva() !== $territoire) {
-            throw ValidationException::withMessages(['code_postal' => self::MESSAGE_TERRITOIRE_CHANGE]);
         }
 
         $enregistre->save();
@@ -158,6 +181,26 @@ class ModifierEtablissementAction
         $this->journalAudit->inscrireLesChangements(ActionAuditee::MagasinModifie, $auteur, $enregistre, $avant, $this->valeursAuditees($enregistre), $enregistre);
 
         return $enregistre;
+    }
+
+    /**
+     * Une adresse saisie reste dans le territoire du magasin : son code
+     * postal ne donne pas un autre territoire, ni aucun (collectivité
+     * d'outre-mer, pays étranger). Une adresse sans code postal passe, et
+     * un magasin qui n'a pas encore de territoire ne le reçoit jamais d'une
+     * adresse saisie : seul le répertoire Sirene le fixe.
+     *
+     * @throws ValidationException
+     */
+    private function verifierLAdresseSaisie(Magasin $enregistre): void
+    {
+        if ($enregistre->territoire === null || array_intersect(self::CHAMPS_DE_L_ADRESSE, array_keys($enregistre->getDirty())) === [] || blank($enregistre->code_postal)) {
+            return;
+        }
+
+        if (Territoire::depuisCodePostal($enregistre->pays, $enregistre->code_postal) !== $enregistre->territoire) {
+            throw ValidationException::withMessages(['code_postal' => self::MESSAGE_TERRITOIRE_CHANGE]);
+        }
     }
 
     /**
@@ -223,6 +266,7 @@ class ModifierEtablissementAction
             'code_postal' => $magasin->code_postal,
             'ville' => $magasin->ville,
             'pays' => $magasin->pays,
+            'territoire' => $magasin->territoire?->value,
             'etablissement_verifie' => $magasin->etablissement_verifie_le !== null,
         ];
     }

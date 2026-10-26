@@ -69,6 +69,9 @@ class MagasinResource extends RessourceDuPanneauSociete
                 Tables\Columns\TextColumn::make('code')->label('Code'),
                 Tables\Columns\TextColumn::make('siret')->label('SIRET'),
                 Tables\Columns\TextColumn::make('ville')->label('Ville')->placeholder('—'),
+                Tables\Columns\TextColumn::make('territoire')
+                    ->label('Territoire')
+                    ->state(fn (Magasin $record): string => self::territoire($record)),
                 Tables\Columns\TextColumn::make('etablissement')
                     ->label('Établissement')
                     ->state(fn (Magasin $record): string => $record->etablissement_verifie_le === null ? 'à vérifier' : 'vérifié')
@@ -100,6 +103,16 @@ class MagasinResource extends RessourceDuPanneauSociete
             'create' => Pages\CreerMagasin::route('/creer'),
             'edit' => Pages\ModifierMagasin::route('/{record}'),
         ];
+    }
+
+    /**
+     * Le territoire du magasin tel que la société le lit (« Martinique »),
+     * ou ce qui le fixera : son établissement confirmé par le répertoire
+     * Sirene.
+     */
+    public static function territoire(Magasin $magasin): string
+    {
+        return $magasin->territoire?->getLabel() ?? 'à fixer : établissement pas encore confirmé';
     }
 
     /**

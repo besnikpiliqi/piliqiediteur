@@ -10,6 +10,7 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -28,7 +29,12 @@ use Illuminate\Support\Facades\DB;
  * (index unique partiel magasins_une_demonstration_par_societe), jamais
  * créé d'office, nommé « Démonstration », code DEMO, sans SIRET ni identité
  * réelle (voir Emetteur::deDemonstration()), avec son client comptoir et
- * un catalogue fictif (voir CatalogueDeDemonstration). C'est un mode école
+ * un catalogue fictif (voir CatalogueDeDemonstration). Son territoire, qui
+ * donne son taux par défaut et son heure, est celui du siège de la
+ * société, lu à son code postal, s'il est pris en charge, sinon la
+ * métropole (siège inconnu, en Guyane, à Mayotte ou dans une collectivité
+ * d'outre-mer) ; fixé à sa création, il se garde à chaque réouverture.
+ * C'est un mode école
  * au sens de la caisse sécurisée : un magasin distinct, avec son registre,
  * ses séries et ses clôtures ; chaque ouverture ouvre une période
  * d'activité et s'inscrit à son journal des événements (JET 100) ; à sa
@@ -84,6 +90,7 @@ class OuvrirLaDemonstrationAction
                 'est_demonstration' => true,
                 'siret' => null,
                 'pays' => 'FR',
+                'territoire' => self::territoireDuSiege($societe),
             ]);
 
             app(TenantContext::class)->runAs($demonstration, function () use ($auteur, $demonstration): void {
@@ -123,6 +130,17 @@ class OuvrirLaDemonstrationAction
 
             return $verrouille;
         }));
+    }
+
+    /**
+     * Le territoire du siège de la société, lu à son code postal, s'il est
+     * pris en charge ; sinon la métropole.
+     */
+    private static function territoireDuSiege(Societe $societe): Territoire
+    {
+        $territoire = blank($societe->siege_code_postal) ? null : Territoire::depuisCodePostal('FR', $societe->siege_code_postal);
+
+        return $territoire !== null && $territoire->estPrisEnCharge() ? $territoire : Territoire::Metropole;
     }
 
     /**

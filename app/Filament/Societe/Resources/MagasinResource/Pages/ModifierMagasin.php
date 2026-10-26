@@ -92,6 +92,10 @@ class ModifierMagasin extends EditRecord
                     Placeholder::make('etablissement')
                         ->label('Établissement au répertoire Sirene')
                         ->content(fn (): string => $this->magasin()->etablissement_verifie_le === null ? 'à vérifier : aucune vente avant sa confirmation' : 'vérifié'),
+                    Placeholder::make('territoire')
+                        ->label('Territoire')
+                        ->helperText('Lu au répertoire Sirene, à la commune de l\'établissement, il fixe le taux de TVA proposé et l\'heure du magasin, et ne change plus.')
+                        ->content(fn (): string => MagasinResource::territoire($this->magasin())),
                     TextInput::make('nic')
                         ->label('NIC de l\'établissement')
                         ->helperText('Les 5 derniers chiffres du SIRET, après le SIREN : il se corrige tant que votre société n\'est pas validée, contrôlé au répertoire Sirene.')

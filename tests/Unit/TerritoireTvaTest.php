@@ -9,34 +9,6 @@ use PHPUnit\Framework\TestCase;
 class TerritoireTvaTest extends TestCase
 {
     /**
-     * @return array<string, array{string|null, string|null, TerritoireTva|null}>
-     */
-    public static function adresses(): array
-    {
-        return [
-            'Paris' => ['FR', '75001', TerritoireTva::Metropole],
-            'Ajaccio' => ['FR', '20000', TerritoireTva::Corse],
-            'Fort-de-France' => ['FR', '97200', TerritoireTva::AntillesReunion],
-            'Pointe-à-Pitre' => ['FR', '97110', TerritoireTva::AntillesReunion],
-            'Saint-Denis de La Réunion, écrit avec une espace' => ['fr', '974 00', TerritoireTva::AntillesReunion],
-            'Cayenne' => ['FR', '97300', TerritoireTva::GuyaneMayotte],
-            'Mamoudzou' => ['FR', '97600', TerritoireTva::GuyaneMayotte],
-            'Saint-Barthélemy' => ['FR', '97133', null],
-            'Saint-Martin' => ['FR', '97150', null],
-            'Saint-Pierre-et-Miquelon' => ['FR', '97500', null],
-            'Nouméa' => ['FR', '98800', null],
-            'sans code postal' => ['FR', null, TerritoireTva::Metropole],
-            'Bruxelles' => ['BE', '1000', null],
-        ];
-    }
-
-    #[DataProvider('adresses')]
-    public function test_le_territoire_se_deduit_du_pays_et_du_code_postal(?string $pays, ?string $codePostal, ?TerritoireTva $attendu): void
-    {
-        $this->assertSame($attendu, TerritoireTva::depuisAdresse($pays, $codePostal));
-    }
-
-    /**
      * @return array<string, array{TerritoireTva, float}>
      */
     public static function tauxNormaux(): array
@@ -53,14 +25,6 @@ class TerritoireTvaTest extends TestCase
     public function test_le_taux_propose_est_le_taux_normal_du_territoire(TerritoireTva $territoire, float $attendu): void
     {
         $this->assertSame($attendu, $territoire->tauxNormal());
-    }
-
-    public function test_seuls_la_guyane_et_mayotte_ne_sont_pas_encore_pris_en_charge(): void
-    {
-        $this->assertSame(
-            [TerritoireTva::GuyaneMayotte],
-            array_values(array_filter(TerritoireTva::cases(), fn (TerritoireTva $territoire): bool => ! $territoire->estPrisEnCharge())),
-        );
     }
 
     /**

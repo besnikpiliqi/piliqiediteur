@@ -42,7 +42,7 @@ enum TypeVerification: string implements HasLabel
     {
         return match ($this) {
             self::SireneUnite => ['siren', 'etat_administratif', 'categorie_juridique', 'denomination', 'diffusion_partielle'],
-            self::SireneEtablissement => ['siret', 'etat_administratif', 'rattache', 'adresse'],
+            self::SireneEtablissement => ['siret', 'etat_administratif', 'rattache', 'adresse', 'motif'],
             self::Courrier => ['siren', 'envoi_id', 'motif', 'source_adresse', 'reference_envoi'],
             self::Manuelle => ['siren', 'pieces', 'decision', 'justification'],
         };

@@ -43,6 +43,19 @@ return new class extends Migration
             $table->string('code_postal', 10)->nullable();
             $table->string('ville', 100)->nullable();
             $table->string('pays', 2)->default('FR');
+            // Le territoire du magasin (voir Territoire) : métropole, Corse
+            // ou un département d'outre-mer. Il donne son taux de TVA par
+            // défaut et son calendrier (journée de caisse, date et année de
+            // ses documents, échéances). Fixé au premier contrôle Sirene
+            // concluant de son établissement, d'après sa commune, il ne
+            // change plus : la base refuse de l'effacer, et de le changer
+            // dès que le magasin a numéroté un document ; avant, seule la
+            // procédure de l'éditeur le corrige, le modèle refusant tout
+            // autre changement (voir DeclencheursDeProtection::colonneFigee()
+            // et Magasin::booted()). Nul seulement pour un magasin réel dont
+            // l'établissement n'a jamais été confirmé, qui ne vend pas et
+            // ne numérote rien.
+            $table->string('territoire', 20)->nullable();
             // Les coordonnées et les références d'acheteur du magasin,
             // réglées dans son panneau (voir CoordonneesMagasin) : les
             // références qu'il donne à ses fournisseurs (n° de client, code
@@ -121,11 +134,19 @@ return new class extends Migration
         // suppression et le vidage de la table, même par une requête qui
         // ne passe pas par le modèle (voir aussi Magasin::forceDelete()).
         DeclencheursDeProtection::sansSuppression('magasins');
+
+        // Le territoire ne change plus une fois fixé : la base refuse de
+        // l'effacer, et de le changer une fois un document numéroté (une
+        // série de sequences_documents autre que les références de
+        // produits, voir Magasin::aNumeroteUnDocument()), la date et
+        // l'année de ses documents signés en dépendant.
+        DeclencheursDeProtection::colonneFigee('magasins', 'territoire', remplacableTantQue: "NOT EXISTS (SELECT 1 FROM sequences_documents WHERE sequences_documents.magasin_id = OLD.id AND sequences_documents.type_document <> 'produit')");
     }
 
     public function down(): void
     {
         Schema::dropIfExists('magasins');
         DeclencheursDeProtection::retirer('magasins');
+        DeclencheursDeProtection::retirerLaColonneFigee('magasins', 'territoire');
     }
 };

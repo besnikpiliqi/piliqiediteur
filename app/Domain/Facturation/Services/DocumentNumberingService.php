@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Magasin;
 use Closure;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Numérotation légale des documents : une série par magasin, par type de
@@ -22,6 +23,14 @@ use Illuminate\Support\Facades\DB;
  * étant différents dans la société, et jamais repris d'une société
  * révoquée du même SIREN (voir CodeMagasin::estPris()). Les références de produits (PRD-000001), qui ne sont
  * pas des numéros de document, ne portent ni code de magasin ni année.
+ *
+ * L'année d'un numéro est celle du calendrier du magasin, que seul son
+ * territoire donne (voir Territoire) : un magasin sans territoire, dont
+ * l'établissement n'a jamais été confirmé par le répertoire Sirene, ne
+ * numérote aucun document daté (voir Magasin::REFUS_TERRITOIRE_INCONNU),
+ * pas même un achat ou un inventaire d'ouverture, que la vente ne
+ * bloquait pas ; les références de produits, sans année, ne sont pas
+ * concernées.
  *
  * Le préfixe d'une série s'écrit à sa création, avec le code du magasin
  * relu en base sous un verrou partagé : un changement de code en cours
@@ -76,8 +85,15 @@ class DocumentNumberingService
         return $segments[1].str_pad(ltrim($segments[2], '0'), self::CHIFFRES_DU_RANG, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * @throws LogicException quand le magasin n'a pas encore de territoire, pour un document daté
+     */
     public function suivant(Magasin $magasin, TypeDocument $type, string $periodKey = ''): string
     {
+        if ($periodKey !== '' && Magasin::query()->whereKey($magasin->getKey())->value('territoire') === null) {
+            throw new LogicException(Magasin::REFUS_TERRITOIRE_INCONNU);
+        }
+
         return DB::transaction(function () use ($magasin, $type, $periodKey): string {
             $sequence = $this->sequenceVerrouillee($magasin, $type, $periodKey, fn (): string => $this->prefixe($magasin, $type, $periodKey));
 

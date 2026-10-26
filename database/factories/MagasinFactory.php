@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
@@ -15,7 +16,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  * @extends Factory<Magasin>
  *
  * Un magasin d'une société validée, à l'identité légale complète, avec son
- * propriétaire (voir SocieteFactory) : son établissement est vérifié, son
+ * propriétaire (voir SocieteFactory) : son établissement est vérifié, en
+ * métropole (voir dansLeTerritoire() pour un autre territoire), son
  * adresse complète, il facture des professionnels comme des particuliers.
  * Son SIRET commence par le SIREN de sa société, libre dans la société ;
  * dans une société validée, il se réserve comme à sa création (voir
@@ -41,10 +43,10 @@ class MagasinFactory extends Factory
             'nom' => fake()->unique()->company(),
             'siret' => fn (array $attributs): string => self::siretLibre(Societe::query()->findOrFail($attributs['societe_id'])),
             'etablissement_verifie_le' => now(),
+            'territoire' => Territoire::Metropole,
             'adresse' => fake()->streetAddress(),
-            // Toujours en métropole : un code postal tiré au hasard pourrait
-            // tomber en Corse ou outre-mer, et changer le taux de TVA
-            // proposé (voir TerritoireTva).
+            // Toujours à Paris, en métropole, comme son territoire : un code
+            // postal tiré au hasard pourrait tomber en Corse ou outre-mer.
             'code_postal' => fake()->numerify('75###'),
             'ville' => fake()->city(),
             'pays' => 'FR',
@@ -88,6 +90,27 @@ class MagasinFactory extends Factory
     public function avecLaSociete(array $attributs): static
     {
         return $this->state(fn (): array => ['societe_id' => Societe::factory()->validee()->avecProprietaire()->state($attributs)]);
+    }
+
+    /**
+     * Un magasin de ce territoire, à une adresse qui y est : Ajaccio,
+     * Pointe-à-Pitre, Fort-de-France ou Saint-Denis de La Réunion ; la
+     * Guyane et Mayotte, que le logiciel ne prend pas encore en charge, à
+     * Cayenne et à Mamoudzou.
+     */
+    public function dansLeTerritoire(Territoire $territoire): static
+    {
+        [$codePostal, $ville] = match ($territoire) {
+            Territoire::Metropole => ['75001', 'Paris'],
+            Territoire::Corse => ['20000', 'Ajaccio'],
+            Territoire::Guadeloupe => ['97110', 'Pointe-à-Pitre'],
+            Territoire::Martinique => ['97200', 'Fort-de-France'],
+            Territoire::Guyane => ['97300', 'Cayenne'],
+            Territoire::Reunion => ['97400', 'Saint-Denis'],
+            Territoire::Mayotte => ['97600', 'Mamoudzou'],
+        };
+
+        return $this->state(fn (): array => ['territoire' => $territoire, 'code_postal' => $codePostal, 'ville' => $ville]);
     }
 
     /**

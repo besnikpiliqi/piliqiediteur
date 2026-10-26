@@ -30,6 +30,7 @@ use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
@@ -341,7 +342,7 @@ class NatureOperationTest extends TestCase
 
     public function test_un_magasin_de_martinique_ne_livre_pas_en_exoneration_dans_son_propre_departement(): void
     {
-        $this->magasin(['code_postal' => '97200', 'ville' => 'Fort-de-France']);
+        $this->magasin(['territoire' => Territoire::Martinique, 'code_postal' => '97200', 'ville' => 'Fort-de-France']);
         $brouillon = $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE);
 
         $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Livraison vers un DOM » : la livraison reste dans le département d\'outre-mer du magasin. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');

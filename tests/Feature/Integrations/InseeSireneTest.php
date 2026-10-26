@@ -30,7 +30,9 @@ class InseeSireneTest extends TestCase
 
     /**
      * L'unité et l'établissement se lisent dans leur période en cours, la
-     * première, avec la clé d'intégration de l'éditeur dans son en-tête.
+     * première, avec la clé d'intégration de l'éditeur dans son en-tête ;
+     * le code de la commune de l'établissement se lit, et un code non
+     * diffusé ([ND]) n'en donne aucun.
      */
     public function test_l_unite_et_l_etablissement_se_lisent_avec_la_cle_de_l_editeur(): void
     {
@@ -54,23 +56,33 @@ class InseeSireneTest extends TestCase
                     'libelleVoieEtablissement' => 'DES LILAS',
                     'complementAdresseEtablissement' => 'BATIMENT C',
                     'codePostalEtablissement' => '69003',
+                    'codeCommuneEtablissement' => '69383',
                     'libelleCommuneEtablissement' => 'LYON',
                 ],
                 'periodesEtablissement' => [['etatAdministratifEtablissement' => 'F', 'enseigne1Etablissement' => 'LES LILAS'], ['etatAdministratifEtablissement' => 'A']],
+            ]]),
+            self::URL.'/siret/00000001800020' => Http::response(['etablissement' => [
+                'siren' => '000000018',
+                'statutDiffusionEtablissement' => 'O',
+                'etablissementSiege' => false,
+                'adresseEtablissement' => ['libelleVoieEtablissement' => 'DU PORT', 'codePostalEtablissement' => '13002', 'codeCommuneEtablissement' => '[ND]', 'libelleCommuneEtablissement' => 'MARSEILLE'],
+                'periodesEtablissement' => [['etatAdministratifEtablissement' => 'A']],
             ]]),
         ]);
         $repertoire = new InseeSirene;
 
         $this->assertEquals(new UniteSirene('000000018', true, 'SOCIETE FICTIVE', '5710', '00012', false), $repertoire->unite('000000018'));
-        $this->assertEquals(new EtablissementSirene('00000001800012', '000000018', false, '7 B RUE DES LILAS', 'BATIMENT C', '69003', 'LYON', false, 'LES LILAS', true), $repertoire->etablissement('00000001800012'));
-        Http::assertSentCount(2);
+        $this->assertEquals(new EtablissementSirene('00000001800012', '000000018', false, '7 B RUE DES LILAS', 'BATIMENT C', '69003', '69383', 'LYON', false, 'LES LILAS', true), $repertoire->etablissement('00000001800012'));
+        $this->assertEquals(new EtablissementSirene('00000001800020', '000000018', true, 'DU PORT', null, '13002', null, 'MARSEILLE', false, null, false), $repertoire->etablissement('00000001800020'));
+        Http::assertSentCount(3);
         Http::assertSent(fn (Request $requete): bool => $requete->url() === self::URL.'/siren/000000018' && $requete->hasHeader('X-INSEE-Api-Key-Integration', self::CLE));
     }
 
     /**
      * Un entrepreneur individuel se nomme par son prénom usuel et son nom ;
      * une entreprise en diffusion partielle ne livre ni son nom ni son
-     * adresse ([ND]), seulement sa commune.
+     * adresse ([ND]), code postal compris, seulement sa commune, dont le
+     * code donne le territoire du magasin (Fort-de-France : 97209).
      */
     public function test_l_entrepreneur_individuel_et_la_diffusion_partielle_se_lisent(): void
     {
@@ -85,7 +97,7 @@ class InseeSireneTest extends TestCase
             ]]),
             self::URL.'/siret/00000003400010' => Http::response(['etablissement' => [
                 'statutDiffusionEtablissement' => 'P',
-                'adresseEtablissement' => ['libelleVoieEtablissement' => '[ND]', 'codePostalEtablissement' => '[ND]', 'libelleCommuneEtablissement' => 'NANTES'],
+                'adresseEtablissement' => ['libelleVoieEtablissement' => '[ND]', 'codePostalEtablissement' => '[ND]', 'codeCommuneEtablissement' => '97209', 'libelleCommuneEtablissement' => 'FORT-DE-FRANCE'],
                 'periodesEtablissement' => [['etatAdministratifEtablissement' => 'A']],
             ]]),
         ]);
@@ -93,7 +105,7 @@ class InseeSireneTest extends TestCase
 
         $this->assertEquals(new UniteSirene('000000026', true, 'JEANNE DUPONT', '1000', '00015', false), $repertoire->unite('000000026'));
         $this->assertEquals(new UniteSirene('000000034', true, null, '5710', '00010', true), $repertoire->unite('000000034'));
-        $this->assertEquals(new EtablissementSirene('00000003400010', '000000034', true, null, null, null, 'NANTES', true, null, false), $repertoire->etablissement('00000003400010'));
+        $this->assertEquals(new EtablissementSirene('00000003400010', '000000034', true, null, null, null, '97209', 'FORT-DE-FRANCE', true, null, false), $repertoire->etablissement('00000003400010'));
     }
 
     /**
@@ -112,7 +124,7 @@ class InseeSireneTest extends TestCase
             'siret' => $siret,
             'etablissementSiege' => $siege,
             'statutDiffusionEtablissement' => 'O',
-            'adresseEtablissement' => ['numeroVoieEtablissement' => '3', 'typeVoieEtablissement' => 'RUE', 'libelleVoieEtablissement' => 'DU PORT', 'codePostalEtablissement' => '13002', 'libelleCommuneEtablissement' => 'MARSEILLE'],
+            'adresseEtablissement' => ['numeroVoieEtablissement' => '3', 'typeVoieEtablissement' => 'RUE', 'libelleVoieEtablissement' => 'DU PORT', 'codePostalEtablissement' => '13002', 'codeCommuneEtablissement' => '13202', 'libelleCommuneEtablissement' => 'MARSEILLE'],
             'periodesEtablissement' => [['etatAdministratifEtablissement' => $etat, ...$periode], ['etatAdministratifEtablissement' => 'A']],
         ];
         Http::fake([self::URL.'/siret?*' => Http::response([
@@ -129,8 +141,8 @@ class InseeSireneTest extends TestCase
 
         $this->assertTrue($liste->complete);
         $this->assertEquals([
-            new EtablissementSirene('00000001800012', '000000018', true, '3 RUE DU PORT', null, '13002', 'MARSEILLE', false, null, true),
-            new EtablissementSirene('00000001800038', '000000018', true, '3 RUE DU PORT', null, '13002', 'MARSEILLE', false, 'COMPTOIR DU PORT', false),
+            new EtablissementSirene('00000001800012', '000000018', true, '3 RUE DU PORT', null, '13002', '13202', 'MARSEILLE', false, null, true),
+            new EtablissementSirene('00000001800038', '000000018', true, '3 RUE DU PORT', null, '13002', '13202', 'MARSEILLE', false, 'COMPTOIR DU PORT', false),
         ], $liste->etablissements);
         Http::assertSent(function (Request $requete): bool {
             parse_str((string) parse_url($requete->url(), PHP_URL_QUERY), $parametres);

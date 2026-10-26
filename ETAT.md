@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 14:35 UTC par pilotage-sync.sh : « Série 9 : demande de l'éditeur enregistrée (lignes uniques, À faire) ».
+Mis à jour le 26/10/2026 à 16:04 UTC par pilotage-sync.sh : « Série 9 : réponses de l'éditeur, lots S9-L et S9-A ajoutés avant le lot 21 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `fa83824`. Commits locaux pas encore poussés :
 
 ```
+e70f18e Affiche les prix unitaires au centime et complète la note de calcul (lot PU)
 ```
 
 Derniers commits poussés :
@@ -39,22 +40,24 @@ fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot
 ```
  M CLAUDE.md
  M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/TableauDesLignes.php
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Resources/FactureResource.php
+ M app/Domain/Facturation/Services/DerogationsDePrix.php
+ M app/Filament/App/Pages/ParametresPrixDeVente.php
+ M app/Filament/App/Resources/InventaireOuvertureResource.php
  M app/Filament/App/Resources/ProduitResource.php
+ M app/Filament/App/Resources/ServiceResource.php
+ M app/Filament/Concerns/AjouteDesLignesDAchat.php
  M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
- M tests/Feature/Facturation/DevisPdfGeneratorTest.php
- M tests/Feature/Facturation/FacturePdfGeneratorTest.php
- M tests/Feature/Facturation/NatureOperationTest.php
- M tests/Feature/Facturation/PolitiqueDArrondiTest.php
- M tests/Feature/Facturation/RepartitionTvaParCumulTest.php
+ M app/Filament/Concerns/SaisitLesPrixDeLigne.php
+ M database/factories/PanierCaisseFactory.php
+ M database/migrations/2026_10_03_100002_create_lignes_devis_table.php
+ M database/migrations/2026_10_03_100004_create_lignes_facture_table.php
+ M database/migrations/2026_10_05_100002_create_lignes_avoir_table.php
+ M tests/Feature/Filament/CaisseTest.php
  M tests/Feature/Filament/FactureResourceTest.php
- M tests/Feature/Filament/SelecteurDeProduitsTest.php
+ M tests/Feature/Filament/InventaireOuvertureResourceTest.php
+ M tests/Feature/Filament/ProduitResourceTest.php
+ M tests/Feature/Filament/ServiceResourceTest.php
  M tests/Unit/CalculateurLigneTest.php
-?? tests/Feature/Facturation/MentionsFiscalesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -66,4 +69,7 @@ T3:correction-reprise
 T3:poussee
 T3:notes
 PU:implementation
+PU:relecture1
+PU:relecture2
+PU:correction
 ```

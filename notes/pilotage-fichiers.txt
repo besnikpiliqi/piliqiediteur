@@ -68,3 +68,7 @@ gen-decisions.js
 historique/extraire-historique.py
 decisions/reponses-regles-ecran-26-10.md
 serie9/demande-editeur.md
+serie9/reponses-serie9.md
+serie9/analyse-lignes.md
+serie9/analyse-a-faire.md
+serie9/critique.md

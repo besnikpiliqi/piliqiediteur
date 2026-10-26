@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 10:52 UTC par pilotage-sync.sh : « Crée la branche de reprise : fiche, notes de pilotage et état du projet ».
+Mis à jour le 26/10/2026 à 10:53 UTC par pilotage-sync.sh : « Ne prend comme dernière course que celle de la chaîne de lots ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

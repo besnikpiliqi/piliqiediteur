@@ -24,7 +24,7 @@ for f in "$SCRIPTS"/t2-correction-reprise-puis-chaine-*.js "$SCRIPTS"/t3-correct
 done
 cp "$S/pilotage-sync.sh" "$S/pilotage-fichiers.txt" "$W/notes/"
 
-JOURNAL=$(ls -t $(find "$WF" -name journal.jsonl 2>/dev/null) 2>/dev/null | head -1)
+JOURNAL=$(ls -t $(grep -lE '"label":"[A-Za-z0-9-]+:(implementation|relecture[12]|correction|correction-reprise|poussee|notes)"' $(find "$WF" -name journal.jsonl 2>/dev/null) 2>/dev/null) 2>/dev/null | head -1)
 {
   echo "# État du projet (généré automatiquement)"
   echo

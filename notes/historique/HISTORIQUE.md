@@ -1,10 +1,10 @@
 # Historique du projet PILIQI (2 au 26 octobre 2026)
 
-Ce fichier raconte tout le travail fait sur PILIQI depuis le premier message de l'éditeur, le 2 octobre 2026, jusqu'au 26 octobre 2026 à 11 h 40 UTC : ce qui a été demandé, conçu, livré et décidé, ce qui a mal tourné, et les règles qui en sont sorties.
+Ce fichier raconte tout le travail fait sur PILIQI depuis le premier message de l'éditeur, le 2 octobre 2026, jusqu'au 26 octobre 2026 à 12 h 45 UTC : ce qui a été demandé, conçu, livré et décidé, ce qui a mal tourné, et les règles qui en sont sorties.
 
 À lire après `README.md` (la fiche de reprise). Ce fichier raconte ; il ne décide rien. Pour toute règle, `CLAUDE.md` de la branche de travail et les fichiers de décision de `notes/` font foi (ordre de priorité au § 7 du README).
 
-Sources : les 18 résumés successifs de la session, les messages de l'éditeur (datés), les notes `etat-chaines.md` et le journal git de la branche `claude/saas-invoice-editor-architecture-q6eizh` (254 commits au 26/10 ; tête poussée `3a02fbc`, tête locale `5f86951`). Les heures sont en UTC. Aucune valeur secrète n'est recopiée ici.
+Sources : les 18 résumés successifs de la session, les messages de l'éditeur (datés), les notes `etat-chaines.md` et le journal git de la branche `claude/saas-invoice-editor-architecture-q6eizh` (255 commits au 26/10 à 12 h 45 ; tête poussée `fa83824`). Les heures sont en UTC. Aucune valeur secrète n'est recopiée ici.
 
 ---
 
@@ -21,7 +21,7 @@ Sources : les 18 résumés successifs de la session, les messages de l'éditeur 
 | Lun 19/10 | A4c. Décisions : vérification par courrier recommandé (V2) et espace des cabinets (EC). | `bd0d6ef`, `41fd0a5` |
 | Mar 20 – ven 23/10 | Arrêt (limite hebdomadaire). Une autre session, sur un autre compte, pousse M1 et M0. | `67f43e9`, `3fede71` |
 | Sam 24 – dim 25/10 | Annulation de M0 et M1, V2, V2b, FA1 à FA3, T2. Décisions TA, EC, T2, T3, PU. | `5cbe4e2` … `c723e1f` |
-| Lun 26/10 | T2 relu et poussé ; T3 commité, sa correction en cours ; branche de reprise créée. | `3a02fbc` … `5f86951` |
+| Lun 26/10 | T2 relu et poussé ; T3 commité, relu, corrigé et poussé ; branche de reprise créée ; PU commence. | `3a02fbc` … `fa83824` |
 
 ---
 
@@ -83,7 +83,7 @@ Sources : les 18 résumés successifs de la session, les messages de l'éditeur 
 - Une ligne de vente vend un produit existant ou un service, sans modifier sa description ni son PU HT (`38e8544`). Une facture d'achat se saisit ligne par ligne dans un formulaire produit complet, sans créer de fournisseur (`a86783c`). Un produit venu d'une facture d'achat API est verrouillé. Stock au CMUP (`7e8ab17`). Barème de prix de vente tiré de la calculatrice HTML de l'éditeur, désactivé par défaut mais visible (`36d638c`).
 - Un libellé trompeur (« 0,56 € TTC » pour un achat) irrite l'éditeur : « comment je peux avoir confiance en toi ». Puis la TVA d'une ligne au prix HT est fausse (10 × 1,18 €) : `a31b0c4`. Il fixe la règle : seul le prix de vente TTC s'arrondit, une fois, quand l'achat enregistre le produit ; ensuite rien ne se recalcule.
 - `CLAUDE.md` : règle de réécriture du code, protocole de rigueur en tête (`49c7f8a`, proposé puis accepté : « me convient tes deux points »), feuille de route en 15 étapes, SUPER PDP plateforme agréée, spécification OpenAPI 1.36.0.beta (`41afe34`), accès par délégation OAuth.
-- 22 h 52, le mandat : « Claude, tu as commencé ce logiciel et c'est toi qui vas entièrement le finir… Ne t'arrête que lorsque l'intégralité du logiciel est 100 % terminée, testée au vert et prête à être utilisée en production. » Puis, plusieurs fois : « continue tout seul jusqu'à la fin ». Il autorise Fable pour concevoir les écrans « si nécessaire ».
+- 22 h 52, le mandat : « Claude, tu as commencé ce logiciel et c'est toi qui vas entièrement le finir… Ne t'arrête que lorsque l'intégralité du logiciel est 100 % terminée, testée au vert et prête à être utilisée en production. » Puis, plusieurs fois : « continue tout seul jusqu'à la fin ». Il autorise le modèle Fable (un modèle Claude qu'il choisit pour la session, pas un outil) pour concevoir les écrans « si nécessaire ».
 - Épisode des identifiants : l'éditeur montre en capture les secrets du bac à sable SUPER PDP et veut « donner les vrais identifiants ». Il ouvre lui-même l'accès réseau à superpdp.tech dans l'environnement. Les variables, mises d'abord dans le script de configuration, passent dans « Variables d'environnement » (visibles seulement dans une nouvelle session). L'essai réel avec les identifiants en ligne est refusé par le classificateur (« Credential Leakage ») : non contourné. Conseil : renouveler les deux secrets après les tests.
 - Méthode : travail parallèle dans un worktree (`wt-prix`). `php artisan test` n'y marchait pas (autoload) ; la méthode a été abandonnée ensuite au profit des copies figées.
 
@@ -119,7 +119,7 @@ Sources : les 18 résumés successifs de la session, les messages de l'éditeur 
 #### Lundi 12/10 : A4, puis les limites
 
 - Nuit : lot A4 (Spatie retiré, équipe de la société, contrôle de l'auteur de chaque action, comptes retirés, équipe d'une société révoquée), de `5533743` à `30844db`.
-- Journée : une douzaine de « Réessayer », « comence avec fable » (8 h 35), « Recommence » : limites de session, puis limite hebdomadaire et plafond mensuel de dépense de l'organisation.
+- Journée : une douzaine de « Réessayer », « comence avec fable » (8 h 35, choix du modèle Fable), « Recommence » : limites de session, puis limite hebdomadaire et plafond mensuel de dépense de l'organisation.
 - Entre le 12 et le 17/10 (date exacte non notée), la ligne d'attribution des scripts de chaîne a été changée (« Fable 5.1 »), puis remise à l'identique (« Opus 5.5 ») : un texte de `REGLES` modifié casse le cache d'une course reprise.
 
 #### Mardi 13 au vendredi 16/10 : arrêt complet
@@ -185,6 +185,8 @@ Aucun commit, aucun message.
 - 10 h 42 à 10 h 46 : il demande toutes les notes de travail pour un autre compte, mises à jour « à chaque fois ». Branche `claude/pilotage-reprise` créée (seule autre branche autorisée), script `pilotage-sync.sh`, étape `:notes` ajoutée à la chaîne.
 - 10 h 46 : ce message coupe `T3:correction` pendant sa grille faketime. Consigne sauvée ; course de reprise `wf_fb31205c-c06`, qui enchaîne ensuite PU, TA, EC, L1, A7 et 21.
 - 11 h 34 : « Il faut que tu mettes tout… pour que lui travaille comme si c'était toi ». Le dossier de reprise est complété (ce fichier en fait partie).
+- 11 h 38 et 12 h 04 (messages 279 et 280) : l'éditeur demande pourquoi l'agent de relecture a trouvé des erreurs dans la fiche que la session n'avait pas vues, puis que la fiche soit relue ainsi à chaque fois. 12 h 05 : étape `<lot>:fiche` ajoutée à la chaîne (relecture à froid de la fiche après chaque lot, `VERIFICATION.md`).
+- 12 h 44 : la relecture de T3 est poussée (`fa83824`), avec la correction des 6 défauts de ses deux relectures ; la sous-course de `wf_fb31205c-c06` commence PU.
 
 ---
 
@@ -212,7 +214,7 @@ Aucun commit, aucun message.
 | 18/10 | Échecs aléatoires de CI (dernier octet d'un flux PDF ; e-mail Faker) | CI rouge par hasard | `aa6f7f8`, `fc23528`, lot T1 |
 | 18/10 | `composer dump-autoload` dans une copie à `vendor` en liens physiques a réécrit le `vendor` du dépôt | Risque sur le dépôt | Copier `vendor/composer` pour de vrai avant tout dump |
 | 18/10 | Disque presque plein | Courses en danger | Copies de banc supprimées (12 Go libérés) |
-| 18, 19, 24/10 | Redémarrages du conteneur | PostgreSQL arrêté ; agents coupés, travail resté dans l'arbre | `service postgresql start` ; notes de reprise ; lots déjà commités retirés des ouverts |
+| 18, 19, 24/10 | Redémarrages du conteneur | PostgreSQL arrêté ; agents coupés, travail resté dans l'arbre | `service postgresql start` ; notes de reprise ; lots déjà poussés retirés des ouverts |
 | 18 et 20/10 | Autres sessions sur la branche (autre compte) | Commits concurrents hors décisions | `5cbe4e2` (revert) ; branche supprimée par l'éditeur |
 | 19 au 24/10 | Limite hebdomadaire | Cinq jours d'arrêt | Reprise le 24/10 |
 | 24/10 | Reprise d'une course qui manque le cache | Relectures de S8-L refaites pour rien | Arrêt ; relance sans reprise |
@@ -246,7 +248,7 @@ Aucun commit, aucun message.
 
 13. **Un message de l'éditeur pendant un tour tue les courses en fond** (09/10 à chaque message, 25/10, 26/10). Règle : tours courts quand une chaîne tourne ; prévenir l'éditeur avant un long travail ; après chaque interruption, vérifier la dernière ligne de chaque `agent-*.jsonl`.
 14. **Les limites tombent sans prévenir** (session, hebdomadaire, plafond de dépense de l'organisation ; arrêts de cinq jours). Règle : pousser dès qu'un lot est vert et relu ; tenir `etat-chaines.md` et la branche de reprise à jour ; points de suivi programmés.
-15. **Un redémarrage du conteneur arrête PostgreSQL et coupe les agents.** Règle : `service postgresql start`, puis `git status`, puis décider : lot commité (le retirer des ouverts) ou travail resté dans l'arbre (reprise).
+15. **Un redémarrage du conteneur arrête PostgreSQL et coupe les agents.** Règle : `service postgresql start`, puis `git status` et `git log origin/<branche>..HEAD`, puis décider. Lot poussé : le retirer des ouverts. Lot commité mais pas poussé, ou travail resté dans l'arbre : script de reprise dans le même conteneur, qui repart de l'étape coupée (relectures, correction ou poussée), sans jamais retirer le lot des ouverts : sinon la poussée du lot suivant l'enverrait sans relecture.
 16. **Deux sessions sur la même branche se détruisent leur travail** (18/10 et 20/10). Règle : une seule session à la fois ; le travail d'une autre session s'annule par `git revert`, jamais par une poussée forcée.
 
 ### Tests
@@ -290,6 +292,7 @@ Aucun commit, aucun message.
 ### Communication avec l'éditeur
 
 - Il est l'éditeur, jamais propriétaire d'un magasin : ne pas lui dire « vous, le propriétaire ».
+- Le vouvoyer (« vous », « votre »), même s'il tutoie : la session l'a toujours fait.
 - Tout en français, même s'il écrit en partie en albanais.
 - Il veut des explications simples avec des exemples chiffrés, et demande souvent pourquoi c'est long : expliquer les relectures, les deux bases et faketime, sans promettre « zéro défaut ».
 - Il change parfois d'avis (prix unitaires, édition des factures) : mettre à jour le fichier de décision, le script et les points de suivi à chaque fois ; la dernière version du fichier fait foi.
@@ -324,7 +327,7 @@ Aucun commit, aucun message.
 ### Lots et commits
 
 - Noms des lots : lots de décisions 1 à 21 ; audit (7 lots) ; caisse sécurisée (6 lots) ; société A0 à A7 (plus A4b, A4c, A5c ; A4q retiré) ; série 8 : R6, S8-T, S8-A, S8-P, S8-R, S8-C, S8-E, S8-L, S8-F, S8-O, S8-V ; T1 à T3 ; V2, V2b ; FA1 à FA3 ; PU, TA, EC, L1 ; chaîne TVA : M0 à FIN (avec C-a, C-b, M5a à M5e, CH1 à CH6).
-- Chaque lot : implémentation (un ou plusieurs commits), deux relectures adversariales (fidélité et métier ; sécurité, isolation et qualité), correction, poussée, notes.
+- Chaque lot : implémentation (un ou plusieurs commits), deux relectures adversariales (fidélité et métier ; sécurité, isolation et qualité, avec les questions du § 45 du prompt maître), correction, poussée, relecture à froid de la fiche de reprise, notes.
 - Message de commit : en français, un verbe au présent qui dit l'effet (« Protège les brouillons et les fiches contre les gestes simultanés »), suivi de « (lot X) ». Le commit de correction s'intitule « Relecture du lot X de <thème> ». Lignes de fin : `Co-Authored-By` et `Claude-Session`. Aucun identifiant de modèle dans le code.
 - Jamais de `--amend` sur un commit poussé (une seule fois, le 04/10, sur un commit pas encore poussé) ; jamais de poussée forcée ; une erreur poussée s'annule par `git revert`.
 - Avant chaque commit : suites SQLite puis PostgreSQL au code 0, faketime si le lot touche aux dates, puis pint.
@@ -347,11 +350,11 @@ Aucun commit, aucun message.
 
 L'ordre et le détail font foi dans `README.md` (§ 6) et `ETAT.md`.
 
-1. **Chaîne en cours** (course `wf_fb31205c-c06` dans l'ancien conteneur) : correction de la relecture de T3 et sa poussée, puis PU, TA, EC, L1, A7 et 21. Si `origin` n'a pas les commits « (lot T3) » et « Relecture du lot T3 … », une nouvelle session refait T3 en entier : `{"ouverts": ["T3", "PU", "TA", "EC", "L1", "A7", "21"]}`.
-2. **Après le lot 21** : CI de la tête, `pilotage-sync.sh`, compte rendu à l'éditeur (laisses, matrice décision → test, choix contestables), puis lui redemander le point 2 de `a-faire-apres-chaine.md` (commande `composer run dev` propre à PILIQI).
+1. **Chaîne en cours** (course `wf_fb31205c-c06` dans l'ancien conteneur) : T3 poussé le 26/10 à 12 h 44 (`fa83824`) ; sa sous-course fait PU (commencé), TA, EC, L1, A7 et 21. Une nouvelle session relance seulement les lots qui ne sont pas sur `origin` (`README.md`, § 5, « Lots restants »).
+2. **Après chaque lot poussé** : CI de la tête et compte rendu à l'éditeur (§ 5, « Rendre compte »). **Après le lot 21** : CI de la tête, `pilotage-sync.sh`, compte rendu récapitulatif à l'éditeur (laisses, matrice décision → test, choix contestables et limites légales non couvertes), puis lui redemander le point 2 de `a-faire-apres-chaine.md` (commande `composer run dev` propre à PILIQI).
 3. **Chaîne TVA** (`tva-lots-M0-FIN.js`, écrite le 17/10) : la mettre d'accord avec `serie8-lots.js` (mécanique et décisions postérieures au 17/10 : V2, V2b, EC, TA, T2, T3, PU, FA), retirer le complément `reprise` du lot FIN, refaire M0 et M1 selon `tva/plan-execution.md`, la faire relire sur une copie figée, puis la lancer. Elle porte aussi les compléments 14 à 20 et les charges des magasins. L'étape 1 de la feuille de route se coche à son lot FIN.
 4. **Point 9 de la série 8** (créer les produits depuis une facture d'achat en PDF ou Excel) : attend les règles de l'éditeur ; questions prêtes au § 4.2 de `serie8/plan-serie8.md`.
-5. **Étape 1 bis** : campagne de tests initiale, selon `campagne/strategie/finale.md` et les réponses T1 à T6 (`societe/reponses-serie4.md`).
+5. **Étape 1 bis** : campagne de tests initiale, selon l'étape 1 bis de `CLAUDE.md` et les réponses T1 à T6 (`societe/reponses-serie4.md`), qui priment sur `campagne/strategie/finale.md` (stratégie du 10/10, à remettre d'accord avec l'architecture actuelle et à présenter de nouveau à l'éditeur avant le premier palier ; `README.md`, § 6).
 6. **Étapes 2 à 15** de la feuille de route de `CLAUDE.md` (SUPER PDP, fin de la caisse sécurisée, journal d'audit, comptabilité, etc.), avec une relance de la campagne après les étapes 2, 3, 5, 9 et 13.
 7. **Rappels à l'éditeur** (§ 9 du README) : clé de l'API Sirene, accès à l'INPI, contrat La Poste avec remise en personne, compte SUPER PDP de production ; renouveler les deux secrets du bac à sable ; analyse d'impact de la vérification par courrier ; question de l'attestation contre le certificat (art. 286 du CGI) ; annuaire de l'Ordre des experts-comptables ; règles à faire confirmer par l'expert-comptable ; audit de sécurité avant la production.
 8. **Ordres de grandeur donnés à l'éditeur** : la chaîne jusqu'au lot 21 en 4 à 6 jours ; l'étape 1 complète en environ un mois ; les étapes 2 à 15 en plusieurs mois.

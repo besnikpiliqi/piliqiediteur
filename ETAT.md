@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 12:45 UTC par pilotage-sync.sh : « Après le lot T3 ».
+Mis à jour le 26/10/2026 à 13:12 UTC par pilotage-sync.sh : « Relecture finale : 29 constats traités, réponses de l'éditeur du 26/10 reportées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,24 @@ fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Domain/Facturation/Services/TableauDesLignes.php
+ M app/Filament/App/Livewire/SelecteurDeProduits.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/ProduitResource.php
+ M app/Filament/Concerns/AjouteDesLignesDeVente.php
+ M tests/Feature/Facturation/AvoirPdfGeneratorTest.php
+ M tests/Feature/Facturation/DevisPdfGeneratorTest.php
+ M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+ M tests/Feature/Facturation/NatureOperationTest.php
+ M tests/Feature/Facturation/PolitiqueDArrondiTest.php
+ M tests/Feature/Facturation/RepartitionTvaParCumulTest.php
+ M tests/Feature/Filament/FactureResourceTest.php
+ M tests/Feature/Filament/SelecteurDeProduitsTest.php
+ M tests/Unit/CalculateurLigneTest.php
+?? tests/Feature/Facturation/MentionsFiscalesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -47,4 +65,5 @@ Course `wf_fb31205c-c06`, étapes commencées (de la plus ancienne à la plus r�
 T3:correction-reprise
 T3:poussee
 T3:notes
+PU:implementation
 ```

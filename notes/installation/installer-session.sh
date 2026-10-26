@@ -27,8 +27,8 @@
 #
 # Garanties : le script ne supprime jamais un cluster ou une base qui contient des
 # données, ne lance jamais composer update, n'affiche jamais le mot de passe, ne
-# lance ni la suite de tests ni caisse:generer-cle, et ne touche pas aux fichiers
-# suivis par git. Le mode --verifier n'écrit aucun fichier : il lit ~/.profile sans
+# lance ni la suite de tests ni caisse:generer-cle, ne change jamais de branche et ne
+# touche pas aux fichiers suivis par git. Le mode --verifier n'écrit aucun fichier : il lit ~/.profile sans
 # l'exécuter, lit la version de Composer dans son fichier sans le lancer, n'essaie
 # pas faketime (libfaketime crée des objets dans /dev/shm) et ne fait que des
 # lectures dans PostgreSQL. Seule exception, hors de root : « sudo -n true ».
@@ -104,6 +104,19 @@ en_postgres() {
   else
     (cd / && sudo -n -u postgres "$@")
   fi
+}
+
+# Pourquoi une étape qui a besoin du projet ne peut pas se faire : dépôt absent, ou
+# branche actuelle sans le projet (main ne contient que le commit initial). $1 = fichier.
+raison_sans_projet() {
+  if [ ! -d "$DEPOT/.git" ] && [ ! -f "$DEPOT/.git" ]; then
+    printf 'dépôt absent (%s)' "$DEPOT"
+    return 0
+  fi
+  local branche
+  branche=$(git -C "$DEPOT" branch --show-current 2>/dev/null)
+  printf '%s absent de la branche %s (main ne contient que le commit initial) : extraire la branche de travail %s (fiche de reprise, § 4.1), puis relancer ce script' \
+    "$1" "${branche:-(détachée)}" "$BRANCHE_TRAVAIL"
 }
 
 # --- PostgreSQL : lectures -------------------------------------------------------
@@ -427,7 +440,7 @@ verifier() {
     if [ "$branche" = "$BRANCHE_TRAVAIL" ]; then
       ok "branche de travail : $branche"
     else
-      attention "branche actuelle : ${branche:-(détachée)} ; la branche de travail est $BRANCHE_TRAVAIL (fiche de reprise, § 4)"
+      attention "branche actuelle : ${branche:-(détachée)} ; la branche de travail est $BRANCHE_TRAVAIL (fiche de reprise, § 4.1)"
     fi
     local fichier_exclusion ligne
     fichier_exclusion="$(git -C "$DEPOT" rev-parse --git-path info/exclude 2>/dev/null)"
@@ -439,37 +452,10 @@ verifier() {
         manque "exclusion locale « $ligne » absente de .git/info/exclude (un test jetable oublié rendrait l'arbre sale)"
       fi
     done
-    if [ -f "$DEPOT/vendor/autoload.php" ] && [ -f "$DEPOT/vendor/composer/installed.json" ]; then
-      local ecart nb_absents nb_differents
-      ecart=$(ecart_vendor_lock)
-      nb_absents=$(printf '%s\n' "$ecart" | sed -n '1p')
-      nb_differents=$(printf '%s\n' "$ecart" | sed -n '2p')
-      if [ "$nb_absents" = 0 ] && [ "$nb_differents" = 0 ]; then
-        ok "vendor conforme à composer.lock (dépendances de développement comprises)"
-      elif [ -z "$nb_absents" ]; then
-        manque "impossible de comparer vendor et composer.lock"
-      else
-        manque "vendor différent de composer.lock : $nb_absents paquet(s) absent(s) [$(printf '%s\n' "$ecart" | sed -n '3p')], $nb_differents version(s) différente(s) [$(printf '%s\n' "$ecart" | sed -n '4p')] : lancer composer install (jamais composer update)"
-      fi
+    if [ ! -f "$DEPOT/composer.json" ]; then
+      manque "$(raison_sans_projet composer.json) ; vendor, vendor/bin et .env non vérifiés"
     else
-      manque "vendor absent : lancer composer install dans $DEPOT (jamais composer update)"
-    fi
-    local outil
-    for outil in phpunit paratest pint; do
-      if [ -x "$DEPOT/vendor/bin/$outil" ]; then ok "vendor/bin/$outil présent"; else manque "vendor/bin/$outil absent (composer install)"; fi
-    done
-    if [ -f "$DEPOT/.env" ]; then
-      ok ".env présent"
-      if grep -Eq '^APP_KEY=base64:.+' "$DEPOT/.env"; then ok "APP_KEY renseignée"; else manque "APP_KEY vide dans .env (php artisan key:generate)"; fi
-      if [ -f "$DEPOT/.env.example" ]; then
-        local absentes_env
-        absentes_env=$(comm -13 <(grep -oE '^[A-Z0-9_]+' "$DEPOT/.env" | sort -u) <(grep -oE '^[A-Z0-9_]+' "$DEPOT/.env.example" | sort -u) | tr '\n' ' ')
-        if [ -n "$absentes_env" ]; then
-          info ".env n'a pas ces variables de .env.example (sans effet sur les tests, qui prennent leurs valeurs dans phpunit.xml) : $absentes_env"
-        fi
-      fi
-    else
-      manque ".env absent (cp .env.example .env, puis php artisan key:generate)"
+      verifier_projet
     fi
     local cles_non_suivies
     cles_non_suivies=$(git -C "$DEPOT" ls-files --others --exclude-standard -- resources/caisse-securisee/cles 2>/dev/null | tr '\n' ' ')
@@ -502,6 +488,42 @@ verifier() {
   fi
   printf '  Il manque %d élément(s) (%d point(s) d'"'"'attention). Lancer : bash installer-session.sh\n' "$MANQUES" "$ATTENTIONS"
   return 1
+}
+
+# Vendor, outils de test et .env : seulement quand la branche actuelle a le projet.
+verifier_projet() {
+  if [ -f "$DEPOT/vendor/autoload.php" ] && [ -f "$DEPOT/vendor/composer/installed.json" ]; then
+    local ecart nb_absents nb_differents
+    ecart=$(ecart_vendor_lock)
+    nb_absents=$(printf '%s\n' "$ecart" | sed -n '1p')
+    nb_differents=$(printf '%s\n' "$ecart" | sed -n '2p')
+    if [ "$nb_absents" = 0 ] && [ "$nb_differents" = 0 ]; then
+      ok "vendor conforme à composer.lock (dépendances de développement comprises)"
+    elif [ -z "$nb_absents" ]; then
+      manque "impossible de comparer vendor et composer.lock"
+    else
+      manque "vendor différent de composer.lock : $nb_absents paquet(s) absent(s) [$(printf '%s\n' "$ecart" | sed -n '3p')], $nb_differents version(s) différente(s) [$(printf '%s\n' "$ecart" | sed -n '4p')] : lancer composer install (jamais composer update)"
+    fi
+  else
+    manque "vendor absent : lancer composer install dans $DEPOT (jamais composer update)"
+  fi
+  local outil
+  for outil in phpunit paratest pint; do
+    if [ -x "$DEPOT/vendor/bin/$outil" ]; then ok "vendor/bin/$outil présent"; else manque "vendor/bin/$outil absent (composer install)"; fi
+  done
+  if [ -f "$DEPOT/.env" ]; then
+    ok ".env présent"
+    if grep -Eq '^APP_KEY=base64:.+' "$DEPOT/.env"; then ok "APP_KEY renseignée"; else manque "APP_KEY vide dans .env (php artisan key:generate)"; fi
+    if [ -f "$DEPOT/.env.example" ]; then
+      local absentes_env
+      absentes_env=$(comm -13 <(grep -oE '^[A-Z0-9_]+' "$DEPOT/.env" | sort -u) <(grep -oE '^[A-Z0-9_]+' "$DEPOT/.env.example" | sort -u) | tr '\n' ' ')
+      if [ -n "$absentes_env" ]; then
+        info ".env n'a pas ces variables de .env.example (sans effet sur les tests, qui prennent leurs valeurs dans phpunit.xml) : $absentes_env"
+      fi
+    fi
+  else
+    manque ".env absent (cp .env.example .env, puis php artisan key:generate)"
+  fi
 }
 
 verifier_contenu_postgresql() {
@@ -722,7 +744,7 @@ installer_composer() {
     return 0
   fi
   if [ ! -f "$DEPOT/composer.json" ]; then
-    attention "dépôt absent : composer install non lancé"
+    attention "$(raison_sans_projet composer.json) : composer install non lancé"
     return 0
   fi
   # GitHub refuse les archives (dist) passées par le proxy de l'environnement : Composer
@@ -744,7 +766,7 @@ installer_composer() {
 installer_env() {
   etape "Fichier .env et clé de l'application"
   if [ ! -f "$DEPOT/.env.example" ]; then
-    attention "dépôt absent : .env non créé"
+    attention "$(raison_sans_projet .env.example) : .env non créé"
     return 0
   fi
   if [ ! -f "$DEPOT/.env" ]; then

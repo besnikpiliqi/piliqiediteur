@@ -12,8 +12,8 @@ Dans la branche de reprise, les trouver par :
 
 ## 1. En bref
 
-1. L'éditeur règle l'environnement cloud du nouveau compte (section 4) : accès au dépôt GitHub, accès réseau aux gestionnaires de paquets, et, de préférence, le script d'installation dans le champ « Setup script ».
-2. La nouvelle session suit la fiche de reprise § 4.1 (branche de travail), récupère la branche de reprise (§ 4.3), puis lance :
+1. L'éditeur règle l'environnement cloud du nouveau compte (section 4) : accès au dépôt GitHub (dont la rubrique « Repositories »), accès réseau aux gestionnaires de paquets, et, de préférence, le script d'installation dans le champ « Setup script » (facultatif la première fois ; il extrait aussi la branche de travail quand l'arbre est sur `main` et propre).
+2. La nouvelle session suit la fiche de reprise § 4.1 (branche de travail), récupère la branche de reprise (§ 4.2), puis lance :
    `bash <chemin>/installer-session.sh --verifier`
    S'il manque quelque chose (code de sortie 1), elle lance `bash <chemin>/installer-session.sh`, puis de nouveau `--verifier`, qui doit finir par « Tout est en place » et le code 0.
 3. Elle lance deux tests ciblés (section 6) avant toute chaîne.
@@ -110,7 +110,7 @@ Relevé dans les journaux d'apt et dans la transcription de la session (aucune v
 
 ### Accès au dépôt
 
-Le compte GitHub de l'éditeur doit être relié au nouveau compte Claude, avec accès au dépôt `besnikpiliqi/piliqiediteur` ; l'environnement le clone dans `/home/user/piliqiediteur`. Si le dépôt manque ou si une poussée est refusée : fiche de reprise § 4.1.
+Le compte GitHub de l'éditeur doit être relié au nouveau compte Claude (https://claude.ai/connect-github), avec l'application GitHub de Claude installée sur le dépôt `besnikpiliqi/piliqiediteur` (depuis la même page). L'environnement clone le dépôt dans `/home/user/piliqiediteur`, sur la branche par défaut `main`, qui ne contient que le commit initial (README.md seul). Pour que le script d'installation lise ce dépôt privé, l'ajouter sous « Repositories » dans les réglages de l'environnement (menu de l'environnement cloud dans la barre de titre de la session, puis Modifier ; rubrique absente de l'environnement « Default »), puis ouvrir une nouvelle session : une variable ou une clé enregistrée n'y suffit pas. Si le dépôt manque ou si une poussée est refusée : fiche de reprise § 4.1.
 
 ### Accès réseau
 
@@ -126,7 +126,7 @@ Avec un niveau limité, ajouter ces domaines dans « Allowed domains » en laiss
 
 Réglage : menu de l'environnement cloud dans la barre de titre de la session, puis Modifier, champ « Setup script ». Ce script tourne au démarrage de chaque nouvelle session, avant que Claude ne commence, à partir du dossier au-dessus du dépôt (d'où les chemins absolus). Il ne peut lire ni les variables ni les secrets enregistrés dans l'environnement : `installer-session.sh` n'en a pas besoin (il tire lui-même le mot de passe de la base de test locale). S'il échoue, la session le signale ; on le corrige dans le même champ, et les nouvelles sessions prennent la version corrigée.
 
-Version recommandée, autonome : coller dans le champ le texte suivant, où la ligne du milieu est remplacée par le contenu entier de `installer-session.sh`, sans rien y changer (la nouvelle session peut préparer ce texte complet pour l'éditeur) :
+Version recommandée, autonome : coller dans le champ le texte suivant, où la ligne « (contenu entier de installer-session.sh) » est remplacée par le contenu entier de `installer-session.sh`, sans rien y changer (la nouvelle session peut préparer ce texte complet pour l'éditeur) :
 
 ```bash
 #!/bin/bash
@@ -134,27 +134,64 @@ mkdir -p /root/piliqi-outils
 cat > /root/piliqi-outils/installer-session.sh <<'FIN_INSTALLER_PILIQI'
 (contenu entier de installer-session.sh)
 FIN_INSTALLER_PILIQI
+# La branche par défaut (main) ne contient que le commit initial : si l'arbre est sur main
+# et propre, extraire la branche de travail ; sinon ne rien changer.
+DEPOT=/home/user/piliqiediteur
+TRAVAIL=claude/saas-invoice-editor-architecture-q6eizh
+if [ "$(git -C "$DEPOT" branch --show-current 2>/dev/null)" = main ] && [ -z "$(git -C "$DEPOT" status --porcelain 2>/dev/null)" ]; then
+  # Clone limité à une branche ou superficiel : élargir la règle de fetch, puis tout récupérer.
+  git -C "$DEPOT" checkout -q "$TRAVAIL" 2>/dev/null || {
+    git -C "$DEPOT" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    if [ "$(git -C "$DEPOT" rev-parse --is-shallow-repository)" = true ]; then
+      git -C "$DEPOT" fetch -q --unshallow origin
+    else
+      git -C "$DEPOT" fetch -q origin
+    fi && git -C "$DEPOT" checkout -q "$TRAVAIL"
+  } || echo "Branche de travail non extraite : la session fera Composer et .env (fiche de reprise § 4.1 puis § 4.3)"
+else
+  echo "Arbre absent, sur une autre branche que main ou non propre : branche de travail non extraite (fiche de reprise § 4.1)"
+fi
 bash /root/piliqi-outils/installer-session.sh
 ```
 
-Version courte, si le script d'installation peut lire le dépôt (à essayer ; s'il ne le peut pas, garder la version autonome) :
+Version courte, si le dépôt est ajouté sous « Repositories » dans les réglages de l'environnement (sinon le `git fetch` échoue : garder la version autonome) :
 
 ```bash
 #!/bin/bash
 cd /home/user/piliqiediteur || { echo "Dépôt absent : installation PILIQI non lancée"; exit 1; }
 git fetch -q origin claude/pilotage-reprise || { echo "Branche de reprise inaccessible"; exit 1; }
-chemin=$(git ls-tree -r --name-only origin/claude/pilotage-reprise | grep -E '(^|/)installer-session\.sh$' | head -n 1)
+# FETCH_HEAD : marche aussi sur un clone limité à une branche ou superficiel.
+chemin=$(git ls-tree -r --name-only FETCH_HEAD | grep -E '(^|/)installer-session\.sh$' | head -n 1)
 [ -n "$chemin" ] || { echo "installer-session.sh introuvable dans la branche de reprise"; exit 1; }
 mkdir -p /root/piliqi-outils
-git show "origin/claude/pilotage-reprise:$chemin" > /root/piliqi-outils/installer-session.sh
+git show "FETCH_HEAD:$chemin" > /root/piliqi-outils/installer-session.sh
+# La branche par défaut (main) ne contient que le commit initial : si l'arbre est sur main
+# et propre, extraire la branche de travail ; sinon ne rien changer.
+DEPOT=/home/user/piliqiediteur
+TRAVAIL=claude/saas-invoice-editor-architecture-q6eizh
+if [ "$(git -C "$DEPOT" branch --show-current 2>/dev/null)" = main ] && [ -z "$(git -C "$DEPOT" status --porcelain 2>/dev/null)" ]; then
+  # Clone limité à une branche ou superficiel : élargir la règle de fetch, puis tout récupérer.
+  git -C "$DEPOT" checkout -q "$TRAVAIL" 2>/dev/null || {
+    git -C "$DEPOT" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    if [ "$(git -C "$DEPOT" rev-parse --is-shallow-repository)" = true ]; then
+      git -C "$DEPOT" fetch -q --unshallow origin
+    else
+      git -C "$DEPOT" fetch -q origin
+    fi && git -C "$DEPOT" checkout -q "$TRAVAIL"
+  } || echo "Branche de travail non extraite : la session fera Composer et .env (fiche de reprise § 4.1 puis § 4.3)"
+else
+  echo "Arbre absent, sur une autre branche que main ou non propre : branche de travail non extraite (fiche de reprise § 4.1)"
+fi
 bash /root/piliqi-outils/installer-session.sh
 ```
+
+La branche par défaut `main` ne contient que le commit initial (README.md seul). Sans l'extraction de la branche de travail, `installer-session.sh` ne trouve ni `composer.json` ni `.env.example`, saute Composer et `.env`, et finit en échec (code 1) ; la session suit alors la fiche de reprise § 4.1, puis relance `installer-session.sh`. L'extraction ne se fait que si l'arbre est sur `main` et propre : elle ne change jamais une autre branche ni un travail en cours. Comme le script tourne avant que Claude ne commence, la session trouve alors le `CLAUDE.md` et les skills de la branche de travail ; la fiche de reprise lui fait de toute façon lire `CLAUDE.md` en entier.
 
 Dans les deux cas, le script reste ensuite dans le conteneur : `bash /root/piliqi-outils/installer-session.sh --verifier` le contrôle à tout moment.
 
 L'étape Composer peut être longue (piège 6). Si le script d'installation dépasse le temps permis, remplacer sa dernière ligne par `bash /root/piliqi-outils/installer-session.sh --sans-composer`, et la session lance elle-même `bash /root/piliqi-outils/installer-session.sh` (qui ne refait alors que Composer et `.env`).
 
-Sans script d'installation, rien n'est perdu : la session lance elle-même `bash installer-session.sh` (elle est `root` et a le réseau), mais elle doit le refaire à chaque nouveau conteneur.
+Sans script d'installation, rien n'est perdu : la session extrait elle-même la branche de travail (fiche de reprise § 4.1), puis lance `bash installer-session.sh` (elle est `root` et a le réseau), mais elle doit le refaire à chaque nouveau conteneur.
 
 ### Variables et secrets
 
@@ -201,7 +238,7 @@ grep -q '^export PILIQI_PG_MOT_DE_PASSE=' ~/.profile \
   || printf '\n# Base PostgreSQL locale de test de PILIQI\nexport PILIQI_PG_MOT_DE_PASSE=%s' "$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')" >> ~/.profile
 ```
 
-Vérifier sans afficher la valeur : `bash -lc 'test -n "$PILIQI_PG_MOT_DE_PASSE" && echo défini'`. Ne pas reprendre le mot de passe de l'ancien conteneur : il était trop court (piège 15). Le mot de passe d'un conteneur neuf n'a de sens que dans ce conteneur ; s'il change, le script réaligne le rôle sur `~/.profile`.
+Vérifier sans afficher la valeur : `bash -lc 'test -n "$PILIQI_PG_MOT_DE_PASSE" && echo défini'`. Ne pas reprendre le mot de passe de l'ancien conteneur : il était court, et c'est aussi la valeur publique de la base de test de la CI (piège 15). Le mot de passe d'un conteneur neuf n'a de sens que dans ce conteneur ; s'il change, le script réaligne le rôle sur `~/.profile`.
 
 ### 5.4 Rôle piliqi et base piliqi_test
 
@@ -261,7 +298,7 @@ Ne pas lancer `php artisan caisse:generer-cle` dans l'arbre de travail : il écr
 
 ### 5.9 Contrôle final
 
-`bash installer-session.sh --verifier` : chaque point est marqué `[ok]`, `[attention]` (à lire, ne bloque pas) ou `[MANQUE]` (à corriger) ; le code de sortie vaut 0 quand rien ne manque, 1 sinon. Ce mode n'écrit aucun fichier : il lit `~/.profile` sans l'exécuter, lit la version de Composer dans son fichier, n'essaie pas faketime (libfaketime crée des objets temporaires dans `/dev/shm`) et ne fait que des lectures dans PostgreSQL. Dans l'ancien conteneur, il finit par « Tout est en place (2 point(s) d'attention) » (l'espace disque et le mot de passe court) et le code 0, sans aucune écriture (contrôlé avec `strace` et des sommes de contrôle). Le mode d'installation n'a jamais été lancé dans l'ancien conteneur, où tout était déjà en place : sa première exécution réelle sera celle du conteneur neuf ; lire sa sortie étape par étape.
+`bash installer-session.sh --verifier` : chaque point est marqué `[ok]`, `[attention]` (à lire, ne bloque pas) ou `[MANQUE]` (à corriger) ; le code de sortie vaut 0 quand rien ne manque, 1 sinon. Sur une branche qui n'a pas `composer.json` (`main`), il le dit en un seul `[MANQUE]` qui renvoie à la fiche de reprise § 4.1, sans vérifier `vendor` ni `.env` ; le mode d'installation saute alors Composer et `.env` avec le même message. Ce mode n'écrit aucun fichier : il lit `~/.profile` sans l'exécuter, lit la version de Composer dans son fichier, n'essaie pas faketime (libfaketime crée des objets temporaires dans `/dev/shm`) et ne fait que des lectures dans PostgreSQL. Dans l'ancien conteneur, il finit par « Tout est en place (2 point(s) d'attention) » (l'espace disque et le mot de passe court) et le code 0, sans aucune écriture (contrôlé avec `strace` et des sommes de contrôle). Le mode d'installation n'a jamais été lancé dans l'ancien conteneur, où tout était déjà en place : sa première exécution réelle sera celle du conteneur neuf ; lire sa sortie étape par étape.
 
 ## 6. Premiers essais, puis les suites
 
@@ -273,7 +310,7 @@ php artisan test --compact tests/Unit/CalculateurLigneTest.php; echo $?
 bash -lc 'cd /home/user/piliqiediteur && DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=piliqi_test DB_USERNAME=piliqi DB_PASSWORD="$PILIQI_PG_MOT_DE_PASSE" php artisan test --compact tests/Feature/Recherche/RechercheSansAccentsTest.php'; echo $?
 ```
 
-Les suites complètes (protocole de `CLAUDE.md`) se lancent sous `bash -lc` pour lire le mot de passe, et le code de sortie se contrôle juste après (`echo $?`). Dans cet environnement, le résumé de PHPUnit sort en une ligne JSON (`{"tool":"paratest","result":"passed",…}`, laravel/pao). Ordres de grandeur dans l'ancien conteneur, avec 4 processus, le 25/10 : SQLite environ 4 min 30 (4 517 tests, dont 356 sautés parce qu'ils ne valent que pour PostgreSQL), PostgreSQL environ 11 minutes (4 517 tests, 4 sautés). La grille faketime du README du dépôt (17 instants) se lance avant un commit qui touche aux dates : `TZ=UTC NO_FAKE_STAT=1 faketime -f "@$t" …`, et, sous PostgreSQL, avec en plus les variables de connexion et `FAKETIME_DONT_RESET=1`.
+Les suites complètes (protocole de `CLAUDE.md`) se lancent sous `bash -lc` pour lire le mot de passe, et le code de sortie se contrôle juste après (`echo $?`). Dans cet environnement, le résumé de PHPUnit sort en une ligne JSON (`{"tool":"paratest","result":"passed",…}`, laravel/pao). Ordres de grandeur dans l'ancien conteneur, avec 4 processus, le 25/10 : SQLite environ 4 min 30 (4 517 tests, dont 356 sautés parce qu'ils ne valent que pour PostgreSQL), PostgreSQL environ 11 minutes (4 517 tests, 4 sautés). La grille faketime du README du dépôt (17 instants depuis le lot T3, poussé le 26/10/2026 ; 12 avant ; ce paragraphe du README fait foi) se lance avant un commit qui touche aux dates : `TZ=UTC NO_FAKE_STAT=1 faketime -f "@$t" …`, et, sous PostgreSQL, avec en plus les variables de connexion et `FAKETIME_DONT_RESET=1`.
 
 ## 7. Pièges connus
 
@@ -288,15 +325,15 @@ Les suites complètes (protocole de `CLAUDE.md`) se lancent sous `bash -lc` pour
 9. **Clé de développement.** `caisse:generer-cle` écrit dans `resources/caisse-securisee/cles` : jamais dans l'arbre de travail (le script signale une clé non suivie).
 10. **Version de PostgreSQL.** 16 en local (accepté pour les tests locaux), 17 en CI, 17 ou 18 en production. Une différence de comportement entre versions se voit en CI : vérifier la CI de chaque tête poussée (fiche de reprise § 5).
 11. **memory_limit.** PHP en ligne de commande était sans limite (`-1`). Si une nouvelle image en fixe une, des processus de la suite parallèle peuvent mourir : le script le signale en `[attention]`.
-12. **Script d'installation du cloud.** Il ne voit pas les variables de l'environnement, part du dossier au-dessus du dépôt et a besoin du réseau vers apt, Packagist et GitHub (section 4).
+12. **Script d'installation du cloud.** Il ne voit pas les variables de l'environnement, part du dossier au-dessus du dépôt, ne lit le dépôt privé que s'il est ajouté sous « Repositories » et a besoin du réseau vers apt, Packagist et GitHub (section 4). Il trouve l'arbre sur `main`, qui ne contient que le commit initial : d'où l'extraction de la branche de travail avant `installer-session.sh`.
 13. **Moteurs.** Ne pas réinstaller MariaDB ni aucun autre moteur : PostgreSQL et SQLite seulement (`CLAUDE.md`, puce « Outillage »).
 14. **Valeurs secrètes.** Ne jamais demander à l'éditeur de coller une clé, un jeton ou un mot de passe dans la conversation ; les identifiants passent seulement par les variables de l'environnement (fiche de reprise § 3).
-15. **Contrôle des valeurs secrètes de `pilotage-sync.sh`.** Au 26/10, il ne marche pas : la commande `grep -rlF -- "$val" "$W" --exclude-dir=.git` place `--exclude-dir=.git` après `--`, donc grep le prend pour un fichier, échoue, et le script conclut qu'aucune valeur n'est présente. Seul le premier contrôle (en-têtes de clé, jetons, adresses de messagerie) fonctionne. Correction : écrire `grep -rlF --exclude-dir=.git -- "$val" "$W"`. Avant de la faire, garder un mot de passe de base de test tiré au hasard (comme le fait `installer-session.sh`) : l'ancien était un mot court qui figure partout dans les notes, et le contrôle corrigé aurait alors refusé chaque poussée.
+15. **Contrôle des valeurs secrètes de `pilotage-sync.sh`.** Corrigé le 26/10/2026 (commit `122acac` de la branche de reprise) : la commande est `grep -rlF --exclude-dir=.git -- "$val" "$W"` (avant, `--exclude-dir=.git` placé après `--` était pris pour un fichier, et le contrôle ne trouvait jamais rien). Une valeur écrite dans `.github/workflows/tests.yml` du dépôt (le mot de passe public de la base de test de la CI, qui était aussi celui de l'ancien conteneur, un mot court qui figure partout dans les notes) n'est pas comptée comme un secret. Dans un conteneur neuf, le mot de passe tiré au hasard par `installer-session.sh` est contrôlé normalement. Depuis le 26/10/2026, la liste des variables contrôlées comprend aussi `RECOMMANDE_CLE`, `RECOMMANDE_SECRET_RAPPEL` et `JOURNAL_AUDIT_CLES_PRECEDENTES`, et le script ne bloque plus quand aucune course n'a encore tourné.
 
 ## 8. Ce que le script ne fait pas
 
-- Relier GitHub, choisir la branche de travail et vérifier la tête poussée : fiche de reprise § 4.1.
-- Récupérer la branche de reprise et copier `notes/` dans le dossier temporaire de la nouvelle session, puis adapter les chemins et le lien de session : fiche de reprise § 4.3 et § 4.4.
-- Activer l'outil Workflow (ultracode) sur le nouveau compte : demande à l'éditeur, fiche de reprise § 4.8.
+- Relier GitHub, choisir la branche de travail et vérifier la tête poussée : fiche de reprise § 4.1 (le script d'installation de l'environnement, section 4, extrait la branche de travail quand l'arbre est sur `main` et propre ; `installer-session.sh` ne change jamais de branche).
+- Récupérer la branche de reprise et copier `notes/` dans le dossier temporaire de la nouvelle session, puis adapter les chemins et le lien de session : fiche de reprise § 4.2 et § 4.4.
+- Activer l'outil Workflow (ultracode) sur le nouveau compte : demande à l'éditeur, fiche de reprise § 4.6.
 - Mettre les identifiants SUPER PDP dans l'environnement : l'éditeur, à l'étape 2.
 - Lancer les suites de tests : c'est le travail de chaque lot, selon `CLAUDE.md`.

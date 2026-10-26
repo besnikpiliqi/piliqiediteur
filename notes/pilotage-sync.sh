@@ -38,7 +38,11 @@ for f in "$S"/reprises/*.js; do
 done
 cp "$S/pilotage-sync.sh" "$S/pilotage-fichiers.txt" "$W/notes/"
 
-JOURNAL=$(ls -t $(grep -lE '"label":"[A-Za-z0-9-]+:(implementation|relecture[12]|correction|correction-reprise|poussee|notes)"' $(find "$WF" -name journal.jsonl 2>/dev/null) 2>/dev/null) 2>/dev/null | head -1)
+JOURNAL=""
+JOURNAUX=$(find "$WF" -name journal.jsonl 2>/dev/null)
+if [ -n "$JOURNAUX" ]; then
+  JOURNAL=$(grep -lE '"label":"[A-Za-z0-9-]+:(implementation|relecture[12]|correction|correction-reprise|poussee|fiche|notes)"' $JOURNAUX </dev/null 2>/dev/null | xargs -r ls -t 2>/dev/null | head -1)
+fi
 {
   echo "# État du projet (généré automatiquement)"
   echo
@@ -79,7 +83,7 @@ JOURNAL=$(ls -t $(grep -lE '"label":"[A-Za-z0-9-]+:(implementation|relecture[12]
 
 TROUVE=0
 if grep -rlE 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|[A-Za-z0-9._%+-]+@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|orange|free|laposte|sfr|wanadoo)\.[a-z]{2,}' "$W" --exclude-dir=.git >/dev/null 2>&1; then TROUVE=1; fi
-for v in PILIQI_PG_MOT_DE_PASSE EDITEUR_OPERATEURS PILIQI_EDITEUR_EMAIL JOURNAL_AUDIT_CLE_ID SUPERPDP_CLIENT_SECRET SUPERPDP_CLIENT_ID SUPERPDP_TRICATEL_CLIENT_SECRET SUPERPDP_TRICATEL_CLIENT_ID INSEE_SIRENE_CLE INPI_RNE_IDENTIFIANT INPI_RNE_MOT_DE_PASSE JOURNAL_AUDIT_CLE CAISSE_SECURISEE_CLE_PRIVEE CAISSE_SECURISEE_PHRASE_SECRETE; do
+for v in RECOMMANDE_CLE RECOMMANDE_SECRET_RAPPEL JOURNAL_AUDIT_CLES_PRECEDENTES PILIQI_PG_MOT_DE_PASSE EDITEUR_OPERATEURS PILIQI_EDITEUR_EMAIL JOURNAL_AUDIT_CLE_ID SUPERPDP_CLIENT_SECRET SUPERPDP_CLIENT_ID SUPERPDP_TRICATEL_CLIENT_SECRET SUPERPDP_TRICATEL_CLIENT_ID INSEE_SIRENE_CLE INPI_RNE_IDENTIFIANT INPI_RNE_MOT_DE_PASSE JOURNAL_AUDIT_CLE CAISSE_SECURISEE_CLE_PRIVEE CAISSE_SECURISEE_PHRASE_SECRETE; do
   val="${!v:-}"
   # Une valeur publique (celle de la base de test de la CI, écrite dans le dépôt) n'est pas un secret.
   if [ ${#val} -ge 6 ] && ! grep -qF -- "$val" "$DEPOT/.github/workflows/tests.yml" 2>/dev/null \

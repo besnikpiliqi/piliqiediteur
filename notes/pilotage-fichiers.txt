@@ -66,3 +66,4 @@ decisions/serie4-donnees.js
 decisions/serie8/questions.js
 gen-decisions.js
 historique/extraire-historique.py
+decisions/reponses-regles-ecran-26-10.md

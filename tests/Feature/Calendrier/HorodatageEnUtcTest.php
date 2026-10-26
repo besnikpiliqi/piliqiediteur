@@ -8,6 +8,7 @@ use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
@@ -15,6 +16,7 @@ use DateTimeZone;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -190,13 +192,48 @@ class HorodatageEnUtcTest extends TestCase
 
     /**
      * Pour chaque table d'un modèle de l'application, chaque colonne
-     * d'instant a le cast Instant, sauf les horodatages que gère Eloquent,
-     * jamais castés ; chaque colonne de jour a le cast JourCivil ; et
-     * aucune colonne d'heure d'aucune table, celles de Laravel et les
-     * tables de liaison comprises, n'a de valeur par défaut.
+     * d'instant a le cast Instant, sauf les horodatages que gère Eloquent :
+     * created_at et updated_at ne sont jamais castés, et deleted_at n'a que
+     * le cast « datetime » qu'ajoute lui-même le trait SoftDeletes, lu et
+     * écrit en UTC comme toute l'application ; chaque colonne de jour a le
+     * cast JourCivil ; et aucune colonne d'heure d'aucune table, celles de
+     * Laravel et les tables de liaison comprises, n'a de valeur par défaut.
+     */
     public function test_les_colonnes_d_horodatage_ont_leur_cast_et_aucune_valeur_par_defaut(): void
     {
-        $modeles = $this->modelesDeLApplication();
+        $this->assertSame([], $this->ecartsDuSchema());
+    }
+
+    /**
+     * La garde du schéma voit une colonne d'instant qui perd son cast : un
+     * modèle VerificationSociete sans celui de expire_le est signalé.
+     */
+    public function test_la_garde_du_schema_signale_une_colonne_d_instant_sans_cast(): void
+    {
+        $sansCast = new class extends VerificationSociete
+        {
+            /**
+             * @return array<string, mixed>
+             */
+            public function getCasts(): array
+            {
+                return array_diff_key(parent::getCasts(), ['expire_le' => true]);
+            }
+        };
+
+        $this->assertSame(['verifications_societe.expire_le : cast aucun, attendu '.Instant::class], $this->ecartsDuSchema(['verifications_societe' => $sansCast]));
+    }
+
+    /**
+     * Les écarts entre le schéma et les casts des modèles de l'application,
+     * avec, pour une table, le modèle qui remplace le sien.
+     *
+     * @param  array<string, Model>  $remplacements
+     * @return list<string>
+     */
+    private function ecartsDuSchema(array $remplacements = []): array
+    {
+        $modeles = array_replace($this->modelesDeLApplication(), $remplacements);
         $ecarts = [];
 
         foreach (Schema::getTableListing(schemaQualified: false) as $table) {
@@ -215,8 +252,12 @@ class HorodatageEnUtcTest extends TestCase
                     continue;
                 }
 
-                $gereeParEloquent = $modele->usesTimestamps() && in_array($colonne['name'], [$modele->getCreatedAtColumn(), $modele->getUpdatedAtColumn(), 'deleted_at'], true);
-                $attendu = $estUnJour ? JourCivil::class : ($gereeParEloquent ? null : Instant::class);
+                $attendu = match (true) {
+                    $estUnJour => JourCivil::class,
+                    $modele->usesTimestamps() && in_array($colonne['name'], [$modele->getCreatedAtColumn(), $modele->getUpdatedAtColumn()], true) => null,
+                    in_array(SoftDeletes::class, class_uses_recursive($modele), true) && $colonne['name'] === $modele->getDeletedAtColumn() => 'datetime',
+                    default => Instant::class,
+                };
                 $cast = $modele->getCasts()[$colonne['name']] ?? null;
 
                 if ($cast !== $attendu) {
@@ -225,7 +266,7 @@ class HorodatageEnUtcTest extends TestCase
             }
         }
 
-        $this->assertSame([], $ecarts);
+        return $ecarts;
     }
 
     /**

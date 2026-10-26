@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -45,6 +46,7 @@ class VerificationSociete extends Model
         'resultat' => ResultatVerification::class,
         'details' => 'array',
         'operateur' => 'array',
+        'expire_le' => Instant::class,
     ];
 
     protected static function booted(): void

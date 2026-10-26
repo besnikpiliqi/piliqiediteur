@@ -21,8 +21,9 @@ use Tests\TestCase;
  * commande, et rien de ce que lisent les agents ne renvoie à un outil
  * absent du projet. La base, PostgreSQL ou SQLite, trie les textes dans
  * le même ordre. Les aides des tests lisent les PDF de dompdf sans
- * dépendre du hasard de leur contenu, et aucun test ne dépend du hasard
- * de Faker ni de celui de Str::random().
+ * dépendre du hasard de leur contenu, aucun test ne dépend du hasard
+ * de Faker ni de celui de Str::random(), et aucun commentaire n'empêche un
+ * test de tourner.
  */
 class OutillageTest extends TestCase
 {
@@ -184,5 +185,30 @@ class OutillageTest extends TestCase
             ->unique();
 
         $this->assertSame([], $skillsProposesAuxAgents->diff($skillsDesPaquetsInstalles)->values()->all());
+    }
+
+    /**
+     * Aucun commentaire des tests n'avale une fonction : un docbloc resté
+     * ouvert court jusqu'à la fermeture du suivant, et la méthode prise
+     * entre les deux ne tourne plus, sans que la suite le signale, comme la
+     * garde du schéma de HorodatageEnUtcTest l'a été.
+     */
+    public function test_aucun_commentaire_des_tests_n_avale_une_fonction(): void
+    {
+        $fonctionsAvalees = [];
+
+        foreach (File::allFiles(base_path('tests')) as $fichier) {
+            if ($fichier->getExtension() !== 'php') {
+                continue;
+            }
+
+            foreach (token_get_all($fichier->getContents()) as $jeton) {
+                if (is_array($jeton) && in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true) && preg_match('/\bfunction\s+\w+\s*\(/', $jeton[1]) === 1) {
+                    $fonctionsAvalees[] = 'tests/'.$fichier->getRelativePathname().':'.$jeton[2];
+                }
+            }
+        }
+
+        $this->assertSame([], $fonctionsAvalees);
     }
 }

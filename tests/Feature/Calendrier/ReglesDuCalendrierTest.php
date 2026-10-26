@@ -43,6 +43,7 @@ class ReglesDuCalendrierTest extends TestCase
         'calcul de calendrier sur un instant (Calendrier)' => '/->(?:startOf|endOf)(?!Second\\b)\\w+\\(|->isToday\\(|->isSameDay\\(|->isYesterday\\(|->isTomorrow\\(|->diffInDays\\(|->(?:year|month|day)\\b/',
         'décalage en jours, mois ou années (Calendrier::deParis()->decaler(), ajouterJours())' => '/(?:add|sub)(?:Day|Days|Week|Weeks|Month|Months|MonthsNoOverflow|Year|Years)\\(/',
         'lecture d\'une date dans un fuseau implicite (Calendrier::deParis()->heureMurale(), Calendrier::jourValide())' => '/::parse\\(|::createFromFormat\\(|Carbon(?:Immutable)?::create\\(|->setDate\\(|->setDay\\(/',
+        'fonction de date de PHP au fuseau par défaut (Calendrier::deParis()->afficher(), anneeDe(), heureMurale())' => '/(?<!function )(?<![\\w>:$\\\\])\\\\?(?:date|gmdate|strtotime|mktime|gmmktime|idate|getdate|localtime|date_create|date_create_immutable)\\(|new \\\\?DateTime(?:Immutable)?\\(/',
         'règle de validation au jour implicite (Calendrier::deParis()->aujourdhui())' => '/(?<!:):(?:today|tomorrow|yesterday|now)\\b/',
         'colonne de jour lue comme un instant (->jour(), ou ->dateTime(\'d/m/Y\') pour un instant)' => '/->date\\(/',
         'borne d\'un sélecteur de date sans le calendrier (Calendrier::deParis()->aujourdhui())' => '/(?:minDate|maxDate)\\((?!.*Calendrier::)/',

@@ -42,6 +42,7 @@ use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PeriodesDActivite;
@@ -321,6 +322,19 @@ class NuitDeParisTest extends TestCase
             ['INV-LYON1-2027-000001', 'FA-LYON1-2027-000001', 'AF-LYON1-2027-000001', 'TK-LYON1-2027-000001', 'FAC-LYON1-2027-000001', 'AV-LYON1-2027-000001', 'DEV-LYON1-2027-000001', 'Z-LYON1-2027-000001'],
             [$inventaire->numero, $factureAchat->numero, $avoirFournisseur->numero, $ticket->numero, $facture->numero, $avoir->numero, $devis->numero, $cloture->numero],
         );
+    }
+
+    /**
+     * Le 1er janvier 2027 à 0 h 30 à Paris, encore le 31 décembre 2026 en
+     * UTC : le pied d'un e-mail, en HTML comme en texte, porte l'année 2027.
+     */
+    public function test_le_pied_des_e_mails_porte_l_annee_de_paris(): void
+    {
+        $this->travelTo(self::enUtc('2026-12-31 23:30:00'));
+
+        $mail = new DemandeInscriptionMail('https://piliqi.test/inscription/confirmer/jeton', now()->addHours(24));
+
+        $mail->assertSeeInHtml('© 2027')->assertSeeInText('© 2027')->assertDontSeeInHtml('© 2026')->assertDontSeeInText('© 2026');
     }
 
     /**

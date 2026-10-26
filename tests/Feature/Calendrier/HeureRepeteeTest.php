@@ -271,22 +271,34 @@ class HeureRepeteeTest extends TestCase
 
     /**
      * Les échecs de connexion du premier passage comptent dans la fenêtre
-     * d'une heure : au second passage, une heure plus tard en temps réel,
-     * l'attente a passé, alors que l'heure murale n'a pas bougé.
+     * d'une heure, en temps réel, à partir du premier d'entre eux : 29
+     * échecs depuis une même adresse IP à 00:50 UTC (2 h 50, heure d'été),
+     * puis le 30e au second passage, à 01:10 UTC (2 h 10, heure d'hiver,
+     * plus tôt à l'heure murale), font attendre cette adresse ; à 01:50 UTC,
+     * une heure après le premier échec, alors que l'heure murale ne marque
+     * encore que 2 h 50, ils ne comptent plus.
      */
     public function test_les_essais_de_connexion_du_premier_passage_comptent_dans_la_fenetre_d_une_heure(): void
     {
-        $this->travelTo(self::enUtc('2026-10-25 00:30:00'));
+        $this->travelTo(self::enUtc('2026-10-25 00:50:00'));
         $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
         $identifiant = (string) $vendeur->identifiantDeConnexion();
+        $echouer = function (int $rang): void {
+            $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter("inconnu-{$rang}@exemple.fr", 'pas-le-bon')), "échec {$rang}");
+        };
 
-        foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE) as $rang) {
-            $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon')), "échec {$rang}");
+        foreach (range(1, LimitationDesConnexions::ECHECS_PAR_ADRESSE - 1) as $rang) {
+            $echouer($rang);
         }
-        $this->assertSame(LimitationDesConnexions::message(60), $this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)));
 
-        $this->travelTo(self::enUtc('2026-10-25 00:31:01'));
+        $this->travelTo(self::enUtc('2026-10-25 01:10:00'));
+        $echouer(LimitationDesConnexions::ECHECS_PAR_ADRESSE);
+        $this->assertSame(LimitationDesConnexions::message(LimitationDesConnexions::ATTENTE), $this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)));
+
+        $this->travelTo(self::enUtc('2026-10-25 01:50:00'));
+        $echouer(LimitationDesConnexions::ECHECS_PAR_ADRESSE + 1);
         $this->assertNull($this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)));
+        $this->assertAuthenticatedAs($vendeur);
     }
 
     /**

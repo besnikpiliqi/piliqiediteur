@@ -4065,3 +4065,7 @@ Ne tableaux de bord duhet me lan « À faire » per aksionet qe duhet me u kry p
 
 Mais tu prends ca en tant que langue française et pas albanais
 
+## 285. 2026-10-26 16:08 UTC
+
+« Le nombre jaune du menu des factures disparaît, remplacé par des onglets clairs. » il faut enlever tout parce que tout va être affiché dans le tableau de bord
+

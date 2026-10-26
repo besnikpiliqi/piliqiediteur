@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 16:04 UTC par pilotage-sync.sh : « Série 9 : réponses de l'éditeur, lots S9-L et S9-A ajoutés avant le lot 21 ».
+Mis à jour le 26/10/2026 à 16:09 UTC par pilotage-sync.sh : « Série 9 : aucun nombre dans les menus, tout au tableau de bord ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

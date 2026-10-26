@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 21:35 UTC par pilotage-sync.sh : « Premier VERIFICATION.md ; fiche : commande des lots restants, série 9 aux § 7 et 8, sources officielles ».
+Mis à jour le 26/10/2026 à 21:44 UTC par pilotage-sync.sh : « Redémarrage du conteneur : chaîne reprise aux relectures de TA ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

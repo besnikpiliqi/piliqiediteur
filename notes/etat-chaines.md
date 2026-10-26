@@ -87,3 +87,4 @@
 - Branche claude/pilotage-reprise créée (autorisée par l'éditeur), dossier de travail scratchpad/pilotage-reprise (worktree orphelin) ; mise à jour par pilotage-sync.sh après chaque lot (étape :notes ajoutée à serie8-lots.js) et après chaque changement. Fiche relue à froid par un agent (18 constats, tous repris).
 - serie8-lots.js (sauvegardes serie8-lots.avant-notes.js, serie8-lots.avant-faketime-L1.js) : étape :notes ; règle faketime dans REGLES ; TA et EC sur la grille du README ; L1 énumère le fuseau UTC de la base. La sous-course n'est pas encore appelée : elle lira ces textes.
 - En-tête du harnais retiré des consignes sauvées de T2 et T3.
+- 26/10, 12 h UTC : à la suggestion de l'éditeur, étape <lot>:fiche ajoutée à serie8-lots.js (sauvegarde serie8-lots.avant-verif-fiche.js) : relecture à froid de la fiche après chaque lot, mise à jour du § 6, VERIFICATION.md. Les agents des lots ne lisent pas la fiche (elle s'adresse à la session qui orchestre).

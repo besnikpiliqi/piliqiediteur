@@ -73,7 +73,8 @@ Deux sessions qui travaillent en même temps sur la branche de travail se détru
   2. `<lot>:relecture1` et `<lot>:relecture2` en parallèle (optique fidélité et métier ; optique sécurité, isolation et qualité) : défauts confirmés seulement ;
   3. `<lot>:correction` s'il y a des défauts (un commit « Relecture du lot … ») ;
   4. `<lot>:poussee` (arbre propre, `git push` sans forcer) ;
-  5. `<lot>:notes` (lance `pilotage-sync.sh`, qui met cette branche à jour).
+  5. `<lot>:fiche` : un agent neuf relit cette fiche à froid, comme le ferait une autre session, la vérifie contre le dépôt et les notes, met à jour le § 6 et les références factuelles fausses, et écrit le reste de ce qu'il trouve dans `VERIFICATION.md` (règles et méthode : il propose, la session décide) ;
+  6. `<lot>:notes` (lance `pilotage-sync.sh`, qui met cette branche à jour).
   La chaîne s'arrête si un lot n'a pas de commit ou si la poussée échoue.
 - Lancer : outil Workflow avec `scriptPath` = `<scratchpad>/serie8-lots.js` et `args` = `{"ouverts": [ ... les lots restants, dans l'ordre ... ]}`, sans `resumeFromRunId`.
 - Lots restants : un lot est fait quand ses commits « (lot X) » sont sur `origin` et, si ses relectures ont trouvé des défauts, son commit « Relecture du lot X … » aussi. `ouverts` reçoit, dans l'ordre de `LOTS`, ceux qui ne sont pas faits. Ne jamais remettre dans `ouverts` un lot déjà poussé.

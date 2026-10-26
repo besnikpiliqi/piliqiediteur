@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 11:09 UTC par pilotage-sync.sh : « Note l'état du 26/10 à 11 h 10 UTC ».
+Mis à jour le 26/10/2026 à 12:05 UTC par pilotage-sync.sh : « Ajoute la relecture à froid de la fiche après chaque lot ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

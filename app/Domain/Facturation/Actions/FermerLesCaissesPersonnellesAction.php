@@ -43,7 +43,8 @@ class FermerLesCaissesPersonnellesAction
 
     /**
      * Ferme les caisses personnelles du magasin, qui doit être le magasin
-     * actif, ouvertes jusqu'à la journée du calendrier de la borne : chacune
+     * actif, ouvertes jusqu'à la journée de la borne, dans son calendrier :
+     * chacune
      * compte ses ventes émises jusqu'à la borne et ses encaissements reçus
      * jusqu'à sa journée.
      *
@@ -59,7 +60,7 @@ class FermerLesCaissesPersonnellesAction
 
         $borne = CarbonImmutable::instance($jusquAu);
 
-        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->verificateur->vendeursAvecCaisseOuverte(Calendrier::deParis()->jourDe($borne))
+        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->verificateur->vendeursAvecCaisseOuverte($magasin->calendrier()->jourDe($borne))
             ->map(function (User $vendeur) use ($borne): ?ClotureCaissePersonnelle {
                 try {
                     return $this->fermerSaCaisse->fermerDOffice($vendeur, $borne);

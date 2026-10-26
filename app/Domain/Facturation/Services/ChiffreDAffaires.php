@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -32,22 +33,22 @@ class ChiffreDAffaires
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
-     * Le net du jour $du au jour $au du calendrier, compris, avec le nombre
-     * de ventes et celui des avoirs déduits.
+     * Le net du jour $du au jour $au de ce calendrier, celui du magasin
+     * actif, compris, avec le nombre de ventes et celui des avoirs déduits.
      *
      * @return array{ht: float, tva: float, ttc: float, factures: int, avoirs: int}
      */
-    public function netSurPeriode(string $du, string $au, ?User $vendeur = null): array
+    public function netSurPeriode(Calendrier $calendrier, string $du, string $au, ?User $vendeur = null): array
     {
         $factures = Facture::query()
             ->emises()
-            ->emisDuAu($du, $au)
+            ->emisDuAu($calendrier, $du, $au)
             ->when($vendeur !== null, fn (Builder $query) => $query->where('cree_par', $vendeur->getKey()))
             ->get(['total_ht', 'total_tva', 'total_ttc']);
 
         [$totauxDesAvoirs, $nombreDAvoirs] = $vendeur === null
-            ? $this->avoirsDuMagasin($du, $au)
-            : $this->avoirsSurLesVentesDe($vendeur, $du, $au);
+            ? $this->avoirsDuMagasin($calendrier, $du, $au)
+            : $this->avoirsSurLesVentesDe($calendrier, $vendeur, $du, $au);
 
         $net = $this->calculateur->deduire($this->calculateur->cumuler($factures), $totauxDesAvoirs);
 
@@ -63,9 +64,9 @@ class ChiffreDAffaires
     /**
      * @return array{0: array{total_ht: float, total_tva: float, total_ttc: float}, 1: int}
      */
-    private function avoirsDuMagasin(string $du, string $au): array
+    private function avoirsDuMagasin(Calendrier $calendrier, string $du, string $au): array
     {
-        $avoirs = $this->avoirsEmis(Avoir::query(), $du, $au)->get(['total_ht', 'total_tva', 'total_ttc']);
+        $avoirs = $this->avoirsEmis(Avoir::query(), $calendrier, $du, $au)->get(['total_ht', 'total_tva', 'total_ttc']);
 
         return [$this->calculateur->cumuler($avoirs), $avoirs->count()];
     }
@@ -76,10 +77,10 @@ class ChiffreDAffaires
      *
      * @return array{0: array{total_ht: float, total_tva: float, total_ttc: float}, 1: int}
      */
-    private function avoirsSurLesVentesDe(User $vendeur, string $du, string $au): array
+    private function avoirsSurLesVentesDe(Calendrier $calendrier, User $vendeur, string $du, string $au): array
     {
         $lignes = LigneAvoir::query()
-            ->whereHas('avoir', fn (Builder $avoirs) => $this->avoirsEmis($avoirs, $du, $au))
+            ->whereHas('avoir', fn (Builder $avoirs) => $this->avoirsEmis($avoirs, $calendrier, $du, $au))
             ->whereHas('ligneFacture.facture', fn (Builder $factures) => $factures->where('cree_par', $vendeur->getKey()))
             ->get(['avoir_id', 'montant_ht', 'montant_tva', 'montant_ttc']);
 
@@ -90,8 +91,8 @@ class ChiffreDAffaires
      * @param  Builder<Avoir>  $avoirs
      * @return Builder<Avoir>
      */
-    private function avoirsEmis(Builder $avoirs, string $du, string $au): Builder
+    private function avoirsEmis(Builder $avoirs, Calendrier $calendrier, string $du, string $au): Builder
     {
-        return $avoirs->where('statut', StatutAvoir::Emise)->emisDuAu($du, $au);
+        return $avoirs->where('statut', StatutAvoir::Emise)->emisDuAu($calendrier, $du, $au);
     }
 }

@@ -153,7 +153,7 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
                 TextEntry::make('derniere_connexion_le')
                     ->label('Dernière connexion')
-                    ->dateTime('d/m/Y à H:i')
+                    ->formatStateUsing(fn (User $record): string => $record->calendrier()->afficherHorsDuMagasin($record->derniere_connexion_le, 'd/m/Y à H:i'))
                     ->placeholder('Jamais connecté'),
                 TextEntry::make('acces_redonne')
                     ->label('Accès redonné')
@@ -197,7 +197,9 @@ class MembreResource extends RessourceDuPanneauSociete
     }
 
     /**
-     * Le dernier accès redonné à ce compte : la date, l'auteur et le mode.
+     * Le dernier accès redonné à ce compte : la date, à l'heure de Paris
+     * pour un compte de la société et à celle de son magasin pour un membre
+     * (nommée hors de Paris, voir User::calendrier()), l'auteur et le mode.
      */
     public static function accesRedonne(User $compte): ?string
     {
@@ -207,7 +209,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
         $auteur = User::query()->where('societe_id', $compte->societe_id)->find($compte->acces_redonne_par)?->name ?? 'un compte de la société';
 
-        return 'Le '.Calendrier::deParis()->afficher($compte->acces_redonne_le, 'd/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
+        return 'Le '.$compte->calendrier()->afficherHorsDuMagasin($compte->acces_redonne_le, 'd/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
     }
 
     /**

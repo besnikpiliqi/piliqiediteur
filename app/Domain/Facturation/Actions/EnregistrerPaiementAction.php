@@ -98,10 +98,11 @@ class EnregistrerPaiementAction
      */
     public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null, array $bonsDAvoir = []): Paiement
     {
+        $magasin = app(TenantContext::class)->magasin();
         $recuLe = Calendrier::jourValide((string) $donneesPaiement['recu_le'])
             ?? throw new LogicException('La date de réception d\'un paiement s\'écrit « AAAA-MM-JJ ».');
 
-        if ($recuLe > Calendrier::deParis()->aujourdhui()) {
+        if ($recuLe > $magasin->calendrier()->aujourdhui()) {
             throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
         }
 
@@ -117,7 +118,6 @@ class EnregistrerPaiementAction
             throw new LogicException(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros($montant), self::enEuros($totalImpute)));
         }
 
-        $magasin = app(TenantContext::class)->magasin();
         $parametres = [
             'client_id' => $client->getKey(),
             'paiement' => $donneesPaiement,

@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Toggle;
@@ -23,7 +24,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListEnregistrementsFiscaux extends ListRecords
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, PrendLeCalendrierDuMagasin;
 
     protected static string $resource = EnregistrementFiscalResource::class;
 
@@ -87,8 +88,8 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ->modalDescription('L\'export s\'inscrit lui-même au journal des événements du magasin.')
                 ->modalSubmitActionLabel('Exporter')
                 ->form([
-                    DatePicker::make('du')->label('Du')->required()->default(Calendrier::premierJourDuMois(Calendrier::deParis()->aujourdhui())),
-                    DatePicker::make('au')->label('Au')->required()->afterOrEqual('du')->default(Calendrier::deParis()->aujourdhui()),
+                    DatePicker::make('du')->label('Du')->required()->default(fn (): string => Calendrier::premierJourDuMois(self::calendrierDuMagasin()->aujourdhui())),
+                    DatePicker::make('au')->label('Au')->required()->afterOrEqual('du')->default(fn (): string => self::calendrierDuMagasin()->aujourdhui()),
                 ])
                 ->authorize(static fn (): bool => EnregistrementFiscalResource::canViewAny())
                 ->action(function (array $data): ?StreamedResponse {

@@ -13,6 +13,7 @@ use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnelles
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Models\User;
 use Filament\Actions;
 use Filament\Facades\Filament;
@@ -44,7 +45,7 @@ use Livewire\Attributes\Locked;
  */
 class ListClotureCaisses extends ListRecords
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, PrendLeCalendrierDuMagasin;
     use PorteUnJeton;
 
     protected static string $resource = ClotureCaisseResource::class;
@@ -74,7 +75,7 @@ class ListClotureCaisses extends ListRecords
     {
         parent::mount();
 
-        $this->journee = Calendrier::deParis()->aujourdhui();
+        $this->journee = self::calendrierDuMagasin()->aujourdhui();
     }
 
     /**

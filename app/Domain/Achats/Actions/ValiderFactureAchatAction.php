@@ -8,7 +8,6 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -139,7 +138,7 @@ class ValiderFactureAchatAction
         $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
 
         $maintenant = CarbonImmutable::now();
-        $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, Calendrier::deParis()->anneeDe($maintenant));
+        $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, $factureAchat->magasin->calendrier()->anneeDe($maintenant));
 
         $factureAchat->forceFill([
             'numero' => $numero,

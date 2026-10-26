@@ -2,6 +2,7 @@
 
 namespace App\Domain\Calendrier;
 
+use App\Domain\Tenancy\Enums\Territoire;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use DateTimeImmutable;
@@ -16,8 +17,10 @@ use LogicException;
  * les décalages en jours, mois ou années (la même heure murale n jours
  * plus tard), l'affichage d'un instant (avec, dans un journal, la mention
  * de l'heure qui se répète) et l'instant d'une heure murale.
- * Un calendrier porte son fuseau et ne le reçoit qu'à sa création, par sa
- * fabrique : deParis() pour tous les magasins.
+ * Un calendrier porte son fuseau et ne le reçoit qu'à sa création, par ses
+ * fabriques : deParis(), pour la société, l'éditeur et la technique, et
+ * duTerritoire(), pour un magasin (voir Magasin::calendrier()), seule
+ * table des fuseaux des territoires.
  *
  * Un instant se compare et se calcule en lui-même, quel que soit son
  * fuseau ; un jour est une chaîne « AAAA-MM-JJ » du calendrier qui l'a
@@ -27,7 +30,8 @@ use LogicException;
 final class Calendrier
 {
     /**
-     * Le seul nom de fuseau écrit dans l'application.
+     * Le fuseau de Paris, lu par deParis() seule ; les autres noms de
+     * fuseaux ne s'écrivent que dans la table de duTerritoire().
      */
     private const FUSEAU_DE_PARIS = 'Europe/Paris';
 
@@ -42,12 +46,54 @@ final class Calendrier
     }
 
     /**
+     * Le calendrier d'un territoire : celui de Paris pour la métropole et
+     * la Corse, l'heure locale de chaque département d'outre-mer, sans
+     * changement d'heure (la Guyane et Mayotte, que le logiciel ne prend
+     * pas encore en charge, ont déjà le leur).
+     */
+    public static function duTerritoire(Territoire $territoire): self
+    {
+        return match ($territoire) {
+            Territoire::Metropole, Territoire::Corse => self::deParis(),
+            Territoire::Guadeloupe => new self('America/Guadeloupe'),
+            Territoire::Martinique => new self('America/Martinique'),
+            Territoire::Guyane => new self('America/Cayenne'),
+            Territoire::Reunion => new self('Indian/Reunion'),
+            Territoire::Mayotte => new self('Indian/Mayotte'),
+        };
+    }
+
+    /**
      * Le nom du fuseau du calendrier : celui du planificateur et de
      * l'affichage des colonnes de Filament.
      */
     public function fuseau(): string
     {
         return $this->fuseau;
+    }
+
+    /**
+     * Le nom de son heure, tel qu'une page qui mêle plusieurs calendriers
+     * le dit (« heure de la Martinique », voir afficherHorsDuMagasin()), et
+     * tel que les libellés du journal des événements d'un magasin le
+     * portent : celle du premier territoire dont c'est le calendrier (voir
+     * duTerritoire(), seule table des fuseaux).
+     *
+     * @throws LogicException pour un calendrier d'aucun territoire
+     */
+    public function libelleDeLHeure(): string
+    {
+        $territoires = array_values(array_filter(Territoire::cases(), fn (Territoire $territoire): bool => self::duTerritoire($territoire)->fuseau === $this->fuseau));
+
+        return match ($territoires[0] ?? null) {
+            Territoire::Metropole, Territoire::Corse => 'heure de Paris',
+            Territoire::Guadeloupe => 'heure de la Guadeloupe',
+            Territoire::Martinique => 'heure de la Martinique',
+            Territoire::Guyane => 'heure de la Guyane',
+            Territoire::Reunion => 'heure de La Réunion',
+            Territoire::Mayotte => 'heure de Mayotte',
+            null => throw new LogicException("Le fuseau {$this->fuseau} n'est le calendrier d'aucun territoire."),
+        };
     }
 
     /**
@@ -125,6 +171,28 @@ final class Calendrier
     public function afficher(DateTimeInterface $instant, string $format): string
     {
         return $this->dansLeFuseau($instant)->format($format);
+    }
+
+    /**
+     * Comme afficher(), pour une page qui mêle plusieurs calendriers, dont
+     * Paris est la référence : l'heure d'un magasin hors de Paris porte le
+     * nom de son heure (« 16/11/2026 20:00 (heure de la Martinique) ») ;
+     * à Paris, aucune mention.
+     */
+    public function afficherHorsDuMagasin(DateTimeInterface $instant, string $format): string
+    {
+        $texte = $this->afficher($instant, $format);
+
+        return $this->fuseau === self::deParis()->fuseau() ? $texte : "{$texte} ({$this->libelleDeLHeure()})";
+    }
+
+    /**
+     * L'heure murale d'un instant dans le calendrier, de 0 à 23 : la
+     * fenêtre des relances, de 9 h à 11 h 59, heure locale du magasin.
+     */
+    public function heureDe(DateTimeInterface $instant): int
+    {
+        return (int) $this->dansLeFuseau($instant)->format('G');
     }
 
     /**

@@ -66,26 +66,27 @@ class ConsultationVies extends Model
 
     /**
      * La consultation telle que l'écran la cite : son n° chez VIES quand
-     * elle en a un, et son instant à l'heure du calendrier (« consultation
-     * WAPIAAAAW1234567 du 09/10/2026 à 14:32 »).
+     * elle en a un, et son instant à l'heure du calendrier de son magasin
+     * (« consultation WAPIAAAAW1234567 du 09/10/2026 à 14:32 »).
      */
     public function reference(): string
     {
-        return trim('consultation '.$this->identifiant_consultation).' du '.Calendrier::deParis()->afficher($this->consultee_le, 'd/m/Y à H:i');
+        return trim('consultation '.$this->identifiant_consultation).' du '.$this->magasin->calendrier()->afficher($this->consultee_le, 'd/m/Y à H:i');
     }
 
     /**
-     * Les vérifications faites tel jour du calendrier, de minuit à minuit,
-     * qu'elles aient trouvé le n° valide ou non : la dernière décide (voir
+     * Les vérifications faites tel jour de ce calendrier, celui de leur
+     * magasin, de minuit à minuit, qu'elles aient trouvé le n° valide ou
+     * non : la dernière décide (voir
      * ControleNatureOperation::consultationDuJour()), entre les instants
      * de ses bornes.
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
      */
-    public function scopeDuJour(Builder $query, string $jour): Builder
+    public function scopeDuJour(Builder $query, Calendrier $calendrier, string $jour): Builder
     {
-        [$minuit, $minuitSuivant] = Calendrier::deParis()->bornesDuJour($jour);
+        [$minuit, $minuitSuivant] = $calendrier->bornesDuJour($jour);
 
         return $query->where('consultee_le', '>=', $minuit)->where('consultee_le', '<', $minuitSuivant);
     }

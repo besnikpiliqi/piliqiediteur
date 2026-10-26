@@ -18,7 +18,7 @@
     @php
         $documentsCorriges = $avoir->facturesConcernees()->map(
             fn (\App\Domain\Facturation\Models\Facture $facture): string => 'Sur '.mb_strtolower($facture->libelleDocument()).' '.$facture->numero
-                .($facture->date_emission ? ' du '.\App\Domain\Calendrier\Calendrier::deParis()->afficher($facture->date_emission, 'd/m/Y') : ''),
+                .($facture->date_emission ? ' du '.$avoir->magasin->calendrier()->afficher($facture->date_emission, 'd/m/Y') : ''),
         );
     @endphp
 
@@ -30,7 +30,7 @@
         'classeTitre' => 'avoir',
         'details' => array_filter([
             $avoir->numero ?? 'Brouillon (non émis)',
-            $avoir->date_emission ? 'Émis le '.\App\Domain\Calendrier\Calendrier::deParis()->afficher($avoir->date_emission, 'd/m/Y') : null,
+            $avoir->date_emission ? 'Émis le '.$avoir->magasin->calendrier()->afficher($avoir->date_emission, 'd/m/Y') : null,
             ...$documentsCorriges,
         ]),
     ])

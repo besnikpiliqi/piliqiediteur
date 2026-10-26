@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
@@ -16,7 +15,9 @@ use Illuminate\Support\Facades\Notification;
 
 /**
  * Commande planifiée (voir bootstrap/app.php) qui passe en retard les
- * factures impayées dont l'échéance est dépassée, magasin par magasin --
+ * factures impayées dont l'échéance est dépassée au jour de leur magasin,
+ * chacun dans son calendrier (voir Magasin::calendrier()), magasin par
+ * magasin --
  * le global scope MagasinScope exige un TenantContext positionné, une
  * commande n'en a par nature aucun au démarrage -- puis prévient le
  * propriétaire de la société de chaque magasin concerné. Un magasin en
@@ -57,7 +58,7 @@ class MarquerFacturesEnRetard extends Command
      */
     private function marquerLesFacturesDe(Magasin $magasin): int
     {
-        $aujourdhui = Calendrier::deParis()->aujourdhui();
+        $aujourdhui = $magasin->calendrier()->aujourdhui();
         $echues = fn (): Builder => Facture::query()
             ->whereIn('statut', [StatutFacture::Emise, StatutFacture::Envoyee, StatutFacture::PartiellementPayee])
             ->where('date_echeance', '<', $aujourdhui);

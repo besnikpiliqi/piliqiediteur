@@ -31,7 +31,8 @@ use LogicException;
  * e-mail -- même archivé, il doit toujours la facture --, reçoit la
  * relance qui suit sa dernière, quand elle est due (voir
  * Magasin::relanceDue()) : dans l'ordre, au plus une par jour, jamais deux
- * fois le même niveau. Une relance manuelle compte comme les autres ; une
+ * fois le même niveau, les jours se comptant dans le calendrier de son
+ * magasin (voir Magasin::calendrier()). Une relance manuelle compte comme les autres ; une
  * relance en échec repart (voir Facture::relancesComptees()).
  */
 #[Signature('app:relancer-factures-impayees')]
@@ -68,7 +69,7 @@ class RelancerFacturesImpayees extends Command
     private function relancerLesFacturesDe(Magasin $magasin, EnvoyerDocumentAction $envoyer): int
     {
         $relancees = 0;
-        $aujourdhui = Calendrier::deParis()->aujourdhui();
+        $aujourdhui = $magasin->calendrier()->aujourdhui();
 
         Facture::query()
             ->with('client')
@@ -77,6 +78,7 @@ class RelancerFacturesImpayees extends Command
             ->whereHas('client', fn (Builder $client) => $client->whereNotNull('email')->where('email', '!=', ''))
             ->lazyById()
             ->each(function (Facture $facture) use ($magasin, $envoyer, $aujourdhui, &$relancees) {
+                $facture->setRelation('magasin', $magasin);
                 $due = $magasin->relanceDue(
                     $facture->niveauDeRelanceAtteint() + 1,
                     Calendrier::joursEntre($facture->date_echeance, $aujourdhui),

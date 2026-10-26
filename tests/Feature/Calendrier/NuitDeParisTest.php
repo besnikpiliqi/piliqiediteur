@@ -349,7 +349,7 @@ class NuitDeParisTest extends TestCase
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create(['code_postal' => '10115', 'ville' => 'Berlin']);
         $consultation = ConsultationVies::forceCreate(['client_id' => $allemand->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW1234567', 'consultee_le' => now(), 'reponse' => '{"valid":true}']);
 
-        $this->assertSame([[], [$consultation->id]], [ConsultationVies::query()->duJour($veille)->pluck('id')->all(), ConsultationVies::query()->duJour($jour)->pluck('id')->all()]);
+        $this->assertSame([[], [$consultation->id]], [ConsultationVies::query()->duJour(Calendrier::deParis(), $veille)->pluck('id')->all(), ConsultationVies::query()->duJour(Calendrier::deParis(), $jour)->pluck('id')->all()]);
 
         $this->travelTo(self::aParis("{$jour} 10:00:00"));
         $facture = $this->emettreUneLivraisonIntracommunautaire($allemand, $jour);

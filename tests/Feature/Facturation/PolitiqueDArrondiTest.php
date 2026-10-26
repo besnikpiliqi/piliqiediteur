@@ -155,7 +155,7 @@ class PolitiqueDArrondiTest extends TestCase
             ->assertDontSee('41,66');
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($ticket->date_emission));
         $this->assertSame(['41.67', '8.33', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
-        $this->assertSame(['ht' => 41.67, 'tva' => 8.33, 'ttc' => 50.0, 'factures' => 1, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode(Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
+        $this->assertSame(['ht' => 41.67, 'tva' => 8.33, 'ttc' => 50.0, 'factures' => 1, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode($magasin->calendrier(), Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
         Livewire::test(FacturesApercu::class)->assertSeeInOrder(['Cette semaine', '41,67 € HT', '50,00 € TTC · 1 facture']);
     }
 
@@ -239,7 +239,7 @@ class PolitiqueDArrondiTest extends TestCase
         $this->assertSame(['20.83', '4.17', '25.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['20.83', '4.17', '25.00'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
         $this->assertSame(['41.66', '8.34', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
-        $this->assertSame(['ht' => 41.66, 'tva' => 8.34, 'ttc' => 50.0, 'factures' => 2, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode(Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
+        $this->assertSame(['ht' => 41.66, 'tva' => 8.34, 'ttc' => 50.0, 'factures' => 2, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode($magasin->calendrier(), Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
     }
 
     /**

@@ -111,9 +111,10 @@ class ControleNatureOperation
     }
 
     /**
-     * La dernière vérification, ce jour du calendrier, du n° de TVA qu'a
-     * aujourd'hui la fiche du client, dans le magasin actif, si elle l'a
-     * trouvé valide ; null sinon : aucune vérification ce jour-là, ou la
+     * La dernière vérification, ce jour du calendrier du magasin du client,
+     * du n° de TVA qu'a aujourd'hui la fiche du client, dans le magasin
+     * actif, si elle l'a trouvé valide ; null sinon : aucune vérification
+     * ce jour-là, ou la
      * dernière l'a trouvé inconnu de VIES, même après une vérification
      * valide plus tôt dans la journée -- le magasin sait alors que le n° ne
      * vaut plus, et la vente reste à la TVA française.
@@ -127,7 +128,7 @@ class ControleNatureOperation
         $derniere = ConsultationVies::query()
             ->where('client_id', $client->getKey())
             ->where('numero_tva', $client->numero_tva)
-            ->duJour($jour)
+            ->duJour($client->magasin->calendrier(), $jour)
             ->latest('consultee_le')
             ->latest('id')
             ->first();

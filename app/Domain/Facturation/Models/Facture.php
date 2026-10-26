@@ -330,16 +330,16 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le jour du calendrier (AAAA-MM-JJ) de la première facture ou du
-     * premier ticket émis par le magasin actif : sa première journée de
-     * caisse (voir CloturerLesJourneesAction). Null tant qu'il n'a rien
+     * Le jour, dans le calendrier du magasin actif, de la première facture
+     * ou du premier ticket qu'il a émis (AAAA-MM-JJ) : sa première journée
+     * de caisse (voir CloturerLesJourneesAction). Null tant qu'il n'a rien
      * vendu.
      */
-    public static function jourDeLaPremiereVente(): ?string
+    public static function jourDeLaPremiereVente(Calendrier $calendrier): ?string
     {
         $premiere = static::query()->emises()->min('date_emission');
 
-        return $premiere === null ? null : Calendrier::deParis()->jourDe(Instant::depuisLaBase($premiere));
+        return $premiere === null ? null : $calendrier->jourDe(Instant::depuisLaBase($premiere));
     }
 
     /**
@@ -368,16 +368,17 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les tickets émis tel jour qu'aucune clôture n'a encore comptés (voir
-     * CloturerCaisseAction) -- jamais un brouillon, jamais une facture à un
-     * professionnel. Un ticket corrigé depuis par un avoir y figure :
-     * l'avoir se déduit à part, le jour de son émission.
+     * Les tickets émis tel jour du calendrier de leur magasin qu'aucune
+     * clôture n'a encore comptés (voir CloturerCaisseAction) -- jamais un
+     * brouillon, jamais une facture à un professionnel. Un ticket corrigé
+     * depuis par un avoir y figure : l'avoir se déduit à part, le jour de
+     * son émission.
      */
-    public function scopeEnAttenteDeCloture(Builder $query, string $jour): Builder
+    public function scopeEnAttenteDeCloture(Builder $query, Calendrier $calendrier, string $jour): Builder
     {
         return $query
             ->tickets()
-            ->emisLe($jour)
+            ->emisLe($calendrier, $jour)
             ->whereNull('cloture_caisse_id');
     }
 
@@ -632,14 +633,15 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Son échéance est dépassée : elle tombait avant aujourd'hui, jour du
-     * calendrier. Une
+     * calendrier de son magasin, quel que soit le magasin actif (une
+     * tâche, un envoi en file d'attente, l'espace de la société). Une
      * facture émise a toujours son échéance (voir EmettreFactureAction) :
      * seul un document numéroté directement en base, que signale la
      * vérification de l'intégrité, peut ne pas en avoir.
      */
     public function estEchue(): bool
     {
-        return $this->date_echeance !== null && $this->date_echeance < Calendrier::deParis()->aujourdhui();
+        return $this->date_echeance !== null && $this->date_echeance < $this->magasin->calendrier()->aujourdhui();
     }
 
     /**
@@ -679,14 +681,14 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le nombre de jours du calendrier depuis sa dernière relance (0 si
-     * elle a été relancée aujourd'hui), null tant qu'elle n'a jamais été
-     * relancée.
+     * Le nombre de jours du calendrier de son magasin depuis sa dernière
+     * relance (0 si elle a été relancée aujourd'hui), null tant qu'elle n'a
+     * jamais été relancée.
      */
     public function joursDepuisLaDerniereRelance(): ?int
     {
         $derniere = $this->relancesComptees()->latest('created_at')->latest('id')->first();
-        $calendrier = Calendrier::deParis();
+        $calendrier = $this->magasin->calendrier();
 
         return $derniere === null ? null : Calendrier::joursEntre($calendrier->jourDe($derniere->created_at), $calendrier->aujourdhui());
     }

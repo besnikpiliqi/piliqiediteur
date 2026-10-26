@@ -318,7 +318,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
         $this->travelTo(self::aParis('2026-10-09 00:00:00'));
         $this->artisan('app:cloturer-caisses-automatiquement')
-            ->expectsOutputToContain('3 clôture(s) automatique(s) effectuée(s) jusqu\'au 08/10/2026.')
+            ->expectsOutputToContain('3 clôture(s) automatique(s) effectuée(s).')
             ->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
@@ -435,7 +435,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         });
 
         $this->artisan('app:cloturer-caisses-automatiquement')
-            ->expectsOutputToContain('1 clôture(s) automatique(s) effectuée(s) jusqu\'au 08/10/2026.')
+            ->expectsOutputToContain('1 clôture(s) automatique(s) effectuée(s).')
             ->expectsOutputToContain('1 magasin(s) en échec, repris au prochain passage.')
             ->assertFailed();
 

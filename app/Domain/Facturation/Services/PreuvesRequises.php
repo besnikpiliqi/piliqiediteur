@@ -135,7 +135,8 @@ class PreuvesRequises
 
     /**
      * L'attestation de réception qui manque, avec le jour où elle est
-     * attendue, et le rappel que ce jour est passé. Elle est attendue au
+     * attendue, et le rappel que ce jour est passé dans le calendrier de
+     * son magasin. Elle est attendue au
      * plus tard le 10 du mois qui suit la livraison (art. 45 bis du
      * règlement 282/2011), dont toute livraison intracommunautaire émise
      * porte la date (voir ControleNatureOperation).
@@ -145,6 +146,6 @@ class PreuvesRequises
         $echeance = Calendrier::jourDuMoisSuivant($facture->livraison_date, 10);
 
         return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.Calendrier::afficherJour($echeance, 'd/m/Y')
-            .($echeance < Calendrier::deParis()->aujourdhui() ? ' : délai dépassé' : '');
+            .($echeance < $facture->magasin->calendrier()->aujourdhui() ? ' : délai dépassé' : '');
     }
 }

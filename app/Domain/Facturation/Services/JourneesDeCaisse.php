@@ -10,8 +10,9 @@ use Illuminate\Support\Collection;
 use LogicException;
 
 /**
- * Le calendrier des journées de caisse d'un magasin : chaque jour du
- * calendrier à partir de sa première vente (facture ou ticket émis),
+ * Le calendrier des journées de caisse d'un magasin : chaque jour de son
+ * calendrier (voir Magasin::calendrier()) à partir de sa première vente
+ * (facture ou ticket émis),
  * dimanches et jours de fermeture habituelle compris, même sans vente,
  * qui tombe dans l'une de ses périodes d'activité (voir
  * PeriodesDActivite). Un magasin fermé n'a aucune journée de caisse, et
@@ -46,7 +47,7 @@ class JourneesDeCaisse
             throw new LogicException("« {$fin} » n'est pas une journée : une journée s'écrit AAAA-MM-JJ.");
         }
 
-        $premiereVente = Facture::jourDeLaPremiereVente();
+        $premiereVente = Facture::jourDeLaPremiereVente($magasin->calendrier());
 
         if ($premiereVente === null) {
             return collect();

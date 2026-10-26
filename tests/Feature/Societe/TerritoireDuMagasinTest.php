@@ -78,7 +78,7 @@ class TerritoireDuMagasinTest extends TestCase
      */
     public function test_la_creation_fixe_le_territoire_lu_a_la_commune_de_l_etablissement(): void
     {
-        $magasin = $this->magasinSitue(self::FORT_DE_FRANCE);
+        $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE);
 
         $this->assertSame([Territoire::Martinique, TerritoireTva::AntillesReunion, 8.5], [$magasin->territoire, $magasin->territoireTva(), $magasin->tauxTvaParDefaut()]);
         $this->assertSame('martinique', $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinCree)[0]->nouvelles_valeurs['territoire']);
@@ -94,7 +94,7 @@ class TerritoireDuMagasinTest extends TestCase
      */
     public function test_un_etablissement_en_diffusion_partielle_prend_le_territoire_de_sa_commune(): void
     {
-        $magasin = $this->magasinSitue(self::FORT_DE_FRANCE, ['siren' => FauxRepertoireSirene::SIREN_DIFFUSION_PARTIELLE]);
+        $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE, ['siren' => FauxRepertoireSirene::SIREN_DIFFUSION_PARTIELLE]);
 
         $this->assertSame([Territoire::Martinique, null, 8.5], [$magasin->territoire, $magasin->code_postal, $magasin->tauxTvaParDefaut()]);
 
@@ -114,7 +114,7 @@ class TerritoireDuMagasinTest extends TestCase
     public function test_un_etablissement_d_une_collectivite_d_outre_mer_est_refuse_par_sa_commune(): void
     {
         $this->assertThrows(
-            fn () => $this->magasinSitue(['97133', 'SAINT-BARTHELEMY', '97701']),
+            fn () => $this->ouvrirUneSocieteSituee(['97133', 'SAINT-BARTHELEMY', '97701']),
             fn (ValidationException $refus): bool => $refus->errors() === ['nic' => [ControleSirene::MOTIF_TERRITOIRE_NON_GERE]],
         );
         $this->assertSame(0, Magasin::query()->count());
@@ -137,7 +137,7 @@ class TerritoireDuMagasinTest extends TestCase
             fn (ValidationException $refus): bool => $refus->errors() === ['nic' => [ControleSirene::MOTIF_TERRITOIRE_INCONNU]],
         );
 
-        $magasin = $this->magasinSitue(self::FORT_DE_FRANCE);
+        $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE);
         $aLEtranger = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
         $this->repertoire()->situerHorsDeFrance($aLEtranger);
         app(TenantContext::class)->clear();
@@ -229,8 +229,8 @@ class TerritoireDuMagasinTest extends TestCase
      */
     public function test_un_nouvel_etablissement_d_un_autre_territoire_est_refuse_meme_au_meme_taux(): void
     {
-        $valide = $this->magasinSitue(self::POINTE_A_PITRE);
-        $aVerifier = $this->magasinSitue(self::POINTE_A_PITRE, ['a_verifier' => true]);
+        $valide = $this->ouvrirUneSocieteSituee(self::POINTE_A_PITRE);
+        $aVerifier = $this->ouvrirUneSocieteSituee(self::POINTE_A_PITRE, ['a_verifier' => true]);
         app(TenantContext::class)->clear();
 
         foreach ([self::SAINT_DENIS_DE_LA_REUNION, self::FORT_DE_FRANCE] as $ailleurs) {
@@ -262,7 +262,7 @@ class TerritoireDuMagasinTest extends TestCase
      */
     public function test_un_nic_corrige_pendant_une_panne_vers_un_autre_territoire_ne_se_confirme_pas_a_la_reprise(): void
     {
-        $magasin = $this->magasinSitue(self::POINTE_A_PITRE, ['a_verifier' => true]);
+        $magasin = $this->ouvrirUneSocieteSituee(self::POINTE_A_PITRE, ['a_verifier' => true]);
         $aLaReunion = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
         $this->repertoire()->rendreInjoignable();
         $this->modifier($magasin, ['nic' => substr($aLaReunion, 9)]);
@@ -290,7 +290,7 @@ class TerritoireDuMagasinTest extends TestCase
      */
     public function test_une_livraison_dans_le_departement_d_un_magasin_sans_code_postal_reste_taxee(): void
     {
-        $magasin = $this->magasinSitue(self::FORT_DE_FRANCE, ['siren' => FauxRepertoireSirene::SIREN_DIFFUSION_PARTIELLE]);
+        $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE, ['siren' => FauxRepertoireSirene::SIREN_DIFFUSION_PARTIELLE]);
         $this->assertNull($magasin->code_postal);
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 8.5, 'suivi_stock' => false]);
@@ -317,7 +317,7 @@ class TerritoireDuMagasinTest extends TestCase
      */
     public function test_une_adresse_d_un_autre_territoire_est_refusee_meme_au_meme_taux(): void
     {
-        $magasin = $this->magasinSitue(self::POINTE_A_PITRE);
+        $magasin = $this->ouvrirUneSocieteSituee(self::POINTE_A_PITRE);
 
         foreach (['97400', '97200'] as $codePostal) {
             $this->assertThrows(
@@ -367,7 +367,7 @@ class TerritoireDuMagasinTest extends TestCase
     {
         Mail::fake();
         config(['editeur.email' => 'editeur@piliqi.test']);
-        $magasin = $this->magasinSitue(self::FORT_DE_FRANCE);
+        $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE);
         $this->repertoire()->deplacer((string) $magasin->siret, ...self::POINTE_A_PITRE);
 
         $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
@@ -396,7 +396,7 @@ class TerritoireDuMagasinTest extends TestCase
     public function test_l_editeur_corrige_un_territoire_mal_lu_avant_le_premier_document_numerote_et_jamais_apres(): void
     {
         config(['editeur.operateurs' => ['alice' => password_hash('secret-d-alice', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1])]]);
-        $magasin = $this->magasinSitue(self::FORT_DE_FRANCE);
+        $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE);
         $this->repertoire()->deplacer((string) $magasin->siret, ...self::POINTE_A_PITRE);
 
         $this->corrigerLeTerritoire($magasin)->expectsOutputToContain("Territoire du magasin {$magasin->code} corrigé : Guadeloupe.")->assertSuccessful();
@@ -428,24 +428,6 @@ class TerritoireDuMagasinTest extends TestCase
         $this->assertSame(Territoire::Metropole, $demonstration->territoire);
         $this->assertThrows(fn () => Magasin::factory()->create(['territoire' => null]), LogicException::class);
         $this->assertThrows(fn () => Magasin::factory()->create(['est_demonstration' => true, 'siret' => null, 'territoire' => null, 'etablissement_verifie_le' => null]), LogicException::class);
-    }
-
-    /**
-     * Un magasin d'une nouvelle société, validée sauf avec a_verifier,
-     * créé par son propriétaire sur l'établissement de son siège, que le
-     * répertoire factice situe à cette adresse (code postal, ville,
-     * commune). Il devient le magasin actif.
-     *
-     * @param  array{0: string, 1: string, 2: string}  $adresse
-     * @param  array<string, mixed>  $options  celles de ouvrirUneSociete()
-     */
-    private function magasinSitue(array $adresse, array $options = []): Magasin
-    {
-        $siren = $options['siren'] ?? SocieteFactory::sirenFictif();
-        $siege = FauxRepertoireSirene::siretDuSiege($siren);
-        $this->repertoire()->deplacer($siege, ...$adresse);
-
-        return $this->ouvrirUneSociete([...$options, 'siren' => $siren, 'nic' => substr($siege, 9)]);
     }
 
     /**

@@ -124,7 +124,9 @@ class RegistreFiscal
      * Verrouille le registre du magasin actif jusqu'à la fin de la
      * transaction en cours et donne l'instant de ses écritures fiscales :
      * maintenant, en UTC à la seconde, noté sur la ligne de verrou comme
-     * dernier verrou du registre. Le verrou de ligne ne tombe qu'à la
+     * dernier verrou du registre, avec le calendrier du magasin, relu sous
+     * ce verrou à la première demande d'un jour (voir
+     * InstantFiscal::calendrier()). Le verrou de ligne ne tombe qu'à la
      * validation de la transaction la plus externe : jusque-là, rappelé
      * depuis n'importe quelle transaction imbriquée, il redonne le même
      * instant, et le note de nouveau si un point de sauvegarde annulé l'a
@@ -447,7 +449,7 @@ class RegistreFiscal
         $verrouTenu = $this->verrous[$magasinId] ?? null;
         $instant = $verrouTenu !== null && $verrouTenu['transaction'] === $transaction
             ? $verrouTenu['instant']
-            : new InstantFiscal(CarbonImmutable::now()->startOfSecond());
+            : new InstantFiscal(CarbonImmutable::now()->startOfSecond(), $magasinId);
         $dernierVerrou = $tete->dernier_horodatage;
 
         if ($dernierVerrou !== null && $instant->utc->lessThan($dernierVerrou)) {

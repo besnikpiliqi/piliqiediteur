@@ -29,7 +29,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * que son identifiant, son magasin, son total TTC et son échéance, et de
  * chacune de ses imputations que ce qu'elle a réglé : les restants dus se
  * calculent ici, en centimes, jamais par une somme que la base ferait sur
- * une colonne décimale.
+ * une colonne décimale. Le retard se compte au jour de chaque magasin,
+ * dans son calendrier (voir Magasin::calendrier() et Facture::estEchue()) :
+ * deux magasins d'une même société peuvent ne pas être le même jour.
  */
 final class FacturesAEncaisserDeLaSociete
 {
@@ -42,13 +44,13 @@ final class FacturesAEncaisserDeLaSociete
      */
     public function pour(User $compte): array
     {
-        $magasins = $compte->magasinsDeSaPortee()
+        $suivis = $compte->magasinsDeSaPortee()
             ->where('est_demonstration', false)
             ->orderBy('id')
             ->get()
             ->filter(fn (Magasin $magasin): bool => $compte->suitLesFacturesAEncaisserDans($magasin))
-            ->values()
-            ->modelKeys();
+            ->keyBy('id');
+        $magasins = $suivis->keys()->all();
 
         if ($magasins === []) {
             return [];
@@ -63,7 +65,8 @@ final class FacturesAEncaisserDeLaSociete
             ->whereIn('factures.magasin_id', $magasins)
             ->aEncaisser()
             ->with(['allocationsPaiement' => $imputations, 'allocationsAvoir' => $imputations])
-            ->get(['id', 'magasin_id', 'total_ttc', 'date_echeance']);
+            ->get(['id', 'magasin_id', 'total_ttc', 'date_echeance'])
+            ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
 
         return collect($magasins)
             ->mapWithKeys(fn (int $magasin): array => [$magasin => Facture::totauxAEncaisser($factures->where('magasin_id', $magasin))])

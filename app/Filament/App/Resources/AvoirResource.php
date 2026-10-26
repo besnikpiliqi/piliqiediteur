@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -15,6 +14,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Actions\Action as ActionDeChamp;
 use Filament\Forms\Components\Hidden;
@@ -67,7 +67,7 @@ use InvalidArgumentException;
  */
 class AvoirResource extends Resource
 {
-    use EnvoieLesDocuments;
+    use EnvoieLesDocuments, PrendLeCalendrierDuMagasin;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
 
@@ -332,7 +332,7 @@ class AvoirResource extends Resource
         $designations = collect($documents)->map(function (Facture $document): string {
             $type = $document->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture';
 
-            return $type.' '.$document->numero.' du '.Calendrier::deParis()->afficher($document->date_emission, 'd/m/Y à H \\h i');
+            return $type.' '.$document->numero.' du '.self::calendrierDuMagasin()->afficher($document->date_emission, 'd/m/Y à H \\h i');
         });
 
         return collect([Avoir::documentQuiDonneLeClient($documents)->nomDuClient(), $designations->implode(', ')])->filter()->implode(' — ');

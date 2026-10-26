@@ -14,7 +14,6 @@ use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
-use Carbon\CarbonInterface;
 use Database\Factories\ClotureCaisseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -123,20 +122,18 @@ class ClotureCaisse extends Model
     }
 
     /**
-     * Une journée clôturée est finie pour la caisse : jusqu'à minuit du
-     * calendrier, elle n'émet plus aucun ticket ni aucun avoir sur un
-     * ticket (voir EmettreFactureAction et EmettreAvoirAction). Chaque
-     * clôture couvre ainsi exactement sa journée, et la fenêtre de
+     * Une journée clôturée est finie pour la caisse : jusqu'au minuit du
+     * calendrier de son magasin, elle n'émet plus aucun ticket ni aucun
+     * avoir sur un ticket (voir EmettreFactureAction et EmettreAvoirAction).
+     * Chaque clôture couvre ainsi exactement sa journée, et la fenêtre de
      * confirmation du bouton de clôture le dit avant (voir
      * ListClotureCaisses). Null tant que la journée est ouverte.
      *
-     * @param  CarbonInterface  $instant  l'instant de la vente
+     * @param  string  $journee  AAAA-MM-JJ : la journée de la vente, dans le calendrier de son magasin
      * @param  string|null  $derniereJourneeCloturee  AAAA-MM-JJ : les journées se clôturent dans l'ordre, celle de la vente l'est donc si elle ne vient pas après
      */
-    public static function refusDUneVente(CarbonInterface $instant, ?string $derniereJourneeCloturee): ?string
+    public static function refusDUneVente(string $journee, ?string $derniereJourneeCloturee): ?string
     {
-        $journee = Calendrier::deParis()->jourDe($instant);
-
         return $derniereJourneeCloturee !== null && $journee <= $derniereJourneeCloturee
             ? 'La journée du '.Calendrier::afficherJour($journee, 'd/m/Y').' est clôturée : les ventes reprennent demain.'
             : null;
@@ -159,7 +156,7 @@ class ClotureCaisse extends Model
      */
     public static function refuserUneVenteSiLaJourneeEstCloturee(Magasin $magasin, InstantFiscal $instant): void
     {
-        $refus = static::refusDUneVente($instant->utc, app(RegistreFiscal::class)->derniereJourneeCloturee($magasin));
+        $refus = static::refusDUneVente($instant->jour(), app(RegistreFiscal::class)->derniereJourneeCloturee($magasin));
 
         if ($refus !== null) {
             throw new LogicException($refus);

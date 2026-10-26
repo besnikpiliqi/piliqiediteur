@@ -313,7 +313,8 @@ class EnregistrementFiscalResourceTest extends TestCase
 
         $composant->assertFileDownloaded('journal-des-evenements-du-2026-10-20-au-2026-10-22.csv');
         $lignes = $this->lignesDuCsv($composant);
-        $this->assertSame(ExporterJournalDesEvenementsAction::COLONNES, $lignes[0]);
+        $this->assertSame(ExporterJournalDesEvenementsAction::colonnes(Calendrier::deParis()), $lignes[0]);
+        $this->assertSame('Horodatage (heure de Paris)', $lignes[0][1]);
         $this->assertSame(['1', '2', '3'], array_column(array_slice($lignes, 1), 0));
         $this->assertSame(['260', '270', '110'], array_column(array_slice($lignes, 1), 3));
         $export = EnregistrementFiscal::query()->where('type', '110')->sole();
@@ -333,7 +334,7 @@ class EnregistrementFiscalResourceTest extends TestCase
             $export->signature,
             'ES256',
             $export->cle_id,
-            '1.2',
+            '1.3',
             $export->contenu,
         ], $lignes[3]);
         $clePublique = Arr::first(config('caisse_securisee.cles_publiques'));
@@ -549,7 +550,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $cleId = hash('sha256', base64_decode(str_replace(['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n"], '', $clePublique)));
 
         Livewire::test(ConformiteApercu::class)
-            ->assertSee('Version 1.2')
+            ->assertSee('Version 1.3')
             ->assertSee('Article 286, I, 3° bis du code général des impôts')
             ->assertSee('Empreinte SHA-256 : '.$cleId)
             ->assertSeeInOrder(['Grand total perpétuel réel', '12,00 €', 'Grand total perpétuel absolu', '36,00 €'])

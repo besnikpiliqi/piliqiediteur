@@ -68,7 +68,7 @@ class AjouterPreuveOperationAction
             throw new InvalidArgumentException('Le nom de qui a établi la preuve compte 150 caractères au plus.');
         }
 
-        $dateDocument = blank($dateDocument) ? null : $this->dateDuDocument($dateDocument);
+        $dateDocument = blank($dateDocument) ? null : $this->dateDuDocument($dateDocument, $facture->magasin->calendrier()->aujourdhui());
 
         return DB::transaction(function () use ($auteur, $facture, $type, $reference, $dateDocument, $emetteur): PreuveOperation {
             $magasin = app(TenantContext::class)->magasin();
@@ -131,16 +131,16 @@ class AjouterPreuveOperationAction
 
     /**
      * Le jour que porte le document (« AAAA-MM-JJ »), jamais après
-     * aujourd'hui.
+     * aujourd'hui, jour du calendrier du magasin de la facture.
      *
      * @throws InvalidArgumentException
      */
-    private function dateDuDocument(string $saisie): string
+    private function dateDuDocument(string $saisie, string $aujourdhui): string
     {
         $jour = Calendrier::jourValide($saisie)
             ?? throw new InvalidArgumentException('La date du document n\'est pas une date valide.');
 
-        if ($jour > Calendrier::deParis()->aujourdhui()) {
+        if ($jour > $aujourdhui) {
             throw new InvalidArgumentException('La date du document ne peut pas être dans le futur.');
         }
 

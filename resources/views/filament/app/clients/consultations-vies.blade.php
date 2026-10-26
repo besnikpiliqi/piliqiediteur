@@ -3,6 +3,7 @@
     ce que dit la dernière pour son n° actuel, puis toutes, de la plus récente à la plus ancienne.
     Le nom renvoyé par VIES vient de l'extérieur : il s'affiche échappé, comme tout le reste.
     Le panneau n'a pas de thème compilé : le tableau est mis en forme en style en ligne.
+    Les heures sont celles du calendrier du magasin ($calendrier).
 --}}
 <div style="display: flex; flex-direction: column; gap: 0.75rem;">
     <p>
@@ -29,7 +30,7 @@
             <tbody>
                 @foreach ($consultations as $consultation)
                     <tr style="border-top: 1px solid rgba(128, 128, 128, 0.25);">
-                        <td style="padding: 0.25rem 0.5rem;">{{ \App\Domain\Calendrier\Calendrier::deParis()->afficher($consultation->consultee_le, 'd/m/Y à H:i') }}</td>
+                        <td style="padding: 0.25rem 0.5rem;">{{ $calendrier->afficher($consultation->consultee_le, 'd/m/Y à H:i') }}</td>
                         <td style="padding: 0.25rem 0.5rem;">{{ $consultation->numero_tva }}</td>
                         <td style="padding: 0.25rem 0.5rem;">{{ $consultation->valide ? 'Valide' : 'Inconnu' }}</td>
                         <td style="padding: 0.25rem 0.5rem;">{{ $consultation->identifiant_consultation ?? '—' }}</td>

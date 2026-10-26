@@ -164,9 +164,9 @@ class FermerSaCaisseAction
     }
 
     /**
-     * Les paiements reçus jusqu'à la journée du calendrier de la borne, et
-     * jamais encore comptés : un encaissement est de la journée où il est
-     * reçu (voir VerificateurCaissesPersonnelles).
+     * Les paiements reçus jusqu'à la journée de la borne, dans le calendrier
+     * du magasin actif, et jamais encore comptés : un encaissement est de la
+     * journée où il est reçu (voir VerificateurCaissesPersonnelles).
      *
      * @return Builder<Paiement>
      */
@@ -174,7 +174,7 @@ class FermerSaCaisseAction
     {
         return Paiement::query()
             ->nonFermesParLeVendeur($vendeur->getKey())
-            ->where('recu_le', '<=', Calendrier::deParis()->jourDe($jusquAu))
+            ->where('recu_le', '<=', app(TenantContext::class)->magasin()->calendrier()->jourDe($jusquAu))
             ->orderBy('id');
     }
 
@@ -205,8 +205,8 @@ class FermerSaCaisseAction
 
     /**
      * « Depuis » : la borne de la dernière fermeture du vendeur, ou le
-     * minuit de la journée du calendrier de la borne s'il n'en a fait
-     * aucune, ou la plus ancienne vente ou le plus ancien paiement compté
+     * minuit de la journée de la borne, dans le calendrier du magasin actif,
+     * s'il n'en a fait aucune, ou la plus ancienne vente ou le plus ancien paiement compté
      * s'il est antérieur -- y compris ceux d'une journée précédente qu'il
      * n'avait pas fermée.
      *
@@ -219,7 +219,8 @@ class FermerSaCaisseAction
             ->where('vendeur_id', $vendeur->getKey())
             ->orderByDesc('id')
             ->first();
-        $depuis = $derniere?->jusqu_au ?? Calendrier::deParis()->debutDuJour(Calendrier::deParis()->jourDe($jusquAu));
+        $calendrier = app(TenantContext::class)->magasin()->calendrier();
+        $depuis = $derniere?->jusqu_au ?? $calendrier->debutDuJour($calendrier->jourDe($jusquAu));
 
         foreach ([$factures->min('date_emission'), $paiements->min('created_at')] as $plusAncien) {
             if ($plusAncien !== null && $plusAncien->lt($depuis)) {

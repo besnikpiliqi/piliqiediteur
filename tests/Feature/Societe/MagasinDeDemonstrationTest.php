@@ -427,8 +427,10 @@ class MagasinDeDemonstrationTest extends TestCase
     /**
      * La démonstration prend le territoire du siège de la société, lu à
      * son code postal : en Martinique, elle propose 8,5 % ; fermée pour
-     * inactivité puis rouverte, elle le garde. Un siège inconnu, ou dans
-     * une collectivité d'outre-mer (Saint-Barthélemy), donne la métropole.
+     * inactivité puis rouverte, elle le garde, avec son heure : un ticket
+     * vendu à 20:00 le 16 novembre, heure de la Martinique (déjà le 17 à
+     * Paris), est daté du 16. Un siège inconnu, ou dans une collectivité
+     * d'outre-mer (Saint-Barthélemy), donne la métropole.
      */
     public function test_la_demonstration_prend_le_territoire_du_siege_et_le_garde(): void
     {
@@ -443,6 +445,13 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $rouverte = app(OuvrirLaDemonstrationAction::class)->handle($martinique->proprietaire, $martinique->fresh());
         $this->assertSame([$demonstration->id, Territoire::Martinique], [$rouverte->id, $rouverte->fresh()->territoire]);
+
+        $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-16 20:00'));
+        app(TenantContext::class)->set($rouverte);
+        $this->actingAs($this->responsableDeTest($rouverte));
+        $ticket = $this->vendre();
+        $this->assertSame('2026-11-16', $rouverte->calendrier()->jourDe($ticket->date_emission));
+        $this->assertStringContainsString('Émise le 16/11/2026', app(FacturePdfGenerator::class)->html($ticket->load('client', 'lignes', 'magasin')));
 
         $sansSiege = $this->inscrireUneSociete();
         app(TenantContext::class)->runAsSociete($sansSiege, fn (): bool => $sansSiege->forceFill(['siege_adresse' => null, 'siege_code_postal' => null, 'siege_ville' => null])->save());

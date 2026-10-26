@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
@@ -606,6 +607,19 @@ class Magasin extends Model implements HasName
     public function territoireTva(): ?TerritoireTva
     {
         return $this->territoire?->tva();
+    }
+
+    /**
+     * Le calendrier du magasin, celui de son territoire (voir
+     * Calendrier::duTerritoire()) : sa journée de caisse et ses clôtures,
+     * la date et l'année de ses documents, ses échéances, ses relances et
+     * ses délais en jours suivent son heure locale. Un magasin sans
+     * territoire, qui ne vend ni ne numérote rien, affiche ses écrans et
+     * ses brouillons à l'heure de la métropole.
+     */
+    public function calendrier(): Calendrier
+    {
+        return Calendrier::duTerritoire($this->territoire ?? Territoire::Metropole);
     }
 
     /**

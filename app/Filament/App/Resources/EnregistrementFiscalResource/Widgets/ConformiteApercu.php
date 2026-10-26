@@ -8,7 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
-use App\Domain\Calendrier\Calendrier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -27,6 +27,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class ConformiteApercu extends BaseWidget
 {
+    use PrendLeCalendrierDuMagasin;
+
     protected function getStats(): array
     {
         $derniereVente = EnregistrementFiscal::query()
@@ -39,7 +41,7 @@ class ConformiteApercu extends BaseWidget
             : sprintf(
                 'Signé par la vente n° %d du %s',
                 $derniereVente->sequence,
-                Calendrier::deParis()->afficher($derniereVente->horodatage, 'd/m/Y à H:i:s'),
+                self::calendrierDuMagasin()->afficher($derniereVente->horodatage, 'd/m/Y à H:i:s'),
             );
 
         return [
@@ -80,7 +82,7 @@ class ConformiteApercu extends BaseWidget
         $quand = sprintf(
             'Vérification %s du %s',
             ($details['verification'] ?? null) === 'complete' ? 'complète' : 'incrémentale',
-            Calendrier::deParis()->afficher($controle->horodatage, 'd/m/Y à H:i:s'),
+            self::calendrierDuMagasin()->afficher($controle->horodatage, 'd/m/Y à H:i:s'),
         );
 
         return $anomalies === 0

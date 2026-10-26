@@ -151,8 +151,8 @@ class CloturerCaisseAction
         $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->jour(), $this->registre->derniereJourneeCloturee($magasin));
         $this->panierDeCaisse->abandonnerLesVentesOuvertesLe($journee);
 
-        $ventes = Facture::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
-        $avoirs = Avoir::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
+        $ventes = Facture::query()->enAttenteDeCloture($instant->calendrier(), $journee)->lockForUpdate()->get();
+        $avoirs = Avoir::query()->enAttenteDeCloture($instant->calendrier(), $journee)->lockForUpdate()->get();
         $etabli = $this->recapitulatif->etablir($magasin, $journee, $ventes, $avoirs, ClotureCaisse::query()->orderByDesc('date_cloture')->first());
         $recapitulatif = $etabli['recapitulatif'];
         $net = fn (string $montant): int => $recapitulatif['ventes_particuliers'][$montant] + $recapitulatif['avoirs_particuliers'][$montant];

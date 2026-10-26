@@ -3,9 +3,9 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Filament\App\Resources\ClotureCaisseResource;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -24,6 +24,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class VentesEnAttenteApercu extends BaseWidget
 {
+    use PrendLeCalendrierDuMagasin;
+
     public static function canView(): bool
     {
         return auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
@@ -31,7 +33,7 @@ class VentesEnAttenteApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(Calendrier::deParis()->aujourdhui());
+        $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(self::calendrierDuMagasin()->aujourdhui());
 
         if ($journees->isEmpty()) {
             return [

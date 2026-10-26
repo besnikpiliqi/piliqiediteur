@@ -279,14 +279,14 @@ class PanierDeCaisse
     }
 
     /**
-     * Les paniers enregistrés pour la dernière fois ce jour du calendrier ou
-     * avant.
+     * Les paniers du magasin actif enregistrés pour la dernière fois ce
+     * jour de son calendrier ou avant.
      *
      * @return Builder<PanierCaisse>
      */
     private function ventesOuvertesLe(string $journee): Builder
     {
-        return PanierCaisse::query()->where('updated_at', '<', Calendrier::deParis()->bornesDuJour($journee)[1]);
+        return PanierCaisse::query()->where('updated_at', '<', app(TenantContext::class)->magasin()->calendrier()->bornesDuJour($journee)[1]);
     }
 
     /**

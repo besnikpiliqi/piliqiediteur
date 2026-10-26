@@ -4,7 +4,6 @@ namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\CategorieOperation;
 use App\Domain\Facturation\Models\Avoir;
@@ -25,7 +24,10 @@ use Illuminate\Support\Collection;
  * centimes, PU HT des lignes de vente en millionièmes d'euro, taux et
  * remises en centièmes de point, dates en texte, jamais un nombre à
  * virgule flottante (voir CalculateurLigne::enCentiemes() et
- * CalculateurLigne::enMillioniemes()).
+ * CalculateurLigne::enMillioniemes()). Une date avec heure s'écrit en ISO
+ * 8601 avec le décalage du calendrier du magasin du document, et un jour
+ * est un jour de ce calendrier (voir Magasin::calendrier()) : à Paris
+ * « +01:00 » ou « +02:00 », en Martinique « -04:00 ».
  *
  * Un ticket, une facture ou un avoir (document()) signe deux blocs :
  *
@@ -163,11 +165,11 @@ class ContenuFiscal
      */
     private function blocDeLaFacture(Facture $facture): array
     {
-        $facture->load(['lignes', 'client']);
+        $facture->load(['lignes', 'client', 'magasin']);
 
         return [
             'numero' => $facture->numero,
-            'date_emission' => $facture->date_emission === null ? null : Calendrier::deParis()->iso8601($facture->date_emission),
+            'date_emission' => $facture->date_emission === null ? null : $facture->magasin->calendrier()->iso8601($facture->date_emission),
             'client' => $this->clientFige($facture),
             'franchise_en_base' => $facture->franchise_en_base,
             'nature_operation' => $facture->nature_operation->value,
@@ -208,7 +210,7 @@ class ContenuFiscal
                 'numero_tva' => $consultation->numero_tva,
                 'valide' => $consultation->valide,
                 'identifiant' => $consultation->identifiant_consultation,
-                'consultee_le' => Calendrier::deParis()->iso8601($consultation->consultee_le),
+                'consultee_le' => $facture->magasin->calendrier()->iso8601($consultation->consultee_le),
             ],
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
@@ -235,12 +237,13 @@ class ContenuFiscal
      */
     private function blocDeLAvoir(Avoir $avoir): array
     {
-        $avoir->load(['lignes.ligneFacture.facture', 'client']);
+        $avoir->load(['lignes.ligneFacture.facture', 'client', 'magasin']);
         $documentsCorriges = $avoir->facturesConcernees();
+        $calendrier = $avoir->magasin->calendrier();
 
         return [
             'numero' => $avoir->numero,
-            'date_emission' => $avoir->date_emission === null ? null : Calendrier::deParis()->iso8601($avoir->date_emission),
+            'date_emission' => $avoir->date_emission === null ? null : $calendrier->iso8601($avoir->date_emission),
             'client' => $this->clientFige($avoir),
             'franchise_en_base' => $avoir->franchise_en_base,
             'nature_operation' => $avoir->nature_operation->value,
@@ -251,7 +254,7 @@ class ContenuFiscal
             'documents_corriges' => $documentsCorriges
                 ->map(fn (Facture $facture): array => [
                     'numero' => $facture->numero,
-                    'date_emission' => $facture->date_emission === null ? null : Calendrier::deParis()->jourDe($facture->date_emission),
+                    'date_emission' => $facture->date_emission === null ? null : $calendrier->jourDe($facture->date_emission),
                 ])
                 ->all(),
             ...$this->lignesEtTotaux($avoir->lignes, $avoir, -1),

@@ -184,7 +184,7 @@ class CloturerLesJourneesAction
         try {
             return $this->fermerLesCaisses->handle(
                 $magasin,
-                CarbonImmutable::now()->min(Calendrier::deParis()->bornesDuJour($jour)[1]->subSecond()),
+                CarbonImmutable::now()->min($magasin->calendrier()->bornesDuJour($jour)[1]->subSecond()),
             );
         } catch (Throwable $exception) {
             report($exception);

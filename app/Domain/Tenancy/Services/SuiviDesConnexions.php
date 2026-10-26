@@ -67,7 +67,7 @@ final class SuiviDesConnexions
         }
 
         if ($precedente !== null) {
-            Notification::make()->title('Votre connexion précédente : '.self::date($precedente))->info()->send();
+            Notification::make()->title('Votre connexion précédente : '.self::date($compte, $precedente))->info()->send();
         }
 
         if ($redonne !== null) {
@@ -87,11 +87,15 @@ final class SuiviDesConnexions
     {
         $auteur = $compte->acces_redonne_par === null ? null : User::query()->whereKey($compte->acces_redonne_par)->value('name');
 
-        return 'Votre accès a été redonné '.self::date($compte->acces_redonne_le).($auteur === null ? '' : " par {$auteur}").', '.($compte->acces_redonne_en_presence ? 'en votre présence.' : 'en votre absence.');
+        return 'Votre accès a été redonné '.self::date($compte, $compte->acces_redonne_le).($auteur === null ? '' : " par {$auteur}").', '.($compte->acces_redonne_en_presence ? 'en votre présence.' : 'en votre absence.');
     }
 
-    private static function date(CarbonInterface $instant): string
+    /**
+     * Une heure du compte, dans son calendrier (voir User::calendrier()),
+     * sans mention : la personne lit sa propre heure.
+     */
+    private static function date(User $compte, CarbonInterface $instant): string
     {
-        return 'le '.Calendrier::deParis()->afficher($instant, 'd/m/Y à H:i');
+        return 'le '.$compte->calendrier()->afficher($instant, 'd/m/Y à H:i');
     }
 }

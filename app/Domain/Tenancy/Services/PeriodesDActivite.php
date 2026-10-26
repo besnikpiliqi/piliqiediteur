@@ -55,20 +55,22 @@ class PeriodesDActivite
     }
 
     /**
-     * Les jours du calendrier des périodes du magasin : pour chacune,
-     * le jour de son début et celui de sa fin, sa fin étant nulle tant
-     * qu'elle est ouverte. Un jour est dans une période s'il tombe entre
-     * ces deux jours, compris.
+     * Les jours des périodes du magasin, dans son calendrier (voir
+     * Magasin::calendrier()) : pour chacune, le jour de son début et celui
+     * de sa fin, sa fin étant nulle tant qu'elle est ouverte. Un jour est
+     * dans une période s'il tombe entre ces deux jours, compris.
      *
      * @return list<array{0: string, 1: string|null}> AAAA-MM-JJ
      */
     public function jours(Magasin $magasin): array
     {
+        $calendrier = $magasin->calendrier();
+
         return PeriodeActivite::query()
             ->where('magasin_id', $magasin->getKey())
             ->orderBy('debut')
             ->get(['debut', 'fin'])
-            ->map(fn (PeriodeActivite $periode): array => [Calendrier::deParis()->jourDe($periode->debut), $periode->fin === null ? null : Calendrier::deParis()->jourDe($periode->fin)])
+            ->map(fn (PeriodeActivite $periode): array => [$calendrier->jourDe($periode->debut), $periode->fin === null ? null : $calendrier->jourDe($periode->fin)])
             ->all();
     }
 }

@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
@@ -14,9 +15,12 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
+use Database\Factories\MagasinFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -26,11 +30,13 @@ use Tests\TestCase;
  * Le contenu signé d'un ticket, de son encaissement, d'une livraison
  * intracommunautaire avec sa vérification VIES et d'un avoir, à des
  * instants où le jour de Paris n'est pas celui de l'UTC, et aux deux
- * passages de l'heure qui se répète au passage à l'heure d'hiver : il
- * reste octet pour octet celui que fixent les fichiers de référence
- * (tests/Fixtures/contenu-signe), écrits en clair. Seuls les identifiants
- * que tire la base ou le hasard (identifiants, uuid du magasin, clé et
- * signature précédente) y sont remplacés par « … ».
+ * passages de l'heure qui se répète au passage à l'heure d'hiver ; puis
+ * ceux de magasins de la Martinique et de La Réunion, à des instants où
+ * leur jour n'est pas celui de Paris : il reste octet pour octet celui que
+ * fixent les fichiers de référence (tests/Fixtures/contenu-signe), écrits
+ * en clair. Seuls les identifiants que tire la base ou le hasard
+ * (identifiants, uuid du magasin, clé et signature précédente) y sont
+ * remplacés par « … ».
  */
 class ContenuSigneDeReferenceTest extends TestCase
 {
@@ -100,6 +106,75 @@ class ContenuSigneDeReferenceTest extends TestCase
         ];
 
         $this->assertSame($this->contenuDeReference($reference), $contenus);
+    }
+
+    /**
+     * Un magasin d'outre-mer signe ses dates avec le décalage de son
+     * territoire et ses jours dans son calendrier : en Martinique, le
+     * ticket de 20:00 le 16 novembre (minuit UTC), son règlement et la
+     * clôture de sa journée ; à La Réunion, la facture de 00:30 le
+     * 1er janvier 2027 (encore le 31 décembre à Paris), numérotée en 2027,
+     * et l'avoir qui la corrige, qui cite son jour.
+     */
+    public function test_le_contenu_signe_d_un_magasin_d_outre_mer_porte_le_decalage_et_le_jour_de_son_territoire(): void
+    {
+        $this->travelTo(self::enUtc('2026-11-17 00:00:00'));
+        $martinique = $this->magasinDOutreMer(Territoire::Martinique, '200000008', 'FDF1', 'Les Saveurs de Fort-de-France');
+        $rhum = Produit::factory()->create(['reference' => 'RHUM-70', 'nom' => 'Rhum agricole 70 cl', 'prix_vente_ttc' => 24, 'taux_tva' => '8.5', 'suivi_stock' => false]);
+        $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(['nom' => 'Marie Joseph', 'email' => 'marie.joseph@exemple.fr', 'telephone' => '05 96 00 00 01']), [['produit_id' => $rhum->id, 'quantite' => 1]], ModePaiement::Especes);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $martinique, '2026-11-16');
+        $contenus = [
+            'ticket' => $this->contenuSigne($ticket, ChaineFiscale::Vente),
+            'encaissement' => $this->contenuSigne($ticket->allocationsPaiement()->sole()->paiement, ChaineFiscale::Encaissement),
+            'cloture' => $this->contenuSigne($cloture, ChaineFiscale::Evenement),
+        ];
+
+        $this->travelTo(self::enUtc('2026-12-31 20:30:00'));
+        $this->magasinDOutreMer(Territoire::Reunion, '300000007', 'RUN1', 'Les Épices de Saint-Denis');
+        $vanille = Produit::factory()->create(['reference' => 'VAN-010', 'nom' => 'Vanille Bourbon 10 gousses', 'prix_vente_ttc' => '21.70', 'taux_tva' => '8.5', 'suivi_stock' => false]);
+        $hotel = Client::factory()->professionnel()->create(['nom' => 'Hôtel du Barachois', 'adresse' => '2 rue du Barachois', 'code_postal' => '97400', 'ville' => 'Saint-Denis', 'email' => 'achats@barachois.example', 'telephone' => '02 62 00 00 02', 'delai_paiement_jours' => 30]);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $hotel, [['produit_id' => $vanille->id, 'quantite' => 3]]));
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $hotel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $contenus += [
+            'facture' => $this->contenuSigne($facture, ChaineFiscale::Vente),
+            'avoir' => $this->contenuSigne($avoir, ChaineFiscale::Vente),
+        ];
+
+        $this->assertSame($this->contenuDeReference('outre-mer'), $contenus);
+    }
+
+    /**
+     * Un magasin de ce territoire, d'une société validée à l'identité
+     * écrite en clair, sur l'établissement 00017 de ce SIREN, magasin
+     * actif.
+     */
+    private function magasinDOutreMer(Territoire $territoire, string $siren, string $code, string $raisonSociale): Magasin
+    {
+        [$codePostal, $ville] = MagasinFactory::lieuDuTerritoire($territoire);
+        $magasin = Magasin::factory()
+            ->dansLeTerritoire($territoire)
+            ->avecLaSociete([
+                'siren' => $siren,
+                'raison_sociale' => $raisonSociale,
+                'forme_juridique' => FormeJuridique::Sarl,
+                'capital_social' => '5000.00',
+                'immatriculation' => 'RCS '.$ville,
+                'numero_tva' => IdentifiantsInsee::numeroTvaPropose($siren),
+                'siege_adresse' => '1 rue de la République',
+                'siege_code_postal' => $codePostal,
+                'siege_ville' => $ville,
+            ])
+            ->create([
+                'code' => $code,
+                'nom' => 'Ma Boutique',
+                'siret' => $siren.'00017',
+                'adresse' => '12 rue Victor Hugo',
+                'email' => 'contact@'.strtolower($code).'.example',
+                'telephone' => '05 96 00 00 00',
+            ]);
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
     }
 
     /**

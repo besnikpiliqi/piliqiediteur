@@ -5,10 +5,23 @@ namespace Tests\Feature\Calendrier;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
+use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
+use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
@@ -23,6 +36,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
+use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionClass;
@@ -32,7 +46,8 @@ use Tests\TestCase;
  * Les instants s'enregistrent, se relisent et se comparent en UTC, dans la
  * base comme en PHP, et les jours restent des jours : aux deux passages
  * de l'heure qui se répète le 25 octobre 2026 (de 2 h à 3 h à Paris,
- * 00:00 à 02:00 UTC), chaque instant garde le sien.
+ * 00:00 à 02:00 UTC), chaque instant garde le sien. Filament affiche un
+ * instant à l'heure du magasin actif, un jour tel quel.
  */
 class HorodatageEnUtcTest extends TestCase
 {
@@ -276,6 +291,55 @@ class HorodatageEnUtcTest extends TestCase
     public function test_les_colonnes_et_les_fiches_affichent_les_instants_a_l_heure_de_paris(): void
     {
         $this->assertSame([Calendrier::deParis()->fuseau(), Calendrier::deParis()->fuseau()], [TextColumn::make('envoye_le')->getTimezone(), TextEntry::make('envoye_le')->getTimezone()]);
+    }
+
+    /**
+     * Dans le panneau d'un magasin de la Martinique, les colonnes et les
+     * fiches de Filament affichent un instant à l'heure de la Martinique,
+     * sans mention ; dans l'espace de la société, à l'heure de Paris : le
+     * réglage suit le magasin actif, relu à chaque rendu.
+     */
+    public function test_le_panneau_d_un_magasin_d_outre_mer_affiche_ses_instants_a_son_heure(): void
+    {
+        $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-16 20:00'));
+        $magasin = $this->ouvrirUneSocieteSituee(Territoire::Martinique);
+        $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => '8.5', 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $fuseaux = static fn (): array => [TextColumn::make('envoye_le')->getTimezone(), TextEntry::make('envoye_le')->getTimezone()];
+
+        $this->dansLeMagasin($magasin, self::responsableDeTest($magasin));
+        $this->assertSame(array_fill(0, 2, Calendrier::duTerritoire(Territoire::Martinique)->fuseau()), $fuseaux());
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
+            ->assertSee('16/11/2026')
+            ->assertDontSee('17/11/2026');
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+        $this->assertSame(array_fill(0, 2, Calendrier::deParis()->fuseau()), $fuseaux());
+    }
+
+    /**
+     * Un jour n'a pas de fuseau : l'échéance d'une facture, la journée
+     * d'une clôture et la date d'un règlement s'affichent tels quels dans
+     * le panneau d'un magasin de la Martinique, en liste comme sur la
+     * fiche. Relu comme un instant de minuit UTC puis converti à l'heure
+     * de la Martinique, le 16 décembre s'afficherait 15/12/2026.
+     */
+    public function test_un_jour_s_affiche_tel_quel_dans_le_panneau_d_un_magasin_de_la_martinique(): void
+    {
+        $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-16 20:00'));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSocieteSituee(Territoire::Martinique));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => '8.5', 'suivi_stock' => false]);
+        $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => 30]);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '10.00', 'recu_le' => '2026-11-16'], [['facture_id' => $facture->id, 'montant' => '10.00']]);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-11-16');
+        $this->dansLeMagasin($magasin, self::responsableDeTest($magasin));
+
+        $this->assertSame(['2026-12-16', '2026-11-16', '2026-11-16'], [$facture->date_echeance, $paiement->recu_le, $cloture->date_cloture]);
+        Livewire::test(ListFactures::class)->assertTableColumnFormattedStateSet('date_echeance', '16/12/2026', $facture);
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertSee('16/12/2026')->assertDontSee('15/12/2026');
+        Livewire::test(ListClotureCaisses::class)->assertTableColumnFormattedStateSet('date_cloture', '16/11/2026', $cloture);
+        Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])->assertSee('16/11/2026')->assertDontSee('15/11/2026');
+        Livewire::test(ListPaiements::class)->assertTableColumnFormattedStateSet('recu_le', '16/11/2026', $paiement);
     }
 
     private function demandeInscription(\DateTimeInterface $expireLe): DemandeInscription

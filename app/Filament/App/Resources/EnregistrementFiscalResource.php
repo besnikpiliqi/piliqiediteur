@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -42,6 +43,8 @@ use Illuminate\Support\Str;
  */
 class EnregistrementFiscalResource extends Resource
 {
+    use PrendLeCalendrierDuMagasin;
+
     protected static ?string $model = EnregistrementFiscal::class;
 
     protected static ?string $slug = 'caisse-securisee';
@@ -66,8 +69,8 @@ class EnregistrementFiscalResource extends Resource
                 TextEntry::make('sequence')->label('Séquence'),
                 TextEntry::make('type')->label('Type ou code')
                     ->formatStateUsing(fn (EnregistrementFiscal $record): string => $record->libelleDuType()),
-                TextEntry::make('horodatage')->label('Horodatage (heure de Paris)')
-                    ->formatStateUsing(fn (EnregistrementFiscal $record): string => Calendrier::deParis()->afficherDansUnJournal($record->horodatage, 'd/m/Y à H:i:s')),
+                TextEntry::make('horodatage')->label(fn (): string => 'Horodatage ('.self::calendrierDuMagasin()->libelleDeLHeure().')')
+                    ->formatStateUsing(fn (EnregistrementFiscal $record): string => self::calendrierDuMagasin()->afficherDansUnJournal($record->horodatage, 'd/m/Y à H:i:s')),
                 TextEntry::make('libelle_operateur')->label('Opérateur')
                     ->state(fn (EnregistrementFiscal $record): string => $record->libelleDeLOperateur()),
                 TextEntry::make('libelle_document')->label('Document')
@@ -126,8 +129,8 @@ class EnregistrementFiscalResource extends Resource
                 Tables\Columns\TextColumn::make('type')->label('Type ou code')
                     ->formatStateUsing(fn (EnregistrementFiscal $record): string => $record->libelleDuType())
                     ->wrap(),
-                Tables\Columns\TextColumn::make('horodatage')->label('Horodatage (heure de Paris)')
-                    ->formatStateUsing(fn (EnregistrementFiscal $record): string => Calendrier::deParis()->afficherDansUnJournal($record->horodatage, 'd/m/Y H:i:s'))
+                Tables\Columns\TextColumn::make('horodatage')->label(fn (): string => 'Horodatage ('.self::calendrierDuMagasin()->libelleDeLHeure().')')
+                    ->formatStateUsing(fn (EnregistrementFiscal $record): string => self::calendrierDuMagasin()->afficherDansUnJournal($record->horodatage, 'd/m/Y H:i:s'))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('libelle_operateur')->label('Opérateur')
                     ->state(fn (EnregistrementFiscal $record): string => $record->libelleDeLOperateur()),
@@ -145,7 +148,7 @@ class EnregistrementFiscalResource extends Resource
                         DatePicker::make('du')->label('Du'),
                         DatePicker::make('au')->label('Au'),
                     ])
-                    ->query(fn (Builder $query, array $data): Builder => $query->horodatesDuJourAuJour($data['du'] ?? null, $data['au'] ?? null))
+                    ->query(fn (Builder $query, array $data): Builder => $query->horodatesDuJourAuJour(self::calendrierDuMagasin(), $data['du'] ?? null, $data['au'] ?? null))
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
                         filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour($data['du'], 'd/m/Y') : null,
                         filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour($data['au'], 'd/m/Y') : null,

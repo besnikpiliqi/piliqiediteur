@@ -5,6 +5,7 @@ namespace App\Filament\App\Widgets;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\ChiffreDAffaires;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -22,6 +23,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class FacturesApercu extends BaseWidget
 {
+    use PrendLeCalendrierDuMagasin;
+
     public static function canView(): bool
     {
         return auth()->user()->can(PermissionRegistry::FACTURE_VIEW);
@@ -34,7 +37,7 @@ class FacturesApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $aujourdhui = Calendrier::deParis()->aujourdhui();
+        $aujourdhui = self::calendrierDuMagasin()->aujourdhui();
 
         return [
             $this->statPourPeriode('Cette semaine', Calendrier::premierJourDeLaSemaine($aujourdhui), $aujourdhui),
@@ -54,7 +57,7 @@ class FacturesApercu extends BaseWidget
      */
     private function statPourPeriode(string $libelle, string $du, string $au): Stat
     {
-        $net = app(ChiffreDAffaires::class)->netSurPeriode($du, $au, $this->voitLesVentesDeToutLEquipe() ? null : auth()->user());
+        $net = app(ChiffreDAffaires::class)->netSurPeriode(self::calendrierDuMagasin(), $du, $au, $this->voitLesVentesDeToutLEquipe() ? null : auth()->user());
         $euros = fn (float $montant): string => number_format($montant, 2, ',', ' ').' €';
         $nombres = $net['factures'].($net['factures'] > 1 ? ' factures' : ' facture')
             .($net['avoirs'] > 0 ? ', '.$net['avoirs'].($net['avoirs'] > 1 ? ' avoirs' : ' avoir') : '');

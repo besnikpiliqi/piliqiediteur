@@ -20,7 +20,7 @@ namespace App\Domain\CaisseSecurisee;
  */
 final class ModuleFiscal
 {
-    public const VERSION = '1.2';
+    public const VERSION = '1.3';
 
     public const REFERENCE_LEGALE = 'Article 286, I, 3° bis du code général des impôts';
 }

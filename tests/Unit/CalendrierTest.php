@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Enums\Territoire;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use DateTimeImmutable;
@@ -12,9 +13,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Le calendrier de Paris, sans base ni application : chaque instant y est
- * écrit avec son décalage, et chaque attente se compare comme un instant
- * (horodatage Unix) ou comme un jour « AAAA-MM-JJ ».
+ * Le calendrier de Paris et ceux des territoires d'outre-mer, sans base ni
+ * application : chaque instant y est écrit avec son décalage, et chaque
+ * attente se compare comme un instant (horodatage Unix) ou comme un jour
+ * « AAAA-MM-JJ ».
  */
 class CalendrierTest extends TestCase
 {
@@ -303,6 +305,173 @@ class CalendrierTest extends TestCase
     public function test_un_jour_bien_forme_est_un_jour_valide(): void
     {
         $this->assertSame(['2028-02-29', '2026-10-25'], [Calendrier::jourValide('2028-02-29'), Calendrier::jourValide('2026-10-25')]);
+    }
+
+    /**
+     * La table de duTerritoire() : la métropole et la Corse ont le
+     * calendrier de Paris, chaque département d'outre-mer le sien, la
+     * Guyane et Mayotte compris, prêts pour le jour où l'éditeur les
+     * accepte.
+     */
+    public function test_chaque_territoire_a_son_fuseau(): void
+    {
+        $this->assertSame(
+            [
+                'metropole' => 'Europe/Paris',
+                'corse' => 'Europe/Paris',
+                'guadeloupe' => 'America/Guadeloupe',
+                'martinique' => 'America/Martinique',
+                'guyane' => 'America/Cayenne',
+                'reunion' => 'Indian/Reunion',
+                'mayotte' => 'Indian/Mayotte',
+            ],
+            array_combine(
+                array_map(static fn (Territoire $territoire): string => $territoire->value, Territoire::cases()),
+                array_map(static fn (Territoire $territoire): string => Calendrier::duTerritoire($territoire)->fuseau(), Territoire::cases()),
+            ),
+        );
+        $this->assertSame(Calendrier::deParis()->fuseau(), Calendrier::duTerritoire(Territoire::Corse)->fuseau());
+    }
+
+    /**
+     * Aux Antilles (UTC−4, sans heure d'été), le jour change à 04:00 UTC,
+     * et l'année aussi le 31 décembre, quand Paris est déjà le lendemain
+     * depuis cinq heures.
+     */
+    public function test_le_jour_et_l_annee_des_antilles_changent_a_minuit_des_antilles(): void
+    {
+        $martinique = Calendrier::duTerritoire(Territoire::Martinique);
+        $guadeloupe = Calendrier::duTerritoire(Territoire::Guadeloupe);
+
+        $this->assertSame(['2026-11-16', '2026-11-17'], [
+            $martinique->jourDe(new DateTimeImmutable('2026-11-17T03:59:59Z')),
+            $martinique->jourDe(new DateTimeImmutable('2026-11-17T04:00:00Z')),
+        ]);
+        $this->assertSame(['2026', '2027', '2027'], [
+            $guadeloupe->anneeDe(new DateTimeImmutable('2027-01-01T03:59:59Z')),
+            $guadeloupe->anneeDe(new DateTimeImmutable('2027-01-01T04:00:00Z')),
+            Calendrier::deParis()->anneeDe(new DateTimeImmutable('2027-01-01T03:59:59Z')),
+        ]);
+    }
+
+    /**
+     * À La Réunion (UTC+4, sans heure d'été), le jour et l'année changent
+     * à 20:00 UTC, quand Paris est encore au 31 décembre.
+     */
+    public function test_le_jour_et_l_annee_de_la_reunion_changent_a_minuit_de_la_reunion(): void
+    {
+        $reunion = Calendrier::duTerritoire(Territoire::Reunion);
+        $avant = new DateTimeImmutable('2026-12-31T19:59:59Z');
+        $apres = new DateTimeImmutable('2026-12-31T20:00:00Z');
+
+        $this->assertSame(
+            ['2026-12-31', '2026', '2027-01-01', '2027', '2026-12-31'],
+            [$reunion->jourDe($avant), $reunion->anneeDe($avant), $reunion->jourDe($apres), $reunion->anneeDe($apres), Calendrier::deParis()->jourDe($apres)],
+        );
+    }
+
+    /**
+     * Outre-mer, aucun changement d'heure : le 25 octobre et le 28 mars y
+     * durent 24 heures, comme tout autre jour.
+     */
+    public function test_un_jour_outre_mer_dure_toujours_24_heures(): void
+    {
+        $bornes = static fn (Calendrier $calendrier, string $jour): array => array_map(static fn (DateTimeInterface $borne): int => $borne->getTimestamp(), $calendrier->bornesDuJour($jour));
+        $martinique = Calendrier::duTerritoire(Territoire::Martinique);
+        $reunion = Calendrier::duTerritoire(Territoire::Reunion);
+
+        $this->assertSame(self::horodatages('2026-10-25T04:00:00Z', '2026-10-26T04:00:00Z'), $bornes($martinique, '2026-10-25'));
+        $this->assertSame(self::horodatages('2027-03-28T04:00:00Z', '2027-03-29T04:00:00Z'), $bornes($martinique, '2027-03-28'));
+        $this->assertSame(self::horodatages('2026-10-24T20:00:00Z', '2026-10-25T20:00:00Z'), $bornes($reunion, '2026-10-25'));
+        $this->assertSame(self::horodatages('2027-03-27T20:00:00Z', '2027-03-28T20:00:00Z'), $bornes($reunion, '2027-03-28'));
+    }
+
+    /**
+     * Les heures que Paris répète ou saute existent une fois, et une
+     * seule, en Martinique, et un journal n'y ajoute aucune mention de
+     * l'heure d'été ou d'hiver.
+     */
+    public function test_aucune_heure_n_est_repetee_ni_sautee_outre_mer(): void
+    {
+        $martinique = Calendrier::duTerritoire(Territoire::Martinique);
+
+        $this->assertSame(
+            self::horodatages('2026-10-25T06:30:00Z', '2027-03-28T06:30:00Z'),
+            [$martinique->heureMurale('2026-10-25 02:30')->getTimestamp(), $martinique->heureMurale('2027-03-28 02:30')->getTimestamp()],
+        );
+        $this->assertSame('25/10/2026 02:30:00', $martinique->afficherDansUnJournal(new DateTimeImmutable('2026-10-25T06:30:00Z'), 'd/m/Y H:i:s'));
+    }
+
+    /**
+     * La date ISO 8601 d'un contenu signé porte le décalage du territoire.
+     */
+    public function test_l_iso8601_porte_le_decalage_du_territoire(): void
+    {
+        $this->assertSame(
+            ['2026-11-16T20:00:00-04:00', '2027-01-01T00:30:00+04:00'],
+            [
+                Calendrier::duTerritoire(Territoire::Martinique)->iso8601(new DateTimeImmutable('2026-11-17T00:00:00Z')),
+                Calendrier::duTerritoire(Territoire::Reunion)->iso8601(new DateTimeImmutable('2026-12-31T20:30:00Z')),
+            ],
+        );
+    }
+
+    public function test_le_libelle_de_l_heure_nomme_le_territoire(): void
+    {
+        $this->assertSame(
+            ['heure de Paris', 'heure de Paris', 'heure de la Guadeloupe', 'heure de la Martinique', 'heure de la Guyane', 'heure de La Réunion', 'heure de Mayotte'],
+            array_map(static fn (Territoire $territoire): string => Calendrier::duTerritoire($territoire)->libelleDeLHeure(), Territoire::cases()),
+        );
+    }
+
+    /**
+     * Sur une page qui mêle plusieurs calendriers, Paris est la référence :
+     * une heure d'un magasin d'outre-mer nomme son heure, une heure de
+     * Paris n'a aucune mention.
+     */
+    public function test_l_affichage_hors_du_magasin_nomme_l_heure_sauf_a_paris(): void
+    {
+        $instant = new DateTimeImmutable('2026-11-17T00:00:00Z');
+
+        $this->assertSame(
+            ['17/11/2026 01:00', '17/11/2026 01:00', '16/11/2026 20:00 (heure de la Martinique)', '17/11/2026 04:00 (heure de La Réunion)'],
+            [
+                Calendrier::deParis()->afficherHorsDuMagasin($instant, 'd/m/Y H:i'),
+                Calendrier::duTerritoire(Territoire::Corse)->afficherHorsDuMagasin($instant, 'd/m/Y H:i'),
+                Calendrier::duTerritoire(Territoire::Martinique)->afficherHorsDuMagasin($instant, 'd/m/Y H:i'),
+                Calendrier::duTerritoire(Territoire::Reunion)->afficherHorsDuMagasin($instant, 'd/m/Y H:i'),
+            ],
+        );
+    }
+
+    /**
+     * Un délai en jours garde l'heure murale du territoire : sans
+     * changement d'heure, trente jours en Martinique font exactement 720
+     * heures, là où Paris en compte 721 à la même période.
+     */
+    public function test_un_decalage_en_jours_outre_mer_garde_l_heure_locale(): void
+    {
+        $martinique = Calendrier::duTerritoire(Territoire::Martinique);
+        $envoi = $martinique->heureMurale('2026-10-20 10:00');
+        $expiration = $martinique->decaler($envoi, CarbonInterval::days(30));
+
+        $this->assertSame($martinique->heureMurale('2026-11-19 10:00')->getTimestamp(), $expiration->getTimestamp());
+        $this->assertSame(720 * 3600, $expiration->getTimestamp() - $envoi->getTimestamp());
+    }
+
+    /**
+     * L'heure murale d'un instant, de 0 à 23, est celle du calendrier :
+     * la fenêtre des relances d'un magasin se lit à son heure.
+     */
+    public function test_l_heure_murale_d_un_instant_est_celle_du_calendrier(): void
+    {
+        $instant = new DateTimeImmutable('2026-11-17T13:00:00Z');
+
+        $this->assertSame([9, 14, 17], [
+            Calendrier::duTerritoire(Territoire::Martinique)->heureDe($instant),
+            Calendrier::deParis()->heureDe($instant),
+            Calendrier::duTerritoire(Territoire::Reunion)->heureDe($instant),
+        ]);
     }
 
     /**

@@ -36,7 +36,7 @@
         'titre' => $libelleDocument,
         'details' => array_filter([
             $facture->numero ?? 'Brouillon (non émise)',
-            $facture->date_emission ? 'Émise le '.\App\Domain\Calendrier\Calendrier::deParis()->afficher($facture->date_emission, 'd/m/Y') : null,
+            $facture->date_emission ? 'Émise le '.$facture->magasin->calendrier()->afficher($facture->date_emission, 'd/m/Y') : null,
             $avecEcheance ? 'Échéance le '.\App\Domain\Calendrier\Calendrier::afficherJour($facture->date_echeance, 'd/m/Y') : null,
         ]),
     ])
@@ -53,6 +53,6 @@
 
     @include('documents.pdf.totaux', ['document' => $facture])
 
-    @include('documents.pdf.reglements', ['reglements' => $reglements, 'dateEmission' => $facture->date_emission])
+    @include('documents.pdf.reglements', ['reglements' => $reglements, 'dateEmission' => $facture->date_emission, 'calendrier' => $facture->magasin->calendrier()])
 </body>
 </html>

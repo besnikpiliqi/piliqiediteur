@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -101,6 +102,19 @@ class TenantContext
     public function id(): int
     {
         return $this->magasin()->getKey();
+    }
+
+    /**
+     * Le calendrier dans lequel les colonnes et les fiches de Filament
+     * affichent leurs instants : celui du magasin actif (son panneau, voir
+     * Magasin::calendrier()), sinon celui de Paris, référence de l'espace
+     * de la société. Seul le réglage de ces colonnes l'appelle (voir
+     * AppServiceProvider) : le code du domaine prend toujours le
+     * calendrier du magasin pour lequel il calcule.
+     */
+    public function calendrierDAffichage(): Calendrier
+    {
+        return $this->magasin?->calendrier() ?? Calendrier::deParis();
     }
 
     public function aUneSociete(): bool

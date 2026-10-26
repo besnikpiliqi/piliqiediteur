@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -219,6 +220,18 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         $magasinId = $this->ligneDIdentifiant()?->magasin_id;
 
         return $magasinId === null ? null : Magasin::query()->where('societe_id', $this->societe_id)->find($magasinId);
+    }
+
+    /**
+     * Le calendrier de ses heures propres (sa connexion précédente, l'accès
+     * qui lui a été redonné) : celui du magasin de son identifiant pour un
+     * membre, qui vit à l'heure de son magasin (voir Magasin::calendrier()),
+     * celui de Paris pour un compte de la société (propriétaire,
+     * administrateur, expert-comptable).
+     */
+    public function calendrier(): Calendrier
+    {
+        return ($this->estMembre() ? $this->magasinDeSonIdentifiant()?->calendrier() : null) ?? Calendrier::deParis();
     }
 
     /**

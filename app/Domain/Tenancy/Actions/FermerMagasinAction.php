@@ -6,7 +6,6 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
@@ -185,7 +184,7 @@ class FermerMagasinAction
      */
     private function fermer(User $auteur, Magasin $magasin, MotifFermeture $motif): array
     {
-        $instant = $this->registre->verrouiller($magasin)->utc;
+        $instant = $this->registre->verrouiller($magasin);
         $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
         self::verifierQuIlSeFerme($verrouille, $motif);
 
@@ -194,7 +193,7 @@ class FermerMagasinAction
         }
 
         $principalRetire = $motif === MotifFermeture::Cession && $verrouille->est_etablissement_principal;
-        $this->cloturerLesJournees->parLeSysteme($verrouille, Calendrier::deParis()->jourDe($instant));
+        $this->cloturerLesJournees->parLeSysteme($verrouille, $instant->jour());
         $verrouille->forceFill([
             'statut' => StatutMagasin::Ferme,
             'motif_fermeture' => $motif,
@@ -225,7 +224,7 @@ class FermerMagasinAction
             MagasinFerme::dispatch($verrouille, $periode);
         }
 
-        return ['fermeture' => $instant, 'cession' => $cession === null ? null : self::resume($cession)];
+        return ['fermeture' => $instant->utc, 'cession' => $cession === null ? null : self::resume($cession)];
     }
 
     /**

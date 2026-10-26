@@ -5,7 +5,6 @@ namespace App\Domain\Stock\Actions;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Enums\OrigineProduit;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
@@ -145,7 +144,7 @@ class ValiderInventaireOuvertureAction
 
         $maintenant = CarbonImmutable::now();
         $inventaire->forceFill([
-            'numero' => $this->numerotation->suivant($magasin, TypeDocument::InventaireOuverture, Calendrier::deParis()->anneeDe($maintenant)),
+            'numero' => $this->numerotation->suivant($magasin, TypeDocument::InventaireOuverture, $magasin->calendrier()->anneeDe($maintenant)),
             'statut' => StatutInventaireOuverture::Valide,
             'date_validation' => $maintenant,
             'valide_par' => $compte->getKey(),

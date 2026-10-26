@@ -2,7 +2,6 @@
 
 namespace App\Filament\App\Resources\FactureResource\Pages;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\TypePreuve;
@@ -11,6 +10,7 @@ use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -34,7 +34,7 @@ use Filament\Resources\Pages\ViewRecord;
  */
 class ViewFacture extends ViewRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, PrendLeCalendrierDuMagasin;
 
     protected static string $resource = FactureResource::class;
 
@@ -102,7 +102,7 @@ class ViewFacture extends ViewRecord
                         ->maxLength(100),
                     DatePicker::make('date_document')
                         ->label('Date du document')
-                        ->maxDate(Calendrier::deParis()->aujourdhui()),
+                        ->maxDate(fn (): string => self::calendrierDuMagasin()->aujourdhui()),
                     TextInput::make('emetteur')
                         ->label('Établie par')
                         ->helperText('La douane, le transporteur, l\'assureur ou l\'acquéreur. Deux documents de transport doivent venir de deux parties indépendantes du magasin et du client.')

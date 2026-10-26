@@ -210,13 +210,13 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * La date de validité est le dernier jour du calendrier où le client
-     * peut accepter le devis : il ne peut plus l'être le lendemain (voir
-     * AccepterDevisAction), et un devis envoyé expire alors (voir
-     * ExpirerLesDevisAction).
+     * La date de validité est le dernier jour du calendrier de son magasin
+     * où le client peut accepter le devis : il ne peut plus l'être le
+     * lendemain (voir AccepterDevisAction), et un devis envoyé expire alors
+     * (voir ExpirerLesDevisAction).
      */
     public function validiteDepassee(): bool
     {
-        return $this->date_validite !== null && $this->date_validite < Calendrier::deParis()->aujourdhui();
+        return $this->date_validite !== null && $this->date_validite < $this->magasin->calendrier()->aujourdhui();
     }
 }

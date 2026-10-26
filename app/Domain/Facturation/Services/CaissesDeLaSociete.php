@@ -26,12 +26,15 @@ use Illuminate\Database\Eloquent\Collection;
  * MagasinScope reste en place, aucune requête ne contourne sa portée.
  *
  * De chacun, elle ne rend que les relevés de caisse fermés le jour choisi,
- * avec les seules colonnes du relevé (voir COLONNES_DU_RELEVE : nom figé
- * du vendeur, période, mode de fermeture et nom figé de qui l'a fermée,
- * totaux), et le nom des vendeurs dont la caisse est encore ouverte
- * aujourd'hui (voir VerificateurCaissesPersonnelles) ; aucun identifiant
- * de compte, aucun nom de client, aucun document. Les montants sont ceux
- * que chaque relevé a enregistrés, jamais additionnés par la base.
+ * ou, sans jour choisi, sa journée en cours, chaque magasin dans son
+ * calendrier (voir Magasin::calendrier() : deux magasins d'une même
+ * société peuvent ne pas être le même jour), avec les seules colonnes du
+ * relevé (voir COLONNES_DU_RELEVE : nom figé du vendeur, période, mode de
+ * fermeture et nom figé de qui l'a fermée, totaux), et le nom des vendeurs
+ * dont la caisse est encore ouverte à son jour (voir
+ * VerificateurCaissesPersonnelles) ; aucun identifiant de compte, aucun
+ * nom de client, aucun document. Les montants sont ceux que chaque relevé
+ * a enregistrés, jamais additionnés par la base.
  */
 final class CaissesDeLaSociete
 {
@@ -76,30 +79,38 @@ final class CaissesDeLaSociete
     }
 
     /**
-     * Pour chacun de ces magasins, dans leur ordre : le magasin, les noms
-     * des vendeurs dont la caisse est encore ouverte aujourd'hui, et les
-     * relevés fermés ce jour du calendrier (« AAAA-MM-JJ »), du plus
-     * récent au plus ancien.
+     * Pour chacun de ces magasins, dans leur ordre : le magasin, son
+     * calendrier, la journée de ses relevés (ce jour choisi, « AAAA-MM-JJ »,
+     * ou, sans jour choisi, sa journée en cours), les noms des vendeurs
+     * dont la caisse est encore ouverte à son jour, et ses relevés fermés
+     * pendant cette journée, de son minuit au suivant, du plus récent au
+     * plus ancien.
      *
-     * @return list<array{magasin: Magasin, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>
+     * @return list<array{magasin: Magasin, calendrier: Calendrier, journee: string, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>
      */
-    public function pour(User $compte, string $journee): array
+    public function pour(User $compte, ?string $journee): array
     {
-        $calendrier = Calendrier::deParis();
-        [$debut, $fin] = $calendrier->bornesDuJour($journee);
         $contexte = app(TenantContext::class);
 
         return $this->magasins($compte)
-            ->map(fn (Magasin $magasin): array => $contexte->runAs($magasin, fn (): array => [
-                'magasin' => $magasin,
-                'caisses_ouvertes' => $this->verificateur->vendeursAvecCaisseOuverte($calendrier->aujourdhui())->pluck('name')->values()->all(),
-                'releves' => ClotureCaissePersonnelle::query()
-                    ->where('cloturee_a', '>=', $debut)
-                    ->where('cloturee_a', '<', $fin)
-                    ->orderByDesc('cloturee_a')
-                    ->orderByDesc('id')
-                    ->get(self::COLONNES_DU_RELEVE),
-            ]))
+            ->map(function (Magasin $magasin) use ($contexte, $journee): array {
+                $calendrier = $magasin->calendrier();
+                $journeeDuMagasin = $journee ?? $calendrier->aujourdhui();
+                [$debut, $fin] = $calendrier->bornesDuJour($journeeDuMagasin);
+
+                return $contexte->runAs($magasin, fn (): array => [
+                    'magasin' => $magasin,
+                    'calendrier' => $calendrier,
+                    'journee' => $journeeDuMagasin,
+                    'caisses_ouvertes' => $this->verificateur->vendeursAvecCaisseOuverte($calendrier->aujourdhui())->pluck('name')->values()->all(),
+                    'releves' => ClotureCaissePersonnelle::query()
+                        ->where('cloturee_a', '>=', $debut)
+                        ->where('cloturee_a', '<', $fin)
+                        ->orderByDesc('cloturee_a')
+                        ->orderByDesc('id')
+                        ->get(self::COLONNES_DU_RELEVE),
+                ]);
+            })
             ->all();
     }
 }

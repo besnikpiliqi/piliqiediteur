@@ -92,7 +92,7 @@ class EmettreAvoirFournisseurAction
         $avoirFournisseur->verifierQueLeStockSuffit();
 
         $maintenant = CarbonImmutable::now();
-        $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, Calendrier::deParis()->anneeDe($maintenant));
+        $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, $avoirFournisseur->magasin->calendrier()->anneeDe($maintenant));
 
         $avoirFournisseur->forceFill([
             'numero' => $numero,

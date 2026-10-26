@@ -15,6 +15,7 @@ use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Actions\MountableAction;
@@ -41,7 +42,7 @@ use Illuminate\Support\HtmlString;
 
 class ClientResource extends Resource
 {
-    use ArchiveLaFiche, GereLesExceptionsMetier, SupprimeEnMasseLigneParLigne;
+    use ArchiveLaFiche, GereLesExceptionsMetier, PrendLeCalendrierDuMagasin, SupprimeEnMasseLigneParLigne;
 
     /**
      * Vendre à un autre magasin de la même société n'est pas une vente
@@ -352,6 +353,7 @@ class ClientResource extends Resource
                         'numeroTva' => $record->numero_tva,
                         'derniere' => $record->derniereConsultationVies(),
                         'consultations' => $record->consultationsVies()->latest('consultee_le')->latest('id')->get(),
+                        'calendrier' => self::calendrierDuMagasin(),
                     ])),
             ])
             ->visible(fn (?Client $record): bool => $record !== null

@@ -13,13 +13,13 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
@@ -60,7 +60,7 @@ use Illuminate\Validation\Rules\Exists;
  */
 class FactureAchatResource extends Resource
 {
-    use AjouteDesLignesDAchat;
+    use AjouteDesLignesDAchat, PrendLeCalendrierDuMagasin;
     use GereLesExceptionsMetier;
     use PorteUnJeton;
     use SaisitUneQuantiteRetournee;
@@ -328,7 +328,7 @@ class FactureAchatResource extends Resource
                     ? '<a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>'
                     : e($avoir->numero);
 
-                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.Calendrier::deParis()->afficher($avoir->date_emission, 'd/m/Y').')')))->toHtml();
+                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.self::calendrierDuMagasin()->afficher($avoir->date_emission, 'd/m/Y').')')))->toHtml();
             });
 
         return $retours->isEmpty() ? null : new HtmlString($retours->implode('<br>'));

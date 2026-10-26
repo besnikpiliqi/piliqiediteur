@@ -9,6 +9,7 @@
 
     @param \App\Domain\Facturation\Services\ReglementsALEmission $reglements
     @param \Carbon\CarbonInterface|null $dateEmission
+    @param \App\Domain\Calendrier\Calendrier $calendrier celui du magasin du document
 --}}
 @php
     $calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class);
@@ -20,7 +21,7 @@
         </tr>
         @foreach($reglements->paiements as $paiement)
             <tr>
-                <td class="libelle">{{ implode(' · ', array_filter([$dateEmission === null ? null : \App\Domain\Calendrier\Calendrier::deParis()->afficher($dateEmission, 'd/m/Y'), $paiement['mode']->getLabel(), $paiement['reference']], filled(...))) }}</td>
+                <td class="libelle">{{ implode(' · ', array_filter([$dateEmission === null ? null : $calendrier->afficher($dateEmission, 'd/m/Y'), $paiement['mode']->getLabel(), $paiement['reference']], filled(...))) }}</td>
                 <td class="montant">{{ $calculateur->enEuros($paiement['montant']) }}</td>
             </tr>
         @endforeach

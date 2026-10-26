@@ -52,26 +52,33 @@ use InvalidArgumentException;
 class ExporterJournalDesEvenementsAction
 {
     /**
-     * Les colonnes du fichier, dans l'ordre.
+     * Les colonnes du fichier, dans l'ordre ; la colonne lisible de
+     * l'horodatage nomme l'heure du magasin (« Horodatage (heure de la
+     * Martinique) », voir Calendrier::libelleDeLHeure()).
+     *
+     * @return list<string>
      */
-    public const COLONNES = [
-        'Séquence',
-        'Horodatage (heure de Paris)',
-        'Horodatage signé (UTC)',
-        'Code',
-        'Libellé',
-        'Opérateur',
-        'Détails',
-        'Adresse IP',
-        'Navigateur',
-        'Document',
-        'Signature précédente',
-        'Signature',
-        'Algorithme',
-        'Clé (cle_id)',
-        'Version du module',
-        'Contenu signé',
-    ];
+    public static function colonnes(Calendrier $calendrier): array
+    {
+        return [
+            'Séquence',
+            "Horodatage ({$calendrier->libelleDeLHeure()})",
+            'Horodatage signé (UTC)',
+            'Code',
+            'Libellé',
+            'Opérateur',
+            'Détails',
+            'Adresse IP',
+            'Navigateur',
+            'Document',
+            'Signature précédente',
+            'Signature',
+            'Algorithme',
+            'Clé (cle_id)',
+            'Version du module',
+            'Contenu signé',
+        ];
+    }
 
     public function __construct(
         private readonly RegistreFiscal $registre,
@@ -111,11 +118,12 @@ class ExporterJournalDesEvenementsAction
         ])));
 
         $magasinId = $magasin->getKey();
+        $calendrier = $magasin->calendrier();
         $avecLesTraces = $exportateur->estProprietaireDuMagasin($magasin);
 
-        return static function ($flux) use ($magasinId, $du, $au, $avecLesTraces): void {
+        return static function ($flux) use ($magasinId, $calendrier, $du, $au, $avecLesTraces): void {
             fwrite($flux, "\u{FEFF}");
-            self::ecrireUneLigne($flux, self::COLONNES);
+            self::ecrireUneLigne($flux, self::colonnes($calendrier));
 
             // Le fichier s'écrit après la réponse de l'action : les
             // requêtes sont filtrées par magasin elles-mêmes, sans dépendre
@@ -124,11 +132,11 @@ class ExporterJournalDesEvenementsAction
                 ->withoutGlobalScope(MagasinScope::class)
                 ->where('magasin_id', $magasinId)
                 ->where('chaine', ChaineFiscale::Evenement->value)
-                ->horodatesDuJourAuJour($du, $au)
+                ->horodatesDuJourAuJour($calendrier, $du, $au)
                 ->when($avecLesTraces, fn (Builder $evenements): Builder => $evenements->with(['trace' => fn (HasOne $trace) => $trace->withoutGlobalScope(MagasinScope::class)->where('magasin_id', $magasinId)]))
                 ->orderBy('sequence')
                 ->lazy(500)
-                ->each(fn (EnregistrementFiscal $evenement) => self::ecrireUneLigne($flux, self::ligne($evenement, $avecLesTraces)));
+                ->each(fn (EnregistrementFiscal $evenement) => self::ecrireUneLigne($flux, self::ligne($evenement, $calendrier, $avecLesTraces)));
         };
     }
 
@@ -145,7 +153,7 @@ class ExporterJournalDesEvenementsAction
      * @param  bool  $avecLaTrace  vrai quand le propriétaire exporte : sa trace a été chargée
      * @return list<string>
      */
-    private static function ligne(EnregistrementFiscal $evenement, bool $avecLaTrace): array
+    private static function ligne(EnregistrementFiscal $evenement, Calendrier $calendrier, bool $avecLaTrace): array
     {
         $donnees = $evenement->contenuSigne()['donnees'] ?? [];
         $details = $donnees['details'] ?? [];
@@ -153,7 +161,7 @@ class ExporterJournalDesEvenementsAction
 
         $lecture = [
             (string) $evenement->sequence,
-            Calendrier::deParis()->afficherDansUnJournal($evenement->horodatage, 'd/m/Y H:i:s'),
+            $calendrier->afficherDansUnJournal($evenement->horodatage, 'd/m/Y H:i:s'),
             (string) ($evenement->contenuSigne()['horodatage'] ?? ''),
             (string) ($donnees['code'] ?? $evenement->type),
             (string) ($donnees['libelle'] ?? ''),

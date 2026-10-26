@@ -3,8 +3,8 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -23,6 +23,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class CaissesPersonnellesOuvertesApercu extends BaseWidget
 {
+    use PrendLeCalendrierDuMagasin;
+
     public static function canView(): bool
     {
         return auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
@@ -30,7 +32,7 @@ class CaissesPersonnellesOuvertesApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui());
+        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::calendrierDuMagasin()->aujourdhui());
 
         return [
             Stat::make('Caisses personnelles ouvertes', (string) $vendeurs->count())

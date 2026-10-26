@@ -31,6 +31,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
 use App\Policies\AffectationPolicy;
@@ -372,17 +373,20 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Les colonnes et les entrées de Filament affichent un instant à
-     * l'heure du calendrier (->dateTime(), y compris réduit à son jour par
-     * ->dateTime('d/m/Y')), et un jour (cast JourCivil) tel quel par
-     * ->jour(), sans aucun fuseau : ->date() relirait le jour comme un
-     * minuit du fuseau de l'application, puis le convertirait à celui de
-     * la colonne, qui peut donner la veille.
+     * l'heure du calendrier d'affichage (->dateTime(), y compris réduit à
+     * son jour par ->dateTime('d/m/Y')) : celui du magasin actif dans son
+     * panneau, celui de Paris dans l'espace de la société (voir
+     * TenantContext::calendrierDAffichage()), lu au rendu ; un jour (cast
+     * JourCivil) s'affiche tel quel par ->jour(), sans aucun fuseau :
+     * ->date() relirait le jour comme un minuit du fuseau de
+     * l'application, puis le convertirait à celui de la colonne, qui peut
+     * donner la veille (aux Antilles).
      */
     private function afficherLesDatesAuCalendrier(): void
     {
         foreach ([TextColumn::class, TextEntry::class] as $composant) {
             $composant::configureUsing(static function (TextColumn|TextEntry $composant): void {
-                $composant->timezone(Calendrier::deParis()->fuseau());
+                $composant->timezone(static fn (): string => app(TenantContext::class)->calendrierDAffichage()->fuseau());
             });
             $composant::macro('jour', function (string $format = 'd/m/Y'): TextColumn|TextEntry {
                 /** @var TextColumn|TextEntry $this */

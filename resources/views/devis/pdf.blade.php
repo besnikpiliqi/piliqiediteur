@@ -28,7 +28,7 @@
                 $brouillon => "{$devis->numero} (brouillon, modifié depuis son envoi)",
                 default => $devis->numero,
             },
-            $brouillon ? null : 'Émis le '.\App\Domain\Calendrier\Calendrier::deParis()->afficher($devis->date_emission, 'd/m/Y'),
+            $brouillon ? null : 'Émis le '.$devis->magasin->calendrier()->afficher($devis->date_emission, 'd/m/Y'),
             $devis->date_validite ? 'Valable jusqu\'au '.\App\Domain\Calendrier\Calendrier::afficherJour($devis->date_validite, 'd/m/Y') : null,
         ]),
     ])

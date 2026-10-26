@@ -127,7 +127,8 @@ class CaissesDeLaSocieteTest extends TestCase
         [$caisses] = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasin), Calendrier::deParis()->aujourdhui());
         $releve = $caisses['releves']->sole();
 
-        $this->assertSame(['magasin', 'caisses_ouvertes', 'releves'], array_keys($caisses));
+        $this->assertSame(['magasin', 'calendrier', 'journee', 'caisses_ouvertes', 'releves'], array_keys($caisses));
+        $this->assertSame('2026-10-09', $caisses['journee']);
         $this->assertSame(
             ['vendeur_nom', 'periode_debut', 'jusqu_au', 'cloturee_a', 'mode_fermeture', 'fermee_par_nom', 'nombre_ventes', 'total_ht', 'total_tva', 'total_ttc', 'encaissements', 'credit_avoir', 'reste_du'],
             array_keys($releve->getAttributes()),

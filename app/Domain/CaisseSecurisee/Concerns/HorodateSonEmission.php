@@ -24,13 +24,12 @@ trait HorodateSonEmission
     }
 
     /**
-     * Les documents émis du jour $du au jour $au du calendrier, compris :
-     * du minuit de $du au minuit qui suit $au, exclu.
+     * Les documents émis du jour $du au jour $au de ce calendrier, celui de
+     * leur magasin (voir Magasin::calendrier()), compris : du minuit de $du
+     * au minuit qui suit $au, exclu.
      */
-    public function scopeEmisDuAu(Builder $query, string $du, string $au): Builder
+    public function scopeEmisDuAu(Builder $query, Calendrier $calendrier, string $du, string $au): Builder
     {
-        $calendrier = Calendrier::deParis();
-
         return $query
             ->where('date_emission', '>=', $calendrier->debutDuJour($du))
             ->where('date_emission', '<', $calendrier->bornesDuJour($au)[1]);
@@ -46,11 +45,12 @@ trait HorodateSonEmission
     }
 
     /**
-     * Les documents émis tel jour du calendrier, de minuit à minuit : 23,
-     * 24 ou 25 heures selon le changement d'heure.
+     * Les documents émis tel jour de ce calendrier, celui de leur magasin,
+     * de minuit à minuit : 23, 24 ou 25 heures à Paris selon le changement
+     * d'heure, toujours 24 outre-mer.
      */
-    public function scopeEmisLe(Builder $query, string $jour): Builder
+    public function scopeEmisLe(Builder $query, Calendrier $calendrier, string $jour): Builder
     {
-        return $query->emisDuAu($jour, $jour);
+        return $query->emisDuAu($calendrier, $jour, $jour);
     }
 }

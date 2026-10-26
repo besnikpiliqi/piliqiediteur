@@ -508,7 +508,10 @@ class Caisse extends Page implements HasForms
      */
     public function journeeCloturee(): ?string
     {
-        return ClotureCaisse::refusDUneVente(now(), ClotureCaisse::derniereJourneeCloturee());
+        /** @var Magasin $magasin */
+        $magasin = Filament::getTenant();
+
+        return ClotureCaisse::refusDUneVente($magasin->calendrier()->aujourdhui(), ClotureCaisse::derniereJourneeCloturee());
     }
 
     /**

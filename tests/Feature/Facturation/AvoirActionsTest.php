@@ -794,7 +794,7 @@ class AvoirActionsTest extends TestCase
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame(['FAC-LYON1-2026-000001', 'AV-LYON1-2026-000001', '120.00'], [$facture->numero, $avoir->numero, $avoir->total_ttc]);
-        $this->assertSame(0, Avoir::query()->enAttenteDeCloture('2026-10-09')->count());
+        $this->assertSame(0, Avoir::query()->enAttenteDeCloture($magasin->calendrier(), '2026-10-09')->count());
         $this->travelTo(self::aParis('2026-10-11 00:00:00'));
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-10');
         $this->assertSame([0, '0.00'], [$cloture->nombre_avoirs, $cloture->total_ttc]);

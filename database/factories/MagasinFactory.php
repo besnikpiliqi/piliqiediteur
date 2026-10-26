@@ -69,13 +69,13 @@ class MagasinFactory extends Factory
 
     /**
      * Ouvre la première période d'activité du magasin à DEBUT_D_ACTIVITE,
-     * comme si sa société avait été validée alors.
+     * heure de son calendrier, comme si sa société avait été validée alors.
      */
     public static function ouvrirSaPremierePeriode(Magasin $magasin, ?User $par = null): void
     {
         (new PeriodeActivite)->forceFill([
             'magasin_id' => $magasin->getKey(),
-            'debut' => Calendrier::deParis()->heureMurale(self::DEBUT_D_ACTIVITE),
+            'debut' => $magasin->calendrier()->heureMurale(self::DEBUT_D_ACTIVITE),
             'ouverte_par' => $par?->getKey(),
         ])->save();
     }
@@ -100,17 +100,29 @@ class MagasinFactory extends Factory
      */
     public function dansLeTerritoire(Territoire $territoire): static
     {
-        [$codePostal, $ville] = match ($territoire) {
-            Territoire::Metropole => ['75001', 'Paris'],
-            Territoire::Corse => ['20000', 'Ajaccio'],
-            Territoire::Guadeloupe => ['97110', 'Pointe-à-Pitre'],
-            Territoire::Martinique => ['97200', 'Fort-de-France'],
-            Territoire::Guyane => ['97300', 'Cayenne'],
-            Territoire::Reunion => ['97400', 'Saint-Denis'],
-            Territoire::Mayotte => ['97600', 'Mamoudzou'],
-        };
+        [$codePostal, $ville] = self::lieuDuTerritoire($territoire);
 
         return $this->state(fn (): array => ['territoire' => $territoire, 'code_postal' => $codePostal, 'ville' => $ville]);
+    }
+
+    /**
+     * Un lieu de chaque territoire : son code postal, sa ville et son code
+     * de commune (code officiel géographique), tels que le répertoire
+     * Sirene les donnerait d'un établissement de cette ville.
+     *
+     * @return array{0: string, 1: string, 2: string}
+     */
+    public static function lieuDuTerritoire(Territoire $territoire): array
+    {
+        return match ($territoire) {
+            Territoire::Metropole => ['75001', 'Paris', '75056'],
+            Territoire::Corse => ['20000', 'Ajaccio', '2A004'],
+            Territoire::Guadeloupe => ['97110', 'Pointe-à-Pitre', '97120'],
+            Territoire::Martinique => ['97200', 'Fort-de-France', '97209'],
+            Territoire::Guyane => ['97300', 'Cayenne', '97302'],
+            Territoire::Reunion => ['97400', 'Saint-Denis', '97411'],
+            Territoire::Mayotte => ['97600', 'Mamoudzou', '97611'],
+        };
     }
 
     /**

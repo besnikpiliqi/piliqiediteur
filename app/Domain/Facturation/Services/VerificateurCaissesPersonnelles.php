@@ -2,11 +2,11 @@
 
 namespace App\Domain\Facturation\Services;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -41,14 +41,15 @@ class VerificateurCaissesPersonnelles
 {
     /**
      * Les vendeurs du magasin actif dont la caisse personnelle est ouverte
-     * au soir de cette journée du calendrier (« AAAA-MM-JJ »), chacun une
+     * au soir de cette journée de son calendrier (« AAAA-MM-JJ », voir
+     * Magasin::calendrier()), sa dernière seconde comprise, chacun une
      * fois, par identifiant.
      *
      * @return Collection<int, User>
      */
     public function vendeursAvecCaisseOuverte(string $journee): Collection
     {
-        $finDeLaJournee = Calendrier::deParis()->bornesDuJour($journee)[1]->subSecond();
+        $finDeLaJournee = app(TenantContext::class)->magasin()->calendrier()->bornesDuJour($journee)[1]->subSecond();
         $paiementsOuverts = Paiement::query()
             ->whereDoesntHave('cloturesCaissePersonnelles')
             ->where('recu_le', '<=', $journee);

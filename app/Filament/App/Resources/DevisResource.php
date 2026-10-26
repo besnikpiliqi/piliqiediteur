@@ -32,6 +32,7 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class DevisResource extends Resource
 {
@@ -127,6 +128,17 @@ class DevisResource extends Resource
 
             self::envoisSection(),
         ]);
+    }
+
+    /**
+     * Les devis de la liste, avec leur magasin chargé une fois pour toute
+     * la liste : la validité de chacun se compte au jour de son calendrier
+     * (voir Devis::validiteDepassee()), sans relire le magasin à chaque
+     * ligne.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('magasin');
     }
 
     public static function table(Table $table): Table

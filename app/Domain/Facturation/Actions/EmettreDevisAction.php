@@ -101,7 +101,7 @@ class EmettreDevisAction
             $maintenant = CarbonImmutable::now();
 
             return $this->operateur->pendant($compte, fn (): Devis => tap($devis->forceFill([
-                'numero' => $devis->numero ?? $this->numerotation->suivant($magasin, TypeDocument::Devis, Calendrier::deParis()->anneeDe($maintenant)),
+                'numero' => $devis->numero ?? $this->numerotation->suivant($magasin, TypeDocument::Devis, $devis->magasin->calendrier()->anneeDe($maintenant)),
                 'statut' => StatutDevis::Envoye,
                 'date_emission' => $maintenant,
             ]))->save());

@@ -32,6 +32,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
@@ -193,6 +194,19 @@ abstract class TestCase extends BaseTestCase
     protected static function aParis(string $heure): CarbonImmutable
     {
         return Calendrier::deParis()->heureMurale($heure);
+    }
+
+    /**
+     * L'instant d'une heure murale du calendrier d'un territoire (« AAAA-MM-JJ
+     * HH:MM » ou « AAAA-MM-JJ HH:MM:SS »), au fuseau de l'application, comme
+     * aParis() : « 2026-11-16 20:00 » en Martinique est le 17 novembre à
+     * minuit UTC.
+     *
+     * @throws InvalidArgumentException
+     */
+    protected static function aLHeureDe(Territoire $territoire, string $heure): CarbonImmutable
+    {
+        return Calendrier::duTerritoire($territoire)->heureMurale($heure);
     }
 
     /**
@@ -366,6 +380,50 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * Une société dont le magasin s'ouvre comme par ouvrirUneSociete(),
+     * avec ses options, sur l'établissement de son siège, que le
+     * répertoire Sirene factice situe dans ce territoire (à son lieu, voir
+     * MagasinFactory::lieuDuTerritoire()), ou à ce code postal, dans cette
+     * ville et cette commune : le territoire du magasin s'y fixe à sa
+     * création. Le magasin devient le magasin actif.
+     *
+     * @param  Territoire|array{0: string, 1: string, 2: string}  $lieu
+     * @param  array<string, mixed>  $options
+     */
+    protected function ouvrirUneSocieteSituee(Territoire|array $lieu, array $options = []): Magasin
+    {
+        $siren = $options['siren'] ?? SocieteFactory::sirenFictif();
+        $siege = FauxRepertoireSirene::siretDuSiege($siren);
+        $this->repertoireSireneFactice()->deplacer($siege, ...($lieu instanceof Territoire ? MagasinFactory::lieuDuTerritoire($lieu) : $lieu));
+
+        return $this->ouvrirUneSociete([...$options, 'siren' => $siren, 'nic' => substr($siege, 9)]);
+    }
+
+    /**
+     * Un autre magasin de la société de $magasin, comme par
+     * ouvrirUnAutreMagasin(), sur un établissement que le répertoire Sirene
+     * factice situe dans ce territoire (voir
+     * MagasinFactory::lieuDuTerritoire()). Il devient le magasin actif.
+     *
+     * @param  array{nom?: string, code?: string, nic?: string, email?: string}  $donnees
+     */
+    protected function ouvrirUnAutreMagasinSitue(Magasin $magasin, Territoire $territoire, array $donnees = []): Magasin
+    {
+        $nic = $donnees['nic'] ?? MagasinFactory::nicLibre($magasin->societe);
+        $this->repertoireSireneFactice()->deplacer($magasin->societe->siren.$nic, ...MagasinFactory::lieuDuTerritoire($territoire));
+
+        return $this->ouvrirUnAutreMagasin($magasin, [...$donnees, 'nic' => $nic]);
+    }
+
+    private function repertoireSireneFactice(): FauxRepertoireSirene
+    {
+        $repertoire = app(RepertoireSirene::class);
+        $this->assertInstanceOf(FauxRepertoireSirene::class, $repertoire);
+
+        return $repertoire;
     }
 
     /**

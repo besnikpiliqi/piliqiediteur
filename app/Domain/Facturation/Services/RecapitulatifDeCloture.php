@@ -89,7 +89,7 @@ class RecapitulatifDeCloture
      */
     public function etablir(Magasin $magasin, string $journee, EloquentCollection $tickets, EloquentCollection $avoirsDeTickets, ?ClotureCaisse $precedente): array
     {
-        $finDeLaJournee = Calendrier::deParis()->bornesDuJour($journee)[1]->subSecond();
+        $finDeLaJournee = $magasin->calendrier()->bornesDuJour($journee)[1]->subSecond();
         $ventes = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $finDeLaJournee);
         $encaissements = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $finDeLaJournee);
         $derniereSequenceVente = $ventes->last()?->sequence ?? $precedente?->derniere_sequence_vente;

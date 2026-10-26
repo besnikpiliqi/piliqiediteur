@@ -93,14 +93,13 @@ class EnregistrementFiscal extends Model
     }
 
     /**
-     * Les enregistrements horodatés du jour $du au jour $au du calendrier
-     * (« AAAA-MM-JJ »), bornes comprises : du minuit de $du au minuit qui
-     * suit $au, exclu. Une borne absente ne limite rien.
+     * Les enregistrements horodatés du jour $du au jour $au de ce
+     * calendrier, celui de leur magasin (« AAAA-MM-JJ »), bornes comprises :
+     * du minuit de $du au minuit qui suit $au, exclu. Une borne absente ne
+     * limite rien.
      */
-    public function scopeHorodatesDuJourAuJour(Builder $query, ?string $du, ?string $au): Builder
+    public function scopeHorodatesDuJourAuJour(Builder $query, Calendrier $calendrier, ?string $du, ?string $au): Builder
     {
-        $calendrier = Calendrier::deParis();
-
         return $query
             ->when(filled($du), fn (Builder $enregistrements): Builder => $enregistrements->where(
                 'horodatage', '>=', $calendrier->debutDuJour($du),

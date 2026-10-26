@@ -15,7 +15,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.2",
+        "version_module": "1.3",
         "cle_id": "…",
         "signature_precedente": null,
         "gt": {
@@ -164,7 +164,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.2",
+        "version_module": "1.3",
         "cle_id": "…",
         "signature_precedente": null,
         "document": {
@@ -223,7 +223,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.2",
+        "version_module": "1.3",
         "cle_id": "…",
         "signature_precedente": "…",
         "gt": {
@@ -371,7 +371,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.2",
+        "version_module": "1.3",
         "cle_id": "…",
         "signature_precedente": "…",
         "gt": {

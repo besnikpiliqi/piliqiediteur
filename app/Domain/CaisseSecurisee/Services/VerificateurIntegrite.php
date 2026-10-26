@@ -389,8 +389,8 @@ class VerificateurIntegrite
             $this->rapport->signaler(AnomalieFiscale::defaut('horodatage', sprintf(
                 '%s : horodaté le %s, avant l\'enregistrement précédent (%s).',
                 $situation,
-                self::enClair($horodatage),
-                self::enClair($precedent['horodatage']),
+                $this->enClair($horodatage),
+                $this->enClair($precedent['horodatage']),
             ), $reference));
         }
 
@@ -624,8 +624,8 @@ class VerificateurIntegrite
         if ($plusRecent !== null && ($dernierVerrou === null || $dernierVerrou < $plusRecent)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('tete', sprintf(
                 'La ligne de tête date le dernier verrou du registre %s, avant son enregistrement le plus récent (%s).',
-                $dernierVerrou === null ? 'd\'aucun instant' : 'du '.self::enClair($dernierVerrou),
-                self::enClair($plusRecent),
+                $dernierVerrou === null ? 'd\'aucun instant' : 'du '.$this->enClair($dernierVerrou),
+                $this->enClair($plusRecent),
             )));
         }
     }
@@ -739,8 +739,8 @@ class VerificateurIntegrite
             $this->rapport->signaler(AnomalieFiscale::defaut('date_emission', sprintf(
                 '%s porte la date d\'émission %s, qui n\'est pas l\'instant de sa signature (%s).',
                 $libelle,
-                $dateEmission === null ? 'illisible' : 'du '.self::enClair($dateEmission),
-                $horodatage === null ? 'illisible' : self::enClair($horodatage),
+                $dateEmission === null ? 'illisible' : 'du '.$this->enClair($dateEmission),
+                $horodatage === null ? 'illisible' : $this->enClair($horodatage),
             ), $reference));
         }
     }
@@ -1322,14 +1322,14 @@ class VerificateurIntegrite
             return;
         }
 
-        $anneeDEmission = Calendrier::deParis()->anneeDe(Instant::depuisLaBase($emission));
+        $anneeDEmission = $this->magasin->calendrier()->anneeDe(Instant::depuisLaBase($emission));
 
         if ($anneeDEmission !== $serie->period_key) {
             $this->rapport->signaler(AnomalieFiscale::defaut('numerotation', sprintf(
                 '%s est numéroté dans l\'année %s mais émis le %s.',
                 self::libelleDuDocument($alias, (int) $document->id, $document->numero),
                 $serie->period_key,
-                self::enClair($emission),
+                $this->enClair($emission),
             ), ['document' => $alias, 'document_id' => (int) $document->id, 'numero' => $document->numero]));
         }
     }
@@ -1577,11 +1577,13 @@ class VerificateurIntegrite
     }
 
     /**
-     * Un horodatage lu en base, affiché à l'heure du calendrier.
+     * Un horodatage lu en base, affiché à l'heure du calendrier du magasin
+     * vérifié, qu'un rapport lu hors du magasin nomme quand ce n'est pas
+     * celle de Paris (« 31/12/2026 à 21:30:00 (heure de la Guadeloupe) »).
      */
-    private static function enClair(string $horodatageEnBase): string
+    private function enClair(string $horodatageEnBase): string
     {
-        return Calendrier::deParis()->afficher(Instant::depuisLaBase($horodatageEnBase), 'd/m/Y à H:i:s');
+        return $this->magasin->calendrier()->afficherHorsDuMagasin(Instant::depuisLaBase($horodatageEnBase), 'd/m/Y à H:i:s');
     }
 
     /**

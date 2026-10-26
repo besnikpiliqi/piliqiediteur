@@ -73,7 +73,8 @@ class FacturesAEncaisserApercu extends Widget
                 ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id'))])
             ->orderBy('date_echeance')
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', Filament::getTenant()));
 
         return [
             'totaux' => Facture::totauxAEncaisser($factures),

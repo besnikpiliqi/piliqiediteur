@@ -293,6 +293,7 @@ class EReportingDesParticuliers
         $reglements = $this->sansLesReductions($this->reglements(
             self::enregistrementsComptes(ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $cloture->derniere_sequence_vente),
             self::enregistrementsComptes(ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $cloture->derniere_sequence_encaissement),
+            $cloture->magasin->calendrier(),
         ));
         $tickets = self::declares(Facture::query())->whereKey(array_unique(array_column($reglements, 'facture_id')))->with('lignes')->get()->keyBy('id');
         $recus = [];
@@ -389,9 +390,10 @@ class EReportingDesParticuliers
      *
      * @param  Collection<int, EnregistrementFiscal>  $ventes
      * @param  Collection<int, EnregistrementFiscal>  $encaissements
+     * @param  Calendrier  $calendrier  celui du magasin de la clôture, qui date chaque enregistrement
      * @return list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null}>
      */
-    private function reglements(Collection $ventes, Collection $encaissements): array
+    private function reglements(Collection $ventes, Collection $encaissements, Calendrier $calendrier): array
     {
         $reglements = [];
         $paiementsALEmission = [];
@@ -401,7 +403,7 @@ class EReportingDesParticuliers
 
             if ($vente->type === 'avoir') {
                 foreach ($contexte['imputations'] as $imputation) {
-                    $reglements[] = self::reglement((int) $imputation['facture_id'], self::jourDe($vente), (int) $imputation['montant'], (int) $vente->document_id, null);
+                    $reglements[] = self::reglement((int) $imputation['facture_id'], $calendrier->jourDe($vente->horodatage), (int) $imputation['montant'], (int) $vente->document_id, null);
                 }
 
                 continue;
@@ -411,7 +413,7 @@ class EReportingDesParticuliers
             $montant = (int) array_sum(array_column($contexte['reglements'], 'montant')) + (int) array_sum(array_column($contexte['credits_avoir'], 'montant'));
 
             if ($montant !== 0) {
-                $reglements[] = self::reglement((int) $vente->document_id, self::jourDe($vente), $montant, null, null);
+                $reglements[] = self::reglement((int) $vente->document_id, $calendrier->jourDe($vente->horodatage), $montant, null, null);
             }
         }
 
@@ -427,7 +429,7 @@ class EReportingDesParticuliers
             }
 
             foreach ($donnees['credits_imputes'] as $credit) {
-                $reglements[] = self::reglement((int) $credit['facture_id'], self::jourDe($encaissement), (int) $credit['montant'], (int) $credit['avoir_id'], (int) $encaissement->document_id);
+                $reglements[] = self::reglement((int) $credit['facture_id'], $calendrier->jourDe($encaissement->horodatage), (int) $credit['montant'], (int) $credit['avoir_id'], (int) $encaissement->document_id);
             }
         }
 
@@ -440,15 +442,6 @@ class EReportingDesParticuliers
     private static function reglement(int $factureId, string $date, int $montant, ?int $avoirId, ?int $paiementId): array
     {
         return ['facture_id' => $factureId, 'date' => $date, 'montant' => $montant, 'avoir_id' => $avoirId, 'paiement_id' => $paiementId];
-    }
-
-    /**
-     * Le jour du calendrier d'un enregistrement du registre fiscal
-     * (AAAA-MM-JJ).
-     */
-    private static function jourDe(EnregistrementFiscal $enregistrement): string
-    {
-        return Calendrier::deParis()->jourDe($enregistrement->horodatage);
     }
 
     /**

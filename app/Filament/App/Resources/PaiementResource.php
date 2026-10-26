@@ -16,6 +16,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -43,7 +44,7 @@ use InvalidArgumentException;
  */
 class PaiementResource extends Resource
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, PrendLeCalendrierDuMagasin;
     use PorteUnJeton;
 
     protected static ?string $model = Paiement::class;
@@ -129,8 +130,8 @@ class PaiementResource extends Resource
                 DatePicker::make('recu_le')
                     ->label('Reçu le')
                     ->required()
-                    ->default(Calendrier::deParis()->aujourdhui())
-                    ->maxDate(Calendrier::deParis()->aujourdhui())
+                    ->default(fn (): string => self::calendrierDuMagasin()->aujourdhui())
+                    ->maxDate(fn (): string => self::calendrierDuMagasin()->aujourdhui())
                     ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),

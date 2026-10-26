@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Closure;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -41,6 +42,8 @@ use Illuminate\Support\Collection;
  */
 class ClotureCaisseResource extends Resource
 {
+    use PrendLeCalendrierDuMagasin;
+
     protected static ?string $model = ClotureCaisse::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-calculator';
@@ -78,7 +81,7 @@ class ClotureCaisseResource extends Resource
      */
     public static function libelleDesJournees(Collection $journees): string
     {
-        $aujourdhui = Calendrier::deParis()->aujourdhui();
+        $aujourdhui = self::calendrierDuMagasin()->aujourdhui();
 
         return $journees
             ->map(fn (string $journee): string => Calendrier::afficherJour($journee, 'd/m/Y').($journee < $aujourdhui ? ' (oubliée)' : ''))
@@ -96,8 +99,9 @@ class ClotureCaisseResource extends Resource
      */
     public static function enAttenteDeCloture(Collection $journees): array
     {
-        $ventes = $journees->flatMap(fn (string $journee) => Facture::query()->enAttenteDeCloture($journee)->get());
-        $avoirs = $journees->flatMap(fn (string $journee) => Avoir::query()->enAttenteDeCloture($journee)->get());
+        $calendrier = self::calendrierDuMagasin();
+        $ventes = $journees->flatMap(fn (string $journee) => Facture::query()->enAttenteDeCloture($calendrier, $journee)->get());
+        $avoirs = $journees->flatMap(fn (string $journee) => Avoir::query()->enAttenteDeCloture($calendrier, $journee)->get());
         $calculateur = app(CalculateurLigne::class);
 
         return [

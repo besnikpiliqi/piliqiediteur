@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -170,15 +171,16 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * Les avoirs sur des tickets de caisse (voir corrigeDesTickets()), émis
-     * tel jour, qu'aucune clôture n'a encore déduits de ses ventes (voir
+     * tel jour du calendrier de leur magasin, qu'aucune clôture n'a encore
+     * déduits de ses ventes (voir
      * CloturerCaisseAction) : un retour se compte le jour où il a lieu, pas
      * celui de la vente d'origine.
      */
-    public function scopeEnAttenteDeCloture(Builder $query, string $jour): Builder
+    public function scopeEnAttenteDeCloture(Builder $query, Calendrier $calendrier, string $jour): Builder
     {
         return $query
             ->where('type_client', TypeClient::Particulier)
-            ->emisLe($jour)
+            ->emisLe($calendrier, $jour)
             ->where('statut', StatutAvoir::Emise)
             ->whereNull('cloture_caisse_id');
     }

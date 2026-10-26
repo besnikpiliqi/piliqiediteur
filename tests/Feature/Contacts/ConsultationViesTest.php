@@ -86,9 +86,9 @@ class ConsultationViesTest extends TestCase
         $lendemainANuit = $this->consultation($client, self::aParis('2026-10-10 00:30:00'));
         $inconnuLeLendemain = $this->consultation($client, self::aParis('2026-10-10 09:00:00'), valide: false);
 
-        $this->assertSame([$veilleAuSoir->id], ConsultationVies::query()->duJour('2026-10-09')->pluck('id')->all());
-        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour('2026-10-10')->orderBy('id')->pluck('id')->all());
-        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour(Calendrier::deParis()->jourDe(self::aParis('2026-10-10 12:00')))->orderBy('id')->pluck('id')->all());
+        $this->assertSame([$veilleAuSoir->id], ConsultationVies::query()->duJour(Calendrier::deParis(), '2026-10-09')->pluck('id')->all());
+        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour(Calendrier::deParis(), '2026-10-10')->orderBy('id')->pluck('id')->all());
+        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour(Calendrier::deParis(), Calendrier::deParis()->jourDe(self::aParis('2026-10-10 12:00')))->orderBy('id')->pluck('id')->all());
     }
 
     public function test_la_reference_cite_le_numero_de_consultation_quand_vies_en_a_donne_un(): void

@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
@@ -11,6 +10,7 @@ use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Widgets\CaissesOuvertesDeLEquipeApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Models\User;
 use Filament\Actions;
 use Filament\Forms\Components\Placeholder;
@@ -44,7 +44,7 @@ use Illuminate\Support\HtmlString;
  */
 class ListClotureCaissePersonnelles extends ListRecords
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, PrendLeCalendrierDuMagasin;
     use PorteUnJeton;
 
     protected static string $resource = ClotureCaissePersonnelleResource::class;
@@ -118,7 +118,7 @@ class ListClotureCaissePersonnelles extends ListRecords
      */
     private static function vendeursAvecCaisseOuverte(): Collection
     {
-        return app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(Calendrier::deParis()->aujourdhui())
+        return app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(self::calendrierDuMagasin()->aujourdhui())
             ->reject(fn (User $vendeur): bool => $vendeur->is(auth()->user()))
             ->values();
     }

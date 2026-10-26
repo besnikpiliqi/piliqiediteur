@@ -6,7 +6,6 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
@@ -41,6 +40,7 @@ use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SaisitUnReglementEnParts;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
@@ -75,7 +75,7 @@ use Illuminate\Support\HtmlString;
 
 class FactureResource extends Resource
 {
-    use AvertitDUneVenteSansStock;
+    use AvertitDUneVenteSansStock, PrendLeCalendrierDuMagasin;
     use ChoisitLaNatureDeLOperation;
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
@@ -120,7 +120,7 @@ class FactureResource extends Resource
     {
         return parent::getEloquentQuery()
             ->visiblesPar(auth()->user())
-            ->with('client');
+            ->with(['client', 'magasin']);
     }
 
     /**
@@ -441,7 +441,7 @@ class FactureResource extends Resource
                         TextEntry::make('emetteur')->label('Établie par')->state(fn (PreuveOperation $record): ?string => $record->emetteur)->placeholder('—'),
                         TextEntry::make('note')
                             ->label('Enregistrée')
-                            ->state(fn (PreuveOperation $record): string => 'le '.Calendrier::deParis()->afficher($record->created_at, 'd/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
+                            ->state(fn (PreuveOperation $record): string => 'le '.self::calendrierDuMagasin()->afficher($record->created_at, 'd/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
                     ])
                     ->columns(5),
             ]);
@@ -490,12 +490,12 @@ class FactureResource extends Resource
                     ->state(function (Facture $record): ?string {
                         $bordereau = self::bordereauQuiFaitFoi($record);
 
-                        return $bordereau === null ? null : 'le '.Calendrier::deParis()->afficher($bordereau->created_at, 'd/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
+                        return $bordereau === null ? null : 'le '.self::calendrierDuMagasin()->afficher($bordereau->created_at, 'd/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
                     }),
                 TextEntry::make('bordereaux_detaxe_remplaces')
                     ->label('N° remplacés')
                     ->state(fn (Facture $record): array => $record->bordereauxDetaxe()->get()->slice(0, -1)
-                        ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le ".Calendrier::deParis()->afficher($bordereau->created_at, 'd/m/Y à H:i'))
+                        ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le ".self::calendrierDuMagasin()->afficher($bordereau->created_at, 'd/m/Y à H:i'))
                         ->values()
                         ->all())
                     ->listWithLineBreaks()
@@ -830,8 +830,8 @@ class FactureResource extends Resource
                 DatePicker::make('recu_le')
                     ->label('Reçu le')
                     ->required()
-                    ->default(Calendrier::deParis()->aujourdhui())
-                    ->maxDate(Calendrier::deParis()->aujourdhui())
+                    ->default(fn (): string => self::calendrierDuMagasin()->aujourdhui())
+                    ->maxDate(fn (): string => self::calendrierDuMagasin()->aujourdhui())
                     ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
             ])
             ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
@@ -908,7 +908,7 @@ class FactureResource extends Resource
 
         if ($facture->nature_operation->exigeVies()
             && $client->aUnNumeroTvaVerifiableSurVies()
-            && app(ControleNatureOperation::class)->consultationDuJour($client, Calendrier::deParis()->aujourdhui()) === null) {
+            && app(ControleNatureOperation::class)->consultationDuJour($client, $facture->magasin->calendrier()->aujourdhui()) === null) {
             app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $client);
         }
     }

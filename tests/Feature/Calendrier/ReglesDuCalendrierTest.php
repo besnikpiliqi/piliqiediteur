@@ -13,11 +13,13 @@ use Tests\TestCase;
  * (app/, les vues, les fabriques et les seeders), seule la classe
  * Calendrier connaît un fuseau : aucun autre code ne lit un jour, une
  * année, un minuit ou un affichage dans un fuseau implicite, ni ne
- * compare un jour par une date qui porte une heure. Dans les tests, toute
- * heure écrite dit de quel fuseau elle est, aucun test ne voyage en jours
- * ni ne part de l'heure réelle, et aucun voyage dans le temps ne part
- * d'une horloge libre. Une exception n'est permise que listée ici, avec
- * sa raison.
+ * compare un jour par une date qui porte une heure. Le code d'un magasin
+ * prend le calendrier de son magasin, jamais celui de Paris, et le
+ * calendrier d'affichage du magasin actif ne sert qu'à Filament. Dans les
+ * tests, toute heure écrite dit de quel fuseau elle est, aucun test ne
+ * voyage en jours ni ne part de l'heure réelle, et aucun voyage dans le
+ * temps ne part d'une horloge libre. Une exception n'est permise que
+ * listée ici, avec sa raison.
  */
 class ReglesDuCalendrierTest extends TestCase
 {
@@ -28,6 +30,50 @@ class ReglesDuCalendrierTest extends TestCase
     private const DOSSIERS_DE_L_APPLICATION = ['app', 'resources/views', 'database/factories', 'database/seeders'];
 
     /**
+     * Un nom de fuseau écrit en clair, quel qu'il soit, sauf les noms de
+     * l'UTC, qui ne sont pas des calendriers : la configuration, la
+     * session PostgreSQL et le diagnostic de la caisse sécurisée les
+     * écrivent.
+     */
+    private const NOM_DE_FUSEAU = '#\\b(?:Europe|America|Indian|Pacific|Atlantic|Africa|Asia|Australia|Antarctica)/|\\bEtc/(?!UTC\\b)#';
+
+    /**
+     * Le code d'un magasin, où Calendrier::deParis() n'a pas cours : un
+     * jour, une année ou un minuit y est celui du magasin
+     * ($magasin->calendrier(), ou celui du magasin du document).
+     */
+    private const CODE_D_UN_MAGASIN = [
+        'app/Domain/Facturation/',
+        'app/Domain/Achats/',
+        'app/Domain/Stock/',
+        'app/Domain/Catalogue/',
+        'app/Domain/CaisseSecurisee/',
+        'app/Domain/Contacts/',
+        'app/Domain/Tenancy/Services/PeriodesDActivite.php',
+        'app/Filament/App/',
+        'resources/views/factures/',
+        'resources/views/avoirs/',
+        'resources/views/devis/',
+        'resources/views/documents/',
+        'resources/views/filament/app/',
+        'app/Console/Commands/ClotureAutomatiqueCaisse.php',
+        'app/Console/Commands/MarquerFacturesEnRetard.php',
+        'app/Console/Commands/ExpirerDevis.php',
+        'app/Console/Commands/RelancerFacturesImpayees.php',
+    ];
+
+    /**
+     * Les fichiers du code d'un magasin où Calendrier::deParis() reste
+     * permis, avec leur raison.
+     *
+     * @var array<string, string>
+     */
+    private const PARIS_PERMIS_DANS_UN_MAGASIN = [
+        'app/Filament/App/Pages/Auth/ModifierProfil.php' => 'échéance du lien de l\'adresse de connexion du propriétaire : heure propre à un compte de la société, sur une page commune aux deux panneaux',
+        'app/Domain/CaisseSecurisee/Models/TraceEvenement.php' => 'expiration d\'une trace technique (adresse IP et navigateur) après un an : délai technique, qui ne date aucune opération du magasin',
+    ];
+
+    /**
      * Ce que l'application ne fait jamais hors de Calendrier, et ce qui le
      * remplace : lire un fuseau, un jour, une année ou un minuit, mettre
      * une date en forme, décaler en jours ou lire une date dans un fuseau
@@ -36,7 +82,8 @@ class ReglesDuCalendrierTest extends TestCase
      * @var array<string, string>
      */
     private const MOTIFS_DU_FUSEAU = [
-        'fuseau écrit ou lu en clair (Calendrier::deParis())' => "/config\\(\\s*'app\\.timezone'\\s*\\)|Europe\\/Paris|date_default_timezone_set/",
+        'fuseau lu en clair (Calendrier::deParis(), $magasin->calendrier())' => "/config\\(\\s*'app\\.timezone'\\s*\\)|date_default_timezone_set/",
+        'nom de fuseau écrit en clair (Calendrier::deParis(), Calendrier::duTerritoire())' => self::NOM_DE_FUSEAU,
         'conversion de fuseau (Calendrier::deParis()->afficher(), jourDe())' => '/setTimezone\\(|->tz\\(|shiftTimezone\\(|->timezone\\(/',
         'jour courant implicite (Calendrier::deParis()->aujourdhui())' => "/\\btoday\\(|\\bnow\\(\\s*'|::now\\(\\s*'/",
         'mise en forme dans un fuseau implicite (Calendrier::deParis()->afficher(), jourDe(), iso8601())' => '/->format\\(|->translatedFormat\\(|->isoFormat\\(|->toDateString\\(|->toDateTimeString\\(|->toIso8601String\\(/',
@@ -46,7 +93,7 @@ class ReglesDuCalendrierTest extends TestCase
         'fonction de date de PHP au fuseau par défaut (Calendrier::deParis()->afficher(), anneeDe(), heureMurale())' => '/(?<!function )(?<![\\w>:$\\\\])\\\\?(?:date|gmdate|strtotime|mktime|gmmktime|idate|getdate|localtime|date_create|date_create_immutable)\\(|new \\\\?DateTime(?:Immutable)?\\(/',
         'règle de validation au jour implicite (Calendrier::deParis()->aujourdhui())' => '/(?<!:):(?:today|tomorrow|yesterday|now)\\b/',
         'colonne de jour lue comme un instant (->jour(), ou ->dateTime(\'d/m/Y\') pour un instant)' => '/->date\\(/',
-        'borne d\'un sélecteur de date sans le calendrier (Calendrier::deParis()->aujourdhui())' => '/(?:minDate|maxDate)\\((?!.*Calendrier::)/',
+        'borne d\'un sélecteur de date sans le calendrier ($magasin->calendrier()->aujourdhui())' => '/(?:minDate|maxDate)\\((?!.*(?:Calendrier::|calendrierDuMagasin\\(\\)|->calendrier\\(\\)))/',
     ];
 
     /**
@@ -79,7 +126,7 @@ class ReglesDuCalendrierTest extends TestCase
      */
     private const LIGNES_PERMISES = [
         'app/Providers/AppServiceProvider.php' => [
-            '$composant->timezone(Calendrier::deParis()->fuseau())' => 'le seul réglage du fuseau des colonnes et des entrées de Filament, celui du calendrier',
+            '$composant->timezone(static fn (): string => app(TenantContext::class)->calendrierDAffichage()->fuseau())' => 'le seul réglage du fuseau des colonnes et des entrées de Filament, celui du calendrier du magasin actif, sinon de Paris',
         ],
         'app/Filament/Societe/Pages/ParametresFiscauxSociete.php' => [
             'Carbon::create(2000, $mois)->translatedFormat(\'F\')' => 'le nom de chacun des douze mois, tiré d\'une date fixe sans heure',
@@ -137,11 +184,14 @@ class ReglesDuCalendrierTest extends TestCase
     ];
 
     /**
-     * Hors de Calendrier, l'application ne lit jamais un fuseau implicite
-     * ni ne met une date en forme hors de lui. Dans Calendrier, le nom du
-     * fuseau de Paris n'est écrit qu'une fois, dans une constante privée
-     * que seule la fabrique deParis() lit ; hors de son constructeur
-     * privé, aucune méthode ne reçoit un fuseau.
+     * Hors de Calendrier, l'application ne lit jamais un fuseau implicite,
+     * n'écrit aucun nom de fuseau (sauf ceux de l'UTC) ni ne met une date
+     * en forme hors de lui. Dans Calendrier, le nom du fuseau de Paris
+     * n'est écrit qu'une fois, dans une constante privée que seule la
+     * fabrique deParis() lit ; les autres noms ne sont écrits que dans la
+     * table de duTerritoire(), qui renvoie à deParis() pour la métropole
+     * et la Corse ; hors de son constructeur privé, aucune méthode ne
+     * reçoit un fuseau.
      */
     public function test_seul_le_calendrier_connait_un_fuseau_et_met_les_dates_en_forme(): void
     {
@@ -158,6 +208,72 @@ class ReglesDuCalendrierTest extends TestCase
         ]);
         $this->assertSame(1, preg_match('/public static function deParis\(\): self\s*\{\s*return new self\(self::FUSEAU_DE_PARIS\);/', $code));
         $this->assertSame([['private', '__construct']], array_values(array_map(static fn (array $fonction): array => [$fonction[1], $fonction[2]], $recoiventUnFuseau)));
+
+        $this->assertSame(1, preg_match('/public static function duTerritoire\(Territoire \$territoire\): self\s*\{(.*?)\n    \}/s', $code, $table));
+        $nomsHorsDeParis = static fn (string $texte): int => (int) preg_match_all(self::NOM_DE_FUSEAU, str_replace("'Europe/Paris'", '', $texte));
+
+        $this->assertSame(5, $nomsHorsDeParis($table[1]));
+        $this->assertSame($nomsHorsDeParis($table[1]), $nomsHorsDeParis($code));
+        $this->assertStringContainsString('Territoire::Metropole, Territoire::Corse => self::deParis()', $table[1]);
+    }
+
+    /**
+     * Le code d'un magasin (ses documents, sa caisse, ses achats, son
+     * stock, ses consultations VIES, ses périodes d'activité, son panneau,
+     * ses PDF et ses tâches planifiées) prend le calendrier de son magasin,
+     * jamais celui de Paris : un magasin de la Martinique ou de La Réunion
+     * a son propre minuit. Seules les exceptions listées, avec leur raison,
+     * gardent Paris.
+     */
+    public function test_le_code_d_un_magasin_prend_le_calendrier_de_son_magasin(): void
+    {
+        $violations = [];
+
+        foreach ($this->fichiersDeLApplication() as $chemin => $fichier) {
+            $dansUnMagasin = array_filter(self::CODE_D_UN_MAGASIN, static fn (string $portee): bool => str_starts_with($chemin, $portee));
+
+            if ($dansUnMagasin === [] || isset(self::PARIS_PERMIS_DANS_UN_MAGASIN[$chemin])) {
+                continue;
+            }
+
+            foreach (explode("\n", $fichier->getContents()) as $numero => $ligne) {
+                if (str_contains($ligne, 'Calendrier::deParis()')) {
+                    $violations[] = sprintf('%s:%d  calendrier de Paris dans le code d\'un magasin ($magasin->calendrier())  %s', $chemin, $numero + 1, trim($ligne));
+                }
+            }
+        }
+
+        $this->assertSame([], $violations);
+
+        foreach (array_keys(self::PARIS_PERMIS_DANS_UN_MAGASIN) as $chemin) {
+            $this->assertStringContainsString('Calendrier::deParis()', File::get(base_path($chemin)), "{$chemin} : exception devenue inutile, à retirer");
+        }
+    }
+
+    /**
+     * Le calendrier d'affichage du magasin actif (celui de Paris hors d'un
+     * magasin) ne sert qu'au réglage du fuseau des colonnes et des entrées
+     * de Filament : tout autre code prend le calendrier du magasin pour
+     * lequel il calcule, ou celui du magasin du document, jamais celui du
+     * contexte.
+     */
+    public function test_le_calendrier_d_affichage_ne_sert_qu_a_filament(): void
+    {
+        $appels = [];
+
+        foreach ($this->fichiersDeLApplication() as $chemin => $fichier) {
+            foreach (explode("\n", $fichier->getContents()) as $numero => $ligne) {
+                if (str_contains($ligne, 'calendrierDAffichage(') && preg_match('#^\s*(?:\*|//|/\*|\{\{--)#', $ligne) !== 1) {
+                    $appels[] = sprintf('%s:%d', $chemin, $numero + 1);
+                }
+            }
+        }
+
+        $this->assertCount(2, $appels);
+        $this->assertStringStartsWith('app/Domain/Tenancy/Services/TenantContext.php:', $appels[0]);
+        $this->assertStringStartsWith('app/Providers/AppServiceProvider.php:', $appels[1]);
+        $this->assertStringContainsString('public function calendrierDAffichage(): Calendrier', explode("\n", File::get(base_path('app/Domain/Tenancy/Services/TenantContext.php')))[(int) explode(':', $appels[0])[1] - 1]);
+        $this->assertSame([], $this->violationsDansLesTests(static fn (string $ligne): array => str_contains($ligne, 'calendrierDAffichage(') ? ['calendrier d\'affichage hors de Filament'] : [], []));
     }
 
     /**
@@ -196,34 +312,42 @@ class ReglesDuCalendrierTest extends TestCase
     }
 
     /**
-     * Les tests ne lisent ni le fuseau de l'application ni le nom du
-     * fuseau de Paris, ni le jour courant dans un fuseau implicite : un
-     * jour s'y écrit en clair (« AAAA-MM-JJ ») ou par
-     * Calendrier::deParis()->aujourdhui(), un fuseau par
-     * Calendrier::deParis()->fuseau().
+     * Les tests ne lisent pas le fuseau de l'application, n'écrivent aucun
+     * nom de fuseau (sauf ceux de l'UTC) et ne lisent pas le jour courant
+     * dans un fuseau implicite : un jour s'y écrit en clair
+     * (« AAAA-MM-JJ ») ou par le calendrier
+     * (Calendrier::deParis()->aujourdhui(), $magasin->calendrier()), un
+     * fuseau par Calendrier::deParis()->fuseau() ou
+     * Calendrier::duTerritoire(). Seul le test de la table de
+     * duTerritoire() écrit les noms qu'il vérifie.
      */
     public function test_les_tests_lisent_le_jour_et_le_fuseau_par_le_calendrier(): void
     {
         $violations = $this->violationsDansLesTests(static fn (string $ligne): array => array_values(array_filter([
-            preg_match("/config\\(\\s*'app\\.timezone'\\s*\\)|Europe\\/Paris/", $ligne) === 1 ? 'fuseau écrit ou lu en clair' : null,
+            preg_match("/config\\(\\s*'app\\.timezone'\\s*\\)/", $ligne) === 1 || preg_match(self::NOM_DE_FUSEAU, $ligne) === 1 ? 'fuseau écrit ou lu en clair' : null,
             preg_match("/\\btoday\\(|\\bnow\\(\\s*'|::now\\(\\s*'/", $ligne) === 1 ? 'jour courant implicite' : null,
-        ])), []);
+        ])), [
+            'tests/Unit/CalendrierTest.php' => [
+                'test_chaque_territoire_a_son_fuseau' => 'il vérifie la table de Calendrier::duTerritoire(), nom par nom',
+            ],
+        ]);
 
         $this->assertSame([], $violations);
     }
 
     /**
-     * Une heure écrite n'apparaît qu'en argument de aParis() ou de
-     * enUtc(), ou de Calendrier::heureMurale() que aParis() appelle,
-     * quel que soit son usage (voyage, aide, attribut, attente) : sans
-     * fuseau, elle se lirait dans le fuseau par défaut de l'application,
-     * et un changement de ce fuseau la décalerait en silence. Un voyage
-     * ne reçoit jamais une chaîne.
+     * Une heure écrite n'apparaît qu'en argument de aParis(), de
+     * aLHeureDe() (après son territoire) ou de enUtc(), ou de
+     * Calendrier::heureMurale() que les deux premières appellent, quel que
+     * soit son usage (voyage, aide, attribut, attente) : sans fuseau, elle
+     * se lirait dans le fuseau par défaut de l'application, et un
+     * changement de ce fuseau la décalerait en silence. Un voyage ne
+     * reçoit jamais une chaîne.
      */
     public function test_les_tests_donnent_le_fuseau_de_chaque_heure_ecrite(): void
     {
         $violations = $this->violationsDansLesTests(function (string $ligne): array {
-            $sansAides = preg_replace('/\b(?:aParis|enUtc|heureMurale)\(\s*([\'"])[^\'"]*\1/', '', $ligne);
+            $sansAides = preg_replace('/\b(?:aParis|enUtc|heureMurale)\(\s*([\'"])[^\'"]*\1|\baLHeureDe\([^,()]*,\s*([\'"])[^\'"]*\2/', '', $ligne);
 
             return array_values(array_filter([
                 preg_match(self::HEURE_ECRITE, (string) $sansAides) === 1 ? 'heure écrite sans fuseau' : null,
@@ -322,29 +446,46 @@ class ReglesDuCalendrierTest extends TestCase
     {
         $violations = [];
 
-        foreach (self::DOSSIERS_DE_L_APPLICATION as $dossier) {
-            foreach (File::allFiles(base_path($dossier)) as $fichier) {
-                $chemin = $this->cheminDansLeDepot($fichier);
-
-                if ($fichier->getExtension() !== 'php' || str_starts_with($chemin, 'app/Domain/Calendrier/')) {
+        foreach ($this->fichiersDeLApplication() as $chemin => $fichier) {
+            foreach (explode("\n", $fichier->getContents()) as $numero => $ligne) {
+                if (preg_match('#^\s*(?:\*|//|/\*|\{\{--)#', $ligne) === 1 || $this->lignePermise($chemin, $ligne)) {
                     continue;
                 }
 
-                foreach (explode("\n", $fichier->getContents()) as $numero => $ligne) {
-                    if (preg_match('#^\s*(?:\*|//|/\*|\{\{--)#', $ligne) === 1 || $this->lignePermise($chemin, $ligne)) {
-                        continue;
-                    }
-
-                    foreach ($motifs as $motif => $expression) {
-                        if (preg_match($expression, $ligne) === 1) {
-                            $violations[] = sprintf('%s:%d  %s  %s', $chemin, $numero + 1, $motif, trim($ligne));
-                        }
+                foreach ($motifs as $motif => $expression) {
+                    if (preg_match($expression, $ligne) === 1) {
+                        $violations[] = sprintf('%s:%d  %s  %s', $chemin, $numero + 1, $motif, trim($ligne));
                     }
                 }
             }
         }
 
         return $violations;
+    }
+
+    /**
+     * Les fichiers PHP de l'application soumis aux règles, par chemin dans
+     * le dépôt, hors app/Domain/Calendrier.
+     *
+     * @return array<string, SplFileInfo>
+     */
+    private function fichiersDeLApplication(): array
+    {
+        $fichiers = [];
+
+        foreach (self::DOSSIERS_DE_L_APPLICATION as $dossier) {
+            foreach (File::allFiles(base_path($dossier)) as $fichier) {
+                $chemin = $this->cheminDansLeDepot($fichier);
+
+                if ($fichier->getExtension() === 'php' && ! str_starts_with($chemin, 'app/Domain/Calendrier/')) {
+                    $fichiers[$chemin] = $fichier;
+                }
+            }
+        }
+
+        ksort($fichiers);
+
+        return $fichiers;
     }
 
     private function lignePermise(string $chemin, string $ligne): bool

@@ -18,13 +18,16 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Pages\LesCaisses;
 use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -133,6 +136,43 @@ class IsolationDesCalendriersTest extends TestCase
 
         $this->assertSame(StatutEnvoi::Envoye, app(TenantContext::class)->runAs($martinique, fn (): StatutEnvoi => $envoi->fresh()->statut));
         $this->assertStringContainsString('Émis le 16/11/2026', $this->texteDuPdf(Mail::sent(DocumentMail::class)->sole()));
+    }
+
+    /**
+     * Un passage horaire où aucune journée n'est due, une caisse
+     * personnelle encore ouverte au jour même, ne verrouille aucun registre
+     * : une vente n'attend jamais, chaque heure, le verrou de la clôture.
+     * Sous SQLite, qui verrouille toute la base sans requête de verrou,
+     * seul PostgreSQL le montre.
+     */
+    public function test_un_passage_horaire_sans_journee_due_ne_verrouille_aucun_registre(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('SQLite verrouille toute la base sans requête de verrou de ligne : ce garde ne se lit que sous PostgreSQL.');
+        }
+
+        $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-16 18:00'));
+        $martinique = $this->magasin(Territoire::Martinique, 'FDF1');
+        $paris = $this->magasin(Territoire::Metropole, 'LYON1');
+        $vendeur = $this->membre($martinique, RoleMagasin::Vendeur);
+        $this->vendreDans($martinique);
+        $this->vendreDans($paris);
+        $this->travelTo(self::enUtc('2026-11-17 04:00:00'));
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+        $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-17 00:30'));
+        app(TenantContext::class)->runAs($martinique, fn (): Facture => self::vendreAuComptant($vendeur, Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
+        $verrous = [];
+        DB::listen(function (QueryExecuted $requete) use (&$verrous): void {
+            if (str_contains($requete->sql, '"tetes_registre_fiscal"') && str_contains($requete->sql, 'for update')) {
+                $verrous[] = $requete->sql;
+            }
+        });
+
+        $this->travelTo(self::enUtc('2026-11-17 05:00:00'));
+        $this->artisan('app:cloturer-caisses-automatiquement')->expectsOutputToContain('0 clôture(s) automatique(s) effectuée(s).')->assertSuccessful();
+
+        $this->assertSame([], $verrous);
+        $this->assertSame([['2026-11-16'], ['2026-11-16']], [$this->journeesCloturees($martinique), $this->journeesCloturees($paris)]);
     }
 
     /**

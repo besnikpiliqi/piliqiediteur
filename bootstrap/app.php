@@ -50,19 +50,25 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: ['rappels/*']);
     })
     ->withSchedule(function (Schedule $schedule): void {
-        // À minuit pile, heure de Paris comme tous les horaires ci-dessous
-        // (schedule_timezone, voir config/app.php) : clôture, dans l'ordre, les journées de
-        // caisse encore ouvertes jusqu'à la veille, celle qui vient de finir
-        // et toute journée manquée, pour tout magasin qui ne l'a pas fait
-        // lui-même (voir ClotureAutomatiqueCaisse). Puis, 15 minutes plus
-        // tard, une fois ces clôtures terminées, on statue sur les factures
-        // en retard.
-        $schedule->command(ClotureAutomatiqueCaisse::class)->dailyAt('00:00');
-        $schedule->command(MarquerFacturesEnRetard::class)->dailyAt('00:15');
-        // Les devis envoyés dont la date de validité était la veille
-        // expirent : leur client ne peut plus les accepter (voir
-        // ExpirerDevis).
-        $schedule->command(ExpirerDevis::class)->dailyAt('00:30');
+        // Les tâches du calendrier des magasins passent toutes les heures,
+        // heure de Paris comme tous les horaires ci-dessous
+        // (schedule_timezone, voir config/app.php), et ne traitent que ce
+        // que le calendrier de chaque magasin rend dû (voir
+        // Magasin::calendrier()) : le minuit de chaque territoire tombe sur
+        // une heure ronde. À la minute 0, la clôture, dans l'ordre, des
+        // journées de caisse encore ouvertes jusqu'à la veille de chaque
+        // magasin, celle qui vient de finir à son minuit et toute journée
+        // manquée, pour tout magasin qui ne l'a pas fait lui-même (voir
+        // ClotureAutomatiqueCaisse) ; un passage où rien n'est dû ne
+        // verrouille aucun registre. À la minute 15, une fois ces clôtures
+        // terminées, le passage en retard des factures échues la veille de
+        // leur magasin.
+        $schedule->command(ClotureAutomatiqueCaisse::class)->hourly();
+        $schedule->command(MarquerFacturesEnRetard::class)->hourlyAt(15);
+        // À la minute 30 : les devis envoyés dont la date de validité était
+        // la veille de leur magasin expirent ; leur client ne peut plus les
+        // accepter (voir ExpirerDevis).
+        $schedule->command(ExpirerDevis::class)->hourlyAt(30);
         // À 3 h, une fois ces traitements de la nuit terminés : la
         // vérification de l'intégrité de la caisse sécurisée de chaque
         // magasin, incrémentale, complète une fois par mois à un jour
@@ -105,9 +111,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // SuivreEnvoisRecommandes).
         $schedule->command(SuivreEnvoisRecommandes::class)->hourly();
         $schedule->command(ReverifierSirene::class, ['--toutes'])->monthlyOn(1, '05:00');
-        // Les relances écrivent aux clients : en matinée plutôt qu'en pleine
-        // nuit, et bien après le passage en retard des factures de la veille.
-        $schedule->command(RelancerFacturesImpayees::class)->dailyAt('09:00');
+        // Les relances écrivent aux clients : toutes les heures, à la minute
+        // 0, pour les seuls magasins qu'il est de 9 h à 11 h 59 à leur heure
+        // locale, en matinée plutôt qu'en pleine nuit, et bien après le
+        // passage en retard des factures de leur veille (voir
+        // RelancerFacturesImpayees).
+        $schedule->command(RelancerFacturesImpayees::class)->hourly();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

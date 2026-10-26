@@ -261,18 +261,39 @@ class RelancerFacturesImpayeesTest extends TestCase
     }
 
     /**
-     * Chaque matin à 9 h, heure de Paris : 7 h UTC en heure d'été.
+     * Chaque matin à 9 h, heure de Paris, pour un magasin de métropole : la
+     * tâche passe toutes les heures, mais ne relance un magasin que de 9 h
+     * à 11 h 59 à son heure locale. Échue depuis 7 jours, la facture n'est
+     * pas relancée au passage de 8 h, l'est à celui de 9 h, et pas une
+     * seconde fois à celui de 10 h ; un magasin dont les relances
+     * s'activent après 11 h 59 attend le lendemain matin.
      */
     public function test_les_relances_partent_chaque_matin_a_9_heures_heure_de_paris(): void
     {
-        // Le planning de bootstrap/app.php s'enregistre au démarrage
-        // d'Artisan, comme sur le serveur avant schedule:run.
+        Mail::fake();
         $this->artisan('schedule:list')->assertSuccessful();
-        $this->travelTo(self::enUtc('2026-10-15 07:00:00'));
-        $this->assertTrue($this->relanceDue());
+        $this->travelTo(self::aParis('2026-10-01 09:00:00'));
+        $facture = $this->factureImpayee($this->magasinQuiRelance(), 'client@exemple.fr');
+        $tardif = $this->magasinQuiRelance();
+        $tardif->update(['relances_automatiques' => false]);
+        $factureTardive = $this->factureImpayee($tardif, 'tardif@exemple.fr');
 
-        $this->travelTo(self::enUtc('2026-10-15 09:00:00'));
-        $this->assertFalse($this->relanceDue());
+        foreach ([[self::aParis('2026-10-08 08:00:00'), []], [self::aParis('2026-10-08 09:00:00'), [1]], [self::aParis('2026-10-08 10:00:00'), [1]]] as [$instant, $niveaux]) {
+            $this->travelTo($instant);
+            $this->assertTrue($this->relanceDue(), $instant->toIso8601String());
+            $this->relancerMaintenant();
+            $this->assertSame($niveaux, $this->niveauxRelances($facture), $instant->toIso8601String());
+        }
+
+        $this->travelTo(self::aParis('2026-10-08 11:30:00'));
+        $tardif->update(['relances_automatiques' => true]);
+        $this->travelTo(self::aParis('2026-10-08 12:00:00'));
+        $this->relancerMaintenant();
+        $this->assertSame([], $this->niveauxRelances($factureTardive));
+
+        $this->travelTo(self::aParis('2026-10-09 09:00:00'));
+        $this->relancerMaintenant();
+        $this->assertSame([1], $this->niveauxRelances($factureTardive));
     }
 
     private function relanceDue(): bool
@@ -316,6 +337,11 @@ class RelancerFacturesImpayeesTest extends TestCase
     private function relancerLe(string $jour): void
     {
         $this->travelTo(self::aParis("{$jour} 09:00:00"));
+        $this->relancerMaintenant();
+    }
+
+    private function relancerMaintenant(): void
+    {
         app(TenantContext::class)->clear();
 
         $this->artisan('app:relancer-factures-impayees')->assertSuccessful();

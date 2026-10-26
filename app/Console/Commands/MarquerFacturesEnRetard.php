@@ -14,15 +14,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Notification;
 
 /**
- * Commande planifiée (voir bootstrap/app.php) qui passe en retard les
- * factures impayées dont l'échéance est dépassée au jour de leur magasin,
- * chacun dans son calendrier (voir Magasin::calendrier()), magasin par
- * magasin --
- * le global scope MagasinScope exige un TenantContext positionné, une
- * commande n'en a par nature aucun au démarrage -- puis prévient le
- * propriétaire de la société de chaque magasin concerné. Un magasin en
- * lecture seule est traité comme les autres : les statuts de ses factures
- * continuent de suivre leurs échéances.
+ * Commande planifiée toutes les heures (voir bootstrap/app.php) qui passe
+ * en retard les factures impayées dont l'échéance est dépassée au jour de
+ * leur magasin, chacun dans son calendrier (voir Magasin::calendrier()),
+ * magasin par magasin -- le global scope MagasinScope exige un
+ * TenantContext positionné, une commande n'en a par nature aucun au
+ * démarrage -- puis prévient le propriétaire de la société de chaque
+ * magasin concerné. Un magasin en lecture seule est traité comme les
+ * autres : les statuts de ses factures continuent de suivre leurs
+ * échéances.
  */
 #[Signature('app:marquer-factures-en-retard')]
 #[Description("Passe au statut 'en_retard' les factures impayées dont l'échéance est dépassée")]

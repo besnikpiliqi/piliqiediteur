@@ -11,8 +11,9 @@ use Illuminate\Console\Command;
 use Throwable;
 
 /**
- * Commande planifiée (voir bootstrap/app.php) qui passe à « Expiré » les
- * devis envoyés dont la date de validité est dépassée (voir
+ * Commande planifiée toutes les heures (voir bootstrap/app.php) qui passe
+ * à « Expiré » les devis envoyés dont la date de validité est dépassée au
+ * jour de leur magasin (voir
  * ExpirerLesDevisAction), magasin par magasin : une commande n'a aucun
  * TenantContext au démarrage. Un magasin suspendu ou fermé est traité
  * comme les autres : les statuts de ses documents continuent de suivre

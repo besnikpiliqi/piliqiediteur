@@ -3,6 +3,7 @@
 namespace Tests\Feature\Calendrier;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Enums\Territoire;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
@@ -13,7 +14,9 @@ use Tests\TestCase;
  * Les tâches planifiées (bootstrap/app.php) partent à l'heure de Paris,
  * été comme hiver, une seule fois les jours de changement d'heure ;
  * aucune tâche quotidienne n'est planifiée entre 2 h et 3 h, heure qui se
- * répète en octobre et n'existe pas en mars.
+ * répète en octobre et n'existe pas en mars. Les tâches du calendrier des
+ * magasins passent toutes les heures, et le minuit de chaque territoire
+ * tombe sur l'un de leurs passages.
  */
 class PlanificateurTest extends TestCase
 {
@@ -23,9 +26,9 @@ class PlanificateurTest extends TestCase
      * @var list<array{string, string}>
      */
     private const TACHES = [
-        ['app:cloturer-caisses-automatiquement', '0 0 * * *'],
-        ['app:marquer-factures-en-retard', '15 0 * * *'],
-        ['app:expirer-devis', '30 0 * * *'],
+        ['app:cloturer-caisses-automatiquement', '0 * * * *'],
+        ['app:marquer-factures-en-retard', '15 * * * *'],
+        ['app:expirer-devis', '30 * * * *'],
         ['caisse:verifier', '0 3 * * *'],
         ['app:verifier-journal-audit', '30 3 * * *'],
         ['app:purger-traces', '0 4 * * *'],
@@ -38,7 +41,7 @@ class PlanificateurTest extends TestCase
         ['app:reverifier-sirene', '0 * * * *'],
         ['app:suivre-envois-recommandes', '0 * * * *'],
         ['app:reverifier-sirene --toutes', '0 5 1 * *'],
-        ['app:relancer-factures-impayees', '0 9 * * *'],
+        ['app:relancer-factures-impayees', '0 * * * *'],
     ];
 
     /**
@@ -57,20 +60,20 @@ class PlanificateurTest extends TestCase
      * dans la journée, en été, en hiver et les jours de changement d'heure
      * (25 heures le 25 octobre 2026, 23 heures le 28 mars 2027) ; la tâche
      * mensuelle part le 1er à 5 h à Paris, en hiver comme en été ; les
-     * tâches horaires partent à chaque heure ronde, aux deux passages de
-     * l'heure répétée compris.
+     * tâches horaires partent chaque heure à leur minute, aux deux passages
+     * de l'heure répétée et après l'heure sautée compris.
      */
     public function test_les_taches_quotidiennes_et_mensuelles_partent_a_l_heure_de_paris_en_ete_en_hiver_et_les_jours_de_changement_d_heure(): void
     {
         $journees = [
-            'été' => [self::enUtc('2026-07-13 22:00:00'), 24, [self::enUtc('2026-07-13 22:00:00'), self::enUtc('2026-07-14 01:00:00'), self::enUtc('2026-07-14 07:00:00')]],
-            'hiver' => [self::enUtc('2026-12-14 23:00:00'), 24, [self::enUtc('2026-12-14 23:00:00'), self::enUtc('2026-12-15 02:00:00'), self::enUtc('2026-12-15 08:00:00')]],
-            'passage à l\'heure d\'hiver' => [self::enUtc('2026-10-24 22:00:00'), 25, [self::enUtc('2026-10-24 22:00:00'), self::enUtc('2026-10-25 02:00:00'), self::enUtc('2026-10-25 08:00:00')]],
-            'passage à l\'heure d\'été' => [self::enUtc('2027-03-27 23:00:00'), 23, [self::enUtc('2027-03-27 23:00:00'), self::enUtc('2027-03-28 01:00:00'), self::enUtc('2027-03-28 07:00:00')]],
+            'été' => [self::enUtc('2026-07-13 22:00:00'), 24, self::enUtc('2026-07-14 01:00:00')],
+            'hiver' => [self::enUtc('2026-12-14 23:00:00'), 24, self::enUtc('2026-12-15 02:00:00')],
+            'passage à l\'heure d\'hiver' => [self::enUtc('2026-10-24 22:00:00'), 25, self::enUtc('2026-10-25 02:00:00')],
+            'passage à l\'heure d\'été' => [self::enUtc('2027-03-27 23:00:00'), 23, self::enUtc('2027-03-28 01:00:00')],
         ];
 
-        foreach ($journees as $journee => [$minuit, $heures, $attendus]) {
-            $this->assertDepartsDesTachesQuotidiennes($journee, $minuit, $heures, $attendus);
+        foreach ($journees as $journee => [$minuit, $heures, $verificationDeLaCaisse]) {
+            $this->assertDepartsDesTachesQuotidiennes($journee, $minuit, $heures, $verificationDeLaCaisse);
         }
 
         $mensuelle = collect($this->evenements())->sole(static fn (Event $evenement): bool => self::commande($evenement) === 'app:reverifier-sirene --toutes');
@@ -79,11 +82,39 @@ class PlanificateurTest extends TestCase
             $this->assertSame($due, $mensuelle->isDue($this->app), $instant->toIso8601String());
         }
 
-        $horaires = array_filter($this->evenements(), static fn (Event $evenement): bool => $evenement->expression === '0 * * * *');
-        foreach ([[self::enUtc('2026-10-25 00:00:00'), true], [self::enUtc('2026-10-25 00:30:00'), false], [self::enUtc('2026-10-25 01:00:00'), true], [self::enUtc('2027-03-28 01:00:00'), true]] as [$instant, $due]) {
-            $this->travelTo($instant);
+        $horaires = array_filter($this->evenements(), static fn (Event $evenement): bool => preg_match('/^\d+ \* \* \* \*$/', $evenement->expression) === 1);
+        foreach ([self::enUtc('2026-10-25 00:00:00'), self::enUtc('2026-10-25 01:00:00'), self::enUtc('2027-03-28 01:00:00'), self::enUtc('2026-07-14 13:00:00')] as $heureRonde) {
             foreach ($horaires as $evenement) {
-                $this->assertSame($due, $evenement->isDue($this->app), $instant->toIso8601String().' : '.self::commande($evenement));
+                $minute = (int) explode(' ', $evenement->expression)[0];
+
+                foreach ([[$minute, true], [$minute + 5, false]] as [$minutes, $due]) {
+                    $instant = $heureRonde->addMinutes($minutes);
+                    $this->travelTo($instant);
+                    $this->assertSame($due, $evenement->isDue($this->app), $instant->toIso8601String().' : '.self::commande($evenement));
+                }
+            }
+        }
+    }
+
+    /**
+     * Le minuit de chaque territoire, en été, en hiver, le 31 décembre et
+     * les jours où Paris change d'heure, tombe à une heure ronde en UTC,
+     * minute 0 et seconde 0 : la clôture automatique, qui passe chaque
+     * heure à la minute 0, est due à cet instant même. Un territoire futur
+     * dont le décalage ne serait pas d'heures entières ferait échouer ce
+     * test.
+     */
+    public function test_chaque_minuit_local_tombe_sur_un_passage_horaire(): void
+    {
+        $cloture = collect($this->evenements())->sole(static fn (Event $evenement): bool => self::commande($evenement) === 'app:cloturer-caisses-automatiquement');
+
+        foreach (Territoire::cases() as $territoire) {
+            foreach (['2026-07-14', '2026-10-25', '2026-12-31', '2027-03-28'] as $jour) {
+                $minuit = Calendrier::duTerritoire($territoire)->debutDuJour($jour);
+                $this->travelTo($minuit);
+
+                $this->assertSame(0, $minuit->getTimestamp() % 3600, "{$territoire->value} : {$jour}");
+                $this->assertTrue($cloture->isDue($this->app), "{$territoire->value} : {$jour}");
             }
         }
     }
@@ -116,13 +147,10 @@ class PlanificateurTest extends TestCase
 
     /**
      * Chaque tâche quotidienne part une seule fois dans la journée de Paris
-     * qui commence à $minuit et dure $heures heures ; la clôture
-     * automatique, la vérification de la caisse sécurisée et les relances
-     * partent à ces instants (minuit, 3 h et 9 h à Paris).
-     *
-     * @param  array{CarbonImmutable, CarbonImmutable, CarbonImmutable}  $attendus
+     * qui commence à $minuit et dure $heures heures ; la vérification de la
+     * caisse sécurisée part à cet instant (3 h à Paris).
      */
-    private function assertDepartsDesTachesQuotidiennes(string $journee, CarbonImmutable $minuit, int $heures, array $attendus): void
+    private function assertDepartsDesTachesQuotidiennes(string $journee, CarbonImmutable $minuit, int $heures, CarbonImmutable $verificationDeLaCaisse): void
     {
         $quotidiennes = array_filter($this->evenements(), static fn (Event $evenement): bool => preg_match('/^\d+ \d+ \* \* \*$/', $evenement->expression) === 1);
         $departs = [];
@@ -140,9 +168,7 @@ class PlanificateurTest extends TestCase
         foreach ($quotidiennes as $evenement) {
             $this->assertCount(1, $departs[self::commande($evenement)] ?? [], "{$journee} : ".self::commande($evenement));
         }
-        foreach (['app:cloturer-caisses-automatiquement', 'caisse:verifier', 'app:relancer-factures-impayees'] as $rang => $commande) {
-            $this->assertSame([$attendus[$rang]->getTimestamp()], $departs[$commande], "{$journee} : {$commande}");
-        }
+        $this->assertSame([$verificationDeLaCaisse->getTimestamp()], $departs['caisse:verifier'], "{$journee} : caisse:verifier");
     }
 
     private static function commande(Event $evenement): string

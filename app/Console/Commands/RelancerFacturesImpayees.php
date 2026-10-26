@@ -18,14 +18,18 @@ use Illuminate\Database\Eloquent\Builder;
 use LogicException;
 
 /**
- * Relances automatiques des factures impayées (voir bootstrap/app.php),
- * pour chaque magasin qui les a activées (Paramètres > Relances), magasin
- * par magasin : une commande n'a aucun TenantContext au démarrage. Seul un
- * magasin réel qui peut vendre écrit à ses clients (voir
- * Magasin::peutEcrireAuxClients()) : actif, non suspendu, d'une société
- * active et validée, son établissement confirmé, jamais la démonstration ;
- * la requête ne lit que ceux-là, et chacun se contrôle encore avant ses
- * relances.
+ * Relances automatiques des factures impayées, à chaque passage horaire
+ * (voir bootstrap/app.php), pour chaque magasin qui les a activées
+ * (Paramètres > Relances), magasin par magasin : une commande n'a aucun
+ * TenantContext au démarrage. Un magasin n'est relancé que s'il est de
+ * 9 h à 11 h 59 à son heure locale (voir Magasin::calendrier() et
+ * PREMIERE_HEURE_DES_RELANCES) : en matinée, plutôt qu'en pleine nuit ; un
+ * passage manqué à 9 h est rattrapé à 10 h ou à 11 h, et rien ne part
+ * plus après 11 h 59 ce jour-là. Seul un magasin réel qui peut vendre
+ * écrit à ses clients (voir Magasin::peutEcrireAuxClients()) : actif, non
+ * suspendu, d'une société active et validée, son établissement confirmé,
+ * jamais la démonstration ; la requête ne lit que ceux-là, et chacun se
+ * contrôle encore avant ses relances.
  *
  * Une facture échue, pas entièrement réglée, dont le client a une adresse
  * e-mail -- même archivé, il doit toujours la facture --, reçoit la
@@ -39,6 +43,13 @@ use LogicException;
 #[Description('Relance par e-mail les factures échues et impayées des magasins qui ont activé les relances automatiques')]
 class RelancerFacturesImpayees extends Command
 {
+    /**
+     * Les heures locales où un magasin est relancé : de 9 h à 11 h 59.
+     */
+    public const PREMIERE_HEURE_DES_RELANCES = 9;
+
+    public const DERNIERE_HEURE_DES_RELANCES = 11;
+
     public function handle(TenantContext $tenantContext, EnvoyerDocumentAction $envoyer): int
     {
         $totalRelancees = 0;
@@ -54,7 +65,9 @@ class RelancerFacturesImpayees extends Command
             ->where('relances_automatiques', true)
             ->orderBy('id')
             ->each(function (Magasin $magasin) use ($tenantContext, $envoyer, &$totalRelancees) {
-                if (! $magasin->peutEcrireAuxClients()) {
+                $heureLocale = $magasin->calendrier()->heureDe(now());
+
+                if ($heureLocale < self::PREMIERE_HEURE_DES_RELANCES || $heureLocale > self::DERNIERE_HEURE_DES_RELANCES || ! $magasin->peutEcrireAuxClients()) {
                     return;
                 }
 

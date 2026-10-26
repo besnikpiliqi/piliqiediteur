@@ -23,6 +23,7 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -30,6 +31,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
@@ -48,9 +50,11 @@ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\PaiementResource\Pages\CreatePaiement;
 use App\Filament\App\Widgets\FacturesApercu;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use LogicException;
@@ -246,22 +250,48 @@ class HeureLocaleTest extends TestCase
      * Une facture émise en Martinique le 16 novembre à 20:00, heure locale
      * (déjà le 17 à Paris), payable à 30 jours, échoit le 16 décembre ; elle
      * ne passe pas en retard à 20:15 le 16, heure locale, mais au passage
-     * qui suit le minuit de la Martinique.
+     * qui suit le minuit de la Martinique. Sa relance, due un jour après
+     * l'échéance, ne part pas à 05:00, heure locale, part à 09:00 et pas
+     * une seconde fois à 10:00 ; un autre magasin de la Martinique, dont
+     * les relances s'activent après le passage de 09:00, est relancé à
+     * 10:00 ; un troisième, dont elles s'activent après celui de 11:00,
+     * n'est pas relancé à 12:00.
      */
     public function test_l_echeance_le_retard_et_les_relances_suivent_le_jour_local(): void
     {
+        Mail::fake();
         $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-16 20:00'));
-        $this->magasin(Territoire::Martinique, 'FDF1');
-        $facture = $this->emettreUneFacture(Client::factory()->professionnel()->create(['delai_paiement_jours' => 30]), 21.70);
+        $premier = $this->magasin(Territoire::Martinique, 'FDF1');
+        $deuxieme = $this->ouvrirUnAutreMagasinSitue($premier, Territoire::Martinique, ['nom' => 'Boutique FDF2', 'code' => 'FDF2']);
+        $troisieme = $this->ouvrirUnAutreMagasinSitue($premier, Territoire::Martinique, ['nom' => 'Boutique FDF3', 'code' => 'FDF3']);
+        $premier->update(['relances_automatiques' => true, 'delais_relance' => [1, 15, 30]]);
+        $deuxieme->update(['relances_automatiques' => false, 'delais_relance' => [1, 15, 30]]);
+        $troisieme->update(['relances_automatiques' => false, 'delais_relance' => [1, 15, 30]]);
+        [$facture, $deLaDeuxieme, $deLaTroisieme] = array_map(fn (Magasin $magasin): Facture => app(TenantContext::class)->runAs($magasin, fn (): Facture => $this->emettreUneFacture(Client::factory()->professionnel()->create(['delai_paiement_jours' => 30, 'email' => strtolower($magasin->code).'@exemple.fr']), 21.70)), [$premier, $deuxieme, $troisieme]);
         $this->assertSame('2026-12-16', $facture->date_echeance);
 
         $this->travelTo(self::enUtc('2026-12-17 00:15:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
-        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+        $this->assertSame(StatutFacture::Emise, app(TenantContext::class)->runAs($premier, fn (): StatutFacture => $facture->fresh()->statut));
 
         $this->travelTo(self::enUtc('2026-12-17 04:15:00'));
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
-        $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
+        $this->assertSame(StatutFacture::EnRetard, app(TenantContext::class)->runAs($premier, fn (): StatutFacture => $facture->fresh()->statut));
+
+        $this->relancerA(self::enUtc('2026-12-17 09:00:00'));
+        $this->assertSame([[], [], []], $this->relancesDe($facture, $deLaDeuxieme, $deLaTroisieme));
+        $this->relancerA(self::enUtc('2026-12-17 13:00:00'));
+        $this->assertSame([[1], [], []], $this->relancesDe($facture, $deLaDeuxieme, $deLaTroisieme));
+
+        $this->travelTo(self::enUtc('2026-12-17 13:30:00'));
+        $deuxieme->update(['relances_automatiques' => true]);
+        $this->relancerA(self::enUtc('2026-12-17 14:00:00'));
+        $this->assertSame([[1], [1], []], $this->relancesDe($facture, $deLaDeuxieme, $deLaTroisieme));
+
+        $this->travelTo(self::enUtc('2026-12-17 15:30:00'));
+        $troisieme->update(['relances_automatiques' => true]);
+        $this->relancerA(self::enUtc('2026-12-17 16:00:00'));
+        $this->assertSame([[1], [1], []], $this->relancesDe($facture, $deLaDeuxieme, $deLaTroisieme));
     }
 
     /**
@@ -532,6 +562,33 @@ class HeureLocaleTest extends TestCase
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 10],
         ]));
+    }
+
+    /**
+     * Le passage des relances automatiques à cet instant.
+     */
+    private function relancerA(CarbonImmutable $instant): void
+    {
+        $this->travelTo($instant);
+        app(TenantContext::class)->clear();
+        $this->artisan('app:relancer-factures-impayees')->assertSuccessful();
+    }
+
+    /**
+     * Les niveaux des relances envoyées de chaque facture, dans l'ordre.
+     *
+     * @return list<list<int>>
+     */
+    private function relancesDe(Facture ...$factures): array
+    {
+        return array_map(static fn (Facture $facture): array => EnvoiDocument::withoutGlobalScopes()
+            ->where('magasin_id', $facture->magasin_id)
+            ->where('document_type', $facture->getMorphClass())
+            ->where('document_id', $facture->id)
+            ->where('nature', NatureEnvoi::Relance)
+            ->orderBy('niveau_relance')
+            ->pluck('niveau_relance')
+            ->all(), $factures);
     }
 
     /**

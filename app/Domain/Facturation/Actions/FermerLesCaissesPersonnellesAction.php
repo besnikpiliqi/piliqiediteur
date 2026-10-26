@@ -20,17 +20,17 @@ use Throwable;
  * restées ouvertes (R5) : une caisse personnelle ne bloque jamais la
  * clôture de la journée. Appelée après la clôture (manuelle, voir
  * ListClotureCaisses, la borne étant alors l'instant de la clôture ; ou
- * automatique, voir ClotureAutomatiqueCaisse), et à minuit pour toute
- * caisse restée ouverte la veille, même après une clôture manuelle (la
- * borne étant alors la fin de la veille). Chaque relevé porte la mention
+ * automatique, voir ClotureAutomatiqueCaisse), et passé le minuit du
+ * magasin pour toute caisse restée ouverte sa veille, même après une
+ * clôture manuelle (la borne étant alors la fin de sa veille). Chaque relevé porte la mention
  * « Fermée automatiquement » (voir ClotureCaissePersonnelle).
  *
  * Toujours après la transaction de la clôture, jamais dedans, et une
  * transaction par vendeur (voir FermerSaCaisseAction::fermerDOffice()) :
  * l'échec d'une fermeture, signalé au journal de l'application
  * (report()), n'annule ni la clôture de la journée ni la fermeture des
- * autres caisses, et sa caisse se ferme au passage suivant, au plus tard à
- * minuit. Ces fermetures sont celles du système, jamais de la personne
+ * autres caisses, et sa caisse se ferme au passage horaire suivant de la
+ * clôture automatique. Ces fermetures sont celles du système, jamais de la personne
  * connectée (voir OperateurCourant).
  */
 class FermerLesCaissesPersonnellesAction

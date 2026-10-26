@@ -19,7 +19,7 @@ Laravel 13, Filament 3 (panneau des magasins sous `/app`), PHP 8.3 ou plus avec 
 
 PostgreSQL (17 ou 18) en production, SQLite en développement et pour les tests rapides. La suite complète passe sur les deux moteurs, en local avant chaque commit et en CI. La base PostgreSQL est en UTF8 avec la collation déterministe C.UTF-8 : elle trie dans l'ordre binaire, comme SQLite. Les recherches ignorent la casse et les accents par une même fonction SQL sur les deux moteurs, que crée une migration sous PostgreSQL : aucune extension à installer.
 
-**Heure.** L'application travaille en UTC : chaque horodatage s'enregistre en UTC (`config/app.php`), et la session PostgreSQL aussi (`config/database.php`). Les journaux techniques de Laravel sont donc en UTC. Le calendrier (journée de caisse, échéances, année des numéros, affichage) suit l'heure de Paris pour tous les magasins, par la classe `App\Domain\Calendrier\Calendrier`, seule à connaître un fuseau, et le planificateur par `schedule_timezone`. Aucun code ne dépend du fuseau de la session de base. En production, fixez aussi le fuseau par défaut de la base, pour les sessions ouvertes hors de l'application (psql, sauvegardes, scripts, répartiteur de connexions qui perd le réglage de la session) : `ALTER DATABASE <base> SET timezone TO 'UTC';`. `php artisan caisse:diagnostiquer` vérifie le fuseau de l'application et ce fuseau par défaut de la base (`pg_settings.reset_val`). `SHOW TIMEZONE` ne le montre pas : il rend l'UTC que l'application fixe à chaque connexion.
+**Heure.** L'application travaille en UTC : chaque horodatage s'enregistre en UTC (`config/app.php`), et la session PostgreSQL aussi (`config/database.php`). Les journaux techniques de Laravel sont donc en UTC. Le calendrier de chaque magasin (journée de caisse, échéances, année des numéros, affichage) suit l'heure de son territoire : Paris pour la métropole et la Corse, la sienne pour chaque territoire d'outre-mer accepté (aujourd'hui la Guadeloupe, la Martinique et La Réunion). Ce territoire est fixé au premier contrôle Sirene de l'établissement et ne change plus. La société, ses courriers et l'éditeur suivent l'heure de Paris. Seule la classe `App\Domain\Calendrier\Calendrier` connaît un fuseau. Le planificateur suit l'heure de Paris (`schedule_timezone`) ; les tâches du calendrier des magasins passent toutes les heures. Aucun code ne dépend du fuseau de la session de base. En production, fixez aussi le fuseau par défaut de la base, pour les sessions ouvertes hors de l'application (psql, sauvegardes, scripts, répartiteur de connexions qui perd le réglage de la session) : `ALTER DATABASE <base> SET timezone TO 'UTC';`. `php artisan caisse:diagnostiquer` vérifie le fuseau de l'application et ce fuseau par défaut de la base (`pg_settings.reset_val`). `SHOW TIMEZONE` ne le montre pas : il rend l'UTC que l'application fixe à chaque connexion.
 
 ```sh
 composer install
@@ -50,7 +50,9 @@ DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=piliqi_test DB_US
 ```sh
 for t in '2026-10-25 00:30:00' '2026-10-25 01:30:00' '2027-03-28 00:59:00' '2027-03-28 01:30:00' \
          '2027-01-02 10:00:00' '2026-12-31 22:59:00' '2026-10-25 00:59:00' '2028-02-29 12:00:00' \
-         '2026-01-31 12:00:00' '2026-12-31 23:30:00' '2026-07-14 22:30:00' '2026-10-25 22:59:30'; do
+         '2026-01-31 12:00:00' '2026-12-31 23:30:00' '2026-07-14 22:30:00' '2026-10-25 22:59:30' \
+         '2026-12-31 20:30:00' '2027-01-01 03:30:00' '2026-07-14 03:30:00' '2026-11-17 03:59:30' \
+         '2026-12-31 19:59:30'; do
   TZ=UTC NO_FAKE_STAT=1 faketime -f "@$t" php artisan test --parallel; echo "$t : $?"
 done
 ```

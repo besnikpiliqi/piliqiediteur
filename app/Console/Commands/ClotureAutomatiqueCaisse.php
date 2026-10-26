@@ -17,8 +17,9 @@ use Throwable;
  * Filet de sécurité réglementaire : un magasin qui ne clôture pas sa
  * journée lui-même (bouton « Clôturer la journée », voir
  * ListClotureCaisses) ne doit jamais laisser une journée de ventes aux
- * particuliers sans clôture ni e-reporting. Cette commande (voir
- * bootstrap/app.php) clôture pour chaque magasin, dans l'ordre, toutes ses
+ * particuliers sans clôture ni e-reporting. Cette commande, à chaque
+ * passage horaire (voir bootstrap/app.php), clôture pour chaque magasin,
+ * dans l'ordre, toutes ses
  * journées encore ouvertes jusqu'à la VEILLE de son jour comprise, chaque
  * magasin dans son calendrier (voir Magasin::calendrier() : la veille d'un
  * magasin de la Martinique n'est pas celle d'un magasin de Paris), voir

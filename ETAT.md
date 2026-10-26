@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 16:09 UTC par pilotage-sync.sh : « Fiche : série 9 dans la chaîne, badges du plan TVA vers l'À faire ».
+Mis à jour le 26/10/2026 à 17:15 UTC par pilotage-sync.sh : « PU poussé ; chaîne relancée avec TA, EC, L1, A7, S9-L, S9-A, 21 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `fa83824`. Commits locaux pas encore poussés :
+Tête poussée : `89f092f`. Commits locaux pas encore poussés :
 
 ```
-e70f18e Affiche les prix unitaires au centime et complète la note de calcul (lot PU)
 ```
 
 Derniers commits poussés :
 
 ```
+89f092f Relecture du lot PU de l’affichage des prix unitaires
+e70f18e Affiche les prix unitaires au centime et complète la note de calcul (lot PU)
 fa83824 Relecture du lot T3 de l’heure locale des magasins
 5f86951 Passe toutes les heures les tâches du calendrier des magasins (lot T3)
 60962cc Met chaque magasin à l'heure locale de son territoire (lot T3)
@@ -31,45 +32,17 @@ fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot
 6b5baba Relecture du lot V2b des compléments de la vérification
 65819c6 Confirme l'adresse choisie au code et libère celle d'une inscription close (lot V2b)
 79216b1 Relecture du lot V2 de la vérification par courrier
-7ee6d18 Vérifie les sociétés par le seul courrier recommandé (lot V2)
-5cbe4e2 Annule les lots M0 et M1 du moteur de TVA faits dans une autre session
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/DerogationsDePrix.php
- M app/Filament/App/Pages/ParametresPrixDeVente.php
- M app/Filament/App/Resources/InventaireOuvertureResource.php
- M app/Filament/App/Resources/ProduitResource.php
- M app/Filament/App/Resources/ServiceResource.php
- M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/SaisitLesPrixDeLigne.php
- M database/factories/PanierCaisseFactory.php
- M database/migrations/2026_10_03_100002_create_lignes_devis_table.php
- M database/migrations/2026_10_03_100004_create_lignes_facture_table.php
- M database/migrations/2026_10_05_100002_create_lignes_avoir_table.php
- M tests/Feature/Filament/CaisseTest.php
- M tests/Feature/Filament/FactureResourceTest.php
- M tests/Feature/Filament/InventaireOuvertureResourceTest.php
- M tests/Feature/Filament/ProduitResourceTest.php
- M tests/Feature/Filament/ServiceResourceTest.php
- M tests/Unit/CalculateurLigneTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_fb31205c-c06`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_a77da96f-9ee`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-T3:correction-reprise
-T3:poussee
-T3:notes
-PU:implementation
-PU:relecture1
-PU:relecture2
-PU:correction
+TA:implementation
 ```

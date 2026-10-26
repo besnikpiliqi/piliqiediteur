@@ -4069,3 +4069,11 @@ Mais tu prends ca en tant que langue française et pas albanais
 
 « Le nombre jaune du menu des factures disparaît, remplacé par des onglets clairs. » il faut enlever tout parce que tout va être affiché dans le tableau de bord
 
+## 286. 2026-10-26 16:56 UTC
+
+Si il y aura pas des arrêtes par les limites alors pour combien de temps va finir le logiciel
+
+## 287. 2026-10-26 17:02 UTC
+
+Mais franchement j’arrive pas à comprendre pourquoi tout ce temps alors que la le logiciel fonctionne très bien
+

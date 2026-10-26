@@ -1,0 +1,1253 @@
+Par rapport ce que tu m’as deja donné dans la discussion qu’on a déjà parlé pour le projet editeur, tu utilises ce que m’as dit te ce que je te dis dans le promte pour que tu fasses les merveilleux choses
+
+PROMPT MAÎTRE — ÉDITEUR DE FACTURES SaaS MULTI-ENTREPRISES
+
+Tu es un architecte logiciel senior spécialisé en Laravel, PHP, SaaS multi-tenant, applications de facturation, comptabilité, sécurité et API.
+
+Je veux développer une application web professionnelle de gestion commerciale et de facturation destinée à être commercialisée ensuite sous forme de SaaS auprès de plusieurs entreprises.
+
+1. OBJECTIF DU PROJET
+
+Construire une application Laravel moderne, professionnelle, maintenable et évolutive permettant notamment :
+
+* gestion de plusieurs entreprises
+* utilisateurs et rôles
+* clients
+* fournisseurs
+* produits et services
+* devis
+* factures de vente
+* factures d’achat
+* avoirs
+* paiements
+* échéances
+* TVA
+* numérotation des documents
+* journaux
+* écritures comptables
+* exports
+* tableaux de bord
+* historique et audit
+* notifications
+* API
+* intégrations externes
+* abonnements SaaS
+
+L’application doit être conçue dès le départ comme un SaaS multi-tenant.
+
+Même si une seule entreprise est utilisée pendant le développement initial, l’architecture doit permettre d’ajouter des milliers d’entreprises sans devoir réécrire le cœur de l’application.
+
+⸻
+
+2. STACK TECHNIQUE
+
+Utiliser une stack Laravel moderne et stable.
+
+Base :
+
+* PHP 8.3+
+* Laravel dernière version stable compatible
+* MySQL 8+
+* Redis
+* Laravel Queue
+* Laravel Scheduler
+* Laravel Events
+* Laravel Notifications
+* Laravel Policies
+* Laravel Gates
+* Laravel API Resources
+* PHPUnit/Pest
+* Laravel Pint
+* PHPStan/Larastan
+
+Frontend :
+
+Choisir une architecture moderne et cohérente avec Laravel.
+
+Privilégier :
+
+* Livewire + Alpine.js
+
+ou, si une SPA est réellement justifiée :
+
+* Vue.js + Inertia
+
+Ne pas mélanger plusieurs architectures frontend sans raison.
+
+⸻
+
+3. ARCHITECTURE MULTI-TENANT
+
+C’est une exigence fondamentale.
+
+Une entreprise = un tenant.
+
+Exemple :
+
+Entreprise A
+Entreprise B
+Entreprise C
+
+Les données d’une entreprise ne doivent JAMAIS être accessibles par une autre entreprise.
+
+Architecture recommandée :
+
+companies
+users
+company_user
+
+Les utilisateurs peuvent appartenir à plusieurs entreprises.
+
+Exemple :
+
+Utilisateur X
+→ Entreprise A : owner
+→ Entreprise B : accountant
+→ Entreprise C : employee
+
+NE PAS utiliser simplement :
+
+users.company_id
+
+Utiliser une relation many-to-many :
+
+company_user
+
+avec au minimum :
+
+* company_id
+* user_id
+* role
+* created_at
+* updated_at
+
+Prévoir également la possibilité d’ajouter des permissions spécifiques par utilisateur.
+
+⸻
+
+4. ISOLATION DES DONNÉES
+
+Toutes les données métier appartenant à une entreprise doivent posséder un :
+
+company_id
+
+Exemples :
+
+customers.company_id
+suppliers.company_id
+products.company_id
+quotes.company_id
+invoices.company_id
+payments.company_id
+journals.company_id
+etc.
+
+Mettre en place une stratégie centrale d’isolation des tenants.
+
+Je veux éviter que chaque développeur doive penser manuellement à ajouter :
+
+where(‘company_id’, …)
+
+partout dans le code.
+
+Utiliser si pertinent :
+
+* TenantContext
+* middleware
+* global scopes
+* policies
+* services
+* repositories
+* événements
+
+Mais ne jamais sacrifier la sécurité pour réduire le code.
+
+L’isolation doit être vérifiable par des tests automatisés.
+
+⸻
+
+5. SÉCURITÉ MULTI-TENANT
+
+Considérer comme critique le scénario :
+
+Un utilisateur de l’entreprise A tente d’accéder à :
+
+/invoices/123
+
+alors que la facture 123 appartient à l’entreprise B.
+
+La réponse doit être :
+
+404 ou 403 selon la stratégie choisie.
+
+JAMAIS retourner les données.
+
+Tester systématiquement :
+
+* accès direct par ID
+* API
+* recherche
+* filtres
+* exports
+* téléchargements PDF
+* fichiers
+* notifications
+* jobs
+* queues
+* webhooks
+* relations Eloquent
+* URLs manipulées manuellement
+
+Aucune fuite de données inter-tenant ne doit être possible.
+
+⸻
+
+6. MODÈLE DE DONNÉES
+
+Prévoir une architecture de base de données professionnelle.
+
+Tables principales :
+
+users
+
+companies
+
+company_user
+
+roles
+
+permissions
+
+customers
+
+customer_contacts
+
+suppliers
+
+products
+
+product_categories
+
+tax_rates
+
+quotes
+
+quote_items
+
+invoices
+
+invoice_items
+
+credit_notes
+
+credit_note_items
+
+payments
+
+payment_allocations
+
+purchase_invoices
+
+purchase_invoice_items
+
+expenses
+
+journals
+
+journal_entries
+
+journal_entry_lines
+
+invoice_sequences
+
+document_sequences
+
+attachments
+
+notifications
+
+audit_logs
+
+subscriptions
+
+subscription_items
+
+plans
+
+api_tokens
+
+webhooks
+
+webhook_deliveries
+
+etc.
+
+Ne pas créer toutes les tables inutilement dès le premier commit.
+
+Construire progressivement, mais prévoir une architecture permettant leur ajout.
+
+⸻
+
+7. CLIENTS
+
+Un client doit pouvoir contenir :
+
+* raison sociale
+* nom
+* prénom
+* adresse
+* adresse complémentaire
+* code postal
+* ville
+* pays
+* email
+* téléphone
+* SIREN
+* SIRET
+* numéro TVA intracommunautaire
+* conditions de paiement
+* mode de paiement
+* notes
+* statut
+
+Prévoir également les informations nécessaires aux entreprises françaises.
+
+Ne pas hardcoder les règles françaises partout dans le code.
+
+Créer une architecture permettant éventuellement de supporter d’autres pays.
+
+⸻
+
+8. FOURNISSEURS
+
+Même principe que pour les clients.
+
+Prévoir :
+
+* identité
+* coordonnées
+* adresse
+* SIREN/SIRET
+* TVA
+* contacts
+* conditions de paiement
+* comptes bancaires si nécessaire
+* pièces jointes
+* notes
+
+⸻
+
+9. PRODUITS ET SERVICES
+
+Un produit/service doit pouvoir contenir :
+
+* référence/SKU
+* nom
+* description
+* type produit/service
+* prix HT
+* taux TVA
+* prix TTC calculé
+* unité
+* catégorie
+* actif/inactif
+
+Ne jamais stocker inutilement des valeurs calculées si elles peuvent être recalculées de façon fiable.
+
+Pour les factures historiques, conserver cependant les valeurs nécessaires à la conservation exacte du document émis.
+
+⸻
+
+10. FACTURES
+
+Prévoir une vraie architecture de facturation.
+
+Une facture doit avoir notamment :
+
+* company_id
+* customer_id
+* numéro
+* statut
+* date d’émission
+* date d’échéance
+* devise
+* conditions de paiement
+* total HT
+* total TVA
+* total TTC
+* montant payé
+* montant restant
+* notes
+* conditions
+* timestamps
+
+Statuts possibles :
+
+draft
+issued
+sent
+partially_paid
+paid
+overdue
+cancelled
+
+Adapter si une meilleure machine à états est nécessaire.
+
+⸻
+
+11. LIGNES DE FACTURE
+
+Une ligne doit conserver les informations historiques nécessaires.
+
+Exemple :
+
+* description
+* référence
+* quantité
+* unité
+* prix unitaire HT
+* remise
+* taux TVA
+* montant TVA
+* montant HT
+* montant TTC
+
+IMPORTANT :
+
+Une facture déjà émise ne doit pas changer simplement parce que le produit original a été modifié.
+
+La facture doit conserver son propre snapshot des informations nécessaires.
+
+⸻
+
+12. NUMÉROTATION
+
+La numérotation doit être indépendante pour chaque entreprise.
+
+Exemple :
+
+Entreprise A :
+
+FAC-2026-000001
+FAC-2026-000002
+
+Entreprise B :
+
+FAC-2026-000001
+
+Les deux entreprises peuvent donc avoir le même numéro.
+
+Prévoir une table dédiée :
+
+invoice_sequences
+
+avec gestion robuste de la concurrence.
+
+Attention aux race conditions.
+
+Deux utilisateurs créant simultanément une facture ne doivent JAMAIS obtenir le même numéro.
+
+Utiliser une transaction et le mécanisme adapté au moteur SQL.
+
+⸻
+
+13. DOCUMENTS
+
+Prévoir une architecture générique permettant :
+
+* devis
+* factures
+* avoirs
+* factures d’achat
+
+avec des règles métier propres à chaque type.
+
+Ne pas créer un énorme modèle “Document” impossible à maintenir si cela complexifie inutilement le domaine.
+
+Utiliser une abstraction seulement lorsqu’elle apporte réellement quelque chose.
+
+⸻
+
+14. STATUTS ET WORKFLOWS
+
+Les transitions de statut doivent être contrôlées.
+
+Exemple :
+
+draft
+→ issued
+→ sent
+→ partially_paid
+→ paid
+
+Une facture payée ne doit pas pouvoir revenir arbitrairement à draft.
+
+Créer des services/domain actions dédiés lorsque nécessaire.
+
+Exemple :
+
+IssueInvoice
+SendInvoice
+CancelInvoice
+RegisterPayment
+GenerateInvoicePdf
+
+⸻
+
+15. PAIEMENTS
+
+Prévoir :
+
+* paiement partiel
+* paiement total
+* plusieurs paiements pour une facture
+* paiement affecté à plusieurs factures si nécessaire
+* modes de paiement
+* date
+* montant
+* référence
+* notes
+
+Ne pas déduire uniquement le statut “paid” d’un champ manuel.
+
+Le montant restant doit être cohérent avec les paiements enregistrés.
+
+⸻
+
+16. COMPTABILITÉ / JOURNAUX
+
+L’application doit être préparée pour gérer des journaux comptables.
+
+Prévoir une architecture permettant :
+
+* journal de ventes
+* journal d’achats
+* journal de banque
+* autres journaux
+
+Exemple :
+
+journals
+journal_entries
+journal_entry_lines
+
+Chaque écriture doit pouvoir être reliée au document source.
+
+Prévoir une architecture compatible avec de futures intégrations comptables externes.
+
+⸻
+
+17. API
+
+Créer une API versionnée.
+
+Exemple :
+
+/api/v1/…
+
+Utiliser :
+
+* API Resources
+* Form Requests
+* Policies
+* rate limiting
+* authentication
+* pagination
+* validation
+* versioning
+
+Ne jamais exposer directement les modèles Eloquent.
+
+Prévoir une documentation API future.
+
+⸻
+
+18. INTÉGRATIONS EXTERNES
+
+L’architecture doit permettre plus tard d’intégrer :
+
+* Pennylane
+* Stripe
+* banques
+* outils comptables
+* outils CRM
+* autres services
+
+Créer une couche d’intégration propre.
+
+Exemple :
+
+Integrations/
+Pennylane/
+Stripe/
+…
+
+Ne pas mettre du code spécifique à Pennylane directement dans InvoiceController.
+
+⸻
+
+19. AUDIT LOG
+
+Toutes les actions importantes doivent pouvoir être auditées.
+
+Exemples :
+
+* création facture
+* modification
+* émission
+* annulation
+* paiement
+* suppression
+* changement de permissions
+* connexion importante
+* changement de paramètres
+
+Conserver :
+
+* utilisateur
+* entreprise
+* action
+* modèle concerné
+* ID
+* anciennes valeurs si nécessaire
+* nouvelles valeurs si nécessaire
+* IP
+* user-agent
+* date
+
+Attention aux données personnelles et à la conformité RGPD.
+
+⸻
+
+20. RGPD
+
+Prévoir dès l’architecture :
+
+* export des données
+* suppression/anonymisation lorsque légalement possible
+* gestion des données personnelles
+* politique de conservation
+* logs sans données sensibles inutiles
+* contrôle d’accès
+* journalisation
+
+Les factures et documents soumis à des obligations légales de conservation doivent être traités séparément des données pouvant être supprimées immédiatement.
+
+⸻
+
+21. FICHIERS ET PDF
+
+Les fichiers doivent être isolés par entreprise.
+
+Exemple logique :
+
+storage/
+companies/
+{company_uuid}/
+invoices/
+quotes/
+attachments/
+
+Ne jamais permettre l’accès à un fichier simplement en connaissant son chemin.
+
+Passer par une autorisation.
+
+Les PDF de factures doivent être générés à partir d’un snapshot fiable des données.
+
+⸻
+
+22. RÔLES
+
+Prévoir au minimum :
+
+Owner
+Admin
+Accountant
+Employee
+Viewer
+
+Mais ne pas coder les permissions directement dans les contrôleurs.
+
+Exemple :
+
+invoice.create
+invoice.read
+invoice.update
+invoice.delete
+invoice.issue
+invoice.send
+invoice.cancel
+payment.create
+customer.create
+accounting.read
+
+Utiliser un véritable système de permissions.
+
+⸻
+
+23. SUPER ADMIN SAAS
+
+Prévoir une partie distincte pour l’administration globale du SaaS.
+
+Le Super Admin peut gérer :
+
+* entreprises
+* utilisateurs
+* abonnements
+* plans
+* consommation
+* limites
+* suspension
+* logs système
+* statistiques globales
+
+ATTENTION :
+
+Le Super Admin SaaS ne doit pas automatiquement avoir accès à toutes les données métier sans mécanisme explicite et audité.
+
+Séparer clairement :
+
+SaaS administration
+
+et
+
+Tenant application.
+
+⸻
+
+24. ABONNEMENTS
+
+Prévoir l’architecture pour plusieurs plans.
+
+Exemple :
+
+Free
+Starter
+Professional
+Business
+Enterprise
+
+Les limites pourraient être :
+
+* nombre d’utilisateurs
+* nombre de clients
+* nombre de factures
+* stockage
+* API
+* fonctionnalités avancées
+
+Ne pas mettre les limites directement dans les contrôleurs.
+
+Créer un service de type :
+
+SubscriptionService
+PlanService
+FeatureGate
+
+⸻
+
+25. FEATURE FLAGS
+
+Prévoir éventuellement :
+
+features
+
+Exemple :
+
+advanced_accounting
+api_access
+multiple_users
+custom_branding
+advanced_reports
+
+Une fonctionnalité peut être activée selon :
+
+* plan
+* entreprise
+* utilisateur
+
+⸻
+
+26. PERFORMANCE
+
+Prévoir une application capable de grandir.
+
+Utiliser correctement :
+
+* indexes
+* eager loading
+* pagination
+* queues
+* Redis
+* cache
+* jobs
+* événements
+
+Éviter :
+
+N+1 queries
+requêtes inutiles
+SELECT *
+sur de grosses tables
+boucles SQL inutiles
+
+Les indexes doivent notamment prendre en compte company_id.
+
+Exemple :
+
+INDEX(company_id, created_at)
+
+et selon les besoins :
+
+INDEX(company_id, status)
+INDEX(company_id, customer_id)
+
+⸻
+
+27. CACHE
+
+Le cache doit toujours respecter le tenant.
+
+INTERDIT :
+
+Cache::remember(‘customers’, …)
+
+Préférer une clé contenant le tenant :
+
+customers:{company_id}:…
+
+Même principe pour :
+
+* statistiques
+* dashboards
+* permissions
+* paramètres
+* listes
+
+⸻
+
+28. QUEUES / JOBS
+
+Les jobs doivent toujours transporter le contexte nécessaire.
+
+Exemple :
+
+GenerateInvoicePdf
+SendInvoiceEmail
+SyncInvoiceWithPennylane
+
+Un job appartenant à l’entreprise A ne doit jamais utiliser accidentellement le tenant B.
+
+Tester cela.
+
+⸻
+
+29. TESTS
+
+Je veux des tests sérieux.
+
+Créer notamment des tests :
+
+* authentication
+* authorization
+* tenant isolation
+* invoice creation
+* invoice numbering
+* payment
+* VAT calculation
+* permissions
+* API
+* PDF
+* queues
+* subscriptions
+
+Tests critiques :
+
+1. Tenant A ne peut pas lire Tenant B.
+2. Tenant A ne peut pas modifier Tenant B.
+3. Tenant A ne peut pas supprimer Tenant B.
+4. Tenant A ne peut pas télécharger les fichiers de Tenant B.
+5. Deux utilisateurs simultanés ne génèrent pas le même numéro de facture.
+
+⸻
+
+30. ARCHITECTURE DU CODE
+
+Je veux une architecture claire.
+
+Éviter les contrôleurs contenant toute la logique métier.
+
+Éviter :
+
+Controller
+→ 500 lignes
+→ requêtes SQL
+→ calcul TVA
+→ génération PDF
+→ envoi email
+→ logique comptable
+
+Préférer :
+
+Controller
+→ Form Request
+→ Action/Service
+→ Domain
+→ Repository/query si réellement nécessaire
+→ Event/Job
+
+Exemple :
+
+InvoiceController
+↓
+CreateInvoiceAction
+↓
+InvoiceService
+↓
+Invoice
+↓
+Events
+
+Ne pas utiliser Repository Pattern partout par dogme.
+
+Utiliser les patterns uniquement lorsqu’ils apportent une vraie valeur.
+
+⸻
+
+31. VALIDATION
+
+Utiliser Form Requests.
+
+Exemple :
+
+StoreCustomerRequest
+StoreInvoiceRequest
+UpdateInvoiceRequest
+
+La validation doit être centralisée.
+
+Prévoir également des règles métier séparées de la validation HTTP.
+
+⸻
+
+32. TRANSACTIONS
+
+Les opérations critiques doivent utiliser des transactions.
+
+Exemple création/émission facture :
+
+DB::transaction(…)
+
+Une facture ne doit pas être partiellement créée.
+
+Même principe pour :
+
+* paiement
+* écriture comptable
+* numérotation
+* synchronisation critique
+
+⸻
+
+33. CONCURRENCE
+
+Faire particulièrement attention à :
+
+* numéros de facture
+* paiements
+* stocks
+* quotas
+* compteurs
+* synchronisations
+
+Utiliser :
+
+* transactions
+* locks
+* unique constraints
+* optimistic/pessimistic locking lorsque nécessaire
+
+Ne jamais compter uniquement sur PHP pour empêcher les doublons.
+
+⸻
+
+34. BASE DE DONNÉES
+
+Les contraintes importantes doivent également être garanties par la base.
+
+Exemples :
+
+* foreign keys
+* unique indexes
+* not null lorsque nécessaire
+* indexes
+* contraintes d’intégrité
+
+Ne pas compter uniquement sur Laravel pour garantir l’intégrité.
+
+⸻
+
+35. CONFIGURATION
+
+Ne jamais mettre :
+
+* clés API
+* secrets
+* mots de passe
+* tokens
+
+directement dans le code.
+
+Utiliser :
+
+.env
+config/
+
+et un système sécurisé de gestion des secrets en production.
+
+⸻
+
+36. LOGGING
+
+Prévoir plusieurs niveaux :
+
+application
+security
+audit
+integration
+
+Ne jamais logger :
+
+* mots de passe
+* tokens
+* secrets
+* données bancaires sensibles
+* informations personnelles inutiles
+
+⸻
+
+37. OBSERVABILITÉ
+
+Prévoir l’architecture pour intégrer plus tard :
+
+* monitoring
+* error tracking
+* performance monitoring
+* métriques
+* alertes
+
+⸻
+
+38. DÉPLOIEMENT
+
+Le projet doit être compatible avec :
+
+Development
+Staging
+Production
+
+Prévoir :
+
+* migrations
+* seeders
+* CI/CD
+* tests automatiques
+* cache config/routes
+* queues
+* scheduler
+* backups
+
+⸻
+
+39. QUALITÉ DU CODE
+
+Je veux :
+
+* PHP strict
+* types explicites
+* DTO lorsque pertinent
+* enums lorsque pertinent
+* classes courtes
+* méthodes courtes
+* noms explicites
+* commentaires uniquement lorsqu’ils apportent une information utile
+* aucune duplication inutile
+
+Respecter SOLID lorsque pertinent sans tomber dans une architecture artificiellement complexe.
+
+⸻
+
+40. NE PAS SUR-ENGINEER
+
+Important :
+
+Je ne veux PAS une architecture compliquée uniquement pour montrer qu’elle est complexe.
+
+Chaque abstraction doit avoir une justification.
+
+Laravel doit rester reconnaissable.
+
+Utiliser les fonctionnalités natives de Laravel lorsqu’elles sont adaptées.
+
+⸻
+
+41. LIVRAISON DU CODE
+
+Lorsque je te demande de développer une fonctionnalité :
+
+1. Analyse le besoin.
+2. Identifie les impacts architecture.
+3. Vérifie la sécurité multi-tenant.
+4. Vérifie les impacts base de données.
+5. Propose l’architecture.
+6. Donne les migrations.
+7. Donne les modèles.
+8. Donne les Form Requests.
+9. Donne les Policies.
+10. Donne les Services/Actions nécessaires.
+11. Donne les Controllers.
+12. Donne les routes.
+13. Donne les tests.
+14. Explique les choix importants.
+15. Vérifie les éventuels problèmes de sécurité.
+16. Vérifie les performances.
+17. Donne les commandes Laravel nécessaires.
+
+Ne saute pas les tests.
+
+⸻
+
+42. RÈGLE IMPORTANTE POUR LE CODE
+
+Ne me donne jamais un exemple volontairement simplifié si je te demande d’implémenter une vraie fonctionnalité.
+
+Je veux du code réellement exploitable dans le projet.
+
+Si une information manque, identifie clairement ce qui manque avant de générer une architecture incohérente.
+
+Ne devine pas une règle métier importante.
+
+⸻
+
+43. ÉVOLUTION FUTURE
+
+L’application doit pouvoir évoluer vers :
+
+* plusieurs milliers d’entreprises
+* plusieurs dizaines de milliers d’utilisateurs
+* millions de factures
+* API publique
+* applications mobiles
+* intégrations comptables
+* paiements en ligne
+* automatisations
+* reporting avancé
+* marketplace éventuelle
+
+Ne pas optimiser prématurément pour ces volumes, mais ne pas créer une architecture qui empêche cette évolution.
+
+⸻
+
+44. ORDRE DE DÉVELOPPEMENT
+
+Commencer par :
+
+PHASE 1
+Architecture du projet
+Multi-tenancy
+Authentication
+Companies
+Users
+Roles
+Permissions
+
+PHASE 2
+Customers
+Suppliers
+Products
+Tax rates
+
+PHASE 3
+Quotes
+Invoices
+Invoice items
+Numbering
+PDF
+
+PHASE 4
+Payments
+Credit notes
+Purchase invoices
+
+PHASE 5
+Accounting
+Journals
+Journal entries
+
+PHASE 6
+API
+Webhooks
+Integrations
+
+PHASE 7
+Subscriptions
+Plans
+Feature gates
+SaaS administration
+
+PHASE 8
+Advanced reporting
+Automation
+Scalability
+
+⸻
+
+45. RÈGLE ABSOLUE
+
+À chaque nouvelle fonctionnalité, pose-toi systématiquement ces questions :
+
+1. Cette fonctionnalité appartient-elle à un tenant ?
+2. Les données sont-elles correctement isolées ?
+3. Un utilisateur d’un autre tenant pourrait-il y accéder ?
+4. Les permissions sont-elles vérifiées ?
+5. Les données sensibles sont-elles protégées ?
+6. La transaction est-elle nécessaire ?
+7. Y a-t-il un risque de race condition ?
+8. Les indexes sont-ils suffisants ?
+9. Faut-il une queue ?
+10. Faut-il un audit log ?
+11. Faut-il une API ?
+12. Les tests couvrent-ils le scénario multi-tenant ?
+13. Cette architecture pourra-t-elle évoluer ?
+
+Ne considère jamais une fonctionnalité comme terminée tant que ces points critiques n’ont pas été vérifiés.
+
+⸻
+
+46. PREMIÈRE ÉTAPE
+
+Ne commence pas immédiatement à générer des centaines de fichiers.
+
+Commence par me proposer :
+
+1. l’architecture globale du projet ;
+2. l’architecture multi-tenant retenue et pourquoi ;
+3. le schéma de base de données initial ;
+4. l’arborescence Laravel ;
+5. les principaux domaines/modules ;
+6. le système d’authentification ;
+7. le système de rôles/permissions ;
+8. la stratégie d’isolation des tenants ;
+9. la stratégie de numérotation des factures ;
+10. la stratégie de sécurité ;
+11. la stratégie de tests ;
+12. les éventuelles dépendances Laravel/packages nécessaires.
+
+Explique les décisions importantes.
+
+Ensuite, attends ma validation avant de commencer à générer le code.
+
+IMPORTANT :
+Ne simplifie pas l’architecture multi-tenant sous prétexte que le projet commence avec une seule entreprise.
+
+Le projet doit être pensé comme un produit SaaS commercialisable dès le premier jour.

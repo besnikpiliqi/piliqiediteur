@@ -70,7 +70,9 @@ TROUVE=0
 if grep -rlE 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|[A-Za-z0-9._%+-]+@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|orange|free|laposte|sfr|wanadoo)\.[a-z]{2,}' "$W" --exclude-dir=.git >/dev/null 2>&1; then TROUVE=1; fi
 for v in PILIQI_PG_MOT_DE_PASSE EDITEUR_OPERATEURS PILIQI_EDITEUR_EMAIL JOURNAL_AUDIT_CLE_ID SUPERPDP_CLIENT_SECRET SUPERPDP_CLIENT_ID SUPERPDP_TRICATEL_CLIENT_SECRET SUPERPDP_TRICATEL_CLIENT_ID INSEE_SIRENE_CLE INPI_RNE_IDENTIFIANT INPI_RNE_MOT_DE_PASSE JOURNAL_AUDIT_CLE CAISSE_SECURISEE_CLE_PRIVEE CAISSE_SECURISEE_PHRASE_SECRETE; do
   val="${!v:-}"
-  if [ ${#val} -ge 6 ] && grep -rlF -- "$val" "$W" --exclude-dir=.git >/dev/null 2>&1; then TROUVE=1; fi
+  # Une valeur publique (celle de la base de test de la CI, écrite dans le dépôt) n'est pas un secret.
+  if [ ${#val} -ge 6 ] && ! grep -qF -- "$val" "$DEPOT/.github/workflows/tests.yml" 2>/dev/null \
+     && grep -rlF --exclude-dir=.git -- "$val" "$W" >/dev/null 2>&1; then TROUVE=1; fi
 done
 if [ "$TROUVE" = 1 ]; then echo "ERREUR : un secret possible a été trouvé dans les notes ; rien n'est commité ni poussé."; exit 2; fi
 

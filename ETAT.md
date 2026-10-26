@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 12:05 UTC par pilotage-sync.sh : « Ajoute la relecture à froid de la fiche après chaque lot ».
+Mis à jour le 26/10/2026 à 12:16 UTC par pilotage-sync.sh : « Ajoute l'installation, l'historique complet et les directives de l'éditeur ; fiche complétée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

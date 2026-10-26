@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 21:17 UTC par pilotage-sync.sh : « Point de suivi : TA en cours ».
+Mis à jour le 26/10/2026 à 21:35 UTC par pilotage-sync.sh : « Premier VERIFICATION.md ; fiche : commande des lots restants, série 9 aux § 7 et 8, sources officielles ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -48,4 +48,6 @@ Course `wf_a77da96f-9ee`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 TA:implementation
+TA:relecture1
+TA:relecture2
 ```

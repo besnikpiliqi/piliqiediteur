@@ -81,3 +81,9 @@
 - Nouvelle course wf_8eaaa549-68e (tâche wehxqpt5q) : T2:correction-reprise, T2:poussee, puis workflow() inline serie8-lots.js avec ouverts T3, PU, TA, EC, L1, A7, 21 (plus besoin d'arrêter la chaîne avant TA).
 - ATTENTION : ne pas interrompre un tour pendant une course (l'interruption tue les agents en cours).
 - 26/10 : fuseau UTC de la base en production rendu automatique, ajouté au point 4 de a-faire-apres-chaine.md (lot L1) ; à reporter dans la fiche de reprise si changement de compte avant L1.
+
+## 26/10/2026, 11 h 10 UTC
+- L'interruption de l'utilisateur à 10:46 UTC a coupé T3:correction (agent-ae96fd3e86c34ad2e) pendant sa grille faketime. Consigne sauvée dans t3/consigne-correction-t3.md (6 défauts). Course de reprise wf_fb31205c-c06 (tâche wq32xpqqr) : T3:correction-reprise, T3:poussee, T3:notes, puis sous-course serie8-lots.js avec PU, TA, EC, L1, A7, 21.
+- Branche claude/pilotage-reprise créée (autorisée par l'éditeur), dossier de travail scratchpad/pilotage-reprise (worktree orphelin) ; mise à jour par pilotage-sync.sh après chaque lot (étape :notes ajoutée à serie8-lots.js) et après chaque changement. Fiche relue à froid par un agent (18 constats, tous repris).
+- serie8-lots.js (sauvegardes serie8-lots.avant-notes.js, serie8-lots.avant-faketime-L1.js) : étape :notes ; règle faketime dans REGLES ; TA et EC sur la grille du README ; L1 énumère le fuseau UTC de la base. La sous-course n'est pas encore appelée : elle lira ces textes.
+- En-tête du harnais retiré des consignes sauvées de T2 et T3.

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 11:09 UTC par pilotage-sync.sh : « Complète la fiche de reprise après sa relecture à froid ; faketime et fuseau UTC dans la chaîne ».
+Mis à jour le 26/10/2026 à 11:09 UTC par pilotage-sync.sh : « Note l'état du 26/10 à 11 h 10 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

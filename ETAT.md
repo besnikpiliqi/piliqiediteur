@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 16:09 UTC par pilotage-sync.sh : « Série 9 : aucun nombre dans les menus, tout au tableau de bord ».
+Mis à jour le 26/10/2026 à 16:09 UTC par pilotage-sync.sh : « Fiche : série 9 dans la chaîne, badges du plan TVA vers l'À faire ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 20:45 UTC par pilotage-sync.sh : « Notes : CI de PU verte, fiche F24271 vérifiée, messages de l'éditeur du 26/10 ».
+Mis à jour le 26/10/2026 à 21:17 UTC par pilotage-sync.sh : « Point de suivi : TA en cours ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `89f092f`. Commits locaux pas encore poussés :
 
 ```
+e2d790a Imprime l'assurance professionnelle facultative de la société (lot TA 3/3)
 ad19e0b Range les autorisations par famille et retire les articles aux sociétés de services (lot TA 2/3)
 7832bb0 Fait choisir à l'inscription un type d'activité définitif (lot TA 1/3)
 ```
@@ -39,32 +40,6 @@ fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/CaisseSecurisee/ModuleFiscal.php
- M app/Domain/Facturation/Services/Emetteur.php
- M app/Domain/Facturation/Services/PiedDePage.php
- M app/Domain/Tenancy/Actions/ModifierIdentiteSocieteAction.php
- M app/Domain/Tenancy/Enums/TypeDActivite.php
- M app/Domain/Tenancy/Models/Societe.php
- M app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
- M app/Filament/Societe/Pages/IdentiteSociete.php
- M database/migrations/0001_01_00_000000_create_societes_table.php
- M resources/views/documents/pdf/pied.blade.php
- M tests/Feature/CaisseSecurisee/EmissionSigneeTest.php
- M tests/Feature/CaisseSecurisee/VerificateurIntegriteTest.php
- M tests/Feature/Facturation/EmetteurFigeTest.php
- M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
- M tests/Feature/Societe/IdentiteSocieteTest.php
- M tests/Feature/Societe/MagasinDeDemonstrationTest.php
- M tests/Feature/Societe/TypeDActiviteTest.php
- M tests/Fixtures/contenu-signe/jour.json
- M tests/Fixtures/contenu-signe/nouvel-an.json
- M tests/Fixtures/contenu-signe/nuit-d-ete.json
- M tests/Fixtures/contenu-signe/nuit-d-hiver.json
- M tests/Fixtures/contenu-signe/outre-mer.json
- M tests/Fixtures/contenu-signe/premier-passage.json
- M tests/Fixtures/contenu-signe/second-passage.json
-?? tests/Feature/Facturation/AssuranceProfessionnelleTest.php
 ```
 
 ## Dernière course de la chaîne

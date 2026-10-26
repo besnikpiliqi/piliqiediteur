@@ -98,3 +98,4 @@
 - 26/10, 17 h 15 UTC : PU poussé (e70f18e, 89f092f). Course wq32xpqqr arrêtée pendant PU:fiche (arbre propre). Nouvelle course wf_a77da96f-9ee (tâche wmnbuda2x) : TA, EC, L1, A7, S9-L, S9-A, 21.
 - 26/10, 17 h 30 UTC : CI de PU (89f092f) verte, push et PR. TA en cours.
 - 26/10, 17 h 50 UTC : l'éditeur a autorisé entreprendre.service-public.gouv.fr (lisible par curl via le proxy, pas par WebFetch). Fiche F24271 (vérifiée le 04/05/2026) : Prix HT = TTC ÷ (1 + taux), arrondi au centime (3e décimale ≥ 5 vers le haut). Les cinq exemples à 50 € (20 %, 10 %, 8,5 %, 5,5 %, 2,10 %) calculés par CalculateurLigne::chiffrerUneVente() donnent exactement les HT de la fiche. Aucun changement.
+- 26/10, 21 h 17 UTC : TA en cours, 2 commits locaux sur 3 (7832bb0, ad19e0b), agent actif ; prochain point de suivi à 01 h 17 UTC.

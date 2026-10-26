@@ -85,8 +85,10 @@ class SelecteurDeProduitsTest extends TestCase
     /**
      * Q9 (a) : le coût moyen, le bénéfice et le taux de marque ne se
      * montrent qu'à qui voit la valeur du stock. 25,00 € TTC à 20 % font
-     * 20,83 € HT ; sur un coût moyen de 8,3333 €, 12,4967 € de bénéfice,
-     * arrondi une fois : 12,50 €, soit 12,50 ÷ 20,83 = 60,01 % de marque.
+     * 20,83 € HT ; sur un coût moyen de 8,3333 €, affiché au centime comme
+     * tout prix unitaire, 8,33 € (décision de l'éditeur du 25/10/2026),
+     * 12,4967 € de bénéfice, arrondi une fois : 12,50 €, soit 12,50 ÷
+     * 20,83 = 60,01 % de marque.
      */
     public function test_le_cout_et_le_benefice_ne_s_affichent_qu_avec_l_autorisation_de_voir_la_valeur_du_stock(): void
     {
@@ -97,7 +99,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->set('toggledTableColumns.cout_moyen', true)
             ->set('toggledTableColumns.taux_de_marque', true)
             ->assertSee('20,83 €')
-            ->assertSee('8,3333 €')
+            ->assertSee('8,33 €')
             ->assertSee('12,50 €')
             ->assertSee('60,01 %');
 
@@ -110,7 +112,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertTableColumnHidden('benefice')
             ->assertTableColumnHidden('taux_de_marque')
             ->assertSee('20,83 €')
-            ->assertDontSee('8,3333 €')
+            ->assertDontSee('8,33 €')
             ->assertDontSee('12,50 €')
             ->assertDontSee('60,01 %');
 

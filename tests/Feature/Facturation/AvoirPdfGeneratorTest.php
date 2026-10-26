@@ -129,7 +129,9 @@ class AvoirPdfGeneratorTest extends TestCase
      * est fait, sur une facture comme sur un ticket. Sur trois lignes de
      * 0,10 € à 20 % (0,25 € HT au taux, répartis 0,08, 0,09 et 0,08 €), le
      * retour de la deuxième crédite toute la ligne, 0,09 € + 0,01 €, et non
-     * 0,08 € + 0,02 € comme une ligne seule : la note l'annonce.
+     * 0,08 € + 0,02 € comme une ligne seule : la note l'annonce, et dit
+     * aussi que les prix unitaires sont affichés arrondis au centime
+     * (décision de l'éditeur du 25/10/2026).
      */
     public function test_un_avoir_explique_le_calcul_de_ses_lignes(): void
     {
@@ -145,8 +147,8 @@ class AvoirPdfGeneratorTest extends TestCase
         $this->assertSame(['0.09', '0.01', '0.10'], [$avoirProfessionnel->total_ht, $avoirProfessionnel->total_tva, $avoirProfessionnel->total_ttc]);
         $rendu = $this->compacte($this->rendu($avoirProfessionnel));
         $this->assertStringContainsString('<td class="montant">0,09 €</td><td class="montant">0,01 €</td><td class="montant">0,10 €</td>', $rendu);
-        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.</div>', $rendu);
-        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.</div>', $this->compacte($this->rendu($avoirSurTicket)));
+        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.</div>', $rendu);
+        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.</div>', $this->compacte($this->rendu($avoirSurTicket)));
     }
 
     /**
@@ -270,7 +272,8 @@ class AvoirPdfGeneratorTest extends TestCase
      * obligatoire et chaque texte entre les marges ; la référence s'imprime
      * entière sur une seule ligne, dans un corps réduit. 8 000 des 9 000
      * articles à 9 999,97 € TTC remisés de 12,5 % : 69 999 790,00 € TTC,
-     * soit 58 333 158,33 € HT à 20 %.
+     * soit 58 333 158,33 € HT à 20 %, au PU HT de 8 333,308333 €, imprimé
+     * au centime : 8 333,31 €.
      */
     public function test_une_reference_de_60_caracteres_et_de_grands_montants_laissent_toutes_les_colonnes_de_l_avoir_dans_la_page(): void
     {
@@ -287,7 +290,7 @@ class AvoirPdfGeneratorTest extends TestCase
         $page = $this->pagesDuPdf(app(AvoirPdfGenerator::class)->generer($avoir)->output())[0];
 
         $this->assertChaqueTexteTientEntreLesMarges($page);
-        foreach (['FACTURE D\'ORIGINE', 'QTÉ', 'PU HT', 'REMISE', 'TAUX', 'TOTAL HT', $reference, 'FAC-ABCDEFGHIJ-2026-000001', "8\u{202F}000", '8 333,308333 €', '12,5 %', '58 333 158,33 €'] as $texte) {
+        foreach (['FACTURE D\'ORIGINE', 'QTÉ', 'PU HT', 'REMISE', 'TAUX', 'TOTAL HT', $reference, 'FAC-ABCDEFGHIJ-2026-000001', "8\u{202F}000", '8 333,31 €', '12,5 %', '58 333 158,33 €'] as $texte) {
             $this->assertContains($texte, array_column($page['textes'], 'texte'));
         }
         $this->assertMatchesRegularExpression('#<td class="reference" style="font-size: [1-7]\.\dpt">'.$reference.'</td>#', $this->tableauDesLignes($avoir));

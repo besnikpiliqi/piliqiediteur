@@ -41,11 +41,14 @@ use InvalidArgumentException;
  *    fois), répartis 2,00 + 2,00 + 2,01. Un retour au fournisseur
  *    (retourDAchat()) rend la TVA du HT des articles retournés jusqu'ici,
  *    sans dépasser celle de la ligne, moins les retours précédents.
- * 5. Le PU HT qu'une ligne de vente enregistre et que son document
- *    imprime est son PU TTC ÷ (1 + taux), au millionième d'euro
- *    (prixUnitaireHtExact()) : 1 000 articles à 1,00 € TTC à 20 % ont un
- *    PU HT de 0,833333 €, et 1 000 x 0,833333 retombe à moins de deux
- *    centimes sur les 833,33 € HT de la ligne.
+ * 5. Le PU HT qu'une ligne de vente enregistre est son PU TTC ÷ (1 +
+ *    taux), au millionième d'euro (prixUnitaireHtExact()) : 1 000
+ *    articles à 1,00 € TTC à 20 % ont un PU HT de 0,833333 €, et 1 000 x
+ *    0,833333 retombe à moins de deux centimes sur les 833,33 € HT de la
+ *    ligne. Documents et écrans l'affichent arrondi au centime, 0,83 €
+ *    (prixUnitaireAffiche()), sans jamais calculer sur ce prix affiché :
+ *    4 x 65,00 € TTC à 20 % font 216,67 € HT, et non 4 x 54,17 € =
+ *    216,68 € ; la note de calcul du document l'explique.
  *
  * Ces calculs n'acceptent que des entiers (centimes, nombre d'articles,
  * centièmes de point de taux et de remise) et refusent un nombre à
@@ -704,17 +707,38 @@ class CalculateurLigne
     }
 
     /**
-     * Un prix en millionièmes tel qu'un document l'imprime, avec ses
-     * décimales utiles, deux au moins : « 0,833333 € », « 8,325 € »,
-     * « 1 000,00 € ».
+     * Un prix unitaire en millionièmes, tel qu'il s'affiche (décision de
+     * l'éditeur du 25/10/2026), en centimes : arrondi une fois au centime
+     * le plus proche, un demi-centime exact au centime supérieur --
+     * 54,166667 € s'affiche 54,17 € ; 8,325 €, 8,33 € ; 0,833333 €, 0,83 €.
+     * Seul l'affichage s'arrondit : le prix enregistré ne change pas, et
+     * aucun montant ne se calcule sur ce prix affiché (voir
+     * MentionsFiscales::calcul(), qui explique l'écart).
      *
      * @throws InvalidArgumentException
      */
-    public function prixUnitaireEnEuros(int $millioniemes): string
+    public function prixUnitaireAuCentime(int $millioniemes): int
     {
-        [$unites, $decimales] = explode('.', ltrim($this->enDecimalUtile($millioniemes), '-'));
+        if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
 
-        return ($millioniemes < 0 ? '-' : '').number_format((int) $unites, 0, ',', ' ').','.$decimales.' €';
+        return $this->diviserArrondi($millioniemes, 10_000);
+    }
+
+    /**
+     * La mise en forme de tout prix unitaire que montre en lecture un
+     * document, une fiche, une liste ou la caisse, PU HT comme PU TTC,
+     * vente comme achat : arrondi au centime (voir prixUnitaireAuCentime()),
+     * écrit comme un montant (voir enEuros()) : « 54,17 € », « 0,83 € »,
+     * « 1 000,00 € ». Un champ de saisie montre, lui, le prix tel qu'il est
+     * enregistré (voir enDecimalUtile()).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireAffiche(int $millioniemes): string
+    {
+        return $this->enEuros($this->prixUnitaireAuCentime($millioniemes));
     }
 
     /**

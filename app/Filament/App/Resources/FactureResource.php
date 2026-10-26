@@ -515,16 +515,19 @@ class FactureResource extends Resource
 
     /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
-     * fournisseur) : pour chaque article son PU HT, avec ses décimales
-     * utiles (voir CalculateurLigne::prixUnitaireHtExact()), son PU TTC et
-     * son taux,
+     * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
      * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
-     * CalculateurLigne). Un achat n'a pas de PU TTC : sa TVA est sa part de
-     * celle du total HT de son taux. La remise n'apparaît que si une ligne
-     * du document en a une : c'est elle qui explique alors que PU x
-     * quantité diffère du total. Sur tout document de vente soumis à la
-     * TVA, la note de calcul dit que le HT de chaque taux se calcule sur son
-     * TTC et se répartit sur les lignes (voir MentionsFiscales::calcul()).
+     * CalculateurLigne). Le PU HT d'une vente, enregistré au millionième
+     * d'euro (voir CalculateurLigne::prixUnitaireHtExact()), s'affiche
+     * arrondi au centime, comme tout prix unitaire (voir
+     * CalculateurLigne::prixUnitaireAffiche()). Un achat n'a pas de PU
+     * TTC : sa TVA est sa part de celle du total HT de son taux. La remise
+     * n'apparaît que si une ligne du document en a une : c'est elle qui
+     * explique alors que PU x quantité diffère du total. Sur tout document
+     * de vente soumis à la TVA, la note de calcul dit que le HT de chaque
+     * taux se calcule sur son TTC et se répartit sur les lignes, et que les
+     * prix unitaires s'affichent arrondis au centime (voir
+     * MentionsFiscales::calcul()).
      * La ligne d'une facture d'achat brouillon
      * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
      * validation (voir LigneAchat). Sous chaque ligne d'une facture d'achat
@@ -549,6 +552,8 @@ class FactureResource extends Resource
         // Un produit, ou un service à son prix de référence : un prix du
         // catalogue dont la TVA est retirée (voir lignes.blade.php).
         $prixCatalogueSansTvaFrancaise = fn (Model $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0);
+        $calculateur = app(CalculateurLigne::class);
+        $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -563,12 +568,12 @@ class FactureResource extends Resource
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')
-                    ->formatStateUsing(fn (string $state): string => app(CalculateurLigne::class)->prixUnitaireEnEuros(app(CalculateurLigne::class)->enMillioniemes($state))),
+                    ->formatStateUsing($prixUnitaire),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
                     ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
                     ->placeholder('—')
-                    ->money('EUR')
+                    ->formatStateUsing($prixUnitaire)
                     ->hidden($estUnAchat),
                 TextEntry::make('taux_tva_du_prix')
                     ->label('TVA retirée')

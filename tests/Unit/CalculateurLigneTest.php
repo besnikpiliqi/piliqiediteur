@@ -581,9 +581,9 @@ class CalculateurLigneTest extends TestCase
 
     /**
      * Un PU HT au millionième se lit dans sa colonne decimal(18,6), s'écrit
-     * comme elle, se montre dans un champ avec ses décimales utiles, deux
-     * au moins, et s'imprime en euros de même ; un flottant ou une
-     * septième décimale ne se lit pas.
+     * comme elle et se montre dans un champ avec ses décimales utiles, deux
+     * au moins, tel qu'il est enregistré ; un flottant ou une septième
+     * décimale ne se lit pas.
      */
     public function test_un_pu_ht_au_millionieme_se_lit_et_s_ecrit_avec_ses_decimales_utiles(): void
     {
@@ -592,10 +592,29 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame([833333, 10010000, 12000000], [$calculateur->enMillioniemes('0.833333'), $calculateur->enMillioniemes('10.01'), $calculateur->enMillioniemes(12)]);
         $this->assertSame(['0.833333', '10.000000'], [$calculateur->enDecimalAuMillionieme(833333), $calculateur->enDecimalAuMillionieme(10000000)]);
         $this->assertSame(['0.833333', '8.325', '12.00'], [$calculateur->enDecimalUtile(833333), $calculateur->enDecimalUtile(8325000), $calculateur->enDecimalUtile(12000000)]);
-        $this->assertSame(['0,833333 €', '1 000,00 €', '-8,325 €'], [$calculateur->prixUnitaireEnEuros(833333), $calculateur->prixUnitaireEnEuros(1000000000), $calculateur->prixUnitaireEnEuros(-8325000)]);
         foreach ([0.833333, '0.8333333', '1,5'] as $illisible) {
             $this->assertThrows(fn () => $calculateur->enMillioniemes($illisible), InvalidArgumentException::class, 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
         }
+    }
+
+    /**
+     * Tout prix unitaire s'affiche arrondi au centime le plus proche, un
+     * demi-centime exact au centime supérieur (décision de l'éditeur du
+     * 25/10/2026) : 54,166667 € (65,00 € TTC à 20 %) s'affiche 54,17 € ;
+     * 8,325 €, 8,33 € ; 8,324999 €, 8,32 € ; 0,833333 €, 0,83 € ; un coût
+     * moyen de 1,0050 €, 1,01 €. Un prix au centime reste le même, et un
+     * prix négatif s'arrondit comme un montant, symétriquement : -8,325 €
+     * s'affiche -8,33 €.
+     */
+    public function test_un_prix_unitaire_s_affiche_au_centime_un_demi_centime_au_centime_superieur(): void
+    {
+        $calculateur = $this->calculateur();
+
+        $this->assertSame(
+            ['54,17 €', '8,33 €', '8,32 €', '0,83 €', '1,01 €', '1 000,00 €', '-8,33 €'],
+            array_map($calculateur->prixUnitaireAffiche(...), [54166667, 8325000, 8324999, 833333, 1005000, 1000000000, -8325000]),
+        );
+        $this->assertSame([5417, 833, 833], [$calculateur->prixUnitaireAuCentime(54166667), $calculateur->prixUnitaireAuCentime(8325000), $calculateur->prixUnitaireAuCentime(8334999)]);
     }
 
     /**

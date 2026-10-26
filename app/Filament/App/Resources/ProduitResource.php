@@ -234,6 +234,7 @@ class ProduitResource extends Resource
     {
         $produit = $form->getRecord();
         $figeParSonFournisseur = $produit instanceof Produit && $produit->vientDUneFactureAchatApi();
+        $calculateur = app(CalculateurLigne::class);
 
         return $form->schema([
             Section::make('Identification')
@@ -257,11 +258,14 @@ class ProduitResource extends Resource
                 // sa ligne d'achat ou d'inventaire d'ouverture ; ensuite
                 // seuls les achats le font évoluer : chaque facture d'achat
                 // validée ou corrigée, et chaque retour au fournisseur (voir
-                // StockLedgerService). Il ne se modifie jamais ici.
+                // StockLedgerService). Il ne se modifie jamais ici :
+                // enregistré au dix-millième d'euro, il s'affiche au
+                // centime, comme tout prix unitaire (voir
+                // CalculateurLigne::prixUnitaireAuCentime()).
                 TextInput::make('cmup_ht')
                     ->label('Coût moyen pondéré (CMUP) HT')
                     ->prefix('€')
-                    ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : number_format((float) $state, 2, '.', ''))
+                    ->formatStateUsing(fn (?string $state): ?string => blank($state) ? $state : $calculateur->enDecimal($calculateur->prixUnitaireAuCentime($calculateur->enMillioniemes($state))))
                     ->helperText(self::AIDE_CMUP)
                     ->disabled(),
                 ...self::prixVenteTtcSchema(),

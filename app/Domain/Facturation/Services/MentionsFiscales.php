@@ -52,6 +52,8 @@ class MentionsFiscales
 
     private const CALCUL_RETOUR_SANS_TVA = 'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
+    private const PRIX_UNITAIRES_AU_CENTIME = 'Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
+
     /**
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon ou un devis, et pour le document qu'on émet (voir ContenuFiscal)
      * @return list<string>
@@ -120,9 +122,15 @@ class MentionsFiscales
      * TVA française (K3, voir ContexteDeVente::documentRetireLaTvaDuPrix())
      * dit que ses produits, et ses services à leur prix de référence, se
      * comptent au prix de leur catalogue sans la TVA de leur taux, et ses
-     * autres services à leur prix sans TVA. Rien en franchise en base, où
-     * le HT est le prix TTC, sans TVA. Une explication, pas une mention :
-     * elle ne se signe pas avec le document (voir ContenuFiscal).
+     * autres services à leur prix sans TVA. Chacune de ces explications
+     * ajoute que les prix unitaires s'affichent arrondis au centime (voir
+     * CalculateurLigne::prixUnitaireAffiche()) et que les totaux se
+     * calculent sans arrondi intermédiaire (décision de l'éditeur du
+     * 25/10/2026) : 4 x 65,00 € TTC à 20 % font 216,67 € HT, quand 4 x le
+     * PU HT affiché, 54,17 €, ferait 216,68 €. Rien en franchise en base,
+     * où le HT est le prix TTC, sans TVA, et le PU HT celui, au centime,
+     * du PU TTC. Une explication, pas une mention : elle ne se signe pas
+     * avec le document (voir ContenuFiscal).
      */
     public function calcul(Facture|Avoir|Devis $document): ?string
     {
@@ -130,10 +138,10 @@ class MentionsFiscales
             return null;
         }
 
-        if (ContexteDeVente::documentRetireLaTvaDuPrix($document)) {
-            return $document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA;
-        }
+        $calcul = ContexteDeVente::documentRetireLaTvaDuPrix($document)
+            ? ($document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA)
+            : ($document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE);
 
-        return $document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE;
+        return $calcul.' '.self::PRIX_UNITAIRES_AU_CENTIME;
     }
 }

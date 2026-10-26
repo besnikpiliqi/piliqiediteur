@@ -222,6 +222,58 @@ class PolitiqueDArrondiTest extends TestCase
     }
 
     /**
+     * L'exemple de l'éditeur (décision du 25/10/2026) : 4 articles à 65,00 €
+     * TTC à 20 % se calculent sans arrondi intermédiaire, 260,00 ÷ 1,2 =
+     * 216,666... -> 216,67 € HT et 43,33 € de TVA, en une ligne de 4 comme
+     * en quatre lignes de 1, en ticket comme en facture, et jamais 4 x
+     * 54,17 € = 216,68 €. Les quatre lignes de 1 reçoivent le HT arrondi du
+     * cumul de leurs TTC : 54,17 € (65,00 ÷ 1,2 = 54,1666...), 54,16 €
+     * (108,33 - 54,17), 54,17 € (162,50 - 108,33) et 54,17 € (216,67 -
+     * 162,50). Chaque ligne enregistre et signe son PU HT exact, 54,166667 €.
+     *
+     * @return array<string, array{list<int>, bool, list<list<string>>}>
+     */
+    public static function decoupagesDeQuatreArticlesA65Euros(): array
+    {
+        $uneLigne = [['216.67', '43.33', '260.00']];
+        $quatreLignes = [['54.17', '10.83', '65.00'], ['54.16', '10.84', '65.00'], ['54.17', '10.83', '65.00'], ['54.17', '10.83', '65.00']];
+
+        return [
+            'une ligne de 4, particulier' => [[4], false, $uneLigne],
+            'une ligne de 4, professionnel' => [[4], true, $uneLigne],
+            'quatre lignes de 1, particulier' => [[1, 1, 1, 1], false, $quatreLignes],
+            'quatre lignes de 1, professionnel' => [[1, 1, 1, 1], true, $quatreLignes],
+        ];
+    }
+
+    /**
+     * @param  list<int>  $quantites  la quantité de chaque ligne
+     * @param  list<list<string>>  $lignesAttendues
+     */
+    #[DataProvider('decoupagesDeQuatreArticlesA65Euros')]
+    public function test_quatre_articles_a_65_euros_ttc_font_216_67_ht_et_43_33_de_tva_en_une_ou_quatre_lignes(array $quantites, bool $professionnel, array $lignesAttendues): void
+    {
+        $this->magasin();
+        $ecran = $this->article('Écran', '65.00');
+        $articles = array_map(fn (int $quantite): array => [$ecran, $quantite], $quantites);
+
+        $vente = $professionnel ? $this->facturerUnProfessionnel($articles) : $this->vendreALaCaisse($this->comptoir(), $articles);
+
+        $this->assertSame(['216.67', '43.33', '260.00'], [$vente->total_ht, $vente->total_tva, $vente->total_ttc]);
+        $this->assertSame($lignesAttendues, $this->montantsDesLignes($vente));
+        $this->assertSame(array_fill(0, count($quantites), '54.166667'), $vente->lignes()->orderBy('ordre')->pluck('prix_unitaire_ht')->all());
+        $signe = $this->documentSigne($vente);
+        $this->assertSame(['ht' => 21667, 'tva' => 4333, 'ttc' => 26000], $signe['totaux']);
+        $this->assertSame([['taux' => 2000, 'ht' => 21667, 'tva' => 4333, 'ttc' => 26000]], $signe['ventilation']);
+        $this->assertSame(array_fill(0, count($quantites), 54166667), array_column($signe['lignes'], 'prix_unitaire_ht'));
+        $pdf = $this->pdf($vente);
+        $this->assertStringContainsString('216,67 €', $pdf);
+        $this->assertStringContainsString('43,33 €', $pdf);
+        $this->assertStringNotContainsString('216,68 €', $pdf);
+        $this->assertStringContainsString($professionnel ? '54,17 €' : '65,00 €', $pdf);
+    }
+
+    /**
      * Deux tickets séparés d'un article à 25,00 € sont justes chacun
      * (20,83 € HT et 4,17 € de TVA) ; la clôture et le chiffre d'affaires
      * du jour les additionnent : 41,66 € HT et 8,34 € de TVA, jamais

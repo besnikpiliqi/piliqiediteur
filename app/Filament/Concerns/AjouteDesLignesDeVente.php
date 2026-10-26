@@ -369,8 +369,11 @@ trait AjouteDesLignesDeVente
     /**
      * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
      * (le prix affiché au client, repris tel quel de la fiche du produit),
-     * le PU HT n'en est que la conversion au millionième d'euro, affichée à
-     * côté telle que la ligne l'enregistrera.
+     * le PU HT n'en est que la conversion au millionième d'euro, montrée à
+     * côté telle que la ligne l'enregistrera : un champ montre le prix tel
+     * qu'il est enregistré, quand les documents, les fiches et les listes
+     * l'affichent arrondi au centime (voir
+     * CalculateurLigne::prixUnitaireAffiche()).
      *
      * Le taux d'une ligne de produit est celui de sa fiche (voir
      * ConstructeurLigneDocument) : affiché, il ne se modifie pas et ne

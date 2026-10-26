@@ -879,11 +879,15 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * La fiche montre le PU HT de chaque ligne tel qu'il est enregistré,
-     * avec ses décimales utiles (Q1-b) : 0,833333 € pour un article à
-     * 1,00 € TTC à 20 %, 100,00 € pour un écran à 120,00 € TTC.
+     * La fiche montre le PU HT de chaque ligne arrondi au centime (décision
+     * de l'éditeur du 25/10/2026), comme son PU TTC, et le total de la
+     * ligne tel qu'il est enregistré : 0,83 € pour un article à 1,00 € TTC
+     * à 20 % (PU HT enregistré 0,833333 €), dont les 1 000 font 833,33 €
+     * HT ; 100,00 € pour un écran à 120,00 € TTC. Sous les lignes, la note
+     * de calcul dit que les prix unitaires sont affichés arrondis au
+     * centime.
      */
-    public function test_la_fiche_montre_le_pu_ht_avec_ses_decimales_utiles(): void
+    public function test_la_fiche_montre_le_pu_ht_au_centime(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsableDeTest($magasin);
@@ -898,7 +902,41 @@ class FactureResourceTest extends TestCase
         ]);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
-            ->assertSeeInOrder(['0,833333 €', '833,33', '100,00 €', '100,00']);
+            ->assertSeeInOrder(['0,83 €', '1,00 €', '833,33', '100,00 €', '120,00 €', '100,00'])
+            ->assertDontSee('0,833333')
+            ->assertSee('Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.');
+    }
+
+    /**
+     * Un champ de saisie montre le prix tel qu'il est enregistré, quand la
+     * fiche l'affiche au centime (décision de l'éditeur du 25/10/2026) : le
+     * brouillon de 4 articles à 65,00 € TTC à 20 % rouvert garde dans le
+     * champ de son PU HT 54.166667 (65 ÷ 1,2), et dans celui de son PU TTC
+     * 65.00 ; sa fiche montre 54,17 €, et le brouillon réenregistré garde
+     * son PU HT et son total.
+     */
+    public function test_le_champ_du_pu_ht_garde_la_valeur_enregistree_quand_la_fiche_l_affiche_au_centime(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
+            ['produit_id' => $ecran->id, 'quantite' => 4],
+        ]);
+
+        $formulaire = Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()]);
+        $cle = array_key_first($formulaire->get('data.lignes'));
+        $formulaire
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.166667')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '65.00')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeInOrder(['54,17 €', '65,00 €', '216,67'])
+            ->assertDontSee('54,166667');
+        $this->assertSame(['54.166667', '216.67', '260.00'], [$facture->lignes()->sole()->prix_unitaire_ht, $facture->fresh()->total_ht, $facture->fresh()->total_ttc]);
     }
 
     /**

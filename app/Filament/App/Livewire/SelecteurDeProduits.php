@@ -190,15 +190,15 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                     ->state(fn (Produit $produit): string => $calculateur->enEuros($this->marge($produit)->prixVenteHt)),
                 TextColumn::make('prix_vente_ttc')
                     ->label('PV TTC')
-                    ->formatStateUsing(fn (Produit $produit): string => $calculateur->enEuros($calculateur->enCentiemes($produit->prix_vente_ttc))),
+                    ->formatStateUsing(fn (Produit $produit): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($produit->prix_vente_ttc))),
                 TextColumn::make('taux_tva')
                     ->label('TVA')
                     ->formatStateUsing(fn (Produit $produit): string => $this->pourcentage($this->marge($produit)->tauxTva)),
-                // Au dix-millième d'euro, comme il est enregistré, avec ses
-                // décimales utiles : 1,003 €.
+                // Enregistré au dix-millième d'euro, affiché au centime
+                // comme tout prix unitaire : 1,0035 € s'affiche 1,00 €.
                 TextColumn::make('cout_moyen')
                     ->label('Coût moyen HT')
-                    ->state(fn (Produit $produit): string => $calculateur->prixUnitaireEnEuros($calculateur->enMillioniemes($produit->cmup_ht)))
+                    ->state(fn (Produit $produit): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($produit->cmup_ht)))
                     ->visible($voitLaValeurDuStock)
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('benefice')

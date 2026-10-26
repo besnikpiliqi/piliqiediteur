@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
@@ -206,7 +207,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Responsable);
         $this->assertSame([RoleMagasin::Responsable, []], [Affectation::query()->where('user_id', $vendeur->id)->sole()->role, Affectation::query()->where('user_id', $vendeur->id)->sole()->autorisations()]);
 
-        app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $futurAdministrateur, null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
+        app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $futurAdministrateur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [AutorisationsSociete::MAGASINS_GERER]);
         $this->assertTrue($futurAdministrateur->refresh()->estAdministrateur());
         app(ChangerLeRoleDeSocieteAction::class)->versMembre($proprietaire, $futurAdministrateur, RoleMagasin::Observateur);
         $this->assertTrue($futurAdministrateur->refresh()->estMembre());

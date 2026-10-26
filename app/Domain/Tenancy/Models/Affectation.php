@@ -118,10 +118,12 @@ class Affectation extends Model
 
     /**
      * Remplace les autorisations cochées pour cette affectation. Une
-     * autorisation inconnue est refusée avant que rien ne soit effacé (voir
+     * autorisation inconnue, ou qui n'existe pas dans le type d'activité de
+     * sa société, est refusée avant que rien ne soit effacé (voir
      * PermissionRegistry::verifierConnues()), puis par la clé étrangère du
-     * référentiel ; une affectation de responsable n'a aucune case. Ce que
-     * l'auteur a le droit de cocher se contrôle avant, par l'action (voir
+     * référentiel et la garde des articles (voir GardesDesTypesDActivite) ;
+     * une affectation de responsable n'a aucune case. Ce que l'auteur a le
+     * droit de cocher se contrôle avant, par l'action (voir
      * PorteeDesDroits::verifierCochables()).
      *
      * @param  array<array-key, mixed>  $autorisations
@@ -130,7 +132,7 @@ class Affectation extends Model
      */
     public function cocher(array $autorisations): void
     {
-        $connues = PermissionRegistry::verifierConnues($autorisations);
+        $connues = PermissionRegistry::verifierConnues($autorisations, Societe::query()->findOrFail($this->societe_id)->type_activite);
 
         if ($this->estDeResponsable()) {
             throw new LogicException('Un responsable n\'a aucune case : il a toutes les autorisations de son magasin.');

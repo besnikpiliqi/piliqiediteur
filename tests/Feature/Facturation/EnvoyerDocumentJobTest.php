@@ -31,6 +31,7 @@ use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -471,7 +472,7 @@ class EnvoyerDocumentJobTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $proprietaire = $this->proprietaireDe($magasin);
-        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES];
+        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES];
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
         $facture = $this->emettreFacture(Client::factory()->create());
         $envoi = app(EnvoyerDocumentAction::class)->handle($vendeur, $facture, 'client@exemple.fr', null);
@@ -480,7 +481,7 @@ class EnvoyerDocumentJobTest extends TestCase
             'suspendu' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
             'retiré de la société' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur),
             'privé de l\'autorisation d\'envoyer' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, array_values(array_diff($cases, [PermissionRegistry::FACTURE_ENVOYER]))),
-            'facture devenue invisible pour lui' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut()),
+            'facture devenue invisible pour lui' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce)),
         };
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
@@ -503,7 +504,7 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::fake();
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
-        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         $relance = app(EnvoyerDocumentAction::class)->relancer($vendeur, $facture, 'client@exemple.fr');
         app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $vendeur);

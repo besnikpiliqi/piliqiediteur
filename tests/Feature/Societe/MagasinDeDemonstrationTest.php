@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
@@ -12,6 +13,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -42,6 +44,7 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Affectation;
@@ -70,6 +73,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -102,7 +106,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(1, $societe->magasins()->where('est_demonstration', true)->count());
         app(TenantContext::class)->runAs($demonstration, function (): void {
             $this->assertSame(['DEMO-CARNET' => 20, 'DEMO-STYLO' => 50, 'DEMO-TASSE' => 10], Produit::query()->orderBy('reference')->pluck('stock_quantite', 'reference')->all());
-            $this->assertSame(2, Service::query()->count());
+            $this->assertSame(3, Service::query()->count());
             $this->assertSame(3, Client::query()->count());
         });
         $this->assertThrows(
@@ -111,6 +115,50 @@ class MagasinDeDemonstrationTest extends TestCase
         );
         $vendeur = $this->membre($reel, RoleMagasin::Vendeur);
         $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($vendeur, $societe), VerificationRefuseeException::class, OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION);
+    }
+
+    /**
+     * @return array<string, array{0: TypeDActivite, 1: array<string, string>, 2: array<string, int>, 3: int}>
+     */
+    public static function cataloguesDeDemonstration(): array
+    {
+        return [
+            'commerce ou atelier' => [
+                TypeDActivite::Commerce,
+                ['Emballage cadeau' => '3.00', 'Livraison à domicile' => '5.90', 'Main-d\'œuvre de réparation (30 min)' => '25.00'],
+                ['DEMO-CARNET' => 20, 'DEMO-STYLO' => 50, 'DEMO-TASSE' => 10],
+                1,
+            ],
+            'services' => [
+                TypeDActivite::Services,
+                ['Atelier d\'une demi-journée' => '450.00', 'Forfait déplacement' => '30.00', 'Heure de conseil' => '72.00'],
+                [],
+                0,
+            ],
+        ];
+    }
+
+    /**
+     * Le catalogue fictif suit le type d'activité de la société : des
+     * articles achetés à un fournisseur et trois services pour un
+     * commerce ; trois services, sans fournisseur, achat ni produit, pour
+     * une société de services ; tous au taux du territoire, avec la même
+     * cliente particulière et la même entreprise fictives.
+     *
+     * @param  array<string, string>  $services
+     * @param  array<string, int>  $produits
+     */
+    #[DataProvider('cataloguesDeDemonstration')]
+    public function test_le_catalogue_de_demonstration_suit_le_type_d_activite(TypeDActivite $type, array $services, array $produits, int $fournisseurs): void
+    {
+        $societe = $this->inscrireUneSociete(type: $type);
+        $this->ouvrirLaDemonstrationEtYEntrer($societe);
+
+        $this->assertSame($services, Service::query()->orderBy('nom')->pluck('prix_ttc', 'nom')->all());
+        $this->assertSame(['20.00'], Service::query()->distinct()->pluck('taux_tva')->all());
+        $this->assertSame($produits, Produit::query()->orderBy('reference')->pluck('stock_quantite', 'reference')->all());
+        $this->assertSame([$fournisseurs, $fournisseurs], [Fournisseur::query()->count(), FactureAchat::query()->count()]);
+        $this->assertSame(['Client comptoir', 'Entreprise cliente de démonstration', 'Marie Martin (cliente fictive)'], Client::query()->orderBy('nom')->pluck('nom')->all());
     }
 
     /**
@@ -244,15 +292,16 @@ class MagasinDeDemonstrationTest extends TestCase
         Livewire::test(Caisse::class)
             ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
             ->assertSee('Emballage cadeau')
-            ->assertSee('Livraison à domicile');
+            ->assertSee('Livraison à domicile')
+            ->assertSee('Main-d\'œuvre de réparation (30 min)');
         $ticket = self::vendreAuComptant($vendeur,
             Client::query()->where('est_comptoir', true)->sole(),
             Service::query()->orderBy('nom')->pluck('id')->map(fn (int $service): array => ['service_id' => $service, 'quantite' => 1])->all(),
             ModePaiement::Especes,
         );
 
-        $this->assertSame([['Emballage cadeau', '3.00', '20.00'], ['Livraison à domicile', '5.90', '20.00']], $ticket->lignes->sortBy('ordre')->map(fn ($ligne): array => [$ligne->description, $ligne->prix_unitaire_ttc, $ligne->taux_tva])->values()->all());
-        $this->assertSame(['8.90', 'payee'], [$ticket->total_ttc, $ticket->statut->value]);
+        $this->assertSame([['Emballage cadeau', '3.00', '20.00'], ['Livraison à domicile', '5.90', '20.00'], ['Main-d\'œuvre de réparation (30 min)', '25.00', '20.00']], $ticket->lignes->sortBy('ordre')->map(fn ($ligne): array => [$ligne->description, $ligne->prix_unitaire_ttc, $ligne->taux_tva])->values()->all());
+        $this->assertSame(['33.90', 'payee'], [$ticket->total_ttc, $ticket->statut->value]);
     }
 
     public function test_ses_numeros_portent_le_code_demo_et_ne_touchent_aucune_serie_reelle(): void
@@ -501,7 +550,7 @@ class MagasinDeDemonstrationTest extends TestCase
         app(TenantContext::class)->set($demonstration);
 
         $chef = $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Chef d\'essai'], RoleMagasin::Responsable));
-        $vendeur = $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($chef, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut()]));
+        $vendeur = $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($chef, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce)]));
 
         foreach ([$chef, $vendeur] as $compte) {
             $this->assertSame([true, (int) $demonstration->id, [(int) $demonstration->id]], [$compte->estUnCompteDEntrainement(), (int) $compte->magasinDeSonIdentifiant()?->id, $compte->magasinsAccessibles()->modelKeys()], $compte->name);
@@ -600,7 +649,7 @@ class MagasinDeDemonstrationTest extends TestCase
         foreach ([RoleMagasin::Vendeur, RoleMagasin::Responsable] as $role) {
             $this->assertThrows(fn () => app(TenantContext::class)->runAs($demonstration, fn () => app(CreerMembreAction::class)->handle($proprietaire, $demonstration->fresh(), ['name' => 'Après la fin'], $role)), AuthorizationException::class);
         }
-        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $ancien, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut()), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $ancien, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce)), AuthorizationException::class);
         $this->assertSame(StatutCompte::Retire, $ancien->refresh()->statut);
         $this->assertFalse(User::query()->where('name', 'Après la fin')->exists());
         $this->assertSame($identifiants, Identifiant::withoutGlobalScopes()->where('magasin_id', $demonstration->id)->count());

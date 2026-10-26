@@ -324,7 +324,7 @@ class TransfererProprieteTest extends TestCase
         Mail::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $auMotDePasseIdentifiant = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, PermissionRegistry::modeleDeLAdministrateur(), AutorisationsSociete::toutes()));
+        $auMotDePasseIdentifiant = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), AutorisationsSociete::toutes()));
         $this->renseignerSonAdresse($auMotDePasseIdentifiant, 'alix@example.test');
 
         $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $auMotDePasseIdentifiant->refresh(), self::MOT_DE_PASSE_DU_PROPRIETAIRE), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE);
@@ -627,14 +627,14 @@ class TransfererProprieteTest extends TestCase
         $globale = Affectation::query()->where('user_id', $proprietaire->id)->sole();
         $this->assertNull($globale->magasin_id);
         $this->assertNull($globale->role);
-        $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(), $globale->autorisations());
+        $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(TypeDActivite::Commerce), $globale->autorisations());
         $proprietaire->refresh();
         $this->assertEqualsCanonicalizing(AutorisationsSociete::toutes(), $proprietaire->autorisationsDeSociete());
         $this->assertTrue($proprietaire->administreTousLesMagasins());
 
         $futur = app(TenantContext::class)->runAs($magasin, fn (): Magasin => $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Magasin futur']));
         $this->assertTrue($proprietaire->refresh()->peutOuvrir($futur));
-        $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(), $proprietaire->autorisationsDans($futur));
+        $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(TypeDActivite::Commerce), $proprietaire->autorisationsDans($futur));
     }
 
     /**

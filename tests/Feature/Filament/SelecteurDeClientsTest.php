@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Livewire\SelecteurDeClients;
 use App\Filament\App\Pages\Caisse;
@@ -180,7 +181,7 @@ class SelecteurDeClientsTest extends TestCase
         $this->assertSame($magasin->getKey(), $client->magasin_id);
         $tableau->assertDispatched(SelecteurDeClients::EVENEMENT, clientId: $client->getKey());
 
-        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::CLIENT_CREATE]))));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), [PermissionRegistry::CLIENT_CREATE]))));
 
         Livewire::test(SelecteurDeClients::class)->assertTableActionHidden('nouveauClient');
     }
@@ -258,7 +259,7 @@ class SelecteurDeClientsTest extends TestCase
             'nom' => 'Jean Secret', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320', 'numero_tva' => 'FR44732829320',
             'email' => 'jean.secret@exemple.fr', 'telephone' => '06 98 76 54 32', 'ville' => 'Besançon',
         ]);
-        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::CLIENT_VIEW]))));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), [PermissionRegistry::CLIENT_VIEW]))));
 
         $tableau = Livewire::test(SelecteurDeClients::class)
             ->assertCanSeeTableRecords([$client])

@@ -77,8 +77,9 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * L'état de la vérification de la société, tel que l'écran le dit ;
-     * pour un cabinet d'expertise comptable qui attend son code, sans
+     * L'état de la vérification de la société, tel que l'écran le dit, les
+     * achats seulement pour une société qui a des articles ; pour un
+     * cabinet d'expertise comptable qui attend son code, sans
      * magasins, catalogue, achats ni démonstration, qu'il n'a pas : un
      * texte provisoire, que l'espace des cabinets remplacera.
      */
@@ -90,7 +91,9 @@ class TableauDeBord extends Dashboard
             $societe->estClose() => 'L\'inscription de votre société est close.',
             $societe->estValidee() => 'Votre société est validée depuis le '.Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y').'.',
             $societe->estUnCabinet() => 'Votre cabinet attend le code de son courrier recommandé. L\'espace des cabinets s\'ouvrira avec la validation.',
-            default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
+            default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : '
+                .($societe->aDesArticles() ? 'catalogue, équipe, paramètres et achats' : 'catalogue, équipe et paramètres')
+                .', et vous essayer dans le magasin de démonstration.',
         };
     }
 

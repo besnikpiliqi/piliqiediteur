@@ -66,11 +66,13 @@ class ServiceResource extends Resource
                 ->default(true)
                 ->columnSpanFull(),
             // Ce qu'une vente hors de France en fait (voir
-            // ControleNatureOperation).
+            // ControleNatureOperation) ; sans articles, aucun bien ne se
+            // livre, et la case n'existe pas (voir Service).
             Toggle::make('frais_accessoires')
                 ->label('Frais de livraison ou accessoires : port, emballage, assurance')
                 ->helperText('Ils suivent les biens qu\'ils accompagnent : un export ou une livraison intracommunautaire peut les facturer sans TVA française.')
                 ->default(false)
+                ->visible(fn (): bool => self::aDesArticles())
                 ->columnSpanFull(),
             Toggle::make('lieu_specifique')
                 ->label('Lieu fixé par la loi : immeuble, transport de personnes, location courte de véhicule, restauration, accès à un événement')
@@ -159,7 +161,7 @@ class ServiceResource extends Resource
                     ->placeholder('Non fixé')
                     ->sortable(),
                 Tables\Columns\IconColumn::make('actif')->label('Proposé à la caisse')->boolean(),
-                Tables\Columns\IconColumn::make('frais_accessoires')->label('Frais accessoires')->boolean()->toggleable(),
+                Tables\Columns\IconColumn::make('frais_accessoires')->label('Frais accessoires')->boolean()->toggleable()->visible(fn (): bool => self::aDesArticles()),
                 Tables\Columns\IconColumn::make('lieu_specifique')->label('Lieu fixé par la loi')->boolean()->toggleable(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable(),
             ])
@@ -189,6 +191,16 @@ class ServiceResource extends Resource
             ->using(fn (Service $record, array $data, ManageServices $livewire): Service => static::executerOuInterrompre(
                 fn (): Service => app(ModifierUneFicheAction::class)->handle(auth()->user(), $record, $livewire->fichesLues[$record->getKey()] ?? [], $data),
             ));
+    }
+
+    /**
+     * La société du magasin actif a-t-elle des articles (voir
+     * Societe::aDesArticles()) ? Sans, un service n'a pas de frais
+     * accessoires, qui suivent des biens.
+     */
+    private static function aDesArticles(): bool
+    {
+        return app(TenantContext::class)->magasin()->societe->aDesArticles();
     }
 
     public static function getPages(): array

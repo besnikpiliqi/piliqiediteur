@@ -25,6 +25,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -61,6 +62,7 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::FOURNISSEUR_VIEW,
             PermissionRegistry::PRODUIT_VIEW,
             PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
+            PermissionRegistry::SERVICE_VIEW,
             PermissionRegistry::DEVIS_VIEW,
             PermissionRegistry::FACTURE_VIEW,
             PermissionRegistry::FACTURE_VIEW_TOUTES,
@@ -85,6 +87,8 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::PRODUIT_ARCHIVER,
             PermissionRegistry::PRODUIT_AJUSTER_STOCK,
             PermissionRegistry::PRIX_VENTE_REGLER,
+            PermissionRegistry::SERVICE_CREATE,
+            PermissionRegistry::SERVICE_UPDATE,
             PermissionRegistry::STOCK_VENDRE_SANS_STOCK,
             PermissionRegistry::VENTE_REMISES_ET_PRIX,
             PermissionRegistry::DEVIS_CREATE,
@@ -218,7 +222,7 @@ class ControleDesDroitsTest extends TestCase
         foreach ([$magasin, $autreMagasin] as $chaqueMagasin) {
             app(TenantContext::class)->set($chaqueMagasin);
 
-            foreach (PermissionRegistry::duProprietaire() as $permission) {
+            foreach (PermissionRegistry::duProprietaire(TypeDActivite::Commerce) as $permission) {
                 $this->assertTrue($proprietaire->can($permission), "{$permission} dans le magasin {$chaqueMagasin->nom}");
             }
 
@@ -320,7 +324,7 @@ class ControleDesDroitsTest extends TestCase
 
         $proprietaire = $this->proprietaireDe($magasin);
 
-        foreach (PermissionRegistry::duProprietaire() as $permission) {
+        foreach (PermissionRegistry::duProprietaire(TypeDActivite::Commerce) as $permission) {
             $this->assertSame(
                 ! in_array($permission, PermissionRegistry::reserveesAuxOperationsCommerciales(), true),
                 $proprietaire->can($permission),

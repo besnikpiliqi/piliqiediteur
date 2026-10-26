@@ -27,8 +27,11 @@ use InvalidArgumentException;
  * NatureOperation) et la livraison qu'elle demande. Un particulier
  * choisit la vente en France, l'export ou la livraison vers un DOM ; un
  * professionnel, les six natures ; une société en franchise en base, la
- * vente en France seule. Le choix se valide aussi côté serveur, comme à
- * l'enregistrement (voir ContexteDeVente::pourEnregistrer()) : une liste
+ * vente en France seule ; une société sans articles n'a aucune nature qui
+ * porte sur des biens (voir NatureOperation::proposees()). Quand une
+ * seule nature reste, le choix ne s'affiche pas. Le choix se valide aussi
+ * côté serveur, comme à l'enregistrement (voir
+ * ContexteDeVente::pourEnregistrer()) : une liste
  * déroulante ne restreint ses choix qu'à l'affichage. L'aide dit la
  * mention imprimée et les conditions, que l'émission contrôle (voir
  * ControleNatureOperation).
@@ -65,6 +68,11 @@ trait ChoisitLaNatureDeLOperation
             ->required()
             ->in(fn (Get $get): array => array_keys(self::naturesProposees($get('client_id'))))
             ->validationMessages(['in' => 'Choisissez une nature proposée pour ce client.'])
+            // Une seule nature possible (franchise en base, ou particulier
+            // d'une société sans articles) : rien à choisir, la nature part
+            // quand même avec le formulaire.
+            ->hidden(fn (Get $get): bool => count(self::naturesProposees($get('client_id'))) === 1)
+            ->dehydratedWhenHidden()
             ->live()
             ->helperText(fn (Get $get): string => self::aideDeLaNature(NatureOperation::depuisSaisie($get('nature_operation'))))
             ->afterStateUpdated(function (Get $get, Set $set, mixed $old): void {
@@ -181,8 +189,8 @@ trait ChoisitLaNatureDeLOperation
     /**
      * Les natures que le client choisi (du magasin actif, archivé compris
      * pour un brouillon qui le garde) peut choisir, dans le régime de TVA
-     * de la société ; celles d'un particulier tant qu'aucun client n'est
-     * choisi.
+     * et le type d'activité de la société ; celles d'un particulier tant
+     * qu'aucun client n'est choisi.
      *
      * @return array<string, string>
      */
@@ -190,8 +198,9 @@ trait ChoisitLaNatureDeLOperation
     {
         $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
         $client = $identifiant === false ? null : Client::withTrashed()->find($identifiant);
+        $societe = app(TenantContext::class)->magasin()->societe;
 
-        return collect(NatureOperation::proposees($client?->estProfessionnel() ?? false, app(TenantContext::class)->magasin()->societe->estEnFranchiseDeTva()))
+        return collect(NatureOperation::proposees($client?->estProfessionnel() ?? false, $societe->estEnFranchiseDeTva(), $societe->type_activite))
             ->mapWithKeys(fn (NatureOperation $nature): array => [$nature->value => $nature->getLabel()])
             ->all();
     }

@@ -29,6 +29,7 @@ use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -158,7 +159,7 @@ class CaisseTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $observateur = $this->membre($magasin, RoleMagasin::Observateur, [
-            ...RoleMagasin::Observateur->permissionsParDefaut(),
+            ...RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce),
             ...array_diff([
                 PermissionRegistry::FACTURE_CREATE,
                 PermissionRegistry::FACTURE_EMETTRE,
@@ -1009,7 +1010,7 @@ class CaisseTest extends TestCase
 
     /**
      * Créer un service, même depuis la caisse, demande l'autorisation de
-     * créer des produits et des services : le vendeur aux autorisations par
+     * créer des services : le vendeur aux autorisations par
      * défaut coche les services du magasin à prix de référence (R2), sans
      * champ pour en créer un, et l'action appelée directement le refuse.
      */
@@ -1033,11 +1034,11 @@ class CaisseTest extends TestCase
         $this->assertSame(['Diagnostic'], Service::query()->pluck('nom')->all());
     }
 
-    public function test_un_vendeur_autorise_a_creer_des_produits_et_des_services_cree_un_service_depuis_la_caisse(): void
+    public function test_un_vendeur_autorise_a_creer_des_services_cree_un_service_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PRODUIT_CREATE], [
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::SERVICE_CREATE], [
             'name' => 'Paul', 'email' => 'paul@example.test',
         ]);
         $this->actingAs($vendeur);
@@ -2051,7 +2052,7 @@ class CaisseTest extends TestCase
      */
     private function retirerUneCase(Magasin $magasin, User $vendeur, string $autorisation): void
     {
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [$autorisation])));
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), [$autorisation])));
     }
 
     /**
@@ -2083,7 +2084,7 @@ class CaisseTest extends TestCase
     public function test_le_bouton_retour_d_un_ticket_n_apparait_qu_a_qui_peut_ouvrir_la_recherche_et_y_trouver_ses_tickets(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
-        $parDefaut = RoleMagasin::Vendeur->permissionsParDefaut();
+        $parDefaut = RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce);
         $sansVoirLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [...$parDefaut, PermissionRegistry::AVOIR_CREER]);
         $sansVoirLesTickets = $this->membre($magasin, RoleMagasin::Vendeur, [...array_diff($parDefaut, [PermissionRegistry::FACTURE_VIEW]), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER]);
         $avecLesTrois = $this->membre($magasin, RoleMagasin::Vendeur, [...$parDefaut, PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER]);

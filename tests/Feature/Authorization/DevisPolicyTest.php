@@ -15,6 +15,7 @@ use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Filament\App\Resources\DevisResource;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -37,7 +38,7 @@ class DevisPolicyTest extends TestCase
     public static function roles(): array
     {
         return [
-            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), true],
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
             'vendeur' => [RoleMagasin::Vendeur, null, true],
             'observateur' => [RoleMagasin::Observateur, null, false],
@@ -60,7 +61,7 @@ class DevisPolicyTest extends TestCase
     public static function rolesQuiModifientLesDevis(): array
     {
         return [
-            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), true],
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
             'vendeur' => [RoleMagasin::Vendeur, null, true],
             'observateur' => [RoleMagasin::Observateur, null, false],

@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\CoordonneesMagasin;
 use App\Models\User;
@@ -75,7 +76,7 @@ class CoordonneesMagasinTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $vendeur = $this->choisirSonMotDePasse(app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Paul Martin'], RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PARAMETRES_GERER])));
+        $vendeur = $this->choisirSonMotDePasse(app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Paul Martin'], RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PARAMETRES_GERER])));
         $this->dansLeMagasin($magasin, $vendeur);
 
         Livewire::test(CoordonneesMagasin::class)

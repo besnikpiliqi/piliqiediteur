@@ -13,6 +13,7 @@ use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
@@ -75,8 +76,8 @@ class CaissesDeLaSocieteTest extends TestCase
         foreach ([[$lyon, 'Paul'], [$paris, 'Jeanne Roux'], [$nice, 'Luc Morel']] as [$magasin, $nom]) {
             $this->vendeurQuiVend($magasin, $nom, 12);
         }
-        $sansLesReleves = array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]));
-        $administrateur = $this->administrateur($lyon, [$lyon->id, $paris->id], [], [$lyon->id => PermissionRegistry::modeleDeLAdministrateur(), $paris->id => $sansLesReleves]);
+        $sansLesReleves = array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]));
+        $administrateur = $this->administrateur($lyon, [$lyon->id, $paris->id], [], [$lyon->id => PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), $paris->id => $sansLesReleves]);
         $aveugle = $this->administrateur($lyon, [$paris->id], [], $sansLesReleves);
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
 
@@ -144,7 +145,7 @@ class CaissesDeLaSocieteTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
 
-        foreach ([$this->responsableDeTest($magasin), $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]), $this->expertComptable($magasin)] as $compte) {
+        foreach ([$this->responsableDeTest($magasin), $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]), $this->expertComptable($magasin)] as $compte) {
             $this->dansLEspaceDeLaSociete($magasin->societe, $compte);
 
             $this->assertFalse(LesCaisses::canAccess(), $compte->name);

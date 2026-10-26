@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -35,10 +36,15 @@ return new class extends Migration
 
             $table->unique(['magasin_id', 'numero']);
         });
+
+        // Seule une société qui a des articles fait un inventaire
+        // d'ouverture (voir TypeDActivite::aDesArticles()).
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::INVENTAIRES_OUVERTURE);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::INVENTAIRES_OUVERTURE);
         Schema::dropIfExists('inventaires_ouverture');
     }
 };

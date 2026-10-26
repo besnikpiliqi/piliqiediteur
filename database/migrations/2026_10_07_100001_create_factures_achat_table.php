@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -55,10 +56,15 @@ return new class extends Migration
             $table->unique(['magasin_id', 'rang_validation']);
             $table->index(['magasin_id', 'fournisseur_id']);
         });
+
+        // Seule une société qui a des articles achète des marchandises
+        // (voir TypeDActivite::aDesArticles()).
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::FACTURES_ACHAT);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::FACTURES_ACHAT);
         Schema::dropIfExists('factures_achat');
     }
 };

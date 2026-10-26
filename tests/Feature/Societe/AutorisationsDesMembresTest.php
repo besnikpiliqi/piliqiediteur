@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
@@ -85,7 +86,7 @@ class AutorisationsDesMembresTest extends TestCase
         $this->assertSame([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PARAMETRES_GERER], $vendeur->refresh()->autorisationsDans($magasin));
 
         $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeurDeLAutre, RoleMagasin::Vendeur, PermissionRegistry::toutes()), AuthorizationException::class);
-        $this->assertEqualsCanonicalizing(RoleMagasin::Vendeur->permissionsParDefaut(), $vendeurDeLAutre->refresh()->autorisationsDans($autre));
+        $this->assertEqualsCanonicalizing(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), $vendeurDeLAutre->refresh()->autorisationsDans($autre));
         $this->assertSame([$magasin->id], Affectation::query()->where('user_id', $vendeur->id)->pluck('magasin_id')->all());
     }
 
@@ -406,7 +407,7 @@ class AutorisationsDesMembresTest extends TestCase
         $this->assertSame([PermissionRegistry::PAIEMENT_CREER], $observateur->autorisationsDans($magasin));
 
         app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Observateur);
-        $this->assertEqualsCanonicalizing(RoleMagasin::Observateur->permissionsParDefaut(), $vendeur->refresh()->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), $vendeur->refresh()->autorisationsDans($magasin));
     }
 
     /**
@@ -506,7 +507,7 @@ class AutorisationsDesMembresTest extends TestCase
         $composant = Livewire::test(EditMembreDuMagasin::class, ['record' => Affectation::query()->where('user_id', $vendeur->id)->sole()->getRouteKey()])
             ->set('data.role', RoleMagasin::Observateur->value);
 
-        $this->assertEqualsCanonicalizing(RoleMagasin::Observateur->permissionsParDefaut(), $composant->get('data.autorisations'));
+        $this->assertEqualsCanonicalizing(RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), $composant->get('data.autorisations'));
     }
 
     /**

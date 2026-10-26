@@ -22,6 +22,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
@@ -170,13 +171,13 @@ class RemisesEtPrixTest extends TestCase
     /**
      * Le prix de référence d'un service ne se fixe, dans le catalogue comme
      * à sa création depuis une vente, que par une personne autorisée : pour
-     * un vendeur qui peut modifier le catalogue, le champ est désactivé, et
+     * un vendeur qui peut créer et modifier les services, le champ est désactivé, et
      * une valeur envoyée malgré tout ne s'enregistre pas.
      */
     public function test_seul_un_membre_autorise_fixe_le_prix_de_reference_d_un_service(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $catalogue = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PRODUIT_CREATE, PermissionRegistry::PRODUIT_UPDATE]);
+        $catalogue = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::SERVICE_CREATE, PermissionRegistry::SERVICE_UPDATE]);
         $responsable = $this->responsable($magasin);
         $diagnostic = Service::factory()->create(['nom' => 'Diagnostic']);
 
@@ -223,7 +224,7 @@ class RemisesEtPrixTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $cable = $this->produit('Câble USB', '12.00');
         $chargeur = $this->produit('Chargeur', '20.00');
         $client = Client::factory()->create();
@@ -244,7 +245,7 @@ class RemisesEtPrixTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $cable = $this->produit('Câble USB', '12.00');
         $chargeur = $this->produit('Chargeur', '20.00');
         $client = Client::factory()->create();
@@ -266,9 +267,9 @@ class RemisesEtPrixTest extends TestCase
         $this->assertTrue($this->proprietaireDe($magasin)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
         $this->assertTrue($this->responsable($magasin)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
         $this->assertTrue($this->administrateur($magasin)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
-        $this->assertContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, PermissionRegistry::modeleDeLAdministrateur());
-        $this->assertNotContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, RoleMagasin::Vendeur->permissionsParDefaut());
-        $this->assertNotContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, RoleMagasin::Observateur->permissionsParDefaut());
+        $this->assertContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
+        $this->assertNotContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
+        $this->assertNotContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Vendeur)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Observateur)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
         $this->assertFalse($this->expertComptable($magasin)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
@@ -280,7 +281,7 @@ class RemisesEtPrixTest extends TestCase
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $cable = $this->produit('Câble USB', '12.00');
-        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::VENTE_REMISES_ET_PRIX]);
+        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::VENTE_REMISES_ET_PRIX]);
         app(TenantContext::class)->set(Magasin::query()->findOrFail($magasin->id));
 
         $facture = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 1, 'remise_pourcentage' => 10]]);
@@ -326,7 +327,7 @@ class RemisesEtPrixTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $cable = $this->produit('Câble USB', '12.00', suiviDuStock: false);
         $chargeur = $this->produit('Chargeur', '20.00', suiviDuStock: false);
         $brouillon = app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), [

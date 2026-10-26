@@ -44,7 +44,7 @@ use Livewire\Component;
  * (voir MargeDuCatalogue), jamais les montants d'un document. Le stock
  * restant, le seuil d'alerte, le fournisseur et la date d'entrée, lus sur
  * la fiche du produit, ne se montrent qu'à qui peut voir les fiches des
- * produits (« Produits et services : voir ») : vendre ne demande que la
+ * produits (« Produits : voir ») : vendre ne demande que la
  * référence, le nom, le prix et le taux.
  *
  * Un clic sur une rangée ajoute le produit à la sélection, gardée ici,
@@ -118,13 +118,14 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
     private ?bool $vendSansStock = null;
 
     /**
-     * Ouvert seulement à qui saisit une vente (caisse, facture, devis), à
-     * chaque requête : une personne qui perd ce droit, la fenêtre ouverte,
-     * n'y fait plus rien.
+     * Ouvert seulement à qui saisit une vente (caisse, facture, devis), dans
+     * le magasin d'une société qui a des articles, à chaque requête : une
+     * personne qui perd ce droit, la fenêtre ouverte, n'y fait plus rien,
+     * et une société de services n'a pas de produits.
      */
     public function boot(): void
     {
-        abort_unless(DevisResource::peutSaisirUneVente(), 403);
+        abort_unless(DevisResource::peutSaisirUneVente() && DevisResource::aDesArticles(), 403);
     }
 
     public function mount(mixed $clientId = null, mixed $nature = null): void

@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -95,7 +96,7 @@ class FermerSaCaisseActionTest extends TestCase
      */
     public function test_le_releve_part_du_plus_ancien_paiement_qu_il_compte(): void
     {
-        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $this->travelTo(self::aParis('2026-10-07 09:00:00'));
         $this->actingAs($this->vendeurDeLaPremiereHeure($this->magasin));
         $factureDUnCollegue = $this->emettreUnDocument(Client::factory()->create(), 45);
@@ -225,7 +226,7 @@ class FermerSaCaisseActionTest extends TestCase
      */
     public function test_une_vente_corrigee_par_un_avoir_avant_la_fermeture_reste_dans_le_ttc_vendu(): void
     {
-        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_CREER]);
         $client = Client::factory()->create();
         $this->emettreFacturePour($vendeur, $client, 120);
         $venteCorrigee = Facture::query()->firstOrFail();
@@ -254,7 +255,7 @@ class FermerSaCaisseActionTest extends TestCase
      */
     public function test_le_releve_separe_le_vendu_les_encaissements_le_credit_d_avoir_et_le_reste_du(): void
     {
-        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_CREER]);
         $martin = Client::factory()->create(['nom' => 'Martin']);
         $this->actingAs($vendeur);
         $ticketRepris = $this->vendreAuComptoir($martin, 30);
@@ -300,7 +301,7 @@ class FermerSaCaisseActionTest extends TestCase
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $proprietaire = $this->proprietaireDe($this->magasin);
-        $autreVendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $autreVendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $this->actingAs($vendeur);
         $facture = $this->emettreUnDocument(Client::factory()->professionnel()->create(), 120);
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);

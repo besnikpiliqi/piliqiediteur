@@ -367,22 +367,24 @@ final class PorteeDesDroits
 
     /**
      * Les autorisations qu'il peut cocher pour un vendeur ou un observateur
-     * dans ce magasin : toutes pour le propriétaire, celles de la vente
-     * comprises, qu'il ne fait jamais lui-même mais coche pour qui il veut,
-     * et pour un responsable de ce magasin, qui les a toutes ; aucune sinon
-     * (les cases d'un administrateur se cochent par le propriétaire, dans
-     * les actions des administrateurs).
+     * dans ce magasin, parmi celles du type d'activité de sa société (voir
+     * PermissionRegistry::pourLeType()) : toutes pour le propriétaire,
+     * celles de la vente comprises, qu'il ne fait jamais lui-même mais
+     * coche pour qui il veut, et pour un responsable de ce magasin, qui les
+     * a toutes ; aucune sinon (les cases d'un administrateur se cochent par
+     * le propriétaire, dans les actions des administrateurs).
      *
      * @return list<string>
      */
     public function autorisationsCochables(User $auteur, Magasin $magasin): array
     {
-        return $this->gereLEquipeDe($auteur, $magasin) ? PermissionRegistry::toutes() : [];
+        return $this->gereLEquipeDe($auteur, $magasin) ? PermissionRegistry::pourLeType($magasin->societe->type_activite) : [];
     }
 
     /**
-     * Refuse une autorisation inconnue, puis une autorisation qu'il ne peut
-     * pas cocher dans ce magasin.
+     * Refuse une autorisation inconnue, ou qui n'existe pas dans le type
+     * d'activité de la société du magasin, puis une autorisation qu'il ne
+     * peut pas cocher dans ce magasin.
      *
      * @param  array<array-key, mixed>  $autorisations
      * @return list<string> les autorisations connues, sans doublon, triées
@@ -391,7 +393,7 @@ final class PorteeDesDroits
      */
     public function verifierCochables(User $auteur, Magasin $magasin, array $autorisations): array
     {
-        $connues = PermissionRegistry::verifierConnues($autorisations);
+        $connues = PermissionRegistry::verifierConnues($autorisations, $magasin->societe->type_activite);
 
         if (array_diff($connues, $this->autorisationsCochables($auteur, $magasin)) !== []) {
             throw new LogicException(self::REFUS_AU_DELA);

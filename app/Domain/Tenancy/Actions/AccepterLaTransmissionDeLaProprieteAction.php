@@ -53,7 +53,8 @@ use SensitiveParameter;
  * administrateur, le nouveau devient propriétaire, son adresse devenant
  * son adresse de connexion, dans la même mise à jour, puis l'ancien reçoit
  * tous les magasins, présents et futurs, avec les autorisations de magasin
- * qu'il avait comme propriétaire, toutes sauf celles de la vente (voir
+ * qu'il avait comme propriétaire, toutes celles du type d'activité de la
+ * société sauf celles de la vente (voir
  * PermissionRegistry::duProprietaire()), que le nouveau propriétaire peut
  * lui cocher, et toutes celles de la société. L'ancien propriétaire garde
  * son identifiant et ne se connecte plus qu'avec lui (son adresse n'est
@@ -145,7 +146,7 @@ class AccepterLaTransmissionDeLaProprieteAction
                     $this->porteeDesAdministrateurs->ecrire($ancienRelu, [
                         'tous' => true,
                         'magasins' => new Collection,
-                        'cases' => [0 => PermissionRegistry::duProprietaire()],
+                        'cases' => [0 => PermissionRegistry::duProprietaire($societe->type_activite)],
                         'societe' => AutorisationsSociete::toutes(),
                     ]);
                     $this->sessions->fermer($ancienRelu);

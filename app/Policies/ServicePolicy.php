@@ -7,26 +7,29 @@ use App\Domain\Catalogue\Models\Service;
 use App\Models\User;
 
 /**
- * Les services font partie du catalogue, comme les produits : mêmes
- * permissions (voir PermissionRegistry), y compris pour créer un service
- * depuis la caisse (voir TrouverOuCreerServiceAction et
- * AjouteDesLignesDeVente::actionAjouterUnService()).
+ * Les services du magasin ont leurs propres autorisations (« Services :
+ * voir », « Services : créer », « Services : modifier », voir
+ * PermissionRegistry), de la famille commune, dans tous les types qui ont
+ * un magasin, y compris pour créer un service depuis la caisse (voir
+ * TrouverOuCreerServiceAction et
+ * AjouteDesLignesDeVente::actionAjouterUnService()) : celles des produits
+ * ne valent que pour les produits.
  */
 class ServicePolicy extends MagasinPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can(PermissionRegistry::PRODUIT_VIEW);
+        return $user->can(PermissionRegistry::SERVICE_VIEW);
     }
 
     public function view(User $user, Service $service): bool
     {
-        return $this->appartientAuMagasinActif($service) && $user->can(PermissionRegistry::PRODUIT_VIEW);
+        return $this->appartientAuMagasinActif($service) && $user->can(PermissionRegistry::SERVICE_VIEW);
     }
 
     public function create(User $user): bool
     {
-        return $user->can(PermissionRegistry::PRODUIT_CREATE);
+        return $user->can(PermissionRegistry::SERVICE_CREATE);
     }
 
     public function update(User $user, Service $service): bool
@@ -41,7 +44,7 @@ class ServicePolicy extends MagasinPolicy
      */
     public function updateAny(User $user): bool
     {
-        return $user->can(PermissionRegistry::PRODUIT_UPDATE);
+        return $user->can(PermissionRegistry::SERVICE_UPDATE);
     }
 
     /**

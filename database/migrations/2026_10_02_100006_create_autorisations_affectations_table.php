@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -28,10 +29,15 @@ return new class extends Migration
             $table->index('autorisation');
             $table->foreign('autorisation')->references('cle')->on('referentiel_autorisations_magasin')->restrictOnDelete();
         });
+
+        // Une case de la famille des articles n'existe que dans une société
+        // qui a des articles (voir PermissionRegistry::articles()).
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::CASES_D_ARTICLES);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::CASES_D_ARTICLES);
         Schema::dropIfExists('autorisations_affectations');
     }
 };

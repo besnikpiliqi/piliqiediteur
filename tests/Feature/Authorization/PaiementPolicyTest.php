@@ -13,6 +13,7 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -58,7 +59,7 @@ class PaiementPolicyTest extends TestCase
     public static function rolesQuiContrePassentDOffice(): array
     {
         return [
-            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur()],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce)],
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable()],
             'responsable, sans case' => [RoleMagasin::Responsable, null],
         ];
@@ -99,7 +100,7 @@ class PaiementPolicyTest extends TestCase
     public function test_un_vendeur_autorise_ne_contre_passe_que_les_paiements_qu_il_voit(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autorise = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
+        $autorise = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
         $autreVendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $sonPaiement = $this->encaisserUnPaiementEnTantQue($autorise);
         $paiementDUnAutre = $this->encaisserUnPaiementEnTantQue($autreVendeur);

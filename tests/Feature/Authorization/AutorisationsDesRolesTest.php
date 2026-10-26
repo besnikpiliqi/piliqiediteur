@@ -4,6 +4,7 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,7 +20,7 @@ use Tests\TestCase;
  * DroitsDuResponsableTest) ; un vendeur ou un observateur reçoit d'office
  * le modèle de son rôle (voir RoleMagasin::permissionsParDefaut()), que
  * l'on coche ou décoche ensuite ; un nouvel administrateur, le modèle de
- * PermissionRegistry::modeleDeLAdministrateur(). Il n'existe plus de rôle
+ * PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce). Il n'existe plus de rôle
  * « comptable » de magasin : l'expert-comptable de la société le remplace.
  */
 class AutorisationsDesRolesTest extends TestCase
@@ -33,7 +34,7 @@ class AutorisationsDesRolesTest extends TestCase
 
         $this->assertFalse(Schema::hasTable('roles'));
         $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
-        $this->assertSame(PermissionRegistry::duProprietaire(), $proprietaire->autorisationsDans($magasin));
+        $this->assertSame(PermissionRegistry::duProprietaire(TypeDActivite::Commerce), $proprietaire->autorisationsDans($magasin));
         $this->assertSame([], array_intersect(PermissionRegistry::deVente(), $proprietaire->autorisationsDans($magasin)));
     }
 
@@ -42,7 +43,7 @@ class AutorisationsDesRolesTest extends TestCase
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
-        foreach (PermissionRegistry::duProprietaire() as $permission) {
+        foreach (PermissionRegistry::duProprietaire(TypeDActivite::Commerce) as $permission) {
             $this->assertTrue($proprietaire->can($permission), $permission);
         }
 
@@ -68,7 +69,7 @@ class AutorisationsDesRolesTest extends TestCase
             [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK],
             array_values(array_diff(PermissionRegistry::toutes(), $administrateur->autorisationsDans($magasin))),
         );
-        $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(), $administrateur->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), $administrateur->autorisationsDans($magasin));
     }
 
     public function test_le_modele_de_l_administrateur_n_a_pas_les_parametres_du_magasin(): void
@@ -80,7 +81,7 @@ class AutorisationsDesRolesTest extends TestCase
 
         $this->assertTrue($proprietaire->can(PermissionRegistry::PARAMETRES_GERER));
         $this->assertFalse($administrateur->can(PermissionRegistry::PARAMETRES_GERER));
-        $this->assertNotContains(PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::modeleDeLAdministrateur());
+        $this->assertNotContains(PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
     }
 
     public function test_il_n_existe_plus_de_role_comptable_de_magasin(): void
@@ -183,6 +184,6 @@ class AutorisationsDesRolesTest extends TestCase
         $membre = $this->membre($magasin, $role);
 
         $this->assertSame($accordee, $membre->can($autorisation));
-        $this->assertEqualsCanonicalizing($role->permissionsParDefaut(), Affectation::query()->where('user_id', $membre->id)->sole()->autorisations());
+        $this->assertEqualsCanonicalizing($role->permissionsParDefaut(TypeDActivite::Commerce), Affectation::query()->where('user_id', $membre->id)->sole()->autorisations());
     }
 }

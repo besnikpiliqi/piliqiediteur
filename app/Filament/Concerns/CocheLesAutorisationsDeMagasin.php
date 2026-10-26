@@ -3,14 +3,19 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Models\Societe;
 use Closure;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 
 /**
- * Les cases d'un compte dans un magasin, en deux groupes : celles qui ne
- * sont pas des ventes (voir PermissionRegistry::horsVente()), puis, à part,
- * celles de la vente (voir PermissionRegistry::deVente()), que le
- * propriétaire coche pour qui il veut sans les exercer lui-même. Le
+ * Les cases d'un compte dans un magasin, celles du type d'activité de la
+ * société du panneau seulement (voir PermissionRegistry::pourLeType() ; la
+ * société de l'espace d'administration, ou celle du magasin), en deux
+ * groupes : celles qui ne sont pas des ventes (voir
+ * PermissionRegistry::horsVente()), puis, à part, celles de la vente (voir
+ * PermissionRegistry::deVente()), que le propriétaire coche pour qui il
+ * veut sans les exercer lui-même. Le
  * formulaire garde chaque groupe sous son nom ($nom, puis $nom_vente) ;
  * l'action reçoit leur réunion (voir autorisationsSaisies()), et refuse
  * elle-même ce que l'auteur ne peut pas cocher.
@@ -30,7 +35,7 @@ trait CocheLesAutorisationsDeMagasin
             CheckboxList::make($nom)
                 ->label($libelle)
                 ->helperText($aide)
-                ->options(self::libellesDe(PermissionRegistry::horsVente()))
+                ->options(fn (): array => self::libellesDe(PermissionRegistry::horsVente()))
                 ->columns(2)
                 ->bulkToggleable()
                 ->hidden($masque ?? false)
@@ -38,7 +43,7 @@ trait CocheLesAutorisationsDeMagasin
             CheckboxList::make("{$nom}_vente")
                 ->label($libelleVente)
                 ->helperText($aideVente)
-                ->options(self::libellesDe(PermissionRegistry::deVente()))
+                ->options(fn (): array => self::libellesDe(PermissionRegistry::deVente()))
                 ->columns(2)
                 ->hidden($masque ?? false)
                 ->columnSpanFull(),
@@ -72,13 +77,17 @@ trait CocheLesAutorisationsDeMagasin
     }
 
     /**
-     * Les libellés de ces autorisations, dans l'ordre du registre.
+     * Les libellés de celles de ces autorisations qui existent dans le type
+     * d'activité de la société du panneau, dans l'ordre du registre.
      *
      * @param  list<string>  $autorisations
      * @return array<string, string>
      */
     private static function libellesDe(array $autorisations): array
     {
-        return array_intersect_key(PermissionRegistry::libelles(), array_flip($autorisations));
+        $tenant = Filament::getTenant();
+        $type = $tenant instanceof Societe ? $tenant->type_activite : $tenant->societe->type_activite;
+
+        return array_intersect_key(PermissionRegistry::libelles(), array_flip(array_intersect($autorisations, PermissionRegistry::pourLeType($type))));
     }
 }

@@ -12,7 +12,8 @@ use Filament\Support\Contracts\HasLabel;
  *   société ; nommé par le propriétaire, ou par un administrateur autorisé
  *   à nommer les responsables dans un magasin de sa portée ;
  * - vendeur, observateur : le rôle n'est qu'un modèle qui précoche des
- *   autorisations (voir permissionsParDefaut()) ; le propriétaire ou un
+ *   autorisations (voir permissionsParDefaut()), celles qui existent dans
+ *   le type d'activité de la société ; le propriétaire ou un
  *   responsable du magasin coche ou décoche ensuite ce qu'il veut, pour ce
  *   seul magasin, jamais au-delà de ses propres autorisations (voir
  *   PorteeDesDroits).
@@ -46,12 +47,24 @@ enum RoleMagasin: string implements HasLabel
     }
 
     /**
-     * Les autorisations que ce modèle précoche. Aucune pour le
-     * responsable, qui n'a pas de case.
+     * Les autorisations que ce modèle précoche dans un magasin d'une
+     * société de ce type : celles du modèle qui existent dans ce type (voir
+     * PermissionRegistry::pourLeType()). Aucune pour le responsable, qui
+     * n'a pas de case.
      *
      * @return list<string>
      */
-    public function permissionsParDefaut(): array
+    public function permissionsParDefaut(TypeDActivite $type): array
+    {
+        return array_values(array_intersect($this->modele(), PermissionRegistry::pourLeType($type)));
+    }
+
+    /**
+     * Le modèle du rôle, avant son croisement avec le type de la société.
+     *
+     * @return list<string>
+     */
+    private function modele(): array
     {
         return match ($this) {
             self::Responsable => [],
@@ -68,6 +81,7 @@ enum RoleMagasin: string implements HasLabel
                 PermissionRegistry::CLIENT_CREATE,
                 PermissionRegistry::CLIENT_UPDATE,
                 PermissionRegistry::PRODUIT_VIEW,
+                PermissionRegistry::SERVICE_VIEW,
                 PermissionRegistry::DEVIS_VIEW,
                 PermissionRegistry::DEVIS_CREATE,
                 PermissionRegistry::DEVIS_UPDATE,
@@ -89,6 +103,7 @@ enum RoleMagasin: string implements HasLabel
                 PermissionRegistry::CLIENT_VIEW,
                 PermissionRegistry::FOURNISSEUR_VIEW,
                 PermissionRegistry::PRODUIT_VIEW,
+                PermissionRegistry::SERVICE_VIEW,
                 PermissionRegistry::DEVIS_VIEW,
                 PermissionRegistry::FACTURE_VIEW,
                 // Les achats sont des documents de coût internes, pas des

@@ -44,6 +44,7 @@ use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
@@ -91,7 +92,7 @@ class ProprietaireSansVenteTest extends TestCase
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($enVerification->proprietaire, $enVerification);
 
         foreach ([[$lyon, $this->proprietaireDe($lyon)], [$villeurbanne, $this->proprietaireDe($lyon)], [$demonstration, $enVerification->proprietaire]] as [$magasin, $proprietaire]) {
-            $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(), $proprietaire->autorisationsDans($magasin), $magasin->nom);
+            $this->assertEqualsCanonicalizing(PermissionRegistry::duProprietaire(TypeDActivite::Commerce), $proprietaire->autorisationsDans($magasin), $magasin->nom);
             app(TenantContext::class)->runAs($magasin, function () use ($magasin, $proprietaire): void {
                 foreach (PermissionRegistry::deVente() as $autorisation) {
                     $this->assertFalse($proprietaire->can($autorisation), "{$magasin->nom} : {$autorisation}");
@@ -338,7 +339,7 @@ class ProprietaireSansVenteTest extends TestCase
             ->setActionData(['autorisations' => [PermissionRegistry::FACTURE_VIEW], 'autorisations_vente' => PermissionRegistry::deVente()])
             ->callMountedAction()
             ->assertHasNoActionErrors();
-        $administrateur = app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()], []);
+        $administrateur = app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, [...PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), ...PermissionRegistry::deVente()], []);
 
         $vendeur = $this->choisirSonMotDePasse(User::query()->where('societe_id', $magasin->societe_id)->where('name', 'Paul')->sole());
         $administrateur = $this->choisirSonMotDePasse($administrateur);
@@ -453,7 +454,7 @@ class ProprietaireSansVenteTest extends TestCase
         foreach ([PermissionRegistry::AVOIR_CREER, PermissionRegistry::DEVIS_CREATE, PermissionRegistry::DEVIS_UPDATE, PermissionRegistry::DEVIS_ENVOYER, PermissionRegistry::FACTURE_JUSTIFIER, PermissionRegistry::PAIEMENT_CONTRE_PASSER, PermissionRegistry::VENTE_REMISES_ET_PRIX] as $autorisation) {
             $this->assertContains($autorisation, $horsVente);
         }
-        $this->assertEqualsCanonicalizing($horsVente, PermissionRegistry::duProprietaire());
+        $this->assertEqualsCanonicalizing($horsVente, PermissionRegistry::duProprietaire(TypeDActivite::Commerce));
     }
 
     /**

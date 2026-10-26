@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
@@ -469,7 +470,7 @@ class ConnexionParIdentifiantTest extends TestCase
         $poste = $this->reconnaitreUnPoste($magasin);
         $comptes = [
             $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable)[0],
-            app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(), []),
+            app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []),
             app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Cabinet Durand']),
         ];
 

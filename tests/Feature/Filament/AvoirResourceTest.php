@@ -15,6 +15,7 @@ use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -490,7 +491,7 @@ class AvoirResourceTest extends TestCase
     private function clientDesDeuxVendeurs(): array
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autorisations = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER];
+        $autorisations = [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER];
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
         $client = Client::factory()->create();
@@ -524,7 +525,7 @@ class AvoirResourceTest extends TestCase
      */
     private function vendeurQuiFaitDesAvoirs(Magasin $magasin, string $email): User
     {
-        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER], ['name' => $email, 'email' => $email]);
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER], ['name' => $email, 'email' => $email]);
     }
 
     /**
@@ -839,7 +840,7 @@ class AvoirResourceTest extends TestCase
     public function test_un_vendeur_qui_cree_des_avoirs_sans_pouvoir_les_voir_n_a_pas_le_bouton_avoir_de_la_fiche(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $sansVoirLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
+        $sansVoirLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_CREER]);
         $avecLesAvoirs = $this->vendeurQuiFaitDesAvoirs($magasin, 'vendeur@example.com');
         $ticketSansVoirLesAvoirs = $this->emettreUnTicketEnTantQue($sansVoirLesAvoirs, Client::factory()->create());
         $ticketAvecLesAvoirs = $this->emettreUnTicketEnTantQue($avecLesAvoirs, Client::factory()->create());

@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Notifications\ResponsableNommeParUnAdministrateur;
@@ -431,7 +432,7 @@ class ResponsablesTest extends TestCase
 
         $affectation = Affectation::query()->where('user_id', $responsable->id)->sole();
         $this->assertSame(RoleMagasin::Vendeur, $affectation->role);
-        $this->assertEqualsCanonicalizing(RoleMagasin::Vendeur->permissionsParDefaut(), $affectation->autorisations());
+        $this->assertEqualsCanonicalizing(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), $affectation->autorisations());
     }
 
     /**

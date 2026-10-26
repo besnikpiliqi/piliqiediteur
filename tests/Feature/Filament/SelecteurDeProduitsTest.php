@@ -11,6 +11,7 @@ use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Pages\Caisse;
@@ -116,7 +117,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertDontSee('12,50 €')
             ->assertDontSee('60,01 %');
 
-        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]));
 
         Livewire::test(SelecteurDeProduits::class)
             ->assertTableColumnVisible('benefice')
@@ -247,7 +248,7 @@ class SelecteurDeProduitsTest extends TestCase
     /**
      * Le stock restant, le seuil d'alerte, le fournisseur et la date
      * d'entrée ne se montrent qu'à qui voit les fiches des produits : un
-     * vendeur à qui « Produits et services : voir » est décoché vend
+     * vendeur à qui « Produits : voir » est décoché vend
      * toujours, voit la référence, le nom et le prix, et « Épuisé » sous un
      * produit qu'il ne peut pas vendre, mais aucune de ces informations,
      * même en demandant leurs colonnes.
@@ -271,7 +272,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertTableColumnFormattedStateSet('stock_quantite', '37', $cable)
             ->assertTableColumnFormattedStateSet('seuil_alerte', '11', $cable);
 
-        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::PRODUIT_VIEW]))));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), [PermissionRegistry::PRODUIT_VIEW]))));
 
         $tableau = Livewire::test(SelecteurDeProduits::class)
             ->set('toggledTableColumns', ['seuil_alerte' => true, 'fournisseur' => ['nom' => true], 'created_at' => true]);

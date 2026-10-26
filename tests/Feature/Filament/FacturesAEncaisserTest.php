@@ -15,6 +15,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -115,7 +116,7 @@ class FacturesAEncaisserTest extends TestCase
         $magasin = $this->magasin();
         $facture = $this->facture($this->responsableDeTest($magasin), 'Atelier Martin', 50);
         $voitTout = $this->administrateur($magasin);
-        $neVoitQueLesSiennes = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW_TOUTES])));
+        $neVoitQueLesSiennes = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW_TOUTES])));
 
         $this->dansLeMagasin($magasin, $voitTout);
         $this->assertTrue(FacturesAEncaisserApercu::canView());
@@ -135,7 +136,7 @@ class FacturesAEncaisserTest extends TestCase
     {
         $magasin = $this->magasin();
         $this->facture($this->responsableDeTest($magasin), 'Atelier Martin', 50);
-        $administrateur = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW])));
+        $administrateur = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW])));
         $this->dansLeMagasin($magasin, $administrateur);
 
         $this->assertFalse(FacturesAEncaisserApercu::canView());
@@ -151,7 +152,7 @@ class FacturesAEncaisserTest extends TestCase
     {
         $magasin = $this->magasin();
         $this->facture($this->responsableDeTest($magasin), 'Atelier Martin', 50);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $observateur = $this->membre($magasin, RoleMagasin::Observateur);
 
         foreach ([$vendeur, $observateur] as $compte) {
@@ -164,7 +165,7 @@ class FacturesAEncaisserTest extends TestCase
     public function test_un_vendeur_autorise_a_contre_passer_ne_voit_que_ses_factures(): void
     {
         $magasin = $this->magasin();
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
         $sienne = $this->facture($vendeur, 'Client du vendeur', 50);
         $duResponsable = $this->facture($this->responsableDeTest($magasin), 'Client du responsable', 120);
         $this->dansLeMagasin($magasin, $vendeur);
@@ -185,7 +186,7 @@ class FacturesAEncaisserTest extends TestCase
     public function test_un_vendeur_qui_contre_passe_et_voit_celles_de_toute_l_equipe_les_voit_toutes_s_il_peut_ouvrir_leur_liste(): void
     {
         $magasin = $this->magasin();
-        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER, PermissionRegistry::FACTURE_VIEW_TOUTES];
+        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PAIEMENT_CONTRE_PASSER, PermissionRegistry::FACTURE_VIEW_TOUTES];
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
         $sansLaListe = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff($cases, [PermissionRegistry::FACTURE_VIEW])));
         $sienne = $this->facture($vendeur, 'Client du vendeur', 50);
@@ -287,7 +288,7 @@ class FacturesAEncaisserTest extends TestCase
     public function test_l_alerte_reste_visible_dans_un_magasin_en_lecture_seule(): void
     {
         $magasin = $this->magasin();
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
         $sienne = $this->facture($vendeur, 'Client du vendeur', 50);
         $magasin->forceFill(['suspendu_le' => now()])->save();
         $this->dansLeMagasin($magasin->fresh(), $vendeur);

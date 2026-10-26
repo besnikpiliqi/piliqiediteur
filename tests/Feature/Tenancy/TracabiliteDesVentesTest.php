@@ -19,6 +19,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -242,7 +243,7 @@ class TracabiliteDesVentesTest extends TestCase
      */
     private static function casesDuVendeurAdministrateur(): array
     {
-        return [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()];
+        return [...PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), ...PermissionRegistry::deVente()];
     }
 
     /**

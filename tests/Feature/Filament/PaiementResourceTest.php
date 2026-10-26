@@ -20,6 +20,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -503,7 +504,7 @@ class PaiementResourceTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(
-            RoleMagasin::Vendeur->permissionsParDefaut(),
+            RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce),
             [PermissionRegistry::FACTURE_VIEW],
         )));
         $client = Client::factory()->create();

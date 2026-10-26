@@ -50,8 +50,10 @@ final class AffectationsDesMembres
 
     /**
      * Les cases de l'affectation, contrôlées : aucune pour un responsable ;
-     * celles demandées, ou le modèle du rôle, pour un vendeur ou un
-     * observateur, que l'auteur peut toutes cocher dans ce magasin.
+     * celles demandées, ou le modèle du rôle dans le type d'activité de la
+     * société du magasin (voir RoleMagasin::permissionsParDefaut()), pour
+     * un vendeur ou un observateur, que l'auteur peut toutes cocher dans ce
+     * magasin.
      *
      * @param  array{role: RoleMagasin, autorisations: list<string>|null}  $demandee
      * @return list<string>
@@ -64,7 +66,7 @@ final class AffectationsDesMembres
             return [];
         }
 
-        return $this->portee->verifierCochables($auteur, $magasin, $demandee['autorisations'] ?? $demandee['role']->permissionsParDefaut());
+        return $this->portee->verifierCochables($auteur, $magasin, $demandee['autorisations'] ?? $demandee['role']->permissionsParDefaut($magasin->societe->type_activite));
     }
 
     /**

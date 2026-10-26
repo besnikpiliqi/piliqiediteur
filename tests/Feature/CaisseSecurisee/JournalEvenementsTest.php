@@ -321,7 +321,7 @@ class JournalEvenementsTest extends TestCase
     {
         $magasin = $this->magasinDe(User::factory()->create());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
-        $observateur = ['avoir_fournisseur.view', 'client.view', 'devis.view', 'facture.view', 'facture_achat.view', 'fournisseur.view', 'produit.view'];
+        $observateur = ['avoir_fournisseur.view', 'client.view', 'devis.view', 'facture.view', 'facture_achat.view', 'fournisseur.view', 'produit.view', 'service.view'];
 
         app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Observateur);
 

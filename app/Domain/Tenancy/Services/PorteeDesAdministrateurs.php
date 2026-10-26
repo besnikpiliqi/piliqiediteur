@@ -26,8 +26,10 @@ use LogicException;
  *   sa sélection ;
  * - ses autorisations de société ; celles qui touchent toute la société
  *   (les paramètres) seulement avec tous les magasins.
- * Toute autorisation inconnue est refusée avant toute écriture, puis par
- * les clés étrangères des référentiels.
+ * Toute autorisation inconnue, ou de magasin qui n'existe pas dans le
+ * type d'activité de la société (voir PermissionRegistry::pourLeType()),
+ * est refusée avant toute écriture, puis par les clés étrangères des
+ * référentiels et les gardes de la base (voir GardesDesTypesDActivite).
  */
 final class PorteeDesAdministrateurs
 {
@@ -63,7 +65,7 @@ final class PorteeDesAdministrateurs
         $cases = [];
 
         foreach ($tous ? [0] : $selection->modelKeys() as $magasinId) {
-            $cases[(int) $magasinId] = PermissionRegistry::verifierConnues($memesPartout ? $autorisationsMagasin : ($autorisationsMagasin[$magasinId] ?? []));
+            $cases[(int) $magasinId] = PermissionRegistry::verifierConnues($memesPartout ? $autorisationsMagasin : ($autorisationsMagasin[$magasinId] ?? []), $societe->type_activite);
         }
 
         return ['tous' => $tous, 'magasins' => $selection, 'cases' => $cases, 'societe' => $deSociete];

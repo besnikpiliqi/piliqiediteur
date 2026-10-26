@@ -663,7 +663,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Les autorisations que son rôle lui donne dans ce magasin de sa
-     * société, qu'il soit actif ou suspendu ; null quand aucune n'y vaut :
+     * société, qu'il soit actif ou suspendu, toujours croisées avec celles
+     * du type d'activité de la société (voir
+     * PermissionRegistry::pourLeType()) : une case d'une autre famille ne
+     * s'y lit jamais ; null quand aucune n'y vaut :
      * - le propriétaire : toutes sauf celles de la vente (voir
      *   PermissionRegistry::duProprietaire()), dans chaque magasin,
      *   démonstration comprise : il ne vend jamais ;
@@ -681,35 +684,39 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
     {
+        $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
+
         if ($this->estProprietaire()) {
-            return PermissionRegistry::duProprietaire();
+            return PermissionRegistry::duProprietaire($magasin->societe->type_activite);
         }
 
         if ($this->estExpertComptable()) {
-            if ($magasin->est_demonstration || $this->estRetire()) {
-                return null;
-            }
-
-            $consultations = PermissionRegistry::consultations();
-            sort($consultations);
-
-            return $consultations;
+            return $magasin->est_demonstration || $this->estRetire() ? null : self::trieesDans(PermissionRegistry::consultations(), $duType);
         }
 
         $affectation = $this->affectationQuiVautDans($magasin);
 
-        if ($affectation === null) {
-            return null;
-        }
+        return match (true) {
+            $affectation === null => null,
+            $affectation->role !== RoleMagasin::Responsable => self::trieesDans($affectation->autorisations(), $duType),
+            default => self::trieesDans($duType, $duType),
+        };
+    }
 
-        if ($affectation->role !== RoleMagasin::Responsable) {
-            return $affectation->autorisations();
-        }
+    /**
+     * Ces autorisations, celles de ce type seulement, dans l'ordre
+     * alphabétique.
+     *
+     * @param  list<string>  $autorisations
+     * @param  list<string>  $duType
+     * @return list<string>
+     */
+    private static function trieesDans(array $autorisations, array $duType): array
+    {
+        $retenues = array_values(array_intersect($autorisations, $duType));
+        sort($retenues);
 
-        $toutes = PermissionRegistry::toutes();
-        sort($toutes);
-
-        return $toutes;
+        return $retenues;
     }
 
     /**

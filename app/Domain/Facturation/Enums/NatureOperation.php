@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Enums;
 
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use Filament\Support\Contracts\HasLabel;
 
 /**
@@ -157,19 +158,22 @@ enum NatureOperation: string implements HasLabel
     }
 
     /**
-     * Les natures qu'un client de ce type peut choisir : la vente en
-     * France seule pour un magasin en franchise en base, qui ne facture
-     * jamais de TVA, hors de France comme en France (sa franchise couvre
-     * aussi ses ventes à l'étranger).
+     * Les natures qu'un client de ce type peut choisir, dans une société de
+     * ce type d'activité : la vente en France seule pour un magasin en
+     * franchise en base, qui ne facture jamais de TVA, hors de France comme
+     * en France (sa franchise couvre aussi ses ventes à l'étranger) ; sans
+     * articles (voir TypeDActivite::aDesArticles()), aucune nature qui
+     * porte sur des biens (voir porteSurDesBiens()).
      *
      * @return list<self>
      */
-    public static function proposees(bool $professionnel, bool $franchiseEnBase): array
+    public static function proposees(bool $professionnel, bool $franchiseEnBase, TypeDActivite $type): array
     {
         if ($franchiseEnBase) {
             return [self::VenteEnFrance];
         }
 
-        return array_values(array_filter(self::cases(), fn (self $nature): bool => $professionnel || ! $nature->reserveeAuxProfessionnels()));
+        return array_values(array_filter(self::cases(), fn (self $nature): bool => ($professionnel || ! $nature->reserveeAuxProfessionnels())
+            && ($type->aDesArticles() || ! $nature->porteSurDesBiens())));
     }
 }

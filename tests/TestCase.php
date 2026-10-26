@@ -610,7 +610,9 @@ abstract class TestCase extends BaseTestCase
      * Les cases que précochait le modèle « comptable » de magasin, que
      * l'éditeur a supprimé (un expert-comptable de la société, en lecture
      * seule, le remplace) : un vendeur à qui on les coche garde, dans les
-     * tests des policies, les mêmes droits que l'ancien comptable.
+     * tests des policies, les mêmes droits que l'ancien comptable, la
+     * consultation des services comprise, qui a ses propres autorisations
+     * depuis que celles des produits ne valent plus pour eux.
      *
      * @return list<string>
      */
@@ -620,6 +622,7 @@ abstract class TestCase extends BaseTestCase
             PermissionRegistry::CLIENT_VIEW,
             PermissionRegistry::FOURNISSEUR_VIEW,
             PermissionRegistry::PRODUIT_VIEW,
+            PermissionRegistry::SERVICE_VIEW,
             PermissionRegistry::DEVIS_VIEW,
             PermissionRegistry::FACTURE_VIEW,
             PermissionRegistry::FACTURE_ACHAT_VIEW,
@@ -678,8 +681,8 @@ abstract class TestCase extends BaseTestCase
      * Un administrateur de la société du magasin, créé par le propriétaire
      * (voir CreerAdministrateurAction), son mot de passe choisi : de tous
      * les magasins, ou de la sélection donnée, avec ces autorisations de
-     * société et ces cases de magasin (le modèle de l'administrateur à
-     * défaut).
+     * société et ces cases de magasin (le modèle de l'administrateur dans
+     * le type d'activité de la société à défaut).
      *
      * @param  list<int>|null  $selection
      * @param  list<string>  $autorisationsSociete
@@ -692,7 +695,7 @@ abstract class TestCase extends BaseTestCase
             $magasin->societe()->firstOrFail(),
             ['name' => fake()->name()],
             $selection,
-            $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur(),
+            $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur($magasin->societe->type_activite),
             $autorisationsSociete,
         ));
 

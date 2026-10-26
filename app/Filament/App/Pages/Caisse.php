@@ -403,7 +403,7 @@ class Caisse extends Page implements HasForms
                     ->required(),
             ]),
 
-            Section::make('Produits et services')->schema([
+            Section::make(fn (): string => DevisResource::aDesArticles() ? 'Produits et services' : 'Services')->schema([
                 ...DevisResource::lignesDeVente(),
                 DevisResource::totauxDuDocument(parTaux: true),
             ]),

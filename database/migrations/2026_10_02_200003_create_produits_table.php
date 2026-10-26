@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -56,10 +57,15 @@ return new class extends Migration
             $table->unique(['magasin_id', 'reference_normalisee']);
             $table->index(['magasin_id', 'code_barres']);
         });
+
+        // Seule une société qui a des articles a des produits (voir
+        // TypeDActivite::aDesArticles()).
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::PRODUITS);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::PRODUITS);
         Schema::dropIfExists('produits');
     }
 };

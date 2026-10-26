@@ -17,6 +17,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -179,7 +180,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_CREER]);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
@@ -235,7 +236,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $collegue = $this->vendeurDeLaPremiereHeure($magasin);
-        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($collegue, $collegue);
         $this->actingAs($vendeur);
@@ -284,7 +285,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $collegue = $this->vendeurDeLaPremiereHeure($magasin);
-        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $this->travelTo(self::aParis('2026-10-07 10:00:00'));
         $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($collegue, $collegue);

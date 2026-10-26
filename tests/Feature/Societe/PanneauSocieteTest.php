@@ -19,6 +19,7 @@ use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -398,7 +399,7 @@ class PanneauSocieteTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->firstOrFail();
-        $administrateur = $this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(), []));
+        $administrateur = $this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []));
         $etapes = function (User $compte) use ($societe): array {
             $this->dansLEspaceDeLaSociete($societe->fresh(), $compte);
 

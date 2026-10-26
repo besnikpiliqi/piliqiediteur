@@ -5,6 +5,7 @@ namespace Tests\Feature\Authorization;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -24,7 +25,7 @@ class FournisseurPolicyTest extends TestCase
     public static function roles(): array
     {
         return [
-            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), true],
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
             'vendeur' => [RoleMagasin::Vendeur, null, false],
             'observateur' => [RoleMagasin::Observateur, null, false],

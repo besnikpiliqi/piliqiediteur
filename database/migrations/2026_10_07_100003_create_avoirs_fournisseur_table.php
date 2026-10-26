@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Tenancy\Support\GardesDesTypesDActivite;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -46,10 +47,15 @@ return new class extends Migration
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'facture_achat_id']);
         });
+
+        // Seule une société qui a des articles reçoit un avoir fournisseur
+        // (voir TypeDActivite::aDesArticles()).
+        GardesDesTypesDActivite::poser(GardesDesTypesDActivite::AVOIRS_FOURNISSEUR);
     }
 
     public function down(): void
     {
+        GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::AVOIRS_FOURNISSEUR);
         Schema::dropIfExists('avoirs_fournisseur');
     }
 };

@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\AvoirFournisseurResource;
@@ -423,8 +424,8 @@ class AvoirFournisseurResourceTest extends TestCase
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
         $avoir = $this->retourner($factureAchat, 0, 2);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW]);
-        $sansLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_ACHAT_VIEW]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW]);
+        $sansLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_VIEW]);
         $this->actingAs($vendeur);
 
         Livewire::test(ListAvoirsFournisseur::class)
@@ -458,7 +459,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $this->recevoir([[$cable, 5, '12.00']], Fournisseur::factory()->create(['nom' => 'Grossiste Confidentiel']));
-        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]));
 
         Livewire::test(ListAvoirsFournisseur::class)
             ->assertSuccessful()

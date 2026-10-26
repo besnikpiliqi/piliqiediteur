@@ -452,7 +452,7 @@ class IdentifiantsTest extends TestCase
             ->mountAction('creerUnCompte')
             ->setActionData(['name' => 'Paul Secret', 'role' => RoleMagasin::Vendeur->value])
             ->set('mountedActionsData.0.autorisations', [])
-            ->setActionData(['jeton' => $jeton, 'autorisations' => RoleMagasin::Vendeur->permissionsParDefaut(), 'autorisations_vente' => []])
+            ->setActionData(['jeton' => $jeton, 'autorisations' => RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), 'autorisations_vente' => []])
             ->callMountedAction()
             ->assertNotified(CreationDesComptes::MESSAGE_DEMANDE_DEJA_SERVIE)
             ->assertActionNotMounted('compteCree');

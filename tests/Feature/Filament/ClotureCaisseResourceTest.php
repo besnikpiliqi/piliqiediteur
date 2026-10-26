@@ -23,6 +23,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\AvoirResource;
@@ -574,7 +575,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirLeMagasin();
         $proprietaire = $this->proprietaireDe($magasin);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER], ['name' => 'Claire Vendeuse']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER], ['name' => 'Claire Vendeuse']);
         $collegue = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Luc Collègue']);
         $this->actingAs($vendeur);
         $sonTicket = $this->vendreAuComptantUnTicketDe(12, ModePaiement::Especes, Client::factory()->create(['nom' => 'Jeanne Cliente']));

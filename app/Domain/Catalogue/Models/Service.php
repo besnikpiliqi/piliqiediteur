@@ -6,6 +6,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use Database\Factories\ServiceFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,7 +34,9 @@ use InvalidArgumentException;
  * service au lieu fixé par la loi (immeuble, transport de personnes,
  * location courte de véhicule, restauration, accès à un événement, art.
  * 259 A du CGI) ne se facture jamais sans TVA française à un
- * professionnel étranger.
+ * professionnel étranger. Une société sans articles, qui ne livre aucun
+ * bien, n'a pas de frais accessoires : la marque s'y enregistre fausse,
+ * quel que soit l'écran qui crée ou modifie le service.
  */
 class Service extends Model
 {
@@ -75,6 +79,10 @@ class Service extends Model
 
             $service->nom_normalise = self::normaliserNom($service->nom);
             $service->verifierSonPrixDeReference();
+
+            if ($service->frais_accessoires && ! Magasin::query()->findOrFail($service->magasin_id ?? app(TenantContext::class)->id())->societe->aDesArticles()) {
+                $service->frais_accessoires = false;
+            }
         });
     }
 

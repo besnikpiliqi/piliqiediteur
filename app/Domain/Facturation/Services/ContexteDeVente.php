@@ -58,11 +58,13 @@ final readonly class ContexteDeVente
 
     /**
      * La vente qu'enregistre un brouillon de facture ou un devis (voir
-     * pour()), dans une nature que son client et le régime de la société
-     * permettent (voir NatureOperation::proposees()) : une société en
-     * franchise en base ne vend qu'en France, sa franchise couvrant aussi
-     * ses ventes hors de France, et un particulier n'achète qu'en France, à
-     * l'export ou livré dans un DOM. Le formulaire ne propose que ces
+     * pour()), dans une nature que son client, le régime et le type
+     * d'activité de la société permettent (voir
+     * NatureOperation::proposees()) : une société en franchise en base ne
+     * vend qu'en France, sa franchise couvrant aussi ses ventes hors de
+     * France ; une société sans articles ne choisit aucune nature qui porte
+     * sur des biens ; et un particulier n'achète qu'en France, à l'export
+     * ou livré dans un DOM. Le formulaire ne propose que ces
      * natures, et rouvre en vente en France un document dont la nature
      * n'est plus permise (voir ChoisitLaNatureDeLOperation::natureARouvrir()) ;
      * une nature reçue d'ailleurs est refusée ici, avant que rien ne
@@ -76,11 +78,14 @@ final readonly class ContexteDeVente
     public static function pourEnregistrer(Client $client, Magasin $magasin, NatureOperation $natureOperation): self
     {
         $contexte = self::pour($client, $magasin, $natureOperation);
+        $type = $magasin->societe->type_activite;
 
-        if (! in_array($natureOperation, NatureOperation::proposees($contexte->typeClient === TypeClient::Professionnel, $contexte->franchiseEnBase), true)) {
-            throw new LogicException("Impossible d'enregistrer en « {$natureOperation->getLabel()} » : ".($contexte->franchiseEnBase
-                ? 'votre société est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « '.NatureOperation::VenteEnFrance->getLabel().' ».'
-                : 'cette nature est réservée aux clients professionnels. Choisissez une autre nature.'));
+        if (! in_array($natureOperation, NatureOperation::proposees($contexte->typeClient === TypeClient::Professionnel, $contexte->franchiseEnBase, $type), true)) {
+            throw new LogicException("Impossible d'enregistrer en « {$natureOperation->getLabel()} » : ".match (true) {
+                $contexte->franchiseEnBase => 'votre société est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « '.NatureOperation::VenteEnFrance->getLabel().' ».',
+                ! $type->aDesArticles() && $natureOperation->porteSurDesBiens() => 'votre société, inscrite comme « '.$type->getLabel().' », ne vend pas de biens. Choisissez une autre nature.',
+                default => 'cette nature est réservée aux clients professionnels. Choisissez une autre nature.',
+            });
         }
 
         return $contexte;

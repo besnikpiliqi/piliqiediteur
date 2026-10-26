@@ -25,6 +25,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
@@ -41,11 +42,14 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureResource;
+use App\Filament\App\Resources\ProduitResource;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Filament\Pages\Dashboard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -716,6 +720,34 @@ class IsolationDesSocietesTest extends TestCase
             $this->assertNotSame((int) $saVente->id, (int) $autreVente->id);
         }
         $this->assertNotSame($aLyon->identifiantDeConnexion(), $aVilleurbanne->identifiantDeConnexion());
+    }
+
+    /**
+     * Le type d'activité d'une société ne change rien dans une autre : à
+     * côté d'une société de services, un commerce garde les autorisations
+     * des articles pour chacun de ses comptes, les écrans des articles dans
+     * sa navigation, et ses produits, que les gardes de la base laissent
+     * passer ; les cases d'articles du commerce s'écrivent toujours.
+     */
+    public function test_le_type_d_une_societe_ne_change_rien_dans_une_autre(): void
+    {
+        $services = $this->ouvrirUneSociete(['type' => TypeDActivite::Services, 'nom' => 'Conseil']);
+        $vendeurDesServices = $this->membre($services, RoleMagasin::Vendeur);
+        $commerce = $this->ouvrirUneSociete(['nom' => 'Boutique']);
+        $vendeurDuCommerce = $this->membre($commerce, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::STOCK_VENDRE_SANS_STOCK]);
+
+        $this->assertContains(PermissionRegistry::PRODUIT_VIEW, $this->proprietaireDe($commerce)->autorisationsDans($commerce));
+        $this->assertSame(array_values(array_intersect(PermissionRegistry::articles(), [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::STOCK_VENDRE_SANS_STOCK])), array_values(array_intersect(PermissionRegistry::articles(), $vendeurDuCommerce->autorisationsDans($commerce))));
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::articles(), $vendeurDesServices->autorisationsDans($services))));
+        $this->assertSame([], $vendeurDuCommerce->autorisationsDans($services));
+        $produit = app(TenantContext::class)->runAs($commerce, fn (): Produit => Produit::factory()->create());
+        $this->assertSame((int) $commerce->id, (int) $produit->magasin_id);
+
+        $this->dansLeMagasin($commerce, $this->proprietaireDe($commerce));
+        $this->get(Dashboard::getUrl(panel: 'app', tenant: $commerce))
+            ->assertOk()
+            ->assertSee(ProduitResource::getUrl('index', panel: 'app', tenant: $commerce), false)
+            ->assertSee(FactureAchatResource::getUrl('index', panel: 'app', tenant: $commerce), false);
     }
 
     /**

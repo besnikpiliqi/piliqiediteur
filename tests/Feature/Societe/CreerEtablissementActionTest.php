@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
@@ -385,7 +386,7 @@ class CreerEtablissementActionTest extends TestCase
         $droits = app(TenantContext::class)->runAs($magasin, fn (): array => json_decode(EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', (string) CodeEvenement::ModificationDesDroits->value)->sole()->contenu, true)['donnees']);
         $this->assertSame(['id' => $proprietaire->id, 'nom' => $proprietaire->name], $droits['details']['membre']);
         $this->assertNull($droits['details']['avant']);
-        $this->assertSame(['role_societe' => 'proprietaire', 'role_magasin' => null, 'statut' => 'actif', 'permissions' => PermissionRegistry::duProprietaire()], $droits['details']['apres']);
+        $this->assertSame(['role_societe' => 'proprietaire', 'role_magasin' => null, 'statut' => 'actif', 'permissions' => PermissionRegistry::duProprietaire(TypeDActivite::Commerce)], $droits['details']['apres']);
         $this->assertSame($magasin->siret, SiretMagasin::query()->where('magasin_id', $magasin->id)->sole()->siret);
         $this->assertSame(1, PeriodeActivite::query()->where('magasin_id', $magasin->id)->whereNull('fin')->count());
     }

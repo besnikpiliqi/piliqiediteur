@@ -25,6 +25,7 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
@@ -1862,7 +1863,7 @@ class FactureAchatActionsTest extends TestCase
     private function connecterUnMembreQuiSaisitLesAchats(array $droitsProduit): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(), PermissionRegistry::FACTURE_ACHAT_CREER, ...$droitsProduit], [
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_CREER, ...$droitsProduit], [
             'name' => 'Léa', 'email' => 'lea@example.test',
         ]);
         $this->actingAs($membre);

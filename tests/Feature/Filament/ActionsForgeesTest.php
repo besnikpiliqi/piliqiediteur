@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -68,8 +69,8 @@ class ActionsForgeesTest extends TestCase
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         app(TenantContext::class)->set($lyon);
-        $collegue = $this->membre($lyon, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_ENVOYER]);
-        $vendeur = $this->membre($lyon, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_ENVOYER]);
+        $collegue = $this->membre($lyon, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ENVOYER]);
+        $vendeur = $this->membre($lyon, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ENVOYER]);
         $brouillonDuCollegue = app(CreerFactureAction::class)->handle($collegue, Client::factory()->create(), $this->lignes());
         $ticketDuCollegue = app(EmettreFactureAction::class)->handle($collegue, app(CreerFactureAction::class)->handle($collegue, Client::factory()->create(), $this->lignes()));
         [$brouillonDeVilleurbanne, $devisDeVilleurbanne, $vendeurDeVilleurbanne] = app(TenantContext::class)->runAs($villeurbanne, function () use ($villeurbanne): array {
@@ -134,7 +135,7 @@ class ActionsForgeesTest extends TestCase
 
         $rienNAEteFait = match ($nom) {
             'émettre une facture' => (function () use ($magasin): Closure {
-                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_EMETTRE])));
+                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_EMETTRE])));
                 $brouillon = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes());
                 $this->dansLeMagasin($magasin, $vendeur);
                 $this->forgerLActionDeLigne(Livewire::test(ListFactures::class)->assertTableActionHidden('emettre', $brouillon), 'emettre', $brouillon);
@@ -142,7 +143,7 @@ class ActionsForgeesTest extends TestCase
                 return fn (): bool => $brouillon->fresh()->statut === StatutFacture::Brouillon;
             })(),
             'envoyer un document' => (function () use ($magasin): Closure {
-                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_ENVOYER])));
+                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_ENVOYER])));
                 $ticket = app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes()));
                 $this->dansLeMagasin($magasin, $vendeur);
                 $this->forgerLAction(Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('envoyer_par_email'), 'envoyer_par_email', ['destinataire' => 'client@exemple.fr']);
@@ -151,7 +152,7 @@ class ActionsForgeesTest extends TestCase
             })(),
             'clôturer la journée' => (function () use ($magasin): Closure {
                 $this->vendreParLeResponsable($magasin);
-                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW]);
+                $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW]);
                 $this->dansLeMagasin($magasin, $vendeur);
                 $this->forgerLAction(Livewire::test(ListClotureCaisses::class)->assertActionHidden('cloturer'), 'cloturer');
 

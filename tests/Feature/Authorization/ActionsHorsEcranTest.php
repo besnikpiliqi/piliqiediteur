@@ -61,6 +61,7 @@ use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -200,7 +201,7 @@ class ActionsHorsEcranTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $autorise = fn (): User => $porte === 'magasin'
             ? $this->responsable($magasin)
-            : $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::modeleDeLAdministrateur());
+            : $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
 
         $suspendu = $autorise();
         app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
@@ -293,9 +294,9 @@ class ActionsHorsEcranTest extends TestCase
                 return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $vendeur, RoleMagasin::Vendeur);
             }),
             'redonner l\'accès' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(RedonnerLAccesAction::class)->handle($auteur, $vendeur, false)),
-            'créer un administrateur' => fn (User $auteur) => app(CreerAdministrateurAction::class)->handle($auteur, $societe, ['name' => 'Alice'], null, PermissionRegistry::modeleDeLAdministrateur(), []),
-            'changer le rôle de société' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($auteur, $vendeur, null, PermissionRegistry::modeleDeLAdministrateur(), [])),
-            'modifier un administrateur' => $this->avec($this->administrateur($magasin), fn (User $administrateur, User $auteur) => app(ModifierAdministrateurAction::class)->modifier($auteur, $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(), AutorisationsSociete::toutes())),
+            'créer un administrateur' => fn (User $auteur) => app(CreerAdministrateurAction::class)->handle($auteur, $societe, ['name' => 'Alice'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []),
+            'changer le rôle de société' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($auteur, $vendeur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [])),
+            'modifier un administrateur' => $this->avec($this->administrateur($magasin), fn (User $administrateur, User $auteur) => app(ModifierAdministrateurAction::class)->modifier($auteur, $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), AutorisationsSociete::toutes())),
             'créer l\'expert-comptable' => fn (User $auteur) => app(CreerExpertComptableAction::class)->handle($auteur, $societe, ['name' => 'Émile']),
             'réintégrer l\'expert-comptable' => $this->avec($this->expertComptable($magasin), function (User $expert) use ($proprietaire): Closure {
                 app(ChangerStatutCompteAction::class)->retirer($proprietaire, $expert);

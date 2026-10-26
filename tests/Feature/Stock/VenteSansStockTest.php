@@ -25,6 +25,7 @@ use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
@@ -174,11 +175,11 @@ class VenteSansStockTest extends TestCase
     public function test_une_autorisation_retiree_entre_l_ecran_et_la_validation_refuse_la_vente(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::STOCK_VENDRE_SANS_STOCK];
+        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::STOCK_VENDRE_SANS_STOCK];
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
         $cable = $this->produit('Câble USB', 1);
         $confirmation = ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($vendeur, $cable, 3))->manques);
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut());
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
         app(TenantContext::class)->set($magasin->fresh());
 
         $this->assertThrows(fn () => $this->vendre($vendeur, $cable, 3, $confirmation), StockInsuffisantException::class, 'Stock insuffisant : Câble USB, reste 1, demandé 3.');
@@ -269,7 +270,7 @@ class VenteSansStockTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $cable = $this->produit('Câble USB', 0);
         $this->assertThrows(fn () => $this->vendre($vendeur, $cable, 1), StockInsuffisantException::class);
-        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::STOCK_VENDRE_SANS_STOCK]);
+        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::STOCK_VENDRE_SANS_STOCK]);
         app(TenantContext::class)->set($magasin->fresh());
 
         $avertissement = $this->avertissementDe(fn () => $this->vendre($vendeur, $cable, 1));

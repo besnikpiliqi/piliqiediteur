@@ -31,6 +31,7 @@ use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
@@ -160,7 +161,7 @@ class DroitsConcurrenceTest extends TestCase
             app(ModifierMembreAction::class)->handle(User::query()->findOrFail($administrateurId), User::query()->findOrFail($vendeurId), RoleMagasin::Responsable);
         }, $concurrente);
 
-        app(ModifierAdministrateurAction::class)->modifier($this->proprietaireDe($magasin), $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(), []);
+        app(ModifierAdministrateurAction::class)->modifier($this->proprietaireDe($magasin), $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
 
         $this->assertStringContainsString(PorteeDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeur->id)->sole()->role);

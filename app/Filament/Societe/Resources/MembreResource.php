@@ -325,7 +325,7 @@ class MembreResource extends RessourceDuPanneauSociete
                 ->required()
                 ->live()
                 ->afterStateUpdated(function (Set $set, mixed $state): void {
-                    $modele = RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut() ?? [];
+                    $modele = RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut(static::societe()->type_activite) ?? [];
 
                     foreach (static::autorisationsAAfficher($modele, 'autorisations') as $champ => $cases) {
                         $set($champ, $cases);
@@ -405,7 +405,7 @@ class MembreResource extends RessourceDuPanneauSociete
     {
         return [
             'autorisations_societe' => AutorisationsSociete::modeleDeLAdministrateur(),
-            ...static::autorisationsAAfficher(PermissionRegistry::modeleDeLAdministrateur(), 'autorisations_magasin'),
+            ...static::autorisationsAAfficher(PermissionRegistry::modeleDeLAdministrateur(static::societe()->type_activite), 'autorisations_magasin'),
         ];
     }
 

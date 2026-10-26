@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
@@ -91,8 +92,8 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
         $this->facture($lyon, 'Atelier Martin', 50);
         $this->facture($villeurbanne, 'Garage Durand', 120, $this->responsable($villeurbanne));
         $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], autorisationsMagasin: [
-            $lyon->id => PermissionRegistry::modeleDeLAdministrateur(),
-            $villeurbanne->id => array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW_TOUTES])),
+            $lyon->id => PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce),
+            $villeurbanne->id => array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW_TOUTES])),
         ]);
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
 
@@ -118,8 +119,8 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
         $this->facture($lyon, 'Atelier Martin', 50);
         $this->facture($villeurbanne, 'Garage Durand', 120, $this->responsable($villeurbanne));
         $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], autorisationsMagasin: [
-            $lyon->id => PermissionRegistry::modeleDeLAdministrateur(),
-            $villeurbanne->id => array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW])),
+            $lyon->id => PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce),
+            $villeurbanne->id => array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW])),
         ]);
         $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
 

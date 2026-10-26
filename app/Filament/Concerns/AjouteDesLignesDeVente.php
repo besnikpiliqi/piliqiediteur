@@ -110,7 +110,10 @@ trait AjouteDesLignesDeVente
     /**
      * Le champ de la douchette, au-dessus des lignes (voir
      * ajouterLeProduitScanne()), puis les lignes et leurs deux boutons
-     * d'ajout.
+     * d'ajout. Dans une société sans articles (voir
+     * Societe::aDesArticles()), seulement les lignes et « Ajouter un
+     * service » : ni douchette, ni tableau des produits, ni ligne de
+     * produit vide au départ.
      *
      * @return array<Component>
      */
@@ -122,7 +125,7 @@ trait AjouteDesLignesDeVente
                 ->label('')
                 ->schema(self::ligneSchema())
                 ->columns(9)
-                ->defaultItems(1)
+                ->defaultItems(fn (): int => self::aDesArticles() ? 1 : 0)
                 ->itemLabel(fn (array $state): string => filled($state['service_id'] ?? null) ? 'Service' : 'Produit')
                 // Remplacé par les deux boutons ci-dessous.
                 ->addable(false)
@@ -153,6 +156,7 @@ trait AjouteDesLignesDeVente
             ->prefixIcon('heroicon-m-qr-code')
             ->autocomplete(false)
             ->dehydrated(false)
+            ->visible(fn (): bool => self::aDesArticles())
             ->extraInputAttributes(['x-on:keydown.enter.prevent' => '$wire.scannerUneReference()']);
     }
 
@@ -633,6 +637,16 @@ trait AjouteDesLignesDeVente
     }
 
     /**
+     * La société du magasin actif a-t-elle des articles (voir
+     * Societe::aDesArticles()) ? Sans, une vente n'a que des lignes de
+     * service.
+     */
+    public static function aDesArticles(): bool
+    {
+        return self::magasin()->societe->aDesArticles();
+    }
+
+    /**
      * « Ajouter un produit » ouvre le grand tableau des produits (point
      * 13, voir SelecteurDeProduits), sur tout l'écran, avec le client et
      * la nature de l'opération du document, dont dépend le total de la
@@ -651,6 +665,7 @@ trait AjouteDesLignesDeVente
             ->modalWidth(MaxWidth::Screen)
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Fermer')
+            ->visible(fn (): bool => self::aDesArticles())
             ->modalContent(fn (Get $get): View => view('filament.app.livewire.fenetre-du-selecteur-de-produits', [
                 'clientId' => $get('client_id'),
                 'nature' => $get('nature_operation'),
@@ -917,7 +932,7 @@ trait AjouteDesLignesDeVente
      * tiendrait compte des accents.
      *
      * Cocher est ouvert à quiconque peut vendre ; créer un service demande
-     * l'autorisation de créer des produits et des services (voir
+     * l'autorisation « Services : créer » (voir ServicePolicy et
      * TrouverOuCreerServiceAction) : sans elle, le champ du nouveau service
      * n'apparaît pas, et le bouton non plus tant que le magasin n'a aucun
      * service.

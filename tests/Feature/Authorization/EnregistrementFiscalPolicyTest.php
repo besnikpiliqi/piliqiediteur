@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -43,7 +44,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
         $this->assertFalse($vendeur->can('viewAny', EnregistrementFiscal::class));
         $this->assertFalse($vendeur->can('view', $evenement));
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CAISSE_SECURISEE_CONSULTER]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CAISSE_SECURISEE_CONSULTER]);
 
         $this->assertTrue($vendeur->fresh()->can('viewAny', EnregistrementFiscal::class));
         $this->assertTrue($vendeur->fresh()->can('view', $evenement));

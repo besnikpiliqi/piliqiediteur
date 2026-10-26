@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,7 +33,7 @@ class AvoirPolicyTest extends TestCase
     public static function roles(): array
     {
         return [
-            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), true],
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), true],
             'vendeur' => [RoleMagasin::Vendeur, null, false],
             'observateur' => [RoleMagasin::Observateur, null, false],
@@ -108,7 +109,7 @@ class AvoirPolicyTest extends TestCase
      */
     private function vendeurQuiFaitDesAvoirs(Magasin $magasin, string $email): User
     {
-        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER], ['name' => $email, 'email' => $email]);
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER], ['name' => $email, 'email' => $email]);
     }
 
     private function emettreUnAvoirEnTantQue(User $auteur): Avoir

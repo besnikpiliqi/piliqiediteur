@@ -38,6 +38,8 @@ class ReferentielDesAutorisationsTest extends TestCase
 
         $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $magasin);
         $this->assertCount(count(PermissionRegistry::toutes()), $magasin);
+        $this->assertEqualsCanonicalizing(PermissionRegistry::articles(), DB::table('referentiel_autorisations_magasin')->where('famille', PermissionRegistry::FAMILLE_ARTICLES)->pluck('cle')->all());
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::articles())), DB::table('referentiel_autorisations_magasin')->where('famille', PermissionRegistry::FAMILLE_COMMUNE)->pluck('cle')->all());
         $this->assertEqualsCanonicalizing(AutorisationsSociete::toutes(), $societe);
         $this->assertCount(count(AutorisationsSociete::toutes()), $societe);
     }

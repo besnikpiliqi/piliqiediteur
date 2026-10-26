@@ -10,6 +10,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
@@ -143,7 +144,7 @@ class FicheProduitPendantUneFactureAchatConcurrenceTest extends TestCase
         self::responsableDeTest($magasin);
         $this->actingAs($avecLeDroitSurLesProduits
             ? $this->proprietaireDe($magasin)
-            : $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(), PermissionRegistry::FACTURE_ACHAT_CREER], ['name' => 'Léa']));
+            : $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_CREER], ['name' => 'Léa']));
         Filament::setTenant($magasin);
 
         return [$magasin, Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20, 'suivi_stock' => true])];

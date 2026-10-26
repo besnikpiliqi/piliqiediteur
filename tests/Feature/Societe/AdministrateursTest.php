@@ -23,6 +23,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
@@ -159,7 +160,7 @@ class AdministrateursTest extends TestCase
         $page = Livewire::test(ListMembres::class)->mountAction('creerUnAdministrateur');
 
         $this->assertSame([AutorisationsSociete::MAGASINS_GERER], array_values($page->get('mountedActionsData.0.autorisations_societe')));
-        $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(), $page->get('mountedActionsData.0.autorisations_magasin'));
+        $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), $page->get('mountedActionsData.0.autorisations_magasin'));
     }
 
     public function test_un_administrateur_de_tous_les_magasins_a_ses_autorisations_dans_un_magasin_cree_apres_lui(): void
@@ -463,8 +464,8 @@ class AdministrateursTest extends TestCase
 
         $page = Livewire::test(ListMembres::class)->mountAction('creerUnAdministrateur')->assertSee('Vente (seulement si cet administrateur vend)');
 
-        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), PermissionRegistry::modeleDeLAdministrateur())));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER])), PermissionRegistry::modeleDeLAdministrateur());
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce))));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER])), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
         $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_vente'));
         $page->setActionData(['name' => 'Alix', 'portee' => 'tous'])
             ->callMountedAction()
@@ -513,7 +514,7 @@ class AdministrateursTest extends TestCase
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()]);
+        $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], [...PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), ...PermissionRegistry::deVente()]);
         $vendre = fn (Magasin $magasin): Facture => app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($administrateur, Client::factory()->create(), $this->lignes()));
 
         $this->assertSame($lyon->id, $vendre($lyon)->magasin_id);
@@ -541,7 +542,7 @@ class AdministrateursTest extends TestCase
 
         $page = Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])->mountAction('changerLeRoleDeSociete');
         $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_vente'));
-        $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(), $page->get('mountedActionsData.0.autorisations_magasin'));
+        $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), $page->get('mountedActionsData.0.autorisations_magasin'));
         $page->setActionData(['role_societe' => RoleSociete::Administrateur->value, 'portee' => 'tous'])->callMountedAction()->assertHasNoActionErrors();
 
         $administrateur = $vendeur->fresh();

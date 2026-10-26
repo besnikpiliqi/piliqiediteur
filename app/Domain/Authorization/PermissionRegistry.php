@@ -2,6 +2,7 @@
 
 namespace App\Domain\Authorization;
 
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use InvalidArgumentException;
 
 /**
@@ -30,9 +31,16 @@ use InvalidArgumentException;
  * pour tous les magasins ou pour chaque magasin de sa sélection (voir
  * modeleDeLAdministrateur()), celles de la vente seulement s'il les lui
  * coche. Chaque autorisation est rangée, en toutes lettres, parmi celles
- * de la vente ou celles qui n'en sont pas (voir horsVente()). Les
- * autorisations de la société elle-même (gérer ses magasins, nommer ses
- * responsables, ses paramètres) sont à part (voir AutorisationsSociete).
+ * de la vente ou celles qui n'en sont pas (voir horsVente()), et dans une
+ * seule famille : celle des articles (voir articles()), qui n'existe que
+ * dans les magasins d'une société qui a des articles (voir
+ * TypeDActivite::aDesArticles() et pourLeType()), ou la famille commune,
+ * toutes les autres ; le référentiel en base porte la famille de chacune.
+ * Dans un magasin, les autorisations de tout compte, les modèles qui les
+ * précochent et les cases proposées se croisent avec celles du type
+ * d'activité de sa société. Les autorisations de la société elle-même
+ * (gérer ses magasins, nommer ses responsables, ses paramètres) sont à
+ * part (voir AutorisationsSociete).
  */
 final class PermissionRegistry
 {
@@ -61,7 +69,7 @@ final class PermissionRegistry
      */
     public const FOURNISSEUR_ARCHIVER = 'fournisseur.archiver';
 
-    // Produits -- et services (voir ServicePolicy) : tout le catalogue
+    // Produits, les articles achetés et suivis en stock (voir ProduitPolicy)
     public const PRODUIT_VIEW = 'produit.view';
 
     public const PRODUIT_CREATE = 'produit.create';
@@ -73,6 +81,14 @@ final class PermissionRegistry
      * ne s'archive pas : il se retire de la caisse (voir ServicePolicy).
      */
     public const PRODUIT_ARCHIVER = 'produit.archiver';
+
+    // Services, les prestations du magasin (voir ServicePolicy), dans tous
+    // les types qui ont un magasin
+    public const SERVICE_VIEW = 'service.view';
+
+    public const SERVICE_CREATE = 'service.create';
+
+    public const SERVICE_UPDATE = 'service.update';
 
     /**
      * Gérer le stock du magasin : reçoit les alertes de stock bas ou
@@ -236,6 +252,14 @@ final class PermissionRegistry
     public const CAISSE_SECURISEE_CONSULTER = 'caisse_securisee.consulter';
 
     /**
+     * La famille des articles (voir articles()) et la famille commune, telles
+     * que le référentiel en base les porte.
+     */
+    public const FAMILLE_ARTICLES = 'articles';
+
+    public const FAMILLE_COMMUNE = 'commune';
+
+    /**
      * @return list<string>
      */
     public static function toutes(): array
@@ -244,6 +268,7 @@ final class PermissionRegistry
             self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_ARCHIVER,
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_ARCHIVER,
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
+            self::SERVICE_VIEW, self::SERVICE_CREATE, self::SERVICE_UPDATE,
             self::STOCK_VENDRE_SANS_STOCK, self::VENTE_REMISES_ET_PRIX,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::FACTURE_JUSTIFIER, self::RELANCES_REGLER,
@@ -277,6 +302,7 @@ final class PermissionRegistry
             self::CLIENT_VIEW,
             self::FOURNISSEUR_VIEW,
             self::PRODUIT_VIEW, self::PRODUIT_VOIR_VALEUR_STOCK,
+            self::SERVICE_VIEW,
             self::DEVIS_VIEW,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES,
             self::PAIEMENT_VIEW,
@@ -340,6 +366,7 @@ final class PermissionRegistry
             self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_ARCHIVER,
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_ARCHIVER,
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
+            self::SERVICE_VIEW, self::SERVICE_CREATE, self::SERVICE_UPDATE,
             self::VENTE_REMISES_ET_PRIX,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_ENVOYER, self::FACTURE_JUSTIFIER, self::RELANCES_REGLER,
@@ -354,18 +381,63 @@ final class PermissionRegistry
     }
 
     /**
-     * Les autorisations du propriétaire dans chacun des magasins de sa
-     * société, sans case : toutes, sauf celles de la vente (voir
-     * deVente()), dans l'ordre alphabétique. Il supervise et contrôle : il
-     * fait les avoirs et les devis, contre-passe, envoie et relance,
-     * clôture la journée et ferme la caisse d'un vendeur, mais ne crée,
-     * n'émet ni n'encaisse jamais aucune vente.
+     * La famille des articles, en toutes lettres : les fournisseurs, les
+     * produits et leur stock, le barème des prix de vente, la vente sans
+     * stock, les achats et les avoirs fournisseur, et les preuves d'export
+     * et de livraison et le bordereau de détaxe, qui ne portent que sur des
+     * biens. Elles n'existent que dans les magasins d'une société qui a
+     * des articles (voir pourLeType()) : ni proposées, ni précochées, ni
+     * lues ailleurs, et la base refuse de les cocher (voir
+     * GardesDesTypesDActivite). Toutes les autres forment la famille
+     * commune.
      *
      * @return list<string>
      */
-    public static function duProprietaire(): array
+    public static function articles(): array
     {
-        $autorisations = array_values(array_diff(self::toutes(), self::deVente()));
+        return [
+            self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_ARCHIVER,
+            self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK,
+            self::PRIX_VENTE_REGLER,
+            self::STOCK_VENDRE_SANS_STOCK,
+            self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
+            self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
+            self::FACTURE_JUSTIFIER,
+        ];
+    }
+
+    /**
+     * Les autorisations qui existent dans les magasins d'une société de ce
+     * type, dans l'ordre du registre : toutes pour une société qui a des
+     * articles, toutes sauf celles des articles (voir articles()) pour une
+     * société de services, aucune pour un cabinet d'expertise comptable,
+     * qui n'a aucun magasin.
+     *
+     * @return list<string>
+     */
+    public static function pourLeType(TypeDActivite $type): array
+    {
+        return match (true) {
+            ! $type->aDesMagasins() => [],
+            $type->aDesArticles() => self::toutes(),
+            default => array_values(array_diff(self::toutes(), self::articles())),
+        };
+    }
+
+    /**
+     * Les autorisations du propriétaire dans chacun des magasins de sa
+     * société, sans case : toutes celles du type de la société (voir
+     * pourLeType()), sauf celles de la vente (voir deVente()), dans l'ordre
+     * alphabétique. Il supervise et contrôle : il fait les avoirs et les
+     * devis, contre-passe, envoie et relance, clôture la journée et ferme
+     * la caisse d'un vendeur, mais ne crée, n'émet ni n'encaisse jamais
+     * aucune vente.
+     *
+     * @return list<string>
+     */
+    public static function duProprietaire(TypeDActivite $type): array
+    {
+        $autorisations = array_values(array_diff(self::pourLeType($type), self::deVente()));
         sort($autorisations);
 
         return $autorisations;
@@ -374,15 +446,16 @@ final class PermissionRegistry
     /**
      * Le modèle des autorisations de magasin d'un nouvel administrateur,
      * que le propriétaire décoche à son gré (voir
-     * CreerAdministrateurAction) : toutes, sauf les paramètres du magasin
-     * et les autorisations de vente (voir deVente()), que le propriétaire
-     * coche pour qui il veut.
+     * CreerAdministrateurAction) : toutes celles du type de la société
+     * (voir pourLeType()), sauf les paramètres du magasin et les
+     * autorisations de vente (voir deVente()), que le propriétaire coche
+     * pour qui il veut.
      *
      * @return list<string>
      */
-    public static function modeleDeLAdministrateur(): array
+    public static function modeleDeLAdministrateur(TypeDActivite $type): array
     {
-        return array_values(array_diff(self::toutes(), [self::PARAMETRES_GERER], self::deVente()));
+        return array_values(array_diff(self::pourLeType($type), [self::PARAMETRES_GERER], self::deVente()));
     }
 
     /**
@@ -410,19 +483,27 @@ final class PermissionRegistry
     }
 
     /**
-     * Les autorisations cochées pour une affectation, refusées dès que
-     * l'une d'elles est inconnue, sans doublon, dans l'ordre alphabétique.
+     * Les autorisations cochées pour une affectation dans un magasin d'une
+     * société de ce type, refusées dès que l'une d'elles est inconnue ou
+     * n'existe pas dans ce type (voir pourLeType()), sans doublon, dans
+     * l'ordre alphabétique.
      *
      * @param  array<array-key, mixed>  $permissions
      * @return list<string>
      *
      * @throws InvalidArgumentException
      */
-    public static function verifierConnues(array $permissions): array
+    public static function verifierConnues(array $permissions, TypeDActivite $type): array
     {
+        $duType = self::pourLeType($type);
+
         foreach ($permissions as $permission) {
             if (! is_string($permission) || ! in_array($permission, self::toutes(), true)) {
                 throw new InvalidArgumentException('Autorisation inconnue : '.(is_scalar($permission) ? $permission : get_debug_type($permission)));
+            }
+
+            if (! in_array($permission, $duType, true)) {
+                throw new InvalidArgumentException('Autorisation qui n\'existe pas pour une société « '.$type->getLabel().' » : '.(self::libelles()[$permission] ?? $permission));
             }
         }
 
@@ -451,13 +532,16 @@ final class PermissionRegistry
             self::FOURNISSEUR_CREATE => 'Fournisseurs : créer',
             self::FOURNISSEUR_UPDATE => 'Fournisseurs : modifier',
             self::FOURNISSEUR_ARCHIVER => 'Fournisseurs : archiver et restaurer',
-            self::PRODUIT_VIEW => 'Produits et services : voir',
-            self::PRODUIT_CREATE => 'Produits et services : créer',
-            self::PRODUIT_UPDATE => 'Produits et services : modifier',
+            self::PRODUIT_VIEW => 'Produits : voir',
+            self::PRODUIT_CREATE => 'Produits : créer',
+            self::PRODUIT_UPDATE => 'Produits : modifier',
             self::PRODUIT_ARCHIVER => 'Produits : archiver et restaurer',
             self::PRODUIT_AJUSTER_STOCK => 'Produits : gérer le stock (alertes de stock bas ou négatif)',
             self::PRODUIT_VOIR_VALEUR_STOCK => 'Produits : voir la valeur totale du stock',
             self::PRIX_VENTE_REGLER => 'Prix de vente : régler le barème automatique',
+            self::SERVICE_VIEW => 'Services : voir',
+            self::SERVICE_CREATE => 'Services : créer',
+            self::SERVICE_UPDATE => 'Services : modifier',
             self::STOCK_VENDRE_SANS_STOCK => 'Stock : vendre sans stock, après un avertissement',
             self::VENTE_REMISES_ET_PRIX => 'Ventes : accorder des remises et fixer le prix d\'un service',
             self::DEVIS_VIEW => 'Devis : voir',

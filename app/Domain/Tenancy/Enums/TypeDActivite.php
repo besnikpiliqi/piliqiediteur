@@ -19,8 +19,8 @@ use Filament\Support\Contracts\HasLabel;
  * - Commerce (« Commerce ou atelier ») : tout le logiciel, articles achetés
  *   et suivis en stock compris ; le choix conseillé en cas de doute ;
  * - Services (« Services, sans vente d'articles ») : services seulement,
- *   avec la caisse de comptoir ; les métiers du bâtiment s'y inscrivent,
- *   sans règle propre ;
+ *   avec la caisse de comptoir, sans articles (voir aDesArticles()) ; les
+ *   métiers du bâtiment s'y inscrivent, sans règle propre ;
  * - Cabinet (« Cabinet d'expertise comptable ») : sans magasin ni
  *   démonstration (voir aDesMagasins()), son code d'activité 69.20Z
  *   contrôlé au répertoire Sirene avant tout courrier (voir
@@ -104,5 +104,20 @@ enum TypeDActivite: string implements HasLabel
     public function aDesMagasins(): bool
     {
         return $this !== self::Cabinet;
+    }
+
+    /**
+     * Une société de ce type a-t-elle des articles : produits, stock,
+     * achats de marchandises, avoirs fournisseur, inventaire d'ouverture,
+     * barème des prix de vente, vente sans stock, écran des fournisseurs,
+     * natures d'opération qui portent sur des biens, et les autorisations
+     * de la famille des articles (voir PermissionRegistry::articles()) ?
+     * Le commerce seul ; la base refuse les produits, factures d'achat,
+     * avoirs fournisseur et inventaires d'ouverture des autres types (voir
+     * GardesDesTypesDActivite).
+     */
+    public function aDesArticles(): bool
+    {
+        return $this === self::Commerce;
     }
 }

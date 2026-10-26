@@ -295,6 +295,15 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * A-t-elle des articles (voir TypeDActivite::aDesArticles()) ? Une
+     * société « Commerce ou atelier » seule.
+     */
+    public function aDesArticles(): bool
+    {
+        return $this->type_activite->aDesArticles();
+    }
+
+    /**
      * Ses magasins sont-ils tous en lecture seule ? Suspendue, résiliée ou
      * révoquée par l'éditeur, ou son inscription close : consultation et
      * téléchargements seulement, et aucun réglage ne se modifie.

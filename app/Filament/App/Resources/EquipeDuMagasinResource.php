@@ -117,7 +117,7 @@ class EquipeDuMagasinResource extends Resource
             ->required()
             ->live()
             ->afterStateUpdated(function (Set $set, ?string $state): void {
-                foreach (static::autorisationsAAfficher(RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut() ?? [], 'autorisations') as $champ => $cases) {
+                foreach (static::autorisationsAAfficher(RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut(Filament::getTenant()->societe->type_activite) ?? [], 'autorisations') as $champ => $cases) {
                     $set($champ, $cases);
                 }
             });

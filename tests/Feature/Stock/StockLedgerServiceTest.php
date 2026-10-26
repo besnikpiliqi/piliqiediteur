@@ -12,6 +12,7 @@ use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource;
@@ -238,9 +239,9 @@ class StockLedgerServiceTest extends TestCase
     public function test_l_alerte_previent_les_membres_a_qui_la_gestion_du_stock_est_cochee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur());
+        $administrateur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
         $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [
-            ...RoleMagasin::Vendeur->permissionsParDefaut(),
+            ...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce),
             PermissionRegistry::PRODUIT_AJUSTER_STOCK,
         ]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
@@ -264,7 +265,7 @@ class StockLedgerServiceTest extends TestCase
         $proprietaireDAilleurs = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ailleurs']));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, [$magasin->id]);
-        $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PRODUIT_AJUSTER_STOCK]);
+        $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::PRODUIT_AJUSTER_STOCK]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
 

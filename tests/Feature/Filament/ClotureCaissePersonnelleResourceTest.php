@@ -14,6 +14,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Widgets\CaissesOuvertesDeLEquipeApercu;
@@ -106,7 +107,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_CREER]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $martin = Client::factory()->create(['nom' => 'Martin']);
@@ -148,7 +149,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
             'Les caisses' => [
                 $this->proprietaireDe($magasin),
                 $this->responsableDeTest($magasin),
-                $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]),
+                $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]),
                 $this->administrateur($magasin),
                 $this->expertComptable($magasin),
             ],
@@ -177,7 +178,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $this->dansLeMagasin($magasin, $vendeur);
         $this->vendreAuComptoir(Client::factory()->create(), 12);
         $administrateur = $this->administrateur($magasin);
-        $sansCloture = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::CLOTURE_CAISSE_GERER])));
+        $sansCloture = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::CLOTURE_CAISSE_GERER])));
 
         $this->dansLeMagasin($magasin, $sansCloture);
         Livewire::test(ListClotureCaissePersonnelles::class)
@@ -209,8 +210,8 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
         $this->dansLeMagasin($magasin, $vendeur);
         $this->vendreAuComptoir(Client::factory()->create(), 12);
-        $vendeurQuiCloture = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
-        $administrateurQuiFerme = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES])));
+        $vendeurQuiCloture = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+        $administrateurQuiFerme = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES])));
         $expert = $this->expertComptable($magasin);
 
         foreach ([$this->proprietaireDe($magasin), $expert, $administrateurQuiFerme] as $compte) {

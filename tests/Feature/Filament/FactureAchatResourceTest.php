@@ -20,6 +20,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureAchatResource;
@@ -1352,7 +1353,7 @@ class FactureAchatResourceTest extends TestCase
     private function connecterUnMembreQuiSaisitLesAchatsSansDroitProduit(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(), PermissionRegistry::FACTURE_ACHAT_CREER], [
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_CREER], [
             'name' => 'Léa', 'email' => 'lea@example.test',
         ]);
         $this->actingAs($membre);

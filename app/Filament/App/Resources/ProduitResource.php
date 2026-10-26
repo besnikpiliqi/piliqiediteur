@@ -205,17 +205,11 @@ class ProduitResource extends Resource
             return null;
         }
 
-        return 'Soit '.self::euros($calculateur->enDecimal($prixUnitaireHt)).' HT + '
-            .self::euros($calculateur->enDecimal($prixUnitaireTtc - $prixUnitaireHt)).' de TVA';
-    }
-
-    /**
-     * Un montant écrit comme sa colonne (« 1234.50 »), tel qu'on le lit :
-     * « 1 234,50 € ».
-     */
-    private static function euros(string $montant): string
-    {
-        return number_format((float) $montant, 2, ',', ' ').' €';
+        // Le prix HT s'écrit comme tout prix unitaire montré en lecture
+        // (voir CalculateurLigne::prixUnitaireAffiche()), la TVA qu'il
+        // laisse sur un article comme un montant.
+        return 'Soit '.$calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal($prixUnitaireHt))).' HT + '
+            .$calculateur->enEuros($prixUnitaireTtc - $prixUnitaireHt).' de TVA';
     }
 
     /**
@@ -260,12 +254,12 @@ class ProduitResource extends Resource
                 // validée ou corrigée, et chaque retour au fournisseur (voir
                 // StockLedgerService). Il ne se modifie jamais ici :
                 // enregistré au dix-millième d'euro, il s'affiche au
-                // centime, comme tout prix unitaire (voir
-                // CalculateurLigne::prixUnitaireAuCentime()).
+                // centime, comme tout prix unitaire montré en lecture (voir
+                // CalculateurLigne::prixUnitaireDansUnChamp()).
                 TextInput::make('cmup_ht')
                     ->label('Coût moyen pondéré (CMUP) HT')
                     ->prefix('€')
-                    ->formatStateUsing(fn (?string $state): ?string => blank($state) ? $state : $calculateur->enDecimal($calculateur->prixUnitaireAuCentime($calculateur->enMillioniemes($state))))
+                    ->formatStateUsing(fn (?string $state): ?string => blank($state) ? $state : $calculateur->prixUnitaireDansUnChamp($calculateur->enMillioniemes($state)))
                     ->helperText(self::AIDE_CMUP)
                     ->disabled(),
                 ...self::prixVenteTtcSchema(),
@@ -284,11 +278,16 @@ class ProduitResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $calculateur = app(CalculateurLigne::class);
+
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
-                Tables\Columns\TextColumn::make('prix_vente_ttc')->label('PV TTC')->money('EUR')->sortable(),
+                Tables\Columns\TextColumn::make('prix_vente_ttc')
+                    ->label('PV TTC')
+                    ->formatStateUsing(fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state)))
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('taux_tva')->label('TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 // Une quantité négative, laissée par une vente sans stock
                 // (R1), reste en rouge, « À régulariser », jusqu'à un achat,

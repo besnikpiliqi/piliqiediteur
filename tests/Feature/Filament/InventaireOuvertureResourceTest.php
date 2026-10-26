@@ -102,6 +102,30 @@ class InventaireOuvertureResourceTest extends TestCase
     }
 
     /**
+     * Le coût unitaire de chaque ligne de la fiche s'écrit comme tout prix
+     * unitaire montré en lecture (voir CalculateurLigne::prixUnitaireAffiche()) :
+     * 1 234,50 €, et non dans l'écriture propre aux montants de Filament
+     * (espace fine insécable entre les milliers), que garde la valeur du
+     * stock, un montant : 2 x 1 234,50 € = 2 469,00 € HT.
+     */
+    public function test_la_fiche_ecrit_le_cout_unitaire_comme_tout_prix_unitaire(): void
+    {
+        $this->magasinDuProprietaire();
+        $this->creationAvecUneLigne([
+            'produit.nom' => 'Vélo',
+            'produit.prix_vente_ttc' => '1990.00',
+            'produit.taux_tva' => '20',
+            'quantite' => 2,
+            'cout_unitaire_ht' => '1234.50',
+        ])->call('create')->assertHasNoFormErrors();
+
+        Livewire::test(ViewInventaireOuverture::class, ['record' => InventaireOuverture::query()->sole()->getRouteKey()])
+            ->assertSee('1 234,50 €')
+            ->assertDontSee("1\u{202F}234,50")
+            ->assertSee("2\u{202F}469,00");
+    }
+
+    /**
      * Un brouillon se supprime depuis la liste comme depuis sa page de
      * modification, avec ses lignes, sans rien créer.
      */
@@ -126,7 +150,10 @@ class InventaireOuvertureResourceTest extends TestCase
     /**
      * La fiche ne compte que le stock qui entre (50 stylos à 0,30 € :
      * 15,00 € HT) et dit, sous la ligne d'un produit qui ne suit pas son
-     * stock, qu'il ne reçoit que son coût de départ.
+     * stock, qu'il ne reçoit que son coût de départ. Le coût unitaire
+     * s'écrit comme tout prix unitaire montré en lecture (voir
+     * CalculateurLigne::prixUnitaireAffiche()), la valeur du stock comme
+     * un montant.
      */
     public function test_la_fiche_dit_qu_un_produit_qui_ne_suit_pas_son_stock_ne_recoit_que_son_cout(): void
     {
@@ -140,8 +167,8 @@ class InventaireOuvertureResourceTest extends TestCase
 
         $fiche->assertSeeInOrder([
             'Valeur du stock HT', "15,00\u{00A0}€",
-            'Carnet A5', "2,00\u{00A0}€", "0,00\u{00A0}€", InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK,
-            'Stylo bleu', "0,30\u{00A0}€", "15,00\u{00A0}€",
+            'Carnet A5', '2,00 €', "0,00\u{00A0}€", InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK,
+            'Stylo bleu', '0,30 €', "15,00\u{00A0}€",
         ]);
         $this->assertSame(1, substr_count($fiche->html(), e(InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK)));
     }

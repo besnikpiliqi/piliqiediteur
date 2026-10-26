@@ -908,14 +908,14 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Un champ de saisie montre le prix tel qu'il est enregistré, quand la
-     * fiche l'affiche au centime (décision de l'éditeur du 25/10/2026) : le
-     * brouillon de 4 articles à 65,00 € TTC à 20 % rouvert garde dans le
-     * champ de son PU HT 54.166667 (65 ÷ 1,2), et dans celui de son PU TTC
-     * 65.00 ; sa fiche montre 54,17 €, et le brouillon réenregistré garde
-     * son PU HT et son total.
+     * Seul un champ où un prix se saisit le montre tel qu'il est
+     * enregistré (décision de l'éditeur du 25/10/2026) : le brouillon de 4
+     * articles à 65,00 € TTC à 20 % rouvert garde 65.00 dans le champ de
+     * son PU TTC ; le champ de son PU HT, qui ne se saisit pas, montre
+     * 54.17 (65 ÷ 1,2 = 54,166667), comme sa fiche, 54,17 € ; le brouillon
+     * réenregistré garde son PU HT au millionième et son total.
      */
-    public function test_le_champ_du_pu_ht_garde_la_valeur_enregistree_quand_la_fiche_l_affiche_au_centime(): void
+    public function test_le_champ_du_pu_ht_montre_le_centime_et_la_ligne_garde_le_millionieme(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->actingAs($this->responsableDeTest($magasin));
@@ -928,7 +928,9 @@ class FactureResourceTest extends TestCase
         $formulaire = Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()]);
         $cle = array_key_first($formulaire->get('data.lignes'));
         $formulaire
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.166667')
+            ->assertFormFieldIsDisabled("lignes.{$cle}.prix_unitaire_ht")
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
+            ->assertFormFieldIsEnabled("lignes.{$cle}.prix_unitaire_ttc")
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '65.00')
             ->call('save')
             ->assertHasNoFormErrors();
@@ -1009,10 +1011,11 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Le PU TTC tapé est gardé tel quel, le PU HT en est la conversion au
-     * centime, et la ligne vaut quantité x PU TTC : 3 x 10,05 € = 30,15 €
-     * TTC, dont 30,15 ÷ 1,2 = 25,125 -> 25,13 € HT, un demi-centime exact
-     * arrondi au centime supérieur (réponse Q2).
+     * Le PU TTC tapé est gardé tel quel, le PU HT en est la conversion,
+     * montrée au centime et enregistrée au millionième, et la ligne vaut
+     * quantité x PU TTC : 3 x 10,05 € = 30,15 € TTC, dont 30,15 ÷ 1,2 =
+     * 25,125 -> 25,13 € HT, un demi-centime exact arrondi au centime
+     * supérieur (réponse Q2).
      */
     public function test_le_pu_ttc_saisi_est_garde_tel_quel(): void
     {
@@ -1026,18 +1029,21 @@ class FactureResourceTest extends TestCase
         $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
         $cle = array_key_first($component->get('data.lignes'));
 
-        // 10,05 € TTC / 1,20 = 8,375 € HT, au millionième d'euro (Q1-b).
+        // 10,05 € TTC / 1,20 = 8,375 € HT, enregistré au millionième d'euro
+        // (Q1-b) et montré au centime, un demi-centime exact au centime
+        // supérieur (décision de l'éditeur du 25/10/2026).
         $component
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.375')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.38')
             ->assertSee('30,15 €')
             ->call('create')
             ->assertHasNoFormErrors();
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         $this->assertSame(['25.13', '5.02', '30.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['10.05', '8.375000'], [$facture->lignes()->sole()->prix_unitaire_ttc, $facture->lignes()->sole()->prix_unitaire_ht]);
     }
 
     /**
@@ -1506,11 +1512,12 @@ class FactureResourceTest extends TestCase
 
         $component
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.333333')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
             ->call('save')
             ->assertHasNoFormErrors();
 
         $this->assertSame('80.00', $facture->fresh()->total_ttc);
+        $this->assertSame('33.333333', $facture->lignes()->sole()->prix_unitaire_ht);
     }
 
     public function test_laction_modifier_disparait_des_quune_facture_est_emise(): void

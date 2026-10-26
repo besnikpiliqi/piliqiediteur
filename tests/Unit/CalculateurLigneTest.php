@@ -580,18 +580,23 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Un PU HT au millionième se lit dans sa colonne decimal(18,6), s'écrit
-     * comme elle et se montre dans un champ avec ses décimales utiles, deux
-     * au moins, tel qu'il est enregistré ; un flottant ou une septième
-     * décimale ne se lit pas.
+     * Un PU HT au millionième se lit dans sa colonne decimal(18,6) et
+     * s'écrit comme elle ; le champ d'une ligne de vente, où il ne se saisit
+     * pas, le montre arrondi au centime, comme tout prix unitaire montré en
+     * lecture (décision de l'éditeur du 25/10/2026), un demi-centime exact
+     * au centime supérieur : 54.17 pour 54,166667 €, 8.33 pour 8,325 € ;
+     * un flottant ou une septième décimale ne se lit pas.
      */
-    public function test_un_pu_ht_au_millionieme_se_lit_et_s_ecrit_avec_ses_decimales_utiles(): void
+    public function test_un_pu_ht_au_millionieme_se_lit_et_s_ecrit_comme_sa_colonne_et_se_montre_au_centime_dans_un_champ(): void
     {
         $calculateur = $this->calculateur();
 
         $this->assertSame([833333, 10010000, 12000000], [$calculateur->enMillioniemes('0.833333'), $calculateur->enMillioniemes('10.01'), $calculateur->enMillioniemes(12)]);
         $this->assertSame(['0.833333', '10.000000'], [$calculateur->enDecimalAuMillionieme(833333), $calculateur->enDecimalAuMillionieme(10000000)]);
-        $this->assertSame(['0.833333', '8.325', '12.00'], [$calculateur->enDecimalUtile(833333), $calculateur->enDecimalUtile(8325000), $calculateur->enDecimalUtile(12000000)]);
+        $this->assertSame(
+            ['0.83', '8.33', '8.32', '12.00', '54.17'],
+            array_map($calculateur->prixUnitaireDansUnChamp(...), [833333, 8325000, 8324999, 12000000, 54166667]),
+        );
         foreach ([0.833333, '0.8333333', '1,5'] as $illisible) {
             $this->assertThrows(fn () => $calculateur->enMillioniemes($illisible), InvalidArgumentException::class, 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
         }

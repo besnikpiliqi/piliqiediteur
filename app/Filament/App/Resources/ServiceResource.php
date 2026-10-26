@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
@@ -147,10 +148,16 @@ class ServiceResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $calculateur = app(CalculateurLigne::class);
+
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
-                Tables\Columns\TextColumn::make('prix_ttc')->label('Prix de référence TTC')->money('EUR')->placeholder('Non fixé')->sortable(),
+                Tables\Columns\TextColumn::make('prix_ttc')
+                    ->label('Prix de référence TTC')
+                    ->formatStateUsing(fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state)))
+                    ->placeholder('Non fixé')
+                    ->sortable(),
                 Tables\Columns\IconColumn::make('actif')->label('Proposé à la caisse')->boolean(),
                 Tables\Columns\IconColumn::make('frais_accessoires')->label('Frais accessoires')->boolean()->toggleable(),
                 Tables\Columns\IconColumn::make('lieu_specifique')->label('Lieu fixé par la loi')->boolean()->toggleable(),

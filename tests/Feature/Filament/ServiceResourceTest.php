@@ -30,6 +30,25 @@ class ServiceResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$serviceAutreMagasin]);
     }
 
+    /**
+     * Le prix de référence de la liste s'écrit comme tout prix unitaire
+     * montré en lecture (voir CalculateurLigne::prixUnitaireAffiche()) :
+     * 1 234,50 €, et non dans l'écriture propre aux montants de Filament
+     * (espace fine insécable entre les milliers) ; un service sans prix de
+     * référence le dit.
+     */
+    public function test_la_liste_ecrit_le_prix_de_reference_comme_tout_prix_unitaire(): void
+    {
+        $this->connecterProprietaire();
+        Service::factory()->auPrixDe('1234.50')->create(['nom' => 'Révision complète']);
+        Service::factory()->create(['nom' => 'Diagnostic']);
+
+        Livewire::test(ManageServices::class)
+            ->assertSee('1 234,50 €')
+            ->assertDontSee("1\u{202F}234,50")
+            ->assertSee('Non fixé');
+    }
+
     public function test_le_proprietaire_cree_un_service(): void
     {
         $magasin = $this->connecterProprietaire();

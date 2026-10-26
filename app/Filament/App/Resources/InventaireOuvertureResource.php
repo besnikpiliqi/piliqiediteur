@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
@@ -201,6 +202,8 @@ class InventaireOuvertureResource extends Resource
 
     public static function infolist(Infolist $infolist): Infolist
     {
+        $calculateur = app(CalculateurLigne::class);
+
         return $infolist->schema([
             InfolistSection::make('Inventaire d\'ouverture')->schema([
                 TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore validé)'),
@@ -221,7 +224,9 @@ class InventaireOuvertureResource extends Resource
                             ->placeholder('Générée à la validation'),
                         TextEntry::make('description')->label('Produit'),
                         TextEntry::make('quantite')->label('Quantité'),
-                        TextEntry::make('cout_unitaire_ht')->label('Coût unitaire HT')->money('EUR'),
+                        TextEntry::make('cout_unitaire_ht')
+                            ->label('Coût unitaire HT')
+                            ->formatStateUsing(fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state))),
                         TextEntry::make('valeur_ht')
                             ->label('Valeur du stock HT')
                             ->money('EUR')

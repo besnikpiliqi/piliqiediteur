@@ -126,7 +126,7 @@ class DerogationsDePrix
         }
 
         if ($produit !== null && $prix !== $this->calculateur->enCentiemes($produit->prix_vente_ttc)) {
-            return "Vendre « {$article} » à ".self::euros($ligne['prix_unitaire_ttc']).' au lieu de '.self::euros($produit->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
+            return "Vendre « {$article} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($produit->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
         }
 
         if ($service === null || $service->estASonPrixDeReference($prix, $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']), $contexte)) {
@@ -140,7 +140,7 @@ class DerogationsDePrix
         $prixDeReference = $service->prixDeReferenceDans($contexte);
 
         if ($prix !== $this->calculateur->enCentiemes($prixDeReference)) {
-            return "Vendre « {$article} » à ".self::euros($ligne['prix_unitaire_ttc']).' au lieu de '.self::euros($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
+            return "Vendre « {$article} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
         }
 
         return "Vendre « {$article} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($service->taux_tva).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';
@@ -165,14 +165,13 @@ class DerogationsDePrix
     }
 
     /**
-     * Un prix écrit comme sa colonne (« 1234.50 »), tel qu'on le lit :
+     * Un prix écrit comme sa colonne (« 1234.50 »), tel que le montre tout
+     * prix unitaire en lecture (voir CalculateurLigne::prixUnitaireAffiche()) :
      * « 1 234,50 € ».
      */
-    private static function euros(string $prix): string
+    private function prixUnitaire(string $prix): string
     {
-        [$euros, $centimes] = explode('.', $prix);
-
-        return number_format((int) $euros, 0, ',', ' ').','.$centimes.' €';
+        return $this->calculateur->prixUnitaireAffiche($this->calculateur->enMillioniemes($prix));
     }
 
     private static function pourcentage(mixed $pourcentage): string

@@ -545,6 +545,43 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * L'exemple de l'éditeur à la caisse (décision du 25/10/2026) : le
+     * champ du PU HT d'une ligne de 4 articles à 65,00 € TTC à 20 %, qui
+     * ne se saisit pas, montre 54.17 et non 54.166667, comme tout prix
+     * unitaire montré en lecture ; le PU TTC saisi garde 65.00, les totaux
+     * se calculent sans ce prix affiché (216,67 € HT, et non 4 x 54,17 € =
+     * 216,68 €), et le ticket encaissé enregistre et signe le PU HT au
+     * millionième.
+     */
+    public function test_le_pu_ht_d_une_ligne_s_affiche_au_centime_et_le_ticket_garde_le_millionieme(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran', 'prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $ecran->id, 'quantite' => 4]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->assertFormFieldIsDisabled("lignes.{$cle}.prix_unitaire_ht")
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '65.00')
+            ->assertSee('Total HT 216,67 € · TVA 43,33 € · Total TTC 260,00 €')
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+
+        $ticket = Facture::query()->sole();
+        $this->assertSame(['216.67', '43.33', '260.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertSame(['65.00', '54.166667'], [$ticket->lignes->sole()->prix_unitaire_ttc, $ticket->lignes->sole()->prix_unitaire_ht]);
+        $signe = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Vente->value)
+            ->where('document_type', $ticket->getMorphClass())
+            ->where('document_id', $ticket->getKey())
+            ->sole()
+            ->contenuSigne()['donnees']['document'];
+        $this->assertSame([54166667], array_column($signe['lignes'], 'prix_unitaire_ht'));
+    }
+
+    /**
      * Point 12 : aucune ligne ne montre de total sous elle, ni son HT ni sa
      * TVA, qui dépendent des autres lignes de son taux ; seuls les totaux
      * du document s'affichent. Deux lignes de 25,00 € montrent 50,00 €

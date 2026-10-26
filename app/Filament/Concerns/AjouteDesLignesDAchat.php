@@ -122,7 +122,7 @@ trait AjouteDesLignesDAchat
             ->helperText(function (Get $get, Placeholder $component): string {
                 $montants = self::montantsDeLaLigneDAchat($get, $component);
 
-                return ($get('quantite') ?? 0).' x '.self::montantEnTexte($get('prix_unitaire_ht') ?? '0').' HT'
+                return ($get('quantite') ?? 0).' x '.self::prixUnitaireEnTexte($get('prix_unitaire_ht')).' HT'
                     .(filled($get('remise_pourcentage')) && (float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
                     .' = '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
             });
@@ -142,7 +142,7 @@ trait AjouteDesLignesDAchat
                     return '—';
                 }
 
-                $vente = self::montantEnTexte((float) $get('produit.prix_vente_ttc')).' TTC l\'article';
+                $vente = self::prixUnitaireEnTexte($get('produit.prix_vente_ttc')).' TTC l\'article';
                 $tauxTva = ProduitResource::tauxDeTvaSaisi($get('produit.taux_tva')) ?? ProduitResource::tauxDeTvaSaisi($get('taux_tva'));
 
                 if ($tauxTva === null) {

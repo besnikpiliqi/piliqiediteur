@@ -179,12 +179,19 @@ class ParametresPrixDeVente extends Page implements HasForms
             }
 
             $beneficeReel = $calculateur->beneficeUnitaire((float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($prix['prix_vente_ttc']), SaisieDecimale::enCentiemes($tauxTva))), $prixAchatHt);
+            // Les prix s'écrivent comme tout prix unitaire montré en lecture
+            // (voir CalculateurLigne::prixUnitaireAffiche()), les bénéfices
+            // comme des montants.
+            [$prixDeVente, $prixCible] = array_map(
+                fn (float $prixTtc): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal(SaisieDecimale::enCentiemes($prixTtc)))),
+                [$prix['prix_vente_ttc'], $prix['prix_cible_ttc']],
+            );
         } catch (InvalidArgumentException) {
             return '—';
         }
 
-        return self::euros($prix['prix_vente_ttc']).' TTC'
-            .($prix['prix_vente_ttc'] !== $prix['prix_cible_ttc'] ? ' (prix cible '.self::euros($prix['prix_cible_ttc']).')' : '')
+        return $prixDeVente.' TTC'
+            .($prixDeVente !== $prixCible ? ' (prix cible '.$prixCible.')' : '')
             .' · bénéfice réel '.self::euros($beneficeReel).' HT (visé '.self::euros($prix['benefice']).')';
     }
 

@@ -694,19 +694,6 @@ class CalculateurLigne
     }
 
     /**
-     * Un prix en millionièmes avec ses décimales utiles, deux au moins,
-     * tel qu'un champ le montre : « 0.833333 », « 8.325 », « 12.00 ».
-     *
-     * @throws InvalidArgumentException
-     */
-    public function enDecimalUtile(int $millioniemes): string
-    {
-        [$unites, $decimales] = explode('.', $this->enDecimalAuMillionieme($millioniemes));
-
-        return $unites.'.'.str_pad(rtrim($decimales, '0'), 2, '0');
-    }
-
-    /**
      * Un prix unitaire en millionièmes, tel qu'il s'affiche (décision de
      * l'éditeur du 25/10/2026), en centimes : arrondi une fois au centime
      * le plus proche, un demi-centime exact au centime supérieur --
@@ -728,17 +715,36 @@ class CalculateurLigne
 
     /**
      * La mise en forme de tout prix unitaire que montre en lecture un
-     * document, une fiche, une liste ou la caisse, PU HT comme PU TTC,
-     * vente comme achat : arrondi au centime (voir prixUnitaireAuCentime()),
-     * écrit comme un montant (voir enEuros()) : « 54,17 € », « 0,83 € »,
-     * « 1 000,00 € ». Un champ de saisie montre, lui, le prix tel qu'il est
-     * enregistré (voir enDecimalUtile()).
+     * document, une fiche, une liste, une aide, un message ou la caisse, PU
+     * HT comme PU TTC, prix de vente, prix de référence, prix d'achat ou
+     * coût, vente comme achat : arrondi au centime (voir
+     * prixUnitaireAuCentime()), écrit comme un montant (voir enEuros()) :
+     * « 54,17 € », « 0,83 € », « 1 000,00 € ». Un prix enregistré au
+     * centime s'y écrit tel quel. Un champ où le prix ne se saisit pas le
+     * montre de même au centime (voir prixUnitaireDansUnChamp()) ; un champ
+     * où il se saisit, tel qu'il est enregistré.
      *
      * @throws InvalidArgumentException
      */
     public function prixUnitaireAffiche(int $millioniemes): string
     {
         return $this->enEuros($this->prixUnitaireAuCentime($millioniemes));
+    }
+
+    /**
+     * Un prix unitaire tel que le montre un champ où il ne se saisit pas :
+     * le PU HT d'une ligne de vente, simple conversion de son PU TTC saisi,
+     * ou le coût moyen d'un produit, que seuls les achats, les retours et
+     * les inventaires font évoluer. Arrondi au centime comme tout prix
+     * unitaire montré en lecture (voir prixUnitaireAuCentime()), il s'écrit
+     * comme une colonne au centime (voir enDecimal()) : « 54.17 » pour
+     * 54,166667 €, « 0.83 », « 12.00 ».
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireDansUnChamp(int $millioniemes): string
+    {
+        return $this->enDecimal($this->prixUnitaireAuCentime($millioniemes));
     }
 
     /**

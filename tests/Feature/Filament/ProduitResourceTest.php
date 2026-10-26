@@ -155,7 +155,7 @@ class ProduitResourceTest extends TestCase
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.333333')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
             ->assertSee('80,00 €')
             ->assertDontSee('79,99 €')
             ->call('create')
@@ -573,6 +573,23 @@ class ProduitResourceTest extends TestCase
             ->filterTable('statut_stock', 'en_stock')
             ->assertCanSeeTableRecords([$enStock])
             ->assertCanNotSeeTableRecords([$epuise, $sansSuiviAZero, $sansSuiviAvecQuantite]);
+    }
+
+    /**
+     * Le prix de vente de la liste s'écrit comme tout prix unitaire montré
+     * en lecture (voir CalculateurLigne::prixUnitaireAffiche()) : 1 234,50 €,
+     * comme dans le sélecteur de produits de la caisse, et non dans
+     * l'écriture propre aux montants de Filament (espace fine insécable
+     * entre les milliers).
+     */
+    public function test_la_liste_ecrit_le_prix_de_vente_comme_tout_prix_unitaire(): void
+    {
+        $this->connecterProprietaire();
+        Produit::factory()->create(['nom' => 'Vélo', 'prix_vente_ttc' => '1234.50', 'suivi_stock' => false]);
+
+        Livewire::test(ListProduits::class)
+            ->assertSee('1 234,50 €')
+            ->assertDontSee("1\u{202F}234,50");
     }
 
     /**

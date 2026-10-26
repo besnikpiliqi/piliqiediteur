@@ -2,10 +2,13 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Get;
 use Illuminate\Support\HtmlString;
+use InvalidArgumentException;
 
 /**
  * Prix et totaux des lignes d'un document à l'écran, partagés par les
@@ -58,6 +61,24 @@ trait SaisitLesPrixDeLigne
     private static function montantEnTexte(float|string $montant): string
     {
         return number_format((float) $montant, 2, ',', ' ').' €';
+    }
+
+    /**
+     * Un prix unitaire du formulaire tel que le montre une aide ou un
+     * résumé, comme tout prix unitaire montré en lecture (voir
+     * CalculateurLigne::prixUnitaireAffiche()) : au centime que retient
+     * son enregistrement (voir SaisieDecimale), « 1 234,50 € » ; « — »
+     * tant qu'il n'est pas un prix lisible.
+     */
+    private static function prixUnitaireEnTexte(mixed $prix): string
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        try {
+            return $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal(SaisieDecimale::enCentiemes($prix))));
+        } catch (InvalidArgumentException) {
+            return '—';
+        }
     }
 
     /**

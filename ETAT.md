@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 10:53 UTC par pilotage-sync.sh : « Ne prend comme dernière course que celle de la chaîne de lots ».
+Mis à jour le 26/10/2026 à 11:09 UTC par pilotage-sync.sh : « Complète la fiche de reprise après sa relecture à froid ; faketime et fuseau UTC dans la chaîne ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

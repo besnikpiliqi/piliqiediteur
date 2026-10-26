@@ -19,8 +19,11 @@ while IFS= read -r f; do
   if [ -f "$S/$f" ]; then mkdir -p "$W/notes/$(dirname "$f")"; cp "$S/$f" "$W/notes/$f"; fi
 done < "$S/pilotage-fichiers.txt"
 mkdir -p "$W/notes/reprises"
-for f in "$SCRIPTS"/t2-correction-reprise-puis-chaine-*.js "$SCRIPTS"/t3-correction-reprise-puis-chaine-*.js; do
+for f in "$SCRIPTS"/*-correction-reprise-puis-chaine-*.js; do
   [ -f "$f" ] && cp "$f" "$W/notes/reprises/$(basename "$f" | sed 's/-wf_[a-z0-9-]*\.js$/.js/')"
+done
+for f in "$S"/reprises/*.js; do
+  [ -f "$f" ] && cp "$f" "$W/notes/reprises/"
 done
 cp "$S/pilotage-sync.sh" "$S/pilotage-fichiers.txt" "$W/notes/"
 
@@ -64,8 +67,8 @@ JOURNAL=$(ls -t $(grep -lE '"label":"[A-Za-z0-9-]+:(implementation|relecture[12]
 } > "$W/ETAT.md"
 
 TROUVE=0
-if grep -rlE 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}' "$W" --exclude-dir=.git >/dev/null 2>&1; then TROUVE=1; fi
-for v in PILIQI_PG_MOT_DE_PASSE SUPERPDP_CLIENT_SECRET SUPERPDP_CLIENT_ID SUPERPDP_TRICATEL_CLIENT_SECRET SUPERPDP_TRICATEL_CLIENT_ID INSEE_SIRENE_CLE INPI_RNE_IDENTIFIANT INPI_RNE_MOT_DE_PASSE JOURNAL_AUDIT_CLE CAISSE_SECURISEE_CLE_PRIVEE CAISSE_SECURISEE_PHRASE_SECRETE; do
+if grep -rlE 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|[A-Za-z0-9._%+-]+@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|orange|free|laposte|sfr|wanadoo)\.[a-z]{2,}' "$W" --exclude-dir=.git >/dev/null 2>&1; then TROUVE=1; fi
+for v in PILIQI_PG_MOT_DE_PASSE EDITEUR_OPERATEURS PILIQI_EDITEUR_EMAIL JOURNAL_AUDIT_CLE_ID SUPERPDP_CLIENT_SECRET SUPERPDP_CLIENT_ID SUPERPDP_TRICATEL_CLIENT_SECRET SUPERPDP_TRICATEL_CLIENT_ID INSEE_SIRENE_CLE INPI_RNE_IDENTIFIANT INPI_RNE_MOT_DE_PASSE JOURNAL_AUDIT_CLE CAISSE_SECURISEE_CLE_PRIVEE CAISSE_SECURISEE_PHRASE_SECRETE; do
   val="${!v:-}"
   if [ ${#val} -ge 6 ] && grep -rlF -- "$val" "$W" --exclude-dir=.git >/dev/null 2>&1; then TROUVE=1; fi
 done

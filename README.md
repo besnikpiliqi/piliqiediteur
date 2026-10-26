@@ -6,28 +6,27 @@ Cette branche (`claude/pilotage-reprise`) ne contient que les notes de pilotage 
 - `ETAT.md` : l'état du dépôt et de la chaîne, régénéré automatiquement à chaque mise à jour.
 - `notes/` : les fichiers de décision de l'éditeur, les cahiers des charges, les plans, les scripts de la chaîne et le script de mise à jour de cette branche.
 
-La branche est mise à jour après chaque lot poussé (étape `:notes` de la chaîne) et après chaque décision de l'éditeur. Le code, lui, est sur la branche de travail `claude/saas-invoice-editor-architecture-q6eizh` (PR #1 de besnikpiliqi/piliqiediteur), et `CLAUDE.md` de cette branche fait foi pour toutes les règles du projet.
+Le code est sur la branche de travail `claude/saas-invoice-editor-architecture-q6eizh` (PR #1 de besnikpiliqi/piliqiediteur). `CLAUDE.md` de cette branche fait foi pour les règles du projet, sauf sur les sujets où une décision plus récente de l'éditeur l'emporte en attendant le lot qui la reporte dans `CLAUDE.md` (liste au § 7).
 
 ## 1. Règle d'or : une seule session à la fois
 
 Deux sessions qui travaillent en même temps sur la branche de travail se détruisent leur travail. Avant de commencer :
 
-1. L'éditeur arrête l'ancienne session (ou confirme qu'elle est arrêtée). Ne jamais démarrer tant qu'une chaîne y tourne.
-2. Le meilleur moment pour changer de session est entre deux lots, juste après une poussée. Regarder dans `ETAT.md` la partie « Commits locaux pas encore poussés » et « Travail non commité » : tout ce qui n'est pas poussé reste dans le conteneur de l'ancienne session et n'arrive pas dans la nouvelle. Si un lot était en cours, il se refait depuis la dernière tête poussée (relancer le lot entier, pas une reprise).
+1. L'éditeur arrête l'ancienne session (ou confirme qu'elle est arrêtée). Ne jamais démarrer tant qu'une chaîne y tourne. Avant de s'arrêter, l'ancienne session lance une dernière fois `pilotage-sync.sh "Passation"`, pour que `ETAT.md` montre l'état exact.
+2. Le meilleur moment pour changer de session est entre deux lots, juste après une poussée. Dans `ETAT.md`, regarder « Commits locaux pas encore poussés » et « Travail non commité » : tout ce qui n'est pas poussé reste dans le conteneur de l'ancienne session et n'arrive pas dans la nouvelle. Un lot qui n'est pas entièrement poussé se refait en entier depuis la tête poussée (§ 6).
 3. Lire `CLAUDE.md` de la branche de travail en entier, puis cette fiche, puis `ETAT.md`.
 
 ## 2. Le mandat et la façon de travailler
 
 - L'utilisateur est l'éditeur de PILIQI (SaaS français de facturation et de caisse ; Laravel 13, Filament 3.3, PHP 8.3, PHPUnit 12). Il délègue toutes les décisions techniques et demande de finir le logiciel en autonomie, selon le protocole de rigueur de `CLAUDE.md` et la feuille de route qui s'y trouve.
 - Tout se fait et s'écrit en français (réponses, code, commits, documents). Jamais en albanais.
-- Il veut la voie la plus sûre, même si elle est plus longue : chaque lot passe par une implémentation, deux relectures adversariales indépendantes, une correction, les suites complètes SQLite puis PostgreSQL au code 0, faketime aux instants du README, pint, puis la poussée et la CI verte. Il a refusé tout allègement du protocole (« On va pas changer rien »). Ultracode est activé chez lui : orchestrer le travail substantiel avec l'outil Workflow.
-- Une règle métier non tranchée (calcul, arrondi, obligation légale, droits) se soumet à l'éditeur, avec des options et une recommandation, au lieu de choisir. Ses réponses s'écrivent aussitôt dans un fichier de décision de `notes/` (texte d'origine cité, puis règles), et la chaîne lit ce fichier.
-- Il aime les explications simples, concrètes, avec des exemples chiffrés. Il demande souvent pourquoi c'est long : expliquer les relectures, les suites sur deux bases et faketime, sans jamais promettre « zéro défaut ».
-- Seul l'éditeur change les règles de `CLAUDE.md` : un lot qui doit les modifier propose le texte et attend son accord (exemple : la puce « Outillage » approuvée le 25/10/2026).
-- Ne jamais committer ni pousser le travail en cours d'un agent de la chaîne (le crochet d'arrêt le demande à chaque tour : répondre que c'est le travail de l'agent, qui commitera après des suites vertes, et qu'un commit non relu n'est pas poussé avant sa relecture).
-- Pas de PR sans demande. Jamais de poussée forcée ni de réécriture de l'historique de la branche de travail. Une seule nouvelle branche a été autorisée : celle-ci.
-- Lignes de fin de chaque commit :
-  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` et `Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6` (une nouvelle session met son propre lien de session). Aucun identifiant de modèle dans le code, les commits ou la PR.
+- Il veut la voie la plus sûre, même si elle est plus longue : chaque lot passe par une implémentation, deux relectures adversariales indépendantes, une correction, les suites complètes SQLite puis PostgreSQL au code 0, faketime aux instants de la grille du README, pint, puis la poussée et la CI verte. Il a refusé tout allègement du protocole (« On va pas changer rien »). Ultracode est activé chez lui : le travail substantiel s'orchestre avec l'outil Workflow.
+- Une règle métier non tranchée (calcul, arrondi, obligation légale, droits) se soumet à l'éditeur, avec des options et une recommandation, au lieu de choisir. Ses réponses s'écrivent aussitôt dans un fichier de décision de `notes/` (texte d'origine cité, puis règles), la chaîne lit ce fichier, et cette branche est mise à jour dans la minute.
+- Il aime les explications simples, concrètes, avec des exemples chiffrés. Il demande souvent pourquoi c'est long : expliquer les relectures, les suites sur deux bases et faketime, sans jamais promettre « zéro défaut ». Une page privée (outil Artifact) a déjà servi à lui montrer un lot (T2).
+- Seul l'éditeur change les règles de `CLAUDE.md`. Les textes que prévoit un fichier de décision de `notes/` sont approuvés (réponses de l'éditeur, décision qu'il a tranchée, section 2 du plan de la série 8) : les lots les écrivent sans redemander, notamment T3, PU (règle 4), TA, EC, et L1 pour la phrase de l'étape 15 sur le fuseau UTC de la base, demandée par l'éditeur le 26/10/2026. Tout autre changement de `CLAUDE.md` se propose à l'éditeur et attend son accord (exemple : la puce « Outillage », approuvée le 25/10/2026).
+- Ne jamais committer ni pousser le travail en cours d'un agent de la chaîne. Le crochet d'arrêt le demande à chaque tour : répondre que c'est le travail de l'agent, qui commitera après des suites vertes, et qu'un commit non relu n'est pas poussé avant sa relecture.
+- Pas de PR sans demande. Jamais de poussée forcée ni de réécriture de l'historique de la branche de travail. Une seule autre branche a été autorisée : celle-ci.
+- Lignes de fin de chaque commit : `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` et `Claude-Session: <lien de la session>` (la session qui a écrit cette fiche : `https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6` ; une nouvelle session met le sien, § 4). Aucun identifiant de modèle dans le code, les commits ou la PR.
 - Un commentaire GitHub se termine par une ligne `---` puis `_Generated by [Claude Code](https://claude.ai/code)_`.
 
 ## 3. Consignes de sécurité (à garder mot pour mot)
@@ -38,44 +37,61 @@ Deux sessions qui travaillent en même temps sur la branche de travail se détru
 - Conseiller à l'éditeur de renouveler les deux secrets du bac à sable SUPER PDP après les tests.
 - Ne jamais envoyer de vraie requête à SUPER PDP, La Poste, l'INPI, l'INSEE ni à l'annuaire de l'Ordre des experts-comptables : seulement des implémentations factices ou des environnements de test autorisés ; aucune donnée fictive en masse en production.
 - `git stash drop` et `git push origin --delete` ont été refusés par le classificateur (Git Destructive) : ne pas les forcer ; demander à l'éditeur de supprimer lui-même une branche sur GitHub.
-- L'éditeur a un jour collé une clé privée de développement dans la conversation : ne jamais la répéter. Le script `notes/pilotage-sync.sh` refuse de pousser cette branche s'il y trouve une clé privée, un jeton ou la valeur d'une des variables ci-dessus.
+- L'éditeur a un jour collé une clé privée de développement dans la conversation : ne jamais la répéter.
+- `notes/pilotage-sync.sh` refuse de pousser cette branche s'il trouve un en-tête de clé privée, un jeton de la forme `ghp_`, `github_pat_`, `sk-` ou `AKIA`, une adresse de messagerie personnelle (gmail, outlook, hotmail, yahoo…), ou la valeur (6 caractères au moins) d'une des variables ci-dessus définie dans l'environnement ou dans `~/.profile`. Il ne voit pas un secret collé dans la conversation et jamais mis en variable : relire soi-même chaque nouveau fichier de notes avant de le synchroniser.
 
 ## 4. Mettre en place une nouvelle session
 
-1. Le dépôt est cloné par l'environnement dans `/home/user/piliqiediteur`. Récupérer cette branche à côté, sans toucher l'arbre de travail :
-   `git -C /home/user/piliqiediteur fetch origin claude/pilotage-reprise && git -C /home/user/piliqiediteur worktree add <scratchpad>/pilotage-reprise claude/pilotage-reprise`
-2. Copier `notes/*` dans le dossier de travail de la session (`<scratchpad>`), en gardant les sous-dossiers.
-3. Remplacer, dans `serie8-lots.js`, `tva-lots-M0-FIN.js`, les scripts de `reprises/` et `pilotage-sync.sh`, l'ancien chemin `/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad` par le nouveau `<scratchpad>` (constante `S`), et dans `pilotage-sync.sh` les chemins `WF` et `SCRIPTS` (dossiers `subagents/workflows` et `workflows/scripts` du projet de la nouvelle session, sous `~/.claude/projects/`).
-4. Base de test : suivre le README du dépôt (PostgreSQL 17 ou 18 en UTF8, collation C.UTF-8, base `piliqi_test`, rôle `piliqi`). Le mot de passe se met dans `~/.profile` sous `PILIQI_PG_MOT_DE_PASSE` (jamais dans le dépôt ni ici). Après un redémarrage du conteneur : `service postgresql start`. Les commandes de test se lancent sous `bash -lc` pour lire `~/.profile`.
-5. faketime : `apt-get install -y faketime`. Sous PostgreSQL, ajouter `FAKETIME_DONT_RESET=1`. La grille des instants est dans le README du dépôt (paragraphe « Suite sous faketime »).
-6. Outils GitHub : seulement les outils `mcp__github__*` (à charger par ToolSearch), pas de `gh`. CI : workflow `.github/workflows/tests.yml`, sur SQLite et PostgreSQL.
+1. Le dépôt est cloné par l'environnement dans `/home/user/piliqiediteur`. Se placer sur la branche de travail :
+   `git -C /home/user/piliqiediteur fetch origin && git -C /home/user/piliqiediteur checkout claude/saas-invoice-editor-architecture-q6eizh && git -C /home/user/piliqiediteur pull --ff-only`.
+   Vérifier que `git rev-parse --short HEAD` donne la « Tête poussée » de `ETAT.md` et que `git status --short` est vide. Ne jamais travailler sur `main` ni sur une autre branche que l'environnement propose : s'il en impose une autre, demander à l'éditeur avant tout commit. Si le dépôt manque ou si une poussée est refusée : `mcp__claude-code-remote__add_repo` (owner `besnikpiliqi`, repo `piliqiediteur`, access `push`), puis `mcp__claude-code-remote__read_documentation` (topic `github.access`), et demander à l'éditeur de relier son compte GitHub. Ne rien contourner.
+2. Installation, selon le README du dépôt : `composer install` (jamais `composer update`), `cp .env.example .env`, `php artisan key:generate`. Les tests génèrent leur propre clé de signature.
+3. Récupérer cette branche à côté, sans toucher l'arbre de travail :
+   `git -C /home/user/piliqiediteur fetch origin claude/pilotage-reprise && git -C /home/user/piliqiediteur worktree add <scratchpad>/pilotage-reprise claude/pilotage-reprise`,
+   puis copier `notes/*` dans `<scratchpad>` en gardant les sous-dossiers.
+4. Adapter les chemins et le lien de session. N est le nouveau `<scratchpad>`, U l'identifiant de la nouvelle session (nom du dossier parent de `<scratchpad>`, à vérifier par `ls ~/.claude/projects/-home-user-piliqiediteur/`) :
+   ```
+   N=<scratchpad> ; U=$(basename "$(dirname "$N")")
+   sed -i -e "s#/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad#$N#g" \
+     -e "s#/root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb#/root/.claude/projects/-home-user-piliqiediteur/$U#g" \
+     -e "s#session_01K3593fBCSfG8EcbWrZryb6#<identifiant de la nouvelle session>#g" \
+     "$N/serie8-lots.js" "$N/tva-lots-M0-FIN.js" "$N/pilotage-sync.sh"
+   grep -n "00d7e3b2\|01K3593f" "$N"/serie8-lots.js "$N"/tva-lots-M0-FIN.js "$N"/pilotage-sync.sh   # ne doit rien rendre
+   ```
+   La ligne `Claude-Session` se trouve dans `REGLES` des deux scripts de chaîne et dans le commit de `pilotage-sync.sh`. Les journaux des courses sont sous `~/.claude/projects/-home-user-piliqiediteur/<U>/subagents/workflows/<course>/journal.jsonl`, les scripts des courses sous `.../<U>/workflows/scripts/`.
+5. Base de test PostgreSQL. Si elle manque : `apt-get install -y postgresql`. Le cluster doit être en C.UTF-8 (les bases des tests parallèles se créent depuis `template1`) : vérifier par `sudo -u postgres psql -Atc "select datcollate from pg_database where datname='template1'"` ; sinon, tant que le cluster est vide : `pg_dropcluster --stop <version> main && pg_createcluster --locale=C.UTF-8 <version> main && service postgresql start`. Créer le rôle et la base selon le README du dépôt (rôle `piliqi`, base `piliqi_test`, UTF8, collation C.UTF-8). Le mot de passe se met dans `~/.profile` par `export PILIQI_PG_MOT_DE_PASSE=…`, jamais dans le dépôt ni ici ; les commandes de test se lancent sous `bash -lc` pour le lire. L'ancien conteneur avait PostgreSQL 16 en C.UTF-8 (accepté pour les tests locaux) ; la CI teste sur 17 ; la production sera en 17 ou 18. Après un redémarrage du conteneur : `service postgresql start`.
+6. faketime : `apt-get install -y faketime`. Sous PostgreSQL, ajouter `FAKETIME_DONT_RESET=1`. La grille des instants est dans le README du dépôt (paragraphe « Suite sous faketime »).
+7. Exclure les fichiers jetables des agents, que le dépôt n'ignore pas (l'exclusion était locale) : `printf 'tests/Feature/Scratch*\ntests/Feature/Scratch/\n' >> /home/user/piliqiediteur/.git/info/exclude`. Sans elle, un test jetable oublié rend l'arbre sale : la poussée refuse et la chaîne s'arrête, ou le fichier part dans un commit.
+8. Outils : GitHub seulement par les outils `mcp__github__*` (à charger par ToolSearch), pas de `gh`. La chaîne ne tourne que par l'outil Workflow : s'il n'apparaît pas, ni directement ni par ToolSearch, ne pas faire les lots à la main hors de la chaîne ; demander à l'éditeur de l'activer (ultracode) sur ce compte.
 
 ## 5. La chaîne de lots
 
 ### Fonctionnement
 
-- `notes/serie8-lots.js` contient la liste `LOTS` (chaque lot : `id`, `phase`, `titre`, `complement` = cahier des charges et fichiers à lire) et la mécanique : pour chaque lot demandé dans `args.ouverts`, dans l'ordre de `LOTS` :
+- `notes/serie8-lots.js` contient `REGLES` (règles communes à tous les lots, dont la vérification sur les deux moteurs et, depuis le 26/10/2026, la grille faketime avant chaque commit qui touche aux dates et avant le dernier commit du lot), la liste `LOTS` (chaque lot : `id`, `phase`, `titre`, `complement` = cahier des charges et fichiers à lire) et la mécanique. Pour chaque lot demandé dans `args.ouverts`, dans l'ordre de `LOTS` :
   1. `<lot>:implementation` (commits du lot, suites vertes) ;
   2. `<lot>:relecture1` et `<lot>:relecture2` en parallèle (optique fidélité et métier ; optique sécurité, isolation et qualité) : défauts confirmés seulement ;
   3. `<lot>:correction` s'il y a des défauts (un commit « Relecture du lot … ») ;
   4. `<lot>:poussee` (arbre propre, `git push` sans forcer) ;
   5. `<lot>:notes` (lance `pilotage-sync.sh`, qui met cette branche à jour).
   La chaîne s'arrête si un lot n'a pas de commit ou si la poussée échoue.
-- Lancer : outil Workflow avec `scriptPath` = `<scratchpad>/serie8-lots.js` et `args` = `{"ouverts": [ ... les lots restants ... ]}`.
-- Règle apprise : relancer SANS reprise (`resumeFromRunId`), avec seulement les lots restants. La reprise peut manquer le cache et refaire des relectures déjà faites. Ne jamais remettre dans `ouverts` un lot déjà poussé.
-- Une course déjà lancée ne voit pas les modifications du script. Pour insérer un lot ou changer un cahier des charges, arrêter la course entre deux lots (après une poussée) et la relancer. Avant toute modification du script, en garder une copie (`serie8-lots.avant-<raison>.js`).
-- Lot interrompu avec du travail resté dans l'arbre : ajouter une note « REPRISE » au lot, ou écrire un petit script de reprise comme ceux de `notes/reprises/` (consigne exacte de l'agent coupé sauvée dans un fichier, note de reprise, puis la chaîne en sous-course avec les lots restants).
+- Lancer : outil Workflow avec `scriptPath` = `<scratchpad>/serie8-lots.js` et `args` = `{"ouverts": [ ... les lots restants, dans l'ordre ... ]}`, sans `resumeFromRunId`.
+- Lots restants : un lot est fait quand ses commits « (lot X) » sont sur `origin` et, si ses relectures ont trouvé des défauts, son commit « Relecture du lot X … » aussi. `ouverts` reçoit, dans l'ordre de `LOTS`, ceux qui ne sont pas faits. Ne jamais remettre dans `ouverts` un lot déjà poussé.
+- Règle apprise : relancer SANS reprise (`resumeFromRunId`). La reprise peut manquer le cache et refaire des relectures déjà faites.
+- Une course déjà lancée ne voit pas les modifications du script, sauf une sous-course pas encore appelée (le script est lu au moment de l'appel). Pour insérer un lot ou changer un cahier des charges, arrêter la course entre deux lots (après une poussée) et la relancer. Avant toute modification du script, en garder une copie (`serie8-lots.avant-<raison>.js`) et vérifier la syntaxe (`node --check` sur une copie où `export const meta` devient `const meta` et le corps est enveloppé dans une fonction `async`).
+- Lot interrompu, dans le même conteneur, avec du travail resté dans l'arbre : écrire un script de reprise comme ceux de `notes/reprises/` (consigne exacte de l'agent coupé sauvée dans un fichier, note de reprise, poussée, mise à jour des notes, puis la chaîne en sous-course avec les lots restants). En sauvant la consigne (premier message utilisateur de son `agent-*.jsonl`), retirer l'en-tête ajouté par le harnais (« [Workflow harness — computed task] … ») et l'indentation de deux espaces de chaque ligne. Sur un autre conteneur, ne jamais lancer un script de `reprises/` : il suppose le travail non commité et les journaux de l'ancien conteneur.
 
 ### Danger connu : les interruptions coupent les agents
 
 Quand l'éditeur envoie un message pendant qu'un tour est en cours, l'interruption arrête aussi toutes les courses Workflow en arrière-plan. C'est arrivé deux fois (T2 le 25/10 à 23 h 40 UTC, T3 le 26/10 à 10 h 46 UTC). Donc :
-- garder les tours courts quand une chaîne tourne, et prévenir l'éditeur avant un long travail (« ne répondez pas avant que j'écrive C'est fini ») ;
-- après chaque interruption, vérifier la date du dernier fichier `agent-*.jsonl` de la course et sa dernière ligne (« [Request interrupted by user] ») ; si l'agent est coupé : extraire sa consigne (premier message utilisateur du fichier, celui qui contient le cahier des charges), la sauver, et relancer comme dans `notes/reprises/`.
+- garder les tours courts quand une chaîne tourne ; avant un long travail, prévenir l'éditeur (« ne répondez pas avant que j'écrive C'est fini ») ; il a été prévenu qu'il peut écrire sans risque quand la session ne travaille pas ;
+- après chaque interruption, vérifier la date du dernier `agent-*.jsonl` de la course et sa dernière ligne (« [Request interrupted by user] ») ; si l'agent est coupé, le relancer comme ci-dessus.
 
 ### Suivi
 
-- Points de suivi par `mcp__claude-code-remote__send_later` (toutes les 3 à 4 heures), et guets en fond (`until grep … journal.jsonl`, 2 heures au plus). Les journaux de course sont sous `~/.claude/projects/<projet>/subagents/workflows/<course>/journal.jsonl`.
-- CI : vérifier la course GitHub de chaque tête poussée (`mcp__github__actions_list`, `list_workflow_runs` sur la branche). Relancer une seule fois si une machine GitHub s'arrête ; une CI rouge pour une cause réelle se corrige.
+- Points de suivi par `mcp__claude-code-remote__send_later` (toutes les 3 à 4 heures) et guets en fond (`until grep … journal.jsonl`, 2 heures au plus).
+- Dans `ETAT.md`, « étapes commencées » ne dit pas qu'une étape est finie : une étape est finie quand le `journal.jsonl` de sa course a une ligne `"type":"result"` avec la même `key` que sa ligne `"type":"started"`.
+- CI : vérifier la course GitHub de chaque tête poussée (`mcp__github__actions_list`, `list_workflow_runs` sur la branche de travail). Relancer une seule fois si une machine GitHub s'arrête ; une CI rouge pour une cause réelle se corrige.
 - Pour les ateliers de conception (cahiers des charges), travailler sur une copie figée du code : `git archive` d'un commit, plus `vendor` en liens physiques et `vendor/composer` copié.
 
 ## 6. Où en est le projet
@@ -84,35 +100,55 @@ L'état précis (commits, travail en cours, dernière course) est dans `ETAT.md`
 
 ### Fait (étape 1 en cours)
 
-- Lots de décisions 1 à 20 ; architecture société A0 à A6 (+ A4b, A5c) ; série 8 : R6, S8-T, S8-A, S8-P, S8-R, S8-C, S8-E, S8-L, S8-F, S8-O, S8-V, A4c ; T1 (tests déterministes) ; V2 (vérification par courrier) et V2b ; FA1, FA2, FA3 (brouillons et fiches face aux validations simultanées) ; T2 (horodatages en UTC, classe Calendrier) ; T3 (heure locale de chaque magasin) commité, relu, correction en cours au 26/10/2026.
+- Lots de décisions 1 à 20 ; architecture société A0 à A6 (+ A4b, A5c) ; série 8 : R6, S8-T, S8-A, S8-P, S8-R, S8-C, S8-E, S8-L, S8-F, S8-O, S8-V, A4c ; T1 (tests déterministes) ; V2 (vérification par courrier) et V2b ; FA1, FA2, FA3 (brouillons et fiches face aux validations simultanées) ; T2 (horodatages en UTC, classe Calendrier).
 - M0 et M1 poussés par une autre session le 20/10 ont été annulés (5cbe4e2) : la chaîne TVA les refera selon son plan.
 
-### Reste dans la chaîne, dans cet ordre
+### Reste dans la chaîne, dans cet ordre (celui de `LOTS`)
 
-1. **T3** : fin de la correction de relecture, poussée (course `wf_fb31205c-c06`).
-2. **PU** : prix unitaires affichés au centime, calcul inchangé, note de calcul des PDF gardée et complétée (`notes/serie8/reponses-affichage-pu.md`).
-3. **TA** : types d'activité choisis à l'inscription (`reponses-types-activite.md`, puis `decision-types-activite.md`).
-4. **EC** : espace des cabinets d'expertise comptable (`reponses-cabinets.md`, `reponses-types-activite.md`, `decision-types-activite.md`, `decision-espace-cabinets.md`, `avenant-cabinets.md` règles 1 à 9).
-5. **L1** : outillage local (OpenSSL, diagnostic, README) et fuseau UTC de la base fixé par les migrations (points 1, 3 et 4 de `a-faire-apres-chaine.md` ; le point 2 attend l'accord de l'éditeur).
-6. **A7** : procédures de l'éditeur, journal d'audit consultable, conservation (section 3.5.14 de `avenant-cabinets.md`, section 14 de `societe/conception-v2-finale.md`).
+1. **T3** : heure locale de chaque magasin (`t2/reponses-t2.md` Q1, `t3/reponses-t3.md`, `t3/decision-heure-locale.md`). Au 26/10/2026, ses trois commits sont faits et relus, et la correction de relecture tourne dans l'ancien conteneur (course `wf_fb31205c-c06`, script `reprises/t3-correction-reprise-puis-chaine.js`), qui enchaîne ensuite seule PU, TA, EC, L1, A7 et 21 dans une sous-course : l'arrêter avant toute passation (§ 1). Si `origin` n'a pas les commits « (lot T3) » et « Relecture du lot T3 … », une nouvelle session refait T3 en entier : `{"ouverts": ["T3", "PU", "TA", "EC", "L1", "A7", "21"]}`. Les 6 défauts trouvés par la relecture de la première version sont décrits dans `t3/consigne-correction-t3.md`, pour suivre la nouvelle relecture (ne pas les donner tels quels à un agent).
+2. **PU** : prix unitaires affichés au centime, calcul inchangé, note de calcul des PDF gardée et complétée (`serie8/reponses-affichage-pu.md`).
+3. **TA** : types d'activité choisis à l'inscription (`serie8/reponses-types-activite.md`, puis `serie8/decision-types-activite.md`).
+4. **EC** : espace des cabinets d'expertise comptable : `serie8/reponses-cabinets.md`, `serie8/reponses-types-activite.md`, `serie8/decision-types-activite.md`, règles 1 à 9 de `serie8/decision-espace-cabinets.md` (sa règle 10 est remplacée par TA), appliquées selon `serie8/avenant-cabinets.md` (dont la section 3.5.14 est reprise par A7).
+5. **L1** : outillage local (OpenSSL, diagnostic, README) et fuseau UTC de la base fixé par les migrations (points 1, 3 et 4, avec sa suite, de `a-faire-apres-chaine.md`, énumérés dans le complément de L1 depuis le 26/10/2026 ; le point 2 attend l'accord de l'éditeur).
+6. **A7** : procédures de l'éditeur, journal d'audit consultable, conservation (section 14 de `societe/conception-v2-finale.md`, section 3.5.14 de `serie8/avenant-cabinets.md`).
 7. **21** : lot de décisions 21 étendu, vérification transverse de toutes les décisions (matrice décision → test).
+
+### Après la poussée du lot 21
+
+1. Vérifier la CI de la tête poussée et lancer `pilotage-sync.sh`.
+2. Rendre compte à l'éditeur : ce que chaque lot a laissé (« laisses »), la matrice décision → test du lot 21, les choix contestables des fichiers de décision.
+3. Lui redemander le point 2 de `a-faire-apres-chaine.md`.
+4. Préparer la chaîne TVA. Ne pas cocher l'étape 1 : elle se coche au lot FIN de la chaîne TVA.
 
 ### Ensuite
 
-- Chaîne TVA (`notes/tva-lots-M0-FIN.js`), à corriger avant de la lancer selon la section 3.4.2 de `serie8/plan-serie8.md`, l'avenant `serie8/avenant-S8V-A4c.md`, les réponses Q12 (b) et P8 (a) ; M0 et M1 refaits selon `tva/plan-execution.md`. Vérifier les réponses de la série 7 (`tva/reponses-serie7.md`) pour CH3 et CH6.
-- Compléments des décisions 14 à 20 (`decisions/reponses-complements-14-20.md`).
-- Étape 1 bis (campagne de tests initiale), puis les étapes 2 à 15 de la feuille de route de `CLAUDE.md`.
-- Ordres de grandeur donnés à l'éditeur : la chaîne jusqu'à 21 en 4 à 6 jours ; l'étape 1 complète (moteur de TVA d'une vingtaine de lots, compléments) en environ un mois ; les étapes 2 à 15 en plusieurs mois.
+- **Chaîne TVA** (`notes/tva-lots-M0-FIN.js`, écrite le 17/10). Avant de la lancer, en garder une copie, puis la mettre d'accord avec `serie8-lots.js` :
+  1. Mécanique : filtre `args.ouverts` ; arrêt (`break`) si la poussée échoue ; étape `<lot>:notes` qui lance `pilotage-sync.sh "Après le lot <lot>"` ; contrôle de la CI au début de chaque lot ; règle faketime de `REGLES`.
+  2. Contenu : la section 3.4.2 de `serie8/plan-serie8.md`, l'avenant `serie8/avenant-S8V-A4c.md`, les réponses Q12 (b) et P8 (a), puis les décisions postérieures au 17/10 : courrier recommandé (V2, V2b) ; cabinets à la place des experts-comptables de la société (EC), donc retirer « experts-comptables » de la règle des droits de son `REGLES` ; types d'activité (TA), ni achats ni stock pour les services ; calendrier de chaque magasin (T2, T3) ; prix unitaires affichés au centime (PU) ; verrous des brouillons (FA).
+  3. Retirer le complément `reprise` du lot FIN, déjà fait par L1.
+  4. Refaire M0 et M1 selon `tva/plan-execution.md`, puisqu'ils ont été annulés par 5cbe4e2.
+  5. Faire relire la chaîne corrigée sur une copie figée du code, comme les autres ateliers de conception, avant de la lancer.
+- CH3 et CH6 sont tranchés dans `tva/plan-execution-decisions.md` (6.1 f : pas de charges récurrentes, donc pas de lot CH3 ; 6.1 b : avoir lié, donc le lot CH6 existe) ; `tva-lots-M0-FIN.js` les applique déjà.
+- Les compléments 1 à 16 des décisions 14 à 20 (`decisions/reponses-complements-14-20.md`) ne forment pas une chaîne à part : `tva/plan-execution.md` (§ 1.5) les répartit dans la chaîne TVA (C-a pour 2, 4, 6 et 16 ; C-b pour 13 à 15 ; textes de M0 ; M2, M3, M5a à M7). Les compléments 1 et 3 sont déjà faits par S8-R et S8-O (§ 3.4.2 du plan de la série 8).
+- Puis l'étape 1 bis (campagne de tests initiale) et les étapes 2 à 15 de la feuille de route de `CLAUDE.md`.
+- Ordres de grandeur donnés à l'éditeur : la chaîne jusqu'à 21 en 4 à 6 jours ; l'étape 1 complète en environ un mois ; les étapes 2 à 15 en plusieurs mois.
 
-## 7. Index des fichiers de décision
+## 7. Index des fichiers de décision et priorités
 
-Un fichier de réponses de l'éditeur prime toujours sur le cahier des charges qu'il complète.
+Un fichier de réponses de l'éditeur prime toujours sur le cahier des charges qu'il complète. Une décision plus récente de l'éditeur prime sur `CLAUDE.md` et sur les plans plus anciens pour son sujet, jusqu'à ce que le lot qui l'applique réécrive `CLAUDE.md` :
+- `serie8/decision-verification-courrier.md` (19/10, lot V2, fait) sur la conception société et les avenants ;
+- `serie8/decision-espace-cabinets.md` (19/10) sur tout ce que `CLAUDE.md` et les plans disent des experts-comptables, que `CLAUDE.md` décrit encore jusqu'au lot EC ;
+- `serie8/reponses-cabinets.md` (24/10) sur `decision-espace-cabinets.md` et `avenant-cabinets.md` ;
+- `serie8/reponses-types-activite.md` (24/10) sur `decision-types-activite.md` et sur la règle 10 de `decision-espace-cabinets.md` ;
+- `t2/reponses-t2.md` (Q1) sur tout « heure de Paris » dit d'un magasin ;
+- `serie8/reponses-affichage-pu.md` (son dernier texte, du 25/10) sur toute version antérieure.
+Pour le reste, `CLAUDE.md` fait foi.
 
 | Sujet | Fichiers (par ordre de priorité) |
 |---|---|
 | Série 8 (retours de l'éditeur après essai) | `serie8/reponses-serie8.md`, `serie8/plan-serie8.md`, `serie8/demande-editeur.md`, `serie8/reponse-editeur.md`, analyses `serie8/arrondi-et-calculs.md`, `caisse-clotures-jet-ereporting.md`, `ecrans-de-vente.md`, `equipe-et-achats.md` |
 | Administrateurs sans vente, connexion par identifiant | `serie8/avenant-S8V-A4c.md` |
-| Vérification par courrier recommandé | `serie8/decision-verification-courrier.md`, `serie8/reponses-v2.md`, `serie8/notes-lot-V2.md` |
+| Vérification par courrier recommandé | `serie8/reponses-v2.md`, `serie8/decision-verification-courrier.md`, `serie8/notes-lot-V2.md` |
 | Cabinets d'expertise comptable | `serie8/reponses-cabinets.md`, `serie8/decision-espace-cabinets.md`, `serie8/avenant-cabinets.md` |
 | Types d'activité | `serie8/reponses-types-activite.md`, `serie8/decision-types-activite.md` |
 | Prix unitaires affichés | `serie8/reponses-affichage-pu.md` |
@@ -141,9 +177,13 @@ Un fichier de réponses de l'éditeur prime toujours sur le cahier des charges q
 - Clé de l'API Sirene de l'INSEE, accès au registre national des entreprises (INPI), contrat La Poste avec remise en personne, compte SUPER PDP de production.
 - Renouveler les deux secrets du bac à sable SUPER PDP après les tests.
 - Analyse d'impact (AIPD) de la vérification des sociétés par courrier.
+- Faire vérifier en priorité, comme le signale `serie8/decision-types-activite.md` (« Limites signalées »), si l'art. 286, I, 3° bis du CGI exige, depuis la loi de finances pour 2025, le certificat d'un organisme accrédité au lieu de l'attestation individuelle de l'éditeur. L'étape 3 et le texte de `CLAUDE.md` sur l'attestation en dépendent.
+- Accès à l'annuaire de l'Ordre des experts-comptables (lot EC) : sans documentation officielle lisible, la procédure de l'éditeur fait foi, et l'éditeur fournit ce que le compte rendu du lot demande.
 - Faire confirmer par l'expert-comptable les règles signalées comme telles dans `CLAUDE.md`, et prévoir un audit de sécurité avant la production.
 - Le point 2 de `a-faire-apres-chaine.md` (commande `composer run dev`) attend son accord.
 
-## 10. Mettre à jour cette branche
+## 10. Mettre à jour cette branche, à chaque fois
 
-`bash <scratchpad>/pilotage-sync.sh "message"` copie les fichiers listés dans `pilotage-fichiers.txt` et les scripts de reprise dans `notes/`, régénère `ETAT.md`, vérifie l'absence de secret, commite et pousse `claude/pilotage-reprise`. La chaîne le lance après chaque lot poussé ; la session le lance aussi après chaque nouvelle décision de l'éditeur ou chaque changement de plan. Un nouveau fichier de décision s'ajoute à `pilotage-fichiers.txt`. Cette fiche (`README.md`) se modifie à la main dans le dossier de la branche, puis le script la commite avec le reste.
+`bash <scratchpad>/pilotage-sync.sh "message"` copie les fichiers listés dans `pilotage-fichiers.txt` et les scripts de reprise dans `notes/`, régénère `ETAT.md`, vérifie l'absence de secret, commite et pousse `claude/pilotage-reprise`.
+
+L'éditeur veut que cette branche ait toujours les dernières notes, jamais seulement à la fin. La session le lance donc aussitôt après chaque changement : chaque décision ou réponse de l'éditeur écrite dans `notes/` ; chaque modification de cette fiche, d'un script de la chaîne ou d'un plan ; chaque lancement, arrêt, interruption ou reprise d'une course ; chaque point de suivi ; chaque résultat de CI. La chaîne le lance en plus après chaque lot poussé (étape `:notes`). Un nouveau fichier de notes (décision, consigne sauvée, script de reprise placé dans `<scratchpad>/reprises/`) s'ajoute à `pilotage-fichiers.txt` avant ce lancement, sinon il n'est pas copié. Cette fiche se modifie à la main dans `<scratchpad>/pilotage-reprise/README.md`, puis le script la commite avec le reste. Si la poussée échoue (code 4) : `git -C <scratchpad>/pilotage-reprise pull --rebase`, puis relancer le script.

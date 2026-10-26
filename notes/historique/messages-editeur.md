@@ -1,6 +1,6 @@
 # Messages de l'éditeur, du premier au dernier
 
-Tous les messages tapés par l'éditeur dans la session de développement (2 au 26 octobre 2026, heure UTC), dans l'ordre, tels qu'il les a écrits. Les captures d'écran sont signalées sans leur image. Toute clé, tout jeton, tout mot de passe et toute adresse personnelle ont été retirés. Les décisions qui font foi sont dans les fichiers de décision (voir README.md, § 7) : ce fichier sert à retrouver ce qu'il a demandé et comment il le dit.
+Tous les messages tapés par l'éditeur dans cette session (heure UTC), dans l'ordre, tels qu'il les a écrits, régénérés à chaque mise à jour de la branche de reprise. Les captures d'écran sont signalées sans leur image. Toute clé, tout jeton, tout mot de passe, tout navigateur et toute donnée personnelle ont été retirés. Les décisions qui font foi sont dans les fichiers de décision (README.md, § 7).
 
 ## 1. 2026-10-02 21:06 UTC
 
@@ -2122,7 +2122,7 @@ SQLSTATE[HY000]: General error: 1 no such table: avoir_allocations
 <!--[if ENDBLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
 ## Request
 
-GET /app/[identifiant du magasin retiré]/factures
+GET /app/[donnée personnelle retirée]/factures
 
 ## Headers
 
@@ -2132,7 +2132,7 @@ GET /app/[identifiant du magasin retiré]/factures
 * **accept-language**: fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7
 * **accept-encoding**: gzip, deflate, br, zstd
 * **connection**: keep-alive
-* **referer**: http://localhost:8000/app/[identifiant du magasin retiré]/avoirs
+* **referer**: http://localhost:8000/app/[donnée personnelle retirée]/avoirs
 * **cookie**: [jeton retiré]%3D; XSRF-TOKEN=[valeur retirée] [jeton retiré]%3D
 * **upgrade-insecure-requests**: 1
 * **sec-fetch-dest**: document
@@ -2273,7 +2273,7 @@ POST /livewire/update
 * **accept**: */*
 * **accept-language**: fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7
 * **accept-encoding**: gzip, deflate, br, zstd
-* **referer**: http://localhost:8000/app/[identifiant du magasin retiré]/factures
+* **referer**: http://localhost:8000/app/[donnée personnelle retirée]/factures
 * **content-type**: application/json
 * **x-livewire**: 
 * **content-length**: 2438
@@ -2578,7 +2578,7 @@ pour l'instain on mets à coter tes recomendations, apres on verra et tu me le d
 
 ## 107. 2026-10-07 10:04 UTC
 
-et ce logiciel n'est pas pour ma boutique mais sera un logiciel indepandant, il n'y a aucun relation avec ou la je  travaille [domaine de l'employeur retiré], la ou je travaille donc sera pas le logiciel du magasin mais tout indepandant, donc moi le createur du logiciel j'aurais jamain un magasin et du coup je donne pas l'attestation à moi meme. et je vois que t'as dit en commentair "// createOrFirst() : si un autre vendeur crée le même service au
+et ce logiciel n'est pas pour ma boutique mais sera un logiciel indepandant, il n'y a aucun relation avec ou la je  travaille [donnée personnelle retirée].fr, la ou je travaille donc sera pas le logiciel du magasin mais tout indepandant, donc moi le createur du logiciel j'aurais jamain un magasin et du coup je donne pas l'attestation à moi meme. et je vois que t'as dit en commentair "// createOrFirst() : si un autre vendeur crée le même service au
 
         // même instant, la contrainte d'unicité tranche et l'on reprend le
 
@@ -4030,4 +4030,12 @@ Mais tu mets à jour toujours tout dans cette branche afin qu’il ait toujours 
 ## 278. 2026-10-26 11:34 UTC
 
 Il faut que tu mettes tout s’il te plaît. Met tout ce qu’il faut avoir pour que lui travaille comme si c’était toi. Donc tout, ce que tu as fait au début et au fur à mesure jusque là, donc les installations dont les dépendances et tout ce que ai besoin pour continuer le travail sans qu’il se perd ou qu’il fasse des erreurs ou n’importe quoi. Donc tout les directives dont par où commencer et tout tout parce que l’autre compte comment sauras quoi faire
+
+## 279. 2026-10-26 11:38 UTC
+
+Tu as dis que l’agent « Il a relevé 18 manques ou erreurs. » et toi tu les a corrigés mais pourquoi lui a trouvé et pas toi avant
+
+## 280. 2026-10-26 12:04 UTC
+
+Ban alors pourquoi tu fais pas comme ça, donc tu mets à jour la fiche et les agents commencent par ce fichier et comme ça ils vont trouver des erreurs s’ils existent. Ou peut être c’est pas bon
 

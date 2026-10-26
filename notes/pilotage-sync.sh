@@ -14,6 +14,17 @@ set +u
 set -u
 [ -d "$W" ] || { echo "ERREUR : dossier $W absent"; exit 1; }
 
+# Messages de l'éditeur et résumés de cette session, régénérés à chaque fois (un fichier par session).
+U_SESSION=$(basename "${WF%/subagents/workflows}")
+SUFFIXE=""; [ "$U_SESSION" = "00d7e3b2-c4d1-5536-95c0-3e77e19552bb" ] || SUFFIXE="-${U_SESSION:0:8}"
+TRANSCRIPTION="${WF%/subagents/workflows}.jsonl"
+if [ -f "$TRANSCRIPTION" ] && [ -f "$S/historique/extraire-historique.py" ]; then
+  mkdir -p "$W/notes/historique"
+  python3 "$S/historique/extraire-historique.py" "$TRANSCRIPTION" "$W/notes/historique/messages-editeur$SUFFIXE.md" \
+    "$W/notes/historique/resumes-de-session$SUFFIXE.md" "$S/historique/retraits-locaux.txt" >/dev/null \
+    || echo "ATTENTION : extraction de l'historique impossible"
+fi
+
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   if [ -f "$S/$f" ]; then mkdir -p "$W/notes/$(dirname "$f")"; cp "$S/$f" "$W/notes/$f"; fi

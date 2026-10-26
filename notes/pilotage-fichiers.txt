@@ -56,8 +56,6 @@ fa/balayage-5cbe4e2.json
 decisions/reponses-complements-14-20.md
 moteurs/choix-moteur-finale.md
 superpdp/openapi.json
-historique/messages-editeur.md
-historique/resumes-de-session.md
 historique/HISTORIQUE.md
 historique/DIRECTIVES.md
 installation/ENVIRONNEMENT.md
@@ -67,3 +65,4 @@ campagne/strategie/finale.md
 decisions/serie4-donnees.js
 decisions/serie8/questions.js
 gen-decisions.js
+historique/extraire-historique.py

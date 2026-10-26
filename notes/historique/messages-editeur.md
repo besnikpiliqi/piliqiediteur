@@ -4039,3 +4039,29 @@ Tu as dis que l’agent « Il a relevé 18 manques ou erreurs. » et toi tu les 
 
 Ban alors pourquoi tu fais pas comme ça, donc tu mets à jour la fiche et les agents commencent par ce fichier et comme ça ils vont trouver des erreurs s’ils existent. Ou peut être c’est pas bon
 
+## 281. 2026-10-26 13:50 UTC
+
+Donc tu me dis qu’il y en a 4608 tests et alors combien de assertions sont et est-ce que tout ces sont des bétons de sécurité du codes
+
+## 282. 2026-10-26 13:59 UTC
+
+un audit de sécurité avant la mise en production. C’est toi qui va faire c’est ça
+
+## 283. 2026-10-26 14:09 UTC
+
+Oui j’ai vu que l’agent neuf avec la fiche a trouvé ce que tu voyais pas mais apres je t’ai dit que tu fasse dorénavant comme cet agent donc à chaque fois il li la fiche et fais comme il connaît rien et comme ça il y aura normalement jamais des erreurs inconnus
+
+## 284. 2026-10-26 14:34 UTC
+
+Kur te zgjedh produktet mi shit nuk duhet te lejohet te futet dy her i njejti produkt por nese klikohet dy her ateher vetem shtohet qty e jo dy her me dal dy linja
+
+
+
+Ne tableaux de bord duhet me lan « À faire » per aksionet qe duhet me u kry psh me kry pagesen ose naj sen qe eshte ne pritje mi qit aty. Psh edhe shitjet jasht vendit qe duhet me dhan numrin e postes ose doganes, e qet aty qe duhet me kry. Dmth krejt shka eshte ne pritje duhet me qit. Dmth te menuja factures e qet nje numer me ngjyr te verdhe qe diqka la mbet pa u perfundu por me gjet se per qla eshte fjala ishte shum veshtire sepse u bejke fjal per me dhan nje kod nga dogana apo diqka te till kur e shet nje produkt jasht vendit dhe ket produkt e ben livraison vet magasin. Dmth nese ka diqka qe duhet te kryhet ose qe ka mbet pa u kry ateher te duhet te shfaqet ne tableau de bord qe me kliku ne te dhe me shku tek ai per me pa per qka eshte fjala.
+
+
+
+
+
+Mais tu prends ca en tant que langue française et pas albanais
+

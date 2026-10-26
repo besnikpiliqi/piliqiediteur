@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 13:12 UTC par pilotage-sync.sh : « Relecture finale : 29 constats traités, réponses de l'éditeur du 26/10 reportées ».
+Mis à jour le 26/10/2026 à 14:35 UTC par pilotage-sync.sh : « Série 9 : demande de l'éditeur enregistrée (lignes uniques, À faire) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

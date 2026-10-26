@@ -1,0 +1,38 @@
+Source officielle : https://entreprendre.service-public.gouv.fr/vosdroits/F24271 (vérifiée le 04 mai 2026 par la DILA), lue le 26/10/2026. Partie utile, recopiée telle quelle :
+
+ Vérifié le 04 mai 2026 - Entreprendre Service Public / Direction de l'information légale et administrative (Premier ministre)
+ Pour obtenir un prix hors taxes (HT) à partir d'un prix toutes taxes comprises (TTC), Il faut utiliser la formule de calcul suivante :
+ Prix HT = Prix TTC ÷ (1 + Taux de TVA) 
+ Pour exprimer le prix HT avec 2 chiffres après la virgule, il faut l'arrondir au centime supérieur si le 3 e chiffre après la virgule est égal ou supérieur à 5. Et l'arrondir au centime inférieur si le 3 e chiffre après la virgule est inférieur à 5. Par exemple, le prix HT de 41,669 € est arrondi à 41,67 € .
+ Nous vous proposons un simulateur pour calculer un prix TTC à partir d'un prix HT :
+ Calculateur de prix hors taxe (HT) ou toutes taxes comprises (TTC) 
+ Tableau - Exemple de calcul du prix HT à l'aide de la formule de calcul suivante Taux de TVA
+ Calcul pour un prix TTC de 50 € 
+ Prix HT
+ 20 % 
+ 50 ÷ (1 + 20 % )
+ 41,67 € 
+ 10 % 
+ 50 ÷ (1 + 10 % )
+ 45,45 € 
+ 8,5 % 
+ 50 ÷ (1 + 8,5 % )
+ 46,08 € 
+ 5,5 % 
+ 50 ÷ (1 + 5,5 % )
+ 47,39 € 
+ 2,10 % 
+ 50 ÷ (1 + 2,10 % )
+ 48,97 € 
+ Textes de loi et références
+ Code général des impôts : articles 278-0 bis à 279 bis 
+ Produits et prestations soumises à des taux réduits de TVA
+ Bofip-Impôt n°BOI-TVA-LIQ-10 sur les coefficients de conversion de la TVA 
+ Précisions concernant les différents taux de TVA
+ Services en ligne et formulaires
+ Calculateur de prix hors taxe (HT) ou toutes taxes comprises (TTC) 
+ Service en ligne
+ Voir aussi
+ Les arrondis 
+
+Vérification du 26/10/2026 : CalculateurLigne::chiffrerUneVente() donne pour 50,00 € TTC : 41,67 € HT (20 %), 45,45 € (10 %), 46,08 € (8,5 %), 47,39 € (5,5 %), 48,97 € (2,10 %), exactement les valeurs de la fiche.

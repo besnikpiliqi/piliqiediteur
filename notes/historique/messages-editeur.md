@@ -4077,3 +4077,27 @@ Si il y aura pas des arrêtes par les limites alors pour combien de temps va fin
 
 Mais franchement j’arrive pas à comprendre pourquoi tout ce temps alors que la le logiciel fonctionne très bien
 
+## 288. 2026-10-26 17:35 UTC
+
+Je sais pas si t’as vu sur ce lien mais la il parle bien comment calculer la tva . https://entreprendre.service-public.gouv.fr/vosdroits/F24271
+
+## 289. 2026-10-26 17:41 UTC
+
+entreprendre.service-public.gouv.fr, j’ai autorisé
+
+## 290. 2026-10-26 17:55 UTC
+
+Tout ce travail t’as fait pour 3 semaines et comment la reste jusqu’à 3 mois pour finir alors le plus gros travail est déjà fait
+
+## 291. 2026-10-26 17:58 UTC
+
+Et pourquoi tu utilises faketime??
+
+## 292. 2026-10-26 18:05 UTC
+
+Et pourquoi tu utilises « Outillage »
+
+## 293. 2026-10-26 20:44 UTC
+
+T’as mis a jour les notes ou pas ce que tu as fait jusqu’à maintenant
+

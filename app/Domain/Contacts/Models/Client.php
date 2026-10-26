@@ -1,0 +1,321 @@
+<?php
+
+namespace App\Domain\Contacts\Models;
+
+use App\Domain\Contacts\Concerns\Proposable;
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Facturation\Casts\NumeroTvaNormalise;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use Database\Factories\ClientFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Expression;
+use Illuminate\Support\Str;
+use LogicException;
+
+class Client extends Model
+{
+    /** @use HasFactory<ClientFactory> */
+    use BelongsToMagasin, HasFactory, Proposable, SoftDeletes;
+
+    /**
+     * Nom du client comptoir créé pour chaque magasin (voir
+     * CreerEtablissementAction) : une seule fiche partagée par toutes les ventes
+     * au comptoir anonymes, jamais une personne identifiée. Le comptoir se
+     * reconnaît à est_comptoir, jamais à ce nom.
+     */
+    public const NOM_COMPTOIR = 'Client comptoir';
+
+    // magasin_id est volontairement absent : il est toujours dérivé du
+    // TenantContext par le trait BelongsToMagasin, jamais du payload client.
+    // est_comptoir aussi : seul CreerEtablissementAction le pose.
+    protected $fillable = [
+        'nom',
+        'type_client',
+        'siren',
+        'siret',
+        'numero_tva',
+        'etabli_en_france',
+        'identifiant_etranger',
+        'adresse',
+        'complement_adresse',
+        'code_postal',
+        'ville',
+        'pays',
+        'telephone',
+        'email',
+        'delai_paiement_jours',
+        'mode_paiement_prefere',
+        'notes',
+    ];
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'etabli_en_france' => true,
+    ];
+
+    protected $casts = [
+        'type_client' => TypeClient::class,
+        'numero_tva' => NumeroTvaNormalise::class,
+        'etabli_en_france' => 'boolean',
+        'delai_paiement_jours' => 'integer',
+        'mode_paiement_prefere' => ModePaiement::class,
+        'est_comptoir' => 'boolean',
+    ];
+
+    protected static function booted(): void
+    {
+        static::saving(fn (Client $client) => $client->normaliserSesIdentifiants());
+
+        static::updating(function (Client $client) {
+            if ($client->estComptoir() && $client->isDirty(['nom', 'type_client'])) {
+                throw new LogicException('Le client comptoir ne se renomme pas et reste un particulier.');
+            }
+        });
+
+        // Supprimer un client l'archive (SoftDeletes) : jamais le client
+        // comptoir, que portent toutes les ventes anonymes du magasin.
+        static::deleting(function (Client $client) {
+            if ($client->estComptoir()) {
+                throw new LogicException('Le client comptoir ne s\'archive jamais.');
+            }
+        });
+    }
+
+    public function estProfessionnel(): bool
+    {
+        return $this->type_client === TypeClient::Professionnel;
+    }
+
+    /**
+     * Établi en France, un professionnel a un SIREN ; établi ailleurs, un
+     * n° de TVA ou un autre identifiant (voir ClientResource). Une
+     * entreprise dont l'adresse est en France y est établie (voir
+     * normaliserSesIdentifiants()) ; à l'étranger, c'est la fiche qui le
+     * dit, puisqu'une entreprise étrangère peut avoir un établissement en
+     * France.
+     */
+    public function estEtabliEnFrance(): bool
+    {
+        return $this->etabli_en_france;
+    }
+
+    /**
+     * Les identifiants tels qu'ils s'enregistrent : le pays en majuscules,
+     * le SIREN tiré au besoin du SIRET, dont il forme les 9 premiers
+     * chiffres (le n° de TVA, lui, perd ses séparateurs dès qu'il est
+     * écrit, voir NumeroTvaNormalise). Les champs que le formulaire cache
+     * ne restent pas en base pour s'imprimer encore sur ses documents : un
+     * particulier n'a ni SIREN, ni SIRET, ni n° de TVA et compte comme
+     * établi en France, comme une entreprise dont l'adresse est en France ;
+     * établi en France, un client n'a pas d'identifiant étranger.
+     */
+    private function normaliserSesIdentifiants(): void
+    {
+        if (filled($this->pays)) {
+            $this->pays = Str::upper(trim($this->pays));
+        }
+
+        if (blank($this->siren) && filled($this->siret)) {
+            $this->siren = substr($this->siret, 0, 9);
+        }
+
+        if (! $this->estProfessionnel()) {
+            $this->siren = null;
+            $this->siret = null;
+            $this->numero_tva = null;
+        }
+
+        if (! $this->estProfessionnel() || TerritoireFiscal::estEnFrance($this->pays)) {
+            $this->etabli_en_france = true;
+        }
+
+        if ($this->estEtabliEnFrance()) {
+            $this->identifiant_etranger = null;
+        }
+    }
+
+    /**
+     * La fiche partagée par les ventes au comptoir anonymes du magasin
+     * (voir CreerEtablissementAction) : la seule où est_comptoir est vrai, quel
+     * que soit le nom d'une autre fiche.
+     */
+    public function estComptoir(): bool
+    {
+        return $this->est_comptoir === true;
+    }
+
+    /**
+     * Son n° de TVA se vérifie-t-il sur VIES (voir VerifierNumeroTvaAction) ?
+     * Oui pour un professionnel dont le n° est d'un État membre de l'Union
+     * ou d'Irlande du Nord (voir TerritoireFiscal::prefixeTvaUe()).
+     */
+    public function aUnNumeroTvaVerifiableSurVies(): bool
+    {
+        return $this->estProfessionnel() && TerritoireFiscal::prefixeTvaUe($this->numero_tva) !== null;
+    }
+
+    /**
+     * Les vérifications de ses n° de TVA sur VIES, de tous les n° qu'il a
+     * eus : chacune reste la preuve de ce qu'elle a vérifié.
+     */
+    public function consultationsVies(): HasMany
+    {
+        return $this->hasMany(ConsultationVies::class);
+    }
+
+    /**
+     * La dernière vérification sur VIES du n° de TVA qu'il a aujourd'hui,
+     * null s'il n'en a pas ou si ce n° n'a jamais été vérifié : celle d'un
+     * ancien n° ne dit rien du nouveau.
+     */
+    public function derniereConsultationVies(): ?ConsultationVies
+    {
+        if (blank($this->numero_tva)) {
+            return null;
+        }
+
+        return $this->consultationsVies()
+            ->where('numero_tva', $this->numero_tva)
+            ->latest('consultee_le')
+            ->latest('id')
+            ->first();
+    }
+
+    public function avoirs(): HasMany
+    {
+        return $this->hasMany(Avoir::class);
+    }
+
+    public function factures(): HasMany
+    {
+        return $this->hasMany(Facture::class);
+    }
+
+    /**
+     * Les clients à qui un paiement s'enregistre : archivé, un client n'est
+     * plus proposé pour une vente, mais il règle toujours ce qu'il doit
+     * encore (voir Facture::client()), en un seul paiement s'il le veut
+     * (voir PaiementResource).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeQuiPeuventRegler(Builder $query): Builder
+    {
+        return $query->withTrashed()->where(fn (Builder $clients): Builder => $clients
+            ->whereNull($this->getQualifiedDeletedAtColumn())
+            ->orWhereHas('factures', fn (Builder $factures): Builder => $factures->whereIn('statut', StatutFacture::quiAttendentUnReglement())));
+    }
+
+    /**
+     * Crédit encore disponible pour ce client (voir
+     * soldeCrediteurEnCentimes()).
+     */
+    public function soldeCrediteur(): float
+    {
+        return (float) app(CalculateurLigne::class)->enDecimal($this->soldeCrediteurEnCentimes());
+    }
+
+    /**
+     * Crédit encore disponible pour ce client, tous avoirs confondus,
+     * particulier ou professionnel, en centimes : un avoir n'est jamais
+     * remboursé (B5). À son émission, il règle d'abord les factures qu'il
+     * corrige, puis les autres factures impayées du client, de la plus
+     * ancienne à la plus récente (voir ImputationDuCredit) ; ce qui reste
+     * est ce crédit. La prochaine facture du client l'absorbe à son
+     * émission (voir AppliquerAvoirsDisponiblesAction), et la
+     * contre-passation d'un paiement l'impute aussitôt sur ce qu'elle
+     * rouvre (complément 1, voir ContrePasserPaiementAction) : il ne
+     * coexiste donc jamais avec une facture due du client.
+     *
+     * Le client comptoir (voir estComptoir()) n'a jamais de solde
+     * créditeur : il est partagé par toutes les ventes anonymes du magasin,
+     * et le crédit d'un avoir fait au comptoir n'appartient qu'à qui en
+     * présente le numéro, son bon d'avoir (voir ApercuDuReglement), jamais
+     * à la vente comptoir suivante.
+     */
+    public function soldeCrediteurEnCentimes(): int
+    {
+        return self::creditsDAvoirEnCentimes([$this])[$this->getKey()];
+    }
+
+    /**
+     * Le crédit d'avoir disponible de chacun de ces clients (voir
+     * soldeCrediteurEnCentimes()), en centimes, par identifiant, en deux
+     * lectures quel que soit leur nombre : leurs avoirs émis, puis les
+     * imputations de ces avoirs. Le crédit de chaque avoir s'en calcule en
+     * centimes (voir Avoir::creditApres()), jamais par une somme que la
+     * base ferait sur une colonne décimale. Le client comptoir n'en a
+     * jamais, sans rien lire pour lui. Le tableau des clients d'une vente
+     * (voir SelecteurDeClients) le lit ainsi pour toute sa page.
+     *
+     * @param  iterable<Client>  $clients
+     * @return array<int, int>
+     */
+    public static function creditsDAvoirEnCentimes(iterable $clients): array
+    {
+        $clients = collect($clients);
+        $credits = $clients->mapWithKeys(fn (Client $client): array => [$client->getKey() => 0])->all();
+        $identifies = $clients->reject(fn (Client $client): bool => $client->estComptoir());
+
+        if ($identifies->isEmpty()) {
+            return $credits;
+        }
+
+        $avoirs = Avoir::query()
+            ->where('statut', StatutAvoir::Emise)
+            ->whereIn('client_id', $identifies->map(fn (Client $client): mixed => $client->getKey())->all())
+            ->with('allocations')
+            ->get();
+
+        foreach ($avoirs as $avoir) {
+            $credits[$avoir->client_id] += $avoir->creditApres($avoir->allocations->pluck('montant_alloue'));
+        }
+
+        return $credits;
+    }
+
+    /**
+     * Les clients qui ont un crédit d'avoir disponible (voir
+     * soldeCrediteurEnCentimes()), jamais le client comptoir : ceux qui ont
+     * un avoir émis dont le total TTC dépasse ce qu'il a imputé. La
+     * comparaison se fait dans la requête du tableau, avoir par avoir, sans
+     * rien lire à part, sur des centimes entiers : chaque montant y est
+     * arrondi au centime et converti en entier avant d'être additionné,
+     * jamais additionné tel quel dans sa colonne décimale, que SQLite
+     * additionnerait en nombres à virgule. Le crédit affiché se calcule à
+     * part, pour la page (voir creditsDAvoirEnCentimes()).
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeAvecUnCreditDAvoir(Builder $query): void
+    {
+        $grammaire = $query->getQuery()->getGrammar();
+        $enCentimes = fn (string $colonne): string => 'cast(round('.$grammaire->wrap($colonne).' * 100) as bigint)';
+
+        $query->whereNull($query->qualifyColumn('est_comptoir'))
+            ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs
+                ->where($avoirs->qualifyColumn('statut'), StatutAvoir::Emise)
+                ->where(
+                    new Expression($enCentimes($avoirs->qualifyColumn('total_ttc'))),
+                    '>',
+                    AvoirAllocation::query()
+                        ->selectRaw('coalesce(sum('.$enCentimes('avoir_allocations.montant_alloue').'), 0)')
+                        ->whereColumn('avoir_allocations.avoir_id', $avoirs->qualifyColumn('id')),
+                ));
+    }
+}

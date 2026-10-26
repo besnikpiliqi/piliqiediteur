@@ -1,0 +1,157 @@
+<?php
+
+namespace App\Domain\Achats\Actions;
+
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Events\FactureAchatValidee;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Services\ConstructeurLigneAchat;
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use LogicException;
+
+/**
+ * Même logique que EmettreFactureAction côté vente : la facture d'achat ne
+ * reçoit son numéro interne qu'à la validation, moment où le stock est
+ * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
+ * Elle reçoit aussi son rang de validation dans le magasin, après son
+ * numéro, sous le verrou de la série de ses rangs (voir
+ * DocumentNumberingService::rangSuivant()), qui ne recule jamais, même
+ * quand deux validations tombent dans la même seconde : le dernier achat
+ * d'un produit se choisit par lui (voir Produit::achatsValides()), et non
+ * par l'instant de la validation, qui s'enregistre en UTC (voir
+ * Instant).
+ * Chacun de ses produits existants doit encore être au catalogue : une
+ * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
+ * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
+ * (voir Produit::rattacherAuFournisseur()) sans être restauré. L'un et
+ * les autres se contrôlent une fois relus sous verrou : le fournisseur
+ * sous un verrou partagé, après la facture d'achat, puis ses produits
+ * (voir plus bas). Leur archivage, qui verrouille la fiche (voir
+ * ArchiverUneFicheAction), passe donc tout entier avant la validation,
+ * qui le voit et la refuse, ou après elle, qu'il attend. Ses
+ * nouveaux produits naissent alors, avant son numéro (voir
+ * ConstructeurLigneAchat::creerLesNouveauxProduits()) : un refus (prix de
+ * vente manquant, référence prise entre-temps) annule toute la validation,
+ * sans consommer ni numéro de facture d'achat ni référence de produit. Un
+ * magasin suspendu ou fermé ne valide plus d'achat (voir
+ * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit sous un verrou
+ * partagé, premier verrou de la transaction, et la fermeture du magasin,
+ * qui la verrouille (voir FermerMagasinAction), passe donc tout entière
+ * avant ou après la validation ; une cession ne laisse aucune réception
+ * entrer dans le stock qu'elle a sorti.
+ *
+ * Une facture d'achat brouillon supprimée pendant que son écran restait
+ * ouvert, ou par une suppression qui passe avant la validation (voir
+ * SupprimerFactureAchatAction), est refusée : la validation ne trouve plus
+ * rien à valider, et le dit.
+ *
+ * Son auteur est relu sous le verrou de sa ligne, avant la facture d'achat
+ * et ses produits (voir LecteurDesDroits) : il doit pouvoir la valider,
+ * et, quand elle crée des produits, en créer (voir ProduitPolicy::create()),
+ * ce que la facture relue sous son verrou dit ; un droit retiré pendant que
+ * son écran restait ouvert est vu. Les
+ * mouvements de stock de la réception notent son nom. Ses produits
+ * existants se verrouillent, par identifiant croissant, après la facture
+ * d'achat et son fournisseur, et avant la numérotation (voir
+ * Produit::verrouillerPourLeStock()).
+ *
+ * La validation demandée par une personne porte un jeton (R3, voir
+ * ActionsUniques), cherché sous le verrou de la ligne de son auteur :
+ * répétée après une réponse perdue, elle rend la facture d'achat déjà
+ * validée, sans faire entrer le stock une seconde fois.
+ */
+class ValiderFactureAchatAction
+{
+    public const REFUS_SANS_DROIT_DE_CREER_DES_PRODUITS = 'Valider cette facture crée de nouveaux produits : il faut aussi le droit de créer des produits.';
+
+    public function __construct(
+        private readonly DocumentNumberingService $numerotation,
+        private readonly ConstructeurLigneAchat $constructeurLignes,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
+        private readonly ActionsUniques $actionsUniques,
+    ) {}
+
+    /**
+     * @param  string|null  $jeton  le jeton de la demande (R3)
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function handle(User $auteur, FactureAchat $factureAchat, ?string $jeton = null): FactureAchat
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $verrou = function () use ($magasin, $auteur): void {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
+            ActionsUniques::verrouDe($auteur)();
+        };
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_FACTURE_ACHAT, $auteur, ['facture_achat_id' => $factureAchat->getKey()], $verrou, fn (): FactureAchat => DB::transaction(function () use ($auteur, $factureAchat, $magasin) {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'valider', $magasin, $factureAchat);
+
+            return $this->operateur->pendant($compte, fn (): FactureAchat => $this->valider($compte, $factureAchat));
+        }));
+    }
+
+    /**
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    private function valider(User $compte, FactureAchat $factureAchat): FactureAchat
+    {
+        $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->first()
+            ?? throw new LogicException(FactureAchat::REFUS_INTROUVABLE);
+
+        if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
+            throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");
+        }
+
+        if ($factureAchat->lignes()->whereNull('produit_id')->exists() && Gate::forUser($compte)->denies('create', Produit::class)) {
+            throw new AuthorizationException(self::REFUS_SANS_DROIT_DE_CREER_DES_PRODUITS);
+        }
+
+        $fournisseur = $factureAchat->fournisseur()->sharedLock()->firstOrFail();
+
+        if ($fournisseur->trashed()) {
+            throw new LogicException("Le fournisseur « {$fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant de valider cette facture d'achat.");
+        }
+
+        Produit::verrouillerPourLeStock($factureAchat->lignes()->pluck('produit_id'));
+
+        if (($produitArchive = $factureAchat->produitArchive()) !== null) {
+            throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture, avant de la valider.");
+        }
+
+        $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
+
+        $maintenant = CarbonImmutable::now();
+        $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, $factureAchat->magasin->calendrier()->anneeDe($maintenant));
+
+        $factureAchat->forceFill([
+            'numero' => $numero,
+            'rang_validation' => $this->numerotation->rangSuivant($factureAchat->magasin, TypeDocument::FactureAchat),
+            'statut' => StatutFactureAchat::Validee,
+            'date_validation' => $maintenant,
+        ])->save();
+
+        // Synchrone et dans la même transaction, voir le commentaire de
+        // FactureAchatValidee ; chaque ligne y arrive avec son produit,
+        // nouveau compris.
+        FactureAchatValidee::dispatch($factureAchat->load('lignes'));
+
+        return $factureAchat;
+    }
+}

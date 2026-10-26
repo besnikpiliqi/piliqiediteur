@@ -1,0 +1,302 @@
+<?php
+
+namespace App\Domain\Tenancy\Actions;
+
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
+use App\Domain\Tenancy\Mail\InscriptionCloseMail;
+use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\TransmissionPropriete;
+use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+use App\Domain\Tenancy\Notifications\AvisDeVerification;
+use App\Domain\Tenancy\Services\AnnulationDesCodes;
+use App\Domain\Tenancy\Services\JetonsDuLien;
+use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Services\PiecesDeVerification;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
+
+/**
+ * Clôt, pour toujours, une inscription qui attend encore son code (voir
+ * MotifCloture) : sans code saisi trente jours après son dernier courrier
+ * (voir app:clore-inscriptions-sans-code), ou par le refus de l'éditeur
+ * (voir editeur:societe:refuser). La société n'est jamais supprimée :
+ * elle reste close, en lecture seule, sans accès commercial, et son SIREN
+ * est libéré (voir l'index unique partiel societes_siren_unique) ; une
+ * nouvelle inscription de ce SIREN peut alors se faire. Toutes les
+ * clôtures suivent la même suite :
+ * - sous le verrou de la ligne de la société, pris « for no key update »
+ *   (comme à la création d'un magasin) : il exclut la saisie du code, un
+ *   nouveau courrier et une demande ou une confirmation d'adresse de
+ *   connexion, mais pas une insertion qui la référence, comme l'entrée du
+ *   journal d'audit d'une transmission acceptée au même instant, qui tient
+ *   déjà les comptes que la clôture attend ; puis sous celui des lignes de
+ *   ses magasins réels, qui exclut tout geste en cours dans l'un d'eux
+ *   (voir cloreSousVerrou()) : la
+ *   clôture
+ *   (close_le, motif_cloture) s'inscrit au journal d'audit avec son motif
+ *   et, pour l'éditeur, sa justification ; les pièces déposées s'effacent,
+ *   dès la décision ; ses codes de confirmation encore actifs s'annulent ;
+ *   l'adresse de son propriétaire cesse d'être une adresse de connexion
+ *   (voir retirerLAdresseDeConnexion()) : le compte reste, ne se connecte
+ *   plus qu'avec son identifiant, et l'adresse peut servir à une nouvelle
+ *   inscription ; une transmission de la propriété en attente s'annule
+ *   (voir annulerLesTransmissionsEnAttente()), et la propriété d'une
+ *   inscription close ne se transmet plus (voir
+ *   DemanderLaTransmissionDeLaProprieteAction::exigerLesConditions()) ;
+ * - après la transaction (voir apresLaCloture()) : son magasin de
+ *   démonstration se ferme pour de bon et ses comptes d'entraînement sont
+ *   retirés, son propriétaire est prévenu dans l'espace de sa société et,
+ *   par e-mail, à l'adresse qu'il vient de perdre, et l'administrateur à
+ *   qui la propriété était proposée apprend que sa transmission est
+ *   annulée ; un échec de l'une de ces suites n'empêche ni la clôture ni
+ *   les autres (la démonstration ne vend plus, et la commande quotidienne
+ *   la reprend).
+ */
+class CloreLInscriptionAction
+{
+    public const MESSAGE_N_ATTEND_PLUS = 'Cette inscription n\'attend plus de code : elle est déjà validée, close ou révoquée.';
+
+    public function __construct(
+        private readonly JournalAudit $journalAudit,
+        private readonly PiecesDeVerification $pieces,
+        private readonly AnnulationDesCodes $annulationDesCodes,
+        private readonly FermerLaDemonstrationAction $fermerLaDemonstration,
+        private readonly JetonsDuLien $jetonsDuLien,
+    ) {}
+
+    /**
+     * Le refus de l'éditeur.
+     *
+     * @throws VerificationRefuseeException
+     */
+    public function refuser(Societe $societe, InterventionDeLEditeur $editeur): void
+    {
+        $cloture = app(TenantContext::class)->runAsSociete($societe, fn (): array => DB::transaction(function () use ($societe, $editeur): array {
+            $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
+
+            if (! $verrouillee->attendSonCode()) {
+                throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
+            }
+
+            return $this->cloreSousVerrou($verrouillee, MotifCloture::Refus, $editeur);
+        }));
+
+        $this->apresLaCloture($societe->fresh(), MotifCloture::Refus, $cloture['adresseRetiree'], $cloture['destinataires']);
+    }
+
+    /**
+     * Clôt l'inscription si aucun courrier de sa vérification n'est parti
+     * depuis la limite, ni elle-même créée depuis : relu sous le verrou de
+     * sa ligne, un nouveau courrier parti entre-temps la garde.
+     *
+     * @return bool l'inscription vient-elle d'être close ?
+     */
+    public function cloreSansCode(Societe $societe, CarbonImmutable $limite): bool
+    {
+        $cloture = app(TenantContext::class)->runAsSociete($societe, fn (): ?array => DB::transaction(function () use ($societe, $limite): ?array {
+            $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
+            $courrierRecent = CodeConfirmation::query()->where('motif', MotifCode::Verification->value)->where('envoye_le', '>', $limite)->exists();
+
+            if (! $verrouillee->attendSonCode() || $courrierRecent || $verrouillee->created_at->greaterThan($limite)) {
+                return null;
+            }
+
+            return $this->cloreSousVerrou($verrouillee, MotifCloture::DelaiExpire);
+        }));
+
+        if ($cloture === null) {
+            return false;
+        }
+
+        $this->apresLaCloture($societe->fresh(), MotifCloture::DelaiExpire, $cloture['adresseRetiree'], $cloture['destinataires']);
+
+        return true;
+    }
+
+    /**
+     * Clôt l'inscription, dans la transaction de l'appelant, sa ligne
+     * verrouillée et elle-même la société active, qui attend son code.
+     * Les lignes de ses magasins réels se verrouillent d'abord, par
+     * identifiant croissant (« for no key update ») : un geste qui
+     * écrit dans un magasin réel avant la validation (une facture d'achat
+     * validée, un inventaire d'ouverture, un brouillon, une fiche, ses
+     * paramètres), qui relit la ligne de son magasin sous un verrou partagé
+     * (« for no key update » pour ses paramètres, qui l'écrivent ; voir
+     * ModifierLesParametresDuMagasinAction) et le dit ouvert tant que
+     * l'inscription ne l'est pas (voir Magasin::verifierQuIlEstOuvert()),
+     * passe tout entier avant la clôture, ou après elle, et la voit : rien
+     * ne s'écrit dans une société close. Les magasins se verrouillent après
+     * la société, comme à leur réouverture (voir RouvrirMagasinAction), et
+     * avant les comptes, comme le font ces gestes (le magasin, puis leur
+     * auteur). Viennent ensuite les lignes de ses comptes, puis celles de
+     * ses transmissions en attente, dans le même ordre que l'acceptation
+     * d'une transmission (les comptes, puis la demande). Le magasin de
+     * démonstration, qui se ferme après la clôture (voir apresLaCloture()),
+     * ne se verrouille pas ici : un retour (voir EmettreAvoirAction) et la
+     * clôture du jour (voir CloturerCaisseAction) y verrouillent la ligne
+     * de leur auteur avant de relire celle du magasin sous un verrou
+     * partagé, quand ils créent la série de numérotation de l'année (voir
+     * DocumentNumberingService::prefixe()) ; verrouiller ici ce magasin,
+     * après les magasins réels et avant les comptes, les interbloquerait
+     * avec la clôture de l'inscription.
+     *
+     * @return array{adresseRetiree: string|null, destinataires: list<int>} l'adresse de connexion retirée au propriétaire, et les comptes à qui une transmission annulée proposait la propriété
+     */
+    private function cloreSousVerrou(Societe $verrouillee, MotifCloture $motif, ?InterventionDeLEditeur $editeur = null): array
+    {
+        $verrouillee->magasinsReels()->orderBy('id')->lock('for no key update')->get();
+        $verrouillee->forceFill(['close_le' => now(), 'motif_cloture' => $motif])->save();
+        $this->journalAudit->inscrire(ActionAuditee::InscriptionClose, null, null, null, ['motif' => $motif->value], $verrouillee, $editeur);
+        $this->pieces->effacerToutes($verrouillee, PiecesDeVerification::MOTIF_DECISION, $editeur);
+
+        CodeConfirmation::query()->whereNull('utilise_le')->whereNull('annule_le')->orderBy('id')->lockForUpdate()->get()
+            ->each(fn (CodeConfirmation $code) => $this->annulationDesCodes->annuler($code, AnnulationDesCodes::INSCRIPTION_CLOSE, editeur: $editeur));
+
+        return [
+            'adresseRetiree' => $this->retirerLAdresseDeConnexion($verrouillee, $editeur),
+            'destinataires' => $this->annulerLesTransmissionsEnAttente($verrouillee, $editeur),
+        ];
+    }
+
+    /**
+     * Retire l'adresse de connexion du propriétaire de l'inscription close,
+     * dans la transaction de la clôture : l'adresse et sa date de
+     * confirmation s'effacent, comme une adresse en attente et son lien, et
+     * le lien « Mot de passe oublié » de cette adresse ne sert plus ; le
+     * retrait s'inscrit au journal d'audit de la société, sans aucune
+     * adresse. Les lignes de tous les comptes de la société se verrouillent,
+     * par identifiant croissant, avant d'y chercher le propriétaire : une
+     * transmission acceptée au même instant, qui tenait ces comptes, est
+     * vue à sa fin, et son nouveau propriétaire perd l'adresse de connexion
+     * qu'elle venait de lui donner. L'index unique des adresses de
+     * connexion ne porte que sur les adresses non nulles : une nouvelle
+     * inscription, ou le propriétaire d'une autre société, peut prendre
+     * cette adresse.
+     *
+     * @return string|null l'adresse retirée, à prévenir après la transaction
+     */
+    private function retirerLAdresseDeConnexion(Societe $verrouillee, ?InterventionDeLEditeur $editeur): ?string
+    {
+        $proprietaire = User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get()
+            ->first(fn (User $compte): bool => $compte->estProprietaire());
+
+        if ($proprietaire === null || ($proprietaire->email === null && $proprietaire->nouvelle_adresse === null)) {
+            return null;
+        }
+
+        $adresse = $proprietaire->email;
+        $proprietaire->forceFill([
+            'email' => null,
+            'email_verified_at' => null,
+            'nouvelle_adresse' => null,
+            'nouvelle_adresse_jeton_hache' => null,
+            'nouvelle_adresse_expire_le' => null,
+        ])->save();
+
+        if ($adresse !== null) {
+            $this->jetonsDuLien->effacer($adresse);
+        }
+
+        $this->journalAudit->inscrire(ActionAuditee::AdresseDeConnexionRetiree, null, null, null, [
+            'compte' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
+        ], $proprietaire, $editeur);
+
+        return $adresse;
+    }
+
+    /**
+     * Annule, dans la transaction de la clôture, chaque transmission de la
+     * propriété encore valable de la société, sous le verrou de sa ligne :
+     * son lien ne sert plus, et l'annulation s'inscrit au journal d'audit
+     * (TransmissionAnnulee), au nom du système ou de l'éditeur.
+     *
+     * @return list<int> les comptes à qui ces transmissions proposaient la propriété
+     */
+    private function annulerLesTransmissionsEnAttente(Societe $verrouillee, ?InterventionDeLEditeur $editeur): array
+    {
+        $destinataires = [];
+
+        $demandes = TransmissionPropriete::query()
+            ->where('societe_id', $verrouillee->getKey())
+            ->whereNull('annulee_le')
+            ->whereNull('acceptee_le')
+            ->where('expire_le', '>', now())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($demandes as $demande) {
+            $demande->forceFill(['annulee_le' => now()])->save();
+            $destinataire = User::query()->whereKey($demande->destinataire_id)->firstOrFail();
+            $this->journalAudit->inscrire(ActionAuditee::TransmissionAnnulee, null, null, null, [
+                'destinataire' => ['id' => $destinataire->getKey(), 'nom' => $destinataire->name],
+            ], $demande, $editeur);
+            $destinataires[] = (int) $destinataire->getKey();
+        }
+
+        return $destinataires;
+    }
+
+    /**
+     * Après la transaction de la clôture, chaque suite à part, un échec
+     * signalé n'empêchant pas les autres : la démonstration se ferme pour
+     * de bon (ses comptes d'entraînement sont retirés, même si elle était
+     * déjà fermée pour inactivité, voir FermerLaDemonstrationAction) ; le
+     * propriétaire est prévenu dans l'espace de sa société, avec le motif
+     * de la clôture (la justification de l'éditeur reste interne) et le
+     * retrait de son adresse de connexion, et par e-mail à l'adresse
+     * retirée, sans son identifiant (voir InscriptionCloseMail) ; chaque
+     * administrateur à qui une transmission annulée proposait la propriété
+     * en est prévenu dans sa cloche.
+     *
+     * @param  list<int>  $destinataires
+     */
+    private function apresLaCloture(Societe $societe, MotifCloture $motif, ?string $adresseRetiree, array $destinataires): void
+    {
+        app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motif, $adresseRetiree, $destinataires): void {
+            $demonstration = $societe->demonstration()->first();
+
+            if ($demonstration !== null) {
+                try {
+                    $this->fermerLaDemonstration->handle($demonstration);
+                } catch (Throwable $erreur) {
+                    report($erreur);
+                }
+            }
+
+            $societe->proprietaire?->notify(new AvisDeVerification(
+                $societe,
+                'L\'inscription de votre société est close',
+                "{$motif->getLabel()}. Vos magasins restent consultables, en lecture seule. Votre adresse e-mail n'est plus une adresse de connexion : ce compte s'ouvre seulement avec votre identifiant, et l'adresse peut servir à une nouvelle inscription. Pour toute question, contactez l'éditeur.",
+                AvisDeVerification::REFUS,
+            ));
+
+            User::query()->whereKey($destinataires)->orderBy('id')->get()->each(fn (User $administrateur) => $administrateur->notify(new AvisDeLEquipe(
+                $societe,
+                'Transmission de la propriété annulée',
+                "L'inscription de {$societe->getFilamentName()} est close : la transmission de la propriété qui vous était proposée est annulée, et le lien qui vous a été envoyé ne sert plus.",
+            )));
+
+            if ($adresseRetiree !== null) {
+                try {
+                    Mail::to($adresseRetiree)->send(new InscriptionCloseMail(
+                        $societe->getFilamentName(),
+                        lcfirst($motif->getLabel()),
+                        rtrim((string) config('app.url'), '/').route('filament.app.auth.register', absolute: false),
+                    ));
+                } catch (Throwable $erreur) {
+                    report($erreur);
+                }
+            }
+        });
+    }
+}

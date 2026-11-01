@@ -122,3 +122,5 @@
 - 01/11 vers 19:00 UTC — réponse de l'éditeur « tout comme recommandé » aux points P1 à P13 d'EC2 : cahier définitif écrit dans ec2/cahier-des-charges.definitif.md (décisions reportées sous chaque point, 8.10 sans objet). ec2/cahier-des-charges.md garde exprès une première ligne « BROUILLON » qui y renvoie, pour que la course wf_b5c2413b-8c6 s'arrête d'elle-même à EC2 après ML : EC2 doit passer après A7b. Au lancement de la course suivante (ouverts = A7b, EC2, S9-L, S9-A, 21), copier d'abord cahier-des-charges.definitif.md sur cahier-des-charges.md. Complément d'EC2 du script : « vient après EC, L1, A7, A7b et ML ».
 
 - 01/11 vers 19:20 UTC — l'éditeur garde les durées de conservation comme elles sont (option c : variables CONSERVATION_* réglables, en commentaire dans .env.example). Plus aucune question en attente.
+
+- 01/11 20:28 UTC — point de suivi : PostgreSQL actif ; ML implémenté en local (335620b, « Vérifie les e-mails sur la boîte de test de Mailtrap et borne le délai SMTP »), relectures rendues (7 constats), ML:correction en cours ; rien de poussé depuis 53ed088. Point de suivi suivant : trig_01F8z85JpjjU9fTRG12bAVKv à 22:28 UTC.

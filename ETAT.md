@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 19:19 UTC par pilotage-sync.sh : « Conservation : l'éditeur garde les variables comme elles sont ».
+Mis à jour le 01/11/2026 à 20:28 UTC par pilotage-sync.sh : « Point de suivi de 20:28 : ML en correction ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `53ed088`. Commits locaux pas encore poussés :
 
 ```
+335620b Vérifie les e-mails sur la boîte de test de Mailtrap et borne le délai SMTP (lot ML)
 ```
 
 Derniers commits poussés :
@@ -37,19 +38,13 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M bootstrap/providers.php
- M config/mail.php
- M config/services.php
- M phpunit.xml
-?? app/Console/Commands/EssayerLesCourriels.php
-?? app/Domain/Tenancy/Mail/CourrielDEssaiMail.php
-?? app/Integrations/Mailtrap/
-?? app/Providers/CourrielsServiceProvider.php
-?? resources/views/mail/essai.blade.php
-?? tests/Feature/Console/
-?? tests/Feature/Integrations/CourrielsReelsTest.php
-?? tests/Feature/Integrations/TransportMailtrapTest.php
-?? tests/Feature/Providers/CourrielsServiceProviderTest.php
+ M .env.example
+ M README.md
+ M app/Console/Commands/EssayerLesCourriels.php
+ M app/Integrations/Mailtrap/TransportMailtrap.php
+ M resources/views/mail/essai.blade.php
+ M tests/Feature/Console/EssayerLesCourrielsTest.php
+ M tests/Feature/Integrations/TransportMailtrapTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -64,4 +59,7 @@ A7:poussee
 A7:fiche
 A7:notes
 ML:implementation
+ML:relecture1
+ML:relecture2
+ML:correction
 ```

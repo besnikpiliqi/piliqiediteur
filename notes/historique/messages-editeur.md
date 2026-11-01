@@ -4485,3 +4485,15 @@ pour le Le cahier des charges du lot EC2: « tout comme recommandé »
 
 les durées de conservation: laisse comme ils sont
 
+## 340. 2026-11-01 19:37 UTC
+
+tu m as dit pour le a7 tu passera sur effort max ?
+
+## 341. 2026-11-01 20:16 UTC
+
+[3 capture(s) d'écran jointe(s)]
+
+comment piliqi doit verifier. j ai donné ca:N° d’inscription au tableau : 01-23456
+
+Conseil régional : Île-de-France
+

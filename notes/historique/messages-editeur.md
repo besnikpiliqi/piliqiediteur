@@ -4435,3 +4435,9 @@ bon j'ai mis sur .env mais toi est ce que t as acced mnt
 
 comment ca va marcher mnt chez piliqi pour tester, tu va mettre à jours ou ce fait automatiaument
 
+## 333. 2026-11-01 16:35 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+malgre que c'est un siren d'un comptable il dit non vous etes pas un comptable. la 2eme photo dit toujours creer votre premier magasin alors que le prelier est deja cree. donc ou laisser un texte par defaut comme "Ajouter un magasin" ou ecrire par deuxieme, troxiem etc ca depend des magasin qu'ils ont deja creer
+

@@ -138,3 +138,11 @@ je parle de tous les actions qui se font sur navigateurs, à chaque clique il y 
 
 il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur et les testes que tu as deja fait comme d'habitude
 
+## 26. 2026-11-01 23:16 UTC
+
+tu as dit que mtn sont 5000 teste ? et alors combien de assertions. et tous ceux teste tout tout le logiciel de a à z c'est
+
+## 27. 2026-11-01 23:17 UTC
+
+mais tout les testes il faut qu'il passe deja à partir de mtn mais aussi à la fin
+

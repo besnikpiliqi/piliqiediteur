@@ -31,3 +31,5 @@ Contexte : l'erreur 419 des fenêtres de recherche de clients et de produits (co
 « il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur et les testes que tu as deja fait comme d'habitude »
 
 À la fin du logiciel, l'audit final, avant la mise en production (étape 15), passe TOUS les tests : tous les tests en navigateur et toute la suite habituelle, sur SQLite puis sur PostgreSQL, puis la grille faketime (D50). Chaque relance de la campagne de tests (étape 1 bis, fin des étapes 2, 3, 5, 9 et 13) comprend aussi les tests en navigateur.
+
+Précision de l'éditeur (01/11/2026, vers 23 h 30) : « mais tout les testes il faut qu'il passe deja à partir de mtn mais aussi à la fin ». Chaque lot, avant chaque commit, passe la suite complète (tests en navigateur compris dès que NAV-1 les a mis en place) sur SQLite puis sur PostgreSQL au code 0, et la CI reste verte ; l'audit final repasse tout, plus la grille faketime.

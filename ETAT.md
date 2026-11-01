@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 23:16 UTC par pilotage-sync.sh : « Audit final : tous les tests en navigateur et la suite habituelle (D51) ».
+Mis à jour le 01/11/2026 à 23:18 UTC par pilotage-sync.sh : « Précision de l'éditeur : tous les tests passent dès maintenant et à la fin ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

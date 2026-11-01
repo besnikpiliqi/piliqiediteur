@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 16:24 UTC par pilotage-sync.sh : « Reprise après la limite d'usage : course wf_b5c2413b-8c6 (A7 aux relectures, ML, EC2...), constat queue:listen pour ML ».
+Mis à jour le 01/11/2026 à 16:24 UTC par pilotage-sync.sh : « Fiche : course wf_b5c2413b-8c6, A7 implémenté non poussé, tête d232b4f ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 20:28 UTC par pilotage-sync.sh : « Point de suivi de 20:28 : ML en correction ».
+Mis à jour le 01/11/2026 à 20:31 UTC par pilotage-sync.sh : « EC2 : une seule case « voir toutes » pour un cabinet (R23, décision § 5.4) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

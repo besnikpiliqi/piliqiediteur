@@ -266,6 +266,15 @@ Exemples : 000 000 943 (actif, 69.20Z) passe, avec la dénomination « CABINET P
 - L'étape « Ajouter votre équipe » ne compte pas les comptes d'expert-comptable de la société (l.129 : `where('role_societe', '<>', 'expert_comptable')`) : ce n'est pas l'équipe des magasins.
 - Exemple : la société du Garage Petitjean n'a aucun magasin : « Créer votre premier magasin », non cochée ; après « Garage 1 » : « Ajouter un magasin », cochée, « 1 magasin » ; après trois magasins : « 3 magasins ». Une déclaration seule laisse « Ajouter votre équipe » non cochée.
 
+
+### R23 — « Voir les siennes » n'existe pas pour un cabinet ni pour l'expert-comptable déclaré (décision § 5.4 ; message de l'éditeur du 01/11/2026, 21 h 29)
+
+- Constat de l'éditeur (capture de la fenêtre « Accepter en ajustant les autorisations » et de l'e-mail de la demande de rattachement) : on y coche séparément « Factures : voir (les siennes) » et « Factures : voir celles de toute l'équipe », de même pour « Clôture de caisse » ; or un compte d'un cabinet, comme un compte d'expert-comptable déclaré, ne fait jamais ni facture ni clôture : « les siennes » ne désigne rien, et « voir les siennes » seul ne lui montre rien. « Elle voit normalement toutes les factures. »
+- Règle : pour un cabinet lié et pour l'expert-comptable déclaré, chaque paire devient une seule case : « Factures : voir toutes celles du magasin » accorde ensemble `facture.view` et `facture.view_toutes` ; « Clôtures de caisse : voir toutes celles du magasin » accorde ensemble `cloture_caisse.view` et `cloture_caisse.view_toutes`. Les deux permissions de chaque paire sont toujours accordées ou retirées ensemble : `PermissionRegistry` (consultations du cabinet, `parDefautDuCabinet`, libellés), l'action qui règle les autorisations d'un cabinet (et celle de la déclaration, R7), les écrans (désignation, page de rattachement, « Accepter en ajustant », page « Cabinet comptable », autorisations de l'expert-comptable déclaré), et le texte de l'e-mail de la demande de rattachement, qui ne cite plus « (les siennes) ». Garde en base, sur SQLite et PostgreSQL : pour une ligne d'autorisations d'un cabinet ou d'une déclaration, `facture.view_toutes` est présente si et seulement si `facture.view` l'est, de même pour `cloture_caisse` ; toute autre combinaison est refusée.
+- Rien ne change pour les comptes de la société (vendeurs, observateurs, administrateurs), pour qui « les siennes » garde son sens.
+- Le tableau de bord du cabinet et l'alerte des factures à encaisser lisent toujours « voir les factures de toute l'équipe » (`CLAUDE.md`), désormais accordé par la seule case des factures.
+- Tests : la fenêtre et l'e-mail montrent une seule case ou un seul libellé par paire ; cocher la case accorde les deux permissions et la décocher retire les deux ; la garde refuse en base une paire incomplète (insertion directe), pour un cabinet comme pour une déclaration ; un compte d'un cabinet à qui la case des factures est accordée voit toutes les factures du magasin, et sans elle aucune.
+
 ---
 
 ## 2. Points à trancher par l'éditeur

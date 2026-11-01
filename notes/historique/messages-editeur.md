@@ -4497,3 +4497,9 @@ comment piliqi doit verifier. j ai donné ca:N° d’inscription au tableau : 01
 
 Conseil régional : Île-de-France
 
+## 342. 2026-11-01 20:30 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+comment pour un comptable voir les sienes.elle peut pas faire les siennes. elle vois normalemnt tout les factures de tout ou peut etre tu as d autre proposition
+

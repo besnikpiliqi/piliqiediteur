@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 17:56 UTC par pilotage-sync.sh : « Cahier d'EC2 : proposition finie, 13 questions posées à l'éditeur ».
+Mis à jour le 01/11/2026 à 18:26 UTC par pilotage-sync.sh : « Point de suivi de 18:26 : A7 en correction ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

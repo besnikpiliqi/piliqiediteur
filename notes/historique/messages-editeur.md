@@ -4457,3 +4457,23 @@ quand je valide le code par courrier pour expert comptable apres il ramen sur ce
 
 comment verifier le compte ! car est bloque par verification
 
+## 337. 2026-11-01 18:00 UTC
+
+"# Durées de conservation (voir config/conservation.php) : l'adresse IP et
+
+# le navigateur s'effacent après ce nombre de mois (12 sans cette ligne) ;
+
+# le journal d'audit garde ses opérations 10 ans et la gestion des accès
+
+# 5 ans, et les jetons des demandes répétées durent 30 jours, sans ces
+
+# lignes.
+
+# [jeton retiré]
+
+# [jeton retiré]
+
+# [jeton retiré]
+
+# [jeton retiré]" pourquoi t as mis en commantaire
+

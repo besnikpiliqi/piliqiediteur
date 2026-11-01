@@ -1,10 +1,10 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 11:49 UTC par pilotage-sync.sh : « Lot ML (Mailtrap) dans la fiche ; variables d'environnement ».
+Mis à jour le 01/11/2026 à 12:01 UTC par pilotage-sync.sh : « CI de L1 : test qui dépendait de l'ordre, corrigé (d232b4f) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `5745e7a`. Commits locaux pas encore poussés :
+Tête poussée : `d232b4f`. Commits locaux pas encore poussés :
 
 ```
 ```
@@ -12,6 +12,7 @@ Tête poussée : `5745e7a`. Commits locaux pas encore poussés :
 Derniers commits poussés :
 
 ```
+d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 5745e7a Relecture du lot L1 de l'architecture société
 8b15aec Outille le développement local et fixe le fuseau UTC de la base (lot L1)
 01fe217 Relecture du lot EC de l’espace des cabinets
@@ -31,18 +32,22 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 c4c684a Fixe le territoire de chaque magasin au répertoire Sirene (lot T3)
 3a02fbc Relecture du lot T2 des horodatages
 c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseaux (lot T2)
-7ed0395 Enregistre, compare et calcule chaque instant en UTC (lot T2)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
  M .env.example
+ M README.md
  M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
  M app/Console/Commands/PurgerJournalAudit.php
+ M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
+ M app/Domain/Cabinets/Actions/RetirerLInvitationAction.php
+ M app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
  M app/Domain/Cabinets/Enums/MotifDeFinDuLien.php
  M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Events/MagasinFerme.php
  M app/Domain/Tenancy/Models/CodeConfirmation.php
  M app/Domain/Tenancy/Models/Societe.php
  M app/Domain/Tenancy/Services/AnnulationDesCodes.php
@@ -54,8 +59,11 @@ c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseau
  M database/migrations/2026_10_02_100008_create_journal_audit_table.php
  M database/migrations/2026_10_02_100011_create_verifications_societe_table.php
  M database/migrations/2026_10_02_100023_create_liens_cabinet_table.php
+ M tests/Feature/Cabinets/CabinetsConcurrenceTest.php
  M tests/Feature/Calendrier/PlanificateurTest.php
+?? app/Console/Commands/Editeur/RevoquerLaSociete.php
 ?? app/Console/Commands/PurgerVerifications.php
+?? app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
 ?? app/Domain/Tenancy/Services/FinDeLaRelation.php
 ?? app/Filament/Cabinet/Resources/JournalAuditDuCabinetResource.php
 ?? app/Filament/Cabinet/Resources/JournalAuditDuCabinetResource/
@@ -63,6 +71,7 @@ c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseau
 ?? app/Filament/Societe/Resources/JournalAuditResource.php
 ?? app/Filament/Societe/Resources/JournalAuditResource/
 ?? app/Policies/EntreeAuditPolicy.php
+?? tests/Feature/Editeur/RevoquerSocieteTest.php
 ?? tests/Feature/Societe/JournalAuditResourceTest.php
 ```
 

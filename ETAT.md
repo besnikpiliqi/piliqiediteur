@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 17:00 UTC par pilotage-sync.sh : « Constat 403 après le code d'un cabinet : correction jointe au lot A7b (§ 2.5) ».
+Mis à jour le 01/11/2026 à 17:56 UTC par pilotage-sync.sh : « Cahier d'EC2 : proposition finie, 13 questions posées à l'éditeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,52 @@ c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseau
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M README.md
+ M app/Console/Commands/Editeur/CorrigerLeSiren.php
+ M app/Console/Commands/Editeur/EnvoyerUnCourrier.php
+ M app/Console/Commands/Editeur/ExaminerLeSiren.php
+ M app/Console/Commands/Editeur/LibererUnSiretSaisiParErreur.php
+ M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+ M app/Console/Commands/Editeur/RevoquerLaSociete.php
+ M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
+ M app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
+ M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
+ M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
+ M app/Domain/Cabinets/Actions/RetirerLInscriptionALOrdreAction.php
+ M app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Cabinets/Support/IdentiteDansLeJournal.php
+ M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
+ M app/Domain/Facturation/Services/DocumentNumberingService.php
+ M app/Domain/Tenancy/Actions/AnnulerCessionAction.php
+ M app/Domain/Tenancy/Actions/ChangerFinExerciceAction.php
+ M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
+ M app/Domain/Tenancy/Actions/EnvoyerCodeDeConfirmationAction.php
+ M app/Domain/Tenancy/Actions/ExaminerSirenAction.php
+ M app/Domain/Tenancy/Actions/LibererUnSiretSaisiParErreurAction.php
+ M app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/CodeConfirmation.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Domain/Tenancy/Rules/CodeMagasinLibre.php
+ M app/Domain/Tenancy/Services/CodeMagasin.php
+ M app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
+ M app/Domain/Tenancy/Services/JournalAudit.php
+ M app/Domain/Tenancy/Services/JournalDesDroits.php
+ M app/Filament/Concerns/AfficheLeJournalDAudit.php
+ M database/migrations/0001_01_00_000000_create_societes_table.php
+ M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M database/migrations/2026_10_02_100008_create_journal_audit_table.php
+ M database/migrations/2026_10_02_100013_create_codes_confirmation_table.php
+ M tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
+ M tests/Feature/Editeur/AnnulerCessionTest.php
+ M tests/Feature/Editeur/ChangerFinExerciceTest.php
+ M tests/Feature/Editeur/LibererSiretTest.php
+ M tests/Feature/Editeur/RevoquerSocieteTest.php
+ M tests/Feature/Editeur/SirenErroneTest.php
+ M tests/Feature/Societe/JournalAuditResourceTest.php
+ M tests/TestCase.php
 ```
 
 ## Dernière course de la chaîne

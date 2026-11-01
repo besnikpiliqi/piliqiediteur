@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 09:01 UTC par pilotage-sync.sh : « Après le lot EC ».
+Mis à jour le 01/11/2026 à 09:17 UTC par pilotage-sync.sh : « Après la CI verte d'EC : questions à l'éditeur, annuaire de l'Ordre, chemins INPI ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,15 @@ c0acd28 Donne son fuseau à chaque heure écrite des tests et fige l'horloge ava
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+ M app/Domain/CaisseSecurisee/Exceptions/ModuleFiscalNonConfigureException.php
+ M app/Domain/CaisseSecurisee/Services/SignataireFiscal.php
+ M app/Domain/Tenancy/Services/JournalAudit.php
+ M tests/Feature/CaisseSecurisee/SignataireFiscalTest.php
+?? app/Domain/CaisseSecurisee/Support/ErreursOpenSsl.php
+?? app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
+?? database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
+?? tests/Unit/ErreursOpenSslTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -51,4 +60,5 @@ EC:correction
 EC:poussee
 EC:fiche
 EC:notes
+L1:implementation
 ```

@@ -2,7 +2,7 @@
 # Copie les notes de pilotage dans la branche claude/pilotage-reprise, régénère ETAT.md,
 # refuse tout secret, puis commite et pousse. Usage : pilotage-sync.sh "message".
 set -uo pipefail
-S=/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad
+S=/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad/nouvelle-session
 W="$S/pilotage-reprise"
 DEPOT=/home/user/piliqiediteur
 BRANCHE_TRAVAIL=claude/saas-invoice-editor-architecture-q6eizh

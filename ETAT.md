@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 00:18 UTC par pilotage-sync.sh : « Passation : état exact de TA (relu, 6 défauts sauvés, reprise à la correction) ».
+Mis à jour le 01/11/2026 à 01:07 UTC par pilotage-sync.sh : « Reprise du 01/11 : nouvelle session simulée, chaîne relancée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,15 +40,13 @@ fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M database/migrations/2026_10_03_100001_create_devis_table.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_a77da96f-9ee`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_22d43798-897`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-TA:implementation
-TA:relecture1
-TA:relecture2
 TA:correction
 ```

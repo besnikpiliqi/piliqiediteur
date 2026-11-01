@@ -10,7 +10,7 @@ export const meta = {
   ],
 }
 
-const S = '/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad'
+const S = '/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad/nouvelle-session'
 const DEPOT = '/home/user/piliqiediteur'
 const BRANCHE = 'claude/saas-invoice-editor-architecture-q6eizh'
 const PLAN = `${S}/tva/plan-execution.md`

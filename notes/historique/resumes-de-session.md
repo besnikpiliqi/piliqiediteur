@@ -4243,3 +4243,246 @@ Continue the conversation from where it left off without asking the user any fur
 
 The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
 
+## Résumé 19, 2026-11-01 00:29 UTC
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+<system-reminder>
+<tools-used-before-summary>Agent, Artifact, AskUserQuestion, Bash, Edit, ExitPlanMode, Read, ReadNotifications, TaskCreate, TaskStop, TaskUpdate, ToolSearch, WebFetch, WebSearch, Workflow, Write, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__read_documentation, mcp__claude-code-remote__send_later, mcp__claude-code-remote__update_trigger, mcp__github__actions_list, mcp__github__actions_run_trigger, mcp__github__get_job_logs, mcp__github__list_branches, mcp__github__list_pull_requests</tools-used-before-summary>
+</system-reminder>
+Summary:
+1. Primary Request and Intent:
+   - **Projet et mandat**
+     - PILIQI (piliqiediteur) : SaaS français de facturation et de caisse (Laravel 13, Filament 3.3, PHP 8.3, PHPUnit 12).
+     - Branche de travail `claude/saas-invoice-editor-architecture-q6eizh`, PR #1 sur besnikpiliqi/piliqiediteur (dépôt privé).
+     - L'utilisateur est l'éditeur. Il délègue toute la technique ; mandat : finir le logiciel en autonomie selon le protocole de CLAUDE.md, voie la plus sûre, sans aucun allègement.
+     - Tout en français, toujours vouvoyer l'éditeur.
+   - **Demande en cours (31/10, puis 01/11)** : « tu recommence le travaille la ou t´es arreté. mais je veux que tu commence à partir de la fiche que t´as mis pour l´autre session... donc tu fais semble comme si c´est toi qui est la nouvelle session et comme ca je s´aurais comment il se comportera. »
+     - Plan approuvé : /root/.claude/plans/fluffy-discovering-wand.md.
+     - Principe : jouer la nouvelle session d'un autre compte, uniquement à partir de la fiche et des notes récupérées depuis GitHub (branche `claude/pilotage-reprise`), dans un dossier neuf N.
+     - Tenir un journal de simulation : à chaque étape, ce que demande la fiche, ce qui a été fait, ce qui s'est passé, et ce qui est corrigé dans la fiche.
+     - Puis relancer la chaîne.
+   - **Directives nouvelles de ce segment**
+     - « Avec ultra code tout le temps sans exception » : à inscrire dans DIRECTIVES.md et la fiche.
+     - Branche de reprise mise à jour à chaque changement, jamais seulement à la fin.
+     - Après chaque lot, un agent neuf relit la fiche à froid (étape `:fiche`, VERIFICATION.md).
+     - Aucun nombre dans les menus : tout passe par « À faire » au tableau de bord.
+   - **Questions de l'éditeur sur l'effort et le modèle : déjà répondu**
+     - Modèle : Opus 5.5.
+     - Effort : « Élevé » recommandé pour le travail courant ; Max seulement pour les moments critiques, ou tout le temps s'il prend le forfait plus élevé.
+     - Max consomme « 3,5× ou plus », et les agents de la chaîne héritent de l'effort réglé au moment de leur lancement.
+     - Aucun réglage ne garantit « sans erreurs ».
+     - Je lui ai dit de changer l'effort maintenant s'il le veut, avant la relance de la chaîne.
+   - **CONSIGNES DE SÉCURITÉ (à garder mot pour mot)**
+     - Ne jamais demander à l'utilisateur de coller jetons, clés ou mots de passe dans la conversation ; ne jamais écrire d'identifiants dans les fichiers du dépôt.
+     - Identifiants seulement par variables d'environnement : SUPERPDP_URL, SUPERPDP_CLIENT_ID, SUPERPDP_CLIENT_SECRET, SUPERPDP_TRICATEL_CLIENT_ID, SUPERPDP_TRICATEL_CLIENT_SECRET, SUPERPDP_REDIRECT_URI ; INSEE_SIRENE_CLE, INPI_RNE_IDENTIFIANT, INPI_RNE_MOT_DE_PASSE, RECOMMANDE_CLE, RECOMMANDE_SECRET_RAPPEL, JOURNAL_AUDIT_CLE, JOURNAL_AUDIT_CLE_ID, JOURNAL_AUDIT_CLES_PRECEDENTES, EDITEUR_OPERATEURS, PILIQI_EDITEUR_EMAIL, CAISSE_SECURISEE_CLE_PRIVEE, CAISSE_SECURISEE_PHRASE_SECRETE.
+     - Le classificateur a refusé un essai réel avec identifiants en ligne (« Credential Leakage ») ; ne pas le contourner.
+     - Conseiller de renouveler les deux secrets du bac à sable SUPER PDP après les tests.
+     - Ne jamais envoyer de vraie requête à SUPER PDP, La Poste, l'INPI, l'INSEE ni à l'annuaire de l'Ordre ; seulement des implémentations factices ou des environnements de test autorisés ; aucune donnée fictive en masse en production.
+     - Pas de PR sans demande. Aucun identifiant de modèle dans les commits, le code ou la PR.
+     - `git stash drop` et `git push origin --delete` refusés par le classificateur (Git Destructive) : ne pas les forcer.
+     - L'utilisateur avait collé une clé privée de développement : ne jamais la répéter.
+     - Lignes de fin de commit : `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` et `Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6`.
+     - Commentaires GitHub : terminer par « --- _Generated by [Claude Code](https://claude.ai/code)_ ».
+     - Ne jamais committer ni pousser le travail en cours des agents de la chaîne (réponse au crochet d'arrêt : c'est le travail de l'agent ; un commit non relu n'est pas poussé avant sa relecture). Ne jamais forcer une poussée ni réécrire l'historique.
+     - Une seule session à la fois sur la branche.
+     - Aucune donnée personnelle dans les notes : le nom de l'employeur (« [donnée personnelle retirée] »), l'UUID du magasin local et les navigateurs ont été retirés. `historique/retraits-locaux.txt` n'est jamais publié.
+     - L'adresse e-mail de l'utilisateur ne sert qu'à l'identifier.
+
+2. Key Technical Concepts:
+   - **Isolation** : BelongsToMagasin/MagasinScope et BelongsToSociete/SocieteScope.
+   - **Bases** : PostgreSQL 16 en local (17 en CI, 17 ou 18 en production) et SQLite. Après chaque redémarrage de la machine : `service postgresql start`.
+   - **Protocole avant commit** : suites SQLite puis PostgreSQL au code 0, grille faketime de 17 instants (`TZ=UTC NO_FAKE_STAT=1`, plus `FAKETIME_DONT_RESET=1` sous PostgreSQL), pint.
+   - **Chaîne `serie8-lots.js`** (outil Workflow)
+     - Étapes par lot : `:implementation`, `:relecture1` et `:relecture2`, `:correction`, `:poussee`, `:fiche`, `:notes`.
+     - `args.ouverts` ; arrêt sans pousser si une relecture ou la correction ne rend rien ; refus de lancer si `ouverts` est vide ou contient un lot inconnu.
+     - Un script de course ne lit aucun fichier.
+   - **Branche `claude/pilotage-reprise`** : README.md (fiche), ETAT.md (automatique), VERIFICATION.md, `notes/`. `pilotage-sync.sh` contrôle les secrets et régénère l'historique via `extraire-historique.py`.
+   - **Danger** : un message de l'éditeur envoyé pendant un tour en cours, ou un redémarrage de la machine, coupe toutes les courses Workflow. Il y a eu de nombreux redémarrages les 31/10 et 01/11.
+   - **TVA** : HT = TTC ÷ (1 + taux), arrondi une fois au centime, conformément à la fiche officielle F24271.
+   - **Série 9 (décisions)** : un produit = une ligne ; « À faire » et « À surveiller » au tableau de bord ; aucun nombre dans les menus.
+
+3. Files and Code Sections:
+   - **Chemins**
+     - S = `/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad`
+     - N = `$S/nouvelle-session` : le dossier de travail de la session simulée.
+   - **Copie de travail de la branche de reprise** : désormais `N/pilotage-reprise`. L'ancien `$S/pilotage-reprise` a été retiré par `git worktree remove`, après contrôle : propre, à 472ae02 = origin.
+   - **N/serie8-lots.js, N/tva-lots-M0-FIN.js, N/pilotage-sync.sh**
+     - Chemins adaptés par le `sed` du § 4.4 : `const S = '.../scratchpad/nouvelle-session'`.
+     - `pilotage-sync.sh` : S=N, W="$S/pilotage-reprise", WF et SCRIPTS sous `/root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/...`.
+     - SID inchangé : session_01K3593fBCSfG8EcbWrZryb6.
+   - **N/historique/retraits-locaux.txt** : recopié depuis `$S/historique/` (écart propre à la simulation, pour éviter une fuite de données personnelles). Jamais publié.
+   - **reprises/TA-defauts-des-relectures.json** (créé dans `$S/reprises`, synchronisé, aussi présent dans `N/reprises`)
+     - Structure : `{"lot":"TA","commits":"7832bb0..e2d790a","source":"journal de la course wf_a77da96f-9ee (… agents a8ee50c7fa114cb56, a0259d3bfad4f28cb)","defauts":[{titre,fichier,scenario,correction,gravite}…]}`.
+     - Les 6 défauts :
+       1. **important** : un devis émis ne fige pas l'assurance professionnelle ;
+       2. mineur : CLAUDE.md dit qu'un cabinet « n'y configure que son identité », mais le code lui laisse créer des comptes ;
+       3. mineur : le message du commit 2 ne nomme pas les tests réécrits ;
+       4. mineur : un cabinet configure plus que son identité (doublon partiel du 2) ;
+       5. mineur : un commentaire cite `CloreLInscriptionAction::refuser()`, qui n'existe plus ;
+       6. mineur : test qui ne prouve rien (`StockNegatifApercu::canView()` est faux même dans un commerce).
+   - **reprises/lot-TA-3-commits-non-relus.patch** : vérifié. `git am` sur 89f092f donne l'arbre db0b0731297dc3ead54b04bbd3413d11030a8eb7, identique à `e2d790a^{tree}` (nouveaux hash 868eb42, c04dec4, 1209719 ; copie jetable retirée).
+   - **README.md de la branche de reprise** : l'encadré « EN PAUSE » a été corrigé (« Correction de la passation (31/10/2026) : … relectures terminées … 6 défauts … TA reprend à sa correction »), synchronisé en 472ae02.
+   - **N/simulation/reprise-2026-10-31.md** : le journal de simulation.
+     - Écrits : l'introduction (écarts propres à la simulation), la passation et les étapes 1 à 4.
+     - Sorties sauvées : verifier-1.txt, installation.txt, test-sqlite.txt, test-pgsql.txt.
+   - **Boucle principale actuelle de `serie8-lots.js`**, à étendre avec `args.reprise` :
+     ```js
+     const OUVERTS = args && Array.isArray(args.ouverts) ? args.ouverts : []
+     const INCONNUS = OUVERTS.filter(id => !LOTS.some(l => l.id === id))
+     if (OUVERTS.length === 0 || INCONNUS.length > 0) { log(`Aucun lot lancé : …`); return [] }
+     ...
+       const rapport = await agent(`${REGLES}\n\n${consigne}`, { label: `${lot.id}:implementation`, phase: lot.phase, schema: RAPPORT })
+       if (!rapport || !rapport.commit) { … break }
+       const revues = (await parallel(OPTIQUES.map((optique, i) => () => agent(`Relecture adversariale du ou des commits ${rapport.commit} …`)))).filter(Boolean)
+       const defauts = revues.flatMap(r => r.defauts || [])
+       if (revues.length < OPTIQUES.length) { … break }
+       let correction = null
+       if (defauts.length > 0) { … correction = await agent(`${REGLES}\n\n${consigne}\n\nCORRECTION DE RELECTURE … ${JSON.stringify(defauts, null, 2)} …`) }
+       if (defauts.length > 0 && (!correction || !correction.commit)) { … break }
+       const poussee = await agent(…); … fiche …; notes …
+     ```
+   - **Autres fichiers de ce segment**
+     - Décisions : serie9/reponses-serie9.md, demande-editeur.md, analyse-lignes.md, analyse-a-faire.md, critique.md ; decisions/reponses-regles-ecran-26-10.md.
+     - Sources et outils : sources/service-public-F24271.txt ; historique/extraire-historique.py.
+     - Installation : installation/ENVIRONNEMENT.md et installer-session.sh.
+     - Historique : historique/HISTORIQUE.md, DIRECTIVES.md, messages-editeur.md, resumes-de-session.md.
+     - Plan : /root/.claude/plans/fluffy-discovering-wand.md.
+
+4. Errors and fixes:
+   - **Interruptions par l'éditeur** : elles ont tué T2:correction (25/10, 23 h 40) et T3:correction (26/10, 10 h 46). Consignes sauvées, courses de reprise relancées.
+   - **Redémarrages de la machine** : le 26/10 à 21 h 42 (relectures de TA), reprise par `resumeFromRunId`. Les 31/10 et 01/11, redémarrages répétés : PostgreSQL arrêté chaque fois et le mode plan revenu.
+   - **Commande refusée** : une commande Bash n'a reçu aucun avis de l'outil d'autorisation ; relancée plus tard, elle a fonctionné.
+   - **`git worktree add`** : refus « already used by worktree ». Corrigé en retirant l'ancien dossier, propre et poussé.
+   - **Formule de U** : elle donne « scratchpad » dans la simulation ; U fixé à la main.
+   - **Contrôle des secrets de `pilotage-sync.sh`** : il ne marchait pas (option `--exclude-dir` placée après `--`). Corrigé, et les valeurs publiques de la CI exemptées.
+   - **Fichier de vérification** : bloquait sans journal de course. Corrigé (`</dev/null`).
+   - **Erreur de fait de ma part** : « 4 344 tests avant T2 » au lieu de 4 384. Corrigé auprès de l'éditeur.
+   - **VERIFICATION.md absent** : l'étape de PU avait été coupée. Relecture faite à la main.
+   - **Domaine bloqué** : `entreprendre.service-public.gouv.fr` bloqué pour WebFetch ; l'éditeur l'a autorisé, et la page se lit par curl via le proxy.
+
+5. Problem Solving:
+   - **Résolu dans ce segment**
+     - T2, T3 et PU poussés, CI verte (3a02fbc, fa83824, 89f092f).
+     - Dossier de reprise complet, relu à froid deux fois (18 puis 29 constats corrigés).
+     - Série 9 conçue et ses réponses enregistrées.
+     - Pause propre, puis passation corrigée.
+   - **Simulation, déjà fait** :
+     - étape 0, la passation (472ae02) ;
+     - étapes 1 à 4 ;
+     - étape 5, l'installation : `--verifier` au code 1 (PostgreSQL arrêté), puis le mode d'installation au code 0 (il a démarré PostgreSQL, tout le reste était en place) ;
+     - étape 6, les tests ciblés au code 0 (SQLite 97 tests, PostgreSQL 15 tests) ;
+     - étape 7, les lectures : ETAT, VERIFICATION, § 0 de DIRECTIVES ;
+     - étape 8 : aucun lot restant poussé (la boucle finit au code 1 quand le dernier lot n'est pas poussé), CI de 89f092f verte (course 40366718621), correctif vérifié.
+   - **Écarts de la fiche relevés, à corriger à l'étape 10**
+     - (0) La pause n'avait pas sauvé les relectures déjà terminées.
+     - (1) « Passation » ou « Pause » dans ETAT.md.
+     - (2) Le § 0.2 (« ce qui n'est pas poussé est perdu ») contredit l'encadré de pause (appliquer le correctif) : dire lequel prime.
+     - (3) Un script de reprise est impraticable sur un conteneur neuf : il faut `args.reprise`.
+     - (4) Le contrôle HEAD = tête poussée échoue légitimement quand des commits sont sauvés par un correctif.
+     - (5) La formule de U et le `sed` ne valent que si N est le dossier de travail de la session ; n'appliquer le `sed` qu'à des copies fraîches.
+     - (6) § 6 : « 4 à 6 jours » est dépassé.
+     - (7) La boucle des lots finit au code 1 quand le dernier lot n'est pas poussé.
+     - (8) VERIFICATION § 2.8 : si TA n'est pas poussé, `ouverts` commence par TA.
+     - (9) Le mode d'installation a bien fonctionné.
+
+6. All user messages:
+   - « le contrôle d'intégrité de la caisse lancé trois fois le 25 octobre ; Et pourquoi 25 octobre et pas d'autres dates »
+   - Réponse à la question sur la puce « Outillage » : « Oui, mettre à jour (Recommandé) »
+   - « Tu as fini le T2! Montre moi de quoi il s'agit »
+   - « Tu as dis dans la fiche que « Ce qui reste … régler le fuseau de la base PostgreSQL en UTC… » mais moi peut être je vais oublier ou si je passe sur l'autre compte alors lui se rappelle pas. Je fais quoi ? »
+   - « Donc tu peux me donner ou mettre qq part tout tes notes de travail afin que l'autre compte puisse continuer ton travail comme s'il était toi » ; réponse à la question : « Branche à part sur GitHub (Recommandé) »
+   - « Mais tu mets à jour toujours tout dans cette branche afin qu'il ait toujours le dernier note donc sans laisser pour à la fin de mettre à jour mais tu le mets à chaque fois »
+   - « Il faut que tu mettes tout s'il te plaît. Met tout ce qu'il faut avoir pour que lui travaille comme si c'était toi. Donc tout, ce que tu as fait au début et au fur à mesure jusque là, donc les installations dont les dépendances et tout ce que ai besoin pour continuer le travail sans qu'il se perd ou qu'il fasse des erreurs ou n'importe quoi. Donc tout les directives dont par où commencer et tout tout parce que l'autre compte comment sauras quoi faire »
+   - « Tu as dis que l'agent « Il a relevé 18 manques ou erreurs. » et toi tu les a corrigés mais pourquoi lui a trouvé et pas toi avant »
+   - « Ban alors pourquoi tu fais pas comme ça, donc tu mets à jour la fiche et les agents commencent par ce fichier et comme ça ils vont trouver des erreurs s'ils existent. Ou peut être c'est pas bon »
+   - Réponses : phrase de L1 « Oui, l'ajouter » ; « ce magasin » « Abandonner cette règle » ; autres magasins « Oui, elle tient »
+   - Message en albanais (série 9 : un produit = une ligne ; « À faire » au tableau de bord ; nombre jaune incompréhensible) + « Mais tu prends ca en tant que langue française et pas albanais »
+   - Réponses série 9 :
+     - « Mais tu règles pour tous les endroits ou en ajoute des produits peu importe si on est sur facture caisse devis etc » ;
+     - « Selon le droit » ;
+     - « Même règle » ;
+     - « À faire + À surveiller (Recommandé) Mais l'expert comptable ne doit voir rien du tout car ce n'est pas son problème » ;
+     - « Toujours une seule ligne » ;
+     - « Qui encaisse voit » ;
+     - « Tout de suite » ;
+     - « Nombres par magasin ».
+   - PDF de la CI échouée sur 5f71b60 : « Pourquoi ces problèmes »
+   - « « Le nombre jaune du menu des factures disparaît, remplacé par des onglets clairs. » il faut enlever tout parce que tout va être affiché dans le tableau de bord »
+   - « Si il y aura pas des arrêtes par les limites alors pour combien de temps va finir le logiciel »
+   - « Mais franchement j'arrive pas à comprendre pourquoi tout ce temps alors que la le logiciel fonctionne très bien »
+   - « Tout ce travail t'as fait pour 3 semaines et comment la reste jusqu'à 3 mois pour finir alors le plus gros travail est déjà fait »
+   - « Et pourquoi tu utilises faketime?? »
+   - « Et pourquoi tu utilises « Outillage » »
+   - « T'as mis a jour les notes ou pas ce que tu as fait jusqu'à maintenant »
+   - « Je sais pas si t'as vu sur ce lien mais la il parle bien comment calculer la tva . https://entreprendre.service-public.gouv.fr/vosdroits/F24271 »
+   - « entreprendre.service-public.gouv.fr, j'ai autorisé »
+   - « Le fichier VERIFICATION.md je la vois nulle part »
+   - « Donc encore un agent neuf a trouvé des erreurs! C'est bizarre car deja il existe mais sans savoir qu'ils existent »
+   - « Moi je comprends pas pourquoi tu dit qu'il reste bcp de temps « jusqu'à deux mois à finir le logiciel » alors le logiciel il fonctionnel et marche presque parfaitement, dont la caisse sécurisé les factures et pdf et les inscriptions et les connexions et toi tu dis qu'il reste bcp à faire. J'ai l'impression que tu te trompes caf normalement tu dois finir bcp plus vite »
+   - « Mais moi je vois que t'as créé la grande partie et meme peut être jusqu'à 70% et toi la semaine dernière t'as fait le travail bcp plus rapide et avancé bcp plus vite et cette semaine t'as fait le travaille vraiment doucement »
+   - « Et si tu peux arrêter pour l'instant le travail car la session va terminer car il est 99% de la semaine. Donc tu commences quand je te dis fin semaine »
+   - « tu recommence le travaille la ou t´es arreté. mais je veux que tu commence à partir de la fiche que t´as mis pour l´autre session. comme on verra comment va derouller comment commence la nouvelle session. donc tu fais semble comme si c´est toi qui est la nouvelle session et comme ca je s´aurais comment il se comportera. »
+   - « Je vois que t'as changé la méthode d'utilisation. Alors ultra code s'active autrement et on choisit quelle effort. Alors si je choisis efort max ou moyen sa change quoi! Est-ce effort max fait meilleur travail ou quoi » (avec une capture des réglages : Opus 5.5, effort Max, Ultracode activé ; reçu plusieurs fois) + « Avec ultra code tout le temps sans exercice » + « Sans exception »
+   - « Dit moi la vérité. Je dois utiliser quoi comme effort et quel modele pour que mon logiciel soit construit hyper propre , hyper sécurisé, hyper performant, hyper efficace et sans erreurs »
+
+7. Pending Tasks:
+   - **Étape 9**
+     - Ajouter `args.reprise` à N/serie8-lots.js, après une copie N/serie8-lots.avant-reprise-de-lot.js.
+     - Par lot : `{"commit":"<plage>"}` saute l'implémentation ; `{"commit":"<plage>","defauts":[…]}` saute aussi les relectures et passe à la correction (liste vide : directement la poussée).
+     - Refus si la reprise vise un lot absent d'`ouverts`, une plage invalide (motif `/^[0-9a-f]{7,40}(\.\.[0-9a-f]{7,40})?$/`) ou des défauts mal formés.
+     - Puis `node --check` sur une copie où `export const meta` devient `const meta` et le corps est enveloppé dans une fonction `async`.
+   - **Étape 10**
+     - Fiche dans N/pilotage-reprise/README.md : remplacer l'encadré « EN PAUSE » par l'état de la reprise ; corriger les écarts listés au point 5 ; documenter `args.reprise` au § 5.
+     - Ajouter « Ultracode tout le temps, sans exception » à N/historique/DIRECTIVES.md (citation, date, numéro) et à la fiche.
+     - Créer N/installation/setup-script-a-coller.sh.
+     - Terminer le journal de simulation (étapes 5 à 11).
+     - Ajouter les nouveaux fichiers à N/pilotage-fichiers.txt (simulation/reprise-2026-10-31.md, installation/setup-script-a-coller.sh).
+     - `git -C N/pilotage-reprise pull --ff-only`, puis `bash N/pilotage-sync.sh "Reprise du 31/10 : nouvelle session simulée"`. Vérifier ETAT.md et l'absence de tout nom d'employeur.
+   - **Étape 11 : relancer la chaîne**
+     - Workflow avec `scriptPath` = N/serie8-lots.js.
+     - `args = {"ouverts":["TA","EC","L1","A7","S9-L","S9-A","21"],"reprise":{"TA":{"commit":"7832bb0..e2d790a","defauts":[les 6 défauts du JSON]}}}`, sans `resumeFromRunId`.
+     - Relire tout de suite le journal : attendu « TA repris à la correction ».
+     - Lancer la chaîne en fin de tour et garder ensuite des tours courts.
+   - **Étape 12 : suivi**
+     - Point de suivi `send_later` toutes les 2 heures (machine instable), qui reprend la chaîne à l'étape atteinte si elle est coupée.
+     - Poser à l'éditeur Q-AF10, Q-AF12 et Q-AF13 bien avant S9-A :
+       - délai de la preuve d'export (recommandé : rouge après 30 jours) ;
+       - preuve d'export reçue après la fermeture du magasin (recommandé : toujours possible) ;
+       - éléments sans fin (recommandé : boutons « Garder », « C'est vérifié », date de visa).
+     - Après chaque lot poussé : CI, VERIFICATION.md, compte rendu court, et rappel des commandes pour son PC si une migration change.
+     - Présenter à l'éditeur le compte rendu de la simulation et l'état du projet, en le vouvoyant.
+   - **Ensuite** : EC, L1, A7, S9-L, S9-A, 21 ; puis la chaîne TVA (à mettre d'accord avant de la lancer), l'étape 1 bis et les étapes 2 à 15.
+
+8. Current Work:
+   - J'exécutais le plan approuvé : la reprise en jouant la nouvelle session.
+   - Je venais de finir l'étape 8, dernière commande :
+     - `git worktree add --detach $N/essai-correctif 89f092f`, puis `git am` du correctif ;
+     - arbre « db0b0731297dc3ead54b04bbd3413d11030a8eb7 », identique à `e2d790a^{tree}` ;
+     - copie jetable retirée.
+   - Avant cela :
+     - CI de 89f092f vérifiée verte ;
+     - boucle des lots : aucun des lots TA, EC, L1, A7, S9-L, S9-A, 21 n'est poussé ;
+     - tests ciblés au code 0 ;
+     - installation au code 0, PostgreSQL démarré vers 00 h 20 UTC le 01/11.
+   - **État**
+     - Branche de travail : HEAD e2d790a (3 commits TA non poussés, arbre propre), origin 89f092f.
+     - Branche de reprise : 472ae02.
+     - Aucune course ni aucun point de suivi actifs.
+   - Je venais aussi de répondre à l'éditeur sur l'effort et le modèle, et je lui ai dit : « Je continue la reprise. Les agents de la chaîne prendront l'effort réglé au moment où je la relancerai, dans un moment : si vous voulez passer à « Élevé », faites-le maintenant. »
+
+9. Optional Next Step:
+   - Poursuivre le plan à l'étape 9, conformément à la demande de l'éditeur : « tu recommence le travaille la ou t´es arreté... tu fais semble comme si c´est toi qui est la nouvelle session et comme ca je s´aurais comment il se comportera ».
+   - Concrètement :
+     1. Sauvegarder N/serie8-lots.js en N/serie8-lots.avant-reprise-de-lot.js.
+     2. Ajouter le mécanisme `args.reprise` (validation près de la garde d'`ouverts`, rapport fabriqué quand `commit` est fourni, relectures sautées quand `defauts` est fourni, en s'assurant que `revues.length < OPTIQUES.length` ne bloque pas ce cas).
+     3. Contrôler la syntaxe avec `node --check`.
+     4. Faire l'étape 10 (fiche, DIRECTIVES avec « Ultracode tout le temps, sans exception », journal de simulation, texte du Setup script, synchronisation).
+     5. Relancer la chaîne en fin de tour (étape 11), avec la reprise de TA à la correction et les 6 défauts de reprises/TA-defauts-des-relectures.json.
+     6. Programmer le suivi toutes les 2 heures.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
+

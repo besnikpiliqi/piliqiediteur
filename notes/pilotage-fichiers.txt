@@ -75,3 +75,6 @@ serie9/critique.md
 sources/service-public-F24271.txt
 reprises/lot-TA-3-commits-non-relus.patch
 reprises/TA-defauts-des-relectures.json
+simulation/reprise-2026-10-31.md
+installation/setup-script-a-coller.sh
+reprises/args-course-wf_22d43798-897.json

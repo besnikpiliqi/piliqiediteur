@@ -15,7 +15,7 @@ Ce fichier réunit tout ce que l'éditeur a demandé sur la façon de travailler
 2. Tout se fait et s'écrit en français, même quand il écrit en albanais (message 210).
 3. Autonomie totale sur la technique, jusqu'à un logiciel fini, testé et prêt pour la production (messages 8, 128, 129, 158, 174).
 4. Une règle métier non tranchée (calcul, arrondi, obligation légale, droits) se pose à lui, expliquée en détail, avec des options et une recommandation ; on ne la devine jamais (message 1, § 42 ; message 101).
-5. La voie la plus sûre, même si elle est plus longue : rien ne s'allège dans le protocole (messages 241 à 245, 253).
+5. La voie la plus sûre, même si elle est plus longue : rien ne s'allège dans le protocole, et ultracode s'applique tout le temps, sans exception (messages 241 à 245, 253, 300, 301).
 6. Un défaut se corrige partout, pas seulement sur l'écran où il l'a vu (messages 80, 97).
 7. Les tests ne se remplacent jamais par une explication (messages 69, 70) ; les calculs se testent sur des milliers de cas (message 92).
 8. Ne jamais prétendre avoir lancé un test qui ne l'a pas été ; ne jamais dire que PILIQI est sans erreur ; distinguer le vérifié du reste à valider (message 156).
@@ -124,7 +124,8 @@ Ce fichier réunit tout ce que l'éditeur a demandé sur la façon de travailler
 - 25/10/2026, message 242 : « Le mode « ultracode » activé sur la session ajoute des ateliers à plusieurs agents (propositions, juges, relectures) : plus sûr, mais plus long. Tu as dit plus sure mais plus long donc moi m’intéresse le plus sur »
 - 25/10/2026, message 245 : « Tu le fait avec ulteacode »
 - 25/10/2026, message 253 : « Non je veux pas changer rien du tout mais juste pourquoi ça doit prendre autant de temps »
-- Ce que cela implique : chaque lot garde implémentation, deux relectures indépendantes, correction, suites sur les deux moteurs, faketime, pint, poussée, CI verte. Le travail substantiel passe par l'outil Workflow. Une question « pourquoi c'est long ? » n'est jamais une demande d'aller plus vite : on explique, on ne raccourcit rien.
+- 01/11/2026, message 300 : « Avec ultra code tout le temps sans exercice » ; message 301 : « Sans exception » (« sans exercice » veut dire « sans exception »).
+- Ce que cela implique : chaque lot garde implémentation, deux relectures indépendantes, correction, suites sur les deux moteurs, faketime, pint, poussée, CI verte. Le travail substantiel passe par l'outil Workflow, tout le temps et sans exception (messages 300 et 301) ; un travail fait à la main (fiche, notes) est relu à froid par des agents neufs. Une question « pourquoi c'est long ? » n'est jamais une demande d'aller plus vite : on explique, on ne raccourcit rien.
 - Statut : tient. Écrit au § 2 de `README.md`.
 
 ### 1.4 Les tests
@@ -314,6 +315,12 @@ Ces consignes viennent de ses essais de l'application sur son PC (captures d'éc
 - Ce que cela implique : « Fable » est un modèle Claude, que l'éditeur choisit pour la session, pas un outil : il n'y a aucun outil à chercher. Après le message 198, la ligne d'attribution des scripts de chaîne est passée à « Fable 5.1 », puis revenue à « Opus 5.5 » (`HISTORIQUE.md`, § 2, lundi 12/10). C'est une autorisation pour la conception des écrans, pas une obligation. La ligne d'attribution des commits reste celle que donne le harnais de la session (`README.md`, § 2), et aucun identifiant de modèle n'entre dans le code.
 - Statut : tient comme autorisation.
 
+**D49. Modèle et effort de la session.**
+- 01/11/2026, message 300 : « Je vois que t’as changé la méthode d’utilisation. Alors ultra code s’active autrement et on choisit quelle effort. Alors si je choisis efort max ou moyen sa change quoi! Est-ce effort max fait meilleur travail ou quoi » (capture : Opus 5.5, effort Max, ultracode activé) ; puis, le même jour : « Dit moi la vérité. Je dois utiliser quoi comme effort et quel modele pour que mon logiciel soit construit hyper propre , hyper sécurisé, hyper performant, hyper efficace et sans erreurs ».
+- Réponse donnée, d'après la documentation d'Anthropic (pas de mémoire) : Fable 5.1 est le modèle le plus capable, mais coûte 2,5 fois plus cher qu'Opus 5.5 au tarif de l'API ; Opus 5.5 est le modèle par défaut, recommandé pour le travail courant. L'effort règle la réflexion avant chaque geste : meilleur sur les problèmes difficiles, plus lent et plus coûteux ; au moins « Élevé » pour un travail exigeant, « Max » quand l'exactitude compte plus que le coût (seulement rentable sur les problèmes difficiles) ; le réglage par défaut de Claude Code est juste en dessous de Max. Aucun réglage ne garantit l'absence d'erreur : c'est la méthode des lots qui protège la qualité. Recommandation : Opus 5.5 juste en dessous de Max, Max pour les parties sensibles (caisse sécurisée, SUPER PDP, sécurité), ou partout si son forfait tient la semaine.
+- Ce que cela implique : c'est lui qui règle le modèle et l'effort ; la session ne les change pas. Les agents d'une course prennent l'effort de la session au moment du lancement, sauf ceux dont le script fixe l'effort (poussée, fiche, notes).
+- Statut : tient.
+
 **D48. L'ordre du prompt maître est remplacé par la feuille de route.**
 - 02/10/2026, message 1, § 41 (format de livraison en 17 points) et § 44 (phases 1 à 8).
 - Statut : **remplacés**. Tient : la feuille de route de `CLAUDE.md` (étapes 1 à 15) et la chaîne de lots ; chaque lot se termine par un compte rendu en français simple (§ 3.4 ci-dessous).
@@ -325,7 +332,7 @@ Ces consignes viennent de ses essais de l'application sur son PC (captures d'éc
 | Validation avant de coder | Attendre sa validation (msg 1, 02/10) | « tu fais beaucoup meilleurs » (msg 8), mandat total (msg 128, 08/10) | Autonomie ; seules les règles métier se posent |
 | Moteur de base | MySQL (msg 1) | « tu aplique celui qui est meilleur » (msg 158, 10/10) | PostgreSQL + SQLite |
 | Spatie | Garder un paquet éprouvé (msg 173, 11/10) | « c'est toi qui dois décider » (msg 174) | Autorisations propres à PILIQI, référentiel en base |
-| Durée du travail | « ca a duré longtemps » (msg 155, 10/10) | « On va pas changer rien » (msg 241), « le plus sur » (msg 242) | Protocole complet, ultracode |
+| Durée du travail | « ca a duré longtemps » (msg 155, 10/10) | « On va pas changer rien » (msg 241), « le plus sur » (msg 242), « tout le temps sans exception » (msg 300, 301, 01/11) | Protocole complet, ultracode partout |
 
 ---
 

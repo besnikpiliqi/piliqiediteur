@@ -11,7 +11,7 @@ export const meta = {
   ],
 }
 
-const S = '/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad'
+const S = '/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad/nouvelle-session'
 const DEPOT = '/home/user/piliqiediteur'
 const BRANCHE = 'claude/saas-invoice-editor-architecture-q6eizh'
 const PLAN = `${S}/serie8/plan-serie8.md`
@@ -148,6 +148,25 @@ if (OUVERTS.length === 0 || INCONNUS.length > 0) {
   return []
 }
 
+// Reprise d'un lot déjà commité, arrêté en route (redémarrage, limite, pause) :
+// args.reprise = { "<lot>": { "commit": "<debut>..<fin>" } } saute l'implémentation et relance les relectures sur cette plage ;
+// avec "defauts": [ ... ] (ceux que les relectures ont déjà rendus, sauvés dans notes/reprises/), il saute aussi les relectures
+// et passe directement à la correction (liste vide : directement à la poussée). Un script de course ne lit aucun fichier :
+// les défauts arrivent par args.
+const REPRISES = args && args.reprise && typeof args.reprise === 'object' && !Array.isArray(args.reprise) ? args.reprise : {}
+const PLAGE_DE_COMMITS = /^[0-9a-f]{7,40}(\.\.[0-9a-f]{7,40})?$/
+const CHAMPS_D_UN_DEFAUT = ['titre', 'fichier', 'scenario', 'correction', 'gravite']
+const REPRISES_FAUSSES = Object.entries(REPRISES).filter(([id, r]) => !OUVERTS.includes(id) || !r || typeof r !== 'object'
+  || typeof r.commit !== 'string' || !PLAGE_DE_COMMITS.test(r.commit)
+  || (r.defauts !== undefined && (!Array.isArray(r.defauts) || r.defauts.some(d => !d || CHAMPS_D_UN_DEFAUT.some(c => typeof d[c] !== 'string'))))).map(([id]) => id)
+if (REPRISES_FAUSSES.length > 0) {
+  log(`Aucun lot lancé : args.reprise mal formé pour ${REPRISES_FAUSSES.join(', ')} (chaque reprise vise un lot de ouverts, avec "commit" = une plage « debut..fin » et, si ses relectures sont faites, "defauts" = la liste de leurs défauts)`)
+  return []
+}
+
+// Une étape coupée par un redémarrage de la machine laisse ses modifications non commitées : la reprise les retrouve.
+const TRAVAIL_COUPE = `Avant de commencer, regarde git status --short dans ${DEPOT} : s'il n'est pas vide, ce sont les modifications non commitées d'une tentative précédente de cette même étape, coupée par un redémarrage de la machine ; relis-les en entier, garde ce qui est juste, corrige ou retire le reste, puis termine le travail. Ne les jette jamais sans les avoir lues.`
+
 const resultats = []
 let phaseCourante = null
 for (const lot of LOTS) {
@@ -164,15 +183,22 @@ for (const lot of LOTS) {
   const parAvenant = lot.id === 'S8-V' || lot.id === 'A4c'
   const cadre = parAvenant ? `Applique en entier ce que ${S}/serie8/avenant-S8V-A4c.md prévoit pour ce lot (fichiers, migrations, classes, tests nommés, critères de fin, points de relecture, textes de CLAUDE.md de sa section 1), avec les règles communes de la section 3.2 de ${PLAN}.` : (serie8 ? `Applique en entier ce que la section 3.3 de ${PLAN} prévoit pour ce lot (fichiers, migrations, classes, tests nommés, critères de fin, points de relecture), avec les règles communes de la section 3.2, les textes de CLAUDE.md de la section 2 qu'il rend vrais, les rattachements de la section 3.4 qui le concernent et les corrections de l'annexe E.` : '')
   const consigne = `${intitule} : ${lot.titre}. ${cadre}${lot.complement ? `\n\n${lot.complement}` : ''}`
-  const rapport = await agent(`${REGLES}\n\n${consigne}`, { label: `${lot.id}:implementation`, phase: lot.phase, schema: RAPPORT })
+  const reprise = REPRISES[lot.id]
+  const relecturesFaites = Boolean(reprise && Array.isArray(reprise.defauts))
+  if (reprise) {
+    log(`Lot ${lot.id} : implémentation déjà commitée (${reprise.commit}), ${relecturesFaites ? `relectures déjà faites (${reprise.defauts.length} défaut(s)), reprise à la correction` : 'reprise aux relectures'}`)
+  }
+  const rapport = reprise
+    ? { commit: reprise.commit, tests: 'implémentation commitée avant la reprise', faits: [], laisses: [], resume: `Lot repris après un arrêt : commits ${reprise.commit}` }
+    : await agent(`${REGLES}\n\n${TRAVAIL_COUPE}\n\n${consigne}`, { label: `${lot.id}:implementation`, phase: lot.phase, schema: RAPPORT })
   if (!rapport || !rapport.commit) {
     log(`Lot ${lot.id} : aucun commit, arrêt de la chaîne pour inspection`)
     resultats.push({ lot: lot.id, rapport, revues: null, correction: null, poussee: null })
     break
   }
-  const revues = (await parallel(OPTIQUES.map((optique, i) => () => agent(`Relecture adversariale du ou des commits ${rapport.commit} dans ${DEPOT} (${intitule} : ${lot.titre}).\n\nConsignes du lot :\n${REGLES}\n\n${consigne}\n\n${optique}\n\nLis le diff (git show, ou git diff sur la plage) et le code autour. Reproduis chaque défaut par un test jetable dans tests/Feature/Scratch/ (exclu de git) que tu supprimes ensuite, par un essai réel (base PostgreSQL jetable que tu supprimes ensuite), ou par une lecture de code irréfutable. Ne signale que ce que tu as confirmé. Ne modifie aucun fichier suivi par git.`, { label: `${lot.id}:relecture${i + 1}`, phase: lot.phase, schema: REVUE })))).filter(Boolean)
+  const revues = relecturesFaites ? [{ defauts: reprise.defauts }] : (await parallel(OPTIQUES.map((optique, i) => () => agent(`Relecture adversariale du ou des commits ${rapport.commit} dans ${DEPOT} (${intitule} : ${lot.titre}).\n\nConsignes du lot :\n${REGLES}\n\n${consigne}\n\n${optique}\n\nLis le diff (git show, ou git diff sur la plage) et le code autour. Reproduis chaque défaut par un test jetable dans tests/Feature/Scratch/ (exclu de git) que tu supprimes ensuite, par un essai réel (base PostgreSQL jetable que tu supprimes ensuite), ou par une lecture de code irréfutable. Ne signale que ce que tu as confirmé. Ne modifie aucun fichier suivi par git.`, { label: `${lot.id}:relecture${i + 1}`, phase: lot.phase, schema: REVUE })))).filter(Boolean)
   const defauts = revues.flatMap(r => r.defauts || [])
-  if (revues.length < OPTIQUES.length) {
+  if (!relecturesFaites && revues.length < OPTIQUES.length) {
     log(`Lot ${lot.id} : ${OPTIQUES.length - revues.length} relecture(s) sans résultat, arrêt de la chaîne pour inspection (rien n'est poussé)`)
     resultats.push({ lot: lot.id, rapport, revues, correction: null, poussee: null })
     break
@@ -180,7 +206,7 @@ for (const lot of LOTS) {
   let correction = null
   if (defauts.length > 0) {
     const titreCommit = lot.id === '21' ? 'Relecture du lot 21 des décisions' : lot.id === 'S9-L' ? 'Relecture du lot S9-L de la série 9' : lot.id === 'S9-A' ? 'Relecture du lot S9-A de la série 9' : lot.id === 'PU' ? 'Relecture du lot PU de l’affichage des prix unitaires' : lot.id === 'T3' ? 'Relecture du lot T3 de l’heure locale des magasins' : lot.id === 'T2' ? 'Relecture du lot T2 des horodatages' : lot.id === 'V2b' ? 'Relecture du lot V2b des compléments de la vérification' : lot.id.startsWith('FA') ? `Relecture du lot ${lot.id} de la concurrence des brouillons et des fiches` : lot.id === 'TA' ? 'Relecture du lot TA des types d’activité' : lot.id === 'T1' ? 'Relecture du lot T1 des tests déterministes' : lot.id === 'V2' ? 'Relecture du lot V2 de la vérification par courrier' : lot.id === 'EC' ? 'Relecture du lot EC de l’espace des cabinets' : (serie8 ? `Relecture du lot ${lot.id} de la série 8` : `Relecture du lot ${lot.id} de l'architecture société`)
-    correction = await agent(`${REGLES}\n\n${consigne}\n\nCORRECTION DE RELECTURE de ce lot (commits ${rapport.commit}).\n\nDeux relectures adversariales ont confirmé ces défauts (des doublons sont possibles) :\n${JSON.stringify(defauts, null, 2)}\n\nVérifie chacun, corrige ceux qui sont réels avec un test de régression, et explique pourquoi tu écartes les autres. Fais un nouveau commit (ne réécris pas l'historique) titré « ${titreCommit} ».`, { label: `${lot.id}:correction`, phase: lot.phase, schema: RAPPORT })
+    correction = await agent(`${REGLES}\n\n${TRAVAIL_COUPE}\n\n${consigne}\n\nCORRECTION DE RELECTURE de ce lot (commits ${rapport.commit}).\n\nDeux relectures adversariales ont confirmé ces défauts (des doublons sont possibles) :\n${JSON.stringify(defauts, null, 2)}\n\nVérifie chacun, corrige ceux qui sont réels avec un test de régression, et explique pourquoi tu écartes les autres. Fais un nouveau commit (ne réécris pas l'historique) titré « ${titreCommit} ».`, { label: `${lot.id}:correction`, phase: lot.phase, schema: RAPPORT })
   }
   if (defauts.length > 0 && (!correction || !correction.commit)) {
     log(`Lot ${lot.id} : correction de relecture sans résultat, arrêt de la chaîne pour inspection (rien n'est poussé)`)

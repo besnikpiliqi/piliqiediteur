@@ -415,11 +415,13 @@ Les 85 décisions de la page d'arbitrages (A1 à K10, 9 octobre) sont dans `note
 | 210, point 6 | 17/10 | « Administratori nuk duhet leju me ba shitje » (l'administrateur ne doit pas vendre) | `notes/serie8/avenant-S8V-A4c.md`, `reponses-serie8.md` | Affinée : il ne vend que si le propriétaire lui coche la vente (`CLAUDE.md`) |
 | 212 | 18/10 | Premier mot de passe égal à l'identifiant, changement facultatif avec une alerte | `notes/serie8/reponses-serie8.md` (précision 5) ; `CLAUDE.md` | Tient |
 | 227 à 229 | 19/10 | SIREN unique ; vérification par le seul courrier recommandé, remis au dirigeant en personne ; réponses A1, B1, C1, D1, E2 | `notes/serie8/decision-verification-courrier.md`, `reponses-v2.md` ; `CLAUDE.md` | Tient |
-| 230, 231 | 19/10 | Espace des cabinets d'expertise comptable ; réponses F1, G2, H1, I1, J1, K2 | `notes/serie8/decision-espace-cabinets.md`, `reponses-cabinets.md`, `avenant-cabinets.md` | Tient (lot EC à venir ; `CLAUDE.md` décrit encore l'ancien expert-comptable jusqu'à EC) |
+| 230, 231 | 19/10 | Espace des cabinets d'expertise comptable ; réponses F1, G2, H1, I1, J1, K2 | `notes/serie8/decision-espace-cabinets.md`, `reponses-cabinets.md`, `avenant-cabinets.md` | Tient (lot EC, poussé le 01/11), **affinée** le 01/11 par le msg 321 : la société peut de nouveau avoir un compte d'expert-comptable |
 | 232 | 19/10 | Accord pour `bacon/bacon-qr-code` | `notes/serie8/reponses-serie8.md` | Tient |
 | 255 à 260 | 25/10 | Prix unitaires affichés au centime, calcul exact inchangé | `notes/serie8/reponses-affichage-pu.md` | Tient (lot PU) |
 | 256 | 25/10 | « En fait les mentions je suis contre mais je sais pas si c’est mieux ou pas » | — | **Remplacée** : la note de calcul des PDF est gardée et complétée (`notes/serie8/reponses-affichage-pu.md`, dernier texte) |
 | 275 | 26/10 | Fuseau UTC de la base fixé par les migrations, contrôlé par `caisse:diagnostiquer` | `notes/a-faire-apres-chaine.md` (point 4, suite) | Tient (lot L1) |
+| 321 | 01/11 | « je veux que cette option existe […] l'ajoute doit se faire par son nom et par son siren de l'expert comptable […] il se rattache tout de suite des que l'expert comptable ouvre son compte chez piliqi […] il doit choisir que peut voir avec des autorisation » ; choix par la fenêtre de questions : premier mot de passe par un lien envoyé à l'adresse professionnelle (7 jours), SIREN actif et 69.20Z, compte fermé au rattachement (l'accès passe par le cabinet), plusieurs personnes d'un seul SIREN | `notes/ec2/decision-expert-comptable-societe.md` (cahier : `notes/ec2/cahier-des-charges.md`) | Tient (lot EC2, après A7) |
+| 322 | 01/11 | « 1a 2a 3a 4a » : constat 10 d'EC (refus d'inviter le SIREN d'un cabinet gardé, exception écrite dans `CLAUDE.md`) ; Q-AF10 (rouge à partir du 31e jour sans preuve d'export) ; Q-AF12 (preuve notée même dans un magasin fermé) ; Q-AF13 (« Garder », « C'est vérifié », date du visa) | `notes/ec2/decision-expert-comptable-societe.md` (§ 4) ; `notes/serie9/reponses-serie9.md` | Tient (lots EC2 et S9-A) |
 
 Les réponses données par la fenêtre de questions ou par une page d'arbitrages ne figurent pas toutes dans les messages tapés : elles sont citées dans leurs fichiers de réponses (séries 4 à 8, V2, cabinets, types d'activité, T2, T3, PU).
 
@@ -502,6 +504,7 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 ### 3.6 Les interruptions
 
 - Quand il envoie un message pendant un tour, les courses Workflow en fond s'arrêtent (`README.md`, § 5). Il en a été prévenu. Garder les tours courts pendant une chaîne ; avant un long travail, le prévenir ; après chaque interruption, vérifier les agents.
+- 01/11/2026 : une fenêtre de questions (AskUserQuestion) laissée ouverte pendant une chaîne garde le tour ouvert ; l'éditeur a répondu par un message (322) qui l'a interrompu et a coupé la course `wf_d67322b9-242` en pleine correction de L1 (reprise par `args.reprise`, course `wf_d6032f41-e79`). Pendant une chaîne, poser les questions dans le texte du message, qui termine le tour, jamais par la fenêtre de questions.
 - Il surveille les agents lui-même : 09/10/2026, message 149 : « il y a qq agents qui sont arrete et pas fini leur travaile ». Vérifier chaque agent après une interruption et le relancer s'il est coupé.
 
 ---

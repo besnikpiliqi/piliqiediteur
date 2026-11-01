@@ -79,3 +79,7 @@ simulation/reprise-2026-10-31.md
 installation/setup-script-a-coller.sh
 reprises/args-course-wf_22d43798-897.json
 reprises/args-course-wf_d67322b9-242.json
+ec2/decision-expert-comptable-societe.md
+ec2/cahier-des-charges.md
+reprises/L1-defauts-des-relectures.json
+reprises/args-course-wf_d6032f41-e79.json

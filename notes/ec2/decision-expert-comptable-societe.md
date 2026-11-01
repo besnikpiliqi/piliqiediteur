@@ -1,0 +1,28 @@
+# Décision de l'éditeur du 01/11/2026 : l'expert-comptable de la société, déclaré par le SIREN de son cabinet
+
+Cette décision prime sur `CLAUDE.md`, sur `serie8/decision-espace-cabinets.md` (19/10/2026) et sur ce que le lot EC a écrit, partout où ils disent qu'une société n'a jamais de compte d'expert-comptable. Tout le reste de l'espace des cabinets (lot EC) reste.
+
+## 1. Le message de l'éditeur, mot pour mot
+
+> je vois que tu dis "Le compte « expert-comptable » créé à l'intérieur d'une société n'existe plus. L'expert-comptable passe toujours par son cabinet." mais moi je veux que cette option existe car peut etre le comptable d'un societe n'as pas encore creer son espace chez piliqi et peut elle veut pas creer son espace que pour son client et comme son comptable peut juste avoir acces dans le compte de la societe de son client mais pas avoir son compte.  du coup, il faut etre la possibilite d ajouter son expert comptable chaque societe. et l'ajoute doit se faire par son nom et par son siren de l'expert comptable car si un jour ce comptable veut ouvrir son compte chez piliqi alors elle pourra tout simplement avoir acces à son client grace à son siren qui est deja declarer par son client. comme ca il se rattache tout de suite des que l'expert comptable ouvre son compte chez piliqi. et quand le client creer son expert comptable alors la il doit choisir que peut voir avec des autorisation, par exemple le client veut pas que son comptable voie ses client ou ses devis etc.
+
+## 2. Ses quatre choix (questions de la session, réponses de l'éditeur le 01/11/2026)
+
+1. **Premier mot de passe : lien par e-mail.** Le propriétaire saisit l'adresse e-mail professionnelle de l'expert-comptable ; PILIQI y envoie un lien valable 7 jours, où l'expert-comptable choisit son mot de passe et découvre son identifiant. C'est une exception voulue à la règle « l'adresse e-mail d'un compte n'est renseignée que par la personne elle-même, jamais par qui crée son compte » et à « le premier mot de passe est l'identifiant ».
+2. **SIREN contrôlé : actif et 69.20Z.** Le SIREN doit exister, être actif au répertoire Sirene et avoir le code d'activité 69.20Z (activités comptables), comme à l'inscription d'un cabinet ; sinon PILIQI refuse.
+3. **Rattachement : le compte se ferme, l'accès passe par le cabinet.** Le jour où un cabinet de ce SIREN est inscrit dans PILIQI et vérifié (validé, contrôlé 69.20Z, vérifié à l'Ordre, actif), le lien avec la société naît tout de suite, avec les mêmes autorisations ; le compte que la société avait créé est alors retiré tout seul, son historique restant, et l'expert-comptable entre désormais par l'espace de son cabinet.
+4. **Personnes : plusieurs, un seul SIREN.** Une société déclare un seul cabinet (un SIREN) à la fois, mais peut créer plusieurs comptes de personnes de ce cabinet, chacune avec son compte et son identifiant, toutes avec les mêmes autorisations.
+
+## 3. Ce que la session a présenté à l'éditeur avec ces questions (non contesté)
+
+- Seul le propriétaire de la société ajoute son expert-comptable, par le nom de la personne et le SIREN de son cabinet.
+- Les autorisations sont celles qu'un client accorde à un cabinet lié (`PermissionRegistry::duCabinet()`) : toutes les consultations cochées au départ, le propriétaire décoche ce qu'il veut (par exemple « Clients : voir » et « Devis : voir ») et, pour une société « Commerce ou atelier », ajoute celles des achats et du stock ; jamais la vente, ni la gestion des comptes, ni les réglages, ni la caisse, ni le journal d'audit. Ce sont ces autorisations qui passent au lien le jour du rattachement.
+- L'expert-comptable ne vend jamais et ne voit jamais le journal d'audit.
+
+## 4. Constat 10 du lot EC : refus d'inviter le SIREN d'un cabinet (réponse de l'éditeur du 01/11/2026 : « 1a »)
+
+Garder le message actuel (« Ce SIREN ne peut pas être invité par votre cabinet. ») quand un cabinet invite le SIREN d'une société inscrite comme cabinet, et écrire cette exception dans `CLAUDE.md` (protocole de rigueur, point 2, et section « Produit ») : le cabinet qui invite apprend que ce SIREN est celui d'un cabinet inscrit, et rien d'autre (le code d'activité 69.20Z de toute entreprise est public au répertoire Sirene).
+
+## 5. Ce qui reste à trancher
+
+Le cahier des charges (`ec2/cahier-des-charges.md`) liste chaque point que ces choix ne règlent pas ; ceux qui touchent une règle métier sont soumis à l'éditeur avant le lot, les autres sont des choix de Claude listés dans le cahier, que l'éditeur peut contester.

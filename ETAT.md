@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 10:56 UTC par pilotage-sync.sh : « Décision du 01/11 : expert-comptable de la société par SIREN (lot EC2) ; réponses Q-AF10, Q-AF12, Q-AF13 ».
+Mis à jour le 01/11/2026 à 10:58 UTC par pilotage-sync.sh : « Lot EC2 ajouté à la chaîne, course wf_d6032f41-e79 (L1 repris à la correction) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

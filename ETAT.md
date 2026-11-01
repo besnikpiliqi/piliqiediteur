@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 11:49 UTC par pilotage-sync.sh : « Décision du 01/11 : Mailtrap (lot ML ajouté au script après A7) ».
+Mis à jour le 01/11/2026 à 11:49 UTC par pilotage-sync.sh : « Lot ML (Mailtrap) dans la fiche ; variables d'environnement ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,6 +43,7 @@ c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseau
  M app/Domain/Cabinets/Enums/MotifDeFinDuLien.php
  M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/CodeConfirmation.php
  M app/Domain/Tenancy/Models/Societe.php
  M app/Domain/Tenancy/Services/AnnulationDesCodes.php
  M app/Domain/Tenancy/Services/SiretsDesMagasins.php
@@ -53,6 +54,7 @@ c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseau
  M database/migrations/2026_10_02_100008_create_journal_audit_table.php
  M database/migrations/2026_10_02_100011_create_verifications_societe_table.php
  M database/migrations/2026_10_02_100023_create_liens_cabinet_table.php
+ M tests/Feature/Calendrier/PlanificateurTest.php
 ?? app/Console/Commands/PurgerVerifications.php
 ?? app/Domain/Tenancy/Services/FinDeLaRelation.php
 ?? app/Filament/Cabinet/Resources/JournalAuditDuCabinetResource.php

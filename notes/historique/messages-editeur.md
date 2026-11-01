@@ -4477,3 +4477,7 @@ comment verifier le compte ! car est bloque par verification
 
 # [jeton retiré]" pourquoi t as mis en commantaire
 
+## 338. 2026-11-01 19:15 UTC
+
+pour le Le cahier des charges du lot EC2: « tout comme recommandé »
+

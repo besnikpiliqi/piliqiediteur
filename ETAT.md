@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 18:51 UTC par pilotage-sync.sh : « A7 poussé (53ed088), CI verte ; ML en cours ».
+Mis à jour le 01/11/2026 à 19:16 UTC par pilotage-sync.sh : « Cahier définitif d'EC2 (tout comme recommandé), gardé à part jusqu'à la course qui commence par A7b ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,18 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M bootstrap/providers.php
+ M config/mail.php
+ M config/services.php
+?? app/Console/Commands/EssayerLesCourriels.php
+?? app/Domain/Tenancy/Mail/CourrielDEssaiMail.php
+?? app/Integrations/Mailtrap/
+?? app/Providers/CourrielsServiceProvider.php
+?? resources/views/mail/essai.blade.php
+?? tests/Feature/Console/
+?? tests/Feature/Integrations/CourrielsReelsTest.php
+?? tests/Feature/Integrations/TransportMailtrapTest.php
+?? tests/Feature/Providers/CourrielsServiceProviderTest.php
 ```
 
 ## Dernière course de la chaîne

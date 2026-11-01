@@ -1,1 +1,1 @@
-BROUILLON — cahier des charges du lot EC2 en cours d'écriture par la session (01/11/2026). Tant que cette mention est en tête, le lot EC2 ne commence pas.
+BROUILLON — le cahier définitif du lot EC2 (réponses de l'éditeur du 01/11/2026 : « tout comme recommandé ») est prêt dans ec2/cahier-des-charges.definitif.md. Il ne remplace ce fichier qu'au lancement de la course qui commence par A7b : EC2 doit passer après A7b (§ 2.2 et 2.5 de a7b/decision-a7b.md), et la course wf_b5c2413b-8c6, qui ne connaît pas A7b, doit s'arrêter d'elle-même à EC2.

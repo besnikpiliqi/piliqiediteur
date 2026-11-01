@@ -4223,3 +4223,17 @@ je vois que tu dis "Le compte « expert-comptable » créé à l’intérieur d�
 
 1a 2a 3a 4a
 
+## 323. 2026-11-01 11:04 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+"Piliqi Editeur ne permet pas de facturer une activité exonérée de TVA (soins, enseignement, assurance, location de logements…)." j'ai pas compris pourquoi ne permet pas des activite exoneree de tva? par ex les micro entreprise qui factures pas des tva jusqu'à un plafond. explique moi pourquoi t'as dit ne permet pas
+
+## 324. 2026-11-01 11:14 UTC
+
+"porte la mention obligatoire « TVA non applicable, art. 293 B du CGI »" il faut avoir une case à cocher quand se creer un produit alors il y en a des produit tva sur marge donc des produits d'ocasion meme s'il facture des tva mais existe des produits qu'on facture pas la tva. donc il faut avoir una case à cote du produit du prix pour montrer que ce produit est tva sur marge. et meme dans la facture pdf ou electronique montrer l'article la loi et le mention
+
+## 325. 2026-11-01 11:20 UTC
+
+d'abort je reponds sur a) d’accord pour cette phrase, et le refus reste (recommandé). et mnt le 1. Quand le faire ? le b) et 2. Comment calculer la marge ? le a)
+

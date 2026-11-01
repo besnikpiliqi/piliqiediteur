@@ -1,18 +1,19 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 10:58 UTC par pilotage-sync.sh : « Lot EC2 ajouté à la chaîne, course wf_d6032f41-e79 (L1 repris à la correction) ».
+Mis à jour le 01/11/2026 à 11:20 UTC par pilotage-sync.sh : « Messages de l'éditeur du 01/11 (activités exonérées, TVA sur la marge) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `01fe217`. Commits locaux pas encore poussés :
+Tête poussée : `5745e7a`. Commits locaux pas encore poussés :
 
 ```
-8b15aec Outille le développement local et fixe le fuseau UTC de la base (lot L1)
 ```
 
 Derniers commits poussés :
 
 ```
+5745e7a Relecture du lot L1 de l'architecture société
+8b15aec Outille le développement local et fixe le fuseau UTC de la base (lot L1)
 01fe217 Relecture du lot EC de l’espace des cabinets
 93ea590 Retire les experts-comptables de la société et réécrit CLAUDE.md (lot EC 4/4)
 94ada86 Lie les cabinets à leurs clients : invitations, demandes, autorisations, accès (lot EC 3/4)
@@ -31,21 +32,11 @@ c4c684a Fixe le territoire de chaque magasin au répertoire Sirene (lot T3)
 3a02fbc Relecture du lot T2 des horodatages
 c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseaux (lot T2)
 7ed0395 Enregistre, compare et calcule chaque instant en UTC (lot T2)
-b926cc9 Fait passer jours, années, minuits et affichages par le calendrier (lot T2)
-c0acd28 Donne son fuseau à chaque heure écrite des tests et fige l'horloge avant tout voyage (lot T2)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Domain/CaisseSecurisee/Support/ErreursOpenSsl.php
- M app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
- M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
- M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
- M tests/Feature/Calendrier/FuseauParDefautDeLaBaseTest.php
- M tests/Unit/ErreursOpenSslTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -54,4 +45,6 @@ Course `wf_d6032f41-e79`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 L1:correction
+L1:poussee
+L1:fiche
 ```

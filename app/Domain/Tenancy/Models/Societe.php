@@ -60,8 +60,9 @@ use LogicException;
  *
  * Ses gardes, quel que soit l'écran ou la commande qui l'enregistre :
  * - jamais validée et close à la fois ;
- * - son SIREN, celui que vérifie le courrier, ne change jamais (une
- *   erreur se traite par la procédure exceptionnelle de l'éditeur), et son
+ * - son SIREN, celui que vérifie le courrier, ne change jamais, sauf par
+ *   la correction exceptionnelle de l'éditeur (voir
+ *   changerLeSirenParLaProcedure()), et son
  *   mois de fin d'exercice plus après la première vente de l'un de ses
  *   magasins (voir aVenduUneFois()), sauf par le changement légal de la
  *   date de clôture (voir changerLeMoisDeFinDExerciceParLaProcedure()) ;
@@ -115,6 +116,13 @@ class Societe extends Model implements HasName
      * passe le verrou de la première vente.
      */
     private bool $changementLegalDeLaFinDExercice = false;
+
+    /**
+     * Le changement de son SIREN en cours est-il sa correction exceptionnelle
+     * par la procédure de l'éditeur (voir changerLeSirenParLaProcedure()) ?
+     * Le seul qui passe la garde du SIREN.
+     */
+    private bool $correctionDuSiren = false;
 
     protected $fillable = [
         'raison_sociale',
@@ -171,7 +179,7 @@ class Societe extends Model implements HasName
         });
 
         static::updating(function (Societe $societe): void {
-            if ($societe->isDirty('siren')) {
+            if ($societe->isDirty('siren') && ! $societe->correctionDuSiren) {
                 throw new LogicException('Le SIREN d\'une société ne change jamais : une erreur se traite par la procédure exceptionnelle de l\'éditeur.');
             }
 
@@ -244,6 +252,25 @@ class Societe extends Model implements HasName
             $this->forceFill(['mois_fin_exercice' => $mois])->save();
         } finally {
             $this->changementLegalDeLaFinDExercice = false;
+        }
+    }
+
+    /**
+     * La correction exceptionnelle de son SIREN saisi par erreur, avec son
+     * n° de TVA, par la seule procédure de l'éditeur (voir
+     * CorrigerSirenAction), sous les verrous de ses registres, tenus par
+     * l'appelant : l'un et l'autre s'inscrivent au journal des événements
+     * de chacun de ses magasins réels (JET 270, voir
+     * JournaliseSesParametresDeConformite).
+     */
+    public function changerLeSirenParLaProcedure(string $siren, ?string $numeroTva): void
+    {
+        $this->correctionDuSiren = true;
+
+        try {
+            $this->forceFill(['siren' => $siren, 'numero_tva' => $numeroTva])->save();
+        } finally {
+            $this->correctionDuSiren = false;
         }
     }
 
@@ -576,7 +603,7 @@ class Societe extends Model implements HasName
 
     public static function parametresDeConformite(): array
     {
-        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'numero_tva'];
+        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'siren', 'numero_tva'];
     }
 
     /**

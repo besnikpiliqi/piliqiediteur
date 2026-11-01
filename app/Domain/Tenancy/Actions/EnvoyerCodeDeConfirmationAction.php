@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\CourrierDeCode;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\DestinataireOfficiel;
+use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
@@ -69,6 +70,8 @@ class EnvoyerCodeDeConfirmationAction
 
     public const MESSAGE_REPERTOIRE_INDISPONIBLE = 'Le répertoire Sirene de l\'INSEE ne répond pas pour le moment : le courrier n\'est pas parti, réessayez dans quelques minutes.';
 
+    public const MESSAGE_SIREN_DE_L_EXAMEN = 'Le courrier de l\'examen d\'un SIREN, et lui seul, part sous le SIREN de l\'entité correcte (--siren), valide et différent de celui de la société.';
+
     public const MESSAGE_PLUS_DE_NOUVEL_ENVOI = 'Un seul nouveau courrier peut être demandé : déposez des pièces pour que l\'éditeur traite votre demande, ou contactez-le.';
 
     public function __construct(
@@ -90,7 +93,7 @@ class EnvoyerCodeDeConfirmationAction
      */
     public function premier(Societe $societe, User $proprietaire, DestinataireDuCourrier $destinataire): CodeConfirmation
     {
-        return $this->envoyer($societe, MotifCode::Verification, $destinataire, $proprietaire, null);
+        return $this->envoyer($societe, (string) $societe->siren, MotifCode::Verification, $destinataire, $proprietaire, null);
     }
 
     /**
@@ -111,7 +114,7 @@ class EnvoyerCodeDeConfirmationAction
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 $this->exigerUnNouvelEnvoiPossible($verrouillee);
 
-                return $this->envoyer($verrouillee, MotifCode::Verification, $destinataire, $proprietaire, null);
+                return $this->envoyer($verrouillee, (string) $verrouillee->siren, MotifCode::Verification, $destinataire, $proprietaire, null);
             });
         });
     }
@@ -119,13 +122,24 @@ class EnvoyerCodeDeConfirmationAction
     /**
      * Le courrier que l'éditeur envoie, sans limite : pour un motif de ses
      * procédures, ou pour la vérification d'une inscription qui attend son
-     * code (après le traitement à la main d'un courrier non reçu).
+     * code (après le traitement à la main d'un courrier non reçu). Le
+     * courrier de l'examen exceptionnel d'un SIREN part au représentant
+     * légal de l'entité correcte, à l'adresse officielle de son siège, sous
+     * son SIREN ($sirenDeLExamen), sa page le retrouvant par ce SIREN (voir
+     * ExaminerSirenAction) ; tout autre, sous le SIREN de la société.
      *
      * @throws VerificationRefuseeException
      */
-    public function parLEditeur(Societe $societe, MotifCode $motif, InterventionDeLEditeur $editeur): CodeConfirmation
+    public function parLEditeur(Societe $societe, MotifCode $motif, InterventionDeLEditeur $editeur, ?string $sirenDeLExamen = null): CodeConfirmation
     {
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motif, $editeur): CodeConfirmation {
+        if (($sirenDeLExamen !== null) !== ($motif === MotifCode::ExamenSiren)
+            || ($sirenDeLExamen !== null && (! IdentifiantsInsee::sirenValide($sirenDeLExamen) || $sirenDeLExamen === (string) $societe->siren))) {
+            throw new VerificationRefuseeException(self::MESSAGE_SIREN_DE_L_EXAMEN);
+        }
+
+        $siren = $sirenDeLExamen ?? (string) $societe->siren;
+
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $siren, $motif, $editeur): CodeConfirmation {
             if ($motif === MotifCode::Verification) {
                 if (! $societe->attendSonCode()) {
                     throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
@@ -134,16 +148,16 @@ class EnvoyerCodeDeConfirmationAction
                 $this->exigerUneEntrepriseActive($societe, null, $editeur);
             }
 
-            $destinataire = $this->destinataireOfficiel->du((string) $societe->siren);
+            $destinataire = $this->destinataireOfficiel->du($siren);
 
-            return DB::transaction(function () use ($societe, $motif, $editeur, $destinataire): CodeConfirmation {
+            return DB::transaction(function () use ($societe, $siren, $motif, $editeur, $destinataire): CodeConfirmation {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($motif === MotifCode::Verification && ! $verrouillee->attendSonCode()) {
                     throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
                 }
 
-                return $this->envoyer($verrouillee, $motif, $destinataire, null, $editeur);
+                return $this->envoyer($verrouillee, $siren, $motif, $destinataire, null, $editeur);
             });
         });
     }
@@ -155,19 +169,19 @@ class EnvoyerCodeDeConfirmationAction
      *
      * @throws VerificationRefuseeException
      */
-    private function envoyer(Societe $societe, MotifCode $motif, DestinataireDuCourrier $destinataire, ?User $proprietaire, ?InterventionDeLEditeur $editeur): CodeConfirmation
+    private function envoyer(Societe $societe, string $siren, MotifCode $motif, DestinataireDuCourrier $destinataire, ?User $proprietaire, ?InterventionDeLEditeur $editeur): CodeConfirmation
     {
         $code = $this->codes->generer();
         $expireLe = Calendrier::deParis()->decaler(now(), CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
 
         try {
-            return DB::transaction(function () use ($societe, $motif, $destinataire, $proprietaire, $editeur, $code, $expireLe): CodeConfirmation {
-                $this->annulerLesCodesQuiNeServirontPlus((string) $societe->siren, $motif);
+            return DB::transaction(function () use ($societe, $siren, $motif, $destinataire, $proprietaire, $editeur, $code, $expireLe): CodeConfirmation {
+                $this->annulerLesCodesQuiNeServirontPlus($siren, $motif);
                 CodeConfirmation::query()->where('motif', $motif->value)->whereNull('utilise_le')->whereNull('annule_le')->orderBy('id')->lockForUpdate()->get()
                     ->each(fn (CodeConfirmation $remplace) => $this->annulationDesCodes->annuler($remplace, AnnulationDesCodes::NOUVEAU_COURRIER, $proprietaire, $editeur));
 
                 $confirmation = tap((new CodeConfirmation)->forceFill([
-                    'siren' => $societe->siren,
+                    'siren' => $siren,
                     'motif' => $motif,
                     'destinataire' => $destinataire->enTableau(),
                     'code_hache' => $this->codes->hacher($code),
@@ -176,7 +190,7 @@ class EnvoyerCodeDeConfirmationAction
                     'demande_par' => $proprietaire?->getKey(),
                 ]))->save();
 
-                $reference = $this->envoi->envoyerCourrier($destinataire, $this->courrier->pdf($destinataire, (string) $societe->siren, $societe->type_activite, $motif, $code, $expireLe), remiseEnPersonne: true);
+                $reference = $this->envoi->envoyerCourrier($destinataire, $this->courrier->pdf($destinataire, $siren, $societe->type_activite, $motif, $code, $expireLe), remiseEnPersonne: true);
                 $confirmation->forceFill(['reference_envoi' => $reference])->save();
 
                 $this->journalAudit->inscrire(ActionAuditee::CodeEnvoye, $proprietaire, null, null, [

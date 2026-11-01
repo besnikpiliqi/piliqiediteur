@@ -26,6 +26,8 @@ enum ActionAuditee: string implements HasLabel
     case SocieteValidee = 'societe_validee';
     case InscriptionClose = 'inscription_close';
     case SocieteRevoquee = 'societe_revoquee';
+    case SirenExamine = 'siren_examine';
+    case SirenCorrige = 'siren_corrige';
     case ActiviteDuCabinetControlee = 'activite_du_cabinet_controlee';
     case OrdreDemande = 'ordre_demande';
     case OrdreVerifie = 'ordre_verifie';
@@ -107,6 +109,8 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteValidee => 'Société validée',
             self::InscriptionClose => 'Inscription close',
             self::SocieteRevoquee => 'Société révoquée par l\'éditeur',
+            self::SirenExamine => 'SIREN examiné par l\'éditeur',
+            self::SirenCorrige => 'SIREN corrigé par l\'éditeur',
             self::ActiviteDuCabinetControlee => 'Code d\'activité du cabinet contrôlé',
             self::OrdreDemande => 'Vérification de l\'inscription à l\'Ordre demandée',
             self::OrdreVerifie => 'Inscription à l\'Ordre vérifiée',
@@ -221,6 +225,15 @@ enum ActionAuditee: string implements HasLabel
             // procédure de l'éditeur, et les SIRET de ses magasins libérés
             // au registre des SIRET réservés (voir RevoquerSocieteAction).
             self::SocieteRevoquee => ['statut', 'sirets_liberes'],
+            // Le SIREN de l'entité correcte, la décision motivée de l'examen
+            // (voir DecisionExamenSiren) et les documents émis concernés,
+            // par leur magasin, leur type et leur numéro (voir
+            // ExaminerSirenAction).
+            self::SirenExamine => ['siren_correct', 'decision', 'documents'],
+            // Le SIREN, le n° de TVA et le SIRET de chaque magasin qui en
+            // change, par son code, avant et après la correction (voir
+            // CorrigerSirenAction).
+            self::SirenCorrige => ['siren', 'numero_tva', 'sirets'],
             // Le code d'activité d'un cabinet lu au répertoire Sirene, sa
             // nomenclature, et le résultat : « concluant » (69.20Z en NAF
             // rév. 2), « a_controler » (code absent ou d'une autre

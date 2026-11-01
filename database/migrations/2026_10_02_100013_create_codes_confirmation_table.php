@@ -29,8 +29,11 @@ return new class extends Migration
         Schema::create('codes_confirmation', function (Blueprint $table) {
             $table->id();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
-            // Copié de la société à l'envoi : la page du code retrouve le
-            // courrier par le SIREN saisi (voir SaisirCodeDeConfirmationAction).
+            // Le SIREN de l'entreprise à qui le courrier part : celui de la
+            // société, ou, pour l'examen d'un SIREN, celui de l'entité
+            // correcte (voir ExaminerSirenAction) ; la page du code retrouve
+            // le courrier par le SIREN saisi (voir
+            // SaisirCodeDeConfirmationAction).
             $table->string('siren', 9);
             // MotifCode.
             $table->string('motif', 30);

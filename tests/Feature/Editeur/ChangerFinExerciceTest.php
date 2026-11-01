@@ -140,15 +140,29 @@ class ChangerFinExerciceTest extends TestCase
 
     /**
      * Une fin qui tombe avant le début de l'exercice en cours, dans un
-     * exercice déjà clos, est refusée ; une fin qui repousserait la clôture
-     * de l'exercice en cours aussi ; rien ne s'écrit.
+     * exercice déjà clos, est refusée : jamais un exercice clos modifié ;
+     * rien ne s'écrit.
      */
-    public function test_une_fin_dans_un_exercice_clos_ou_qui_repousse_la_cloture_est_refusee(): void
+    public function test_une_fin_avant_la_derniere_cloture_d_exercice_est_refusee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $this->vendre($magasin);
 
         $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2025-12-31', '2026-10-15'), LogicException::class, sprintf(ChangerFinExerciceAction::MESSAGE_EXERCICE_CLOS, '01/01/2026'));
+
+        $this->assertNothingChanged($magasin->societe);
+    }
+
+    /**
+     * Une fin qui repousserait la clôture de l'exercice en cours au-delà de
+     * sa fin d'origine est refusée : jamais une clôture obligatoire
+     * repoussée ; rien ne s'écrit.
+     */
+    public function test_une_fin_qui_repousserait_la_cloture_est_refusee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $this->vendre($magasin);
+
         $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2027-03-31', '2026-10-15'), LogicException::class, sprintf(ChangerFinExerciceAction::MESSAGE_CLOTURE_REPOUSSEE, '31/12/2026'));
 
         $this->assertNothingChanged($magasin->societe);

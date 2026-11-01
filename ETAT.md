@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 16:41 UTC par pilotage-sync.sh : « Fiche : numérotation des lots restants ».
+Mis à jour le 01/11/2026 à 17:00 UTC par pilotage-sync.sh : « Constat 403 après le code d'un cabinet : correction jointe au lot A7b (§ 2.5) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -48,4 +48,5 @@ Course `wf_b5c2413b-8c6`, étapes commencées (de la plus ancienne à la plus r�
 ```
 A7:relecture1
 A7:relecture2
+A7:correction
 ```

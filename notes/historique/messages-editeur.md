@@ -4445,3 +4445,9 @@ malgre que c'est un siren d'un comptable il dit non vous etes pas un comptable. 
 
 1a 2a 3 oui
 
+## 335. 2026-11-01 16:59 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+quand je valide le code par courrier pour expert comptable apres il ramen sur cette page!  est ce que peut etre que cette direction est fait que pour les magasin apres donner le code ou pas?
+

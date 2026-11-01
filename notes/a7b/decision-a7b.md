@@ -50,3 +50,12 @@ Base : `societe/conception-v2-finale.md`, section 9.4, point 3 (régularisation)
 
 - La règle de la régularisation reste « à faire confirmer par l'expert-comptable de la société le jour où le cas se présente » (`CLAUDE.md`).
 - Nouvelle attestation par magasin après une correction de SIREN : étape 3. Connexion et adresses de réception SUPER PDP après une correction de SIREN : étape 2.
+
+### 2.5 Correction jointe : la saisie du code du courrier d'un cabinet mène à une page 403
+
+Constat de l'éditeur du 01/11/2026, 17 h 58 (capture) : après avoir saisi le code du courrier recommandé d'un cabinet d'expertise comptable sur la page `/code`, le navigateur arrive sur `/societe/{uuid}` et affiche « 403 Forbidden ». Cause lue dans le code : `CodeDuCourrierController::saisir()` redirige toujours vers `TableauDeBord::getUrl(panel: 'societe', …)`, l'espace d'administration d'une société, que le panneau refuse à un cabinet ; `ConfirmerInscriptionController::confirmer()` fait déjà le bon choix (`estUnCabinet()` : `TableauDeBordDuCabinet`, panneau `cabinet`). À faire :
+
+- Après la saisie du code, le propriétaire d'un cabinet arrive sur le tableau de bord de son cabinet (`/cabinet/{uuid}`), celui d'une autre société sur celui de sa société, avec le même avis sur l'adresse de connexion.
+- Une seule méthode donne l'adresse de l'accueil de l'espace d'une société selon son type, et toutes les redirections qui en ont besoin l'utilisent au lieu de répéter le test (contrôleurs, middlewares, notifications, e-mails, actions) ; passer en revue chaque redirection et chaque lien qui vise le panneau `societe` (`grep "panel: 'societe'"`) et dire dans « faits » lesquels peuvent concerner un cabinet et ce qui a changé.
+- Un compte d'un cabinet qui ouvre l'adresse de l'espace d'administration de sa propre société (`/societe/{uuid}` de son cabinet) est mené au tableau de bord de son cabinet au lieu d'une page 403 ; l'adresse d'une autre société reste refusée, sans rien révéler.
+- Tests : saisie du code pour un cabinet (redirection vers l'espace du cabinet, avis d'adresse compris), pour une société (inchangé), adresse `/societe/{uuid}` ouverte par le propriétaire et par un collaborateur d'un cabinet (redirigés vers leur espace), et par un compte d'une autre société (refus inchangé).

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -14,6 +16,7 @@ use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use Database\Factories\UserFactory;
+use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
@@ -83,6 +86,20 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * La longueur des colonnes où l'historique fige le nom d'une personne
+     * (les colonnes *_nom, auteur_libelle) : un nom pour l'historique ne la
+     * dépasse jamais (voir nomPourLHistorique()).
+     */
+    public const LONGUEUR_D_UN_NOM_POUR_L_HISTORIQUE = 255;
+
+    /**
+     * Les caractères de la dénomination d'un cabinet gardés au moins dans
+     * le nom pour l'historique d'un de ses comptes, quand il faut le
+     * raccourcir.
+     */
+    private const DENOMINATION_GARDEE_DU_CABINET = 40;
 
     /**
      * Les valeurs par défaut de la migration, pour les colonnes que lisent
@@ -354,17 +371,57 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * Son rôle dans ce magasin, tel que le dit son tableau de bord après
      * « Bonjour » : pour un membre, le rôle de son affectation à ce
      * magasin, suivi du nom du magasin (« Vendeur · Boutique Lyon 1 ») ;
-     * pour le propriétaire, un administrateur ou un expert-comptable, son
-     * rôle de société (voir libelleDuRoleDeSociete()) ; suivi de
-     * « (démonstration) » dans le magasin de démonstration.
+     * pour un compte d'un cabinet d'expertise comptable chez un client, son
+     * rôle dans son cabinet suivi du nom du magasin (« Collaborateur du
+     * cabinet Martin · Boutique Lyon 1 ») ; pour le propriétaire, un
+     * administrateur ou un expert-comptable, son rôle de société (voir
+     * libelleDuRoleDeSociete()) ; suivi de « (démonstration) » dans le
+     * magasin de démonstration.
      */
     public function libelleDuRoleDans(Magasin $magasin): string
     {
-        $libelle = $this->estMembre()
-            ? ($this->affectationQuiVautDans($magasin)?->role?->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom
-            : $this->libelleDuRoleDeSociete();
+        $libelle = match (true) {
+            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role?->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
+            $this->estDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
+            default => $this->libelleDuRoleDeSociete(),
+        };
 
         return $magasin->est_demonstration ? "{$libelle} (démonstration)" : $libelle;
+    }
+
+    /**
+     * Son nom tel que l'historique le garde (le nom figé d'un auteur, le
+     * registre fiscal, les journaux) : son nom ; pour un compte d'un
+     * cabinet d'expertise comptable, qui agit chez un client en son nom,
+     * avec celui de son cabinet : « Nom (cabinet Dénomination) », ou le
+     * SIREN du cabinet sans dénomination, borné à 255 caractères, la
+     * dénomination raccourcie d'abord, puis le nom.
+     */
+    public function nomPourLHistorique(): string
+    {
+        if (! $this->estDUnCabinet()) {
+            return $this->name;
+        }
+
+        $cabinet = filled($this->societe->raison_sociale) ? (string) $this->societe->raison_sociale : (string) $this->societe->siren;
+        $nom = $this->name;
+        $place = self::LONGUEUR_D_UN_NOM_POUR_L_HISTORIQUE - mb_strlen(' (cabinet )');
+
+        if (mb_strlen($nom) + mb_strlen($cabinet) > $place) {
+            $cabinet = mb_substr($cabinet, 0, max(self::DENOMINATION_GARDEE_DU_CABINET, $place - mb_strlen($nom)) - 1).'…';
+            $nom = mb_strlen($nom) + mb_strlen($cabinet) > $place ? mb_substr($nom, 0, $place - mb_strlen($cabinet) - 1).'…' : $nom;
+        }
+
+        return "{$nom} (cabinet {$cabinet})";
+    }
+
+    /**
+     * Le nom pour l'historique (voir nomPourLHistorique()) du compte de cet
+     * identifiant, relu en base avec sa société, null s'il n'existe pas.
+     */
+    public static function nomFigeDe(int $id): ?string
+    {
+        return self::query()->with('societe')->find($id)?->nomPourLHistorique();
     }
 
     public function estActif(): bool
@@ -556,9 +613,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Les autorisations du compte dans ce magasin, par ordre alphabétique :
-     * aucune dans le magasin d'une autre société, ni pour un compte qui ne
-     * peut pas agir (voir peutAgir()) ; sinon celles que son rôle lui donne
-     * (voir autorisationsEnregistreesDans()). Lues une fois par instance et
+     * aucune dans le magasin d'une autre société, sauf pour un compte d'un
+     * cabinet d'expertise comptable chez un client lié qui lui est ouvert,
+     * ni pour un compte qui ne peut pas agir (voir peutAgir()) ; sinon
+     * celles que son rôle ou le lien de son cabinet lui donne (voir
+     * autorisationsEnregistreesDans()). Lues une fois par instance et
      * par magasin, pour les écrans : toute écriture de droits les fait
      * oublier (voir oublierLesDroits()), et une action les relit sur un
      * compte rechargé (voir LecteurDesDroits).
@@ -567,7 +626,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function autorisationsDans(Magasin $magasin): array
     {
-        if ((int) $magasin->societe_id !== (int) $this->societe_id || ! $this->peutAgir()) {
+        if (! $this->peutAgir() || ((int) $magasin->societe_id !== (int) $this->societe_id && ! $this->estDUnCabinet())) {
             return [];
         }
 
@@ -610,30 +669,35 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Oublie les autorisations lues sur cette instance : après une écriture
-     * de droits, elles se relisent en base.
+     * Oublie les autorisations lues sur cette instance, et sa société, où
+     * se lit s'il est un compte d'un cabinet (voir estDUnCabinet()) : après
+     * une écriture de droits, elles se relisent en base.
      */
     public function oublierLesDroits(): void
     {
         $this->autorisationsParMagasin = [];
+        $this->unsetRelation('societe');
     }
 
     /**
      * Ses droits dans ce magasin, tels que la base les donne, son statut
      * compris, pour le journal des événements (JET 130, voir
      * JournalDesDroits) : son rôle de société, son rôle de magasin (nul
-     * pour le propriétaire, un administrateur et un expert-comptable), son
-     * statut et ses autorisations par ordre alphabétique ; null quand il
-     * n'y en a aucun (magasin d'une autre société, aucun droit qui vaille
-     * ici).
+     * pour le propriétaire, un administrateur, un expert-comptable et un
+     * compte d'un cabinet), son statut et ses autorisations par ordre
+     * alphabétique, et, pour un compte d'un cabinet d'expertise comptable
+     * chez un client lié, son cabinet (identifiant, SIREN, dénomination) ;
+     * null quand il n'y en a aucun (magasin d'une autre société hors d'un
+     * client lié, aucun droit qui vaille ici).
      *
-     * @return array{role_societe: string, role_magasin: string|null, statut: string, permissions: list<string>}|null
+     * @return array{role_societe: string, role_magasin: string|null, statut: string, permissions: list<string>, cabinet?: array{id: int, siren: string, raison_sociale: string|null}}|null
      */
     public function droitsDans(Magasin $magasin): ?array
     {
         $compte = self::query()->findOrFail($this->getKey());
+        $duCabinet = $compte->estDUnCabinet();
 
-        if ((int) $magasin->societe_id !== (int) $compte->societe_id) {
+        if ((int) $magasin->societe_id !== (int) $compte->societe_id && ! $duCabinet) {
             return null;
         }
 
@@ -648,6 +712,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'role_magasin' => $compte->estMembre() ? $compte->affectationQuiVautDans($magasin)?->role?->value : null,
             'statut' => $compte->statut->value,
             'permissions' => $autorisations,
+            ...($duCabinet ? ['cabinet' => IdentiteDansLeJournal::de($compte->societe)] : []),
         ];
     }
 
@@ -697,6 +762,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * du type d'activité de la société (voir
      * PermissionRegistry::pourLeType()) : une case d'une autre famille ne
      * s'y lit jamais ; null quand aucune n'y vaut :
+     * - un compte d'un cabinet d'expertise comptable, dans un magasin réel
+     *   d'un client lié que son cabinet lui ouvre (son propriétaire, ou un
+     *   collaborateur à qui ce client est confié) : celles que le client
+     *   accorde au cabinet (voir AccesDesCabinets::autorisationsEnregistrees()),
+     *   sans regarder si le cabinet est vérifié, ce que contrôlent
+     *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
      * - le propriétaire : toutes sauf celles de la vente (voir
      *   PermissionRegistry::duProprietaire()), dans chaque magasin,
      *   démonstration comprise : il ne vend jamais ;
@@ -714,6 +785,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
     {
+        if ($this->estDUnCabinet()) {
+            return app(AccesDesCabinets::class)->autorisationsEnregistrees($this, $magasin);
+        }
+
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
 
         if ($this->estProprietaire()) {
@@ -783,14 +858,20 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Peut-il ouvrir ce magasin ? Un magasin de sa société, avec un compte
-     * qui peut agir (voir peutAgir()) : le propriétaire ouvre tous ceux de
-     * sa société ; un expert-comptable, tous ses magasins réels, jamais la
+     * Peut-il ouvrir ce magasin ? Avec un compte qui peut agir (voir
+     * peutAgir()), un compte d'un cabinet d'expertise comptable vérifié
+     * ouvre les magasins réels d'un client lié qui lui est ouvert (voir
+     * AccesDesCabinets::ouvre()) ; tout autre compte, un magasin de sa
+     * société : le propriétaire ouvre tous ceux de sa société ; un expert-comptable, tous ses magasins réels, jamais la
      * démonstration ; tout autre compte, ceux où une affectation lui donne
      * des droits (voir affectationQuiVautDans()).
      */
     public function peutOuvrir(Magasin $magasin): bool
     {
+        if ($this->estDUnCabinet()) {
+            return $this->peutAgir() && app(AccesDesCabinets::class)->ouvre($this, $magasin);
+        }
+
         if ((int) $magasin->societe_id !== (int) $this->societe_id || ! $this->peutAgir()) {
             return false;
         }
@@ -809,7 +890,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Les magasins qu'il peut ouvrir, par nom, le magasin de démonstration
      * à part, après les autres (voir peutOuvrir()) ; aucun pour un compte
-     * qui n'est pas actif ; pour un membre, son seul magasin.
+     * qui n'est pas actif ; pour un membre, son seul magasin ; pour un
+     * compte d'un cabinet d'expertise comptable, les magasins réels des
+     * clients que son cabinet lui ouvre, par dénomination du client puis
+     * nom du magasin (voir AccesDesCabinets::magasinsOuverts()).
      *
      * @return Collection<int, Magasin>
      */
@@ -817,6 +901,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         if (! $this->estActif()) {
             return new Collection;
+        }
+
+        if ($this->estDUnCabinet()) {
+            return app(AccesDesCabinets::class)->magasinsOuverts($this);
         }
 
         $magasins = Magasin::query()->where('societe_id', $this->societe_id);
@@ -856,20 +944,54 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Efface ses avis de cabinet à propos de ces clients (voir AvisDuCabinet,
+     * données client_id) le jour où ils ne lui sont plus ouverts : il ne
+     * voit plus rien d'eux dans sa cloche.
+     *
+     * @param  list<int>  $clients
+     */
+    public function effacerLesAvisDesClients(array $clients): void
+    {
+        foreach ($clients as $client) {
+            $this->notifications()->where('data->client_id', $client)->delete();
+        }
+    }
+
+    /**
      * Filament\Models\Contracts\HasTenants : les magasins que le panneau
-     * « app » lui ouvre (voir magasinsAccessibles()), sa société dans celui
-     * de l'administration de la société s'il peut l'administrer, et son
-     * cabinet dans l'espace du cabinet pour un compte actif d'un cabinet
-     * d'expertise comptable.
+     * « app » lui ouvre (voir magasinsAccessibles()) ; pour un compte d'un
+     * cabinet d'expertise comptable, seulement ceux du client du magasin
+     * ouvert, s'il lui est ouvert, jamais tous les clients de son cabinet ;
+     * sa société dans celui de l'administration de la société s'il peut
+     * l'administrer, et son cabinet dans l'espace du cabinet pour un compte
+     * actif d'un cabinet d'expertise comptable.
      */
     public function getTenants(Panel $panel): array|Collection
     {
         return match ($panel->getId()) {
-            'app' => $this->magasinsAccessibles(),
+            'app' => $this->estDUnCabinet() ? $this->magasinsDuClientOuvert() : $this->magasinsAccessibles(),
             'societe' => $this->peutAdministrer() ? new Collection([$this->societe]) : new Collection,
             'cabinet' => $this->ouvreLEspaceDuCabinet() ? new Collection([$this->societe]) : new Collection,
             default => new Collection,
         };
+    }
+
+    /**
+     * Pour un compte d'un cabinet d'expertise comptable, les magasins qu'il
+     * ouvre du client du magasin ouvert dans le panneau des magasins, s'il
+     * l'ouvre ; aucun sinon.
+     *
+     * @return Collection<int, Magasin>
+     */
+    private function magasinsDuClientOuvert(): Collection
+    {
+        $ouvert = Filament::getTenant();
+
+        if (! $ouvert instanceof Magasin || ! $this->peutOuvrir($ouvert)) {
+            return new Collection;
+        }
+
+        return $this->magasinsAccessibles()->where('societe_id', $ouvert->societe_id)->values();
     }
 
     public function canAccessTenant(Model $tenant): bool

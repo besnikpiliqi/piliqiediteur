@@ -1,10 +1,12 @@
 <?php
 
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Http\Controllers\AccepterLInvitationDuCabinetController;
 use App\Http\Controllers\CodeDuCourrierController;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Http\Controllers\ConfirmerNouvelleAdresseController;
 use App\Http\Controllers\RappelsDesPrestatairesController;
+use App\Http\Controllers\RattachementAuCabinetController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => to_route('filament.app.tenant'));
@@ -58,3 +60,28 @@ Route::post('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::clas
     ->where('jeton', '[A-Za-z0-9]{64}')
     ->middleware('throttle:10,1')
     ->name('profil.adresse.confirmer');
+
+// L'invitation d'un cabinet d'expertise comptable à une entreprise pas
+// encore inscrite (voir AccepterLInvitationDuCabinetController) :
+// l'ouverture du lien n'écrit rien, le formulaire accepte, un bouton à part
+// refuse.
+Route::get('/invitation-cabinet/{jeton}', [AccepterLInvitationDuCabinetController::class, 'afficher'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('cabinets.invitation.afficher');
+Route::post('/invitation-cabinet/{jeton}', [AccepterLInvitationDuCabinetController::class, 'accepter'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('cabinets.invitation.accepter');
+Route::post('/invitation-cabinet/{jeton}/refus', [AccepterLInvitationDuCabinetController::class, 'refuser'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('cabinets.invitation.refuser');
+
+// La demande de rattachement d'un cabinet à une entreprise déjà inscrite
+// (voir RattachementAuCabinetController) : le lien mène son propriétaire,
+// une fois connecté, à la page de rattachement de son espace.
+Route::get('/rattachement-cabinet/{jeton}', [RattachementAuCabinetController::class, 'ouvrir'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('cabinets.rattachement.afficher');

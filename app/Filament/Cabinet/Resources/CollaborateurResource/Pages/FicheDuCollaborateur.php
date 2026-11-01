@@ -2,21 +2,28 @@
 
 namespace App\Filament\Cabinet\Resources\CollaborateurResource\Pages;
 
+use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
+use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Actions\AnnulerLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Models\User;
 use Closure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
 /**
  * La fiche d'un collaborateur du cabinet, avec les gestes de son
- * propriétaire (voir CollaborateurResource et PorteeDesDroits) : redonner
+ * propriétaire (voir CollaborateurResource et PorteeDesDroits) : lui
+ * confier des clients liés (voir ConfierDesClientsAction), redonner
  * l'accès, en sa présence seulement (son identifiant n'ouvre aucun compte
  * de cabinet), suspendre, réactiver, retirer du cabinet, réintégrer, et
  * transmettre la propriété du cabinet à un collaborateur actif. Chaque
@@ -32,6 +39,7 @@ class FicheDuCollaborateur extends ViewRecord
         $compte = fn (): User => $this->compte();
 
         return [
+            $this->confierDesClientsAction(),
             $this->transmettreLaProprieteAction(),
             $this->renvoyerLeLienDeTransmissionAction(),
             $this->annulerLaTransmissionAction(),
@@ -41,6 +49,51 @@ class FicheDuCollaborateur extends ViewRecord
             CollaborateurResource::actionReactiver(Action::make('reactiver'), $compte)->after(fn () => $this->getRecord()->refresh()),
             CollaborateurResource::actionRetirerDeLaSociete(Action::make('retirerDeLaSociete'), $compte)->label('Retirer du cabinet')->after(fn () => $this->getRecord()->refresh()),
         ];
+    }
+
+    /**
+     * Le propriétaire choisit les clients liés qu'il confie à ce
+     * collaborateur, parmi les liens actifs que son cabinet lui ouvre (voir
+     * ConfierDesClientsAction) : les cases cochées sont la liste complète
+     * après le geste.
+     */
+    public function confierDesClientsAction(): Action
+    {
+        return Action::make('confierDesClients')
+            ->label('Clients confiés')
+            ->icon('heroicon-o-briefcase')
+            ->visible(fn (): bool => auth()->user()?->can('confierDesClients', $this->compte()) ?? false)
+            ->fillForm(fn (): array => ['liens' => ClientConfie::query()->where('user_id', $this->compte()->getKey())->pluck('lien_id')->map(fn ($id): string => (string) $id)->all()])
+            ->form([
+                CheckboxList::make('liens')
+                    ->label('Clients liés')
+                    ->helperText('Il ouvre les magasins réels de chaque client coché, selon les autorisations que ce client accorde au cabinet.')
+                    ->options(fn (): array => self::clientsLies())
+                    ->columns(1),
+            ])
+            ->action(function (array $data): void {
+                $this->agir(function () use ($data): void {
+                    app(ConfierDesClientsAction::class)->handle(auth()->user(), $this->compte(), array_map(intval(...), $data['liens'] ?? []));
+                    Notification::make()->title('Les clients confiés sont enregistrés.')->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Les clients liés que le cabinet ouvre à son propriétaire, par
+     * dénomination, sous l'identifiant de leur lien.
+     *
+     * @return array<int, string>
+     */
+    private static function clientsLies(): array
+    {
+        $liens = app(AccesDesCabinets::class)->liensOuverts(auth()->user())->get(['liens_cabinet.id', 'liens_cabinet.societe_id']);
+        $clients = Societe::query()->whereKey($liens->pluck('societe_id')->all())->get(['id', 'siren', 'raison_sociale'])->keyBy('id');
+
+        return $liens
+            ->mapWithKeys(fn (LienCabinet $lien): array => [(int) $lien->getKey() => ($clients[$lien->societe_id]->raison_sociale ?? 'Sans dénomination').' · SIREN '.$clients[$lien->societe_id]->siren])
+            ->sort()
+            ->all();
     }
 
     /**

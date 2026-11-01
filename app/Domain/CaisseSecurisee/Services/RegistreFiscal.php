@@ -3,6 +3,7 @@
 namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
@@ -12,6 +13,8 @@ use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -176,9 +179,11 @@ class RegistreFiscal
      * de la société qui s'inscrit au journal des événements de chacun de
      * ses magasins (voir JournaliseSesParametresDeConformite). Seulement
      * des magasins de la société active : jamais le registre d'une autre
-     * société. Dans la transaction déjà ouverte d'un appelant, celui-ci
-     * doit les avoir tous verrouillés en tête. Fermé par défaut : un
-     * registre qui ne peut pas se verrouiller refuse toute l'opération.
+     * société (sauf pour un cabinet d'expertise comptable, voir
+     * sousVerrouDesMagasinsDesClients()). Dans la transaction déjà ouverte
+     * d'un appelant, celui-ci doit les avoir tous verrouillés en tête.
+     * Fermé par défaut : un registre qui ne peut pas se verrouiller refuse
+     * toute l'opération.
      *
      * @template TResultat
      *
@@ -203,6 +208,52 @@ class RegistreFiscal
         return $this->enTeteDeTransaction($magasins, function () use ($contexte, $magasins): void {
             foreach ($magasins as $magasin) {
                 $contexte->runAs($magasin, fn () => $this->verrouiller($magasin));
+            }
+        }, $operation);
+    }
+
+    /**
+     * Exécute $operation sous le verrou des registres de ces magasins de
+     * clients d'un cabinet d'expertise comptable, pris par identifiant
+     * croissant, chacun dans le contexte de sa société et de son magasin :
+     * la seule prise de registres de plusieurs sociétés, pour inscrire au
+     * journal des événements de chaque magasin d'un client les droits des
+     * comptes de son cabinet lié (voir JournalDesDroits). Chaque magasin
+     * doit être celui d'une société qui a un lien avec ce cabinet, quel que
+     * soit son état (lecture filtrée par le cabinet et ces sociétés) ; dans
+     * la transaction déjà ouverte d'un appelant, celui-ci doit les avoir
+     * tous verrouillés en tête.
+     *
+     * @template TResultat
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     * @param  Closure(): TResultat  $operation
+     * @return TResultat
+     *
+     * @throws LogicException quand l'un des magasins n'est pas celui d'un client de ce cabinet
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function sousVerrouDesMagasinsDesClients(Societe $cabinet, Collection $magasins, Closure $operation): mixed
+    {
+        $magasins = $magasins->sortBy(fn (Magasin $magasin): int => $magasin->getKey())->values();
+        $clients = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
+            ->where('cabinet_id', $cabinet->getKey())
+            ->whereIn('societe_id', $magasins->pluck('societe_id')->unique()->values()->all())
+            ->distinct()
+            ->pluck('societe_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        if ($magasins->contains(fn (Magasin $magasin): bool => ! in_array((int) $magasin->societe_id, $clients, true))) {
+            throw new LogicException('Le registre fiscal d\'un magasin ne se verrouille, hors de sa société, que pour un client du cabinet.');
+        }
+
+        $contexte = app(TenantContext::class);
+
+        return $this->enTeteDeTransaction($magasins, function () use ($contexte, $magasins): void {
+            foreach ($magasins as $magasin) {
+                $contexte->runAsSociete($magasin->societe, fn () => $contexte->runAs($magasin, fn () => $this->verrouiller($magasin)));
             }
         }, $operation);
     }
@@ -562,7 +613,7 @@ class RegistreFiscal
             'sequence' => $sequence,
             'type' => $type,
             'horodatage' => $instant->pourSignature(),
-            'operateur' => $operateur === null ? null : ['id' => $operateur->getKey(), 'nom' => $operateur->name],
+            'operateur' => $operateur === null ? null : ['id' => $operateur->getKey(), 'nom' => $operateur->nomPourLHistorique()],
             'version_module' => $this->versionDuModule,
             'cle_id' => $cleId,
             'signature_precedente' => $signaturePrecedente,

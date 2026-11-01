@@ -345,13 +345,26 @@ class CollaborateursTest extends TestCase
     {
         $cabinet = $this->ouvrirUnCabinet();
         $proprietaire = $this->proprietaireDuCabinet($cabinet);
-        $collaborateur = $this->renseignerSonAdresse($this->collaborateur($cabinet), 'paul@cabinet.test');
+        $premiere = $this->ouvrirUneSociete(['nom' => 'Première cliente']);
+        $seconde = $this->ouvrirUneSociete(['nom' => 'Seconde cliente']);
+        $this->lierLeCabinet($cabinet, $premiere);
+        $this->lierLeCabinet($cabinet, $seconde);
+        $collaborateur = $this->renseignerSonAdresse($this->confier($this->collaborateur($cabinet), [$premiere]), 'paul@cabinet.test');
         $jeton = $this->demanderLaTransmission($proprietaire, $collaborateur, self::MOT_DE_PASSE_CHOISI);
         app(TenantContext::class)->clear();
 
         app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($collaborateur, $jeton, self::MOT_DE_PASSE_CHOISI);
 
         $ancien = $proprietaire->fresh();
+        $this->assertTrue($ancien->peutOuvrir($premiere));
+        $this->assertTrue($ancien->peutOuvrir($seconde));
+        $this->assertSame(2, DB::table('clients_confies')->where('user_id', $ancien->id)->count());
+        $this->assertSame(0, DB::table('clients_confies')->where('user_id', $collaborateur->id)->count());
+        $this->assertTrue($collaborateur->fresh()->peutOuvrir($seconde));
+        foreach ([$premiere, $seconde] as $magasin) {
+            $dernier = collect($this->modificationsDesDroits($magasin))->where('membre.id', $ancien->id)->last();
+            $this->assertSame(['proprietaire', 'collaborateur'], [$dernier['avant']['role_societe'], $dernier['apres']['role_societe']], $magasin->nom);
+        }
         $this->assertSame([RoleSociete::Collaborateur, null, []], [$ancien->role_societe, $ancien->email_verified_at, $ancien->autorisationsDeSociete()]);
         $this->assertSame(0, DB::table('affectations')->where('user_id', $ancien->id)->count());
         $this->assertTrue($ancien->canAccessPanel(Filament::getPanel('cabinet')));

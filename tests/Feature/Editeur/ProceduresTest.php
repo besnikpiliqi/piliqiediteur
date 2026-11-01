@@ -4,6 +4,8 @@ namespace Tests\Feature\Editeur;
 
 use App\Domain\Cabinets\Actions\ConstaterLInscriptionALOrdreAction;
 use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
@@ -339,6 +341,40 @@ class ProceduresTest extends TestCase
         Notification::assertSentTo($proprietaire, AvisDuCabinet::class, fn (AvisDuCabinet $avis, array $canaux): bool => $avis->titre === 'Inscription à l\'Ordre refusée'
             && str_contains($avis->texte, $motif)
             && $canaux === ['database', 'mail']);
+    }
+
+    /**
+     * L'éditeur constate la radiation d'un cabinet du tableau de l'Ordre :
+     * il n'est plus vérifié, chacun de ses liens prend fin (motif
+     * « cabinet plus vérifié »), au JET 130 de chaque magasin de chaque
+     * client et aux journaux d'audit, avec l'intervention de l'éditeur ; le
+     * propriétaire du cabinet et celui de chaque client sont prévenus.
+     */
+    public function test_la_radiation_d_un_cabinet_constatee_par_l_editeur_met_fin_a_tous_ses_liens(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $premier = $this->ouvrirUneSociete(['nom' => 'Première cliente']);
+        $second = $this->ouvrirUneSociete(['nom' => 'Seconde cliente']);
+        $liens = [$this->lierLeCabinet($cabinet, $premier), $this->lierLeCabinet($cabinet, $second)];
+        app(TenantContext::class)->clear();
+        $motif = 'Radiation publiée au tableau de l\'Ordre de la région Île-de-France.';
+
+        $this->procedure('editeur:cabinet:retirer-ordre', $cabinet, ['--motif' => $motif])->assertSuccessful();
+
+        $this->assertNotNull($cabinet->cabinet()->sole()->ordre_retire_le);
+        $this->assertFalse($cabinet->fresh()->estUnCabinetVerifie());
+        foreach ($liens as $lien) {
+            $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::CabinetPlusVerifie], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
+        }
+        $retrait = app(TenantContext::class)->runAsSociete($cabinet, fn (): EntreeAudit => EntreeAudit::query()->where('action', ActionAuditee::OrdreRetire->value)->sole());
+        $this->assertSame([['motif' => $motif], 'editeur'], [$retrait->nouvelles_valeurs, $retrait->origine]);
+        $fin = app(TenantContext::class)->runAsSociete($premier->societe, fn (): EntreeAudit => EntreeAudit::query()->where('action', ActionAuditee::LienTermine->value)->sole());
+        $this->assertSame(['cabinet_plus_verifie', 'editeur'], [$fin->nouvelles_valeurs['motif'], $fin->origine]);
+        $this->assertContains('Radiation de l\'Ordre constatée', $this->proprietaireDuCabinet($cabinet)->notifications()->get()->pluck('data.title')->all());
+        foreach ([$premier, $second] as $magasin) {
+            $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+            $this->assertNull(collect($this->modificationsDesDroits($magasin))->where('membre.id', $this->proprietaireDuCabinet($cabinet)->id)->last()['apres']);
+        }
     }
 
     public function test_une_societe_inconnue_est_refusee(): void

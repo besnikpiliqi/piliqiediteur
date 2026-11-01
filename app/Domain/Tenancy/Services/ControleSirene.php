@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Integrations\Rne\IdentiteRne;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\SireneIndisponibleException;
@@ -185,6 +186,43 @@ class ControleSirene
             'forme_juridique' => $unite->categorieJuridique === null ? null : FormeJuridique::depuisCategorieInsee($unite->categorieJuridique),
             'numero_tva' => IdentifiantsInsee::numeroTvaPropose($unite->siren),
             ...($siege === null || $siege->diffusionPartielle ? [] : [
+                'siege_adresse' => $siege->adresse,
+                'siege_complement_adresse' => $siege->complementAdresse,
+                'siege_code_postal' => $siege->codePostal,
+                'siege_ville' => $siege->ville,
+            ]),
+        ];
+    }
+
+    /**
+     * L'identité légale d'une société depuis le registre national des
+     * entreprises (voir RegistreNationalDesEntreprises::identite()), pour
+     * le client invité par un cabinet d'expertise comptable (voir
+     * AccepterLInvitationAction) : sa dénomination, sa catégorie juridique
+     * et la forme qu'elle donne, son capital en euros (un capital dans une
+     * autre devise n'est pas repris) et s'il est variable, son
+     * immatriculation et l'adresse de son siège ; chaque champ que le
+     * registre ne donne pas se prend dans le répertoire Sirene quand il le
+     * donne (voir identiteDepuisSirene()). Le propriétaire complète le
+     * reste dans l'identité de sa société.
+     *
+     * @return array<string, mixed>
+     */
+    public function identiteDepuisLeRegistre(IdentiteRne $registre, UniteSirene $unite): array
+    {
+        $sirene = $this->identiteDepuisSirene($unite);
+        $siege = $registre->adresseDuSiege;
+        $enEuros = $registre->capital !== null && in_array($registre->deviseCapital, [null, 'EUR'], true);
+
+        return [
+            ...$sirene,
+            'raison_sociale' => $registre->denomination ?? $sirene['raison_sociale'],
+            'categorie_juridique_insee' => $registre->categorieJuridique ?? $sirene['categorie_juridique_insee'],
+            'forme_juridique' => $registre->categorieJuridique === null ? $sirene['forme_juridique'] : FormeJuridique::depuisCategorieInsee($registre->categorieJuridique),
+            ...($enEuros ? ['capital_social' => $registre->capital] : []),
+            ...($registre->capitalVariable === null ? [] : ['capital_variable' => $registre->capitalVariable]),
+            ...($registre->immatriculation === null ? [] : ['immatriculation' => $registre->immatriculation]),
+            ...($siege === null ? [] : [
                 'siege_adresse' => $siege->adresse,
                 'siege_complement_adresse' => $siege->complementAdresse,
                 'siege_code_postal' => $siege->codePostal,

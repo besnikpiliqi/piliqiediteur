@@ -19,7 +19,6 @@ use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -87,9 +86,11 @@ class ExporterJournalDesEvenementsAction
     ) {}
 
     /**
-     * Inscrit l'export au journal, au nom de son auteur relu en base, qui
-     * doit pouvoir consulter la caisse sécurisée du magasin actif (voir
-     * LecteurDesDroits), puis rend ce qui écrit le fichier dans le flux
+     * Inscrit l'export au journal, au nom de son auteur relu en base sous le
+     * verrou du registre du magasin actif, qui doit pouvoir y consulter la
+     * caisse sécurisée (voir LecteurDesDroits) : un export qui croise un
+     * changement de ses droits (la fin du lien d'un cabinet d'expertise
+     * comptable) passe tout entier avant ou après lui ; puis rend ce qui écrit le fichier dans le flux
      * qu'on lui passe : avec l'adresse IP et le navigateur de chaque
      * événement pour le seul propriétaire de la société.
      *
@@ -108,14 +109,18 @@ class ExporterJournalDesEvenementsAction
         }
 
         $magasin = app(TenantContext::class)->magasin();
-        $exportateur = $this->lecteur->exiger($auteur, PermissionRegistry::CAISSE_SECURISEE_CONSULTER, $magasin);
+        $exportateur = $this->registre->sousVerrou($magasin, function () use ($auteur, $magasin, $du, $au): User {
+            $exportateur = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::CAISSE_SECURISEE_CONSULTER, $magasin);
 
-        $this->operateur->pendant($exportateur, fn () => DB::transaction(fn () => $this->registre->journaliser(CodeEvenement::ExportDeDonnees, [
-            'export' => 'journal_des_evenements',
-            'format' => 'csv',
-            'du' => $du,
-            'au' => $au,
-        ])));
+            $this->operateur->pendant($exportateur, fn () => $this->registre->journaliser(CodeEvenement::ExportDeDonnees, [
+                'export' => 'journal_des_evenements',
+                'format' => 'csv',
+                'du' => $du,
+                'au' => $au,
+            ]));
+
+            return $exportateur;
+        });
 
         $magasinId = $magasin->getKey();
         $calendrier = $magasin->calendrier();

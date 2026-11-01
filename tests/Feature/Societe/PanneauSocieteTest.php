@@ -26,8 +26,10 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
+use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
+use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource;
@@ -76,7 +78,9 @@ class PanneauSocieteTest extends TestCase
      * affichée et à ses administrateurs actifs selon la page : le tableau
      * de bord et la vérification à tout administrateur, l'identité et la
      * fiscalité au seul administrateur de tous les magasins autorisé à
-     * gérer les paramètres de la société ; ni à un responsable, un vendeur
+     * gérer les paramètres de la société, le cabinet comptable et la page
+     * de rattachement d'un cabinet au propriétaire seul ; ni à un
+     * responsable, un vendeur
      * ou l'expert-comptable, ni au propriétaire d'une autre société, ni à
      * un compte suspendu, ni sans connexion. Chaque ressource hérite de la
      * base stricte, et le modèle qu'elle gère a une policy explicite : sans
@@ -97,6 +101,7 @@ class PanneauSocieteTest extends TestCase
         $panneau = Filament::getPanel('societe');
         $pages = $panneau->getPages();
         $pagesDesParametres = [IdentiteSociete::class, ParametresFiscauxSociete::class];
+        $pagesDuProprietaire = [CabinetComptable::class, RattachementDUnCabinet::class];
 
         $this->assertNotEmpty($pages);
         $this->assertInstanceOf(SocietePolicy::class, Gate::getPolicyFor(Societe::class));
@@ -107,8 +112,8 @@ class PanneauSocieteTest extends TestCase
             $this->assertSame(
                 [
                     'proprietaire' => true,
-                    'administrateur' => ! in_array($page, $pagesDesParametres, true),
-                    'administrateur_des_parametres' => true,
+                    'administrateur' => ! in_array($page, [...$pagesDesParametres, ...$pagesDuProprietaire], true),
+                    'administrateur_des_parametres' => ! in_array($page, $pagesDuProprietaire, true),
                     'responsable' => false,
                     'vendeur' => false,
                     'expert_comptable' => false,

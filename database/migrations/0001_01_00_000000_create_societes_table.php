@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\Schema;
  * TypeDActivite) ; un cabinet d'expertise comptable n'a aucun magasin,
  * et sa vérification propre (son code d'activité, son inscription à
  * l'Ordre) est sur sa ligne de la table cabinets (voir Cabinet et
- * GardesDesCabinets).
+ * GardesDesCabinets). Une société qui naît de l'invitation d'un cabinet
+ * est validée sans courrier, son identité remplie depuis le registre
+ * national (voir AccepterLInvitationAction).
  *
  * Un SIREN n'appartient qu'à une seule société dans tout le logiciel :
  * une inscription qui attend le code de son courrier recommandé, ou une
@@ -66,6 +68,13 @@ return new class extends Migration
             $table->string('siege_complement_adresse')->nullable();
             $table->string('siege_code_postal', 10)->nullable();
             $table->string('siege_ville', 100)->nullable();
+            // Nom et qualité du représentant légal tels que lus au registre
+            // national, à la validation par l'invitation d'un cabinet (voir
+            // AccepterLInvitationAction) ; nulle quand le registre n'en
+            // donne pas, et pour une société validée par le code de son
+            // courrier, dont le destinataire garde le représentant (voir
+            // CodeConfirmation).
+            $table->string('representant_legal')->nullable();
             // L'assurance professionnelle, facultative dans tous les types
             // qui ont un magasin (jamais pour un cabinet d'expertise
             // comptable) : l'assureur ou le garant, son adresse, le n° de
@@ -106,6 +115,9 @@ return new class extends Migration
 
             $table->index('siren');
             $table->index('statut');
+            // La recherche des cabinets d'expertise comptable vérifiés par
+            // une société qui désigne le sien (voir RechercheDesCabinets).
+            $table->index('type_activite');
         });
 
         // Un SIREN n'appartient qu'à une seule société : celle qui attend

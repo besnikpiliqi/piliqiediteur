@@ -2,14 +2,23 @@
 
 namespace App\Filament\Cabinet\Pages;
 
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Cabinets\Services\TableauDeBordDesClients;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Pages\Dashboard;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Le tableau de bord d'un cabinet d'expertise comptable, dans l'espace du
@@ -18,11 +27,17 @@ use Illuminate\Contracts\Support\Htmlable;
  * « Bonjour » et le rôle de la personne dans le cabinet (voir
  * User::libelleDuRoleDeSociete()) ; pour le propriétaire seul, tant que le
  * cabinet n'est pas vérifié, la liste de ses étapes, chacune avec son état
- * et l'écran qui la fait (voir etapes()) ; où en est sa vérification. Ni
- * magasin ni démonstration : un cabinet n'en a aucun.
+ * et l'écran qui la fait (voir etapes()) ; où en est sa vérification ; ses
+ * clients liés que le cabinet ouvre au compte, chacun avec le bouton qui
+ * ouvre sa fiche ; pour le propriétaire d'un cabinet qui n'est plus
+ * vérifié, ses seuls liens actifs, pour y mettre fin (voir
+ * getViewData()). Aucune méthode publique ne reçoit l'identifiant d'un
+ * client ou d'un magasin : un geste relit son lien parmi ceux du cabinet. Ni magasin ni démonstration : un cabinet n'en a aucun.
  */
 class TableauDeBordDuCabinet extends Dashboard
 {
+    use GereLesExceptionsMetier;
+
     public const ETAPE_CODE_DU_COURRIER = 'Saisir le code du courrier recommandé';
 
     public const ETAPE_ACTIVITE = 'Faire contrôler votre code d\'activité 69.20Z';
@@ -30,6 +45,8 @@ class TableauDeBordDuCabinet extends Dashboard
     public const ETAPE_ORDRE = 'Faire vérifier votre inscription au tableau de l\'Ordre';
 
     public const ETAPE_COLLABORATEURS = 'Créer vos collaborateurs';
+
+    public const ETAPE_CLIENTS = 'Inviter vos clients';
 
     protected static ?string $navigationIcon = 'heroicon-o-home';
 
@@ -74,7 +91,7 @@ class TableauDeBordDuCabinet extends Dashboard
      * Les étapes du propriétaire du cabinet, dans l'ordre : saisir le code
      * du courrier recommandé, qui valide le cabinet, faire contrôler son
      * code d'activité, faire vérifier son inscription au tableau de
-     * l'Ordre, créer ses collaborateurs. Chacune dit si elle est faite, où
+     * l'Ordre, créer ses collaborateurs, inviter ses clients. Chacune dit si elle est faite, où
      * elle en est, et mène à l'écran qui la fait. Aucune pour un
      * collaborateur.
      *
@@ -124,7 +141,64 @@ class TableauDeBordDuCabinet extends Dashboard
                 'etat' => $collaborateurs > 0 ? trans_choice('{1} 1 collaborateur|[2,*] :count collaborateurs', $collaborateurs) : 'Un compte par collaborateur, qui ne verra que les clients que vous lui confierez.',
                 'url' => CollaborateurResource::getUrl('index'),
             ],
+            [
+                'titre' => self::ETAPE_CLIENTS,
+                'faite' => ($clients = app(AccesDesCabinets::class)->liensDuCompte(auth()->user())->count()) > 0,
+                'etat' => $clients > 0 ? trans_choice('{1} 1 client lié|[2,*] :count clients liés', $clients) : 'Par leur SIREN, une fois votre cabinet vérifié : chacun accepte et règle ce que votre cabinet peut faire.',
+                'url' => InvitationsEtDemandes::getUrl(),
+            ],
         ];
+    }
+
+    /**
+     * Ce que la vue montre, hors de toute méthode publique : le navigateur,
+     * qui peut appeler toute méthode publique d'une page Livewire avec les
+     * paramètres qu'il veut, n'obtient jamais un client qu'il désignerait
+     * lui-même. Les clients liés que le cabinet ouvre au compte connecté,
+     * chacun avec son identité réduite, ses magasins réels, ses factures à
+     * encaisser quand il les lui ouvre et l'adresse de sa fiche (voir
+     * TableauDeBordDesClients), aucun tant que le cabinet n'est pas
+     * vérifié ; pour le seul propriétaire d'un cabinet qui n'est plus
+     * vérifié ou plus actif, ses liens actifs, pour y mettre fin (voir
+     * AccesDesCabinets::liensActifsDuCabinet()).
+     *
+     * @return array{clients: list<array{lien: string, url: string, client: Societe, actif_depuis: mixed, magasins: int, factures: array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}|null}>, liensActifs: Collection<int, LienCabinet>}
+     */
+    protected function getViewData(): array
+    {
+        $cabinet = $this->cabinet();
+        $compte = auth()->user();
+
+        return [
+            'clients' => array_map(
+                fn (array $ligne): array => [...$ligne, 'url' => ClientDuCabinetResource::getUrl('view', ['record' => $ligne['lien']])],
+                app(TableauDeBordDesClients::class)->pour($compte),
+            ),
+            'liensActifs' => $compte->estProprietaire() && ! $cabinet->estUnCabinetVerifie()
+                ? app(AccesDesCabinets::class)->liensActifsDuCabinet($cabinet)
+                : new Collection,
+        ];
+    }
+
+    /**
+     * Mettre fin à un lien actif d'un cabinet qui n'est plus vérifié : le
+     * lien se relit parmi ceux du cabinet par son uuid, et l'action le
+     * contrôle de nouveau (voir MettreFinAuLienAction).
+     */
+    public function mettreFinAuLienAction(): Action
+    {
+        return Action::make('mettreFinAuLien')
+            ->label('Mettre fin au lien')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalDescription('Ce client et votre cabinet ne sont plus liés : il pourra en lier un autre.')
+            ->action(function (array $arguments): void {
+                static::executerSansCasser(function () use ($arguments): void {
+                    $lien = LienCabinet::query()->duCabinet($this->cabinet())->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
+                    app(MettreFinAuLienAction::class)->handle(auth()->user(), $lien);
+                    Notification::make()->title('Le lien a pris fin.')->success()->send();
+                });
+            });
     }
 
     /**

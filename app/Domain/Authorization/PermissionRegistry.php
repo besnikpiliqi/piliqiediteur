@@ -459,6 +459,108 @@ final class PermissionRegistry
     }
 
     /**
+     * Les autorisations qu'un client accorde par défaut au cabinet
+     * d'expertise comptable qu'il lie : les consultations (voir
+     * consultations()) qui existent dans les magasins de son type (voir
+     * pourLeType()), dans l'ordre alphabétique.
+     *
+     * @return list<string>
+     */
+    public static function parDefautDuCabinet(TypeDActivite $typeDuClient): array
+    {
+        $autorisations = array_values(array_intersect(self::consultations(), self::pourLeType($typeDuClient)));
+        sort($autorisations);
+
+        return $autorisations;
+    }
+
+    /**
+     * Les seules autorisations qu'un client peut ajouter à celles de son
+     * cabinet lié, écrites en toutes lettres : celles des achats et du
+     * stock, qui n'existent que dans une société qui a des articles (voir
+     * pourLeType()). Créer des produits y figure parce que valider une
+     * facture d'achat ou un inventaire d'ouverture l'exige ; jamais la
+     * vente, les clients, les services, les devis, les avoirs, les envois,
+     * les paramètres ni la caisse.
+     *
+     * @return list<string>
+     */
+    public static function ajoutablesAuCabinet(TypeDActivite $typeDuClient): array
+    {
+        return array_values(array_intersect([
+            self::FOURNISSEUR_CREATE,
+            self::FOURNISSEUR_UPDATE,
+            self::FOURNISSEUR_ARCHIVER,
+            self::FACTURE_ACHAT_CREER,
+            self::FACTURE_ACHAT_VALIDER,
+            self::AVOIR_FOURNISSEUR_CREER,
+            self::PRODUIT_CREATE,
+        ], self::pourLeType($typeDuClient)));
+    }
+
+    /**
+     * Toutes les autorisations qu'un client de ce type peut accorder à son
+     * cabinet lié (voir parDefautDuCabinet() et ajoutablesAuCabinet()),
+     * dans l'ordre alphabétique ; aucune pour un cabinet, qui n'est jamais
+     * client. La liste d'un client qui a des articles est celle que la
+     * base écrit en toutes lettres (voir GardesDesCabinets).
+     *
+     * @return list<string>
+     */
+    public static function duCabinet(TypeDActivite $typeDuClient): array
+    {
+        $autorisations = array_values(array_unique([...self::parDefautDuCabinet($typeDuClient), ...self::ajoutablesAuCabinet($typeDuClient)]));
+        sort($autorisations);
+
+        return $autorisations;
+    }
+
+    /**
+     * Les autorisations accordées au cabinet lié d'un client de ce type,
+     * refusées dès que l'une d'elles ne peut pas lui être accordée (voir
+     * duCabinet()), sans doublon, dans l'ordre alphabétique.
+     *
+     * @param  array<array-key, mixed>  $autorisations
+     * @return list<string>
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function verifierDuCabinet(array $autorisations, TypeDActivite $typeDuClient): array
+    {
+        $permises = self::duCabinet($typeDuClient);
+
+        foreach ($autorisations as $autorisation) {
+            if (! is_string($autorisation) || ! in_array($autorisation, $permises, true)) {
+                throw new InvalidArgumentException('Autorisation qui ne s\'accorde pas à un cabinet : '.(is_string($autorisation) ? (self::libelles()[$autorisation] ?? $autorisation) : get_debug_type($autorisation)));
+            }
+        }
+
+        $connues = array_values(array_unique($autorisations));
+        sort($connues);
+
+        return $connues;
+    }
+
+    /**
+     * Les libellés des autorisations qu'un client de ce type peut accorder
+     * à son cabinet lié, dans l'ordre du registre, créer des produits
+     * précisé : seulement ceux d'une facture d'achat ou d'un inventaire
+     * d'ouverture.
+     *
+     * @return array<string, string>
+     */
+    public static function libellesDuCabinet(TypeDActivite $typeDuClient): array
+    {
+        $libelles = array_intersect_key(self::libelles(), array_flip(self::duCabinet($typeDuClient)));
+
+        if (isset($libelles[self::PRODUIT_CREATE])) {
+            $libelles[self::PRODUIT_CREATE] = 'Produits : créer ceux d\'une facture d\'achat ou d\'un inventaire d\'ouverture';
+        }
+
+        return $libelles;
+    }
+
+    /**
      * Les autorisations des opérations commerciales, refusées tant que le
      * magasin ne peut pas vendre (voir ControleDesDroits et
      * Magasin::peutVendre()) : émettre une facture ou un ticket, noter les

@@ -98,7 +98,7 @@ class JournalAudit
                     default => self::ORIGINE_MEMBRE,
                 },
                 'auteur_id' => $auteur?->getKey(),
-                'auteur_libelle' => $auteur?->name,
+                'auteur_libelle' => $auteur?->nomPourLHistorique(),
                 'action' => $action,
                 'cible_type' => $cible?->getMorphClass(),
                 'cible_id' => $cible?->getKey(),

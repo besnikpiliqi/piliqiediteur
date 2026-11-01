@@ -42,7 +42,7 @@ class DestinataireOfficiel
     public function du(string $siren): DestinataireDuCourrier
     {
         try {
-            $representant = collect($this->rne->representants($siren))->first(fn (RepresentantRne $dirigeant): bool => $dirigeant->pouvoirDeRepresentation)
+            $representant = $this->representantLegal($siren)
                 ?? throw new VerificationRefuseeException(self::MESSAGE_AUCUN_REPRESENTANT);
             $adresse = $this->rne->adresseDuSiege($siren) ?? $this->siegeAuRepertoire($siren) ?? throw new VerificationRefuseeException(self::MESSAGE_AUCUNE_ADRESSE);
         } catch (RneIndisponibleException) {
@@ -50,6 +50,21 @@ class DestinataireOfficiel
         }
 
         return new DestinataireDuCourrier($representant->nomPourLeCourrier(), $representant->estUnePersonneMorale(), $adresse);
+    }
+
+    /**
+     * Le représentant légal de l'entreprise au registre national des
+     * entreprises, le même dirigeant que pour le courrier (le premier qui a
+     * le pouvoir de la représenter), null quand le registre ne la connaît
+     * pas ou n'en donne aucun : la société d'un client invité par un
+     * cabinet d'expertise comptable naît quand même (voir
+     * AccepterLInvitationAction).
+     *
+     * @throws RneIndisponibleException
+     */
+    public function representantLegal(string $siren): ?RepresentantRne
+    {
+        return collect($this->rne->representants($siren))->first(fn (RepresentantRne $dirigeant): bool => $dirigeant->pouvoirDeRepresentation);
     }
 
     /**

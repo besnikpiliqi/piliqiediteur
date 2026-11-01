@@ -273,6 +273,22 @@ final class PorteeDesDroits
     }
 
     /**
+     * Confie-t-il des clients de son cabinet d'expertise comptable à ce
+     * compte (voir ConfierDesClientsAction) ? Le propriétaire actif du
+     * cabinet, qui gère son équipe, pour un collaborateur non retiré du
+     * même cabinet.
+     */
+    public function peutConfierDesClients(User $auteur, User $compte): bool
+    {
+        return $auteur->estProprietaire()
+            && $auteur->estDUnCabinet()
+            && $this->gereSonEquipe($auteur)
+            && $compte->estCollaborateur()
+            && ! $compte->estRetire()
+            && (int) $compte->societe_id === (int) $auteur->societe_id;
+    }
+
+    /**
      * Voit-il l'identifiant de connexion de ce compte, dans les listes et
      * les fiches ? La personne elle-même ; le propriétaire, pour tout
      * compte de sa société ; un responsable, pour un vendeur ou un

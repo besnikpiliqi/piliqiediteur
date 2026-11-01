@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Societe;
 use App\Models\User;
 
@@ -29,7 +30,8 @@ use App\Models\User;
  *   (voir creerUnMagasin()) ;
  * - réservés au propriétaire (voir les gestes ci-dessous) : faire
  *   avancer la vérification de la société (un nouveau courrier, des
- *   pièces pour l'éditeur), transmettre la propriété ; ouvrir le magasin de
+ *   pièces pour l'éditeur), transmettre la propriété, gérer son cabinet
+ *   d'expertise comptable (voir gererSonCabinet()) ; ouvrir le magasin de
  *   démonstration, aussi pour un administrateur de tous les magasins
  *   autorisé à les gérer. Les gestes sur les comptes, administrateurs
  *   compris, sont dans MembrePolicy.
@@ -151,5 +153,23 @@ class SocietePolicy
             && ! $societe->estEnLectureSeule()
             && ! $societe->estValidee()
             && ($user->estProprietaire() || ($user->administreTousLesMagasins() && $user->aLAutorisationDeSociete(AutorisationsSociete::MAGASINS_GERER)));
+    }
+
+    /**
+     * Gérer son cabinet d'expertise comptable (le désigner, accepter ou
+     * refuser une demande de rattachement, régler ses autorisations,
+     * mettre fin au lien, inviter son expert-comptable à créer son
+     * espace) : son propriétaire seul, dans une société qui n'est pas un
+     * cabinet, ni révoquée, ni close ; une société suspendue ou résiliée
+     * le gère encore : un accès se donne et se coupe toujours (voir
+     * ControleDesDroits).
+     */
+    public function gererSonCabinet(User $user, Societe $societe): bool
+    {
+        return $this->view($user, $societe)
+            && $user->estProprietaire()
+            && ! $societe->estUnCabinet()
+            && ! $societe->estClose()
+            && $societe->statut !== StatutSociete::Revoquee;
     }
 }

@@ -27,8 +27,10 @@ use Illuminate\Support\Facades\DB;
  * chaque magasin (TenantContext::runAs()), seulement si l'utilisateur y a
  * encore des droits, quel que soit son statut (voir User::droitsDans()) :
  * le propriétaire de la société, un expert-comptable dans un magasin réel,
- * ou un compte affecté à ce magasin ou à tous ; qui n'y en a plus n'a plus
- * rien à y inscrire.
+ * un compte affecté à ce magasin ou à tous, ou un compte d'un cabinet
+ * d'expertise comptable dans un magasin réel d'un client que son lien
+ * actif lui ouvre, dans le contexte de ce client ; qui n'y en a plus n'a
+ * plus rien à y inscrire.
  *
  * Une déconnexion n'est jamais bloquée : laisser une session ouverte
  * parce que le registre refuse d'écrire (clé de signature absente,
@@ -47,18 +49,22 @@ class JournaliserFinDeSession
         }
 
         $session = $requete->session();
+        $duCabinet = $utilisateur->estDUnCabinet();
         $magasins = Magasin::query()
             ->whereKey(MagasinsOuvertsParLaSession::de($session))
-            ->where('societe_id', $utilisateur->societe_id)
+            ->when(! $duCabinet, fn ($magasins) => $magasins->where('societe_id', $utilisateur->societe_id))
             ->orderBy('id')
             ->get()
             ->filter(fn (Magasin $magasin): bool => $utilisateur->droitsDans($magasin) !== null);
+        $contexte = app(TenantContext::class);
 
         foreach ($magasins as $magasin) {
+            $journaliser = fn () => $contexte->runAs($magasin, fn () => DB::transaction(
+                fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::FinDeSession),
+            ));
+
             try {
-                app(TenantContext::class)->runAs($magasin, fn () => DB::transaction(
-                    fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::FinDeSession),
-                ));
+                $duCabinet ? $contexte->runAsSociete($magasin->societe, $journaliser) : $journaliser();
             } catch (RefusFiscalException $refus) {
                 report($refus);
             }

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\PreuveDeValidation;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -20,10 +21,11 @@ use Throwable;
 
 /**
  * La seule validation d'une société, qui reçoit la preuve utilisée (voir
- * PreuveDeValidation : aujourd'hui seulement le code du courrier
- * recommandé, saisi par SaisirCodeDeConfirmationAction) et l'inscrit au
- * journal d'audit. Une autre voie que l'éditeur déciderait passerait par
- * elle, avec sa propre preuve.
+ * PreuveDeValidation : le code du courrier recommandé, saisi par
+ * SaisirCodeDeConfirmationAction, ou l'invitation d'un cabinet
+ * d'expertise comptable, acceptée par AccepterLInvitationAction, avec ce
+ * cabinet) et l'inscrit au journal d'audit. Une autre voie que l'éditeur
+ * déciderait passerait par elle, avec sa propre preuve.
  *
  * valider() s'exécute dans la transaction de l'appelant, sous les verrous
  * des registres de tous les magasins de la société, puis de la ligne de la
@@ -67,17 +69,22 @@ class ValiderLaSocieteAction
     /**
      * @param  Societe  $verrouillee  la société, relue sous le verrou de sa ligne, dans son propre contexte
      * @param  User  $proprietaire  son propriétaire, qui a donné la preuve
+     * @param  Societe|null  $cabinet  le cabinet dont l'invitation est la preuve, et seulement pour elle
      *
-     * @throws LogicException quand la société n'attend plus de code
+     * @throws LogicException quand la société n'attend plus de code, ou que le cabinet ne va pas avec la preuve
      * @throws SiretDejaReserveException
      */
-    public function valider(Societe $verrouillee, User $proprietaire, PreuveDeValidation $preuve): void
+    public function valider(Societe $verrouillee, User $proprietaire, PreuveDeValidation $preuve, ?Societe $cabinet = null): void
     {
         if (! $verrouillee->attendSonCode() || ! $proprietaire->estProprietaire() || (int) $proprietaire->societe_id !== $verrouillee->getKey()) {
             throw new LogicException('Seule une inscription qui attend son code se valide, par la preuve de son propriétaire.');
         }
 
-        $this->operateur->pendantLeSysteme(function () use ($verrouillee, $proprietaire, $preuve): void {
+        if (($preuve === PreuveDeValidation::InvitationDuCabinet) !== ($cabinet?->estUnCabinet() === true)) {
+            throw new LogicException('Seule l\'invitation d\'un cabinet d\'expertise comptable nomme le cabinet qui valide la société.');
+        }
+
+        $this->operateur->pendantLeSysteme(function () use ($verrouillee, $proprietaire, $preuve, $cabinet): void {
             $magasins = $verrouillee->magasinsReels()->where('statut', StatutMagasin::Actif->value)->orderBy('id')->get();
             $verrouillee->forceFill(['validee_le' => now()])->save();
 
@@ -93,6 +100,7 @@ class ValiderLaSocieteAction
                 'preuve' => $preuve->value,
                 'proprietaire' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
                 'sirets' => $magasins->map(fn (Magasin $magasin): string => (string) $magasin->siret)->values()->all(),
+                'cabinet' => $cabinet === null ? [] : IdentiteDansLeJournal::de($cabinet),
             ], $verrouillee);
 
             SocieteValidee::dispatch($verrouillee);

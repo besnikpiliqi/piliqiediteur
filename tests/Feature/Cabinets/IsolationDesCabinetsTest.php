@@ -1,0 +1,179 @@
+<?php
+
+namespace Tests\Feature\Cabinets;
+
+use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Models\InvitationCabinet;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
+use App\Filament\Societe\Pages\CabinetComptable;
+use App\Models\User;
+use Database\Factories\SocieteFactory;
+use Filament\Facades\Filament;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
+use LogicException;
+use Tests\TestCase;
+
+/**
+ * L'isolation de l'espace des cabinets d'expertise comptable : un cabinet
+ * ne voit que ses clients liés, un collaborateur que ses clients confiés,
+ * un client que son cabinet et les noms de ses personnes qui ont accès,
+ * jamais un autre client ni un autre cabinet ; chaque lecture hors du
+ * client courant filtre et ne lit que ses colonnes.
+ */
+class IsolationDesCabinetsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Societe $c1;
+
+    private Societe $c2;
+
+    private User $a;
+
+    private User $b;
+
+    private Magasin $x;
+
+    private Magasin $xBis;
+
+    private Magasin $y;
+
+    private Magasin $z;
+
+    private LienCabinet $lienX;
+
+    private LienCabinet $lienY;
+
+    private LienCabinet $lienZ;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->c1 = $this->ouvrirUnCabinet();
+        $this->c2 = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux');
+        $this->x = $this->ouvrirUneSociete(['nom' => 'X centre', 'raison_sociale' => 'CLIENTE X', 'a_verifier' => true]);
+        app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($this->x), $this->x->societe);
+        $this->xBis = $this->ouvrirUnAutreMagasin($this->x, ['nom' => 'X gare']);
+        $this->y = $this->ouvrirUneSociete(['nom' => 'Y', 'raison_sociale' => 'CLIENTE Y']);
+        $this->z = $this->ouvrirUneSociete(['nom' => 'Z', 'raison_sociale' => 'CLIENTE Z']);
+        $this->lienX = $this->lierLeCabinet($this->c1, $this->x);
+        $this->lienY = $this->lierLeCabinet($this->c1, $this->y);
+        $this->lienZ = $this->lierLeCabinet($this->c2, $this->z);
+        $this->a = $this->confier($this->collaborateur($this->c1, 'Alice Arnaud'), [$this->x]);
+        $this->b = $this->confier($this->collaborateur($this->c1, 'Bruno Benoît'), [$this->y]);
+    }
+
+    public function test_un_collaborateur_ne_voit_que_les_clients_qui_lui_sont_confies(): void
+    {
+        $this->dansLEspaceDuCabinet($this->c1, $this->a);
+        Livewire::test(ListClientsDuCabinet::class)->assertCanSeeTableRecords([$this->lienX])->assertCanNotSeeTableRecords([$this->lienY]);
+        $this->get(ClientDuCabinetResource::getUrl('view', ['record' => $this->lienY->uuid], panel: 'cabinet', tenant: $this->c1))->assertNotFound();
+        $this->get(ClientDuCabinetResource::getUrl('view', ['record' => $this->lienX->uuid], panel: 'cabinet', tenant: $this->c1))->assertOk();
+        $this->flushSession();
+        $this->actingAs($this->a)->get("/app/{$this->y->uuid}")->assertNotFound();
+
+        $this->dansLEspaceDuCabinet($this->c1, $this->b);
+        Livewire::test(ListClientsDuCabinet::class)->assertCanSeeTableRecords([$this->lienY])->assertCanNotSeeTableRecords([$this->lienX]);
+        $this->flushSession();
+        $this->actingAs($this->b)->get("/app/{$this->x->uuid}")->assertNotFound();
+    }
+
+    public function test_le_proprietaire_du_cabinet_voit_tous_ses_clients_et_jamais_ceux_d_un_autre_cabinet(): void
+    {
+        $this->dansLEspaceDuCabinet($this->c1, $this->proprietaireDuCabinet($this->c1));
+        Livewire::test(ListClientsDuCabinet::class)->assertCanSeeTableRecords([$this->lienX, $this->lienY])->assertCanNotSeeTableRecords([$this->lienZ]);
+        $this->get(ClientDuCabinetResource::getUrl('view', ['record' => $this->lienZ->uuid], panel: 'cabinet', tenant: $this->c1))->assertNotFound();
+
+        $this->dansLEspaceDuCabinet($this->c2, $this->proprietaireDuCabinet($this->c2));
+        Livewire::test(ListClientsDuCabinet::class)->assertCanSeeTableRecords([$this->lienZ])->assertCanNotSeeTableRecords([$this->lienX, $this->lienY]);
+    }
+
+    public function test_aucune_donnee_d_un_client_n_est_visible_depuis_un_autre_client(): void
+    {
+        app(TenantContext::class)->set($this->y);
+        Client::factory()->create(['nom' => 'Client de Y']);
+        Produit::factory()->create(['nom' => 'Produit de Y']);
+        $proprietaire = $this->proprietaireDuCabinet($this->c1);
+
+        $this->dansLeMagasin($this->x, $proprietaire);
+        $this->assertSame(0, Client::query()->where('nom', 'Client de Y')->count());
+        $this->assertSame(0, Produit::query()->where('nom', 'Produit de Y')->count());
+        $this->assertEqualsCanonicalizing([$this->x->id, $this->xBis->id], $proprietaire->fresh()->getTenants(Filament::getPanel('app'))->modelKeys());
+    }
+
+    public function test_un_client_ne_voit_que_son_cabinet_et_les_noms_de_ses_personnes_qui_ont_acces(): void
+    {
+        $this->a->forceFill(['email' => 'alice@cabinet.test'])->save();
+        $this->dansLEspaceDeLaSociete($this->x->societe, $this->proprietaireDe($this->x));
+
+        Livewire::test(CabinetComptable::class)
+            ->assertSeeText(['Claire Martin', 'Alice Arnaud', (string) $this->c1->raison_sociale])
+            ->assertDontSeeText(['Bruno Benoît', (string) $this->c2->raison_sociale, 'alice@cabinet.test', (string) $this->a->identifiantDeConnexion()]);
+    }
+
+    public function test_les_lectures_hors_du_client_courant_filtrent_par_cabinet_et_ne_lisent_que_leurs_colonnes(): void
+    {
+        $requetes = [];
+        DB::listen(function ($requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        $liens = app(AccesDesCabinets::class)->liensOuverts($this->a)->pluck('liens_cabinet.id')->all();
+        $page = new CabinetComptable;
+        $personnes = app(TenantContext::class)->runAsSociete($this->x->societe, fn (): array => $page->personnesQuiOntAcces($this->lienX));
+
+        $this->assertSame([$this->lienX->id], array_map(intval(...), $liens));
+        $this->assertSame(['Alice Arnaud', 'Claire Martin'], $personnes);
+        $this->assertTrue(collect($requetes)->contains(fn (string $sql): bool => str_contains($sql, '"liens_cabinet"."cabinet_id" = ?') && str_contains($sql, 'from "clients_confies"')));
+        $this->assertTrue(collect($requetes)->contains(fn (string $sql): bool => str_starts_with($sql, 'select "name" from "users"') || str_starts_with($sql, 'select "users"."name" from "users"')));
+    }
+
+    public function test_chaque_modele_d_un_cabinet_ou_d_un_lien_est_isole_par_sa_societe(): void
+    {
+        $this->inviterUneEntreprise($this->c1, SocieteFactory::sirenFictif(), 'a@b.test');
+        $this->inviterUneEntreprise($this->c2, SocieteFactory::sirenFictif(), 'c@d.test');
+
+        $this->assertSame([$this->lienX->id], app(TenantContext::class)->runAsSociete($this->x->societe, fn (): array => LienCabinet::query()->pluck('id')->map(intval(...))->all()));
+        $this->assertSame([$this->c1->id], app(TenantContext::class)->runAsSociete($this->c1, fn (): array => InvitationCabinet::query()->pluck('societe_id')->map(intval(...))->unique()->values()->all()));
+        $this->assertSame([$this->c1->id], app(TenantContext::class)->runAsSociete($this->c1, fn (): array => ClientConfie::query()->pluck('societe_id')->map(intval(...))->unique()->values()->all()));
+        $this->assertSame([], app(TenantContext::class)->runAsSociete($this->c2, fn (): array => ClientConfie::query()->pluck('id')->all()));
+    }
+
+    public function test_une_action_forgee_du_cabinet_sur_un_client_non_lie_est_refusee(): void
+    {
+        $this->assertThrows(fn () => app(ConfierDesClientsAction::class)->handle($this->proprietaireDuCabinet($this->c1), $this->a, [$this->lienZ->id]), LogicException::class);
+        $this->assertThrows(fn () => app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDuCabinet($this->c1), $this->lienX, []), AuthorizationException::class);
+        $this->assertThrows(fn () => app(MettreFinAuLienAction::class)->handle($this->proprietaireDuCabinet($this->c2), $this->lienX), AuthorizationException::class);
+        $this->assertSame('actif', DB::table('liens_cabinet')->where('id', $this->lienX->id)->value('etat'));
+    }
+
+    public function test_un_collaborateur_ne_voit_ni_les_invitations_ni_les_demandes_du_cabinet(): void
+    {
+        $this->inviterUneEntreprise($this->c1, SocieteFactory::sirenFictif(), 'a@b.test');
+        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->c1->id)->sole();
+
+        foreach ([$this->a, $this->b] as $collaborateur) {
+            $this->dansLEspaceDuCabinet($this->c1, $collaborateur);
+            $this->get(InvitationsEtDemandes::getUrl(panel: 'cabinet', tenant: $this->c1))->assertForbidden();
+            $this->assertFalse($collaborateur->can('viewAny', InvitationCabinet::class));
+            $this->assertFalse($collaborateur->can('view', $invitation));
+        }
+    }
+}

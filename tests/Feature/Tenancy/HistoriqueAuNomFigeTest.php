@@ -83,13 +83,17 @@ class HistoriqueAuNomFigeTest extends TestCase
         'pieces_verification' => ['deposee_par' => 'deposee_par_nom'],
         'codes_confirmation' => ['demande_par' => 'demande_par_nom'],
         'postes_reconnus' => ['reconnu_par' => 'reconnu_par_nom', 'retire_par' => 'retire_par_nom'],
+        'invitations_cabinet' => ['invitee_par' => 'invitee_par_nom', 'retiree_par' => 'retiree_par_nom'],
+        'liens_cabinet' => ['demande_par' => 'demande_par_nom', 'repondu_par' => 'repondu_par_nom', 'termine_par' => 'termine_par_nom'],
+        'clients_confies' => ['confie_par' => 'confie_par_nom'],
     ];
 
     /**
      * Les colonnes vers un compte qui ne sont pas de l'historique : des
      * droits actuels, un identifiant de connexion, un panier en cours, le
      * jeton d'une demande traitée, une demande de transmission de la
-     * propriété, un lien interne jamais affiché, ou un nom déjà porté
+     * propriété, un lien interne jamais affiché, un client confié à un
+     * collaborateur d'un cabinet (un droit actuel), ou un nom déjà porté
      * ailleurs (le contenu signé, le libellé de l'audit).
      *
      * @var list<string>
@@ -109,6 +113,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'journal_audit.auteur_id',
         'enregistrements_fiscaux.operateur_id',
         'mandats_pdp.accorde_par',
+        'clients_confies.user_id',
     ];
 
     public function test_les_ecrans_de_l_historique_affichent_le_nom_tel_qu_il_etait_au_moment_de_l_operation(): void

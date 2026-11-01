@@ -8,7 +8,8 @@ use App\Domain\Tenancy\Services\ControleSirene;
 /**
  * Les avertissements que le code d'activité principale d'une entreprise,
  * lu au répertoire Sirene (voir UniteSirene), fait afficher sur la page du
- * lien d'inscription (voir ConfirmerInscriptionController), chacun avec les
+ * lien d'inscription (voir ConfirmerInscriptionController) et sur celle de
+ * l'invitation d'un cabinet (voir pourUneInvitation()), chacun avec les
  * types d'activité qu'il concerne : un type peu probable pour cette
  * activité, une activité exonérée de TVA que le logiciel ne facture pas,
  * ou une limite connue. Ils ne bloquent jamais : seul le cabinet
@@ -31,6 +32,27 @@ final class AvertissementsDuCodeDActivite
      * @return list<array{texte: string, types: list<TypeDActivite>}>
      */
     public static function pour(?string $code, ?string $nomenclature): array
+    {
+        return self::avertissements($code, $nomenclature, 'Votre code d\'activité est 69.20Z (activités comptables) : si vous êtes inscrit à l\'Ordre des experts-comptables, choisissez « '.TypeDActivite::Cabinet->getLabel().' ».');
+    }
+
+    /**
+     * Les mêmes avertissements, sur la page de l'invitation d'un cabinet
+     * d'expertise comptable (voir AccepterLInvitationDuCabinetController),
+     * dont le menu n'offre pas le type « Cabinet d'expertise comptable » :
+     * pour le code 69.20Z, refuser l'invitation et s'inscrire soi-même.
+     *
+     * @return list<array{texte: string, types: list<TypeDActivite>}>
+     */
+    public static function pourUneInvitation(?string $code, ?string $nomenclature): array
+    {
+        return self::avertissements($code, $nomenclature, 'Votre code d\'activité est 69.20Z (activités comptables). Un cabinet d\'expertise comptable ne s\'inscrit pas par l\'invitation d\'un autre cabinet : si c\'est votre cas, refusez cette invitation et inscrivez votre cabinet vous-même.');
+    }
+
+    /**
+     * @return list<array{texte: string, types: list<TypeDActivite>}>
+     */
+    private static function avertissements(?string $code, ?string $nomenclature, string $activitesComptables): array
     {
         if ($code === null || $nomenclature !== self::NOMENCLATURE || preg_match('/^(\d{2})\.(\d)\d[A-Z]$/', $code, $morceaux) !== 1) {
             return [];
@@ -59,7 +81,7 @@ final class AvertissementsDuCodeDActivite
             ],
             [
                 $code === ControleSirene::CODE_ACTIVITES_COMPTABLES,
-                'Votre code d\'activité est 69.20Z (activités comptables) : si vous êtes inscrit à l\'Ordre des experts-comptables, choisissez « '.TypeDActivite::Cabinet->getLabel().' ».',
+                $activitesComptables,
                 $sansLeCabinet,
             ],
             [

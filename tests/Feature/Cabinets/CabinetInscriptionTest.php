@@ -222,8 +222,8 @@ class CabinetInscriptionTest extends TestCase
 
     /**
      * La liste des étapes du propriétaire d'un cabinet : le code du
-     * courrier, le code d'activité, l'inscription à l'Ordre et ses
-     * collaborateurs, chacune faite à son tour, sans magasin ni
+     * courrier, le code d'activité, l'inscription à l'Ordre, ses
+     * collaborateurs et ses clients, chacune faite à son tour, sans magasin ni
      * démonstration ; toutes faites, elle disparaît ; un collaborateur n'en
      * a aucune.
      */
@@ -236,8 +236,8 @@ class CabinetInscriptionTest extends TestCase
         $tableau = Livewire::test(TableauDeBordDuCabinet::class);
         $etapes = $tableau->instance()->etapes();
 
-        $this->assertSame([TableauDeBordDuCabinet::ETAPE_CODE_DU_COURRIER, TableauDeBordDuCabinet::ETAPE_ACTIVITE, TableauDeBordDuCabinet::ETAPE_ORDRE, TableauDeBordDuCabinet::ETAPE_COLLABORATEURS], array_column($etapes, 'titre'));
-        $this->assertSame([false, true, false, false], array_column($etapes, 'faite'));
+        $this->assertSame([TableauDeBordDuCabinet::ETAPE_CODE_DU_COURRIER, TableauDeBordDuCabinet::ETAPE_ACTIVITE, TableauDeBordDuCabinet::ETAPE_ORDRE, TableauDeBordDuCabinet::ETAPE_COLLABORATEURS, TableauDeBordDuCabinet::ETAPE_CLIENTS], array_column($etapes, 'titre'));
+        $this->assertSame([false, true, false, false, false], array_column($etapes, 'faite'));
         $this->assertSame('Votre cabinet attend le code de son courrier recommandé.', $tableau->instance()->etatDeLaVerification());
         foreach ([...array_column($etapes, 'etat'), $tableau->instance()->etatDeLaVerification()] as $texte) {
             $this->assertStringNotContainsStringIgnoringCase('magasin', $texte);
@@ -248,7 +248,10 @@ class CabinetInscriptionTest extends TestCase
         $verifie = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif());
         $collaborateur = $this->collaborateur($verifie);
         $this->dansLEspaceDuCabinet($verifie, $this->proprietaireDuCabinet($verifie));
+        $this->assertTrue(Livewire::test(TableauDeBordDuCabinet::class)->instance()->resteDesEtapes());
 
+        $this->lierLeCabinet($verifie, $this->ouvrirUneSociete(['nom' => 'Boutique cliente']));
+        $this->dansLEspaceDuCabinet($verifie, $this->proprietaireDuCabinet($verifie));
         $this->assertFalse(Livewire::test(TableauDeBordDuCabinet::class)->instance()->resteDesEtapes());
 
         $this->dansLEspaceDuCabinet($verifie, $collaborateur);

@@ -128,9 +128,6 @@ class ReglesDuCalendrierTest extends TestCase
         'app/Providers/AppServiceProvider.php' => [
             '$composant->timezone(static fn (): string => app(TenantContext::class)->calendrierDAffichage()->fuseau())' => 'le seul réglage du fuseau des colonnes et des entrées de Filament, celui du calendrier du magasin actif, sinon de Paris',
         ],
-        'app/Filament/Societe/Pages/ParametresFiscauxSociete.php' => [
-            'Carbon::create(2000, $mois)->translatedFormat(\'F\')' => 'le nom de chacun des douze mois, tiré d\'une date fixe sans heure',
-        ],
         'app/Domain/CaisseSecurisee/Services/RegistreFiscal.php' => [
             '\'instant\' => $instant->utc->toIso8601String()' => 'journal technique d\'une horloge qui recule (Log::critical), en UTC',
             '\'dernier_verrou\' => $dernierVerrou->toIso8601String()' => 'journal technique d\'une horloge qui recule (Log::critical), en UTC',

@@ -178,6 +178,15 @@ class MembrePolicy
     }
 
     /**
+     * Confier des clients du cabinet à ce collaborateur : le propriétaire
+     * du cabinet (voir PorteeDesDroits::peutConfierDesClients()).
+     */
+    public function confierDesClients(User $user, User $collaborateur): bool
+    {
+        return $this->portee->peutConfierDesClients($user, $collaborateur);
+    }
+
+    /**
      * Créer ou réintégrer un expert-comptable : le propriétaire seul,
      * jamais dans un cabinet d'expertise comptable (voir aUneEquipe()).
      */

@@ -4,6 +4,9 @@ namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -77,7 +80,9 @@ use SensitiveParameter;
  * Dans un cabinet d'expertise comptable, qui n'a ni magasin ni
  * administrateur, la propriété passe de même à un collaborateur actif, aux
  * mêmes conditions ; l'ancien propriétaire devient collaborateur, sans
- * affectation ni autorisation de société.
+ * affectation ni autorisation de société, avec tous les clients liés du
+ * cabinet confiés (voir confierTousLesClients()), ses droits dans leurs
+ * magasins réels inscrits au JET 130 de chacun.
  */
 class AccepterLaTransmissionDeLaProprieteAction
 {
@@ -148,7 +153,9 @@ class AccepterLaTransmissionDeLaProprieteAction
                         'email' => $demandeRelue->adresse,
                         'email_verified_at' => now(),
                     ])->save();
-                    if (! $societe->estUnCabinet()) {
+                    if ($societe->estUnCabinet()) {
+                        $this->confierTousLesClients($ancienRelu, $nouveauRelu);
+                    } else {
                         $this->porteeDesAdministrateurs->ecrire($ancienRelu, [
                             'tous' => true,
                             'magasins' => new Collection,
@@ -200,5 +207,21 @@ class AccepterLaTransmissionDeLaProprieteAction
             && (int) $demande->societe_id === (int) $compte->societe_id
                 ? $demande
                 : null;
+    }
+
+    /**
+     * Dans un cabinet d'expertise comptable, l'ancien propriétaire, devenu
+     * collaborateur, garde tous les clients du cabinet : chaque client lié
+     * lui est confié, par le nouveau propriétaire ; les clients confiés à
+     * celui-ci, qui les voit tous désormais, s'effacent.
+     */
+    private function confierTousLesClients(User $ancien, User $nouveau): void
+    {
+        ClientConfie::query()->where('user_id', $nouveau->getKey())->delete();
+        $dejaConfies = ClientConfie::query()->where('user_id', $ancien->getKey())->pluck('lien_id')->map(fn ($id): int => (int) $id)->all();
+
+        LienCabinet::query()->duCabinet((int) $ancien->societe_id)->where('etat', EtatDuLien::Actif->value)->orderBy('id')->pluck('id')
+            ->reject(fn ($id): bool => in_array((int) $id, $dejaConfies, true))
+            ->each(fn ($id) => (new ClientConfie)->forceFill(['lien_id' => (int) $id, 'user_id' => $ancien->getKey(), 'confie_par' => $nouveau->getKey()])->save());
     }
 }

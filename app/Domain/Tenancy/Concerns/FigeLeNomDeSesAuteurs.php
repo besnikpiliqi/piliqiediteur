@@ -10,12 +10,14 @@ use LogicException;
  * L'historique garde le nom de chaque personne tel qu'il était au moment
  * de chaque opération : une ligne d'historique qui désigne une personne
  * (son auteur, le vendeur d'une caisse...) enregistre aussi son nom, dans
- * une colonne sœur, posée depuis le nom que la base donne pour ce compte,
- * dans la même transaction, chaque fois que la colonne de la personne est
- * posée ou change. Les écrans, les exports et les notifications lisent ce
- * nom figé, jamais le nom actuel du compte : un changement de nom dans le
- * profil, un compte refusé ou rattaché à une autre société ne change rien
- * à ce que montre l'historique. Le nom figé ne se modifie jamais seul.
+ * une colonne sœur, posée depuis le nom que la base donne pour ce compte
+ * (avec celui de son cabinet pour un compte d'un cabinet d'expertise
+ * comptable, voir User::nomPourLHistorique()), dans la même transaction,
+ * chaque fois que la colonne de la personne est posée ou change. Les
+ * écrans, les exports et les notifications lisent ce nom figé, jamais le
+ * nom actuel du compte : un changement de nom dans le profil, un compte
+ * refusé ou rattaché à une autre société ne change rien à ce que montre
+ * l'historique. Le nom figé ne se modifie jamais seul.
  *
  * Chaque modèle déclare ses couples (voir colonnesAuNomFige()).
  */
@@ -32,7 +34,7 @@ trait FigeLeNomDeSesAuteurs
             foreach (static::colonnesAuNomFige() as $colonne => $colonneDuNom) {
                 if (! $modele->exists || $modele->isDirty($colonne)) {
                     $personne = $modele->getAttribute($colonne);
-                    $modele->setAttribute($colonneDuNom, $personne === null ? null : User::query()->whereKey($personne)->value('name'));
+                    $modele->setAttribute($colonneDuNom, $personne === null ? null : User::nomFigeDe((int) $personne));
 
                     continue;
                 }

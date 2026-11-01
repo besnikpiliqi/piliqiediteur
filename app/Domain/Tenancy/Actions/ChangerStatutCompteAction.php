@@ -247,14 +247,16 @@ class ChangerStatutCompteAction
     }
 
     /**
-     * Supprime les affectations et les autorisations de société d'un compte
-     * qui quitte la société : il garde son rôle de société, son identifiant
-     * et son magasin de rattachement, sans aucun droit.
+     * Supprime les affectations, les autorisations de société et, pour un
+     * collaborateur d'un cabinet d'expertise comptable, les clients confiés
+     * d'un compte qui quitte la société : il garde son rôle de société, son
+     * identifiant et son magasin de rattachement, sans aucun droit.
      */
     public static function retirerLesDroits(User $compte): void
     {
         Affectation::query()->where('user_id', $compte->getKey())->delete();
         DB::table('autorisations_societe')->where('user_id', $compte->getKey())->delete();
+        DB::table('clients_confies')->where('societe_id', $compte->societe_id)->where('user_id', $compte->getKey())->delete();
     }
 
     /**

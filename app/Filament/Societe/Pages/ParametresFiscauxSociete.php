@@ -2,6 +2,7 @@
 
 namespace App\Filament\Societe\Pages;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Societe;
@@ -15,7 +16,6 @@ use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -80,7 +80,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
                 ->helperText('Ne concerne que les prestations de services normalement soumises à la TVA sur les encaissements. Activée, la mention « Option pour le paiement de la taxe d\'après les débits » est imprimée sur vos factures et avoirs. Laissez désactivé si vous ne savez pas, ou si votre activité est principalement de la vente de marchandises.'),
             Select::make('mois_fin_exercice')
                 ->label('Mois de fin d\'exercice')
-                ->options(collect(range(1, 12))->mapWithKeys(fn (int $mois): array => [$mois => ucfirst(Carbon::create(2000, $mois)->translatedFormat('F'))])->all())
+                ->options(collect(range(1, 12))->mapWithKeys(fn (int $mois): array => [$mois => Calendrier::nomDuMois($mois)])->all())
                 ->helperText(fn (): string => $this->societe()->aVenduUneFois()
                     ? 'Verrouillé depuis la première vente de l\'un de vos magasins.'
                     : 'Décembre par défaut. Il se verrouille dès la première vente de l\'un de vos magasins.')

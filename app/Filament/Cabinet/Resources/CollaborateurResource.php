@@ -2,7 +2,10 @@
 
 namespace App\Filament\Cabinet\Resources;
 
+use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
@@ -19,8 +22,9 @@ use Illuminate\Database\Eloquent\Builder;
  * Les collaborateurs d'un cabinet d'expertise comptable, dans l'espace du
  * cabinet, pour son propriétaire seul (voir MembrePolicy et
  * PorteeDesDroits) : leur identifiant de connexion, leur statut, leur
- * mot de passe encore égal à l'identifiant, leur première connexion ; et
- * ses gestes : créer un collaborateur, suspendre, réactiver, retirer,
+ * mot de passe encore égal à l'identifiant, leur première connexion, les
+ * clients qui leur sont confiés ; et ses gestes : créer un collaborateur,
+ * leur confier des clients, suspendre, réactiver, retirer,
  * réintégrer, redonner l'accès en sa présence, transmettre la propriété
  * du cabinet. Un collaborateur n'y voit rien. Personne ne change ici le
  * nom ni l'adresse d'un autre compte, et un compte ne se supprime jamais.
@@ -71,6 +75,9 @@ class CollaborateurResource extends RessourceDuPanneauCabinet
                     ->state(fn (User $record): ?string => static::peut('voirLIdentifiant', $record) ? $record->identifiantDeConnexion() : null)
                     ->placeholder('—'),
                 Tables\Columns\TextColumn::make('statut')->label('Statut')->badge(),
+                Tables\Columns\TextColumn::make('clients_confies')
+                    ->label('Clients confiés')
+                    ->state(fn (User $record): int => ClientConfie::query()->where('user_id', $record->getKey())->count()),
                 Tables\Columns\TextColumn::make('signaux')
                     ->label('À surveiller')
                     ->badge()
@@ -102,12 +109,32 @@ class CollaborateurResource extends RessourceDuPanneauCabinet
                 TextEntry::make('mot_de_passe')
                     ->label('Mot de passe')
                     ->state(fn (User $record): string => $record->mot_de_passe_est_l_identifiant ? 'Encore l\'identifiant : la personne ne peut pas se connecter avant de choisir le sien' : 'Choisi par la personne'),
+                TextEntry::make('clients_confies')
+                    ->label('Clients confiés')
+                    ->state(fn (User $record): array => self::clientsConfies($record))
+                    ->listWithLineBreaks()
+                    ->placeholder('Aucun'),
                 TextEntry::make('derniere_connexion_le')
                     ->label('Dernière connexion')
                     ->formatStateUsing(fn (User $record): string => $record->calendrier()->afficherHorsDuMagasin($record->derniere_connexion_le, 'd/m/Y à H:i'))
                     ->placeholder('Jamais connecté'),
             ])->columns(2),
         ]);
+    }
+
+    /**
+     * Les clients confiés à ce collaborateur, par dénomination : ceux des
+     * liens actifs de son cabinet (voir AccesDesCabinets::liensDuCompte()).
+     *
+     * @return list<string>
+     */
+    private static function clientsConfies(User $collaborateur): array
+    {
+        $clients = app(AccesDesCabinets::class)->liensDuCompte($collaborateur)->pluck('liens_cabinet.societe_id')->all();
+
+        return Societe::query()->whereKey($clients)->orderBy('raison_sociale')->get(['id', 'siren', 'raison_sociale'])
+            ->map(fn (Societe $client): string => ($client->raison_sociale ?? 'Sans dénomination').' · SIREN '.$client->siren)
+            ->all();
     }
 
     public static function getPages(): array

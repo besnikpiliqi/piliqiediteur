@@ -4,8 +4,18 @@ namespace Tests;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
+use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
+use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
 use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Mail\DemandeDeRattachementMail;
+use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -500,6 +510,117 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->clear();
 
         return $compte->refresh();
+    }
+
+    /**
+     * Le lien actif entre ce cabinet et ce client (une société, ou celle de
+     * ce magasin), comme dans le vrai parcours : le propriétaire du client
+     * désigne le cabinet (voir DesignerUnCabinetAction), le propriétaire
+     * du cabinet accepte (voir AccepterLaDemandeDeLienAction), avec les
+     * autorisations par défaut ; puis, données, le propriétaire du client
+     * règle ces autorisations (voir ReglerLesAutorisationsDuCabinetAction).
+     * Aucun contexte n'est actif ensuite.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function lierLeCabinet(Societe $cabinet, Magasin|Societe $client, ?array $autorisations = null): LienCabinet
+    {
+        $client = $client instanceof Magasin ? $client->societe : $client;
+        app(TenantContext::class)->clear();
+        $demande = app(DesignerUnCabinetAction::class)->handle($client->proprietaire()->firstOrFail(), $client, $cabinet);
+        app(TenantContext::class)->clear();
+        $lien = app(AccepterLaDemandeDeLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), $demande);
+        app(TenantContext::class)->clear();
+
+        if ($autorisations !== null) {
+            app(ReglerLesAutorisationsDuCabinetAction::class)->handle($client->proprietaire()->firstOrFail(), $lien, $autorisations);
+            app(TenantContext::class)->clear();
+        }
+
+        return LienCabinet::query()->withoutGlobalScopes()->findOrFail($lien->getKey());
+    }
+
+    /**
+     * Confie ces clients liés (des sociétés, ou celles de ces magasins) à
+     * ce collaborateur, en plus de ceux qu'il suit déjà, par le
+     * propriétaire de son cabinet (voir ConfierDesClientsAction). Aucun
+     * contexte n'est actif ensuite.
+     *
+     * @param  list<Magasin|Societe>  $clients
+     */
+    protected function confier(User $collaborateur, array $clients): User
+    {
+        $cabinet = $collaborateur->societe()->firstOrFail();
+        $liens = LienCabinet::query()->withoutGlobalScopes()
+            ->where('cabinet_id', $cabinet->getKey())
+            ->where('etat', EtatDuLien::Actif->value)
+            ->whereIn('societe_id', array_map(fn (Magasin|Societe $client): int => (int) ($client instanceof Magasin ? $client->societe_id : $client->getKey()), $clients))
+            ->pluck('id')
+            ->all();
+        $deja = DB::table('clients_confies')->where('societe_id', $cabinet->getKey())->where('user_id', $collaborateur->getKey())->pluck('lien_id')->all();
+        app(TenantContext::class)->clear();
+        app(ConfierDesClientsAction::class)->handle($this->proprietaireDuCabinet($cabinet), $collaborateur, array_values(array_unique(array_map(intval(...), [...$deja, ...$liens]))));
+        app(TenantContext::class)->clear();
+
+        return $collaborateur->refresh();
+    }
+
+    /**
+     * Le propriétaire du cabinet invite ce SIREN à cette adresse (voir
+     * InviterUneEntrepriseAction), e-mails retenus : rend le jeton du lien
+     * du dernier e-mail d'invitation. Aucun contexte n'est actif ensuite.
+     */
+    protected function inviterUneEntreprise(Societe $cabinet, string $siren, string $email): string
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, $siren, $email, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        return Str::afterLast((string) Mail::sent(InvitationDuCabinetMail::class)->last()?->lien, '/');
+    }
+
+    /**
+     * La personne qui a reçu le lien accepte l'invitation, avec ce type
+     * d'activité et la case du choix définitif (voir
+     * AccepterLInvitationAction) : rend le propriétaire de la société née.
+     * Aucun contexte n'est actif ensuite.
+     */
+    protected function accepterLInvitation(string $jeton, TypeDActivite $type = TypeDActivite::Commerce, string $motDePasse = self::MOT_DE_PASSE_CHOISI): User
+    {
+        app(TenantContext::class)->clear();
+        $proprietaire = app(AccepterLInvitationAction::class)->handle($jeton, [
+            'password' => $motDePasse,
+            'password_confirmation' => $motDePasse,
+            'type_activite' => $type->value,
+            'choix_definitif' => true,
+        ]);
+        app(TenantContext::class)->clear();
+
+        return $proprietaire;
+    }
+
+    /**
+     * Le propriétaire du cabinet invite le SIREN de cette société déjà
+     * inscrite, à cette adresse : une demande de rattachement (voir
+     * InviterUneEntrepriseAction), e-mails retenus ; rend le jeton du lien
+     * du dernier e-mail de rattachement. Aucun contexte n'est actif
+     * ensuite.
+     */
+    protected function demanderLeRattachement(Societe $cabinet, Societe $client, string $email): string
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(TenantContext::class)->clear();
+        app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, (string) $client->siren, $email, self::MOT_DE_PASSE_CHOISI);
+        app(TenantContext::class)->clear();
+
+        return Str::afterLast((string) Mail::sent(DemandeDeRattachementMail::class)->last()?->lien, '/');
     }
 
     /**

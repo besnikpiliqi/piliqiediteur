@@ -334,6 +334,16 @@ final class Calendrier
     }
 
     /**
+     * Le nom français d'un mois de l'année (1 à 12), avec sa majuscule
+     * (« Décembre ») : le mois de fin d'exercice d'une société, qui n'a ni
+     * jour ni heure.
+     */
+    public static function nomDuMois(int $mois): string
+    {
+        return ucfirst(CarbonImmutable::create(2000, $mois, 1, 0, 0, 0, 'UTC')->locale('fr')->translatedFormat('F'));
+    }
+
+    /**
      * Le jour, s'il est un jour « AAAA-MM-JJ » du calendrier ; sinon null.
      */
     public static function jourValide(string $jour): ?string

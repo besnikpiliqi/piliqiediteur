@@ -41,6 +41,20 @@
         <p>SIREN : {{ $societe->siren }}</p>
     </x-filament::section>
 
+    @if (\App\Filament\Societe\Pages\CabinetComptable::canAccess())
+        @php($cabinet = $this->cabinetComptable())
+        <x-filament::section icon="heroicon-o-briefcase">
+            <x-slot name="heading">Cabinet comptable</x-slot>
+
+            <p>
+                <x-filament::link :href="\App\Filament\Societe\Pages\CabinetComptable::getUrl()">{{ $cabinet['lie'] === null ? 'Aucun cabinet lié' : 'Cabinet comptable : '.$cabinet['lie'] }}</x-filament::link>
+            </p>
+            @foreach ($cabinet['demandes'] as $demande)
+                <p><x-filament::link :href="$demande['url']">{{ $demande['cabinet'] }} demande à suivre votre société</x-filament::link></p>
+            @endforeach
+        </x-filament::section>
+    @endif
+
     @if ($manquantes !== [])
         <x-filament::section icon="heroicon-o-exclamation-triangle" icon-color="warning">
             <x-slot name="heading">Identité incomplète pour facturer un professionnel</x-slot>

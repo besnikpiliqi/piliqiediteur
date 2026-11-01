@@ -10,6 +10,7 @@ use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
@@ -38,8 +39,11 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /**
  * Panneau applicatif quotidien des magasins : le propriétaire de la
  * société, dans chacun de ses magasins, ses administrateurs, ses
- * experts-comptables (en lecture) et les membres de l'équipe de chaque
- * magasin y gèrent clients, produits, factures, et le propriétaire et les
+ * experts-comptables (en lecture), les membres de l'équipe de chaque
+ * magasin, et les comptes d'un cabinet d'expertise comptable lié, dans
+ * les magasins réels des clients qui leur sont confiés, selon les
+ * autorisations que chaque client accorde au cabinet, y gèrent clients,
+ * produits, factures, et le propriétaire et les
  * responsables d'un magasin son équipe (voir EquipeDuMagasinResource).
  * C'est le panneau par défaut (->default()), avec la tenancy Filament
  * branchée sur Magasin (URL /app/{magasin:uuid}/...), et celui de
@@ -58,7 +62,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * MenerUnCompteSansMagasin mène un compte qui n'a encore aucun magasin à
  * l'espace de sa société ou à la page qui le lui dit (voir AucunMagasin).
  * Le sélecteur de magasin n'apparaît qu'à qui en ouvre plusieurs : un
- * compte de membre n'en a qu'un.
+ * compte de membre n'en a qu'un, un compte d'un cabinet n'y voit que les
+ * magasins du client ouvert.
  */
 class AppPanelProvider extends PanelProvider
 {
@@ -84,7 +89,9 @@ class AppPanelProvider extends PanelProvider
             })
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
-            ->tenantMenu(fn (): bool => (auth()->user()?->magasinsAccessibles()->count() ?? 0) > 1)
+            // Pour un compte d'un cabinet d'expertise comptable, seulement
+            // les magasins du client ouvert (voir User::getTenants()).
+            ->tenantMenu(fn (): bool => (auth()->user()?->getTenants(Filament::getCurrentPanel())->count() ?? 0) > 1)
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,
                 JournaliserOuvertureDeSession::class,
@@ -97,13 +104,20 @@ class AppPanelProvider extends PanelProvider
             // retard, stocks bas.
             ->databaseNotifications()
             // Le propriétaire passe d'ici à l'administration de sa société
-            // (voir SocietePanelProvider).
+            // (voir SocietePanelProvider), un compte d'un cabinet
+            // d'expertise comptable à l'espace de son cabinet (voir
+            // CabinetPanelProvider).
             ->userMenuItems([
                 MenuItem::make()
                     ->label('Administration de la société')
                     ->icon('heroicon-o-building-office-2')
                     ->url(fn (): string => TableauDeBord::getUrl(panel: 'societe', tenant: auth()->user()->societe))
                     ->visible(fn (): bool => auth()->user()?->peutAdministrer() ?? false),
+                MenuItem::make()
+                    ->label('Espace du cabinet')
+                    ->icon('heroicon-o-briefcase')
+                    ->url(fn (): string => TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: auth()->user()->societe))
+                    ->visible(fn (): bool => auth()->user()?->ouvreLEspaceDuCabinet() ?? false),
             ])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\\Filament\\App\\Pages')

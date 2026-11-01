@@ -29,6 +29,7 @@ enum ActionAuditee: string implements HasLabel
     case OrdreDemande = 'ordre_demande';
     case OrdreVerifie = 'ordre_verifie';
     case OrdreRefuse = 'ordre_refuse';
+    case OrdreRetire = 'ordre_retire';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
     case SiretChange = 'siret_change';
@@ -46,6 +47,20 @@ enum ActionAuditee: string implements HasLabel
     case RoleDeSocieteChange = 'role_de_societe_change';
     case ExpertComptableCree = 'expert_comptable_cree';
     case CollaborateurCree = 'collaborateur_cree';
+    case ClientsConfiesModifies = 'clients_confies_modifies';
+    case InvitationEnvoyee = 'invitation_envoyee';
+    case InvitationRetiree = 'invitation_retiree';
+    case InvitationAcceptee = 'invitation_acceptee';
+    case InvitationRefusee = 'invitation_refusee';
+    case InvitationCaduque = 'invitation_caduque';
+    case LienDemande = 'lien_demande';
+    case LienRefuse = 'lien_refuse';
+    case DemandeDeLienRetiree = 'demande_de_lien_retiree';
+    case DemandeDeLienExpiree = 'demande_de_lien_expiree';
+    case LienActive = 'lien_active';
+    case LienTermine = 'lien_termine';
+    case AutorisationsDuCabinetModifiees = 'autorisations_du_cabinet_modifiees';
+    case EspaceCabinetSuggere = 'espace_cabinet_suggere';
     case DroitsModifies = 'droits_modifies';
     case ResponsableNomme = 'responsable_nomme';
     case ResponsableRetire = 'responsable_retire';
@@ -93,6 +108,7 @@ enum ActionAuditee: string implements HasLabel
             self::OrdreDemande => 'Vérification de l\'inscription à l\'Ordre demandée',
             self::OrdreVerifie => 'Inscription à l\'Ordre vérifiée',
             self::OrdreRefuse => 'Inscription à l\'Ordre refusée',
+            self::OrdreRetire => 'Radiation de l\'Ordre constatée par l\'éditeur',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
             self::SiretChange => 'SIRET du magasin changé',
@@ -110,6 +126,20 @@ enum ActionAuditee: string implements HasLabel
             self::RoleDeSocieteChange => 'Rôle de société changé',
             self::ExpertComptableCree => 'Expert-comptable créé',
             self::CollaborateurCree => 'Collaborateur du cabinet créé',
+            self::ClientsConfiesModifies => 'Clients confiés à un collaborateur modifiés',
+            self::InvitationEnvoyee => 'Invitation d\'un client envoyée',
+            self::InvitationRetiree => 'Invitation d\'un client retirée',
+            self::InvitationAcceptee => 'Invitation du cabinet acceptée',
+            self::InvitationRefusee => 'Invitation du cabinet refusée',
+            self::InvitationCaduque => 'Invitation du cabinet devenue caduque',
+            self::LienDemande => 'Rattachement à un cabinet demandé',
+            self::LienRefuse => 'Rattachement à un cabinet refusé',
+            self::DemandeDeLienRetiree => 'Demande de rattachement retirée',
+            self::DemandeDeLienExpiree => 'Demande de rattachement expirée',
+            self::LienActive => 'Lien avec un cabinet actif',
+            self::LienTermine => 'Lien avec un cabinet terminé',
+            self::AutorisationsDuCabinetModifiees => 'Autorisations du cabinet modifiées',
+            self::EspaceCabinetSuggere => 'Expert-comptable invité à créer l\'espace de son cabinet',
             self::DroitsModifies => 'Droits modifiés',
             self::ResponsableNomme => 'Responsable nommé',
             self::ResponsableRetire => 'Responsable retiré',
@@ -138,12 +168,15 @@ enum ActionAuditee: string implements HasLabel
         return match ($this) {
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose,
-            self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse => CategorieAudit::Verification,
+            self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse, self::OrdreRetire => CategorieAudit::Verification,
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::CollaborateurCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
             self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee,
-            self::AdresseDeConnexionRetiree => CategorieAudit::Acces,
+            self::AdresseDeConnexionRetiree, self::ClientsConfiesModifies, self::InvitationEnvoyee, self::InvitationRetiree,
+            self::InvitationAcceptee, self::InvitationRefusee, self::InvitationCaduque, self::LienDemande, self::LienRefuse,
+            self::DemandeDeLienRetiree, self::DemandeDeLienExpiree, self::LienActive, self::LienTermine,
+            self::AutorisationsDuCabinetModifiees => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -175,9 +208,10 @@ enum ActionAuditee: string implements HasLabel
             self::CodeSaisi => ['motif', 'resultat', 'tentatives'],
             self::CodeAnnule => ['motif', 'raison'],
             // La preuve qui valide la société (voir PreuveDeValidation), le
-            // propriétaire qui l'a donnée et les SIRET de ses magasins mis
-            // en activité.
-            self::SocieteValidee => ['preuve', 'proprietaire', 'sirets'],
+            // propriétaire qui l'a donnée, les SIRET de ses magasins mis en
+            // activité et, pour une invitation acceptée, le cabinet qui l'a
+            // envoyée (son identifiant, son SIREN et sa dénomination).
+            self::SocieteValidee => ['preuve', 'proprietaire', 'sirets', 'cabinet'],
             self::InscriptionClose, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             // Le code d'activité d'un cabinet lu au répertoire Sirene, sa
             // nomenclature, et le résultat : « concluant » (69.20Z en NAF
@@ -190,7 +224,9 @@ enum ActionAuditee: string implements HasLabel
             // VoieDeVerificationOrdre), ou le motif d'un refus.
             self::OrdreDemande => ['numero_ordre', 'conseil_regional'],
             self::OrdreVerifie => ['voie', 'numero_ordre', 'conseil_regional'],
-            self::OrdreRefuse => ['motif'],
+            // Le motif d'un refus, ou de la radiation constatée par
+            // l'éditeur (voir RetirerLInscriptionALOrdreAction).
+            self::OrdreRefuse, self::OrdreRetire => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'territoire', 'etablissement_verifie'],
             self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'territoire', 'etablissement_verifie'],
             // Pour une cession, l'indication d'établissement principal
@@ -217,7 +253,30 @@ enum ActionAuditee: string implements HasLabel
             // de magasin (voir JournalDesDroits).
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::CollaborateurCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
-            self::CompteReintegre, self::ProprieteTransferee, self::ProprieteReprise => ['droits'],
+            self::CompteReintegre, self::ProprieteTransferee, self::ProprieteReprise, self::ClientsConfiesModifies => ['droits'],
+            // Le SIREN invité, jamais l'adresse à laquelle part le lien
+            // (« sans donnée personnelle inutile ») ; pour une invitation
+            // acceptée, la société créée ; pour une invitation devenue
+            // caduque, sa raison.
+            self::InvitationEnvoyee, self::InvitationRetiree, self::InvitationRefusee => ['siren'],
+            self::InvitationAcceptee => ['siren', 'client'],
+            self::InvitationCaduque => ['siren', 'raison'],
+            // Le cabinet et le client du lien (identifiant, SIREN et
+            // dénomination ; au journal d'un cabinet, pour une demande qui
+            // n'est pas devenue un lien actif, le SIREN seul du client, voir
+            // IdentiteDansLeJournal), son origine (voir OrigineDuLien), son
+            // motif de fin (voir MotifDeFinDuLien), les autorisations d'une
+            // demande acceptée sur la page de rattachement (« par_defaut »
+            // ou « ajustees ») et les droits des comptes du cabinet touchés
+            // dans les magasins réels du client (voir JournalDesDroits).
+            self::LienDemande => ['cabinet', 'client', 'origine'],
+            self::LienRefuse, self::DemandeDeLienRetiree, self::DemandeDeLienExpiree => ['cabinet', 'client'],
+            self::LienActive => ['cabinet', 'client', 'origine', 'autorisations', 'droits'],
+            self::LienTermine => ['cabinet', 'client', 'motif', 'droits'],
+            self::AutorisationsDuCabinetModifiees => ['cabinet', 'droits'],
+            // Si l'e-mail a pu partir ; l'adresse de l'expert-comptable
+            // invité ne s'écrit pas.
+            self::EspaceCabinetSuggere => ['envoye'],
             // Le compte (son identifiant technique et son nom au moment de
             // l'opération), jamais son identifiant de connexion, qui serait
             // son mot de passe tant qu'il ne l'a pas changé ; pour un accès

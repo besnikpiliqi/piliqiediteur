@@ -2,8 +2,21 @@
 
 namespace App\Domain\Authorization;
 
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\PosteReconnu;
@@ -31,6 +44,22 @@ use App\Models\User;
  * voirLesParametresFiscaux, l'identité et les réglages fiscaux de la
  * société, que SocietePolicy ne lui ouvre pas),
  * y compris une question future, un refus.
+ *
+ * Un compte d'un cabinet d'expertise comptable (son propriétaire ou un
+ * collaborateur) n'a d'autorisation de société que dans l'espace de son
+ * cabinet (les paramètres, son identité, pour son propriétaire) ; dans
+ * l'espace de son cabinet, les policies du panneau répondent, la lecture
+ * seule d'un cabinet suspendu, résilié ou révoqué ne lui laissant que les
+ * consultations et les gestes d'accès ; il ne fait jamais rien dans
+ * l'espace d'administration d'une autre société ; dans un magasin, il
+ * n'agit que dans celui d'un client lié qui lui est ouvert (voir
+ * User::peutOuvrir() : son cabinet vérifié et actif, le client confié),
+ * avec les règles de ce client (lecture seule, validation), les seules
+ * autorisations que le client accorde à son cabinet (refus net pour toute
+ * autre), et, pour une question de policy, seulement les gestes de
+ * GESTES_D_UN_CABINET : les consultations et les écritures des achats et
+ * du stock, jamais un geste sur l'équipe, le magasin ou la société, ni la
+ * vente, l'envoi, la clôture ou l'encaissement.
  *
  * Une autorisation de société (voir AutorisationsSociete) ne vaut que dans
  * la société du compte : celle du contexte, sinon la sienne. Le propriétaire
@@ -90,6 +119,40 @@ final class ControleDesDroits
     ];
 
     /**
+     * Les gestes d'une policy qu'un compte d'un cabinet d'expertise
+     * comptable peut demander dans un magasin d'un client, chacun sur son
+     * modèle : les consultations, et les écritures des achats et du stock,
+     * que la policy contrôle ensuite par l'autorisation que le client
+     * accorde au cabinet. Tout autre geste lui est refusé, quelle que soit
+     * la ligne en base, sur les comptes, les affectations, les postes
+     * reconnus, les magasins et la société, et tout geste de vente,
+     * d'envoi, de clôture ou d'encaissement.
+     *
+     * @var array<string, list<class-string>>
+     */
+    public const GESTES_D_UN_CABINET = [
+        'viewAny' => self::MODELES_CONSULTES_PAR_UN_CABINET,
+        'view' => self::MODELES_CONSULTES_PAR_UN_CABINET,
+        'create' => [FactureAchat::class, AvoirFournisseur::class, Fournisseur::class, InventaireOuverture::class, Produit::class],
+        'update' => [FactureAchat::class, Fournisseur::class, InventaireOuverture::class],
+        'valider' => [FactureAchat::class, InventaireOuverture::class],
+        'delete' => [FactureAchat::class, Fournisseur::class, InventaireOuverture::class],
+        'deleteAny' => [FactureAchat::class, Fournisseur::class, InventaireOuverture::class],
+        'restore' => [Fournisseur::class],
+    ];
+
+    /**
+     * Les modèles de document ou de fiche qu'un compte d'un cabinet consulte
+     * dans un magasin d'un client, selon les autorisations qu'il lui accorde.
+     *
+     * @var list<class-string>
+     */
+    private const MODELES_CONSULTES_PAR_UN_CABINET = [
+        Client::class, Fournisseur::class, Produit::class, Service::class, Devis::class, Facture::class, Paiement::class, Avoir::class,
+        ClotureCaisse::class, ClotureCaissePersonnelle::class, FactureAchat::class, AvoirFournisseur::class, InventaireOuverture::class, EnregistrementFiscal::class,
+    ];
+
+    /**
      * @param  array<int, mixed>  $arguments  le modèle (ou sa classe) sur lequel porte la question, s'il y en a un
      */
     public function __invoke(User $user, string $ability, array $arguments = []): ?bool
@@ -99,6 +162,11 @@ final class ControleDesDroits
         }
 
         $contexte = app(TenantContext::class);
+
+        if ($user->estDUnCabinet()) {
+            return $this->pourUnCompteDeCabinet($user, $ability, $arguments[0] ?? null, $contexte);
+        }
+
         $estDeSociete = in_array($ability, AutorisationsSociete::toutes(), true);
 
         if ($user->estExpertComptable() && ($estDeSociete || ! $this->estUneConsultationPermise($ability))) {
@@ -147,6 +215,63 @@ final class ControleDesDroits
         return in_array($ability, PermissionRegistry::consultations(), true) || in_array($ability, self::CONSULTATIONS, true);
     }
 
+    /**
+     * Un compte d'un cabinet d'expertise comptable : ses autorisations de
+     * société dans l'espace de son cabinet seulement ; dans l'espace de son
+     * cabinet, les policies du panneau, la lecture seule d'un cabinet
+     * suspendu, résilié ou révoqué ne lui laissant que les consultations et
+     * les gestes d'accès ; jamais rien dans l'espace d'une autre société ;
+     * dans un magasin, seulement celui d'un client qu'il ouvre (voir
+     * User::peutOuvrir()), avec les règles de ce client (lecture seule,
+     * validation) et les seules autorisations que le client accorde au
+     * cabinet, un refus net pour toute autre ; et, pour une question de
+     * policy, seulement un geste de GESTES_D_UN_CABINET.
+     */
+    private function pourUnCompteDeCabinet(User $user, string $ability, mixed $cible, TenantContext $contexte): ?bool
+    {
+        if (in_array($ability, AutorisationsSociete::toutes(), true)) {
+            return $contexte->aUneSociete() && ! $contexte->has() && (int) $contexte->societe()->getKey() === (int) $user->societe_id
+                ? $this->autorisationDeSociete($user, $ability, $contexte->societe())
+                : false;
+        }
+
+        if (! $contexte->has()) {
+            if (! $contexte->aUneSociete()) {
+                return null;
+            }
+
+            return (int) $contexte->societe()->getKey() === (int) $user->societe_id
+                ? $this->dansLEspaceDeLaSociete($user, $ability, $cible, $contexte->societe())
+                : false;
+        }
+
+        $magasin = $contexte->magasin();
+
+        if (! $user->peutOuvrir($magasin)) {
+            return false;
+        }
+
+        if ($magasin->estEnLectureSeule() && ! $this->estPermisEnLectureSeule($ability, $cible, $magasin->societe)) {
+            return false;
+        }
+
+        if (! $magasin->peutVendre() && in_array($ability, PermissionRegistry::reserveesAuxOperationsCommerciales(), true)) {
+            return false;
+        }
+
+        if (in_array($ability, PermissionRegistry::toutes(), true)) {
+            return in_array($ability, $user->autorisationsDans($magasin), true);
+        }
+
+        foreach (self::GESTES_D_UN_CABINET[$ability] ?? [] as $modele) {
+            if (self::porteSur($cible, $modele)) {
+                return null;
+            }
+        }
+
+        return false;
+    }
+
     private function autorisationDeSociete(User $user, string $ability, Societe $societe): ?bool
     {
         if ($societe->getKey() !== (int) $user->societe_id) {
@@ -170,7 +295,7 @@ final class ControleDesDroits
             return null;
         }
 
-        return self::porteSurLEquipe($cible) && $societe->statut !== StatutSociete::Revoquee ? null : false;
+        return (self::porteSurLEquipe($cible) || ($ability === 'gererSonCabinet' && self::porteSur($cible, Societe::class))) && $societe->statut !== StatutSociete::Revoquee ? null : false;
     }
 
     private function estPermisEnLectureSeule(string $ability, mixed $cible, Societe $societe): bool
@@ -183,13 +308,14 @@ final class ControleDesDroits
 
     /**
      * Un geste sur l'équipe : un compte (voir MembrePolicy), une
-     * affectation à un magasin (voir AffectationPolicy), ou un poste
-     * reconnu du magasin (voir PosteReconnuPolicy) : un accès se coupe
-     * toujours.
+     * affectation à un magasin (voir AffectationPolicy), un poste reconnu
+     * du magasin (voir PosteReconnuPolicy), ou le lien avec un cabinet
+     * d'expertise comptable (voir LienCabinetPolicy), des deux côtés du
+     * lien : un accès se coupe toujours.
      */
     private static function porteSurLEquipe(mixed $cible): bool
     {
-        return self::porteSur($cible, User::class) || self::porteSur($cible, Affectation::class) || self::porteSur($cible, PosteReconnu::class);
+        return self::porteSur($cible, User::class) || self::porteSur($cible, Affectation::class) || self::porteSur($cible, PosteReconnu::class) || self::porteSur($cible, LienCabinet::class);
     }
 
     /**

@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Cabinets\Models\Cabinet;
+use App\Domain\Cabinets\Models\InvitationCabinet;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
@@ -48,6 +50,8 @@ use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
 use App\Policies\InventaireOuverturePolicy;
+use App\Policies\InvitationCabinetPolicy;
+use App\Policies\LienCabinetPolicy;
 use App\Policies\MagasinDeLaSocietePolicy;
 use App\Policies\MembrePolicy;
 use App\Policies\PaiementPolicy;
@@ -152,6 +156,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Affectation::class, AffectationPolicy::class);
         Gate::policy(PosteReconnu::class, PosteReconnuPolicy::class);
         Gate::policy(Cabinet::class, CabinetPolicy::class);
+        Gate::policy(LienCabinet::class, LienCabinetPolicy::class);
+        Gate::policy(InvitationCabinet::class, InvitationCabinetPolicy::class);
 
         Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
 
@@ -205,7 +211,9 @@ class AppServiceProvider extends ServiceProvider
             'facture' => Facture::class,
             'facture_achat' => FactureAchat::class,
             'inventaire_ouverture' => InventaireOuverture::class,
+            'invitation_cabinet' => InvitationCabinet::class,
             'ligne_avoir' => LigneAvoir::class,
+            'lien_cabinet' => LienCabinet::class,
             'magasin' => Magasin::class,
             'paiement' => Paiement::class,
             'produit' => Produit::class,

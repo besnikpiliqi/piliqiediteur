@@ -3,6 +3,7 @@
 namespace Tests\Feature\Integrations;
 
 use App\Integrations\EnvoiRecommande\AdressePostale;
+use App\Integrations\Rne\IdentiteRne;
 use App\Integrations\Rne\InpiRne;
 use App\Integrations\Rne\RepresentantRne;
 use App\Integrations\Rne\RneIndisponibleException;
@@ -108,6 +109,61 @@ class InpiRneTest extends TestCase
         config(['services.rne.mot_de_passe' => null]);
         $this->assertThrows(fn () => (new InpiRne)->representants('000000059'), RneIndisponibleException::class);
         Http::assertNotSent(fn (Request $requete): bool => str_ends_with($requete->url(), '/companies/000000059'));
+    }
+
+    /**
+     * L'identité d'une société se lit dans sa formalité : sa dénomination,
+     * le code de sa catégorie juridique, son capital en euros et s'il est
+     * variable, son greffe d'immatriculation et son siège.
+     */
+    public function test_l_identite_d_une_societe_se_lit_dans_la_formalite(): void
+    {
+        $formalite = self::formaliteDeSociete();
+        $formalite['formality']['content']['personneMorale']['identite'] = [
+            'entreprise' => ['denomination' => 'SOCIETE FICTIVE', 'formeJuridique' => '5710', 'greffeImmatriculation' => 'Lyon'],
+            'description' => ['montantCapital' => 15000, 'deviseCapital' => 'EUR', 'capitalVariable' => false],
+        ];
+        Http::fake([
+            self::URL.'/sso/login' => Http::response(['token' => self::JETON]),
+            self::URL.'/companies/000000018' => Http::response($formalite),
+        ]);
+
+        $this->assertEquals(
+            new IdentiteRne('SOCIETE FICTIVE', '5710', '15000.00', 'EUR', false, 'RCS Lyon', new AdressePostale('SOCIETE FICTIVE', '12 RUE DES LILAS', 'BATIMENT B', '69003', 'LYON', AdressePostale::SOURCE_RNE)),
+            (new InpiRne)->identite('000000018'),
+        );
+    }
+
+    /**
+     * Un champ d'identité absent, ou d'un autre type, reste vide : la
+     * réponse ne devient pas illisible, contrairement aux dirigeants.
+     */
+    public function test_un_champ_d_identite_absent_reste_vide_sans_rendre_la_reponse_illisible(): void
+    {
+        $formalite = self::formaliteDeSociete();
+        $formalite['formality']['content']['personneMorale']['identite'] = [
+            'entreprise' => ['denomination' => 'SOCIETE FICTIVE', 'formeJuridique' => ['inattendu']],
+            'description' => ['montantCapital' => 'beaucoup'],
+        ];
+        Http::fake([
+            self::URL.'/sso/login' => Http::response(['token' => self::JETON]),
+            self::URL.'/companies/000000018' => Http::response($formalite),
+        ]);
+
+        $identite = (new InpiRne)->identite('000000018');
+
+        $this->assertSame(['SOCIETE FICTIVE', null, null, null, null, null], [$identite->denomination, $identite->categorieJuridique, $identite->capital, $identite->deviseCapital, $identite->capitalVariable, $identite->immatriculation]);
+        $this->assertNotNull($identite->adresseDuSiege);
+    }
+
+    public function test_un_siren_inconnu_du_registre_n_a_pas_d_identite(): void
+    {
+        Http::fake([
+            self::URL.'/sso/login' => Http::response(['token' => self::JETON]),
+            self::URL.'/companies/*' => Http::response(['message' => 'Not found'], 404),
+        ]);
+
+        $this->assertNull((new InpiRne)->identite('000000018'));
     }
 
     /**

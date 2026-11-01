@@ -4,10 +4,12 @@ use App\Console\Commands\CloreInscriptionsSansCode;
 use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\EffacerPiecesVerification;
 use App\Console\Commands\ExpirerDevis;
+use App\Console\Commands\ExpirerInvitationsDesCabinets;
 use App\Console\Commands\FermerDemonstrationsInactives;
 use App\Console\Commands\MarquerFacturesEnRetard;
 use App\Console\Commands\PurgerActionsTraitees;
 use App\Console\Commands\PurgerDemandesInscription;
+use App\Console\Commands\PurgerInvitationsDesCabinets;
 use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\RelancerFacturesImpayees;
@@ -117,6 +119,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // passage en retard des factures de leur veille (voir
         // RelancerFacturesImpayees).
         $schedule->command(RelancerFacturesImpayees::class)->hourly();
+        // Chaque heure : les invitations et les demandes de lien des
+        // cabinets d'expertise comptable restées 7 jours sans réponse
+        // expirent, et les invitations d'un SIREN désormais inscrit
+        // deviennent caduques (voir ExpirerInvitationsDesCabinets) ; les
+        // invitations closes s'effacent 48 heures après leur fin, une
+        // invitation refusée après 7 jours (voir PurgerInvitationsDesCabinets).
+        $schedule->command(ExpirerInvitationsDesCabinets::class)->hourlyAt(45);
+        $schedule->command(PurgerInvitationsDesCabinets::class)->hourlyAt(50);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -30,10 +30,13 @@ use Throwable;
  * - formality.content.personnePhysique.identite.entrepreneur.descriptionPersonne :
  *   l'entrepreneur individuel, seul dirigeant de son entreprise ;
  * - adresseEntreprise.adresse : l'adresse du siège (numVoie, typeVoie,
- *   voie, complementLocalisation, codePostal, commune).
+ *   voie, complementLocalisation, codePostal, commune) ;
+ * - personneMorale.identite : l'identité légale d'une société (voir
+ *   identite()), lue champ par champ : un champ absent est nul.
  * Seuls les rôles de ROLES_QUI_REPRESENTENT donnent le pouvoir de
- * représenter l'entreprise. Un champ absent ou d'un autre type n'est
- * jamais tenu pour une réponse : la réponse est alors illisible.
+ * représenter l'entreprise. Un champ des dirigeants absent ou d'un autre
+ * type n'est jamais tenu pour une réponse : la réponse est alors
+ * illisible.
  *
  * - 200 : la formalité ;
  * - 404 : le registre ne connaît pas ce SIREN ;
@@ -82,6 +85,56 @@ class InpiRne implements RegistreNationalDesEntreprises
     public function adresseDuSiege(string $siren): ?AdressePostale
     {
         $contenu = $this->formalite($siren);
+
+        return $contenu === null ? null : $this->siege($contenu);
+    }
+
+    /**
+     * L'identité d'une société (personneMorale.identite) : entreprise.denomination,
+     * entreprise.formeJuridique (le code à 4 chiffres de sa catégorie
+     * juridique), description.montantCapital, description.deviseCapital,
+     * description.capitalVariable, entreprise.greffeImmatriculation (la
+     * ville du greffe, « RCS {ville} ») ; d'un entrepreneur individuel
+     * (personnePhysique.identite.entreprise), sa seule forme juridique,
+     * sans capital. Chemins à confirmer dans le dictionnaire de données
+     * officiel du RNE avant la mise en production ; un champ absent ou
+     * d'un autre type est nul.
+     */
+    public function identite(string $siren): ?IdentiteRne
+    {
+        $contenu = $this->formalite($siren);
+
+        if ($contenu === null) {
+            return null;
+        }
+
+        $morale = is_array($contenu['personneMorale'] ?? null);
+        $identite = $morale ? ($contenu['personneMorale']['identite'] ?? null) : ($contenu['personnePhysique']['identite'] ?? null);
+        $entreprise = is_array($identite) && is_array($identite['entreprise'] ?? null) ? $identite['entreprise'] : [];
+        $description = $morale && is_array($identite) && is_array($identite['description'] ?? null) ? $identite['description'] : [];
+        $categorie = $this->texte($entreprise, 'formeJuridique');
+        $capital = $this->texte($description, 'montantCapital');
+        $greffe = $this->texte($entreprise, 'greffeImmatriculation');
+
+        return new IdentiteRne(
+            denomination: $morale ? $this->texte($entreprise, 'denomination') : null,
+            categorieJuridique: $categorie !== null && preg_match('/^\d{4}$/', $categorie) === 1 ? $categorie : null,
+            capital: $capital !== null && is_numeric($capital) ? number_format((float) $capital, 2, '.', '') : null,
+            deviseCapital: $this->texte($description, 'deviseCapital'),
+            capitalVariable: is_bool($description['capitalVariable'] ?? null) ? $description['capitalVariable'] : null,
+            immatriculation: $morale && $greffe !== null ? mb_substr("RCS {$greffe}", 0, 100) : null,
+            adresseDuSiege: $this->siege($contenu),
+        );
+    }
+
+    /**
+     * L'adresse du siège dans le contenu d'une formalité, null si le
+     * registre ne la donne pas.
+     *
+     * @param  array<mixed>  $contenu
+     */
+    private function siege(array $contenu): ?AdressePostale
+    {
         $personne = $contenu['personneMorale'] ?? $contenu['personnePhysique'] ?? null;
         $adresse = is_array($personne) ? ($personne['adresseEntreprise']['adresse'] ?? null) : null;
 

@@ -10,7 +10,9 @@ use RuntimeException;
 /**
  * Les gardes par lesquelles la base elle-même refuse une vente ou un
  * encaissement au nom du propriétaire de la société, qui ne vend jamais
- * (voir PermissionRegistry::duProprietaire()), même écrits par
+ * (voir PermissionRegistry::duProprietaire()), ou d'un compte d'un cabinet
+ * d'expertise comptable, qui n'a jamais d'autorisation de vente chez un
+ * client (voir PermissionRegistry::duCabinet()), même écrits par
  * DB::table(), une requête brute ou une action défectueuse ; elles
  * s'ajoutent aux droits, qui ne lui donnent aucune autorisation de vente,
  * comme les gardes des droits s'ajoutent aux lectures (voir
@@ -48,7 +50,7 @@ use RuntimeException;
  */
 final class GardesDeLaVente
 {
-    public const MESSAGE = 'Le propriétaire ne vend jamais : aucune vente ni aucun encaissement ne s\'inscrit à son nom.';
+    public const MESSAGE = 'Le propriétaire d\'une société et les comptes d\'un cabinet ne vendent jamais : aucune vente ni aucun encaissement ne s\'inscrit à leur nom.';
 
     /**
      * Pour chaque table gardée : la colonne de son auteur, la condition
@@ -136,11 +138,15 @@ final class GardesDeLaVente
     }
 
     /**
-     * L'auteur de la ligne écrite est, à cet instant, le propriétaire.
+     * L'auteur de la ligne écrite est, à cet instant, un compte qui ne vend
+     * jamais : le propriétaire d'une société (celui d'un cabinet
+     * d'expertise comptable compris), ou un collaborateur d'un cabinet. Le
+     * rôle suffit : un compte d'un cabinet a toujours l'un de ces deux
+     * rôles, la garde des rôles l'impose (voir GardesDesDroits).
      */
-    private static function auteurProprietaire(string $auteur): string
+    private static function auteurQuiNeVendJamais(string $auteur): string
     {
-        return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND role_societe = '".RoleSociete::Proprietaire->value."')";
+        return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND role_societe IN ('".RoleSociete::Proprietaire->value."', '".RoleSociete::Collaborateur->value."'))";
     }
 
     /**
@@ -167,7 +173,7 @@ final class GardesDeLaVente
                 ."IF NEW.{$auteur} IS NULL THEN RETURN NEW; END IF; "
                 .$estUneVente
                 ."PERFORM 1 FROM users WHERE id = NEW.{$auteur} FOR SHARE; "
-                .'IF '.self::auteurProprietaire($auteur)." THEN RAISE EXCEPTION '%', ".self::message().'; END IF; '
+                .'IF '.self::auteurQuiNeVendJamais($auteur)." THEN RAISE EXCEPTION '%', ".self::message().'; END IF; '
                 .'RETURN NEW; END $$',
             "CREATE TRIGGER {$nom} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION {$nom}()",
         ];
@@ -180,7 +186,7 @@ final class GardesDeLaVente
     private static function instructionsSqlite(string $table, array $garde): array
     {
         $nom = self::nom($table);
-        $refus = fn (string $condition): string => 'SELECT RAISE(ABORT, '.self::message().") WHERE NEW.{$garde['auteur']} IS NOT NULL AND {$condition} AND ".self::auteurProprietaire($garde['auteur']).';';
+        $refus = fn (string $condition): string => 'SELECT RAISE(ABORT, '.self::message().") WHERE NEW.{$garde['auteur']} IS NOT NULL AND {$condition} AND ".self::auteurQuiNeVendJamais($garde['auteur']).';';
         $instructions = ["CREATE TRIGGER {$nom}_insert BEFORE INSERT ON {$table} BEGIN {$refus($garde['vente'])} END"];
 
         if ($garde['modification'] !== null) {

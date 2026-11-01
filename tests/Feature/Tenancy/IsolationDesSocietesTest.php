@@ -4,6 +4,9 @@ namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\Cabinet;
+use App\Domain\Cabinets\Models\ClientConfie;
+use App\Domain\Cabinets\Models\InvitationCabinet;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -86,9 +89,12 @@ class IsolationDesSocietesTest extends TestCase
      */
     private const MODELES_DE_SOCIETE = [
         Cabinet::class,
+        ClientConfie::class,
         CodeConfirmation::class,
         EntreeAudit::class,
         Identifiant::class,
+        InvitationCabinet::class,
+        LienCabinet::class,
         PieceVerification::class,
         TraceAudit::class,
         TransmissionPropriete::class,

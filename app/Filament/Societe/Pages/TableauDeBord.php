@@ -3,6 +3,8 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
@@ -35,7 +37,9 @@ use Illuminate\Database\Eloquent\Collection;
  * restant dû et le retard de ses factures à encaisser (voir
  * facturesAEncaisser()), qui mènent à leur liste dans le magasin ; pour un
  * administrateur autorisé à nommer les responsables, où le faire (voir
- * peutNommerUnResponsable()) ; et son magasin de démonstration, ouvert ici
+ * peutNommerUnResponsable()) ; pour le propriétaire, son cabinet
+ * comptable et les demandes de rattachement en cours (voir
+ * cabinetComptable()) ; et son magasin de démonstration, ouvert ici
  * tant que la société est en cours de vérification (voir
  * OuvrirLaDemonstrationAction). Les magasins et les comptes se lisent dans
  * la société affichée : ceux d'aucune autre société.
@@ -159,6 +163,29 @@ class TableauDeBord extends Dashboard
                 },
                 'url' => $demonstration?->statut === StatutMagasin::Actif && $compte->peutOuvrir($demonstration) ? Dashboard::getUrl(panel: 'app', tenant: $demonstration) : null,
             ],
+        ];
+    }
+
+    /**
+     * Pour le propriétaire qui gère son cabinet comptable (voir
+     * CabinetComptable) : la dénomination du cabinet lié, ou null, et
+     * chaque demande de rattachement en cours d'un cabinet, avec le lien de
+     * sa page de rattachement. Ce n'est pas une étape de la liste.
+     *
+     * @return array{lie: string|null, demandes: list<array{cabinet: string, url: string}>}
+     */
+    public function cabinetComptable(): array
+    {
+        $lie = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->first(['id', 'cabinet_id']);
+        $demandes = LienCabinet::query()->where('etat', EtatDuLien::DemandeParLeCabinet->value)->where('expire_le', '>', now())->orderBy('demande_le')->get(['id', 'uuid', 'cabinet_id']);
+        $denomination = fn (int $cabinet): string => Societe::query()->whereKey($cabinet)->value('raison_sociale') ?? 'Un cabinet';
+
+        return [
+            'lie' => $lie === null ? null : $denomination((int) $lie->cabinet_id),
+            'demandes' => $demandes->map(fn (LienCabinet $demande): array => [
+                'cabinet' => $denomination((int) $demande->cabinet_id),
+                'url' => RattachementDUnCabinet::getUrl(['lien' => $demande->uuid]),
+            ])->values()->all(),
         ];
     }
 

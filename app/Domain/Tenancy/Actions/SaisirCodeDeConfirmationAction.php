@@ -2,6 +2,8 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCode;
@@ -136,6 +138,7 @@ class SaisirCodeDeConfirmationAction
         private readonly ValiderLaSocieteAction $validerLaSociete,
         private readonly AlerteEditeur $alerteEditeur,
         private readonly DemanderUneNouvelleAdresseAction $adresseEnAttente,
+        private readonly MettreFinAuLienAction $finDesLiens,
     ) {}
 
     /**
@@ -392,14 +395,17 @@ class SaisirCodeDeConfirmationAction
      * magasin et au journal d'audit). Dans cet ordre, à cause de l'index
      * d'un seul propriétaire par société : la personne inscrite devient
      * administrateur (collaborateur dans un cabinet d'expertise comptable,
-     * qui n'a pas d'administrateur), sans portée ni autorisation, et sa date de
-     * confirmation d'adresse s'efface (son adresse n'est plus qu'un
+     * qui n'a pas d'administrateur), sans portée ni autorisation, et sa date
+     * de confirmation d'adresse s'efface (son adresse n'est plus qu'un
      * contact) ; le nouveau propriétaire est créé, avec son identifiant,
      * sans adresse de connexion : celle qu'il a choisie attend la
      * confirmation de son lien ; chaque compte d'avant est retiré par lui,
      * ses droits supprimés, ses notifications effacées, ses sessions
      * fermées, et le lien « Mot de passe oublié » de l'ancienne adresse de
-     * connexion s'efface.
+     * connexion s'efface. Le lien avec un cabinet d'expertise comptable et
+     * les demandes de lien en cours prennent fin, cabinet prévenu : le
+     * nouveau propriétaire choisit lui-même son cabinet (voir
+     * MettreFinAuLienAction::pourUneSocieteQuiChangeDeMains()).
      *
      * @param  array{email: string, password: string, nom: string}  $nouveauCompte
      * @return array{0: User, 1: string} le nouveau propriétaire, et le jeton du lien de son adresse en attente
@@ -444,6 +450,8 @@ class SaisirCodeDeConfirmationAction
 
             return ['compte' => $nouveau, 'jeton' => $jeton];
         });
+
+        $this->finDesLiens->pourUneSocieteQuiChangeDeMains($verrouillee, MotifDeFinDuLien::ProprietaireRemplace);
 
         return [$resultat['compte'], $resultat['jeton']];
     }

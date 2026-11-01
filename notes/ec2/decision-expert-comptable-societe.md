@@ -23,6 +23,13 @@ Cette décision prime sur `CLAUDE.md`, sur `serie8/decision-espace-cabinets.md` 
 
 Garder le message actuel (« Ce SIREN ne peut pas être invité par votre cabinet. ») quand un cabinet invite le SIREN d'une société inscrite comme cabinet, et écrire cette exception dans `CLAUDE.md` (protocole de rigueur, point 2, et section « Produit ») : le cabinet qui invite apprend que ce SIREN est celui d'un cabinet inscrit, et rien d'autre (le code d'activité 69.20Z de toute entreprise est public au répertoire Sirene).
 
-## 5. Ce qui reste à trancher
+## 5. Corrections d'écran jointes à ce lot (décision de l'éditeur du 01/11/2026, messages 323 et 325)
+
+Hors du sujet de l'expert-comptable, mais tranchées par l'éditeur le même jour et confiées à ce lot, avec un test chacune :
+
+1. **Phrase des activités exonérées, sous le menu du type d'activité de l'inscription** (`TypeDActivite::rappelDuChoixDefinitif()`, et toute autre page qui l'affiche). L'éditeur a cru, en la lisant, qu'un micro-entrepreneur en franchise de TVA n'était pas pris en charge (message 323) ; il approuve la réécriture proposée (message 325 : « a) d'accord pour cette phrase, et le refus reste »). La dernière phrase devient, avec le nom de l'application lu dans la configuration comme aujourd'hui : « Les micro-entrepreneurs en franchise de TVA (art. 293 B du CGI) sont pris en charge. En revanche, {application} ne permet pas de facturer une activité exonérée de TVA par la loi (soins médicaux, enseignement, assurance, location de logements…). » Le refus des activités exonérées par les art. 261 à 261 E du CGI reste (décision de la série 8, point 11, et complément 10) ; les avertissements du code d'activité (divisions 64 à 66 et 85 à 88, 68.20A) gardent leur sens, et la phrase de `CLAUDE.md` (« activité exonérée de TVA que PILIQI ne facture pas ») ne change pas.
+2. **Astérisque du mot de passe de l'inscription.** Sur la page d'inscription, « Votre mot de passe » est obligatoire (règle `required` de `RegleDuMotDePasse::regles()`) mais n'affiche pas l'astérisque rouge des champs obligatoires, contrairement à « Confirmer le mot de passe » (`InscriptionSociete::getPasswordFormComponent()`, sans `->required()`). Le champ le montre désormais ; vérifier les autres formulaires où un mot de passe choisi est obligatoire (page du lien, profil, transmission de la propriété) et y appliquer la même règle.
+
+## 6. Ce qui reste à trancher
 
 Le cahier des charges (`ec2/cahier-des-charges.md`) liste chaque point que ces choix ne règlent pas ; ceux qui touchent une règle métier sont soumis à l'éditeur avant le lot, les autres sont des choix de Claude listés dans le cahier, que l'éditeur peut contester.

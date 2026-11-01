@@ -35,7 +35,8 @@ use ZipArchive;
  * - la version du module fiscal ;
  * - le fuseau de l'application, UTC (voir Calendrier::exigerUnFuseauUtc()) ;
  * - sous PostgreSQL, le fuseau par défaut de la base, que les migrations
- *   fixent à UTC (voir FuseauParDefautDeLaBase).
+ *   fixent à UTC ; en échec, sa cause et la commande qui la corrige (voir
+ *   FuseauParDefautDeLaBase).
  */
 #[Signature('caisse:diagnostiquer')]
 #[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base')]

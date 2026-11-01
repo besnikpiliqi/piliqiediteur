@@ -11,11 +11,14 @@ use Illuminate\Support\Facades\DB;
  * lisent les horodatages en UTC, comme l'application, sans qu'aucune
  * commande manuelle ne soit à retenir au déploiement. Le rôle qui lance
  * les migrations doit être propriétaire de la base : sinon la migration
- * échoue en disant quoi faire (voir FuseauParDefautDeLaBase). Sous
- * SQLite, rien à fixer.
+ * échoue en disant quoi faire, sauf si la base est déjà à UTC (voir
+ * FuseauParDefautDeLaBase). Sous SQLite, rien à fixer.
  *
  * Le réglage appartient à la base, pas au schéma : migrate:fresh, qui
  * supprime les tables, le laisse en place, et le rejouer ne change rien.
+ * Une sauvegarde logique restaurée sans --create le perd, et cette
+ * migration, déjà inscrite, ne passe plus : caisse:diagnostiquer le
+ * signale et donne la commande qui le rétablit.
  */
 return new class extends Migration
 {

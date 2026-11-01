@@ -15,7 +15,13 @@ namespace App\Domain\CaisseSecurisee\Support;
  *
  * Sous Windows, PHP ne trouve pas le fichier openssl.cnf tant que la
  * variable d'environnement OPENSSL_CONF ne le désigne pas, et OpenSSL ne
- * génère alors aucune clé : detail() y ajoute la marche à suivre.
+ * génère alors aucune clé : detail() y ajoute la marche à suivre. setx
+ * règle une variable d'utilisateur, que seuls voient les programmes lancés
+ * ensuite (un terminal, un éditeur de code ou un XAMPP Control Panel déjà
+ * ouverts gardent l'ancien environnement) ; un Apache installé comme
+ * service Windows, sous le compte Système local, ne la voit jamais, et ne
+ * voit une variable du système (setx /M) qu'après un redémarrage de
+ * Windows.
  */
 final class ErreursOpenSsl
 {
@@ -25,7 +31,9 @@ final class ErreursOpenSsl
      */
     public const MARCHE_A_SUIVRE_SOUS_WINDOWS = 'Sous Windows, PHP ne trouve pas le fichier openssl.cnf tant que la variable d\'environnement OPENSSL_CONF ne le désigne pas : '
         .'réglez-la sur le fichier openssl.cnf de PHP (par exemple, dans une invite de commandes : setx OPENSSL_CONF "C:\\xampp\\php\\extras\\ssl\\openssl.cnf"), '
-        .'ouvrez un nouveau terminal, redémarrez Apache s\'il sert l\'application, puis relancez php artisan caisse:diagnostiquer.';
+        .'puis fermez et rouvrez le terminal, l\'éditeur de code qui l\'ouvre et le XAMPP Control Panel, qui ne voient la variable qu\'à leur lancement, et redémarrez Apache s\'il sert l\'application. '
+        .'Si Apache tourne comme service Windows, réglez-la pour tout le système (setx /M OPENSSL_CONF "C:\\xampp\\php\\extras\\ssl\\openssl.cnf", dans une invite de commandes lancée en administrateur), puis redémarrez Windows : un service du compte Système local, comme celui qu\'installe XAMPP, ne voit ni une variable d\'utilisateur ni une variable du système réglée après le démarrage. '
+        .'Relancez ensuite php artisan caisse:diagnostiquer.';
 
     /**
      * Vide la file des erreurs d'OpenSSL, juste avant une opération.

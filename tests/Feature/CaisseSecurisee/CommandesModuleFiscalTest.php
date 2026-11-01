@@ -166,9 +166,11 @@ class CommandesModuleFiscalTest extends TestCase
     /**
      * Sous PostgreSQL, le fuseau par défaut de la base (celui que reçoit
      * toute session avant que l'application ne fixe le sien) doit être
-     * l'UTC : une session ouverte avec le fuseau de Paris pour fuseau de
-     * départ, comme après ALTER DATABASE, fait échouer le diagnostic, alors
-     * que SHOW TIMEZONE y rend l'UTC que l'application vient de fixer.
+     * l'UTC : une session dont les options de connexion donnent le fuseau
+     * de Paris pour fuseau de départ fait échouer le diagnostic, qui en
+     * nomme la cause, alors que SHOW TIMEZONE y rend l'UTC que
+     * l'application vient de fixer. Chaque cause et sa commande se
+     * vérifient dans FuseauParDefautDeLaBaseTest.
      */
     public function test_diagnostiquer_echoue_quand_le_fuseau_par_defaut_de_la_base_n_est_pas_utc(): void
     {
@@ -183,7 +185,7 @@ class CommandesModuleFiscalTest extends TestCase
         try {
             $this->assertSame('UTC', DB::selectOne('show timezone')->TimeZone);
             $this->artisan('caisse:diagnostiquer')
-                ->expectsOutputToContain('Le fuseau par défaut de la base est « '.Calendrier::deParis()->fuseau().' »')
+                ->expectsOutputToContain('est « '.Calendrier::deParis()->fuseau().' », et non UTC : les options de la connexion le fixent')
                 ->expectsOutputToContain('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.')
                 ->assertFailed();
         } finally {

@@ -18,6 +18,10 @@ Contexte : l'erreur 419 des fenêtres de recherche de clients et de produits (co
 2. Portée : chaque action de chaque écran (bouton, lien, fenêtre, formulaire), pour chaque rôle qui la voit, avec un test en navigateur qui vérifie qu'elle se termine comme prévu ; un balayage qui ouvre chaque page et chaque action de chaque panneau pour chaque rôle et échoue à la moindre erreur ; chaque lot suivant ajoute les tests en navigateur de ce qu'il touche, et ses relecteurs cliquent aussi dans un vrai navigateur.
 3. Ordre : d'abord la correction de l'erreur 419 (lot SL, juste après A7b), puis ce lot des tests en navigateur (NAV), puis ML, EC2, S9-L, S9-A, 21.
 
-## 4. Réponses de l'éditeur
+## 4. Réponses de l'éditeur (01/11/2026, vers 23 h 10)
 
-(en attente)
+« 1a 2 oui 3 oui »
+
+- Outil : Pest 4 et son module browser (pestphp/pest, pestphp/pest-plugin-laravel, pestphp/pest-plugin-browser, en développement seulement) et le paquet npm playwright (développement et tests seulement, jamais livré). Les tests PHPUnit existants restent tels quels (Pest exécute aussi les classes PHPUnit). Texte de `CLAUDE.md` approuvé, puce « Outillage » : « aucun outil Node (Vite, Tailwind) tant qu'aucun thème d'écran personnalisé n'existe » devient « aucun outil Node (Vite, Tailwind) tant qu'aucun thème d'écran personnalisé n'existe, sauf Playwright, qui ne sert qu'aux tests en navigateur » ; et la phrase « la CI passe la suite complète sur les deux » vaut aussi pour les tests en navigateur.
+- Portée : chaque action de chaque écran, pour chaque rôle qui la voit, a un test en navigateur qui clique et vérifie qu'elle se termine comme prévu ; un balayage ouvre chaque page et chaque action de chaque panneau pour chaque rôle et échoue à la moindre erreur (JavaScript, console, requête en échec, 419 ou 404 de Livewire) ; chaque lot suivant ajoute les tests en navigateur de ce qu'il crée ou change ; ses relecteurs rejouent aussi ces actions dans un vrai navigateur.
+- Ordre : SL (correction de l'erreur 419) juste après A7b, puis NAV-1 à NAV-5 (`navigateur/plan-nav.md`), puis ML, EC2, S9-L, S9-A, 21.

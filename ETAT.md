@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 22:47 UTC par pilotage-sync.sh : « Directive : tests en navigateur de toutes les actions (questions à l'éditeur) ».
+Mis à jour le 01/11/2026 à 22:55 UTC par pilotage-sync.sh : « Lots SL et NAV-1 à NAV-5 (tests en navigateur) insérés après A7b ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

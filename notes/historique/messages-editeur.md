@@ -130,3 +130,7 @@ il faut faire tous les testes en navigateur et pas que le code car tu vois dans 
 
 je parle de tous les actions qui se font sur navigateurs, à chaque clique il y a un comportement donc qqch qui doit se finir comme prevu
 
+## 24. 2026-11-01 22:52 UTC
+
+« 1a 2 oui 3 oui »
+

@@ -1,60 +1,55 @@
 # Vérification de la fiche de reprise
 
-Date : 01/11/2026, 08 h 59 UTC selon l'horloge du conteneur (voir 2.6). Lot : EC (étape `EC:fiche` de la course `wf_d67322b9-242`).
+Date : 01/11/2026, 11 h 21 UTC (`date -u` du conteneur ; les courses GitHub 194 et 195 de `5745e7a` sont créées à 11 h 20 UTC, une minute après le commit de 11 h 19 : horloges d'accord cette fois). Lot : L1 (étape `L1:fiche` de la course `wf_d6032f41-e79`).
 
-Vérifié contre : `git -C /home/user/piliqiediteur log` et `origin/claude/saas-invoice-editor-architecture-q6eizh`, en lecture seule (tête poussée `01fe217`, aucun commit local non poussé, arbre propre, branche de travail extraite) ; la boucle du § 5 (EC : 4 commits « (lot EC k/4) » et « Relecture du lot EC » sur `origin` ; L1, A7, S9-L, S9-A, 21 : aucun) ; le `journal.jsonl` de la course (`EC:implementation` → `976e827..93ea590` ; relectures relancées : 7 et 8 défauts ; `EC:correction` → `01fe217` ; `EC:poussee` → `pousse: true` ; `EC:fiche` commencée) ; `notes/reprises/args-course-wf_d67322b9-242.json` (`ouverts` = EC, L1, A7, S9-L, S9-A, 21) ; la liste `LOTS` de `serie8-lots.js` (identique à `notes/serie8-lots.js` ; ordre … TA, EC, L1, A7, S9-L, S9-A, 21, conforme au § 6), `LOTS_SENSIBLES = ['A7', '21']`, `effortDuLot`, `COMMITS_DU_LOT` ; les sauvegardes `serie8-lots.avant-*.js` citées (présentes) ; `<scratchpad>/../relectures-coupees/EC-0707/` (présent) ; la CI GitHub (courses 190 et 191 de `9ce20c3` : succès ; 192, push, et 193, PR, de `01fe217` : en cours).
+Vérifié contre : `git -C /home/user/piliqiediteur log` et `origin/claude/saas-invoice-editor-architecture-q6eizh`, en lecture seule (tête poussée `5745e7a`, égale à `HEAD`, arbre propre, branche de travail extraite) ; la boucle du § 5 (L1 : `8b15aec` « (lot L1) » et `5745e7a` « Relecture du lot L1 … » sur `origin` ; A7, EC2, S9-L, S9-A, 21 : aucun) ; le `journal.jsonl` de la course (`L1:correction` → `5745e7a`, 7 constats traités, aucun écarté ; `L1:poussee` → `pousse: true`, `01fe217..5745e7a` ; `L1:fiche` commencée) ; `notes/reprises/args-course-wf_d6032f41-e79.json` (`ouverts` = L1, A7, EC2, S9-L, S9-A, 21, `reprise` de L1 avec `8b15aec` et 7 défauts) ; `notes/reprises/L1-defauts-des-relectures.json` (présent) ; la liste `LOTS` de `serie8-lots.js` (identique à `notes/serie8-lots.js` ; ordre … TA, EC, L1, A7, EC2, S9-L, S9-A, 21), `LOTS_SENSIBLES = ['A7', '21']` ; `serie8-lots.avant-EC2.js` (présent) ; `git show 8b15aec -- CLAUDE.md` (phrase de l'étape 15 écrite) ; `notes/historique/messages-editeur.md` de la branche de reprise (jusqu'au message 325) ; la CI GitHub (courses 194, push, et 195, PR, de `5745e7a` : en cours).
 
 ## 1. Corrigé dans README.md
 
-1. Titre de l'encadré : « TA corrigé et poussé, chaîne relancée sur EC » → « TA et EC corrigés et poussés, L1 suit ».
-2. Encadré, 2e puce : « CI de `9ce20c3` en cours à 02 h 46 UTC » → « CI de `9ce20c3` verte (courses GitHub 190, push, et 191, PR) ».
-3. Encadré : nouvelle puce « EC est fini » (relectures 7 + 8 constats, correction `01fe217`, constat 10 écarté et laissé à l'éditeur, poussée `9ce20c3..01fe217`, course à `EC:fiche`, puis `EC:notes` et `L1:implementation`, CI de `01fe217` en cours, `ouverts` commence par L1).
-4. § 5, « Lots restants » : la boucle ne liste plus EC (`for l in L1 A7 S9-L S9-A 21`).
-5. § 6, « Fait » : CI de `9ce20c3` verte ; EC ajouté (4 commits, correction `01fe217`, poussée par `wf_d67322b9-242`, premier lot sans grille faketime et avec `effortDuLot`).
-6. § 6, « Reste dans la chaîne » : paragraphe d'état réécrit (tête `01fe217`, course `wf_d67322b9-242` à `EC:fiche`, puis `EC:notes` et `L1:implementation`, effort Extra, sans grille) ; EC retiré de la liste, renumérotée de 1 (L1) à 5 (21).
+1. Titre de l'encadré : « TA et EC corrigés et poussés, L1 suit » → « TA, EC et L1 corrigés et poussés, A7 suit ».
+2. Encadré : nouvelle puce « L1 est fini » (coupure de `wf_d67322b9-242` à 10 h 52, reprise par `wf_d6032f41-e79` à `L1:correction`, commit `5745e7a`, poussée `01fe217..5745e7a` vers 11 h 20 UTC, CI 194/195 en cours, puis `L1:notes` et `A7:implementation` ; `ouverts` commence par A7 ; premier hash d'une reprise de A7 : `5745e7a`).
+3. § 5, « Lots restants » : la boucle était `for l in L1 A7 S9-L S9-A 21` ; elle oubliait EC2, qui est dans `LOTS` entre A7 et S9-L. Devenue `for l in A7 EC2 S9-L S9-A 21`.
+4. § 6, « Fait » : L1 ajouté (`8b15aec`, correction `5745e7a`, poussés par `wf_d6032f41-e79`, phrase de l'étape 15 écrite dans `CLAUDE.md`, CI en cours).
+5. § 6, « Reste dans la chaîne » : paragraphe d'état réécrit (tête `5745e7a`, course à `L1:fiche`, puis `L1:notes` et `A7:implementation`) ; L1 retiré de la liste, renumérotée de 1 (A7) à 5 (21).
+6. § 6, S9-A : la réponse du msg 322 est « 1a 2a 3a 4a » (le 1 étant le constat 10 d'EC), pas « 2a 3a 4a ».
+7. § 8, « Série 9 » : « Q-AF10, Q-AF12 et Q-AF13 à reposer avant S9-A » était faux (tranchées par le msg 322) ; corrigé.
+8. § 8, « Production » : ajouté que le fuseau et la phrase de `CLAUDE.md` sont faits par L1.
 
 ## 2. Faux, ambigu ou manquant, non corrigé (propositions ; la session décide)
 
-### 2.1 § 7 : priorité de `decision-espace-cabinets.md` devenue caduque en partie
+### 2.1 CI de `5745e7a` non conclue
 
-« `serie8/decision-espace-cabinets.md` (19/10) sur tout ce que `CLAUDE.md` et les plans disent des experts-comptables, que `CLAUDE.md` décrit encore jusqu'au lot EC » : EC a réécrit `CLAUDE.md` (commit `93ea590`, 43 lignes changées dans `CLAUDE.md`). Vérifié par `git show 01fe217:CLAUDE.md` : il ne parle plus d'expert-comptable de la société, mais de cabinets d'expertise comptable (21 occurrences de « cabinet »). Attention : une session ou un agent qui a chargé `CLAUDE.md` avant la poussée d'EC (c'était le cas du contexte de cette relecture) en garde l'ancienne version ; la relire depuis le dépôt. Texte proposé pour le § 7 :
+Courses 194 et 195 « in_progress » à 11 h 21 UTC. Remplacer « CI de `5745e7a` en cours à 11 h 21 UTC » par « CI de `5745e7a` verte (courses GitHub 194, push, et 195, PR) » dans l'encadré et au § 6 quand elles finissent, et le noter dans `etat-chaines.md`.
 
-> - `serie8/decision-espace-cabinets.md` (19/10) sur ce que les plans plus anciens disent des experts-comptables ; le lot EC (`93ea590`) l'a reporté dans `CLAUDE.md`, qui fait foi désormais pour ce sujet, sauf la section 3.5.14 de `avenant-cabinets.md`, reprise par A7.
+### 2.2 Messages 323 à 325 de l'éditeur et nouvelles décisions, absents de la fiche
 
-La même mise à jour vaut pour la ligne « Chaîne TVA », point 2 du § 6 (« retirer « experts-comptables » de la règle des droits de son `REGLES` ») : toujours juste, rien à changer.
+- Msg 323 (11 h 04) : question sur l'avertissement « ne permet pas de facturer une activité exonérée de TVA » (micro-entreprises en franchise). Une réponse de la session est attendue ; si elle conduit à changer le texte de l'avertissement du type d'activité, c'est un lot ou un ajout de cahier des charges.
+- Msg 324 (11 h 14) et 325 (11 h 20) : TVA sur la marge (case sur le produit, mention sur le PDF et la facture électronique) et réponses « a) d'accord pour cette phrase, et le refus reste », « 1 : b », « 2 : a ». Fichiers créés à 11 h 21 : `tva/decision-tva-sur-marge.md` (déjà dans `pilotage-fichiers.txt`) et la nouvelle version de `ec2/decision-expert-comptable-societe.md` (copie d'avant : `decision-expert-comptable-societe.avant-msg325.md`).
+- Proposition : au § 7, ajouter à la liste des priorités « `tva/decision-tva-sur-marge.md` (01/11) sur l'étape 14 de `CLAUDE.md` et sur le plan TVA pour le régime de la marge » et « `ec2/decision-expert-comptable-societe.md` (01/11) sur `CLAUDE.md` et `serie8/decision-espace-cabinets.md` pour le compte d'expert-comptable de la société, jusqu'au lot EC2 » ; au tableau, lignes « Expert-comptable de la société (EC2) : `ec2/decision-expert-comptable-societe.md`, `ec2/cahier-des-charges.md` » et ajouter `tva/decision-tva-sur-marge.md` à « Moteur de TVA » ; au § 8, une puce « EC2 » et une puce « TVA sur la marge » ; au § 6, « Ensuite », point 2 de la chaîne TVA, ajouter « TVA sur la marge (`tva/decision-tva-sur-marge.md`) ».
+- Le § 8 « Cabinets » et le § 7 disent encore que `CLAUDE.md` fait foi pour les experts-comptables depuis EC ; la décision du 01/11 (msg 321) rétablit un compte d'expert-comptable de la société, contraire à la phrase actuelle de `CLAUDE.md` (« une société n'a jamais de compte d'expert-comptable »). Proposition pour le § 7, après la puce `decision-espace-cabinets.md` : « sauf le compte d'expert-comptable de la société, rétabli par `ec2/decision-expert-comptable-societe.md` (01/11), qui prime sur `CLAUDE.md` jusqu'au lot EC2 ».
 
-### 2.2 Compte rendu d'EC à l'éditeur (§ 5, « Suivi »)
+### 2.3 Cahier des charges d'EC2 encore « BROUILLON »
 
-- EC change des migrations (`create_societes_table`, `create_users_table`, `create_identifiants_table`, `create_affectations_table`, `create_autorisations_societe_table`, et cinq nouvelles tables `cabinets`, `invitations_cabinet`, `liens_cabinet`, `autorisations_cabinet`, `clients_confies`) : rappeler pour son PC `git pull`, `php artisan migrate:fresh`, `php artisan optimize:clear` et une nouvelle inscription.
-- Lui soumettre le constat 10, écarté par la correction (« le refus neutre d'un SIREN tenu par un cabinet suit le cahier des charges … Question laissée à l'éditeur ») : à ajouter aux « Questions encore ouvertes » du § 6. Texte proposé :
+`ec2/cahier-des-charges.md` (159 octets) ne contient que la mention « BROUILLON … ». La fiche dit que la session l'écrit pendant A7 et que la chaîne s'arrête sinon : c'est juste, mais aucune ligne ne dit à une nouvelle session reprenant après une passation quoi faire si le brouillon n'est pas fini. Texte proposé au § 6, point 2 (EC2) : « Si la chaîne s'est arrêtée sur EC2 faute de cahier des charges, l'écrire depuis la décision et `ec2/code-01fe217/` (copie figée du code, conteneur d'origine seulement ; sur un conteneur neuf, `git archive 01fe217`), le faire relire à froid par des agents neufs, retirer la mention, puis relancer avec `ouverts` commençant par EC2. »
 
-> - Constat 10 du lot EC (message de `01fe217`) : le refus d'inviter un SIREN tenu par un cabinet est neutre mais se distingue d'une demande envoyée ; le rendre indistinguable exigerait une demande qui ne s'accepte jamais. Choix à confirmer par l'éditeur.
+### 2.4 Encadré et § 4, point 1 : passages devenus historiques
 
-- Lui dire ce que l'agent d'implémentation a laissé (12 « laisses ») et la correction (5 « laisses »), à lire dans le `journal.jsonl` de la course ; la suppression de tests de l'expert-comptable de la société (4930 → 4916 tests, chacun remplacé par un test nommé selon le rapport) ; et que la grille faketime n'a pas été lancée (critère 7.1.5 de l'avenant non exécuté, D50).
-- § 9 : « Accès à l'annuaire de l'Ordre des experts-comptables (lot EC) … l'éditeur fournit ce que le compte rendu du lot demande » : le compte rendu d'EC doit donc dire ce qui est demandé (`AnnuaireDeLOrdreTest` montre une implémentation factice).
+Les puces sur `wf_22d43798-897` et la commande `python3 … a['reprise']['TA']…` du § 4, point 1 ne servent plus (TA, EC, L1 sont sur `origin`). Texte proposé, en tête du passage du § 4, point 1 : « Aujourd'hui aucun correctif n'est à appliquer ; ce qui suit sert d'exemple pour un futur lot sauvé (remplacer `TA` par le lot et le fichier d'arguments par celui de sa course). » L'encadré devient long (huit puces) : proposer de déplacer les puces TA et EC dans `notes/historique/HISTORIQUE.md` et de ne garder que l'état courant.
 
-### 2.3 CI de `01fe217` non encore conclue
+### 2.5 Titre du commit de correction de L1
 
-Courses 192 et 193 « in_progress ». La session note leur conclusion dans `etat-chaines.md` et remplace « CI de `01fe217` en cours » par « CI verte » dans l'encadré et au § 6.
+`5745e7a` s'appelle « Relecture du lot L1 de l'architecture société » (titre tiré de la phase du lot dans `LOTS`), alors que L1 porte sur l'outillage local. La boucle du § 5 le trouve quand même (« Relecture du lot L1 »). Rien à corriger dans le dépôt (pas de réécriture d'historique) ; signaler seulement, si la session le juge utile, que la phase de A7 et EC2 (« A7 et lot 21 ») donnera le même genre de titre.
 
-### 2.4 En-tête, ligne 3 : période de la session
+### 2.6 Lot de suivi du § 6 « Après la poussée du lot 21 », point 2
 
-« la session qui l'a écrite (2 au 26 octobre 2026) » : la même session écrit encore la fiche le 01/11/2026. Proposition : « (depuis le 2 octobre 2026) ».
-
-### 2.5 Encadré : puces devenues historiques
-
-Les puces sur `wf_22d43798-897` (plage `89f092f..e2d790a`, « la prochaine reprise écrit `89f092f..<dernier commit>` ») et le § 4, point 1 (commande `python3 … a['reprise']['TA']…`) ne servent plus. Les propositions 2.2 à 2.4 de la relecture précédente restent valables ; texte proposé, en tête du passage du § 4, point 1 : « Aujourd'hui aucun correctif n'est à appliquer (TA et EC sont sur `origin`) ; ce qui suit sert d'exemple pour un futur lot sauvé. » Et, dans l'encadré, une reprise de L1 aura pour premier hash `01fe217`.
-
-### 2.6 Horloge du conteneur
-
-`date -u` donnait 08 h 59 UTC alors que GitHub date la création des courses 192 et 193 à 09 h 59 UTC, après le commit `01fe217` (08 h 57 +0000) : une des deux horloges a une heure d'écart (la veille, la course 190 de `9ce20c3` était créée une minute après son commit). Les heures « vers 09 h UTC » écrites dans la fiche sont donc à une heure près. Proposition : que la session contrôle l'heure (`date -u` contre l'API GitHub) avant de dater les notes et les points de suivi.
+Toujours ouvert ; L1 ne l'a pas touché (vérifié par `git show --stat 8b15aec 5745e7a` : aucun fichier de `SaisirCodeDeConfirmationAction`). Rien à changer.
 
 ### 2.7 Points des relectures précédentes toujours ouverts
 
-Toujours non repris : visibilité de `VERIFICATION.md` seulement après `pilotage-sync.sh` ; Q-AF10, Q-AF12 et Q-AF13 à reposer avant S9-A, absentes des « Questions encore ouvertes » et du § 9 (proposition : les y ajouter, S9-A n'étant plus qu'à deux lots) ; complément de A7 qui cite aussi la section 7 de l'avenant ; T3 commité à 12 h 44, poussé vers 12 h 57 UTC. Textes proposés : versions précédentes de ce fichier dans l'historique de `claude/pilotage-reprise`.
+Visibilité de `VERIFICATION.md` seulement après `pilotage-sync.sh` ; complément de A7 qui cite aussi la section 7 de l'avenant ; constat 10 d'EC désormais tranché (msg 322, « 1a » : lot EC2), donc plus à ajouter aux questions ouvertes. Le compte rendu de L1 à l'éditeur (§ 5, « Suivi ») doit lui rappeler, puisque L1 ajoute une migration (`0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base`), `git pull`, `php artisan migrate:fresh`, `php artisan optimize:clear` et une nouvelle inscription, ainsi que les nouvelles consignes du README (OPENSSL_CONF par `setx`, terminal et XAMPP à rouvrir).
 
 ### 2.8 `ETAT.md`
 
-Généré à 07 h 12 UTC : il montre encore les quatre commits d'EC « pas encore poussés » et la tête `9ce20c3`. Normal : l'étape `EC:notes` le régénère. Rien à corriger à la main.
+Généré à 10 h 58 UTC : il montre encore la tête `01fe217`, `8b15aec` « pas encore poussé » et du travail non commité. Normal : l'étape `L1:notes` le régénère. Rien à corriger à la main.
 
 Aucune valeur secrète n'a été lue ni écrite dans cette relecture.

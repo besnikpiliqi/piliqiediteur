@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 11:21 UTC par pilotage-sync.sh : « Décisions du 01/11 : phrase des activités exonérées (lot EC2), TVA sur la marge dans la chaîne TVA ».
+Mis à jour le 01/11/2026 à 11:23 UTC par pilotage-sync.sh : « Après le lot L1 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -47,4 +47,5 @@ Course `wf_d6032f41-e79`, étapes commencées (de la plus ancienne à la plus r�
 L1:correction
 L1:poussee
 L1:fiche
+L1:notes
 ```

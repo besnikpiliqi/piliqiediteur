@@ -19,18 +19,31 @@ Laravel 13, Filament 3 (panneau des magasins sous `/app`), PHP 8.3 ou plus avec 
 
 PostgreSQL (17 ou 18) en production, SQLite en développement et pour les tests rapides. La suite complète passe sur les deux moteurs, en local avant chaque commit et en CI. La base PostgreSQL est en UTF8 avec la collation déterministe C.UTF-8 : elle trie dans l'ordre binaire, comme SQLite. Les recherches ignorent la casse et les accents par une même fonction SQL sur les deux moteurs, que crée une migration sous PostgreSQL : aucune extension à installer.
 
-**Heure.** L'application travaille en UTC : chaque horodatage s'enregistre en UTC (`config/app.php`), et la session PostgreSQL aussi (`config/database.php`). Les journaux techniques de Laravel sont donc en UTC. Le calendrier de chaque magasin (journée de caisse, échéances, année des numéros, affichage) suit l'heure de son territoire : Paris pour la métropole et la Corse, la sienne pour chaque territoire d'outre-mer accepté (aujourd'hui la Guadeloupe, la Martinique et La Réunion). Ce territoire est fixé au premier contrôle Sirene de l'établissement et ne change plus. La société, ses courriers et l'éditeur suivent l'heure de Paris. Seule la classe `App\Domain\Calendrier\Calendrier` connaît un fuseau. Le planificateur suit l'heure de Paris (`schedule_timezone`) ; les tâches du calendrier des magasins passent toutes les heures. Aucun code ne dépend du fuseau de la session de base. En production, fixez aussi le fuseau par défaut de la base, pour les sessions ouvertes hors de l'application (psql, sauvegardes, scripts, répartiteur de connexions qui perd le réglage de la session) : `ALTER DATABASE <base> SET timezone TO 'UTC';`. `php artisan caisse:diagnostiquer` vérifie le fuseau de l'application et ce fuseau par défaut de la base (`pg_settings.reset_val`). `SHOW TIMEZONE` ne le montre pas : il rend l'UTC que l'application fixe à chaque connexion.
+**Heure.** L'application travaille en UTC : chaque horodatage s'enregistre en UTC (`config/app.php`), et la session PostgreSQL aussi (`config/database.php`). Les journaux techniques de Laravel sont donc en UTC. Le calendrier de chaque magasin (journée de caisse, échéances, année des numéros, affichage) suit l'heure de son territoire : Paris pour la métropole et la Corse, la sienne pour chaque territoire d'outre-mer accepté (aujourd'hui la Guadeloupe, la Martinique et La Réunion). Ce territoire est fixé au premier contrôle Sirene de l'établissement et ne change plus. La société, ses courriers et l'éditeur suivent l'heure de Paris. Seule la classe `App\Domain\Calendrier\Calendrier` connaît un fuseau. Le planificateur suit l'heure de Paris (`schedule_timezone`) ; les tâches du calendrier des magasins passent toutes les heures. Aucun code ne dépend du fuseau de la session de base. Le fuseau par défaut de la base, celui des sessions ouvertes hors de l'application (psql, sauvegardes, scripts, répartiteur de connexions qui perd le réglage de la session), est fixé à UTC par les migrations, sous PostgreSQL (`ALTER DATABASE` sur la base courante) : aucune commande manuelle n'est à retenir, mais le rôle qui lance les migrations doit être propriétaire de la base, sinon la migration échoue en disant quoi faire. `php artisan caisse:diagnostiquer` vérifie le fuseau de l'application et le fuseau par défaut que reçoit une session de la base (`pg_settings.reset_val`), qu'un réglage du rôle ou des options de connexion remplaceraient. `SHOW TIMEZONE` ne le montre pas : il rend l'UTC que l'application fixe à chaque connexion.
 
-```sh
-composer install
-cp .env.example .env
-php artisan key:generate
-php artisan caisse:generer-cle
-php artisan migrate
-php artisan test
-```
+## Installation locale
 
-Pour lancer la suite sur PostgreSQL en local, créez une fois le rôle des tests, autorisé à créer les bases des tests parallèles, et sa base. Ces bases se créent depuis `template1` : le serveur doit avoir été initialisé en C.UTF-8 (`initdb --locale=C.UTF-8`), comme celui de la CI.
+1. **PHP 8.3 ou plus et ses extensions.** Activez dans `php.ini` (une ligne `extension=…` par extension, sans le `;` qui la commente) : curl, fileinfo, intl, mbstring, openssl, pdo_pgsql, pdo_sqlite, sqlite3 et zip. `php -m` liste les extensions chargées ; `composer check-platform-reqs` dit s'il en manque une.
+2. **Sous Windows (XAMPP compris).** Le fichier `php.ini` de XAMPP est `C:\xampp\php\php.ini`. PHP n'y trouve le fichier `openssl.cnf` que si la variable d'environnement `OPENSSL_CONF` le désigne : sans elle, aucune clé ne se génère, et toute la suite de tests échoue avec « OpenSSL n'a pas pu générer de clé ECDSA P-256 ». Réglez-la une fois dans une invite de commandes, puis ouvrez un nouveau terminal (et redémarrez Apache s'il sert l'application) :
+
+   ```bat
+   setx OPENSSL_CONF "C:\xampp\php\extras\ssl\openssl.cnf"
+   ```
+
+   Selon la version de XAMPP, le fichier peut aussi être `C:\xampp\apache\conf\openssl.cnf` ; avec PHP seul, c'est le fichier `extras\ssl\openssl.cnf` de son dossier.
+3. **Dépendances.** `composer install`, et jamais `composer update` : `composer.lock` fixe les versions que vérifient la suite de tests et la CI, et changer une dépendance demande l'accord de l'éditeur.
+4. **Environnement.** Copiez `.env.example` en `.env` (`copy .env.example .env` sous Windows), puis lancez `php artisan key:generate`. En développement, la base est SQLite (`database/database.sqlite`, que `php artisan migrate` propose de créer) et les e-mails s'écrivent dans `storage/logs/laravel.log` au lieu de partir (`MAIL_MAILER=log`).
+5. **Clé de signature fiscale.** `php artisan caisse:generer-cle` épingle sa clé publique et affiche une seule fois la ligne `CAISSE_SECURISEE_CLE_PRIVEE=…`, à recopier dans `.env` (voir plus bas).
+6. **Clé du journal d'audit.** `php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"` affiche une clé aléatoire : recopiez-la dans `JOURNAL_AUDIT_CLE`, et donnez-lui un identifiant de votre choix dans `JOURNAL_AUDIT_CLE_ID` (par exemple `dev-1`). Sans elle, aucune action auditée ne s'enregistre : la confirmation d'une inscription échoue (`JournalAuditNonConfigureException`).
+7. **Base.** `php artisan migrate`.
+8. **Contrôle.** `php artisan caisse:diagnostiquer` vérifie OpenSSL (une clé s'y génère et s'exporte), zip, les clés de signature, la clé du journal d'audit et les fuseaux, sans jamais afficher une clé ; chaque ligne doit dire OK, et une ligne en échec dit quoi faire.
+9. **Tests.** `php artisan test`, ou `php artisan test --parallel`.
+10. **Lancement.** Les trois commandes du développement (voir plus bas) : `php artisan serve`, `php artisan queue:listen` et `php artisan schedule:work`.
+11. **Première inscription.** Sur `/app/register` (voir plus bas), le lien de confirmation de l'inscription, valable 24 heures, s'écrit dans `storage/logs/laravel.log` : ouvrez l'adresse en `/inscription/…` de l'e-mail « Confirmez l'inscription de votre société », le dernier du fichier.
+
+## Tests, commandes et fonctionnement
+
+Pour lancer la suite sur PostgreSQL en local, créez une fois le rôle des tests, autorisé à créer les bases des tests parallèles, et sa base. Ces bases se créent depuis `template1` : le serveur doit avoir été initialisé en C.UTF-8 (`initdb --locale=C.UTF-8`), comme celui de la CI. Le rôle des tests est propriétaire de chacune : les migrations y fixent le fuseau par défaut à UTC.
 
 ```sh
 sudo service postgresql start

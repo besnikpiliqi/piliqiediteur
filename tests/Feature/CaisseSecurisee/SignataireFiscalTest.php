@@ -301,6 +301,38 @@ class SignataireFiscalTest extends TestCase
         $this->assertThrows(fn () => $this->signataire()->signer(self::CONTENU), ModuleFiscalNonConfigureException::class, 'la clé privée de signature est illisible');
     }
 
+    /**
+     * Une clé privée ou épinglée qu'OpenSSL ne lit pas : le message dit
+     * les erreurs d'OpenSSL (voir ErreursOpenSsl), jamais un octet de la
+     * clé ; une valeur qui n'est pas du base64 le dit, sans OpenSSL.
+     */
+    public function test_une_cle_qu_openssl_ne_lit_pas_dit_ses_erreurs_sans_rien_reveler_de_la_cle(): void
+    {
+        $priveeTronquee = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgU0VDUkVUU0VDUkVU\n-----END PRIVATE KEY-----\n";
+        $refus = function (): string {
+            try {
+                $this->signataire()->signer(self::CONTENU);
+            } catch (ModuleFiscalNonConfigureException $exception) {
+                return $exception->getMessage();
+            }
+
+            $this->fail('La signature aurait dû être refusée.');
+        };
+
+        config(['caisse_securisee.cle_privee' => base64_encode($priveeTronquee)]);
+        $priveeIllisible = $refus();
+        config(['caisse_securisee.cle_privee' => 'pas du base64 !']);
+        $pasDuBase64 = $refus();
+        config(['caisse_securisee.cle_privee' => base64_encode($this->autrePaire()['privee']), 'caisse_securisee.cles_publiques' => ['abimee.pem' => "-----BEGIN PUBLIC KEY-----\nabime\n-----END PUBLIC KEY-----\n"]]);
+        $epingleeIllisible = $refus();
+
+        $this->assertStringStartsWith('Caisse sécurisée non configurée : la clé privée de signature est illisible (PEM encodé en base64 attendu, phrase secrète à vérifier). Erreurs d\'OpenSSL : error:', $priveeIllisible);
+        $this->assertStringNotContainsString('MIGHAgEA', $priveeIllisible);
+        $this->assertStringNotContainsString('U0VDUkVU', $priveeIllisible);
+        $this->assertSame('Caisse sécurisée non configurée : la clé privée de signature est illisible (PEM encodé en base64 attendu, phrase secrète à vérifier). Sa valeur n\'est pas écrite en base64.', $pasDuBase64);
+        $this->assertStringStartsWith('Caisse sécurisée non configurée : la clé épinglée abimee.pem n\'est pas une clé publique ECDSA P-256 lisible. Erreurs d\'OpenSSL : error:', $epingleeIllisible);
+    }
+
     public function test_une_cle_privee_chiffree_ne_signe_qu_avec_sa_phrase_secrete(): void
     {
         $chiffree = $this->autrePaire(phraseSecrete: 'phrase du coffre');

@@ -9,11 +9,14 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * Commandes de l'éditeur : caisse:generer-cle (paire de clés de signature
- * fiscale) et caisse:diagnostiquer (le serveur peut-il signer ?).
+ * fiscale) et caisse:diagnostiquer (le serveur peut-il signer et le
+ * journal d'audit s'inscrire ?).
  */
 class CommandesModuleFiscalTest extends TestCase
 {
@@ -72,10 +75,68 @@ class CommandesModuleFiscalTest extends TestCase
         $cleId = $this->cleIdDe(Arr::first(config('caisse_securisee.cles_publiques')));
 
         $this->artisan('caisse:diagnostiquer')
+            ->expectsOutputToContain('clé d\'essai générée et exportée, puis jetée')
             ->expectsOutputToContain("cle_id {$cleId}, signature ES256 vérifiée avec la clé épinglée")
+            ->expectsOutputToContain('clé (JOURNAL_AUDIT_CLE) et identifiant (JOURNAL_AUDIT_CLE_ID) configurés, valeurs non affichées')
+            ->doesntExpectOutputToContain(config('journal_audit.cle'))
             ->expectsOutputToContain(ModuleFiscal::VERSION)
             ->expectsOutputToContain('Caisse sécurisée opérationnelle.')
             ->assertSuccessful();
+    }
+
+    /**
+     * L'échec que connaît PHP sous Windows tant que la variable
+     * OPENSSL_CONF ne désigne pas son fichier openssl.cnf, reproduit sur
+     * tout système : la commande tourne dans un autre processus PHP, dont
+     * OPENSSL_CONF désigne un fichier absent. Le contrôle de la génération
+     * d'une clé échoue en disant les erreurs d'OpenSSL ; sous Windows, la
+     * marche à suivre s'y ajoute (voir ErreursOpenSslTest).
+     */
+    public function test_diagnostiquer_dit_les_erreurs_d_openssl_quand_il_ne_trouve_pas_son_fichier_de_configuration(): void
+    {
+        $configurationAbsente = base_path('tests/Fixtures/CaisseSecurisee/aucun-openssl.cnf');
+        $this->assertFileDoesNotExist($configurationAbsente);
+
+        $diagnostic = Process::path(base_path())
+            ->env(['OPENSSL_CONF' => $configurationAbsente])
+            ->timeout(60)
+            ->run([PHP_BINARY, 'artisan', 'caisse:diagnostiquer']);
+
+        $this->assertSame(1, $diagnostic->exitCode());
+        $this->assertMatchesRegularExpression("/\\| Génération d'une clé P-256 +\\| ÉCHEC +\\| OpenSSL n'a pas pu générer de clé ECDSA P-256\\. Erreurs d'OpenSSL : error:/u", $diagnostic->output());
+    }
+
+    /**
+     * @return array<string, array{0: string|null, 1: string|null}>
+     */
+    public static function clesDuJournalAuditInutilisables(): array
+    {
+        return [
+            'clé absente' => [null, 'cle-du-serveur-2026'],
+            'clé de 16 octets seulement' => [base64_encode('seize-octets-ici'), 'cle-du-serveur-2026'],
+            'identifiant absent' => [base64_encode('trente-deux-octets-pour-la-cle!!'), null],
+        ];
+    }
+
+    /**
+     * Sans la clé du journal d'audit ou son identifiant, aucune action
+     * auditée ne s'enregistre (confirmation d'une inscription comprise) :
+     * le diagnostic le signale et dit comment générer la clé, sans jamais
+     * afficher ce qui est configuré.
+     */
+    #[DataProvider('clesDuJournalAuditInutilisables')]
+    public function test_diagnostiquer_signale_une_cle_du_journal_d_audit_inutilisable_sans_afficher_aucune_valeur(?string $cle, ?string $cleId): void
+    {
+        config(['journal_audit.cle' => $cle, 'journal_audit.cle_id' => $cleId]);
+
+        $diagnostic = $this->artisan('caisse:diagnostiquer');
+
+        foreach (array_filter([$cle, $cleId]) as $valeur) {
+            $diagnostic->doesntExpectOutputToContain($valeur);
+        }
+        $diagnostic->expectsOutputToContain('La clé du journal d\'audit (JOURNAL_AUDIT_CLE, au moins 32 octets aléatoires en base64) ou son identifiant (JOURNAL_AUDIT_CLE_ID) est absent ou invalide : aucune action auditée ne s\'enregistre, confirmation d\'une inscription comprise. Générez une clé par php -r "echo base64_encode(random_bytes(32)), PHP_EOL;", placez-la dans JOURNAL_AUDIT_CLE et donnez-lui un identifiant de votre choix dans JOURNAL_AUDIT_CLE_ID.')
+            ->expectsOutputToContain('Caisse sécurisée non opérationnelle : 1 contrôle(s) en échec.')
+            ->assertFailed();
     }
 
     public function test_diagnostiquer_echoue_quand_la_cle_privee_est_absente(): void

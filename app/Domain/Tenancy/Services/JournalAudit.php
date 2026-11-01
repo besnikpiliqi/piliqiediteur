@@ -213,6 +213,22 @@ class JournalAudit
     }
 
     /**
+     * Vrai si la clé courante du journal et son identifiant permettent d'y
+     * inscrire une entrée, sans rien rendre de l'un ni de l'autre : ce que
+     * vérifie caisse:diagnostiquer.
+     */
+    public static function estConfigure(): bool
+    {
+        try {
+            self::cleCourante();
+        } catch (JournalAuditNonConfigureException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @return array{0: string, 1: string}
      *
      * @throws JournalAuditNonConfigureException

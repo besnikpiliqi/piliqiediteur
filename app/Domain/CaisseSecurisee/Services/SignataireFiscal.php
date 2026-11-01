@@ -3,6 +3,7 @@
 namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Support\ErreursOpenSsl;
 use Illuminate\Contracts\Config\Repository;
 use OpenSSLAsymmetricKey;
 use RuntimeException;
@@ -26,6 +27,10 @@ use RuntimeException;
  *
  * Fermé par défaut : une clé absente, illisible ou non épinglée lève
  * ModuleFiscalNonConfigureException au lieu de signer.
+ *
+ * Une génération, une lecture ou un export de clé, ou une signature,
+ * qu'OpenSSL refuse lève une exception qui dit ses erreurs et, sous
+ * Windows, la marche à suivre (voir ErreursOpenSsl), jamais une clé.
  */
 class SignataireFiscal
 {
@@ -59,13 +64,20 @@ class SignataireFiscal
      * clé publique.
      *
      * @return array{cle_id: string, cle_privee: string, cle_publique: string}
+     *
+     * @throws RuntimeException OpenSSL ne génère ou n'exporte pas la clé
      */
     public static function genererUnePaire(): array
     {
+        ErreursOpenSsl::oublier();
         $cle = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => self::COURBE]);
 
-        if ($cle === false || ! openssl_pkey_export($cle, $clePrivee)) {
-            throw new RuntimeException("OpenSSL n'a pas pu générer de clé ECDSA P-256.");
+        if ($cle === false) {
+            throw new RuntimeException('OpenSSL n\'a pas pu générer de clé ECDSA P-256. '.ErreursOpenSsl::detail());
+        }
+
+        if (! openssl_pkey_export($cle, $clePrivee)) {
+            throw new RuntimeException('OpenSSL n\'a pas pu exporter la clé ECDSA P-256 générée. '.ErreursOpenSsl::detail());
         }
 
         return [
@@ -79,11 +91,15 @@ class SignataireFiscal
      * La signature ES256 du contenu, en base64url.
      *
      * @throws ModuleFiscalNonConfigureException
+     * @throws RuntimeException OpenSSL refuse de signer
      */
     public function signer(string $contenu): string
     {
-        if (! openssl_sign($contenu, $signature, $this->clePrivee(), OPENSSL_ALGO_SHA256)) {
-            throw new RuntimeException('La signature OpenSSL du contenu fiscal a échoué.');
+        $clePrivee = $this->clePrivee();
+        ErreursOpenSsl::oublier();
+
+        if (! openssl_sign($contenu, $signature, $clePrivee, OPENSSL_ALGO_SHA256)) {
+            throw new RuntimeException('La signature OpenSSL du contenu fiscal a échoué. '.ErreursOpenSsl::detail());
         }
 
         return self::base64url($signature);
@@ -154,11 +170,17 @@ class SignataireFiscal
         }
 
         $pem = base64_decode($valeur, true);
+
+        if ($pem === false) {
+            throw ModuleFiscalNonConfigureException::clePriveeIllisible('Sa valeur n\'est pas écrite en base64.');
+        }
+
         $phraseSecrete = (string) $this->config->get('caisse_securisee.phrase_secrete');
-        $cle = $pem === false ? false : openssl_pkey_get_private($pem, $phraseSecrete === '' ? null : $phraseSecrete);
+        ErreursOpenSsl::oublier();
+        $cle = openssl_pkey_get_private($pem, $phraseSecrete === '' ? null : $phraseSecrete);
 
         if ($cle === false) {
-            throw ModuleFiscalNonConfigureException::clePriveeIllisible();
+            throw ModuleFiscalNonConfigureException::clePriveeIllisible(ErreursOpenSsl::detail());
         }
 
         if (! self::estUneCleP256($cle)) {
@@ -194,10 +216,15 @@ class SignataireFiscal
                 throw ModuleFiscalNonConfigureException::clePriveeEpinglee((string) $fichier);
             }
 
+            ErreursOpenSsl::oublier();
             $cle = openssl_pkey_get_public((string) $pem);
 
-            if ($cle === false || ! self::estUneCleP256($cle)) {
-                throw ModuleFiscalNonConfigureException::cleEpingleeIllisible((string) $fichier);
+            if ($cle === false) {
+                throw ModuleFiscalNonConfigureException::cleEpingleeIllisible((string) $fichier, ErreursOpenSsl::detail());
+            }
+
+            if (! self::estUneCleP256($cle)) {
+                throw ModuleFiscalNonConfigureException::cleEpingleeIllisible((string) $fichier, 'OpenSSL la lit, mais sa courbe ou son algorithme n\'est pas celui d\'une clé ECDSA P-256.');
             }
 
             $trousseau[self::empreinte($cle)] = $cle;

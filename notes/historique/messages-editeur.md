@@ -4215,3 +4215,11 @@ Il y avait quoi dans le TA, quels fonctionnalités
 
 Cabinet : un cabinet d’expertise comptable ne peut plus créer d’administrateurs ni de comptes d’expert-comptable, ni changer ses réglages de TVA ; il ne configure que son identité, comme le disent les règles. Tu dis ça mais moi je comprends pas pourquoi tu as mis ces règles et moi ke me rappelle pas
 
+## 321. 2026-11-01 10:10 UTC
+
+je vois que tu dis "Le compte « expert-comptable » créé à l’intérieur d’une société n’existe plus. L’expert-comptable passe toujours par son cabinet." mais moi je veux que cette option existe car peut etre le comptable d'un societe n'as pas encore creer son espace chez piliqi et peut elle veut pas creer son espace que pour son client et comme son comptable peut juste avoir acces dans le compte de la societe de son client mais pas avoir son compte.  du coup, il faut etre la possibilite d ajouter son expert comptable chaque societe. et l'ajoute doit se faire par son nom et par son siren de l'expert comptable car si un jour ce comptable veut ouvrir son compte chez piliqi alors elle pourra tout simplement avoir acces à son client grace à son siren qui est deja declarer par son client. comme ca il se rattache tout de suite des que l'expert comptable ouvre son compte chez piliqi. et quand le client creer son expert comptable alors la il doit choisir que peut voir avec des autorisation, par exemple le client veut pas que son comptable voie ses client ou ses devis etc.
+
+## 322. 2026-11-01 10:52 UTC
+
+1a 2a 3a 4a
+

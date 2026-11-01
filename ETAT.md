@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 09:17 UTC par pilotage-sync.sh : « Après la CI verte d'EC : questions à l'éditeur, annuaire de l'Ordre, chemins INPI ».
+Mis à jour le 01/11/2026 à 10:56 UTC par pilotage-sync.sh : « Décision du 01/11 : expert-comptable de la société par SIREN (lot EC2) ; réponses Q-AF10, Q-AF12, Q-AF13 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `01fe217`. Commits locaux pas encore poussés :
 
 ```
+8b15aec Outille le développement local et fixe le fuseau UTC de la base (lot L1)
 ```
 
 Derniers commits poussés :
@@ -37,28 +38,20 @@ c0acd28 Donne son fuseau à chaque heure écrite des tests et fige l'horloge ava
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Domain/CaisseSecurisee/Exceptions/ModuleFiscalNonConfigureException.php
- M app/Domain/CaisseSecurisee/Services/SignataireFiscal.php
- M app/Domain/Tenancy/Services/JournalAudit.php
- M tests/Feature/CaisseSecurisee/SignataireFiscalTest.php
-?? app/Domain/CaisseSecurisee/Support/ErreursOpenSsl.php
-?? app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
-?? database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
-?? tests/Unit/ErreursOpenSslTest.php
+ M app/Domain/CaisseSecurisee/Support/ErreursOpenSsl.php
+ M app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
+ M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
+ M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
+ M tests/Feature/Calendrier/FuseauParDefautDeLaBaseTest.php
+ M tests/Unit/ErreursOpenSslTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_d67322b9-242`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_d6032f41-e79`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-EC:implementation
-EC:relecture1
-EC:relecture2
-EC:correction
-EC:poussee
-EC:fiche
-EC:notes
-L1:implementation
+L1:correction
 ```

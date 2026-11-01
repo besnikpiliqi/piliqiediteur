@@ -5,6 +5,7 @@ namespace Tests\Feature\CaisseSecurisee;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -170,7 +171,11 @@ class CommandesModuleFiscalTest extends TestCase
      * de Paris pour fuseau de départ fait échouer le diagnostic, qui en
      * nomme la cause, alors que SHOW TIMEZONE y rend l'UTC que
      * l'application vient de fixer. Chaque cause et sa commande se
-     * vérifient dans FuseauParDefautDeLaBaseTest.
+     * vérifient dans FuseauParDefautDeLaBaseTest. La base reçoit d'abord,
+     * par une connexion à part, le fuseau UTC que lui donnent les
+     * migrations : cette classe ne les passe pas, et un test qui les
+     * défait (DatabaseMigrations) retire ce réglage, si bien que l'ordre
+     * des tests d'un processus ne le garantit pas.
      */
     public function test_diagnostiquer_echoue_quand_le_fuseau_par_defaut_de_la_base_n_est_pas_utc(): void
     {
@@ -179,6 +184,9 @@ class CommandesModuleFiscalTest extends TestCase
         }
 
         $connexionDuTest = DB::getDefaultConnection();
+        config(['database.connections.reglage_de_la_base' => config("database.connections.{$connexionDuTest}")]);
+        FuseauParDefautDeLaBase::fixerAUtc(DB::connection('reglage_de_la_base'));
+        DB::purge('reglage_de_la_base');
         config(['database.connections.fuseau_de_paris' => [...config("database.connections.{$connexionDuTest}"), 'server_options' => ['TimeZone' => Calendrier::deParis()->fuseau()]]]);
         DB::setDefaultConnection('fuseau_de_paris');
 

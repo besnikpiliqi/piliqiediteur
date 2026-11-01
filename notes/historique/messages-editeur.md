@@ -4413,3 +4413,25 @@ middleware: web, throttle:10,1
 
 je veut utilier le https://mailtrap.io pour les email. donc tu va mettre en place un vrai mail un vrai serveur , comme ca on sait que tous les send mail vont avec succes. donc tu peux faire quelque testes mais pas à chaque fois pour ne pas prendre du temps pour rien. peut etre t'en a besion les identifiant
 
+## 328. 2026-11-01 13:30 UTC
+
+j 'ai mis dans le connecteur le Mailtrap
+
+## 329. 2026-11-01 13:33 UTC
+
+je l'ai mis sur application cluade
+
+## 330. 2026-11-01 13:35 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+
+
+## 331. 2026-11-01 13:37 UTC
+
+bon j'ai mis sur .env mais toi est ce que t as acced mnt
+
+## 332. 2026-11-01 13:38 UTC
+
+comment ca va marcher mnt chez piliqi pour tester, tu va mettre à jours ou ce fait automatiaument
+

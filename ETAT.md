@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 26/10/2026 à 22:09 UTC par pilotage-sync.sh : « Pause à la demande de l'éditeur : état exact et commits de TA sauvés ».
+Mis à jour le 01/11/2026 à 00:18 UTC par pilotage-sync.sh : « Passation : état exact de TA (relu, 6 défauts sauvés, reprise à la correction) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

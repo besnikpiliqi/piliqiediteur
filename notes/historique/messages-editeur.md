@@ -4121,3 +4121,21 @@ Mais moi je vois que t’as créé la grande partie et meme peut être jusqu’�
 
 Et si tu peux arrêter pour l’instant le travail car la session va terminer car il est 99% de la semaine. Donc tu commences quand je te dis fin semaine
 
+## 299. 2026-10-31 09:52 UTC
+
+tu recommence le travaille la ou t´es arreté. mais je veux que tu commence à partir de la fiche que t´as mis pour l´autre session. comme on verra comment va derouller comment commence la nouvelle session. donc tu fais semble comme si c´est toi qui est la nouvelle session et comme ca je s´aurais comment il se comportera.
+
+## 300. 2026-11-01 00:12 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+Je vois que t’as changé la méthode d’utilisation. Alors ultra code s’active autrement et on choisit quelle effort. Alors si je choisis efort max ou moyen sa change quoi! Est-ce effort max fait meilleur travail ou quoi
+
+
+
+Avec ultra code tout le temps sans exercice
+
+## 301. 2026-11-01 00:13 UTC
+
+Sans exception
+

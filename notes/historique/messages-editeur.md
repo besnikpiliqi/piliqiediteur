@@ -4187,3 +4187,7 @@ La avec effort extra et ultracode est-ce que ça va durer plus longtemps
 
 Alors l’effort sera extra avec ultracode et tu me dis quand il faut passer en effort max
 
+## 314. 2026-11-01 02:10 UTC
+
+Est-ce que tu peux basculer toi meme sans me demander
+

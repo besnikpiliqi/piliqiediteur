@@ -4207,3 +4207,11 @@ Comment ça ça prend combien temps maintenant
 
 Tu dit sql à chaque passage! C’est quoi les passages
 
+## 319. 2026-11-01 02:52 UTC
+
+Il y avait quoi dans le TA, quels fonctionnalités
+
+## 320. 2026-11-01 02:57 UTC
+
+Cabinet : un cabinet d’expertise comptable ne peut plus créer d’administrateurs ni de comptes d’expert-comptable, ni changer ses réglages de TVA ; il ne configure que son identité, comme le disent les règles. Tu dis ça mais moi je comprends pas pourquoi tu as mis ces règles et moi ke me rappelle pas
+

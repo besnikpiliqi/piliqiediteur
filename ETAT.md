@@ -1,12 +1,16 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 02:52 UTC par pilotage-sync.sh : « Chaîne relancée sur EC avec l'effort par lot et sans grille faketime ».
+Mis à jour le 01/11/2026 à 07:12 UTC par pilotage-sync.sh : « Relectures d'EC relancées sur tous les commits non poussés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `9ce20c3`. Commits locaux pas encore poussés :
 
 ```
+93ea590 Retire les experts-comptables de la société et réécrit CLAUDE.md (lot EC 4/4)
+94ada86 Lie les cabinets à leurs clients : invitations, demandes, autorisations, accès (lot EC 3/4)
+9671a29 Donne au cabinet ses collaborateurs et transmet sa propriété à l'un d'eux (lot EC 2/4)
+976e827 Vérifie les cabinets d'expertise comptable et leur ouvre leur espace (lot EC 1/4)
 ```
 
 Derniers commits poussés :
@@ -45,4 +49,6 @@ Course `wf_d67322b9-242`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 EC:implementation
+EC:relecture1
+EC:relecture2
 ```

@@ -4191,3 +4191,11 @@ Alors l’effort sera extra avec ultracode et tu me dis quand il faut passer en 
 
 Est-ce que tu peux basculer toi meme sans me demander
 
+## 315. 2026-11-01 02:30 UTC
+
+J’arrive pas à comprendre pourquoi ça prend tout ce temps alors que c’est du code et le code se fait rapidement par toi. Est-ce le faketime qui prend le temps
+
+## 316. 2026-11-01 02:38 UTC
+
+En fait tu enlèves faketime pour toujours et on le met juste à la fin du logiciel pour tout regler car maintenant normalement pas besoin car la c’est important de construire le logiciel au plus vite et la faketime on fait juste à la fin pour confirmer que tout va bien et à la fin se réglera plus rapide. D’accord
+

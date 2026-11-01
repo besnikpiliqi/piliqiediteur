@@ -17,7 +17,7 @@ Ce fichier réunit tout ce que l'éditeur a demandé sur la façon de travailler
 4. Une règle métier non tranchée (calcul, arrondi, obligation légale, droits) se pose à lui, expliquée en détail, avec des options et une recommandation ; on ne la devine jamais (message 1, § 42 ; message 101).
 5. La voie la plus sûre, même si elle est plus longue : rien ne s'allège dans le protocole, et ultracode s'applique tout le temps, sans exception (messages 241 à 245, 253, 300, 301).
 6. Un défaut se corrige partout, pas seulement sur l'écran où il l'a vu (messages 80, 97).
-7. Les tests ne se remplacent jamais par une explication (messages 69, 70) ; les calculs se testent sur des milliers de cas (message 92).
+7. Les tests ne se remplacent jamais par une explication (messages 69, 70) ; les calculs se testent sur des milliers de cas (message 92). La grille faketime ne se lance qu'à la fin du logiciel (D50, 01/11/2026).
 8. Ne jamais prétendre avoir lancé un test qui ne l'a pas été ; ne jamais dire que PILIQI est sans erreur ; distinguer le vérifié du reste à valider (message 156).
 9. Il n'a pas de comptable : chercher les règles sur les sites officiels (message 102).
 10. Aucun mélange entre magasins ni entre sociétés, « zéro » ; chaque magasin doit avoir l'impression d'avoir son propre logiciel (messages 20, 107).
@@ -158,6 +158,13 @@ Ce fichier réunit tout ce que l'éditeur a demandé sur la façon de travailler
 **D21. Dire ce qu'on fait des échecs.**
 - 10/10/2026, message 159 : « tu fais quoi avec les echecs ? » ; 11/10/2026, message 175 : « Tu fait quoi avec ceux qui ont echué ».
 - Ce que cela implique : chaque compte rendu dit, pour chaque échec (test, agent, CI) : la cause, la correction, et si c'est réglé ou encore ouvert.
+- Statut : tient.
+
+**D50. La grille faketime reportée à la fin du logiciel.**
+- 01/11/2026 : « En fait tu enlèves faketime pour toujours et on le met juste à la fin du logiciel pour tout regler car maintenant normalement pas besoin car la c’est important de construire le logiciel au plus vite et la faketime on fait juste à la fin pour confirmer que tout va bien et à la fin se réglera plus rapide. D’accord ».
+- Contexte : la grille (toute la suite rejouée aux 17 instants du README) prenait environ 1 h 30 par passage, au moins deux fois par lot, soit environ la moitié de la durée d'un lot ; la machine n'a que 4 processeurs.
+- Ce que cela implique : `REGLES` de `serie8-lots.js` dit aux agents de ne plus la lancer (à faire aussi dans le script de la chaîne TVA et des étapes suivantes). Elle se lance une seule fois, à la fin du logiciel, avant la mise en production, et tout ce qu'elle trouve se corrige alors. Rien d'autre ne change : chaque test fige le temps à un instant écrit avec son fuseau et ne dépend jamais de l'heure réelle, et les suites SQLite puis PostgreSQL passent au code 0 avant chaque commit. `CLAUDE.md` n'est pas modifié : sa phrase « la suite passe aussi sous faketime… » décrit l'exigence finale. Le lot TA, dont l'agent de correction était déjà dans la grille, la finit ; la règle vaut à partir du lot EC.
+- Avis donné avant sa décision : garder la grille, ou au moins une fois par lot ; il a choisi la vitesse. Risque accepté : des erreurs de date trouvées plus tard, à corriger à la fin.
 - Statut : tient.
 
 ### 1.5 Développement : repartir de zéro et réécrire

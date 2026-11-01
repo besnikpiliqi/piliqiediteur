@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 02:11 UTC par pilotage-sync.sh : « Effort des agents fixé par lot : Extra, Max pour les lots sensibles ».
+Mis à jour le 01/11/2026 à 02:39 UTC par pilotage-sync.sh : « Décision de l'éditeur : grille faketime reportée à la fin du logiciel ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

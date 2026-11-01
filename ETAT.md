@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 21:16 UTC par pilotage-sync.sh : « Conteneur remplacé : notes restaurées ; constats 404 (A7b § 2.6) et étapes d'une société invitée (EC2 R24) ».
+Mis à jour le 01/11/2026 à 21:27 UTC par pilotage-sync.sh : « Course wf_1ce3e4cc-2f2 lancée (A7b, ML, EC2, S9-L, S9-A, 21) ; cahier définitif d'EC2 en place ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,4 +41,8 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 
 ## Dernière course de la chaîne
 
-Aucune course trouvée.
+Course `wf_1ce3e4cc-2f2`, étapes commencées (de la plus ancienne à la plus récente) :
+
+```
+A7b:implementation
+```

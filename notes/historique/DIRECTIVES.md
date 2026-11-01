@@ -167,6 +167,12 @@ Ce fichier réunit tout ce que l'éditeur a demandé sur la façon de travailler
 - Avis donné avant sa décision : garder la grille, ou au moins une fois par lot ; il a choisi la vitesse. Risque accepté : des erreurs de date trouvées plus tard, à corriger à la fin.
 - Statut : tient.
 
+**D51. Tests en navigateur de toutes les actions, et audit final complet.**
+- 01/11/2026, vers 22 h 35 : « il faut faire tous les testes en navigateur et pas que le code car tu vois dans navigateur peut avoir d'autre erreurs. donc il faut que tu fasse tous les testes aussi dans les navigateur » ; puis : « je parle de tous les actions qui se font sur navigateurs, à chaque clique il y a un comportement donc qqch qui doit se finir comme prevu » ; réponse aux questions : « 1a 2 oui 3 oui » (`notes/navigateur/decision-tests-navigateur.md`).
+- 01/11/2026, vers 23 h 20 : « il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur et les testes que tu as deja fait comme d'habitude ».
+- Ce que cela implique : Pest 4 et son module browser (lot NAV-1), chaque action de chaque écran testée en navigateur pour chaque rôle (lots NAV-1 à NAV-5, `notes/navigateur/plan-nav.md`), puis chaque lot suivant ajoute les tests en navigateur de ce qu'il crée ou change, et ses relecteurs rejouent ces actions dans un vrai navigateur (`REGLES` et `OPTIQUES` de `serie8-lots.js`, à reprendre dans le script de la chaîne TVA et des étapes suivantes). À la fin du logiciel, l'audit final, avant la mise en production (étape 15), passe TOUS les tests : tous les tests en navigateur et toute la suite habituelle, sur SQLite puis sur PostgreSQL, puis la grille faketime (D50) ; et chaque relance de la campagne de tests (étape 1 bis, fin des étapes 2, 3, 5, 9 et 13) comprend les tests en navigateur.
+- Statut : tient.
+
 ### 1.5 Développement : repartir de zéro et réécrire
 
 **D22. On repart de zéro à chaque changement, on code comme pour la production.**
@@ -437,6 +443,7 @@ Les 85 décisions de la page d'arbitrages (A1 à K10, 9 octobre) sont dans `note
 | 01/11 vers 22 h 58 UTC | 01/11 | Trois captures : la fenêtre « Chercher un client » (et celle des produits) s'ouvre, mais cliquer une ligne donne « This page has expired » puis « 419 Page Expired » | `scratchpad/diag-419-rapport.md` (atelier wf_876004e5-713) | Diagnostic en cours dans un vrai navigateur, sur une copie isolée ; correction confiée ensuite à un lot |
 | 01/11 vers 23 h 05 UTC | 01/11 | « il faut faire tous les testes en navigateur et pas que le code […] » ; « je parle de tous les actions qui se font sur navigateurs, à chaque clique il y a un comportement donc qqch qui doit se finir comme prevu » | `notes/navigateur/decision-tests-navigateur.md` | Tient ; outil, portée et ordre soumis à l'éditeur (questions 1 à 3) |
 | 01/11 vers 23 h 10 UTC | 01/11 | « 1a 2 oui 3 oui » (Pest 4 et son module browser ; chaque action testée en navigateur, balayage, chaque lot suivant ; ordre SL, NAV, ML, EC2, S9-L, S9-A, 21) | `notes/navigateur/decision-tests-navigateur.md` § 4 ; `notes/navigateur/plan-nav.md` | Tient (lots SL et NAV-1 à NAV-5 insérés après A7b) |
+| 01/11 vers 23 h 20 UTC | 01/11 | « il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur et les testes que tu as deja fait comme d'habitude » | `notes/historique/DIRECTIVES.md` D51 ; fiche, « Audit final » ; `notes/navigateur/decision-tests-navigateur.md` § 5 | Tient |
 | 322 | 01/11 | « 1a 2a 3a 4a » : constat 10 d'EC (refus d'inviter le SIREN d'un cabinet gardé, exception écrite dans `CLAUDE.md`) ; Q-AF10 (rouge à partir du 31e jour sans preuve d'export) ; Q-AF12 (preuve notée même dans un magasin fermé) ; Q-AF13 (« Garder », « C'est vérifié », date du visa) | `notes/ec2/decision-expert-comptable-societe.md` (§ 4) ; `notes/serie9/reponses-serie9.md` | Tient (lots EC2 et S9-A) |
 
 Les réponses données par la fenêtre de questions ou par une page d'arbitrages ne figurent pas toutes dans les messages tapés : elles sont citées dans leurs fichiers de réponses (séries 4 à 8, V2, cabinets, types d'activité, T2, T3, PU).

@@ -134,3 +134,7 @@ je parle de tous les actions qui se font sur navigateurs, à chaque clique il y 
 
 « 1a 2 oui 3 oui »
 
+## 25. 2026-11-01 23:14 UTC
+
+il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur et les testes que tu as deja fait comme d'habitude
+

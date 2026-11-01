@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 22:56 UTC par pilotage-sync.sh : « Fiche : lots SL et NAV-1 à NAV-5 dans la liste des lots restants ».
+Mis à jour le 01/11/2026 à 23:16 UTC par pilotage-sync.sh : « Audit final : tous les tests en navigateur et la suite habituelle (D51) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

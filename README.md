@@ -182,6 +182,10 @@ Au 01/11/2026 vers 18 h 29 UTC, la tête poussée est `53ed088` (correction de r
 7. **S9-A** : « À faire » et « À surveiller » au tableau de bord de chaque magasin, nombres par magasin dans l'espace de la société, aucun nombre dans les menus (`serie9/reponses-serie9.md`, puis `serie9/analyse-a-faire.md` corrigée par `serie9/critique.md`). Q-AF10, Q-AF12 et Q-AF13 sont tranchées par l'éditeur le 01/11/2026 (msg 322, « 1a 2a 3a 4a », le 1 portant sur le constat 10 d'EC) : réponses écrites dans `serie9/reponses-serie9.md` (section « Réponses de l'éditeur du 01/11/2026 »), que le lot relit à son début.
 8. **21** : lot de décisions 21 étendu, vérification transverse de toutes les décisions (matrice décision → test), y compris chaque directive et chaque décision de `notes/historique/DIRECTIVES.md` (§ 1 et § 2), même écrite seulement dans le code ; pour celles qui ne sont ni dans `CLAUDE.md` ni dans un fichier de décision, il propose dans « laisses » le texte à soumettre à l'éditeur, sans l'écrire dans `CLAUDE.md`.
 
+### Audit final, avant la mise en production (à ne pas oublier : directive de l'éditeur du 01/11/2026, D51)
+
+« il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur et les testes que tu as deja fait comme d'habitude » À la fin du logiciel, avant la mise en production (étape 15), l'audit final passe TOUS les tests : tous les tests en navigateur (lots NAV-1 à NAV-5 et ceux de chaque lot suivant) et toute la suite habituelle, sur SQLite puis sur PostgreSQL, chacune au code 0, puis la grille faketime (D50), et tout ce qu'ils trouvent se corrige alors. Chaque relance de la campagne de tests (étape 1 bis, fin des étapes 2, 3, 5, 9 et 13) comprend aussi les tests en navigateur.
+
 ### Après la poussée du lot 21
 
 1. Vérifier la CI de la tête poussée et lancer `pilotage-sync.sh`.

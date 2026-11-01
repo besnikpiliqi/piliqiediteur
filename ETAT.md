@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 21:39 UTC par pilotage-sync.sh : « Client comptoir et ticket transformé en facture : questions à l'éditeur ».
+Mis à jour le 01/11/2026 à 21:52 UTC par pilotage-sync.sh : « Client comptoir et avoirs non utilisés : décision de l'éditeur confiée au lot S9-A ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,15 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
+ M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
+ M app/Domain/Cabinets/Models/Cabinet.php
+ M app/Domain/Cabinets/Models/LienCabinet.php
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
+ M app/Domain/Tenancy/Actions/CreerSocieteAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
  M app/Filament/Societe/Pages/AccepterLaTransmission.php
  M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
  M app/Http/Controllers/CodeDuCourrierController.php
@@ -46,8 +55,11 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M app/Providers/Filament/SocietePanelProvider.php
  M tests/Feature/Cabinets/CabinetInscriptionTest.php
  M tests/Feature/Cabinets/CollaborateursTest.php
+ M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
  M tests/Feature/Cabinets/PanneauCabinetTest.php
+ M tests/Feature/Societe/PanneauSocieteTest.php
  M tests/Feature/Societe/TypeDActiviteTest.php
+?? app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
 ?? app/Filament/EspaceDeLaSociete.php
 ?? app/Http/Middleware/MenerUnCabinetASonEspace.php
 ```

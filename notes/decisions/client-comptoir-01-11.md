@@ -15,6 +15,11 @@
 2. Retours au comptoir d'un client anonyme : (a) garder le bon d'avoir (point 16), sans jamais l'afficher comme un « solde créditeur » du client comptoir (recommandé) ; (b) aucun avoir au client comptoir : un retour exige d'abord de transformer le ticket en facture au nom du client.
 3. Choix de Claude, contestable : le client comptoir n'apparaît plus dans la liste « Clients » (rien à y voir ni à modifier), son adresse est refusée, il reste « Client comptoir » sur ses tickets, et la colonne « Solde créditeur » ne le concerne pas.
 
-## 4. Réponses de l'éditeur
+## 4. Réponses de l'éditeur (01/11/2026, vers 22 h 50)
 
-(en attente)
+« 1a 2a( mais la il faut afficher qq part (peut etre dans le tableau de bord ) les avoir des client comptoires et professionel s'il reste des avoir sans regler donc qui ne sont pas encore facture pour que le proprietaire ou le magasin sache ce qu'il reste comme avoirs sans regler ) 3 oui »
+
+- 1a : l'avoir d'annulation automatique de la transformation reste (lot C-b de la chaîne TVA).
+- 2a : les bons d'avoir des retours au comptoir restent, jamais affichés comme un solde du client comptoir ; en plus, les avoirs non utilisés (bons d'avoir du comptoir et crédits des clients) s'affichent au tableau de bord du magasin et, par magasin, dans l'espace d'administration.
+- 3 oui : le client comptoir sort de la liste des clients et de leurs sélecteurs, sa fiche ne se consulte ni ne se modifie.
+- Application et textes de `CLAUDE.md` : `serie9/reponses-serie9.md`, dernière section (lot S9-A).

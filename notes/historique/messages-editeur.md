@@ -108,3 +108,7 @@ quand ce magasin est invite par son comptable et lui accepte alors c'est pas bon
 
 le client comptoir n'as pas besoin de ce genre d'info et meme chez le client comptoir ne doit pas pouvoir aller voir ou editer car c'est un client comptoir inconnu et c'est normal que c'est un client particulier sauf si ce client veux apres transformer son ticket de vente en facture alors la on choisi les info du client. ETTT commen je t'ai deja dis si un jour un client viens avec son ticket et veut transformer son ticket en facture alors ca doit se faire uniquement latransformation en facture en un clique sans pouvoir creer d'abort l'avoir et apres la facture. donc le client donne son ticket avec son numer de ticket et le magasin transform en facture juste avec un clique car un client comptoir ne doit pas avoir une avoir car c'est inconnu et donc comme dans la 2eme photo marque le "Solde créditeur" 0.00€ alors ce client ne doit jamais avoir un avoir car c'est inconnu. donc juste une transformation en facture en un clique avec son num de ticket
 
+## 19. 2026-11-01 21:51 UTC
+
+« 1a 2a( mais la il faut afficher qq part (peut etre dans le tableau de bord )  les avoir des client comptoires et professionel s'il reste des avoir sans regler donc qui ne sont pas encore facture pour que le proprietaire ou le magasin sache ce qu'il reste comme avoirs sans regler )  3 oui »
+

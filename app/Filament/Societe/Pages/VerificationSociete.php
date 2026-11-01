@@ -42,10 +42,9 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
  *
  * Tant que le code n'est pas saisi, elle rappelle le type d'activité de la
  * société (voir la vue partielle filament.rappel-du-type) : s'il est faux,
- * l'éditeur clôt l'inscription, ce qui libère le SIREN. Pour un cabinet
- * d'expertise comptable, qui n'a ni magasin ni démonstration, son état ne
- * parle ni de l'un ni de l'autre, jusqu'à l'espace des cabinets qui le
- * remplacera.
+ * l'éditeur clôt l'inscription, ce qui libère le SIREN. Un cabinet
+ * d'expertise comptable a sa propre page, dans l'espace du cabinet, qui en
+ * reprend le courrier et les gestes (voir VerificationDuCabinet).
  *
  * Elle montre aussi les établissements que le répertoire Sirene doit
  * encore confirmer, avec le bouton qui reprend leur contrôle.

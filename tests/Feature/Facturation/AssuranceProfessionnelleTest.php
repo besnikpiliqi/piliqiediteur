@@ -223,8 +223,9 @@ class AssuranceProfessionnelleTest extends TestCase
 
     /**
      * Un cabinet d'expertise comptable n'a ni magasin ni document de
-     * vente : la page de son identité n'a pas de bloc d'assurance, et
-     * l'action n'en écrit aucun champ, même reçu.
+     * vente : l'action n'écrit aucun champ de l'assurance, même reçu (la
+     * page de son identité, dans l'espace du cabinet, voir
+     * CabinetInscriptionTest).
      */
     public function test_un_cabinet_n_a_pas_de_bloc_d_assurance(): void
     {
@@ -235,17 +236,6 @@ class AssuranceProfessionnelleTest extends TestCase
         app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $cabinet, [...self::ASSURANCE, 'capital_social' => '5000', 'immatriculation' => 'RCS Paris']);
 
         $this->assertSame(['immatriculation' => 'RCS Paris', 'assurance_assureur' => null, 'assurance_adresse' => null, 'assurance_contrat' => null, 'assurance_couverture' => null], $cabinet->fresh()->only(['immatriculation', ...ModifierIdentiteSocieteAction::CHAMPS_DE_L_ASSURANCE]));
-        $this->dansLEspaceDeLaSociete($cabinet->fresh(), $proprietaire);
-        $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $cabinet))
-            ->assertOk()
-            ->assertSeeText('Identité légale')
-            ->assertDontSeeText(['Assurance professionnelle', 'Assureur ou garant']);
-        Livewire::test(IdentiteSociete::class)
-            ->assertFormFieldIsHidden('assurance_assureur')
-            ->fillForm(['assurance_assureur' => 'Mutuelle du Bâtiment'])
-            ->call('save')
-            ->assertHasNoFormErrors();
-        $this->assertNull($cabinet->fresh()->assurance_assureur);
     }
 
     /**

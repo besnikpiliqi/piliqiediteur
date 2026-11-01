@@ -8,14 +8,18 @@ use App\Models\User;
 
 /**
  * Les gestes sur la société elle-même, dans son espace d'administration
- * (voir SocietePanelProvider), jamais pour le compte d'une autre société :
+ * (voir SocietePanelProvider), ou, pour un cabinet d'expertise comptable,
+ * dans l'espace du cabinet (voir CabinetPanelProvider), jamais pour le
+ * compte d'une autre société :
  * - la consulter (tableau de bord, vérification) : son propriétaire et ses
- *   administrateurs, avec un compte qui peut agir (voir view()) ;
+ *   administrateurs, ou les comptes d'un cabinet, avec un compte qui peut
+ *   agir (voir view()) ;
  * - ses paramètres (identité légale, fiscalité) : le propriétaire et un
  *   administrateur de tous les magasins autorisé à les gérer, qui les
  *   consultent même en lecture seule et ne les modifient qu'en dehors ; un
  *   cabinet d'expertise comptable, qui n'a ni magasin ni document de vente,
- *   ne règle que son identité (voir voirLesParametresFiscaux()) ;
+ *   ne règle que son identité (voir voirLesParametresFiscaux()), que tous
+ *   ses comptes consultent et que son propriétaire seul modifie ;
  * - ses magasins, sauf pour un cabinet d'expertise comptable, qui n'en a
  *   aucun (voir TypeDActivite::aDesMagasins()) : qui est autorisé à les
  *   gérer, dans sa portée (les
@@ -49,24 +53,27 @@ class SocietePolicy
 {
     public function view(User $user, Societe $societe): bool
     {
-        return $user->peutAdministrer() && $user->peutAgir() && (int) $user->societe_id === $societe->getKey();
+        return ($user->peutAdministrer() || $user->ouvreLEspaceDuCabinet()) && $user->peutAgir() && (int) $user->societe_id === $societe->getKey();
     }
 
     /**
      * Ouvrir l'identité légale et les paramètres fiscaux, même en lecture
      * seule : le propriétaire, et un administrateur de tous les magasins
-     * autorisé à gérer les paramètres de la société.
+     * autorisé à gérer les paramètres de la société ; dans un cabinet
+     * d'expertise comptable, chacun de ses comptes.
      */
     public function voirLesParametres(User $user, Societe $societe): bool
     {
-        return $this->view($user, $societe)
-            && $user->administreTousLesMagasins()
-            && in_array(AutorisationsSociete::PARAMETRES_GERER, $user->autorisationsDeSociete(), true);
+        return $this->view($user, $societe) && ($user->ouvreLEspaceDuCabinet() || self::gereLesParametres($user));
     }
 
+    /**
+     * Les modifier, hors lecture seule : qui les gère, le propriétaire d'un
+     * cabinet compris (voir AutorisationsSociete::duProprietaireDUnCabinet()).
+     */
     public function modifierLesParametres(User $user, Societe $societe): bool
     {
-        return $this->voirLesParametres($user, $societe) && ! $societe->estEnLectureSeule();
+        return $this->view($user, $societe) && self::gereLesParametres($user) && ! $societe->estEnLectureSeule();
     }
 
     /**
@@ -79,6 +86,15 @@ class SocietePolicy
     public function voirLesParametresFiscaux(User $user, Societe $societe): bool
     {
         return $this->voirLesParametres($user, $societe) && ! $societe->estUnCabinet();
+    }
+
+    /**
+     * Gère-t-il les paramètres de sa société : avec tous les magasins dans
+     * sa portée et l'autorisation de les gérer ?
+     */
+    private static function gereLesParametres(User $user): bool
+    {
+        return $user->administreTousLesMagasins() && in_array(AutorisationsSociete::PARAMETRES_GERER, $user->autorisationsDeSociete(), true);
     }
 
     public function modifierLesParametresFiscaux(User $user, Societe $societe): bool

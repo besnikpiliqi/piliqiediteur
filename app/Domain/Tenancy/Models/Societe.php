@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -16,6 +17,7 @@ use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -300,6 +302,39 @@ class Societe extends Model implements HasName
     public function estUnCabinet(): bool
     {
         return $this->type_activite === TypeDActivite::Cabinet;
+    }
+
+    /**
+     * La vérification d'un cabinet d'expertise comptable (voir Cabinet),
+     * qui n'existe que pour un cabinet. La relation filtre déjà par la
+     * société : elle se lit sans SocieteScope, hors de tout contexte (la
+     * connexion, la page d'une invitation) comme dans le contexte d'une
+     * autre société (celle d'un client qui désigne ce cabinet), toujours
+     * pour ce seul cabinet.
+     *
+     * @return HasOne<Cabinet, $this>
+     */
+    public function cabinet(): HasOne
+    {
+        return $this->hasOne(Cabinet::class)->withoutGlobalScope(SocieteScope::class);
+    }
+
+    /**
+     * Est-ce un cabinet d'expertise comptable vérifié, qui peut inviter,
+     * lier, voir et ouvrir ses clients ? Validé (le code de son courrier
+     * saisi), actif (ni suspendu, ni résilié, ni révoqué), son code
+     * d'activité contrôlé et son inscription au tableau de l'Ordre vérifiée,
+     * sans radiation constatée depuis. Relue en base à chaque question.
+     */
+    public function estUnCabinetVerifie(): bool
+    {
+        if (! $this->estUnCabinet() || ! $this->estValidee() || $this->statut !== StatutSociete::Active) {
+            return false;
+        }
+
+        $verification = $this->cabinet()->first(['id', 'societe_id', 'activite_controlee_le', 'ordre_verifie_le', 'ordre_retire_le']);
+
+        return $verification !== null && $verification->aSonActiviteControlee() && $verification->estVerifieALOrdre();
     }
 
     /**

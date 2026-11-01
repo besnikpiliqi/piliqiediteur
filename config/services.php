@@ -84,6 +84,18 @@ return [
         'secret_rappel' => env('RECOMMANDE_SECRET_RAPPEL'),
     ],
 
+    /*
+     | L'annuaire de l'Ordre des experts-comptables, qui vérifie
+     | l'inscription d'un cabinet d'expertise comptable au tableau (voir
+     | AnnuaireDeLOrdre) : son pilote, editeur tant qu'aucun accès
+     | automatique officiel et documenté n'existe (l'éditeur vérifie chaque
+     | cabinet dans sa procédure), ou faux pour le développement et les
+     | tests (jamais en production).
+     */
+    'ordre' => [
+        'pilote' => env('ORDRE_PILOTE', 'editeur'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

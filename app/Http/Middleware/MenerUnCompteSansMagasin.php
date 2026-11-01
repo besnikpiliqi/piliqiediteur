@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Closure;
@@ -12,7 +13,9 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * L'accueil du panneau des magasins (/app) pour un compte qui n'a encore
  * aucun magasin à ouvrir (voir User::magasinsAccessibles()) : jamais une
- * erreur. Le propriétaire et un administrateur vont à l'espace de leur
+ * erreur. Un compte d'un cabinet d'expertise comptable va toujours à
+ * l'espace de son cabinet (voir TableauDeBordDuCabinet). Le propriétaire et
+ * un administrateur vont à l'espace de leur
  * société, où se créent les magasins (voir TableauDeBord) ; un
  * expert-comptable d'une société sans magasin réel, à une page qui le lui
  * dit (voir AucunMagasin). Un compte de membre a toujours son magasin, où
@@ -26,7 +29,15 @@ class MenerUnCompteSansMagasin
     {
         $compte = $request->user();
 
-        if (! $compte instanceof User || ! $request->routeIs('filament.app.tenant') || $compte->magasinsAccessibles()->isNotEmpty()) {
+        if (! $compte instanceof User || ! $request->routeIs('filament.app.tenant')) {
+            return $next($request);
+        }
+
+        if ($compte->ouvreLEspaceDuCabinet()) {
+            return redirect()->to(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $compte->societe));
+        }
+
+        if ($compte->magasinsAccessibles()->isNotEmpty()) {
             return $next($request);
         }
 

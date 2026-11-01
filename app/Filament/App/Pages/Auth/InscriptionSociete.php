@@ -42,7 +42,9 @@ use Illuminate\Validation\ValidationException;
  * CreerSocieteAction).
  *
  * Le type d'activité se choisit dans un menu sans valeur par défaut (voir
- * TypeDActivite), chaque entrée avec sa ligne d'exemples, l'aide de
+ * TypeDActivite), sauf pour le lien qu'une société envoie à son
+ * expert-comptable pour qu'il crée l'espace de son cabinet (?type=cabinet,
+ * voir afterFill()), chaque entrée avec sa ligne d'exemples, l'aide de
  * l'entrée choisie et le rappel que le choix sera définitif sous le menu ;
  * il peut encore changer sur la page du lien, puis devient définitif à la
  * création de la société. Le code d'activité de l'entreprise, lu au
@@ -101,6 +103,20 @@ class InscriptionSociete extends Register
     public function getHeading(): string|Htmlable
     {
         return 'Inscrire votre société';
+    }
+
+    /**
+     * Le lien qu'une société envoie à son expert-comptable pour qu'il crée
+     * l'espace de son cabinet présélectionne « Cabinet d'expertise
+     * comptable » (?type=cabinet) : le menu reste modifiable, ici et sur la
+     * page du lien, où la case du choix définitif est toujours demandée.
+     * Aucune autre entrée ne se présélectionne.
+     */
+    protected function afterFill(): void
+    {
+        if (request()->query('type') === TypeDActivite::Cabinet->value) {
+            $this->form->fill(['type_activite' => TypeDActivite::Cabinet->value]);
+        }
     }
 
     protected function getForms(): array

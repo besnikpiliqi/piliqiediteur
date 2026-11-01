@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -84,6 +85,7 @@ class IsolationDesSocietesTest extends TestCase
      * @var list<class-string<Model>>
      */
     private const MODELES_DE_SOCIETE = [
+        Cabinet::class,
         CodeConfirmation::class,
         EntreeAudit::class,
         Identifiant::class,

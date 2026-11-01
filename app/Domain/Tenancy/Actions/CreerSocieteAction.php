@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -16,6 +17,7 @@ use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\GenerateurDIdentifiants;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -59,8 +61,12 @@ use SensitiveParameter;
  * passe qu'il a déjà choisi (voir GenerateurDIdentifiants) ; le contrôle
  * Sirene de l'entreprise au registre des vérifications ; l'inscription au
  * journal d'audit, avec le type et le code d'activité lu au répertoire et
- * sa nomenclature, enregistrés nulle part ailleurs ; le courrier
- * recommandé et son code (voir
+ * sa nomenclature, enregistrés nulle part ailleurs (son origine :
+ * « inscription », la société s'inscrit elle-même) ; pour un cabinet
+ * d'expertise comptable, sa ligne de vérification (voir Cabinet), avec ce
+ * code, contrôlé quand il est 69.20Z en NAF rév. 2, sinon à contrôler par
+ * l'éditeur, et ce contrôle au journal d'audit ; le courrier recommandé et
+ * son code (voir
  * EnvoyerCodeDeConfirmationAction::premier()). Deux confirmations
  * simultanées du même SIREN n'en créent qu'une : l'index unique partiel
  * societes_siren_unique refuse la seconde, qui lit MESSAGE_SIREN_PRIS.
@@ -153,7 +159,13 @@ class CreerSocieteAction
                         'raison_sociale' => $nouvelle->raison_sociale,
                         'forme_juridique' => JournalAudit::valeur($nouvelle->forme_juridique),
                         'proprietaire' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
+                        'origine' => 'inscription',
                     ], $nouvelle);
+
+                    if ($nouvelle->estUnCabinet()) {
+                        $this->noterLActiviteDuCabinet($nouvelle, $proprietaire, $unite);
+                    }
+
                     $this->envoyerCode->premier($nouvelle, $proprietaire, $destinataire);
 
                     return $nouvelle;
@@ -171,5 +183,30 @@ class CreerSocieteAction
                 default => $doublon,
             };
         }
+    }
+
+    /**
+     * La ligne de vérification du cabinet qui naît (voir Cabinet), avec le
+     * code d'activité que le répertoire Sirene lui donne à la confirmation :
+     * contrôlé quand il est 69.20Z en NAF rév. 2 ; absent ou d'une autre
+     * nomenclature, il reste à contrôler par l'éditeur, dans la procédure
+     * de l'Ordre (voir ConstaterLInscriptionALOrdreAction). Un autre code de
+     * cette nomenclature a déjà refusé l'inscription.
+     */
+    private function noterLActiviteDuCabinet(Societe $cabinet, User $proprietaire, UniteSirene $unite): void
+    {
+        $concluant = ControleSirene::exerceLesActivitesComptables($unite) === true;
+
+        tap((new Cabinet)->forceFill([
+            'code_activite' => $unite->activitePrincipale,
+            'nomenclature_activite' => $unite->nomenclatureActivite,
+            'activite_controlee_le' => $concluant ? now() : null,
+        ]))->save();
+
+        $this->journalAudit->inscrire(ActionAuditee::ActiviteDuCabinetControlee, $proprietaire, null, null, [
+            'code_activite' => $unite->activitePrincipale,
+            'nomenclature' => $unite->nomenclatureActivite,
+            'resultat' => $concluant ? 'concluant' : 'a_controler',
+        ], $cabinet);
     }
 }

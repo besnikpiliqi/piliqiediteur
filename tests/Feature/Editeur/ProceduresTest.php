@@ -2,6 +2,10 @@
 
 namespace Tests\Feature\Editeur;
 
+use App\Domain\Cabinets\Actions\ConstaterLInscriptionALOrdreAction;
+use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
+use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
+use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
@@ -20,9 +24,13 @@ use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
+use App\Integrations\Ordre\AnnuaireTenuParLEditeur;
+use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
@@ -252,6 +260,85 @@ class ProceduresTest extends TestCase
 
         $this->assertSame($avant, $this->ecritures());
         $this->assertSame([true, false, TypeDActivite::Commerce], [$validee->fresh()->estValidee(), $validee->fresh()->estClose(), $validee->fresh()->type_activite]);
+    }
+
+    /**
+     * La vérification par l'éditeur de l'inscription d'un cabinet à
+     * l'Ordre suit le cadre commun : refusée sans justification ni pièce,
+     * sans le SIREN retapé ou sans opérateur, sans rien écrire ; faite,
+     * elle pose l'inscription, voie « éditeur », efface la demande en
+     * attente et s'inscrit au journal d'audit du cabinet, origine
+     * « éditeur », avec sa justification et son opérateur ; le propriétaire
+     * est prévenu.
+     */
+    public function test_editeur_cabinet_verifier_ordre_exige_justification_piece_siren_et_operateur_et_s_inscrit_a_l_audit(): void
+    {
+        $this->app->instance(AnnuaireDeLOrdre::class, new AnnuaireTenuParLEditeur);
+        $cabinet = $this->inscrireUneSociete(FauxRepertoireSirene::SIREN_CABINET, type: TypeDActivite::Cabinet);
+        $proprietaire = $this->saisirLeCodeDuCourrier($cabinet);
+        app(VerifierLOrdreAction::class)->handle($proprietaire, $cabinet->fresh(), ['numero_ordre' => '75-00042', 'conseil_regional' => 'Paris Île-de-France']);
+        app(TenantContext::class)->clear();
+        $avant = $this->ecritures();
+        $options = ['--numero' => '75-00042', '--conseil' => 'Paris Île-de-France'];
+
+        $this->artisan('editeur:cabinet:verifier-ordre', ['societe' => (string) $cabinet->id, ...$options, '--confirmer' => $cabinet->siren])->assertFailed();
+        $this->artisan('editeur:cabinet:verifier-ordre', ['societe' => (string) $cabinet->id, ...$options, '--justification' => self::JUSTIFICATION, '--piece' => self::PIECE, '--confirmer' => '000000000'])->assertFailed();
+        $this->artisan('editeur:cabinet:verifier-ordre', ['societe' => (string) $cabinet->id, ...$options, '--justification' => self::JUSTIFICATION, '--piece' => self::PIECE, '--confirmer' => $cabinet->siren])
+            ->expectsQuestion('Nom de l\'opérateur', 'alice')
+            ->expectsQuestion('Secret de l\'opérateur', 'faux-secret')
+            ->assertFailed();
+        $this->assertSame($avant, $this->ecritures());
+        $this->assertFalse($cabinet->fresh()->estUnCabinetVerifie());
+
+        $this->procedure('editeur:cabinet:verifier-ordre', $cabinet, $options)
+            ->expectsOutputToContain('Inscription à l\'Ordre vérifiée.')
+            ->assertSuccessful();
+
+        $verification = $cabinet->cabinet()->sole();
+        $this->assertSame(['75-00042', 'Paris Île-de-France', VoieDeVerificationOrdre::Editeur, null], [$verification->numero_ordre, $verification->conseil_regional_ordre, $verification->ordre_voie, $verification->ordre_demande_le]);
+        $this->assertTrue($cabinet->fresh()->estUnCabinetVerifie());
+        $entree = app(TenantContext::class)->runAsSociete($cabinet, fn (): EntreeAudit => EntreeAudit::query()->where('action', ActionAuditee::OrdreVerifie->value)->sole());
+        $this->assertSame(['editeur', self::JUSTIFICATION, ['alice'], 'editeur'], [$entree->origine, $entree->justification, $entree->operateur['operateurs'], $entree->nouvelles_valeurs['voie']]);
+        $this->assertContains('L\'éditeur a vérifié l\'inscription de votre cabinet au tableau de l\'Ordre.', $proprietaire->notifications()->get()->pluck('data.body')->all());
+    }
+
+    public function test_editeur_cabinet_verifier_ordre_refuse_une_societe_qui_n_est_pas_un_cabinet(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $avant = $this->ecritures();
+
+        $this->procedure('editeur:cabinet:verifier-ordre', $societe, ['--numero' => '75-00042', '--conseil' => 'Paris'])
+            ->expectsOutputToContain(ConstaterLInscriptionALOrdreAction::MESSAGE_PAS_UN_CABINET)
+            ->assertFailed();
+
+        $this->assertSame($avant, $this->ecritures());
+        $this->assertSame(0, DB::table('cabinets')->count());
+    }
+
+    /**
+     * Le refus par l'éditeur efface la demande en attente, note son motif,
+     * que la page du cabinet montre, s'inscrit au journal d'audit et
+     * prévient le propriétaire avec le motif, dans sa cloche et par e-mail.
+     */
+    public function test_editeur_cabinet_refuser_ordre_previent_le_proprietaire_avec_le_motif(): void
+    {
+        $this->app->instance(AnnuaireDeLOrdre::class, new AnnuaireTenuParLEditeur);
+        $cabinet = $this->inscrireUneSociete(FauxRepertoireSirene::SIREN_CABINET, type: TypeDActivite::Cabinet);
+        $proprietaire = $this->saisirLeCodeDuCourrier($cabinet);
+        app(VerifierLOrdreAction::class)->handle($proprietaire, $cabinet->fresh(), ['numero_ordre' => '75-00042', 'conseil_regional' => 'Paris']);
+        app(TenantContext::class)->clear();
+        Notification::fake();
+        $motif = 'Aucune inscription à ce numéro au tableau de l\'Ordre de la région Île-de-France.';
+
+        $this->procedure('editeur:cabinet:refuser-ordre', $cabinet, ['--motif' => $motif])->assertSuccessful();
+
+        $verification = $cabinet->cabinet()->sole();
+        $this->assertSame([null, null, $motif], [$verification->ordre_demande_le, $verification->ordre_verifie_le, $verification->ordre_motif_refus]);
+        $entree = app(TenantContext::class)->runAsSociete($cabinet, fn (): EntreeAudit => EntreeAudit::query()->where('action', ActionAuditee::OrdreRefuse->value)->sole());
+        $this->assertSame([['motif' => $motif], 'editeur'], [$entree->nouvelles_valeurs, $entree->origine]);
+        Notification::assertSentTo($proprietaire, AvisDuCabinet::class, fn (AvisDuCabinet $avis, array $canaux): bool => $avis->titre === 'Inscription à l\'Ordre refusée'
+            && str_contains($avis->texte, $motif)
+            && $canaux === ['database', 'mail']);
     }
 
     public function test_une_societe_inconnue_est_refusee(): void

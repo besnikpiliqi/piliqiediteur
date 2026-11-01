@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\EnvoiRecommande\FauxServiceEnvoiRecommande;
+use App\Integrations\Ordre\AnnuaireTenuParLEditeur;
+use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
+use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use App\Integrations\Rne\FauxRne;
 use App\Integrations\Rne\InpiRne;
@@ -20,9 +23,12 @@ use RuntimeException;
  * des entreprises de l'INPI (RNE_PILOTE, « inpi » ou « faux ») et l'envoi
  * recommandé par l'API de La Poste (RECOMMANDE_PILOTE), seulement
  * « faux » tant que le contrat de l'éditeur avec La Poste n'est pas
- * branché. Le pilote « faux » sert au développement et aux tests, sans
- * aucune requête ; l'application refuse de démarrer en production avec
- * l'un d'eux.
+ * branché, et l'annuaire de l'Ordre des experts-comptables (ORDRE_PILOTE,
+ * « editeur », le pilote de production tant qu'aucun accès automatique
+ * officiel n'existe, ou « faux »), qui vérifie l'inscription d'un cabinet
+ * d'expertise comptable. Le pilote « faux » sert au développement et aux
+ * tests, sans aucune requête ; l'application refuse de démarrer en
+ * production avec l'un d'eux.
  */
 class VerificationServiceProvider extends ServiceProvider
 {
@@ -35,6 +41,7 @@ class VerificationServiceProvider extends ServiceProvider
         'sirene' => ['insee' => InseeSirene::class, 'faux' => FauxRepertoireSirene::class],
         'rne' => ['inpi' => InpiRne::class, 'faux' => FauxRne::class],
         'recommande' => ['faux' => FauxServiceEnvoiRecommande::class],
+        'ordre' => ['editeur' => AnnuaireTenuParLEditeur::class, 'faux' => FauxAnnuaireDeLOrdre::class],
     ];
 
     /**
@@ -46,6 +53,7 @@ class VerificationServiceProvider extends ServiceProvider
         'sirene' => RepertoireSirene::class,
         'rne' => RegistreNationalDesEntreprises::class,
         'recommande' => ServiceEnvoiRecommande::class,
+        'ordre' => AnnuaireDeLOrdre::class,
     ];
 
     public function register(): void

@@ -50,7 +50,10 @@ use Illuminate\Support\Facades\Log;
  *   vérifications et se signale au propriétaire et à l'éditeur, sans rien
  *   bloquer : ni les ventes ni les paiements ne s'arrêtent, et le
  *   territoire du magasin ne change pas ; l'éditeur décide (pour le
- *   territoire, voir signalerUnAutreTerritoire()).
+ *   territoire, voir signalerUnAutreTerritoire()). C'est aussi la seule
+ *   relecture du code d'activité d'un cabinet d'expertise comptable après
+ *   son inscription : un code devenu autre que 69.20Z en NAF rév. 2 se
+ *   signale de même, sans rien couper.
  *
  * Ce qui s'écrit sur la société (catégorie lue) s'inscrit à son journal
  * d'audit, le système pour auteur, avec les anciennes et les nouvelles
@@ -118,6 +121,11 @@ class ReverificationSirene
         if ($consultation['resultat'] === ResultatVerification::Negative) {
             Log::warning('Revérification Sirene : écart sur une société validée.', ['societe_id' => $societe->getKey(), 'motif' => $consultation['motif']]);
             $this->signalerLEcart($societe, $consultation['motif'], negative: true);
+        }
+
+        if ($societe->estUnCabinet() && $unite !== null && $consultation['resultat'] === ResultatVerification::Concluante && ControleSirene::exerceLesActivitesComptables($unite) === false) {
+            Log::warning('Revérification Sirene : code d\'activité d\'un cabinet devenu autre que 69.20Z.', ['societe_id' => $societe->getKey(), 'code_activite' => $unite->activitePrincipale]);
+            $this->signalerLEcart($societe, "Le code d'activité de votre cabinet au répertoire Sirene est désormais {$unite->activitePrincipale}, et non plus ".ControleSirene::CODE_ACTIVITES_COMPTABLES.' (activités comptables).');
         }
 
         if ($categorieLue !== null && $categorieLueAvant !== null && $categorieLueAvant !== $categorieLue) {

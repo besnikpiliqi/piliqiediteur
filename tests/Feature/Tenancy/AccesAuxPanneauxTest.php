@@ -37,13 +37,22 @@ class AccesAuxPanneauxTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_proprietaire_ouvre_les_panneaux_app_et_societe_et_aucun_autre(): void
+    /**
+     * Trois panneaux et aucun autre : celui des magasins, l'espace
+     * d'administration d'une société et l'espace d'un cabinet d'expertise
+     * comptable. Le propriétaire d'une société qui a des magasins ouvre
+     * les deux premiers, jamais celui d'un cabinet ni un panneau inconnu.
+     */
+    public function test_il_n_existe_que_les_panneaux_app_societe_et_cabinet(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
+        $this->assertEqualsCanonicalizing(['app', 'societe', 'cabinet'], array_keys(Filament::getPanels()));
         $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('app')));
         $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertFalse($proprietaire->canAccessPanel(Filament::getPanel('cabinet')));
+        $this->assertSame([], $proprietaire->getTenants(Filament::getPanel('cabinet'))->modelKeys());
         $this->assertFalse($proprietaire->canAccessPanel(Panel::make()->id('editeur')));
         $this->assertSame([$magasin->societe_id], $proprietaire->getTenants(Filament::getPanel('societe'))->modelKeys());
         $this->assertSame([], $proprietaire->getTenants(Panel::make()->id('editeur'))->modelKeys());

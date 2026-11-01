@@ -7,7 +7,9 @@ use InvalidArgumentException;
 /**
  * Les autorisations de la société elle-même, dans son espace
  * d'administration, que le propriétaire coche pour un administrateur (voir
- * CreerAdministrateurAction) : le propriétaire les a toutes sans case ; un
+ * CreerAdministrateurAction) : le propriétaire les a toutes sans case,
+ * sauf le propriétaire d'un cabinet d'expertise comptable, qui n'a que
+ * les paramètres, son identité (voir duProprietaireDUnCabinet()) ; un
  * membre ou un expert-comptable n'en a aucune, quelle que soit la ligne
  * qu'en garderait la base (voir User::autorisationsDeSociete()). Aucune
  * chaîne magique ailleurs : on référence toujours ces constantes. La base
@@ -54,6 +56,20 @@ final class AutorisationsSociete
     public static function toutes(): array
     {
         return [self::MAGASINS_GERER, self::RESPONSABLES_NOMMER, self::PARAMETRES_GERER, self::ACCES_REDONNER];
+    }
+
+    /**
+     * Les autorisations de société du propriétaire d'un cabinet
+     * d'expertise comptable, qui n'a ni magasin, ni administrateur, ni
+     * responsable : ses paramètres, c'est-à-dire son identité (un cabinet
+     * n'a pas de réglages fiscaux dans le logiciel, voir
+     * SocietePolicy::voirLesParametresFiscaux()).
+     *
+     * @return list<string>
+     */
+    public static function duProprietaireDUnCabinet(): array
+    {
+        return [self::PARAMETRES_GERER];
     }
 
     /**

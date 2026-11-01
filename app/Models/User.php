@@ -288,6 +288,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return $this->role_societe === RoleSociete::Administrateur;
     }
 
+    /**
+     * Est-il un compte d'un cabinet d'expertise comptable (voir
+     * Societe::estUnCabinet()) : son propriétaire ou l'un de ses
+     * collaborateurs ? Lu sur sa société, chargée une fois par instance.
+     */
+    public function estDUnCabinet(): bool
+    {
+        return $this->societe?->estUnCabinet() === true;
+    }
+
     public function estExpertComptable(): bool
     {
         return $this->role_societe === RoleSociete::ExpertComptable;
@@ -309,18 +319,21 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Son rôle dans sa société, tel que le dit le tableau de bord de
-     * l'espace d'administration après « Bonjour » : « Propriétaire de »
-     * suivi de la dénomination de la société quand elle est connue,
-     * sinon le libellé de son rôle (« Administrateur »,
-     * « Expert-comptable »).
+     * l'espace d'administration ou de l'espace du cabinet après
+     * « Bonjour » : « Propriétaire de » suivi de la dénomination de la
+     * société quand elle est connue (« Propriétaire du cabinet » pour un
+     * cabinet d'expertise comptable), sinon le libellé de son rôle
+     * (« Administrateur », « Expert-comptable »).
      */
     public function libelleDuRoleDeSociete(): string
     {
         $denomination = $this->societe?->raison_sociale;
 
-        return $this->estProprietaire() && filled($denomination)
-            ? "Propriétaire de {$denomination}"
-            : $this->role_societe->getLabel();
+        return match (true) {
+            $this->estProprietaire() && $this->estDUnCabinet() => filled($denomination) ? "Propriétaire du cabinet {$denomination}" : 'Propriétaire du cabinet',
+            $this->estProprietaire() && filled($denomination) => "Propriétaire de {$denomination}",
+            default => $this->role_societe->getLabel(),
+        };
     }
 
     /**
@@ -426,17 +439,20 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Ses autorisations de société : toutes pour le propriétaire, celles
-     * que le propriétaire a cochées pour un administrateur, aucune pour
-     * tout autre compte, même si la base en gardait une ligne. Telles que
-     * la base les donne, sans regarder son statut.
+     * Ses autorisations de société : toutes pour le propriétaire (les
+     * seuls paramètres, son identité, pour le propriétaire d'un cabinet
+     * d'expertise comptable, voir
+     * AutorisationsSociete::duProprietaireDUnCabinet()), celles que le
+     * propriétaire a cochées pour un administrateur, aucune pour tout autre
+     * compte, même si la base en gardait une ligne. Telles que la base les
+     * donne, sans regarder son statut.
      *
      * @return list<string>
      */
     public function autorisationsDeSociete(): array
     {
         if ($this->estProprietaire()) {
-            return AutorisationsSociete::toutes();
+            return $this->estDUnCabinet() ? AutorisationsSociete::duProprietaireDUnCabinet() : AutorisationsSociete::toutes();
         }
 
         if (! $this->estAdministrateur()) {
@@ -743,11 +759,13 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Peut-il administrer sa société (son espace d'administration) ? Son
      * propriétaire et ses administrateurs, avec un compte actif ; jamais
-     * un membre ni un expert-comptable.
+     * un membre ni un expert-comptable, ni un compte d'un cabinet
+     * d'expertise comptable, qui a son propre espace (voir
+     * CabinetPanelProvider).
      */
     public function peutAdministrer(): bool
     {
-        return $this->estActif() && ($this->estProprietaire() || $this->estAdministrateur());
+        return $this->estActif() && ($this->estProprietaire() || $this->estAdministrateur()) && ! $this->estDUnCabinet();
     }
 
     /**
@@ -825,14 +843,17 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Filament\Models\Contracts\HasTenants : les magasins que le panneau
-     * « app » lui ouvre (voir magasinsAccessibles()), et sa société dans
-     * celui de l'administration de la société s'il peut l'administrer.
+     * « app » lui ouvre (voir magasinsAccessibles()), sa société dans celui
+     * de l'administration de la société s'il peut l'administrer, et son
+     * cabinet dans l'espace du cabinet pour un compte actif d'un cabinet
+     * d'expertise comptable.
      */
     public function getTenants(Panel $panel): array|Collection
     {
         return match ($panel->getId()) {
             'app' => $this->magasinsAccessibles(),
             'societe' => $this->peutAdministrer() ? new Collection([$this->societe]) : new Collection,
+            'cabinet' => $this->ouvreLEspaceDuCabinet() ? new Collection([$this->societe]) : new Collection,
             default => new Collection,
         };
     }
@@ -841,9 +862,18 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return match (true) {
             $tenant instanceof Magasin => $this->peutOuvrir($tenant),
-            $tenant instanceof Societe => $tenant->getKey() === (int) $this->societe_id && $this->peutAdministrer(),
+            $tenant instanceof Societe => $tenant->getKey() === (int) $this->societe_id && ($this->peutAdministrer() || $this->ouvreLEspaceDuCabinet()),
             default => false,
         };
+    }
+
+    /**
+     * Ouvre-t-il l'espace de son cabinet (voir CabinetPanelProvider) ? Un
+     * compte actif d'un cabinet d'expertise comptable.
+     */
+    public function ouvreLEspaceDuCabinet(): bool
+    {
+        return $this->estActif() && $this->estDUnCabinet();
     }
 
     /**
@@ -855,7 +885,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * l'administrer, sinon à une page qui le lui dit (voir
      * MenerUnCompteSansMagasin), et aucun magasin ne s'ouvre hors de ceux
      * que lui donne canAccessTenant(). Celui de l'administration de la
-     * société s'ouvre à son propriétaire et à ses administrateurs actifs. Un
+     * société s'ouvre à son propriétaire et à ses administrateurs actifs,
+     * jamais à un cabinet d'expertise comptable ; celui du cabinet, aux
+     * comptes actifs d'un cabinet (voir ouvreLEspaceDuCabinet()). Un
      * compte qui doit choisir son mot de passe n'y voit que ce choix (voir
      * ExigerSonPropreMotDePasse). Tout autre panneau
      * reste fermé, jusqu'à ce que l'administration de l'éditeur (étape 13
@@ -866,6 +898,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return match ($panel->getId()) {
             'app' => $this->estActif(),
             'societe' => $this->peutAdministrer(),
+            'cabinet' => $this->ouvreLEspaceDuCabinet(),
             default => false,
         };
     }

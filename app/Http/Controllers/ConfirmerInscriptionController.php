@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\TableauDeBord;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,7 +52,9 @@ use Illuminate\Validation\ValidationException;
  * définitif dès cet instant. Créée sans magasin,
  * la société attend le code de son courrier ; son propriétaire, dont le
  * lien suivi a confirmé l'adresse, est connecté et arrive dans l'espace de
- * sa société, sur la liste de ses premières étapes (voir TableauDeBord).
+ * sa société, sur la liste de ses premières étapes (voir TableauDeBord),
+ * ou, pour un cabinet d'expertise comptable, dans l'espace du cabinet,
+ * sur la liste des siennes (voir TableauDeBordDuCabinet).
  */
 class ConfirmerInscriptionController
 {
@@ -125,7 +128,7 @@ class ConfirmerInscriptionController
         Auth::login($societe->proprietaire);
         request()->session()->regenerate();
 
-        return redirect()->to(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))
+        return redirect()->to($societe->estUnCabinet() ? TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $societe) : TableauDeBord::getUrl(panel: 'societe', tenant: $societe))
             ->header('Referrer-Policy', 'no-referrer');
     }
 

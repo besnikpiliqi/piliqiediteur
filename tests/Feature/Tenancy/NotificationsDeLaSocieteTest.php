@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
@@ -46,6 +47,7 @@ class NotificationsDeLaSocieteTest extends TestCase
         $notifications = [
             AvisDeLEquipe::class => new AvisDeLEquipe($societe, 'Titre', 'Texte'),
             AvisDeVerification::class => new AvisDeVerification($societe, 'Titre', 'Texte'),
+            AvisDuCabinet::class => new AvisDuCabinet($societe, 'Titre', 'Texte'),
             ResponsableNommeParUnAdministrateur::class => new ResponsableNommeParUnAdministrateur($administrateur, $responsable, $magasin),
             EnvoiDocumentEchoue::class => new EnvoiDocumentEchoue($envoi),
             FacturesPasseesEnRetard::class => new FacturesPasseesEnRetard($magasin, ['FAC-MABOUT-2026-000001']),

@@ -15,7 +15,10 @@ use Illuminate\Support\Facades\Schema;
  * (régime de TVA, option pour les débits, mois de fin d'exercice) ; chacun
  * de ses magasins est un de ses établissements, un SIRET. Son type
  * d'activité, choisi à son inscription, ne change jamais (voir
- * TypeDActivite) ; un cabinet d'expertise comptable n'a aucun magasin.
+ * TypeDActivite) ; un cabinet d'expertise comptable n'a aucun magasin,
+ * et sa vérification propre (son code d'activité, son inscription à
+ * l'Ordre) est sur sa ligne de la table cabinets (voir Cabinet et
+ * GardesDesCabinets).
  *
  * Un SIREN n'appartient qu'à une seule société dans tout le logiciel :
  * une inscription qui attend le code de son courrier recommandé, ou une

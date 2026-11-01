@@ -28,13 +28,14 @@ class VerificationServiceProviderTest extends TestCase
                 'services.sirene.pilote' => 'insee',
                 'services.rne.pilote' => 'inpi',
                 'services.recommande.pilote' => null,
+                'services.ordre.pilote' => 'editeur',
                 "services.{$service}.pilote" => 'faux',
             ]);
 
             $this->assertThrows(fn () => (new VerificationServiceProvider($this->app))->boot(), RuntimeException::class, "Le fournisseur factice de « {$service} » (pilote faux) ne sert jamais en production.");
         }
 
-        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null]);
+        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null, 'services.ordre.pilote' => 'editeur']);
         (new VerificationServiceProvider($this->app))->boot();
         $this->app->detectEnvironment(fn (): string => 'testing');
         config(array_fill_keys(array_map(fn (string $service): string => "services.{$service}.pilote", self::SERVICES), 'faux'));

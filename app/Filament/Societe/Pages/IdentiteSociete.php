@@ -38,7 +38,10 @@ use Illuminate\Validation\ValidationException;
  * Consultable par le propriétaire et un administrateur de tous les
  * magasins autorisé à gérer les paramètres de la société (voir
  * SocietePolicy::voirLesParametres()) ; le formulaire ne s'enregistre que
- * tant qu'elle n'est pas en lecture seule.
+ * tant qu'elle n'est pas en lecture seule. Un cabinet d'expertise
+ * comptable, qui ne facture rien dans le logiciel, n'y lit ni ce qui
+ * manque pour facturer, ni l'assurance : sa page, dans l'espace du
+ * cabinet, en hérite (voir IdentiteDuCabinet).
  */
 class IdentiteSociete extends Page implements HasForms
 {
@@ -85,9 +88,9 @@ class IdentiteSociete extends Page implements HasForms
                         ->hiddenLabel()
                         ->content(fn (): string => 'Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : '.implode(', ', $this->societe()->mentionsLegalesManquantes()).'.'),
                 ])
-                ->visible(fn (): bool => $this->societe()->mentionsLegalesManquantes() !== []),
+                ->visible(fn (): bool => $this->societe()->type_activite->aDesMagasins() && $this->societe()->mentionsLegalesManquantes() !== []),
             Section::make('Identité légale')
-                ->description('Imprimée dans le pied des devis, factures, tickets et avoirs de tous vos magasins.')
+                ->description(fn (): ?string => $this->societe()->type_activite->aDesMagasins() ? 'Imprimée dans le pied des devis, factures, tickets et avoirs de tous vos magasins.' : null)
                 ->schema([
                     Placeholder::make('siren')
                         ->label('SIREN')

@@ -25,6 +25,10 @@ enum ActionAuditee: string implements HasLabel
     case CodeAnnule = 'code_annule';
     case SocieteValidee = 'societe_validee';
     case InscriptionClose = 'inscription_close';
+    case ActiviteDuCabinetControlee = 'activite_du_cabinet_controlee';
+    case OrdreDemande = 'ordre_demande';
+    case OrdreVerifie = 'ordre_verifie';
+    case OrdreRefuse = 'ordre_refuse';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
     case SiretChange = 'siret_change';
@@ -84,6 +88,10 @@ enum ActionAuditee: string implements HasLabel
             self::CodeAnnule => 'Code de confirmation annulé',
             self::SocieteValidee => 'Société validée',
             self::InscriptionClose => 'Inscription close',
+            self::ActiviteDuCabinetControlee => 'Code d\'activité du cabinet contrôlé',
+            self::OrdreDemande => 'Vérification de l\'inscription à l\'Ordre demandée',
+            self::OrdreVerifie => 'Inscription à l\'Ordre vérifiée',
+            self::OrdreRefuse => 'Inscription à l\'Ordre refusée',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
             self::SiretChange => 'SIRET du magasin changé',
@@ -127,7 +135,8 @@ enum ActionAuditee: string implements HasLabel
     {
         return match ($this) {
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees,
-            self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose => CategorieAudit::Verification,
+            self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose,
+            self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse => CategorieAudit::Verification,
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
@@ -149,8 +158,11 @@ enum ActionAuditee: string implements HasLabel
         return match ($this) {
             // Le type d'activité choisi, et le code d'activité lu au
             // répertoire Sirene à la confirmation avec sa nomenclature,
-            // enregistrés nulle part ailleurs sur la société.
-            self::SocieteInscrite => ['siren', 'type_activite', 'code_activite', 'nomenclature_activite', 'raison_sociale', 'forme_juridique', 'proprietaire'],
+            // enregistrés nulle part ailleurs sur la société (sauf, pour un
+            // cabinet d'expertise comptable, sur sa ligne de vérification,
+            // voir Cabinet) ; son origine : « inscription », la société
+            // s'inscrit elle-même.
+            self::SocieteInscrite => ['siren', 'type_activite', 'code_activite', 'nomenclature_activite', 'raison_sociale', 'forme_juridique', 'proprietaire', 'origine'],
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
             self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],
@@ -165,6 +177,18 @@ enum ActionAuditee: string implements HasLabel
             // en activité.
             self::SocieteValidee => ['preuve', 'proprietaire', 'sirets'],
             self::InscriptionClose, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
+            // Le code d'activité d'un cabinet lu au répertoire Sirene, sa
+            // nomenclature, et le résultat : « concluant » (69.20Z en NAF
+            // rév. 2), « a_controler » (code absent ou d'une autre
+            // nomenclature, contrôlé ensuite par l'éditeur) ou
+            // « controle_par_l_editeur » (voir Cabinet).
+            self::ActiviteDuCabinetControlee => ['code_activite', 'nomenclature', 'resultat'],
+            // Le n° d'inscription au tableau de l'Ordre et le conseil
+            // régional déclarés, la voie de la vérification (voir
+            // VoieDeVerificationOrdre), ou le motif d'un refus.
+            self::OrdreDemande => ['numero_ordre', 'conseil_regional'],
+            self::OrdreVerifie => ['voie', 'numero_ordre', 'conseil_regional'],
+            self::OrdreRefuse => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'territoire', 'etablissement_verifie'],
             self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'territoire', 'etablissement_verifie'],
             // Pour une cession, l'indication d'établissement principal

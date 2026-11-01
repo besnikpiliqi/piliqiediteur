@@ -27,11 +27,11 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
+use App\Filament\Cabinet\Pages\IdentiteDuCabinet;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
-use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete;
-use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
+use App\Filament\Societe\Resources\MembreResource;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
@@ -378,12 +378,13 @@ class TypeDActiviteTest extends TestCase
     }
 
     /**
-     * Avant l'espace des cabinets, un cabinet ne configure que son
-     * identité (CLAUDE.md, « Vérification de la société ») : son
-     * propriétaire ne crée ni membre, ni administrateur, ni
-     * expert-comptable, et n'ouvre ni ne modifie de réglages fiscaux ; les
-     * actions le refusent avec leur motif, sans rien écrire. Le
-     * propriétaire d'une société qui a des magasins, lui, le peut.
+     * Un cabinet ne configure que son identité (CLAUDE.md, « Vérification
+     * de la société »), dans l'espace du cabinet : son propriétaire ne crée
+     * ni membre, ni administrateur, ni expert-comptable, et n'ouvre ni ne
+     * modifie de réglages fiscaux ; les actions le refusent avec leur
+     * motif, sans rien écrire, et l'espace d'administration d'une société,
+     * où ces écrans se trouvent, lui reste fermé. Le propriétaire d'une
+     * société qui a des magasins, lui, le peut.
      */
     public function test_un_cabinet_ne_configure_que_son_identite_ni_equipe_ni_reglages_fiscaux(): void
     {
@@ -430,48 +431,17 @@ class TypeDActiviteTest extends TestCase
         $this->assertSame([$proprietaire->id], User::query()->where('societe_id', $cabinet->id)->pluck('id')->all());
         $this->assertSame($avant, $cabinet->fresh()->only(ModifierParametresFiscauxSocieteAction::CHAMPS));
 
-        $this->dansLEspaceDeLaSociete($cabinet->fresh(), $proprietaire);
+        $this->dansLEspaceDuCabinet($cabinet->fresh(), $proprietaire);
+        $this->get(IdentiteDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk();
         $this->get(ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $cabinet))->assertForbidden();
-        $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $cabinet))->assertOk();
-        Livewire::test(ListMembres::class)
-            ->assertActionHidden('creerUnMembre')
-            ->assertActionHidden('creerUnAdministrateur')
-            ->assertActionHidden('creerUnExpertComptable')
-            ->assertActionHidden('nommerUnResponsable');
-    }
-
-    /**
-     * Le propriétaire d'un cabinet ne lit dans la liste de ses premières
-     * étapes que celle du code du courrier, sans magasin, équipe ni
-     * démonstration, et un état de la vérification qui n'en parle pas ;
-     * une fois le code saisi, il ne lui reste aucune étape. Branche
-     * provisoire : l'espace des cabinets la remplacera.
-     */
-    public function test_la_liste_d_etapes_d_un_cabinet_n_a_que_le_code_du_courrier_et_ne_parle_pas_de_magasins(): void
-    {
-        $cabinet = $this->inscrireUnCabinet();
-        $this->dansLEspaceDeLaSociete($cabinet, $cabinet->proprietaire()->firstOrFail());
-
-        $tableau = Livewire::test(TableauDeBord::class);
-        $etapes = $tableau->instance()->etapes();
-
-        $this->assertSame([TableauDeBord::ETAPE_CODE_DU_COURRIER], array_column($etapes, 'titre'));
-        $this->assertStringNotContainsStringIgnoringCase('magasin', implode(' ', array_column($etapes, 'etat')));
-        $this->assertSame('Votre cabinet attend le code de son courrier recommandé. L\'espace des cabinets s\'ouvrira avec la validation.', $tableau->instance()->etatDeLaVerification());
-        $tableau->assertSeeText(TableauDeBord::ETAPE_CODE_DU_COURRIER)
-            ->assertDontSeeText([TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION, 'Ouvrir le magasin de démonstration']);
-
-        $proprietaire = $this->saisirLeCodeDuCourrier($cabinet);
-        $this->dansLEspaceDeLaSociete($cabinet->fresh(), $proprietaire);
-
-        $this->assertFalse(Livewire::test(TableauDeBord::class)->instance()->resteDesEtapes());
+        $this->get(MembreResource::getUrl('index', panel: 'societe', tenant: $cabinet))->assertForbidden();
     }
 
     /**
      * Aucun texte de la vérification ne parle à un cabinet de magasins ni
-     * de démonstration : le bandeau, la page « Vérification » en attente du
-     * code puis après la clôture de l'inscription, l'avis de validation,
-     * l'avis et l'e-mail de clôture.
+     * de démonstration : le bandeau, l'avis de validation, l'avis et
+     * l'e-mail de clôture (sa page de la vérification, dans l'espace du
+     * cabinet, voir CabinetInscriptionTest).
      */
     public function test_les_textes_de_la_verification_ne_parlent_a_un_cabinet_ni_de_magasins_ni_de_demonstration(): void
     {
@@ -483,20 +453,8 @@ class TypeDActiviteTest extends TestCase
         $this->assertStringContainsString('Cabinet en attente du code de son courrier recommandé.', $bandeau);
         $this->assertTextesSansMagasinNiDemonstration([$bandeau]);
 
-        $this->dansLEspaceDeLaSociete($cabinet, $proprietaire);
-        $this->get(VerificationSociete::getUrl(panel: 'societe', tenant: $cabinet))
-            ->assertOk()
-            ->assertSeeText('Votre cabinet attend le code de son courrier recommandé.')
-            ->assertDontSeeText(['magasin de démonstration', 'vos magasins']);
-
         app(TenantContext::class)->clear();
         app(CloreLInscriptionAction::class)->parLEditeur($cabinet, self::editeur(), MotifCloture::Refus);
-        $close = $cabinet->fresh();
-        $this->dansLEspaceDeLaSociete($close, $proprietaire->fresh());
-        $this->get(VerificationSociete::getUrl(panel: 'societe', tenant: $close))
-            ->assertOk()
-            ->assertSeeText('L\'inscription de votre cabinet est close (Refus de l\'éditeur) : son espace reste consultable, en lecture seule.')
-            ->assertDontSeeText('vos magasins restent consultables');
 
         $valide = $this->inscrireUnCabinet(SocieteFactory::sirenFictif());
         $this->saisirLeCodeDuCourrier($valide);
@@ -598,7 +556,6 @@ class TypeDActiviteTest extends TestCase
         return [
             'commerce ou atelier' => [TypeDActivite::Commerce],
             'services sans vente d\'articles' => [TypeDActivite::Services],
-            'cabinet d\'expertise comptable' => [TypeDActivite::Cabinet],
         ];
     }
 
@@ -606,12 +563,13 @@ class TypeDActiviteTest extends TestCase
      * La page « Vérification » rappelle le type tant que le code n'est pas
      * saisi, par la vue partielle du rappel ; la page « Identité » le
      * montre en lecture seule, sans champ qui le change : un type envoyé
-     * avec l'identité est ignoré.
+     * avec l'identité est ignoré. Les pages d'un cabinet, dans l'espace du
+     * cabinet, voir CabinetInscriptionTest.
      */
     #[DataProvider('types')]
     public function test_la_verification_et_l_identite_rappellent_le_type_sans_permettre_de_le_changer(TypeDActivite $type): void
     {
-        $societe = $this->inscrireUneSociete($type === TypeDActivite::Cabinet ? FauxRepertoireSirene::SIREN_CABINET : self::SIREN, type: $type);
+        $societe = $this->inscrireUneSociete(self::SIREN, type: $type);
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $rappel = trim(html_entity_decode(strip_tags(view('filament.rappel-du-type', ['societe' => $societe])->render()), ENT_QUOTES));
         $this->dansLEspaceDeLaSociete($societe, $proprietaire);

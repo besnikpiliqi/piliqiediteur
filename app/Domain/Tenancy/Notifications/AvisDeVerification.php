@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Notifications;
 
 use App\Domain\Tenancy\Models\Societe;
+use App\Filament\Cabinet\Pages\VerificationDuCabinet;
 use App\Filament\Societe\Pages\VerificationSociete;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification as NotificationFilament;
@@ -13,7 +14,9 @@ use Illuminate\Notifications\Notification;
  * de la société (voir SocietePanelProvider), sur la vérification de la
  * société : validée, close, un courrier revenu, un écart relevé par une
  * revérification au répertoire Sirene. Elle porte la société
- * (`societe_id`) et mène à la page de la vérification.
+ * (`societe_id`) et mène à la page de la vérification, celle de l'espace
+ * du cabinet pour un cabinet d'expertise comptable (voir
+ * VerificationDuCabinet).
  */
 class AvisDeVerification extends Notification
 {
@@ -52,7 +55,9 @@ class AvisDeVerification extends Notification
                 ->actions([
                     Action::make('voir')
                         ->label('Voir la vérification')
-                        ->url(VerificationSociete::getUrl(panel: 'societe', tenant: $this->societe))
+                        ->url($this->societe->estUnCabinet()
+                            ? VerificationDuCabinet::getUrl(panel: 'cabinet', tenant: $this->societe)
+                            : VerificationSociete::getUrl(panel: 'societe', tenant: $this->societe))
                         ->markAsRead(),
                 ])
                 ->getDatabaseMessage(),

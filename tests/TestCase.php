@@ -4,6 +4,7 @@ namespace Tests;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -42,10 +43,13 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
+use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
+use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
@@ -450,6 +454,42 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Un cabinet d'expertise comptable vérifié, comme par le vrai parcours :
+     * inscrit avec le type « Cabinet d'expertise comptable » (voir
+     * inscrireUneSociete()), sous le SIREN du cabinet de test du répertoire
+     * Sirene factice ou, donné, sous ce SIREN, d'activité 69.20Z ; validé
+     * par le code de son courrier ; son inscription au tableau de l'Ordre
+     * vérifiée par son propriétaire, par l'annuaire factice (voir
+     * VerifierLOrdreAction), qui inscrit d'abord ce SIREN. Son propriétaire
+     * porte ce nom, comme s'il l'avait changé dans son profil. Aucun
+     * contexte n'est actif ensuite.
+     */
+    protected function ouvrirUnCabinet(?string $siren = null, string $nomDuProprietaire = 'Claire Martin'): Societe
+    {
+        $siren ??= FauxRepertoireSirene::SIREN_CABINET;
+        app(RepertoireSirene::class)->exercer($siren, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        $annuaire = app(AnnuaireDeLOrdre::class);
+        $this->assertInstanceOf(FauxAnnuaireDeLOrdre::class, $annuaire);
+        $annuaire->inscrire($siren, '75-'.substr($siren, -5), FauxAnnuaireDeLOrdre::CONSEIL_DU_CABINET_DE_TEST);
+
+        $cabinet = $this->inscrireUneSociete($siren, type: TypeDActivite::Cabinet);
+        $proprietaire = $this->saisirLeCodeDuCourrier($cabinet);
+        $proprietaire->forceFill(['name' => $nomDuProprietaire])->save();
+        app(VerifierLOrdreAction::class)->handle($proprietaire, $cabinet->fresh(), ['numero_ordre' => '75-'.substr($siren, -5), 'conseil_regional' => FauxAnnuaireDeLOrdre::CONSEIL_DU_CABINET_DE_TEST]);
+        app(TenantContext::class)->clear();
+
+        return $cabinet->fresh();
+    }
+
+    /**
+     * Le propriétaire de ce cabinet d'expertise comptable.
+     */
+    protected function proprietaireDuCabinet(Societe $cabinet): User
+    {
+        return $cabinet->proprietaire()->firstOrFail();
+    }
+
+    /**
      * Le code que porte le dernier courrier de ce motif (la vérification,
      * sauf autre motif) de la société, tel que son destinataire le lit
      * (XXXX-XXXX-XXXX) dans le PDF que le prestataire factice a reçu : le
@@ -834,6 +874,21 @@ abstract class TestCase extends BaseTestCase
         Filament::setCurrentPanel(Filament::getPanel('societe'));
         Filament::setTenant($societe, isQuiet: true);
         app(TenantContext::class)->poserSociete($societe);
+    }
+
+    /**
+     * Ce compte, connecté, dans l'espace de ce cabinet d'expertise
+     * comptable, comme pour un écran de ce panneau testé par Livewire. La
+     * session est repartie de zéro.
+     */
+    protected function dansLEspaceDuCabinet(Societe $cabinet, User $compte): void
+    {
+        $this->flushSession();
+        app(TenantContext::class)->clear();
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('cabinet'));
+        Filament::setTenant($cabinet, isQuiet: true);
+        app(TenantContext::class)->poserSociete($cabinet);
     }
 
     /**

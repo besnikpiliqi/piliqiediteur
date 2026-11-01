@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
@@ -37,6 +38,7 @@ use App\Models\User;
 use App\Policies\AffectationPolicy;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
+use App\Policies\CabinetPolicy;
 use App\Policies\ClientPolicy;
 use App\Policies\ClotureCaissePersonnellePolicy;
 use App\Policies\ClotureCaissePolicy;
@@ -149,6 +151,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(User::class, MembrePolicy::class);
         Gate::policy(Affectation::class, AffectationPolicy::class);
         Gate::policy(PosteReconnu::class, PosteReconnuPolicy::class);
+        Gate::policy(Cabinet::class, CabinetPolicy::class);
 
         Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
 
@@ -194,6 +197,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::morphMap([
             'avoir' => Avoir::class,
             'avoir_fournisseur' => AvoirFournisseur::class,
+            'cabinet' => Cabinet::class,
             'cloture_caisse' => ClotureCaisse::class,
             'cloture_caisse_personnelle' => ClotureCaissePersonnelle::class,
             'devis' => Devis::class,

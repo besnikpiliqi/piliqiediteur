@@ -35,8 +35,9 @@ class Devis extends Model implements DocumentEnvoyable
 
     protected $table = 'devis';
 
-    // numero, statut, date_emission, les totaux, le type du client, la
-    // franchise de TVA, la nature d'opération et la livraison sont
+    // numero, statut, date_emission, l'émetteur figé, les totaux, le type
+    // du client, la franchise de TVA, la nature d'opération et la livraison
+    // sont
     // volontairement absents : ils ne sont écrits que par les actions des
     // devis (CreerDevisAction, ModifierDevisAction, EmettreDevisAction...),
     // jamais par mass assignment depuis une requête utilisateur.
@@ -65,6 +66,7 @@ class Devis extends Model implements DocumentEnvoyable
         'livraison_date' => JourCivil::class,
         'transport_par' => TransportPar::class,
         'date_emission' => Instant::class,
+        'emetteur_fige' => 'array',
         'date_validite' => JourCivil::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -162,13 +164,20 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Un devis n'est pas signé au registre fiscal, même numéroté : il
-     * imprime le magasin tel qu'il est aujourd'hui, sur son PDF comme dans
-     * l'e-mail qui le porte.
+     * L'émetteur que le devis imprime, sur son PDF comme dans l'e-mail qui
+     * le porte : celui qu'il a figé à son dernier envoi (voir
+     * EmettreDevisAction), assurance professionnelle comprise, quoi que
+     * deviennent ensuite la société et le magasin ; un brouillon, jamais
+     * envoyé ou repassé en brouillon par une modification (voir
+     * ModifierDevisAction), imprime la société et le magasin tels qu'ils
+     * sont aujourd'hui. Un devis n'est pas signé au registre fiscal : cet
+     * émetteur se garde sur sa ligne, que seules ses actions écrivent.
      */
     public function emetteur(): Emetteur
     {
-        return Emetteur::duMagasin($this->magasin);
+        return $this->emetteur_fige === null
+            ? Emetteur::duMagasin($this->magasin)
+            : Emetteur::duContenuSigne($this->emetteur_fige);
     }
 
     /**

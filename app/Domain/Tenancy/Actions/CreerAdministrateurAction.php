@@ -22,7 +22,9 @@ use LogicException;
  * premier mot de passe (voir CreationDesComptes), sa portée (tous les
  * magasins, présents et futurs, ou une sélection, sans rien de
  * présélectionné) et ses autorisations, de société et de magasin (voir
- * PorteeDesAdministrateurs), celles de la vente jamais précochées.
+ * PorteeDesAdministrateurs), celles de la vente jamais précochées ;
+ * jamais dans un cabinet d'expertise comptable (voir
+ * refuserDansUnCabinet()).
  *
  * Contrôlé sur l'auteur relu sous les verrous des registres des magasins
  * de sa portée (tous les magasins de la société pour une portée globale)
@@ -35,6 +37,8 @@ class CreerAdministrateurAction
     use AgitDansLaSociete;
 
     public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire crée et modifie les administrateurs.';
+
+    public const MESSAGE_CABINET = 'Un cabinet d\'expertise comptable n\'a ni administrateur ni expert-comptable.';
 
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
@@ -56,6 +60,7 @@ class CreerAdministrateurAction
     public function handle(User $auteur, Societe $societe, array $identite, ?array $magasins, array $autorisationsMagasin, array $autorisationsSociete, ?string $jeton = null): User
     {
         return $this->dansLaSociete($societe, self::MESSAGE_PROPRIETAIRE_SEUL, function () use ($auteur, $societe, $identite, $magasins, $autorisationsMagasin, $autorisationsSociete, $jeton): User {
+            self::refuserDansUnCabinet($societe);
             self::exigerLeProprietaire($auteur, $societe);
             $portee = $this->porteeDesAdministrateurs->lire($societe, $magasins, $autorisationsMagasin, $autorisationsSociete);
             $identiteValide = $this->creation->valider($identite);
@@ -92,6 +97,21 @@ class CreerAdministrateurAction
 
             return $resultat['existant'] ?? $resultat['compte'];
         });
+    }
+
+    /**
+     * Jamais dans un cabinet d'expertise comptable, qui n'a ni magasin, ni
+     * administrateur, ni expert-comptable, et ne configure que son
+     * identité (voir MembrePolicy::creerUnAdministrateur()). Le type d'une
+     * société ne change jamais : il se lit une fois, hors des verrous.
+     *
+     * @throws LogicException
+     */
+    public static function refuserDansUnCabinet(Societe $societe): void
+    {
+        if ($societe->estUnCabinet()) {
+            throw new LogicException(self::MESSAGE_CABINET);
+        }
     }
 
     /**

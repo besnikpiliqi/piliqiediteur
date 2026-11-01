@@ -143,14 +143,15 @@ class ListMembres extends ListRecords
     /**
      * Créer le compte d'un membre pour un magasin, le seul qu'il ouvrira :
      * le propriétaire, dans tout magasin, démonstration comprise (des
-     * comptes d'entraînement).
+     * comptes d'entraînement) ; jamais dans un cabinet d'expertise
+     * comptable, qui n'a aucun magasin (voir MembrePolicy::create()).
      */
     public function creerUnMembreAction(): Action
     {
         return Action::make('creerUnMembre')
             ->label('Créer un membre')
             ->icon('heroicon-o-user-plus')
-            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->auteur()->can('create', User::class))
             ->fillForm(fn (): array => ['jeton' => (string) Str::uuid()])
             ->form([
                 Select::make('magasin_id')

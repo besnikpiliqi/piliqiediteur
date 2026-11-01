@@ -217,8 +217,9 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
      * code, échu le 01/10, et le 06/10, au même instant, le passage en
      * retard et la fin de l'inscription : la saisie du code, qui valide la
      * société (voir ValiderLaSocieteAction), ou le refus de l'éditeur, qui
-     * clôt l'inscription (voir CloreLInscriptionAction::refuser()) ; l'une
-     * comme l'autre ferme ensuite la démonstration, sous le verrou de son
+     * clôt l'inscription (voir CloreLInscriptionAction::parLEditeur(),
+     * motif MotifCloture::Refus) ; l'une comme l'autre ferme ensuite la
+     * démonstration, sous le verrou de son
      * registre, puis de sa ligne, puis des factures des journées qu'elle
      * clôture (voir FermerLaDemonstrationAction). Le passage en retard ne
      * verrouille que le ticket, le temps de sa mise à jour. Le second

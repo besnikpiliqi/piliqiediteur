@@ -11,6 +11,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -26,7 +27,10 @@ use LogicException;
  * consommer un autre, quand il repart après avoir été modifié (voir
  * ModifierDevisAction). Sa date d'émission est celle de cet envoi : elle
  * remplace celle de l'envoi précédent, qu'il gardait depuis sa
- * modification. Un magasin qui ne peut pas vendre (lecture seule, société
+ * modification. Il fige alors son émetteur, la société et le magasin tels
+ * qu'ils sont à cet envoi, assurance professionnelle comprise, qu'il
+ * imprime ensuite quoi qu'ils deviennent (voir Devis::emetteur()), jusqu'à
+ * sa prochaine modification. Un magasin qui ne peut pas vendre (lecture seule, société
  * en cours de vérification, établissement pas encore confirmé) n'en envoie
  * pas (voir Magasin::verifierQuIlPeutVendre()). Un devis dont la date de validité est
  * déjà dépassée ne part pas : son client ne pourrait plus l'accepter (voir
@@ -104,6 +108,7 @@ class EmettreDevisAction
                 'numero' => $devis->numero ?? $this->numerotation->suivant($magasin, TypeDocument::Devis, $devis->magasin->calendrier()->anneeDe($maintenant)),
                 'statut' => StatutDevis::Envoye,
                 'date_emission' => $maintenant,
+                'emetteur_fige' => Emetteur::duMagasin($devis->magasin)->enTableau(),
             ]))->save());
         }));
     }

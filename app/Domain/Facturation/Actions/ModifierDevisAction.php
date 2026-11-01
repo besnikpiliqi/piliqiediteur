@@ -26,10 +26,13 @@ use LogicException;
  * transformé en facture (voir Devis::estModifiable()), lignes comprises.
  * Un devis envoyé ou accepté repasse en brouillon : le client ne s'est
  * engagé que sur la version qu'il a reçue, son acceptation est effacée, et
- * la nouvelle version n'a pas encore été émise. Il garde son numéro, que
- * son prochain envoi reprend, et la date de son dernier envoi, que ce
- * prochain envoi remplace (voir EmettreDevisAction) : même remis en main
- * propre, sans e-mail, il garde la trace de sa remise au client. Ses
+ * la nouvelle version n'a pas encore été émise : il perd l'émetteur figé
+ * à son envoi et imprime de nouveau la société et le magasin
+ * d'aujourd'hui, jusqu'à son prochain envoi, qui fige le sien (voir
+ * Devis::emetteur()). Il garde son numéro, que son prochain envoi
+ * reprend, et la date de son dernier envoi, que ce prochain envoi
+ * remplace (voir EmettreDevisAction) : même remis en main propre, sans
+ * e-mail, il garde la trace de sa remise au client. Ses
  * e-mails restent dans son historique (voir EnvoiDocument), et celui qui
  * n'est pas encore parti ne part plus (voir EnvoyerDocumentJob).
  *
@@ -112,6 +115,7 @@ class ModifierDevisAction
             'client_id' => $client->getKey(),
             ...$contexte->colonnes(),
             'statut' => StatutDevis::Brouillon,
+            'emetteur_fige' => null,
         ])->save();
         $devis->lignes()->delete();
 

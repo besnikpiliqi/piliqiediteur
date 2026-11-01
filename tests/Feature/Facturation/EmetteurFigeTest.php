@@ -12,6 +12,8 @@ use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\Facture;
@@ -42,8 +44,9 @@ use Tests\TestCase;
  * Un ticket, une facture ou un avoir émis se réimprime et se renvoie avec
  * l'émetteur qu'il a signé au registre fiscal, quoi que deviennent ensuite
  * la société et le magasin (voir FigeSonEmetteur), et l'e-mail qui le
- * porte présente ce même émetteur (voir DocumentMail) ; un brouillon et un
- * devis impriment la société et le magasin tels qu'ils sont aujourd'hui.
+ * porte présente ce même émetteur (voir DocumentMail) ; un devis fige le
+ * sien à son envoi (voir Devis::emetteur()) ; un brouillon imprime la
+ * société et le magasin tels qu'ils sont aujourd'hui.
  *
  * Le magasin y est d'abord la Boutique du Port (voir magasinDuPort()),
  * puis devient la Boutique des Quais, puis, quand un troisième émetteur
@@ -232,11 +235,13 @@ class EmetteurFigeTest extends TestCase
     }
 
     /**
-     * Ni le brouillon, qui n'est pas encore signé, ni le devis, qui ne
-     * l'est jamais, même envoyé, n'ont d'émetteur figé : ils impriment le
-     * magasin, ses mentions et son option pour les débits d'aujourd'hui.
+     * Le brouillon, qui n'est pas encore émis, n'a pas d'émetteur figé :
+     * il imprime le magasin, ses mentions et son option pour les débits
+     * d'aujourd'hui. Le devis, jamais signé, fige le sien à son envoi et
+     * l'imprime ensuite tel quel (règle 7 de la décision du 24/10/2026 :
+     * « Un devis le fige avec le reste de son émetteur »).
      */
-    public function test_un_brouillon_et_un_devis_lisent_l_identite_actuelle(): void
+    public function test_un_brouillon_lit_l_identite_actuelle_et_un_devis_envoye_garde_celle_de_son_envoi(): void
     {
         $magasin = $this->magasinDuPort();
         $client = Client::factory()->professionnel()->create();
@@ -249,8 +254,35 @@ class EmetteurFigeTest extends TestCase
 
         $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDuBrouillon), $this->societe($htmlDuBrouillon)]);
         $this->assertSame([self::ASSURANCE_DES_QUAIS, self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DES_QUAIS, self::CATEGORIE], $this->pieds($htmlDuBrouillon));
-        $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDuDevis), $this->societe($htmlDuDevis)]);
-        $this->assertSame(self::ASSURANCE_DES_QUAIS, $this->pieds($htmlDuDevis)[0]);
+        $this->assertSame([self::EN_TETE_DU_PORT, self::SOCIETE_DU_PORT], [$this->enTete($htmlDuDevis), $this->societe($htmlDuDevis)]);
+        $this->assertSame(self::ASSURANCE_DU_PORT, $this->pieds($htmlDuDevis)[0]);
+    }
+
+    /**
+     * Modifié après son envoi, le devis repasse en brouillon : il perd
+     * l'émetteur de son envoi et imprime celui d'aujourd'hui ; renvoyé, il
+     * fige celui de ce nouvel envoi, qu'un changement suivant ne touche
+     * plus. Un brouillon jamais envoyé n'a rien de figé.
+     */
+    public function test_un_devis_repasse_en_brouillon_perd_son_emetteur_fige_et_fige_celui_de_son_nouvel_envoi(): void
+    {
+        $magasin = $this->magasinDuPort();
+        $client = Client::factory()->professionnel()->create();
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $this->assertNull($devis->fresh()->emetteur_fige);
+        app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
+        $this->assertSame('Boutique du Port', $devis->fresh()->emetteur_fige['nom']);
+        $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
+
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis->fresh(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 2]]);
+        $htmlDuBrouillon = app(DevisPdfGenerator::class)->html($modifie);
+        app(EmettreDevisAction::class)->handle(self::auteur(), $modifie);
+        $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DU_CANAL);
+        $htmlDuRenvoi = app(DevisPdfGenerator::class)->html($devis->fresh());
+
+        $this->assertSame([StatutDevis::Brouillon, null], [$modifie->statut, $modifie->emetteur_fige]);
+        $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS, self::ASSURANCE_DES_QUAIS], [$this->enTete($htmlDuBrouillon), $this->societe($htmlDuBrouillon), $this->pieds($htmlDuBrouillon)[0]]);
+        $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS, self::ASSURANCE_DES_QUAIS], [$this->enTete($htmlDuRenvoi), $this->societe($htmlDuRenvoi), $this->pieds($htmlDuRenvoi)[0]]);
     }
 
     /**
@@ -352,11 +384,13 @@ class EmetteurFigeTest extends TestCase
     }
 
     /**
-     * Un devis n'est jamais signé : demandé avant le changement d'identité
-     * et parti après lui, son e-mail, objet compris, et son PDF présentent
-     * le magasin du jour de son départ.
+     * Le devis fige son émetteur à son envoi : demandé avant le changement
+     * d'identité et parti après lui (file d'attente chargée, nouvelle
+     * tentative), son e-mail, objet compris, et son PDF présentent le
+     * vendeur du jour de son envoi, comme ceux d'une facture émise. Seuls
+     * les moyens de joindre le magasin sont ceux d'aujourd'hui.
      */
-    public function test_l_e_mail_d_un_devis_presente_le_magasin_du_jour_de_son_depart(): void
+    public function test_l_e_mail_d_un_devis_presente_l_emetteur_fige_a_son_envoi_meme_parti_apres_un_changement(): void
     {
         Mail::fake();
         Queue::fake([EnvoyerDocumentJob::class]);
@@ -369,20 +403,20 @@ class EmetteurFigeTest extends TestCase
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
 
         $numero = $devis->fresh()->numero;
-        $this->assertSame(['Boutique des Quais', 'Martin Frères'], [$emetteursImprimes->sole()->nom, $emetteursImprimes->sole()->raisonSociale]);
+        $this->assertSame(['Boutique du Port', 'Martin et Fils', self::ASSURANCE_DU_PORT], [$emetteursImprimes->sole()->nom, $emetteursImprimes->sole()->raisonSociale, $emetteursImprimes->sole()->ligneDeLAssurance()]);
         $this->assertSame([
-            'expediteur' => 'Boutique des Quais',
-            'reponse' => ['bonjour@boutique-des-quais.fr', 'Boutique des Quais'],
-            'objet' => "Devis {$numero} — Boutique des Quais",
-            'en_tete' => ['Boutique des Quais'],
-            'signature' => ['Cordialement, Boutique des Quais'],
+            'expediteur' => 'Boutique du Port',
+            'reponse' => ['bonjour@boutique-des-quais.fr', 'Boutique du Port'],
+            'objet' => "Devis {$numero} — Boutique du Port",
+            'en_tete' => ['Boutique du Port'],
+            'signature' => ['Cordialement, Boutique du Port'],
             'pied' => [
-                'Martin Frères · 8 rue Neuve · 69002 Lyon',
+                'Martin et Fils · 12 quai des Pêcheurs · 13002 Marseille',
                 'Tél. 04 72 00 00 00 · bonjour@boutique-des-quais.fr',
                 'SIRET 12121212000012',
             ],
         ], $this->donneesDe(Mail::sent(DocumentMail::class)->sole()));
-        $this->assertSame("Devis {$numero} — Boutique des Quais", $envoi->fresh()->objet);
+        $this->assertSame("Devis {$numero} — Boutique du Port", $envoi->fresh()->objet);
     }
 
     /**

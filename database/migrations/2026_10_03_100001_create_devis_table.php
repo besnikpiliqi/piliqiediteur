@@ -38,6 +38,15 @@ return new class extends Migration
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->timestamp('date_emission')->nullable();
+            // L'émetteur que le devis a figé à son dernier envoi (voir
+            // EmettreDevisAction et Emetteur::enTableau()) : la société et
+            // le magasin tels qu'ils étaient alors, assurance
+            // professionnelle comprise, que son PDF et ses e-mails
+            // impriment ensuite quoi qu'ils deviennent. Null pour un
+            // brouillon, qui imprime ceux d'aujourd'hui : une modification
+            // qui repasse le devis en brouillon l'efface (voir
+            // ModifierDevisAction).
+            $table->json('emetteur_fige')->nullable();
             $table->date('date_validite')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('conditions_paiement')->nullable();

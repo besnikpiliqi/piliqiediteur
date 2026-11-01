@@ -24,8 +24,8 @@ use Illuminate\Mail\Mailables\Envelope;
  *
  * Il présente le vendeur que son PDF imprime (voir
  * DocumentEnvoyable::emetteur()) : celui qu'une facture ou un avoir a
- * signé à son émission, la société et le magasin d'aujourd'hui pour un
- * devis. Son nom est celui de l'expéditeur, de l'objet (voir
+ * signé à son émission, celui qu'un devis a figé à son dernier envoi. Son
+ * nom est celui de l'expéditeur, de l'objet (voir
  * EnvoiDocument::objetPour()), de l'en-tête et de la signature ; sa
  * dénomination (suivie de « EI » pour un entrepreneur individuel, voir
  * Emetteur::denominationImprimee()), son adresse et son SIRET sont ceux du

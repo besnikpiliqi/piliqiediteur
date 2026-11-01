@@ -25,7 +25,9 @@ use Illuminate\Support\Str;
  * fiscal à son émission (voir ContenuFiscal) et l'imprime ensuite tel
  * qu'il l'a signé, pour toujours, quoi que deviennent la société et le
  * magasin -- siège, forme, capital et assurance compris (voir
- * duContenuSigne() et FigeSonEmetteur) ; un brouillon ou un devis
+ * duContenuSigne() et FigeSonEmetteur). Un devis, jamais signé, fige le
+ * sien sur sa ligne à chaque envoi et l'imprime ensuite de même jusqu'à
+ * sa prochaine modification (voir Devis::emetteur()) ; un brouillon
  * l'imprime tel qu'ils sont aujourd'hui (voir duMagasin()).
  *
  * Le magasin de démonstration imprime une identité fictive, sans SIREN,
@@ -79,9 +81,9 @@ final readonly class Emetteur
 
     /**
      * La société et le magasin tels qu'ils sont aujourd'hui : l'émetteur
-     * que signe un document à son émission, et celui qu'imprime un
-     * brouillon ou un devis. Celui du magasin de démonstration est fictif
-     * (voir deDemonstration()).
+     * que signe un document à son émission, que fige un devis à son envoi,
+     * et celui qu'imprime un brouillon. Celui du magasin de démonstration
+     * est fictif (voir deDemonstration()).
      */
     public static function duMagasin(Magasin $magasin): self
     {
@@ -176,7 +178,8 @@ final readonly class Emetteur
     /**
      * L'émetteur que le contenu signé d'un document a retenu à son
      * émission : le bloc « emetteur » de son contexte (voir ContenuFiscal),
-     * écrit par enTableau().
+     * écrit par enTableau(), comme celui qu'un devis a figé à son envoi
+     * (voir Devis::emetteur()).
      *
      * @param  array<string, mixed>  $emetteur
      */

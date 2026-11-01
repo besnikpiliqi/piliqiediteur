@@ -13,7 +13,9 @@ use App\Models\User;
  *   administrateurs, avec un compte qui peut agir (voir view()) ;
  * - ses paramètres (identité légale, fiscalité) : le propriétaire et un
  *   administrateur de tous les magasins autorisé à les gérer, qui les
- *   consultent même en lecture seule et ne les modifient qu'en dehors ;
+ *   consultent même en lecture seule et ne les modifient qu'en dehors ; un
+ *   cabinet d'expertise comptable, qui n'a ni magasin ni document de vente,
+ *   ne règle que son identité (voir voirLesParametresFiscaux()) ;
  * - ses magasins, sauf pour un cabinet d'expertise comptable, qui n'en a
  *   aucun (voir TypeDActivite::aDesMagasins()) : qui est autorisé à les
  *   gérer, dans sa portée (les
@@ -65,6 +67,23 @@ class SocietePolicy
     public function modifierLesParametres(User $user, Societe $societe): bool
     {
         return $this->voirLesParametres($user, $societe) && ! $societe->estEnLectureSeule();
+    }
+
+    /**
+     * Ouvrir les réglages fiscaux (régime de TVA, option pour les débits,
+     * mois de fin d'exercice), même en lecture seule : qui ouvre les
+     * paramètres de la société, jamais dans un cabinet d'expertise
+     * comptable, qui n'a ni magasin ni document de vente et ne règle que
+     * son identité (voir CLAUDE.md, « Vérification de la société »).
+     */
+    public function voirLesParametresFiscaux(User $user, Societe $societe): bool
+    {
+        return $this->voirLesParametres($user, $societe) && ! $societe->estUnCabinet();
+    }
+
+    public function modifierLesParametresFiscaux(User $user, Societe $societe): bool
+    {
+        return $this->voirLesParametresFiscaux($user, $societe) && ! $societe->estEnLectureSeule();
     }
 
     /**

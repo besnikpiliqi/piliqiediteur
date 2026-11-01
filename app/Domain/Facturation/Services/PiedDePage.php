@@ -64,8 +64,9 @@ final readonly class PiedDePage
 
     /**
      * Le pied du document, d'après l'émetteur qu'il imprime : celui qu'il
-     * a signé une fois émis (voir FigeSonEmetteur), la société et le
-     * magasin d'aujourd'hui pour un brouillon ou un devis.
+     * a signé une fois émis (voir FigeSonEmetteur), celui qu'un devis a
+     * figé à son dernier envoi (voir Devis::emetteur()), la société et le
+     * magasin d'aujourd'hui pour un brouillon.
      */
     public static function pour(Facture|Avoir|Devis $document, Emetteur $emetteur): self
     {

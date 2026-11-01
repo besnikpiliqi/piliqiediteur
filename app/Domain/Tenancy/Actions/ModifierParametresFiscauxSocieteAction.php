@@ -25,7 +25,9 @@ use LogicException;
  * défaut), verrouillé dès la première vente de l'un de ses magasins (voir
  * Societe::aVenduUneFois()).
  *
- * Réservé à qui règle les paramètres de la société (voir SocietePolicy).
+ * Réservé à qui règle les paramètres de la société (voir SocietePolicy),
+ * jamais dans un cabinet d'expertise comptable, qui ne règle que son
+ * identité (voir SocietePolicy::voirLesParametresFiscaux()).
  * Chacun touche la conformité de la caisse : l'enregistrement se fait
  * sous le verrou des registres de tous les magasins de la société, fermés
  * compris, pris par identifiant croissant, et chaque changement s'inscrit
@@ -41,6 +43,8 @@ use LogicException;
 class ModifierParametresFiscauxSocieteAction
 {
     public const CHAMPS = ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'];
+
+    public const MESSAGE_CABINET = 'Un cabinet d\'expertise comptable n\'a pas de réglages fiscaux dans PILIQI : il n\'a ni magasin ni document de vente.';
 
     public function __construct(
         private readonly RegistreFiscal $registre,
@@ -63,7 +67,11 @@ class ModifierParametresFiscauxSocieteAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $donnees): Societe {
-            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'modifierLesParametres', $societe, $societe, new LogicException(ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION));
+            if ($societe->estUnCabinet()) {
+                throw new LogicException(self::MESSAGE_CABINET);
+            }
+
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'modifierLesParametresFiscaux', $societe, $societe, new LogicException(ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION));
 
             $valides = Validator::make(array_intersect_key($donnees, array_flip(self::CHAMPS)), [
                 'regime_tva' => ['sometimes', 'required', Rule::enum(RegimeTva::class)],

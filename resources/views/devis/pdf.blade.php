@@ -9,8 +9,9 @@
     {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
          numéro et la date de son dernier envoi (voir ModifierDevisAction) :
          cette version n'a pas encore été émise, elle ne porte aucune date
-         d'émission. $emetteur : la société et le magasin d'aujourd'hui, un
-         devis n'étant pas signé au registre fiscal (voir DevisPdfGenerator) ;
+         d'émission. $emetteur : celui que le devis a figé à son dernier
+         envoi, la société et le magasin d'aujourd'hui pour un brouillon
+         (voir Devis::emetteur()) ;
          $pied : l'identité de la société, les conditions de paiement, la
          nature de l'opération et la franchise de TVA, s'il y a lieu (voir
          PiedDePage) ; $tableau : ses lignes, mesurées pour tenir dans la

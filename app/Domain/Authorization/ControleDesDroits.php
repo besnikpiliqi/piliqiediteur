@@ -27,8 +27,9 @@ use App\Models\User;
  * que garderait la base : aucune autorisation de société ; dans un magasin
  * réel de sa société, les seules consultations (voir
  * PermissionRegistry::consultations()) ; à toute question de policy autre
- * qu'une consultation (viewAny, view, et voirLesParametres, l'identité et
- * les réglages fiscaux de la société, que SocietePolicy ne lui ouvre pas),
+ * qu'une consultation (viewAny, view, voirLesParametres et
+ * voirLesParametresFiscaux, l'identité et les réglages fiscaux de la
+ * société, que SocietePolicy ne lui ouvre pas),
  * y compris une question future, un refus.
  *
  * Une autorisation de société (voir AutorisationsSociete) ne vaut que dans
@@ -77,7 +78,7 @@ use App\Models\User;
  */
 final class ControleDesDroits
 {
-    private const CONSULTATIONS = ['viewAny', 'view', 'voirLesParametres'];
+    private const CONSULTATIONS = ['viewAny', 'view', 'voirLesParametres', 'voirLesParametresFiscaux'];
 
     /**
      * Les gestes de clôture, chacun sur son modèle.

@@ -185,9 +185,9 @@ class AssuranceProfessionnelleTest extends TestCase
     }
 
     /**
-     * La facture, le ticket et l'avoir émis gardent l'assurance du jour de
-     * leur émission quand elle change ensuite ; un brouillon et un devis,
-     * jamais signés, impriment celle d'aujourd'hui. Chaque changement
+     * La facture, le ticket, l'avoir et le devis émis gardent l'assurance
+     * du jour de leur émission quand elle change ensuite ; un brouillon,
+     * pas encore émis, imprime celle d'aujourd'hui. Chaque changement
      * s'inscrit au journal d'audit de la société, avec les anciennes et
      * les nouvelles valeurs.
      */
@@ -204,16 +204,14 @@ class AssuranceProfessionnelleTest extends TestCase
 
         app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $magasin->societe, self::NOUVELLE_ASSURANCE);
 
-        $this->assertSame([self::LIGNE, self::LIGNE, self::LIGNE], [
+        $this->assertSame([self::LIGNE, self::LIGNE, self::LIGNE, self::LIGNE], [
             $this->pieds(app(FacturePdfGenerator::class)->html($facture->fresh()))[0],
             $this->pieds(app(FacturePdfGenerator::class)->html($ticket->fresh()))[0],
             $this->pieds(app(AvoirPdfGenerator::class)->html($avoir->fresh()))[0],
-        ]);
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [$this->ligneDeService()]);
-        $this->assertSame([self::NOUVELLE_LIGNE, self::NOUVELLE_LIGNE], [
-            $this->pieds(app(FacturePdfGenerator::class)->html($brouillon))[0],
             $this->pieds(app(DevisPdfGenerator::class)->html($devis->fresh()))[0],
         ]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [$this->ligneDeService()]);
+        $this->assertSame(self::NOUVELLE_LIGNE, $this->pieds(app(FacturePdfGenerator::class)->html($brouillon))[0]);
 
         $changements = app(TenantContext::class)->runAsSociete($magasin->societe, fn () => EntreeAudit::query()->where('action', ActionAuditee::IdentiteModifiee->value)->orderBy('sequence')->get());
         $this->assertSame([

@@ -28,9 +28,10 @@ use Illuminate\Validation\ValidationException;
  * magasins.
  *
  * Consultable par le propriétaire et un administrateur de tous les
- * magasins autorisé à gérer les paramètres de la société (voir
- * SocietePolicy::voirLesParametres()) ; le formulaire ne s'enregistre que
- * tant qu'elle n'est pas en lecture seule.
+ * magasins autorisé à gérer les paramètres de la société, jamais dans un
+ * cabinet d'expertise comptable (voir
+ * SocietePolicy::voirLesParametresFiscaux()) ; le formulaire ne
+ * s'enregistre que tant qu'elle n'est pas en lecture seule.
  */
 class ParametresFiscauxSociete extends Page implements HasForms
 {
@@ -53,7 +54,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
     {
         $societe = Filament::getTenant();
 
-        return $societe instanceof Societe && (auth()->user()?->can('voirLesParametres', $societe) ?? false);
+        return $societe instanceof Societe && (auth()->user()?->can('voirLesParametresFiscaux', $societe) ?? false);
     }
 
     public function getTitle(): string|Htmlable
@@ -87,7 +88,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
                 ->disabled(fn (): bool => $this->societe()->aVenduUneFois()),
         ])
             ->statePath('data')
-            ->disabled(fn (): bool => ! (auth()->user()?->can('modifierLesParametres', $this->societe()) ?? false));
+            ->disabled(fn (): bool => ! (auth()->user()?->can('modifierLesParametresFiscaux', $this->societe()) ?? false));
     }
 
     /**

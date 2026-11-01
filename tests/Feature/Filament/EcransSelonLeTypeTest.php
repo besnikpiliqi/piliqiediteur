@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -102,17 +104,26 @@ class EcransSelonLeTypeTest extends TestCase
         $this->get(ServiceResource::getUrl('index', panel: 'app', tenant: $services))->assertOk();
     }
 
+    /**
+     * Les aperçus du stock suivent l'autorisation de voir les produits, que
+     * le propriétaire d'une société de services n'a pas, et que celui d'un
+     * commerce a : dans le commerce, un produit en stock négatif fait
+     * paraître l'aperçu du stock négatif.
+     */
     public function test_sans_articles_les_apercus_de_stock_n_apparaissent_pas(): void
     {
         $services = $this->ouvrirUneSociete(['type' => TypeDActivite::Services]);
-        $this->dansLeMagasin($services, $this->proprietaireDe($services));
+        $proprietaireDesServices = $this->proprietaireDe($services);
+        $this->dansLeMagasin($services, $proprietaireDesServices);
 
-        $this->assertSame([false, false], [StockNegatifApercu::canView(), ValeurStockApercu::canView()]);
+        $this->assertSame([false, false, false], [$proprietaireDesServices->can(PermissionRegistry::PRODUIT_VIEW), StockNegatifApercu::canView(), ValeurStockApercu::canView()]);
 
         $commerce = $this->ouvrirUneSociete(['nom' => 'Boutique']);
-        $this->dansLeMagasin($commerce, $this->proprietaireDe($commerce));
+        $proprietaireDuCommerce = $this->proprietaireDe($commerce);
+        $this->dansLeMagasin($commerce, $proprietaireDuCommerce);
+        Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true, 'stock_quantite' => -2]);
 
-        $this->assertTrue(ValeurStockApercu::canView());
+        $this->assertSame([true, true, true], [$proprietaireDuCommerce->can(PermissionRegistry::PRODUIT_VIEW), StockNegatifApercu::canView(), ValeurStockApercu::canView()]);
     }
 
     /**

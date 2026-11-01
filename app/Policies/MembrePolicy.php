@@ -21,6 +21,8 @@ use App\Models\User;
  * - les administrateurs et les experts-comptables se créent et se
  *   modifient par le propriétaire seul, qui seul change le rôle de société
  *   d'un compte et transmet la propriété ;
+ * - un cabinet d'expertise comptable ne crée aucun compte : il n'a ni
+ *   magasin, ni administrateur, ni expert-comptable (voir aUneEquipe()) ;
  * - suspendre, réactiver, retirer de la société, redonner l'accès,
  *   afficher l'identifiant : qui en a le droit pour ce compte ;
  * - personne ne touche à son propre compte, ni au propriétaire.
@@ -50,11 +52,14 @@ class MembrePolicy
     /**
      * Créer un compte : le propriétaire (tout rôle), ou un administrateur
      * autorisé à nommer les responsables (le compte d'un responsable d'un
-     * magasin réel de sa portée ; voir PorteeDesDroits::peutDonnerLeRole()).
+     * magasin réel de sa portée ; voir PorteeDesDroits::peutDonnerLeRole()) ;
+     * jamais dans un cabinet d'expertise comptable (voir aUneEquipe()).
      */
     public function create(User $user): bool
     {
-        return $user->peutAgir() && ($user->estProprietaire() || $user->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER));
+        return $user->peutAgir()
+            && self::aUneEquipe($user)
+            && ($user->estProprietaire() || $user->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER));
     }
 
     /**
@@ -119,11 +124,12 @@ class MembrePolicy
     }
 
     /**
-     * Créer un administrateur : le propriétaire seul.
+     * Créer un administrateur : le propriétaire seul, jamais dans un
+     * cabinet d'expertise comptable (voir aUneEquipe()).
      */
     public function creerUnAdministrateur(User $user): bool
     {
-        return $user->peutAgir() && $user->estProprietaire();
+        return $user->peutAgir() && $user->estProprietaire() && self::aUneEquipe($user);
     }
 
     /**
@@ -160,11 +166,23 @@ class MembrePolicy
     }
 
     /**
-     * Créer ou réintégrer un expert-comptable : le propriétaire seul.
+     * Créer ou réintégrer un expert-comptable : le propriétaire seul,
+     * jamais dans un cabinet d'expertise comptable (voir aUneEquipe()).
      */
     public function creerLExpertComptable(User $user): bool
     {
         return $this->creerUnAdministrateur($user);
+    }
+
+    /**
+     * La société du compte a-t-elle une équipe à créer ? Jamais un cabinet
+     * d'expertise comptable, qui n'a ni magasin, donc ni membre, ni
+     * administrateur ni expert-comptable, et ne configure que son identité
+     * (voir CLAUDE.md, « Vérification de la société »).
+     */
+    private static function aUneEquipe(User $user): bool
+    {
+        return ! $user->societe->estUnCabinet();
     }
 
     public function delete(User $user, User $membre): bool

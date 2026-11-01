@@ -23,7 +23,8 @@ use LogicException;
  * son premier mot de passe (voir CreationDesComptes), sans affectation ni
  * case. Il lit chaque magasin réel de la société, présent ou futur, et
  * n'écrit rien (voir ControleDesDroits) ; chacun signe ses propres
- * consultations.
+ * consultations. Jamais dans un cabinet d'expertise comptable (voir
+ * CreerAdministrateurAction::refuserDansUnCabinet()).
  *
  * Contrôlé sur l'auteur relu sous les verrous des registres de tous les
  * magasins de la société et de sa ligne, puis le jeton de l'écran et la
@@ -53,6 +54,7 @@ class CreerExpertComptableAction
     public function handle(User $auteur, Societe $societe, array $identite, ?string $jeton = null): User
     {
         return $this->dansLaSociete($societe, self::MESSAGE_PROPRIETAIRE_SEUL, function () use ($auteur, $societe, $identite, $jeton): User {
+            CreerAdministrateurAction::refuserDansUnCabinet($societe);
             self::exigerLeProprietaire($auteur, $societe);
             $identiteValide = $this->creation->valider($identite);
             $empreinte = CreationDesComptes::empreinte(['role_societe' => RoleSociete::ExpertComptable->value, 'name' => $identiteValide['name']]);

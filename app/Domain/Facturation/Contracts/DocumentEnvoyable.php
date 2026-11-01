@@ -33,8 +33,9 @@ interface DocumentEnvoyable
     /**
      * Le vendeur que le document imprime, et que présente l'e-mail qui le
      * porte (voir DocumentMail) : celui qu'une facture ou un avoir
-     * numéroté a signé à son émission (voir FigeSonEmetteur), le magasin
-     * tel qu'il est aujourd'hui pour un devis, jamais signé.
+     * numéroté a signé à son émission (voir FigeSonEmetteur), celui qu'un
+     * devis a figé à son dernier envoi (voir Devis::emetteur()), la société
+     * et le magasin tels qu'ils sont aujourd'hui pour un brouillon.
      *
      * @throws DocumentSansEnregistrementSigneException
      */

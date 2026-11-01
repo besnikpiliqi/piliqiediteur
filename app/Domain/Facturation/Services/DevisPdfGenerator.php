@@ -10,9 +10,10 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * Même présentation que la facture (voir FacturePdfGenerator), depuis les
  * lignes et les totaux enregistrés du devis, jamais depuis l'état courant
  * du catalogue, sur la même page A4 numérotée (voir MiseEnPageA4), avec
- * le même tableau des lignes (voir TableauDesLignes). Un
- * devis n'est pas signé au registre fiscal : il imprime le magasin tel
- * qu'il est aujourd'hui (voir Devis::emetteur()).
+ * le même tableau des lignes (voir TableauDesLignes). Un devis n'est pas
+ * signé au registre fiscal : il imprime l'émetteur figé à son dernier
+ * envoi, la société et le magasin d'aujourd'hui tant qu'il est un
+ * brouillon (voir Devis::emetteur()).
  */
 class DevisPdfGenerator
 {

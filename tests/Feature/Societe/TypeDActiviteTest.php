@@ -2,13 +2,18 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
+use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
+use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
@@ -23,8 +28,10 @@ use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\Societe\Pages\IdentiteSociete;
+use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete;
+use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
@@ -368,6 +375,69 @@ class TypeDActiviteTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins')->where('id', $ailleurs->id)->update(['societe_id' => $cabinet->id])), QueryException::class, 'un cabinet d\'expertise comptable n\'a aucun magasin');
 
         $this->assertSame(0, Magasin::query()->where('societe_id', $cabinet->id)->count());
+    }
+
+    /**
+     * Avant l'espace des cabinets, un cabinet ne configure que son
+     * identité (CLAUDE.md, « Vérification de la société ») : son
+     * propriétaire ne crée ni membre, ni administrateur, ni
+     * expert-comptable, et n'ouvre ni ne modifie de réglages fiscaux ; les
+     * actions le refusent avec leur motif, sans rien écrire. Le
+     * propriétaire d'une société qui a des magasins, lui, le peut.
+     */
+    public function test_un_cabinet_ne_configure_que_son_identite_ni_equipe_ni_reglages_fiscaux(): void
+    {
+        $commerce = $this->inscrireUneSociete(self::SIREN);
+        $proprietaireDuCommerce = $commerce->proprietaire()->firstOrFail();
+        app(TenantContext::class)->clear();
+        $this->assertSame([true, true, true, true, true], [
+            $proprietaireDuCommerce->can('create', User::class),
+            $proprietaireDuCommerce->can('creerUnAdministrateur', User::class),
+            $proprietaireDuCommerce->can('creerLExpertComptable', User::class),
+            $proprietaireDuCommerce->can('voirLesParametresFiscaux', $commerce),
+            $proprietaireDuCommerce->can('modifierLesParametresFiscaux', $commerce),
+        ]);
+
+        $cabinet = $this->inscrireUnCabinet();
+        $proprietaire = $cabinet->proprietaire()->firstOrFail();
+        $avant = $cabinet->fresh()->only(ModifierParametresFiscauxSocieteAction::CHAMPS);
+        app(TenantContext::class)->clear();
+
+        $this->assertSame([false, false, false, false, false, true, true], [
+            $proprietaire->can('create', User::class),
+            $proprietaire->can('creerUnAdministrateur', User::class),
+            $proprietaire->can('creerLExpertComptable', User::class),
+            $proprietaire->can('voirLesParametresFiscaux', $cabinet),
+            $proprietaire->can('modifierLesParametresFiscaux', $cabinet),
+            $proprietaire->can('voirLesParametres', $cabinet),
+            $proprietaire->can('modifierLesParametres', $cabinet),
+        ]);
+        $this->assertThrows(
+            fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $cabinet, ['name' => 'Camille Durand'], null, [], AutorisationsSociete::toutes()),
+            LogicException::class,
+            CreerAdministrateurAction::MESSAGE_CABINET,
+        );
+        $this->assertThrows(
+            fn () => app(CreerExpertComptableAction::class)->handle($proprietaire, $cabinet, ['name' => 'Dominique Petit']),
+            LogicException::class,
+            CreerAdministrateurAction::MESSAGE_CABINET,
+        );
+        $this->assertThrows(
+            fn () => app(ModifierParametresFiscauxSocieteAction::class)->handle($proprietaire, $cabinet, ['regime_tva' => RegimeTva::FranchiseEnBase->value, 'mois_fin_exercice' => 6]),
+            LogicException::class,
+            ModifierParametresFiscauxSocieteAction::MESSAGE_CABINET,
+        );
+        $this->assertSame([$proprietaire->id], User::query()->where('societe_id', $cabinet->id)->pluck('id')->all());
+        $this->assertSame($avant, $cabinet->fresh()->only(ModifierParametresFiscauxSocieteAction::CHAMPS));
+
+        $this->dansLEspaceDeLaSociete($cabinet->fresh(), $proprietaire);
+        $this->get(ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $cabinet))->assertForbidden();
+        $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $cabinet))->assertOk();
+        Livewire::test(ListMembres::class)
+            ->assertActionHidden('creerUnMembre')
+            ->assertActionHidden('creerUnAdministrateur')
+            ->assertActionHidden('creerUnExpertComptable')
+            ->assertActionHidden('nommerUnResponsable');
     }
 
     /**

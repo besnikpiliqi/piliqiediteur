@@ -391,7 +391,8 @@ class SaisirCodeDeConfirmationAction
      * JournalDesDroits::modifier(), qui s'inscrit au JET 130 de chaque
      * magasin et au journal d'audit). Dans cet ordre, à cause de l'index
      * d'un seul propriétaire par société : la personne inscrite devient
-     * administrateur, sans portée ni autorisation, et sa date de
+     * administrateur (collaborateur dans un cabinet d'expertise comptable,
+     * qui n'a pas d'administrateur), sans portée ni autorisation, et sa date de
      * confirmation d'adresse s'efface (son adresse n'est plus qu'un
      * contact) ; le nouveau propriétaire est créé, avec son identifiant,
      * sans adresse de connexion : celle qu'il a choisie attend la
@@ -413,7 +414,7 @@ class SaisirCodeDeConfirmationAction
 
             if ($inscrit !== null) {
                 $inscrit->forceFill([
-                    'role_societe' => RoleSociete::Administrateur,
+                    'role_societe' => $verrouillee->estUnCabinet() ? RoleSociete::Collaborateur : RoleSociete::Administrateur,
                     'email_verified_at' => null,
                     'nouvelle_adresse' => null,
                     'nouvelle_adresse_jeton_hache' => null,

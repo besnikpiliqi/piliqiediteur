@@ -30,7 +30,10 @@ use LogicException;
  *   travaille dans plusieurs magasins y a un compte dans chacun, et aucun
  *   geste ne fait changer un compte de magasin ;
  * - seul le propriétaire gère les administrateurs et les
- *   experts-comptables, et change le rôle de société d'un compte ;
+ *   experts-comptables, et change le rôle de société d'un compte ; dans un
+ *   cabinet d'expertise comptable, seul son propriétaire gère les
+ *   collaborateurs (les règles générales suffisent : un collaborateur
+ *   n'est pas un membre), et aucun rôle ne change ;
  * - responsable d'un magasin : nommé ou retiré par le propriétaire, ou par
  *   un administrateur autorisé à nommer les responsables, dans les
  *   magasins réels de sa portée (voir peutNommerUnResponsable()), jamais
@@ -325,12 +328,15 @@ final class PorteeDesDroits
      * Peut-il changer le rôle de société de ce compte (membre,
      * administrateur, expert-comptable ; voir
      * ChangerLeRoleDeSocieteAction) ? Le propriétaire seul, pour un compte
-     * actif de sa société qui n'est pas un compte d'entraînement.
+     * actif de sa société qui n'est pas un compte d'entraînement ; jamais
+     * dans un cabinet d'expertise comptable, dont les collaborateurs ne
+     * changent jamais de rôle.
      */
     public function peutChangerLeRoleDeSociete(User $auteur, User $compte): bool
     {
         return $this->estUneCible($auteur, $compte)
             && $auteur->estProprietaire()
+            && ! $auteur->estDUnCabinet()
             && $compte->estActif()
             && ! $compte->estUnCompteDEntrainement();
     }

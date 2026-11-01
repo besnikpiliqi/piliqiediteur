@@ -126,15 +126,17 @@ trait GereLesComptes
             ->icon('heroicon-o-key')
             ->color('warning')
             ->modalDescription('Toutes ses sessions se ferment. À sa prochaine connexion, la personne verra que son accès a été redonné, par vous, en sa présence ou en son absence.')
-            ->fillForm(fn (): array => ['jeton' => (string) Str::uuid()])
-            ->form([
+            ->fillForm(fn (mixed $record = null): array => ['jeton' => (string) Str::uuid(), ...($compte($record)->estCollaborateur() ? ['mode' => 'present'] : [])])
+            ->form(fn (mixed $record = null): array => [
                 Hidden::make('jeton'),
                 Radio::make('mode')
                     ->label('La personne est-elle là ?')
-                    ->options([
-                        'present' => 'La personne est là : elle tape elle-même son nouveau mot de passe',
-                        'absent' => 'Elle est absente : son mot de passe redevient son identifiant',
-                    ])
+                    ->options($compte($record)->estCollaborateur()
+                        ? ['present' => 'La personne est là : elle tape elle-même son nouveau mot de passe (un collaborateur ne se connecte jamais avec son identifiant)']
+                        : [
+                            'present' => 'La personne est là : elle tape elle-même son nouveau mot de passe',
+                            'absent' => 'Elle est absente : son mot de passe redevient son identifiant',
+                        ])
                     ->required()
                     ->live(),
                 ...self::champsDuMotDePasseChoisi(fn (Get $get): bool => $get('mode') === 'present'),
@@ -205,7 +207,12 @@ trait GereLesComptes
      * dit. Un administrateur ou un expert-comptable qui travaille à
      * distance, ou dont aucun magasin n'a de poste reconnu, ne peut pas se
      * connecter avec son identifiant : pour lui, la fenêtre propose d'abord
-     * que la personne présente choisisse son mot de passe.
+     * que la personne présente choisisse son mot de passe. Un collaborateur
+     * d'un cabinet ne se connecte jamais avec son identifiant (voir
+     * PostesReconnus::ouvreLeCompte()) : la fenêtre ne propose pas de le
+     * lui remettre, seulement qu'il choisisse son mot de passe maintenant
+     * ou que l'accès lui soit redonné plus tard, en sa présence ; « Redonner
+     * l'accès » ne lui propose de même que sa présence.
      *
      * @param  Closure(): ?int  $compteCree  l'identifiant technique du compte que la page vient de créer
      */
@@ -231,10 +238,15 @@ trait GereLesComptes
                     ->content(fn (): string => ($cree = $compte()) === null ? '' : self::messageDuCompteCree($cree)),
                 Radio::make('mode')
                     ->label('Et maintenant ?')
-                    ->options([
-                        'remettre' => 'Je remets l\'identifiant à la personne',
-                        'present' => 'La personne est là : elle choisit son mot de passe maintenant',
-                    ])
+                    ->options($compte()?->estCollaborateur() === true
+                        ? [
+                            'present' => 'La personne est là : elle choisit son mot de passe maintenant',
+                            'plus_tard' => 'Plus tard : je lui redonnerai l\'accès en sa présence',
+                        ]
+                        : [
+                            'remettre' => 'Je remets l\'identifiant à la personne',
+                            'present' => 'La personne est là : elle choisit son mot de passe maintenant',
+                        ])
                     ->required()
                     ->live(),
                 ...self::champsDuMotDePasseChoisi(fn (Get $get): bool => $get('mode') === 'present'),
@@ -265,6 +277,7 @@ trait GereLesComptes
         $identifiant = "Identifiant : {$compte->identifiantDeConnexion()}. Mot de passe : le même que l'identifiant.";
 
         return match (true) {
+            $compte->estCollaborateur() => "Identifiant : {$compte->identifiantDeConnexion()}. Un cabinet n'a pas de poste reconnu : avec son seul identifiant, le collaborateur ne se connecte pas. Il choisit son mot de passe maintenant, sur cet écran, ou plus tard, quand vous lui redonnerez l'accès en sa présence.",
             ! $compte->estMembre() => "{$identifiant} Il n'ouvre le compte que depuis un poste reconnu d'un magasin de sa portée, où la personne choisira son propre mot de passe à sa première connexion. À distance, ou si aucun magasin de sa portée n'a de poste reconnu, elle ne pourra pas se connecter avec son identifiant : si elle est là, qu'elle choisisse son mot de passe maintenant.",
             $compte->estResponsable() => "{$identifiant} Il n'ouvre le compte que depuis un poste reconnu du magasin, où la personne choisira son propre mot de passe à sa première connexion. Remettez-les en main propre ; elle pourra renseigner son adresse e-mail dans son profil.",
             default => "{$identifiant} Il n'ouvre le compte que depuis un poste reconnu du magasin. Remettez-les en main propre ; la personne pourra changer son mot de passe et renseigner son adresse e-mail dans son profil.",

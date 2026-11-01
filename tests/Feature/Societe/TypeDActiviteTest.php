@@ -378,25 +378,28 @@ class TypeDActiviteTest extends TestCase
     }
 
     /**
-     * Un cabinet ne configure que son identité (CLAUDE.md, « Vérification
-     * de la société »), dans l'espace du cabinet : son propriétaire ne crée
-     * ni membre, ni administrateur, ni expert-comptable, et n'ouvre ni ne
-     * modifie de réglages fiscaux ; les actions le refusent avec leur
-     * motif, sans rien écrire, et l'espace d'administration d'une société,
-     * où ces écrans se trouvent, lui reste fermé. Le propriétaire d'une
-     * société qui a des magasins, lui, le peut.
+     * Un cabinet ne configure que son identité et ses collaborateurs
+     * (CLAUDE.md, « Vérification de la société »), dans l'espace du cabinet
+     * : son propriétaire ne crée ni membre, ni administrateur, ni
+     * expert-comptable, et n'ouvre ni ne modifie de réglages fiscaux ; les
+     * actions le refusent avec leur motif, sans rien écrire, et l'espace
+     * d'administration d'une société, où ces écrans se trouvent, lui reste
+     * fermé ; il crée ses collaborateurs. Le propriétaire d'une société qui
+     * a des magasins, lui, crée son équipe et règle sa fiscalité, jamais un
+     * collaborateur.
      */
-    public function test_un_cabinet_ne_configure_que_son_identite_ni_equipe_ni_reglages_fiscaux(): void
+    public function test_un_cabinet_ne_configure_que_son_identite_et_ses_collaborateurs_ni_equipe_de_magasin_ni_reglages_fiscaux(): void
     {
         $commerce = $this->inscrireUneSociete(self::SIREN);
         $proprietaireDuCommerce = $commerce->proprietaire()->firstOrFail();
         app(TenantContext::class)->clear();
-        $this->assertSame([true, true, true, true, true], [
+        $this->assertSame([true, true, true, true, true, false], [
             $proprietaireDuCommerce->can('create', User::class),
             $proprietaireDuCommerce->can('creerUnAdministrateur', User::class),
             $proprietaireDuCommerce->can('creerLExpertComptable', User::class),
             $proprietaireDuCommerce->can('voirLesParametresFiscaux', $commerce),
             $proprietaireDuCommerce->can('modifierLesParametresFiscaux', $commerce),
+            $proprietaireDuCommerce->can('creerUnCollaborateur', User::class),
         ]);
 
         $cabinet = $this->inscrireUnCabinet();
@@ -404,7 +407,7 @@ class TypeDActiviteTest extends TestCase
         $avant = $cabinet->fresh()->only(ModifierParametresFiscauxSocieteAction::CHAMPS);
         app(TenantContext::class)->clear();
 
-        $this->assertSame([false, false, false, false, false, true, true], [
+        $this->assertSame([false, false, false, false, false, true, true, true], [
             $proprietaire->can('create', User::class),
             $proprietaire->can('creerUnAdministrateur', User::class),
             $proprietaire->can('creerLExpertComptable', User::class),
@@ -412,6 +415,7 @@ class TypeDActiviteTest extends TestCase
             $proprietaire->can('modifierLesParametresFiscaux', $cabinet),
             $proprietaire->can('voirLesParametres', $cabinet),
             $proprietaire->can('modifierLesParametres', $cabinet),
+            $proprietaire->can('creerUnCollaborateur', User::class),
         ]);
         $this->assertThrows(
             fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $cabinet, ['name' => 'Camille Durand'], null, [], AutorisationsSociete::toutes()),

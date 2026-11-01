@@ -73,6 +73,11 @@ use SensitiveParameter;
  * VerificateurCaissesPersonnelles::refuserSiSaCaisseEstOuverteAilleurs()).
  * Un brouillon qu'il avait créé devient, à son émission, la vente de qui
  * l'émet (voir EmettreFactureAction).
+ *
+ * Dans un cabinet d'expertise comptable, qui n'a ni magasin ni
+ * administrateur, la propriété passe de même à un collaborateur actif, aux
+ * mêmes conditions ; l'ancien propriétaire devient collaborateur, sans
+ * affectation ni autorisation de société.
  */
 class AccepterLaTransmissionDeLaProprieteAction
 {
@@ -131,7 +136,7 @@ class AccepterLaTransmissionDeLaProprieteAction
 
                     $this->porteeDesAdministrateurs->effacer($nouveauRelu);
                     $ancienRelu->forceFill([
-                        'role_societe' => RoleSociete::Administrateur,
+                        'role_societe' => $societe->estUnCabinet() ? RoleSociete::Collaborateur : RoleSociete::Administrateur,
                         'email_verified_at' => null,
                         'code_du_courrier_saisi_le' => null,
                         'nouvelle_adresse' => null,
@@ -143,12 +148,15 @@ class AccepterLaTransmissionDeLaProprieteAction
                         'email' => $demandeRelue->adresse,
                         'email_verified_at' => now(),
                     ])->save();
-                    $this->porteeDesAdministrateurs->ecrire($ancienRelu, [
-                        'tous' => true,
-                        'magasins' => new Collection,
-                        'cases' => [0 => PermissionRegistry::duProprietaire($societe->type_activite)],
-                        'societe' => AutorisationsSociete::toutes(),
-                    ]);
+                    if (! $societe->estUnCabinet()) {
+                        $this->porteeDesAdministrateurs->ecrire($ancienRelu, [
+                            'tous' => true,
+                            'magasins' => new Collection,
+                            'cases' => [0 => PermissionRegistry::duProprietaire($societe->type_activite)],
+                            'societe' => AutorisationsSociete::toutes(),
+                        ]);
+                    }
+
                     $this->sessions->fermer($ancienRelu);
                     $this->jetonsDuLien->effacer((string) $ancienRelu->email);
                     $demandeRelue->forceFill(['acceptee_le' => now()])->save();
@@ -163,6 +171,13 @@ class AccepterLaTransmissionDeLaProprieteAction
 
             return $ancien;
         });
+
+        if ($societe->estUnCabinet()) {
+            $ancien->refresh()->notify(new AvisDeLEquipe($societe, 'Propriété transmise', "{$administrateur->name} a accepté la propriété du cabinet {$societe->getFilamentName()} : vous en êtes désormais collaborateur, avec tous les clients du cabinet confiés. Vous vous connectez désormais avec votre identifiant."));
+            $administrateur->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$ancien->name} vous a transmis la propriété du cabinet {$societe->getFilamentName()} : vous gérez désormais ses collaborateurs, ses clients et ses liens. Votre adresse {$administrateur->email} est désormais votre adresse de connexion.", nature: AvisDeLEquipe::ATTENTION));
+
+            return;
+        }
 
         $ancien->refresh()->notify(new AvisDeLEquipe($societe, 'Propriété transmise', "{$administrateur->name} a accepté la propriété de {$societe->getFilamentName()} : vous en êtes désormais administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire peut vous cocher, et toutes celles de la société. Vous vous connectez désormais avec votre identifiant."));
         $administrateur->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$ancien->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre : le propriétaire supervise et contrôle. Votre adresse {$administrateur->email} est désormais votre adresse de connexion.", nature: AvisDeLEquipe::ATTENTION));

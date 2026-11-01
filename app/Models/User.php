@@ -43,6 +43,10 @@ use Illuminate\Support\Str;
  *   portent ses cases) ;
  * - un expert-comptable, sans affectation ni case, qui lit chaque magasin
  *   réel de la société (voir PermissionRegistry::consultations()) ;
+ * - dans un cabinet d'expertise comptable, qui n'a ni administrateur ni
+ *   membre, un collaborateur, créé par le propriétaire du cabinet, sans
+ *   affectation, ni case, ni autorisation de société (voir
+ *   CreerCollaborateurAction) ;
  * - un membre, affecté à un seul magasin, celui de son identifiant (voir
  *   Identifiant), avec un rôle de magasin : responsable (toutes les
  *   autorisations de ce magasin, sans case), vendeur ou observateur (ses
@@ -309,6 +313,15 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Est-il un collaborateur d'un cabinet d'expertise comptable (voir
+     * RoleSociete::Collaborateur) ?
+     */
+    public function estCollaborateur(): bool
+    {
+        return $this->role_societe === RoleSociete::Collaborateur;
+    }
+
+    /**
      * Est-il responsable de son magasin : un membre dont l'affectation a le
      * rôle de responsable ?
      */
@@ -331,6 +344,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
         return match (true) {
             $this->estProprietaire() && $this->estDUnCabinet() => filled($denomination) ? "Propriétaire du cabinet {$denomination}" : 'Propriétaire du cabinet',
+            $this->estCollaborateur() => filled($denomination) ? "Collaborateur du cabinet {$denomination}" : RoleSociete::Collaborateur->getLabel(),
             $this->estProprietaire() && filled($denomination) => "Propriétaire de {$denomination}",
             default => $this->role_societe->getLabel(),
         };

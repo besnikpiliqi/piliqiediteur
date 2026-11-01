@@ -97,10 +97,17 @@ final class PostesReconnus
      * Le navigateur de cette requête est-il un poste reconnu, non retiré,
      * d'un magasin que ce compte ouvre ? Seule lecture des postes hors du
      * magasin actif : à la connexion, les postes que désigne le témoin du
-     * navigateur, filtrés par les magasins de ce compte.
+     * navigateur, filtrés par les magasins de ce compte. Jamais pour un
+     * compte d'un cabinet d'expertise comptable, que ni lui ni son cabinet
+     * n'a reconnu : le poste d'un magasin d'un client ne lui ouvre pas son
+     * compte avec son identifiant.
      */
     public function ouvreLeCompte(User $compte, Request $requete): bool
     {
+        if ($compte->estDUnCabinet()) {
+            return false;
+        }
+
         $jetons = $this->jetonsDuNavigateur($requete);
         $magasins = $compte->magasinsAccessibles()->modelKeys();
 

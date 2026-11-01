@@ -68,17 +68,17 @@ class DemanderLaTransmissionDeLaProprieteAction
 
     public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire transmet la propriété de sa société.';
 
-    public const MESSAGE_ADMINISTRATEUR = 'La propriété ne se transmet qu\'à un administrateur actif de la société.';
+    public const MESSAGE_ADMINISTRATEUR = 'La propriété ne se transmet qu\'à un administrateur actif de la société, ou, dans un cabinet d\'expertise comptable, à un collaborateur actif.';
 
-    public const MESSAGE_MOT_DE_PASSE = 'Cet administrateur doit d\'abord choisir son propre mot de passe dans son profil.';
+    public const MESSAGE_MOT_DE_PASSE = 'Ce compte doit d\'abord choisir son propre mot de passe dans son profil.';
 
-    public const MESSAGE_ADRESSE = 'Cet administrateur doit d\'abord renseigner lui-même son adresse e-mail dans son profil.';
+    public const MESSAGE_ADRESSE = 'Ce compte doit d\'abord renseigner lui-même son adresse e-mail dans son profil.';
 
-    public const MESSAGE_ADRESSE_DU_PROPRIETAIRE = 'L\'adresse de cet administrateur est la vôtre : il doit renseigner la sienne dans son profil.';
+    public const MESSAGE_ADRESSE_DU_PROPRIETAIRE = 'L\'adresse de ce compte est la vôtre : il doit renseigner la sienne dans son profil.';
 
-    public const MESSAGE_AUCUNE_DEMANDE = 'Aucune transmission de la propriété n\'attend pour cet administrateur.';
+    public const MESSAGE_AUCUNE_DEMANDE = 'Aucune transmission de la propriété n\'attend pour ce compte.';
 
-    public const MESSAGE_ADRESSE_CHANGEE = 'L\'adresse de cet administrateur a changé depuis la demande : demandez de nouveau la transmission.';
+    public const MESSAGE_ADRESSE_CHANGEE = 'L\'adresse de ce compte a changé depuis la demande : demandez de nouveau la transmission.';
 
     public const MESSAGE_INSCRIPTION_CLOSE = 'L\'inscription de la société est close : sa propriété ne se transmet plus.';
 
@@ -205,7 +205,9 @@ class DemanderLaTransmissionDeLaProprieteAction
             throw new LogicException(self::MESSAGE_INSCRIPTION_CLOSE);
         }
 
-        if ($administrateur->is($proprietaire) || ! $administrateur->estAdministrateur() || ! $administrateur->estActif() || (int) $administrateur->societe_id !== $societe->getKey()) {
+        $destinataireAttendu = $societe->estUnCabinet() ? $administrateur->estCollaborateur() : $administrateur->estAdministrateur();
+
+        if ($administrateur->is($proprietaire) || ! $destinataireAttendu || ! $administrateur->estActif() || (int) $administrateur->societe_id !== $societe->getKey()) {
             throw new AuthorizationException(self::MESSAGE_ADMINISTRATEUR);
         }
 
@@ -268,7 +270,7 @@ class DemanderLaTransmissionDeLaProprieteAction
     {
         $proprietaireDeLAdresse = FournisseurDesComptes::proprietaireDeLAdresse($demande->adresse);
         $lien = $proprietaireDeLAdresse === null
-            ? rtrim((string) config('app.url'), '/').route('filament.societe.transmission', ['jeton' => $jeton], absolute: false)
+            ? rtrim((string) config('app.url'), '/').route($societe->estUnCabinet() ? 'filament.cabinet.transmission' : 'filament.societe.transmission', ['jeton' => $jeton], absolute: false)
             : null;
 
         Mail::to($demande->adresse)->send(new TransmissionDeLaProprieteMail(

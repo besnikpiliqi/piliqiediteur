@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Support;
 
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -39,9 +40,13 @@ use RuntimeException;
  *   confirmation ; un propriétaire sans adresse de connexion passe, voir
  *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou dont le
  *   mot de passe est encore son identifiant ; le rôle de propriétaire,
- *   d'administrateur ou d'expert-comptable pour un compte d'entraînement
- *   (rattaché au magasin de démonstration), qui n'ouvre jamais un magasin
- *   réel.
+ *   d'administrateur, d'expert-comptable ou de collaborateur pour un compte
+ *   d'entraînement (rattaché au magasin de démonstration), qui n'ouvre
+ *   jamais un magasin réel ; un collaborateur hors d'un cabinet
+ *   d'expertise comptable, un administrateur ou un membre dans un cabinet
+ *   (le type d'une société ne change jamais : lu sans verrou) ; un
+ *   collaborateur, comme le propriétaire, n'a ni affectation ni
+ *   autorisation de société.
  *
  * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE INSERT OR
  * UPDATE par garde. Chaque fonction verrouille d'abord la ligne parente
@@ -158,21 +163,24 @@ final class GardesDesDroits
     {
         $rolesDeMagasin = self::liste(array_map(static fn (RoleMagasin $role): string => $role->value, RoleMagasin::cases()));
         $rolesDeSociete = self::liste(array_map(static fn (RoleSociete $role): string => $role->value, RoleSociete::cases()));
-        $sansAffectation = self::liste([RoleSociete::Proprietaire->value, RoleSociete::ExpertComptable->value]);
+        $sansAffectation = self::liste([RoleSociete::Proprietaire->value, RoleSociete::ExpertComptable->value, RoleSociete::Collaborateur->value]);
         $administrateur = "'".RoleSociete::Administrateur->value."'";
         $membre = "'".RoleSociete::Membre->value."'";
         $responsable = "'".RoleMagasin::Responsable->value."'";
         $roleDuCompte = 'COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), \'\')';
         $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> COALESCE(NEW.id, 0)';
         $magasinDeSonIdentifiant = 'COALESCE((SELECT magasin_id FROM identifiants WHERE user_id = NEW.user_id), -1)';
-        $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::ExpertComptable->value]);
+        $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::ExpertComptable->value, RoleSociete::Collaborateur->value]);
+        $collaborateur = "'".RoleSociete::Collaborateur->value."'";
+        $typeDeLaSociete = "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), '')";
+        $cabinet = "'".TypeDActivite::Cabinet->value."'";
         $proprietaire = "'".RoleSociete::Proprietaire->value."'";
         $compteDEntrainement = 'EXISTS (SELECT 1 FROM identifiants INNER JOIN magasins ON magasins.id = identifiants.magasin_id WHERE identifiants.user_id = NEW.id AND magasins.est_demonstration = TRUE)';
 
         return [
             self::AFFECTATIONS => [
                 ["NEW.role IS NOT NULL AND NEW.role NOT IN ({$rolesDeMagasin})", 'rôle de magasin inconnu'],
-                ["{$roleDuCompte} IN ({$sansAffectation})", 'le propriétaire et un expert-comptable n\'ont aucune affectation'],
+                ["{$roleDuCompte} IN ({$sansAffectation})", 'le propriétaire, un expert-comptable et un collaborateur d\'un cabinet n\'ont aucune affectation'],
                 ["NEW.role IS NULL AND {$roleDuCompte} <> {$administrateur}", 'seul un administrateur a une affectation sans rôle'],
                 ["NEW.role IS NOT NULL AND {$roleDuCompte} = {$administrateur}", 'un administrateur n\'a aucun rôle de magasin'],
                 ['NEW.magasin_id IS NULL AND NEW.role IS NOT NULL', 'une affectation à tous les magasins n\'a pas de rôle de magasin'],
@@ -189,7 +197,9 @@ final class GardesDesDroits
             ],
             self::ROLES => [
                 ["NEW.role_societe NOT IN ({$rolesDeSociete})", 'rôle de société inconnu'],
-                ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire et un expert-comptable n\'ont ni affectation ni autorisation de société'],
+                ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire, un expert-comptable et un collaborateur d\'un cabinet n\'ont ni affectation ni autorisation de société'],
+                ["NEW.role_societe = {$collaborateur} AND {$typeDeLaSociete} <> {$cabinet}", 'un collaborateur n\'existe que dans un cabinet d\'expertise comptable'],
+                ["NEW.role_societe IN ({$administrateur}, {$membre}) AND {$typeDeLaSociete} = {$cabinet}", 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre'],
                 ["NEW.role_societe = {$administrateur} AND EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NOT NULL)", 'un administrateur n\'a aucune affectation de membre'],
                 ["NEW.role_societe = {$membre} AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NULL) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'],
                 ["NEW.role_societe = {$proprietaire} AND NEW.email IS NOT NULL AND NEW.email_verified_at IS NULL", 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'],

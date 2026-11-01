@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\Societe\Pages\AccepterLaTransmission;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
@@ -54,6 +55,11 @@ class CabinetPanelProvider extends PanelProvider
             ->path('cabinet')
             ->login(Connexion::class)
             ->profile(ModifierProfil::class)
+            // Le lien de la transmission de la propriété du cabinet à un
+            // collaborateur (voir AccepterLaTransmission).
+            ->authenticatedRoutes(function (): void {
+                AccepterLaTransmission::registerRoutes();
+            })
             ->tenant(Societe::class, slugAttribute: 'uuid')
             ->tenantMenu(false)
             ->tenantMiddleware([

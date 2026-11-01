@@ -21,8 +21,9 @@ use App\Models\User;
  * - les administrateurs et les experts-comptables se créent et se
  *   modifient par le propriétaire seul, qui seul change le rôle de société
  *   d'un compte et transmet la propriété ;
- * - un cabinet d'expertise comptable ne crée aucun compte : il n'a ni
- *   magasin, ni administrateur, ni expert-comptable (voir aUneEquipe()) ;
+ * - un cabinet d'expertise comptable n'a ni magasin, ni administrateur, ni
+ *   membre, ni expert-comptable (voir aUneEquipe()) : son propriétaire
+ *   seul crée et gère ses collaborateurs (voir creerUnCollaborateur()) ;
  * - suspendre, réactiver, retirer de la société, redonner l'accès,
  *   afficher l'identifiant : qui en a le droit pour ce compte ;
  * - personne ne touche à son propre compte, ni au propriétaire.
@@ -151,18 +152,29 @@ class MembrePolicy
      * propre mot de passe, son adresse renseignée par lui et le mot de
      * passe du propriétaire, sans aucune preuve de qualité de
      * représentant) : le propriétaire seul, jamais à un expert-comptable ni
-     * à un membre. Un geste sur l'équipe : permis dans une société
+     * à un membre ; dans un cabinet d'expertise comptable, à un
+     * collaborateur actif, aux mêmes conditions. Un geste sur l'équipe : permis dans une société
      * suspendue, jamais dans une société révoquée (voir ControleDesDroits),
      * ni dans une inscription close, dont le propriétaire n'a plus
      * d'adresse de connexion (voir CloreLInscriptionAction).
      */
     public function transmettreLaPropriete(User $user, User $administrateur): bool
     {
-        return $this->creerUnAdministrateur($user)
+        return $user->peutAgir()
+            && $user->estProprietaire()
             && ! $user->societe->estClose()
-            && $administrateur->estAdministrateur()
+            && ($user->estDUnCabinet() ? $administrateur->estCollaborateur() : $administrateur->estAdministrateur())
             && $administrateur->estActif()
             && (int) $administrateur->societe_id === (int) $user->societe_id;
+    }
+
+    /**
+     * Créer ou réintégrer un collaborateur : le propriétaire actif d'un
+     * cabinet d'expertise comptable, et lui seul.
+     */
+    public function creerUnCollaborateur(User $user): bool
+    {
+        return $user->peutAgir() && $user->estProprietaire() && $user->estDUnCabinet() && $this->portee->gereSonEquipe($user);
     }
 
     /**

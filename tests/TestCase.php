@@ -4,6 +4,7 @@ namespace Tests;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -28,6 +29,7 @@ use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
@@ -479,6 +481,25 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->clear();
 
         return $cabinet->fresh();
+    }
+
+    /**
+     * Un collaborateur de ce cabinet d'expertise comptable, comme dans le
+     * vrai parcours : créé par le propriétaire du cabinet (voir
+     * CreerCollaborateurAction), qui choisit son mot de passe en sa
+     * présence, sur l'écran du propriétaire (voir RedonnerLAccesAction) : un
+     * collaborateur ne se connecte jamais avec son identifiant. Aucun
+     * contexte n'est actif ensuite.
+     */
+    protected function collaborateur(Societe $cabinet, string $nom = 'Paul Lefèvre'): User
+    {
+        app(TenantContext::class)->clear();
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $compte = app(CreerCollaborateurAction::class)->handle($proprietaire, $cabinet, ['name' => $nom]);
+        app(RedonnerLAccesAction::class)->handle($proprietaire, $compte, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        app(TenantContext::class)->clear();
+
+        return $compte->refresh();
     }
 
     /**

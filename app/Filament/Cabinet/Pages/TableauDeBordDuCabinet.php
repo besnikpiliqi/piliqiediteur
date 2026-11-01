@@ -3,8 +3,10 @@
 namespace App\Filament\Cabinet\Pages;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
+use App\Filament\Cabinet\Resources\CollaborateurResource;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Contracts\Support\Htmlable;
@@ -26,6 +28,8 @@ class TableauDeBordDuCabinet extends Dashboard
     public const ETAPE_ACTIVITE = 'Faire contrôler votre code d\'activité 69.20Z';
 
     public const ETAPE_ORDRE = 'Faire vérifier votre inscription au tableau de l\'Ordre';
+
+    public const ETAPE_COLLABORATEURS = 'Créer vos collaborateurs';
 
     protected static ?string $navigationIcon = 'heroicon-o-home';
 
@@ -69,9 +73,10 @@ class TableauDeBordDuCabinet extends Dashboard
     /**
      * Les étapes du propriétaire du cabinet, dans l'ordre : saisir le code
      * du courrier recommandé, qui valide le cabinet, faire contrôler son
-     * code d'activité et faire vérifier son inscription au tableau de
-     * l'Ordre. Chacune dit si elle est faite, où elle en est, et mène à
-     * l'écran qui la fait. Aucune pour un collaborateur.
+     * code d'activité, faire vérifier son inscription au tableau de
+     * l'Ordre, créer ses collaborateurs. Chacune dit si elle est faite, où
+     * elle en est, et mène à l'écran qui la fait. Aucune pour un
+     * collaborateur.
      *
      * @return list<array{titre: string, faite: bool, etat: string, url: string|null}>
      */
@@ -112,6 +117,12 @@ class TableauDeBordDuCabinet extends Dashboard
                     default => 'Donnez votre n° d\'inscription au tableau et votre conseil régional.',
                 },
                 'url' => $page,
+            ],
+            [
+                'titre' => self::ETAPE_COLLABORATEURS,
+                'faite' => ($collaborateurs = CollaborateurResource::getEloquentQuery()->where('users.statut', '<>', StatutCompte::Retire->value)->count()) > 0,
+                'etat' => $collaborateurs > 0 ? trans_choice('{1} 1 collaborateur|[2,*] :count collaborateurs', $collaborateurs) : 'Un compte par collaborateur, qui ne verra que les clients que vous lui confierez.',
+                'url' => CollaborateurResource::getUrl('index'),
             ],
         ];
     }

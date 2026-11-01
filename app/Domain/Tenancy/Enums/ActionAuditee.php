@@ -45,6 +45,7 @@ enum ActionAuditee: string implements HasLabel
     case AdministrateurModifie = 'administrateur_modifie';
     case RoleDeSocieteChange = 'role_de_societe_change';
     case ExpertComptableCree = 'expert_comptable_cree';
+    case CollaborateurCree = 'collaborateur_cree';
     case DroitsModifies = 'droits_modifies';
     case ResponsableNomme = 'responsable_nomme';
     case ResponsableRetire = 'responsable_retire';
@@ -108,6 +109,7 @@ enum ActionAuditee: string implements HasLabel
             self::AdministrateurModifie => 'Administrateur modifié',
             self::RoleDeSocieteChange => 'Rôle de société changé',
             self::ExpertComptableCree => 'Expert-comptable créé',
+            self::CollaborateurCree => 'Collaborateur du cabinet créé',
             self::DroitsModifies => 'Droits modifiés',
             self::ResponsableNomme => 'Responsable nommé',
             self::ResponsableRetire => 'Responsable retiré',
@@ -137,7 +139,7 @@ enum ActionAuditee: string implements HasLabel
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose,
             self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse => CategorieAudit::Verification,
-            self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
+            self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::CollaborateurCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
             self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee,
@@ -213,7 +215,7 @@ enum ActionAuditee: string implements HasLabel
             // Les droits de chaque compte touché, avant et après, avec son
             // nom au moment de l'opération, son rôle de société et ses rôles
             // de magasin (voir JournalDesDroits).
-            self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
+            self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::CollaborateurCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::ProprieteTransferee, self::ProprieteReprise => ['droits'],
             // Le compte (son identifiant technique et son nom au moment de

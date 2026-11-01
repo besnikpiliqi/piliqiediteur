@@ -119,13 +119,20 @@ class VerificationOrdreTest extends TestCase
     }
 
     /**
-     * Seul le propriétaire du cabinet fait vérifier son inscription : ni
-     * le propriétaire d'une autre société, par une action forgée, ni un
+     * Seul le propriétaire du cabinet fait vérifier son inscription : ni un
+     * collaborateur, qui voit la page sans le bouton et dont l'action
+     * forgée ne se monte pas, ni le propriétaire d'une autre société, ni un
      * propriétaire suspendu ; une inscription vérifiée ne se redemande pas.
      */
     public function test_seul_le_proprietaire_du_cabinet_demande_la_verification_de_l_ordre(): void
     {
         $cabinet = $this->cabinetValide();
+        $collaborateur = $this->collaborateur($cabinet);
+        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
+        $this->get(VerificationDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk();
+        $this->forgerLAction(Livewire::test(VerificationDuCabinet::class)->assertActionHidden('verifierLOrdre'), 'verifierLOrdre', self::DONNEES);
+        $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($collaborateur, $cabinet, self::DONNEES), AuthorizationException::class, VerifierLOrdreAction::MESSAGE_PROPRIETAIRE_SEUL);
+        $this->assertSame([], $this->entreesDAudit($cabinet, ActionAuditee::OrdreVerifie));
         $autre = $this->proprietaireDe($this->ouvrirUneSociete());
         app(TenantContext::class)->clear();
 

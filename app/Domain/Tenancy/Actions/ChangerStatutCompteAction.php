@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -41,8 +42,10 @@ use LogicException;
  * - réintégrer un compte retiré, dans son rôle et, pour un membre, dans son
  *   magasin, selon les règles de la création de ce rôle : comme membre
  *   (voir PorteeDesDroits::peutReintegrer()), comme administrateur ou comme
- *   expert-comptable par le propriétaire seul. Un compte retiré par le
- *   propriétaire ne se réintègre que par le propriétaire.
+ *   expert-comptable par le propriétaire seul, comme collaborateur d'un
+ *   cabinet par le propriétaire du cabinet seul, sans client confié. Un
+ *   compte retiré par le propriétaire ne se réintègre que par le
+ *   propriétaire.
  *
  * Chaque nouveau statut note qui l'a donné, et si c'était alors le
  * propriétaire (voir User::nouveauStatut()) : la décision du propriétaire
@@ -206,6 +209,33 @@ class ChangerStatutCompteAction
                 CreerExpertComptableAction::exigerLeProprietaire($auteurRelu, $societe);
 
                 if (! $compteRelu->estRetire() || ! $compteRelu->estExpertComptable() || (int) $compteRelu->societe_id !== $societe->getKey()) {
+                    throw new AuthorizationException(PorteeDesDroits::REFUS);
+                }
+
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+            });
+        });
+
+        $compte->refresh();
+    }
+
+    /**
+     * Réintègre un collaborateur retiré d'un cabinet d'expertise comptable :
+     * le propriétaire du cabinet seul, tant qu'il gère son équipe ; le
+     * collaborateur revient sans aucun client confié.
+     *
+     * @throws AuthorizationException
+     */
+    public function reintegrerLeCollaborateur(User $auteur, User $compte): void
+    {
+        $cabinet = $compte->societe()->firstOrFail();
+
+        $this->dansLaSociete($cabinet, CreerCollaborateurAction::MESSAGE_PROPRIETAIRE_DU_CABINET_SEUL, function () use ($auteur, $compte, $cabinet): void {
+            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], [], function (User $auteurRelu, array $relus) use ($cabinet): void {
+                [$compteRelu] = $relus;
+                CreerCollaborateurAction::exigerLeProprietaireDuCabinet($auteurRelu, $cabinet);
+
+                if (! $compteRelu->estRetire() || ! $compteRelu->estCollaborateur() || (int) $compteRelu->societe_id !== $cabinet->getKey()) {
                     throw new AuthorizationException(PorteeDesDroits::REFUS);
                 }
 

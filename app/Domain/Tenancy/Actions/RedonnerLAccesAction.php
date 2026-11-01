@@ -32,7 +32,9 @@ use SensitiveParameter;
  *   jeton d'écran, et la même demande répétée après une réponse perdue
  *   reste sans effet.
  * - Elle est absente : son mot de passe redevient son identifiant ; refusé
- *   quand il l'est déjà (rien à remettre).
+ *   quand il l'est déjà (rien à remettre), et toujours pour un
+ *   collaborateur d'un cabinet, que son identifiant n'ouvre jamais, faute
+ *   de poste reconnu (voir PostesReconnus::ouvreLeCompte()).
  * Dans les deux cas, sous le verrou des lignes de l'auteur et du compte
  * relues : toutes les sessions du compte se ferment et son « se souvenir
  * de moi » est coupé ; la date, l'auteur et le mode s'écrivent sur le
@@ -55,6 +57,8 @@ class RedonnerLAccesAction
     public const MESSAGE_DEJA_L_IDENTIFIANT = 'Son mot de passe est déjà son identifiant.';
 
     public const MESSAGE_DEJA_REDONNE = 'L\'accès a déjà été redonné.';
+
+    public const MESSAGE_COLLABORATEUR_PRESENT = 'Un collaborateur choisit son mot de passe en votre présence : son identifiant n\'ouvre pas son compte.';
 
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
@@ -95,6 +99,10 @@ class RedonnerLAccesAction
 
                 if ($enPresence && $jeton !== null && $compteRelu->jeton_acces_redonne === $jeton) {
                     return false;
+                }
+
+                if (! $enPresence && $compteRelu->estCollaborateur()) {
+                    throw new LogicException(self::MESSAGE_COLLABORATEUR_PRESENT);
                 }
 
                 if (! $enPresence && $compteRelu->mot_de_passe_est_l_identifiant) {

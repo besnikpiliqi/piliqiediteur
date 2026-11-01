@@ -3,6 +3,7 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -64,9 +65,11 @@ class AccepterLaTransmission extends SimplePage
             ->schema([
                 Placeholder::make('etat')
                     ->hiddenLabel()
-                    ->content(fn (): string => $this->estValable()
-                        ? 'En confirmant, vous devenez le propriétaire de la société : vous aurez tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, et votre adresse '.$this->compte()->email.' deviendra votre adresse de connexion.'
-                        : AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN),
+                    ->content(fn (): string => match (true) {
+                        ! $this->estValable() => AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN,
+                        $this->compte()->estDUnCabinet() => 'En confirmant, vous devenez le propriétaire du cabinet : vous gérerez ses collaborateurs, ses clients et ses liens, et votre adresse '.$this->compte()->email.' deviendra votre adresse de connexion.',
+                        default => 'En confirmant, vous devenez le propriétaire de la société : vous aurez tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre, et votre adresse '.$this->compte()->email.' deviendra votre adresse de connexion.',
+                    }),
                 TextInput::make('mot_de_passe')
                     ->label('Votre mot de passe')
                     ->password()
@@ -97,8 +100,17 @@ class AccepterLaTransmission extends SimplePage
             return;
         }
 
+        $compte = $this->compte()->refresh();
+
+        if ($compte->estDUnCabinet()) {
+            Notification::make()->title('Vous êtes désormais le propriétaire du cabinet.')->success()->send();
+            $this->redirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $compte->societe));
+
+            return;
+        }
+
         Notification::make()->title('Vous êtes désormais le propriétaire de la société.')->success()->send();
-        $this->redirect(TableauDeBord::getUrl(tenant: $this->compte()->refresh()->societe));
+        $this->redirect(TableauDeBord::getUrl(panel: 'societe', tenant: $compte->societe));
     }
 
     /**

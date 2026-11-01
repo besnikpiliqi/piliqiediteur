@@ -39,8 +39,10 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
-            // proprietaire, administrateur, expert_comptable ou membre (voir
-            // RoleSociete).
+            // proprietaire, administrateur, expert_comptable, membre ou
+            // collaborateur (voir RoleSociete) ; collaborateur seulement
+            // dans une société de type cabinet, administrateur et membre
+            // jamais (voir GardesDesDroits).
             $table->string('role_societe', 20)->default('membre');
             $table->string('statut', 20)->default('actif');
             // Qui a donné au compte son statut actuel (voir

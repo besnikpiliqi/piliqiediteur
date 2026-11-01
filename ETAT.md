@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 01:07 UTC par pilotage-sync.sh : « Reprise du 01/11 : nouvelle session simulée, chaîne relancée ».
+Mis à jour le 01/11/2026 à 01:19 UTC par pilotage-sync.sh : « Fiche corrigée après sa relecture à froid (11 constats) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,7 +40,30 @@ fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Authorization/ControleDesDroits.php
+ M app/Domain/Facturation/Actions/EmettreDevisAction.php
+ M app/Domain/Facturation/Actions/ModifierDevisAction.php
+ M app/Domain/Facturation/Contracts/DocumentEnvoyable.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Services/DevisPdfGenerator.php
+ M app/Domain/Facturation/Services/Emetteur.php
+ M app/Domain/Facturation/Services/MentionsFiscales.php
+ M app/Domain/Facturation/Services/PiedDePage.php
+ M app/Domain/Tenancy/Actions/CreerAdministrateurAction.php
+ M app/Domain/Tenancy/Actions/CreerExpertComptableAction.php
+ M app/Domain/Tenancy/Actions/ModifierParametresFiscauxSocieteAction.php
+ M app/Filament/Societe/Pages/ParametresFiscauxSociete.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/ListMembres.php
+ M app/Policies/MembrePolicy.php
+ M app/Policies/SocietePolicy.php
  M database/migrations/2026_10_03_100001_create_devis_table.php
+ M resources/views/devis/pdf.blade.php
+ M tests/Feature/Facturation/AssuranceProfessionnelleTest.php
+ M tests/Feature/Facturation/EmetteurFigeTest.php
+ M tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php
+ M tests/Feature/Filament/EcransSelonLeTypeTest.php
+ M tests/Feature/Societe/TypeDActiviteTest.php
 ```
 
 ## Dernière course de la chaîne

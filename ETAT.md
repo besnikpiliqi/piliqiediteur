@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 11:23 UTC par pilotage-sync.sh : « Après le lot L1 ».
+Mis à jour le 01/11/2026 à 11:49 UTC par pilotage-sync.sh : « Décision du 01/11 : Mailtrap (lot ML ajouté au script après A7) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,31 @@ c723e1f Dit l'heure d'été ou d'hiver dans les journaux et contrôle les fuseau
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.example
+ M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+ M app/Console/Commands/PurgerJournalAudit.php
+ M app/Domain/Cabinets/Enums/MotifDeFinDuLien.php
+ M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/Societe.php
+ M app/Domain/Tenancy/Services/AnnulationDesCodes.php
+ M app/Domain/Tenancy/Services/SiretsDesMagasins.php
+ M app/Providers/AppServiceProvider.php
+ M bootstrap/app.php
+ M config/conservation.php
+ M database/migrations/0001_01_00_000000_create_societes_table.php
+ M database/migrations/2026_10_02_100008_create_journal_audit_table.php
+ M database/migrations/2026_10_02_100011_create_verifications_societe_table.php
+ M database/migrations/2026_10_02_100023_create_liens_cabinet_table.php
+?? app/Console/Commands/PurgerVerifications.php
+?? app/Domain/Tenancy/Services/FinDeLaRelation.php
+?? app/Filament/Cabinet/Resources/JournalAuditDuCabinetResource.php
+?? app/Filament/Cabinet/Resources/JournalAuditDuCabinetResource/
+?? app/Filament/Concerns/AfficheLeJournalDAudit.php
+?? app/Filament/Societe/Resources/JournalAuditResource.php
+?? app/Filament/Societe/Resources/JournalAuditResource/
+?? app/Policies/EntreeAuditPolicy.php
+?? tests/Feature/Societe/JournalAuditResourceTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -48,4 +73,5 @@ L1:correction
 L1:poussee
 L1:fiche
 L1:notes
+A7:implementation
 ```

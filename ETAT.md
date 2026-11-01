@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 16:41 UTC par pilotage-sync.sh : « Lot A7b (réponses 1a 2a 3 oui de l'éditeur) ajouté au script avant ML ».
+Mis à jour le 01/11/2026 à 16:41 UTC par pilotage-sync.sh : « Fiche : numérotation des lots restants ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 19:16 UTC par pilotage-sync.sh : « Cahier définitif d'EC2 (tout comme recommandé), gardé à part jusqu'à la course qui commence par A7b ».
+Mis à jour le 01/11/2026 à 19:19 UTC par pilotage-sync.sh : « Conservation : l'éditeur garde les variables comme elles sont ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,6 +40,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M bootstrap/providers.php
  M config/mail.php
  M config/services.php
+ M phpunit.xml
 ?? app/Console/Commands/EssayerLesCourriels.php
 ?? app/Domain/Tenancy/Mail/CourrielDEssaiMail.php
 ?? app/Integrations/Mailtrap/

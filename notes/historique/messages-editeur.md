@@ -4481,3 +4481,7 @@ comment verifier le compte ! car est bloque par verification
 
 pour le Le cahier des charges du lot EC2: « tout comme recommandé »
 
+## 339. 2026-11-01 19:19 UTC
+
+les durées de conservation: laisse comme ils sont
+

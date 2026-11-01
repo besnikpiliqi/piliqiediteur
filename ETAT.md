@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 21:52 UTC par pilotage-sync.sh : « Client comptoir et avoirs non utilisés : décision de l'éditeur confiée au lot S9-A ».
+Mis à jour le 01/11/2026 à 22:01 UTC par pilotage-sync.sh : « Constat 419 des fenêtres de recherche : diagnostic en cours ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Console/Commands/Editeur/CorrigerLeSiren.php
  M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
  M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
  M app/Domain/Cabinets/Models/Cabinet.php
@@ -45,6 +46,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
  M app/Domain/Tenancy/Actions/CreerSocieteAction.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
  M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
  M app/Filament/Societe/Pages/AccepterLaTransmission.php
  M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
@@ -53,15 +55,19 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M app/Http/Middleware/MenerUnCompteSansMagasin.php
  M app/Providers/Filament/AppPanelProvider.php
  M app/Providers/Filament/SocietePanelProvider.php
+ M resources/views/filament/cabinet/pages/verification-du-cabinet.blade.php
  M tests/Feature/Cabinets/CabinetInscriptionTest.php
  M tests/Feature/Cabinets/CollaborateursTest.php
  M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
  M tests/Feature/Cabinets/PanneauCabinetTest.php
+ M tests/Feature/Editeur/SirenErroneTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php
  M tests/Feature/Societe/TypeDActiviteTest.php
+ M tests/TestCase.php
 ?? app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
 ?? app/Filament/EspaceDeLaSociete.php
 ?? app/Http/Middleware/MenerUnCabinetASonEspace.php
+?? tests/Feature/Editeur/CorrectionDuSirenDUnCabinetTest.php
 ```
 
 ## Dernière course de la chaîne

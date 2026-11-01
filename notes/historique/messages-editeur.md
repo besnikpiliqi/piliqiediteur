@@ -112,3 +112,9 @@ le client comptoir n'as pas besoin de ce genre d'info et meme chez le client com
 
 « 1a 2a( mais la il faut afficher qq part (peut etre dans le tableau de bord )  les avoir des client comptoires et professionel s'il reste des avoir sans regler donc qui ne sont pas encore facture pour que le proprietaire ou le magasin sache ce qu'il reste comme avoirs sans regler )  3 oui »
 
+## 20. 2026-11-01 21:58 UTC
+
+[3 capture(s) d'écran jointe(s)]
+
+quand on ouvre la fenetre pour chercher les client et meme les produits il fait comme ca, donc pas possible d'appuyer sur le "" pour selecter car il  y aura ces problemes des photo 2 et 3
+

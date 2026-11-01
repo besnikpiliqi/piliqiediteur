@@ -26,8 +26,9 @@ use LogicException;
  * par le propriétaire du client ou par celui du cabinet, chacun contrôlé
  * dans sa propre société (voir LienCabinetPolicy::mettreFin()), même pour
  * un cabinet qui n'est plus vérifié ou en lecture seule ; par l'éditeur,
- * quand il constate la radiation du cabinet de l'Ordre (voir parLEditeur())
- * ; par le système, quand l'inscription d'une société non validée se clôt
+ * quand il constate la radiation du cabinet de l'Ordre, ou qu'il révoque
+ * le cabinet ou le client (voir parLEditeur() et pourUnClientRevoque()) ;
+ * par le système, quand l'inscription d'une société non validée se clôt
  * ou qu'une autre personne saisit le code de son courrier (voir
  * parLeSysteme()). Sous les verrous de JournalDesDroits::modifierLeLien() :
  * le lien passe à « terminé », ses clients confiés et ses autorisations
@@ -65,11 +66,38 @@ class MettreFinAuLienAction
     }
 
     /**
-     * La fin d'un lien décidée par une procédure de l'éditeur, sans auteur.
+     * La fin d'un lien décidée par une procédure de l'éditeur, sans auteur :
+     * le propriétaire du cabinet est prévenu, et celui du client, sauf quand
+     * c'est le client que l'éditeur révoque (il l'apprend avec sa
+     * révocation).
      */
-    public function parLEditeur(LienCabinet $lien, MotifDeFinDuLien $motif, InterventionDeLEditeur $editeur): void
+    public function parLEditeur(LienCabinet $lien, MotifDeFinDuLien $motif, InterventionDeLEditeur $editeur, bool $prevenirLeClient = true): void
     {
-        $this->terminer(null, $lien, $motif, $editeur, static fn (): null => null);
+        $this->terminer(null, $lien, $motif, $editeur, static fn (): null => null, $prevenirLeClient);
+    }
+
+    /**
+     * Le lien actif et les demandes en cours, dans les deux sens, d'un
+     * client que l'éditeur révoque prennent fin dans la transaction de sa
+     * révocation, qui tient déjà les registres de ses magasins réels et sa
+     * ligne (voir RevoquerSocieteAction) : le lien par la procédure de
+     * l'éditeur (voir parLEditeur()), motif « société révoquée », le
+     * cabinet prévenu ; chaque demande retirée au nom du système, son jeton
+     * effacé, son cabinet prévenu.
+     */
+    public function pourUnClientRevoque(Societe $client, InterventionDeLEditeur $editeur): void
+    {
+        $liens = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
+            ->where('societe_id', $client->getKey())
+            ->whereIn('etat', [EtatDuLien::Actif->value, ...array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::demandes())])
+            ->orderBy('id')
+            ->get();
+
+        foreach ($liens as $lien) {
+            $lien->estActif()
+                ? $this->parLEditeur($lien, MotifDeFinDuLien::SocieteRevoquee, $editeur, prevenirLeClient: false)
+                : $this->retraitDesDemandes->parLeSysteme($lien, MotifDeFinDuLien::SocieteRevoquee);
+        }
     }
 
     /**

@@ -250,6 +250,25 @@ class StockLedgerService
     }
 
     /**
+     * Rentrée en stock de ce qu'une sortie de cession avait fait sortir,
+     * par l'annulation de la cession faite par erreur (voir
+     * AnnulerCessionAction, $source : le magasin dont la cession
+     * s'annule) : la même quantité, au coût moyen gardé dans la sortie,
+     * comme une entrée à son coût (voir entrerAuCout()), le mouvement
+     * gardant ce coût.
+     *
+     * @throws InvalidArgumentException quand le mouvement n'est pas une sortie de cession
+     */
+    public function rentrerApresAnnulationDeCession(Produit $produit, MouvementStock $sortie, Model $source, string $note): ?MouvementStock
+    {
+        if ($sortie->type !== TypeMouvementStock::SortieCession || (int) $sortie->produit_id !== (int) $produit->getKey()) {
+            throw new InvalidArgumentException('Seule une sortie de cession de ce produit rentre à l\'annulation de la cession.');
+        }
+
+        return $this->entrerAuCout($produit, TypeMouvementStock::EntreeAnnulationCession, $sortie->quantite, (float) $sortie->cout_unitaire_ht, $source, $note, (float) $sortie->cout_unitaire_ht);
+    }
+
+    /**
      * Enregistre un mouvement typé (vente, réception, retour client...) et
      * met à jour le cache produits.stock_quantite de façon atomique. Un
      * inventaire d'ouverture, qui entre à son coût saisi, passe par
@@ -268,6 +287,7 @@ class StockLedgerService
             TypeMouvementStock::InventaireOuverture => 'Un inventaire d\'ouverture passe par entrerALInventaireDOuverture(), avec son coût saisi.',
             TypeMouvementStock::RetourFournisseur => 'Un retour fournisseur passe par retournerAuFournisseur(), avec le coût de sa ligne d\'achat.',
             TypeMouvementStock::SortieCession => 'Une sortie de cession passe par sortirPourCession(), avec tout le stock au coût moyen.',
+            TypeMouvementStock::EntreeAnnulationCession => 'L\'annulation d\'une cession passe par rentrerApresAnnulationDeCession(), au coût de sa sortie.',
             default => null,
         };
 

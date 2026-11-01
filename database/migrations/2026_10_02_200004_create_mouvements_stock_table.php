@@ -16,7 +16,8 @@ return new class extends Migration
             $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
             // vente, reception_achat, inventaire_ouverture,
             // retour_fournisseur, retour_client, ajustement_entree,
-            // ajustement_sortie, sortie_cession (voir TypeMouvementStock).
+            // ajustement_sortie, sortie_cession, entree_annulation_cession
+            // (voir TypeMouvementStock).
             $table->string('type', 30);
             // Nombre entier d'articles, toujours positif : le sens (+/-)
             // est déterminé par `type`, jamais par le signe stocké -- évite
@@ -29,8 +30,10 @@ return new class extends Migration
             // stock d'un inventaire d'ouverture entre (voir
             // StockLedgerService::entrerALInventaireDOuverture()), ou le
             // CMUP auquel le stock d'un magasin cédé sort (voir
-            // StockLedgerService::sortirPourCession()) ; null pour les
-            // autres mouvements, au CMUP du moment.
+            // StockLedgerService::sortirPourCession()) et rentre à
+            // l'annulation de sa cession (voir
+            // StockLedgerService::rentrerApresAnnulationDeCession()) ; null
+            // pour les autres mouvements, au CMUP du moment.
             $table->decimal('cout_unitaire_ht', 14, 4)->nullable();
             $table->nullableMorphs('source');
             $table->timestamp('survenu_le');

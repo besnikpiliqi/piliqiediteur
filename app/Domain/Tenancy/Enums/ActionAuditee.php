@@ -25,6 +25,7 @@ enum ActionAuditee: string implements HasLabel
     case CodeAnnule = 'code_annule';
     case SocieteValidee = 'societe_validee';
     case InscriptionClose = 'inscription_close';
+    case SocieteRevoquee = 'societe_revoquee';
     case ActiviteDuCabinetControlee = 'activite_du_cabinet_controlee';
     case OrdreDemande = 'ordre_demande';
     case OrdreVerifie = 'ordre_verifie';
@@ -38,6 +39,8 @@ enum ActionAuditee: string implements HasLabel
     case MagasinRouvert = 'magasin_rouvert';
     case TerritoireCorrige = 'territoire_corrige';
     case SiretLibere = 'siret_libere';
+    case CessionAnnulee = 'cession_annulee';
+    case FinExerciceChangee = 'fin_exercice_changee';
     case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
     case DemonstrationOuverte = 'demonstration_ouverte';
     case DemonstrationFermee = 'demonstration_fermee';
@@ -103,6 +106,7 @@ enum ActionAuditee: string implements HasLabel
             self::CodeAnnule => 'Code de confirmation annulé',
             self::SocieteValidee => 'Société validée',
             self::InscriptionClose => 'Inscription close',
+            self::SocieteRevoquee => 'Société révoquée par l\'éditeur',
             self::ActiviteDuCabinetControlee => 'Code d\'activité du cabinet contrôlé',
             self::OrdreDemande => 'Vérification de l\'inscription à l\'Ordre demandée',
             self::OrdreVerifie => 'Inscription à l\'Ordre vérifiée',
@@ -116,6 +120,8 @@ enum ActionAuditee: string implements HasLabel
             self::MagasinRouvert => 'Magasin rouvert',
             self::TerritoireCorrige => 'Territoire du magasin corrigé par l\'éditeur',
             self::SiretLibere => 'SIRET du magasin libéré par l\'éditeur',
+            self::CessionAnnulee => 'Cession du magasin annulée par l\'éditeur',
+            self::FinExerciceChangee => 'Date de clôture de l\'exercice changée par l\'éditeur',
             self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
             self::DemonstrationFermee => 'Magasin de démonstration fermé',
@@ -211,6 +217,10 @@ enum ActionAuditee: string implements HasLabel
             // envoyée (son identifiant, son SIREN et sa dénomination).
             self::SocieteValidee => ['preuve', 'proprietaire', 'sirets', 'cabinet'],
             self::InscriptionClose, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
+            // Le statut de la société avant et après sa révocation par la
+            // procédure de l'éditeur, et les SIRET de ses magasins libérés
+            // au registre des SIRET réservés (voir RevoquerSocieteAction).
+            self::SocieteRevoquee => ['statut', 'sirets_liberes'],
             // Le code d'activité d'un cabinet lu au répertoire Sirene, sa
             // nomenclature, et le résultat : « concluant » (69.20Z en NAF
             // rév. 2), « a_controler » (code absent ou d'une autre
@@ -240,11 +250,23 @@ enum ActionAuditee: string implements HasLabel
             // correction par la procédure de l'éditeur (voir
             // CorrigerLeTerritoireAction).
             self::TerritoireCorrige => ['territoire'],
-            // Le SIRET libéré d'un magasin fermé pour cessation, le motif de
-            // sa libération, le territoire du magasin, qui ne change pas, et
-            // celui où le répertoire Sirene situe son établissement (voir
-            // LibererLeSiretAction).
+            // Le SIRET libéré d'un magasin, le motif de sa libération et,
+            // pour un territoire mal lu, le territoire du magasin, qui ne
+            // change pas, et celui où le répertoire Sirene situe son
+            // établissement (voir LibererLeSiretAction et
+            // LibererUnSiretSaisiParErreurAction).
             self::SiretLibere => ['siret', 'motif', 'territoire', 'territoire_lu'],
+            // Le motif de fermeture du magasin avant et après l'annulation
+            // de sa cession par la procédure de l'éditeur, le nombre de
+            // produits rentrés en stock et la valeur hors taxe de ce stock,
+            // au coût de leur sortie (voir AnnulerCessionAction).
+            self::CessionAnnulee => ['motif', 'produits_rentres', 'valeur_stock_rentre_ht'],
+            // Le mois de fin d'exercice et la fin de l'exercice en cours,
+            // avant et après le changement légal de la date de clôture, le
+            // jour de la décision et l'expert-comptable de la société qui a
+            // validé la durée de l'exercice transitoire (voir
+            // ChangerFinExerciceAction).
+            self::FinExerciceChangee => ['mois_fin_exercice', 'fin_exercice_en_cours', 'decision_du', 'duree_validee_par'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son
             // nom au moment de l'opération, son rôle de société et ses rôles

@@ -152,6 +152,14 @@ class Magasin extends Model implements HasName
      */
     private bool $correctionDuTerritoire = false;
 
+    /**
+     * Le changement de son motif de fermeture en cours est-il l'annulation
+     * de sa cession par la procédure de l'éditeur (voir
+     * annulerSaCessionParLaProcedure()) ? La seule qui rend à un magasin
+     * cédé un autre motif de fermeture.
+     */
+    private bool $annulationDeLaCession = false;
+
     protected $fillable = [
         'nom',
         'code',
@@ -258,7 +266,7 @@ class Magasin extends Model implements HasName
         });
 
         static::updating(function (Magasin $magasin) {
-            if ($magasin->getOriginal('motif_fermeture') === MotifFermeture::Cession && $magasin->isDirty(['statut', 'motif_fermeture'])) {
+            if ($magasin->getOriginal('motif_fermeture') === MotifFermeture::Cession && $magasin->isDirty(['statut', 'motif_fermeture']) && ! $magasin->annulationDeLaCession) {
                 throw new LogicException('Un magasin cédé ne se rouvre jamais et reste cédé.');
             }
 
@@ -310,6 +318,29 @@ class Magasin extends Model implements HasName
             $this->forceFill(['territoire' => $territoire])->save();
         } finally {
             $this->correctionDuTerritoire = false;
+        }
+    }
+
+    /**
+     * L'annulation de sa cession faite par erreur, par la seule procédure
+     * de l'éditeur (voir AnnulerCessionAction), sous le verrou de son
+     * registre : il reste fermé, avec le motif qu'il avait avant sa
+     * cession, temporaire ou cessation.
+     *
+     * @throws LogicException
+     */
+    public function annulerSaCessionParLaProcedure(MotifFermeture $motif): void
+    {
+        if (! $this->aEteCede() || ! in_array($motif, [MotifFermeture::Temporaire, MotifFermeture::Cessation], true)) {
+            throw new LogicException('Seule la cession d\'un magasin s\'annule, vers une fermeture temporaire ou pour cessation.');
+        }
+
+        $this->annulationDeLaCession = true;
+
+        try {
+            $this->forceFill(['motif_fermeture' => $motif])->save();
+        } finally {
+            $this->annulationDeLaCession = false;
         }
     }
 

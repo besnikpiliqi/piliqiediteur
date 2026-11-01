@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TeteJournalAudit;
@@ -24,10 +25,14 @@ use Throwable;
  * pas expiré arrête l'effacement de sa chaîne. La tête de la chaîne,
  * verrouillée comme pour une inscription, retient le point de reprise (la
  * séquence et l'empreinte de la dernière entrée effacée), d'où repart la
- * vérification (voir VerificateurJournalAudit). Une entrée sans date
+ * vérification (voir VerificateurJournalAudit). Une entrée de la
+ * vérification de la société, sans date d'expiration, s'efface une fois
+ * passée la fin de la conservation que la fin de la relation a fixée à sa
+ * société (voir FinDeLaRelation) ; toute autre entrée sans date
  * d'expiration ne s'efface jamais ; la base refuse tout autre effacement
- * (voir DeclencheursDeProtection::effacementApresExpiration()). La trace
- * d'une entrée effacée, d'un an, s'efface avec elle si elle demeure.
+ * (voir DeclencheursDeProtection::effacementApresExpirationOuFinDeLaRelation()).
+ * La trace d'une entrée effacée, d'un an, s'efface avec elle si elle
+ * demeure.
  *
  * La panne d'une société n'arrête pas les suivantes : elle est signalée
  * (report()), et reprise au passage suivant.
@@ -65,17 +70,19 @@ class PurgerJournalAudit extends Command
     private function purgerLaSociete(Societe $societe): int
     {
         $effacees = 0;
+        $finDeLaVerification = $societe->verification_conservee_jusqu_au;
 
         foreach (TeteJournalAudit::query()->where('societe_id', $societe->getKey())->orderBy('id')->pluck('id') as $teteId) {
-            $effacees += DB::transaction(function () use ($teteId): int {
+            $effacees += DB::transaction(function () use ($teteId, $finDeLaVerification): int {
                 $tete = TeteJournalAudit::query()->whereKey($teteId)->lockForUpdate()->firstOrFail();
+                $finDeLaRelationPassee = $tete->categorie === CategorieAudit::Verification && $finDeLaVerification !== null && $finDeLaVerification->lessThanOrEqualTo(now());
                 $expirees = EntreeAudit::query()
                     ->where('categorie', $tete->categorie->value)
                     ->when($tete->magasin_id === null, fn ($requete) => $requete->whereNull('magasin_id'), fn ($requete) => $requete->where('magasin_id', $tete->magasin_id))
                     ->where('sequence', '>', $tete->reprise_sequence ?? 0)
                     ->orderBy('sequence')
                     ->get(['id', 'sequence', 'empreinte', 'expire_le'])
-                    ->takeWhile(fn (EntreeAudit $entree): bool => $entree->expire_le !== null && $entree->expire_le->lessThanOrEqualTo(now()));
+                    ->takeWhile(fn (EntreeAudit $entree): bool => $entree->expire_le === null ? $finDeLaRelationPassee : $entree->expire_le->lessThanOrEqualTo(now()));
 
                 if ($expirees->isEmpty()) {
                     return 0;
@@ -84,8 +91,9 @@ class PurgerJournalAudit extends Command
                 $identifiants = $expirees->pluck('id')->all();
                 $effacables = EntreeAudit::query()
                     ->whereKey($identifiants)
-                    ->where('expire_le', '<=', now())
-                    ->whereRaw(DeclencheursDeProtection::conditionDExpiration())
+                    ->where(fn ($requete) => $requete
+                        ->whereRaw(DeclencheursDeProtection::conditionDExpiration())
+                        ->orWhereRaw(DeclencheursDeProtection::conditionDeFinDeLaRelation('journal_audit', CategorieAudit::Verification->value)))
                     ->count();
 
                 if ($effacables !== count($identifiants)) {

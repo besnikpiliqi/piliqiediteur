@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Annule, sur une décision, un code de confirmation encore actif (voir
  * CodeConfirmation) : un nouveau courrier du même motif le remplace (le
- * premier code ne vaut plus), ou l'inscription de sa société est close.
+ * premier code ne vaut plus), l'inscription de sa société est close, ou
+ * l'éditeur révoque sa société (voir RevoquerSocieteAction).
  * Le code s'annule dans sa société, et l'annulation s'inscrit à son
  * journal d'audit avec sa raison. Le SIREN et le motif du code sont
  * libérés : un autre code peut partir.
@@ -22,6 +23,8 @@ class AnnulationDesCodes
     public const NOUVEAU_COURRIER = 'nouveau_courrier';
 
     public const INSCRIPTION_CLOSE = 'inscription_close';
+
+    public const SOCIETE_REVOQUEE = 'societe_revoquee';
 
     public function __construct(private readonly JournalAudit $journalAudit) {}
 

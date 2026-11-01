@@ -51,7 +51,9 @@ return new class extends Migration
             $table->foreignId('termine_par')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('termine_par_nom')->nullable();
             $table->timestamp('termine_le')->nullable();
-            // MotifDeFinDuLien.
+            // MotifDeFinDuLien : par_le_client, par_le_cabinet, remplace,
+            // cabinet_plus_verifie, proprietaire_remplace, inscription_close,
+            // societe_revoquee.
             $table->string('motif_fin', 30)->nullable();
             $table->timestamps();
 

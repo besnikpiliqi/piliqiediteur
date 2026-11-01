@@ -31,8 +31,13 @@ use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
+use App\Domain\Tenancy\Actions\RevoquerSocieteAction;
+use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -350,6 +355,37 @@ class CabinetsConcurrenceTest extends TestCase
         $this->assertTrue($this->attendre($concurrente)->successful());
         $this->assertSame(EtatDuLien::Termine, $demande->fresh()->etat);
         $this->assertSame('cabinet_plus_verifie', $demande->fresh()->motif_fin->value);
+    }
+
+    /**
+     * L'éditeur révoque un cabinet pendant que son propriétaire accepte la
+     * désignation d'un client : la révocation attend l'acceptation, qui
+     * tient la vérification du cabinet sous un verrou partagé, puis met fin
+     * au lien qu'elle a fait naître ; aucun lien ne reste actif.
+     */
+    public function test_une_acceptation_de_lien_pendant_la_revocation_du_cabinet_ne_laisse_aucun_lien_actif(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        app(TenantContext::class)->clear();
+        $demande = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
+        app(TenantContext::class)->clear();
+        app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($cabinet->fresh(), MotifCode::Revocation, new InterventionDeLEditeur('Courrier de vérification détourné, titulaire reçu.', 'DOSSIER-2026-0102', ['alice']));
+        app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure((string) $cabinet->siren, MotifCode::Revocation, $this->codeDuCourrier($cabinet, MotifCode::Revocation), '127.0.0.1');
+        app(TenantContext::class)->clear();
+        $cabinetId = (int) $cabinet->getKey();
+        $concurrente = null;
+        $this->concurrencerDesQueLaLigneEstVerrouillee('cabinets', 'for share', static function () use ($cabinetId): void {
+            app(RevoquerSocieteAction::class)->handle(Societe::query()->findOrFail($cabinetId), new InterventionDeLEditeur('Courrier de vérification détourné, titulaire reçu.', 'DOSSIER-2026-0102', ['alice', 'bruno']));
+        }, $concurrente);
+
+        app(AccepterLaDemandeDeLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), $demande);
+
+        $this->assertTrue($this->attendre($concurrente)->successful());
+        $this->assertSame([EtatDuLien::Termine, 'societe_revoquee'], [$demande->fresh()->etat, $demande->fresh()->motif_fin->value]);
+        $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->where('etat', EtatDuLien::Actif->value)->count());
+        $this->assertSame(StatutSociete::Revoquee, $cabinet->fresh()->statut);
     }
 
     public function test_une_acceptation_et_un_refus_simultanes_de_la_meme_invitation_ne_laissent_qu_une_issue(): void

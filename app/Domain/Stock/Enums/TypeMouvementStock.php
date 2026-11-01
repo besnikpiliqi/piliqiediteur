@@ -9,7 +9,9 @@ namespace App\Domain\Stock\Enums;
  * entrer, à son coût saisi, le stock existant au démarrage d'un magasin
  * (voir StockLedgerService::entrerALInventaireDOuverture()) ; la sortie de
  * cession fait sortir, au coût moyen, le stock d'un magasin cédé (voir
- * StockLedgerService::sortirPourCession()).
+ * StockLedgerService::sortirPourCession()), que l'annulation de la cession
+ * par l'éditeur fait rentrer au même coût (voir
+ * StockLedgerService::rentrerApresAnnulationDeCession()).
  */
 enum TypeMouvementStock: string
 {
@@ -21,6 +23,7 @@ enum TypeMouvementStock: string
     case AjustementEntree = 'ajustement_entree';
     case AjustementSortie = 'ajustement_sortie';
     case SortieCession = 'sortie_cession';
+    case EntreeAnnulationCession = 'entree_annulation_cession';
 
     /**
      * true = entre en stock (+), false = sort du stock (-).
@@ -28,7 +31,7 @@ enum TypeMouvementStock: string
     public function estEntree(): bool
     {
         return match ($this) {
-            self::ReceptionAchat, self::InventaireOuverture, self::RetourClient, self::AjustementEntree => true,
+            self::ReceptionAchat, self::InventaireOuverture, self::RetourClient, self::AjustementEntree, self::EntreeAnnulationCession => true,
             self::Vente, self::RetourFournisseur, self::AjustementSortie, self::SortieCession => false,
         };
     }

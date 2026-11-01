@@ -12,6 +12,7 @@ use App\Console\Commands\PurgerDemandesInscription;
 use App\Console\Commands\PurgerInvitationsDesCabinets;
 use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
+use App\Console\Commands\PurgerVerifications;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SuivreEnvoisRecommandes;
@@ -85,6 +86,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // chaque chaîne (voir PurgerJournalAudit).
         $schedule->command(PurgerTraces::class)->dailyAt('04:00');
         $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15');
+        // À 4 h 20 : les données de vérification d'une société cinq ans
+        // après la fin de la relation (voir PurgerVerifications).
+        $schedule->command(PurgerVerifications::class)->dailyAt('04:20');
         // À 4 h 30 : les jetons des demandes traitées depuis plus de 30
         // jours s'effacent (voir PurgerActionsTraitees).
         $schedule->command(PurgerActionsTraitees::class)->dailyAt('04:30');

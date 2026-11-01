@@ -23,7 +23,10 @@ use LogicException;
  * - l'opérateur saisit son nom et son secret personnel dans un champ
  *   masqué, jamais en option de la ligne de commande, pour ne pas le
  *   laisser dans l'historique : la procédure ne se lance donc que dans un
- *   terminal interactif (voir RegistreDesOperateurs) ;
+ *   terminal interactif (voir RegistreDesOperateurs) ; une procédure grave
+ *   (la révocation d'une société, la libération d'un SIRET saisi par
+ *   erreur, l'annulation d'une cession, voir operateursExiges()) en exige
+ *   deux, distincts, chacun authentifié par son propre secret ;
  * - elle s'inscrit, origine « éditeur », avec sa justification, sa pièce,
  *   ses opérateurs, l'utilisateur système et l'hôte (voir
  *   InterventionDeLEditeur), et ne réécrit jamais un document émis.
@@ -33,7 +36,18 @@ abstract class ProcedureDeLEditeur extends Command
 {
     public const MESSAGE_MAGASIN_INTROUVABLE = 'Ce magasin n\'existe pas dans cette société : donnez son code.';
 
+    public const MESSAGE_MEME_OPERATEUR = 'Cette procédure exige deux opérateurs distincts : rien n\'est fait.';
+
     public const OPTIONS_COMMUNES = '{--justification= : Pourquoi l\'éditeur intervient, en vingt caractères au moins} {--piece= : La référence de la pièce qui fonde l\'intervention} {--confirmer= : La valeur attendue, retapée d\'avance (le SIREN de la société)}';
+
+    /**
+     * Combien d'opérateurs distincts la procédure exige : un, sauf pour une
+     * procédure grave, qui en exige deux.
+     */
+    protected function operateursExiges(): int
+    {
+        return 1;
+    }
 
     /**
      * Les lignes du résumé affiché avant la confirmation.
@@ -89,8 +103,20 @@ abstract class ProcedureDeLEditeur extends Command
         }
 
         try {
-            $operateur = $operateurs->authentifier($this->ask('Nom de l\'opérateur'), $this->secret('Secret de l\'opérateur'));
-            $this->info($this->executer($societe, new InterventionDeLEditeur($justification, $piece, [$operateur])));
+            $authentifies = [];
+
+            for ($rang = 1; $rang <= $this->operateursExiges(); $rang++) {
+                $suffixe = $this->operateursExiges() === 1 ? '' : ($rang === 1 ? ' (premier)' : ' (second)');
+                $operateur = $operateurs->authentifier($this->ask("Nom de l'opérateur{$suffixe}"), $this->secret("Secret de l'opérateur{$suffixe}"));
+
+                if (in_array($operateur, $authentifies, true)) {
+                    throw new VerificationRefuseeException(self::MESSAGE_MEME_OPERATEUR);
+                }
+
+                $authentifies[] = $operateur;
+            }
+
+            $this->info($this->executer($societe, new InterventionDeLEditeur($justification, $piece, $authentifies)));
         } catch (VerificationRefuseeException|LogicException $refus) {
             $this->error($refus->getMessage());
 

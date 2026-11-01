@@ -10,7 +10,8 @@ use Filament\Support\Contracts\HasLabel;
  * en a lié un autre ; le cabinet n'est plus vérifié (radiation de l'Ordre
  * constatée par l'éditeur) ; une autre personne a saisi le code du
  * courrier de la société et en est devenue propriétaire ; l'inscription de
- * la société s'est close sans validation.
+ * la société s'est close sans validation ; l'éditeur a révoqué le cabinet
+ * ou le client (voir RevoquerSocieteAction).
  */
 enum MotifDeFinDuLien: string implements HasLabel
 {
@@ -20,6 +21,7 @@ enum MotifDeFinDuLien: string implements HasLabel
     case CabinetPlusVerifie = 'cabinet_plus_verifie';
     case ProprietaireRemplace = 'proprietaire_remplace';
     case InscriptionClose = 'inscription_close';
+    case SocieteRevoquee = 'societe_revoquee';
 
     public function getLabel(): string
     {
@@ -30,6 +32,7 @@ enum MotifDeFinDuLien: string implements HasLabel
             self::CabinetPlusVerifie => 'Cabinet plus vérifié',
             self::ProprietaireRemplace => 'Nouveau propriétaire de la société',
             self::InscriptionClose => 'Inscription de la société close',
+            self::SocieteRevoquee => 'Société révoquée par l\'éditeur',
         };
     }
 }

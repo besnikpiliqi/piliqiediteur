@@ -32,6 +32,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
+use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Identifiant;
@@ -89,6 +90,7 @@ class IsolationDesSocietesTest extends TestCase
      */
     private const MODELES_DE_SOCIETE = [
         Cabinet::class,
+        ChangementFinExercice::class,
         ClientConfie::class,
         CodeConfirmation::class,
         EntreeAudit::class,

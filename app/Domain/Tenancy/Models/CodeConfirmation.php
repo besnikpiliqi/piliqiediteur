@@ -18,9 +18,11 @@ use LogicException;
  * SIREN et par motif dans tout le logiciel.
  *
  * Seuls son suivi (référence, remise, retour), ses essais, son usage, son
- * annulation et la fin de sa conservation se posent ; ses autres colonnes
- * ne se corrigent jamais. Il ne s'efface pas par le modèle, et la base
- * refuse son effacement avant la fin de sa conservation (voir
+ * annulation et la fin de sa conservation se posent, celle-ci à la fin
+ * de la relation avec sa société (voir FinDeLaRelation) ; ses autres
+ * colonnes ne se corrigent jamais. Il ne s'efface pas par le modèle : la
+ * seule purge de fin de conservation l'efface (voir
+ * app:purger-verifications), et la base refuse son effacement avant (voir
  * DeclencheursDeProtection::suppressionApresConservation()).
  *
  * @property array<string, mixed> $destinataire
@@ -76,7 +78,7 @@ class CodeConfirmation extends Model
         });
 
         static::deleting(function (): never {
-            throw new LogicException('Un code de confirmation ne s\'efface jamais.');
+            throw new LogicException('Un code de confirmation ne s\'efface jamais par le modèle : seule la purge de fin de conservation l\'efface.');
         });
     }
 

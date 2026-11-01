@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Tenancy\Enums\CategorieAudit;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -12,11 +13,13 @@ use Illuminate\Support\Facades\Schema;
  * magasin (magasin_id) ou de la société (magasin_id nul), dans sa
  * catégorie, et en signe l'empreinte par HMAC avec la clé dédiée du
  * journal (cle_id). Une entrée ne se modifie jamais et ne s'efface qu'une
- * fois sa durée de conservation passée (expire_le, nulle tant qu'elle
- * n'est pas fixée), par le début de sa chaîne (voir
- * app:purger-journal-audit) ; la base refuse tout le reste (voir
- * DeclencheursDeProtection::effacementApresExpiration()). L'adresse IP et
- * le navigateur sont rangés à part (traces_audit).
+ * fois sa durée de conservation passée (expire_le), ou, pour une entrée de
+ * la vérification de la société, sans expire_le, une fois passée la fin
+ * de la conservation que la fin de la relation fixe à sa société
+ * (societes.verification_conservee_jusqu_au), par le début de sa chaîne
+ * (voir app:purger-journal-audit) ; la base refuse tout le reste (voir
+ * DeclencheursDeProtection::effacementApresExpirationOuFinDeLaRelation()).
+ * L'adresse IP et le navigateur sont rangés à part (traces_audit).
  *
  * expire_le et created_at sont des instants en UTC (cast Instant) :
  * l'empreinte les signe, et les déclencheurs comparent expire_le à
@@ -59,7 +62,7 @@ return new class extends Migration
         DB::statement('CREATE UNIQUE INDEX journal_audit_sequence_magasin ON journal_audit (magasin_id, categorie, sequence) WHERE magasin_id IS NOT NULL');
         DB::statement('CREATE UNIQUE INDEX journal_audit_sequence_societe ON journal_audit (societe_id, categorie, sequence) WHERE magasin_id IS NULL');
 
-        DeclencheursDeProtection::effacementApresExpiration('journal_audit');
+        DeclencheursDeProtection::effacementApresExpirationOuFinDeLaRelation('journal_audit', CategorieAudit::Verification->value);
     }
 
     public function down(): void

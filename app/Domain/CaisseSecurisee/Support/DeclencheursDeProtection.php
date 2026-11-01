@@ -22,6 +22,12 @@ use RuntimeException;
  *   traces techniques, voir TraceEvenement) ; elle ne se vide pas. L'heure
  *   de comparaison est celle du serveur de base de données, en UTC, comme
  *   expire_le (voir Instant) ;
+ * - effacementApresExpirationOuFinDeLaRelation() : de même, pour une table
+ *   qui garde la vérification d'une société (son registre des
+ *   vérifications, les entrées de la vérification de son journal d'audit)
+ *   : une ligne sans expire_le s'y efface aussi une fois passée la fin de
+ *   la conservation des données de vérification que porte sa société,
+ *   cinq ans après la fin de la relation (voir FinDeLaRelation) ;
  * - suppressionApresConservation() : table dont une ligne se modifie (son
  *   suivi), mais ne s'efface qu'une fois passée la fin de sa conservation,
  *   une colonne nulle tant qu'elle n'est pas fixée (les codes de courrier,
@@ -98,6 +104,45 @@ final class DeclencheursDeProtection
     }
 
     /**
+     * Comme effacementApresExpiration(), pour une table qui garde la
+     * vérification d'une société, chaque ligne avec sa société (societe_id)
+     * : une ligne sans expire_le, conservée jusqu'à cinq ans après la fin de
+     * la relation avec sa société (Q4), s'efface aussi une fois passée la
+     * fin de la conservation que porte sa société
+     * (societes.verification_conservee_jusqu_au, posée à la fin de la
+     * relation et figée ensuite, voir FinDeLaRelation) ; le journal d'audit
+     * ne la donne qu'aux entrées de sa catégorie de la vérification.
+     *
+     * @param  string|null  $categorie  la seule catégorie de lignes que la fin de la relation laisse effacer (categorie), null pour toutes
+     */
+    public static function effacementApresExpirationOuFinDeLaRelation(string $table, ?string $categorie = null): void
+    {
+        self::poser($table, 'effacement_apres_expiration', 'refuser toute modification, tout vidage et toute suppression avant expiration', [
+            'UPDATE' => "{$table} : modification refusée",
+            'DELETE' => "{$table} : suppression refusée avant expiration",
+            'TRUNCATE' => "{$table} : vidage refusé",
+        ], colonneDExpiration: 'expire_le', suppressionAussiPermise: fn (string $pilote): string => self::finDeLaRelationPassee($pilote, 'OLD', $categorie));
+    }
+
+    /**
+     * La condition SQL, au pilote de la connexion, à laquelle le
+     * déclencheur d'une table à effacement après expiration ou fin de la
+     * relation (voir effacementApresExpirationOuFinDeLaRelation()) laisse
+     * aussi effacer une ligne de cette table sans expire_le : la fin de la
+     * conservation des données de vérification de sa société passée à
+     * l'heure UTC du serveur de base. Qui efface ces lignes les choisit par
+     * elle, comme par conditionDExpiration().
+     *
+     * @param  string|null  $categorie  la seule catégorie de lignes concernée, null pour toutes
+     */
+    public static function conditionDeFinDeLaRelation(string $table, ?string $categorie = null): string
+    {
+        self::verifierLeNom($table);
+
+        return self::finDeLaRelationPassee(self::piloteGere(), $table, $categorie);
+    }
+
+    /**
      * @param  string  $colonne  la fin de la conservation d'une ligne, nulle tant qu'elle n'est pas fixée
      */
     public static function suppressionApresConservation(string $table, string $colonne): void
@@ -165,21 +210,19 @@ final class DeclencheursDeProtection
 
     /**
      * La condition SQL, au pilote de la connexion, à laquelle le
-     * déclencheur d'une table à effacement après expiration laisse effacer
-     * une ligne : expire_le passée à l'heure UTC du serveur de base. Qui
+     * déclencheur d'une table à effacement après expiration, ou après
+     * conservation pour la colonne de sa fin de conservation, laisse
+     * effacer une ligne : cette colonne (expire_le) passée à l'heure UTC du
+     * serveur de base. Qui
      * efface ces lignes (voir app:purger-traces) les choisit par elle :
      * l'heure de l'application, que peut devancer celle du serveur de base,
      * ne ferait refuser tout un lot pour une seule ligne.
      */
-    public static function conditionDExpiration(): string
+    public static function conditionDExpiration(string $colonne = 'expire_le'): string
     {
-        $pilote = DB::connection()->getDriverName();
+        self::verifierLeNom($colonne);
 
-        if (! in_array($pilote, ['pgsql', 'sqlite'], true)) {
-            throw new RuntimeException("Le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite).");
-        }
-
-        return self::ligneExpiree($pilote, 'expire_le');
+        return self::ligneExpiree(self::piloteGere(), $colonne);
     }
 
     /**
@@ -202,8 +245,9 @@ final class DeclencheursDeProtection
      * @param  string  $exigence  ce que la table doit refuser, pour le message d'un pilote non pris en charge
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus  le message de refus de chaque opération
      * @param  string|null  $colonneDExpiration  la colonne au-delà de laquelle la suppression d'une ligne passe, null pour la refuser toujours
+     * @param  (callable(string): string)|null  $suppressionAussiPermise  pour un pilote, une autre condition SQL sur la ligne effacée (OLD) sous laquelle sa suppression passe aussi
      */
-    private static function poser(string $table, string $protection, string $exigence, array $refus, ?string $colonneDExpiration = null): void
+    private static function poser(string $table, string $protection, string $exigence, array $refus, ?string $colonneDExpiration = null, ?callable $suppressionAussiPermise = null): void
     {
         self::verifierLeNom($table);
 
@@ -212,10 +256,15 @@ final class DeclencheursDeProtection
         }
 
         $connexion = DB::connection();
+        $pilote = $connexion->getDriverName();
+        $suppressionPermise = $colonneDExpiration === null ? null : implode(' OR ', array_filter([
+            '('.self::ligneExpiree($pilote === 'pgsql' ? 'pgsql' : 'sqlite', "OLD.{$colonneDExpiration}").')',
+            $suppressionAussiPermise === null || ! in_array($pilote, ['pgsql', 'sqlite'], true) ? null : '('.$suppressionAussiPermise($pilote).')',
+        ]));
 
-        $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres($table, $protection, $refus, $colonneDExpiration),
-            'sqlite' => self::instructionsSqlite($table, $protection, $refus, $colonneDExpiration),
+        $instructions = match ($pilote) {
+            'pgsql' => self::instructionsPostgres($table, $protection, $refus, $suppressionPermise),
+            'sqlite' => self::instructionsSqlite($table, $protection, $refus, $suppressionPermise),
             default => throw new RuntimeException("La table {$table} doit {$exigence} : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
         };
 
@@ -227,15 +276,17 @@ final class DeclencheursDeProtection
     /**
      * La fonction de refus laisse passer, pour une table à effacement après
      * expiration ou après conservation, la suppression d'une ligne dont la
-     * colonne d'expiration, en UTC, est passée à l'heure UTC du serveur.
+     * colonne d'expiration, en UTC, est passée à l'heure UTC du serveur, ou
+     * qui remplit l'autre condition de sa protection.
      *
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus
+     * @param  string|null  $suppressionPermise  la condition SQL sur la ligne effacée (OLD) sous laquelle sa suppression passe, null pour la refuser toujours
      * @return list<string>
      */
-    private static function instructionsPostgres(string $table, string $protection, array $refus, ?string $colonneDExpiration): array
+    private static function instructionsPostgres(string $table, string $protection, array $refus, ?string $suppressionPermise): array
     {
-        $ligneExpireeEffacee = $colonneDExpiration !== null
-            ? "IF TG_OP = 'DELETE' THEN IF ".self::ligneExpiree('pgsql', "OLD.{$colonneDExpiration}").' THEN RETURN OLD; END IF; END IF; '
+        $ligneExpireeEffacee = $suppressionPermise !== null
+            ? "IF TG_OP = 'DELETE' THEN IF {$suppressionPermise} THEN RETURN OLD; END IF; END IF; "
             : '';
         $instructions = [
             "CREATE OR REPLACE FUNCTION refus_{$table}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$ligneExpireeEffacee}RAISE EXCEPTION '%', TG_ARGV[0]; END \$\$",
@@ -254,18 +305,20 @@ final class DeclencheursDeProtection
     /**
      * Pour une table à effacement après expiration ou après conservation,
      * le déclencheur BEFORE DELETE ne refuse que la suppression d'une
-     * ligne qui n'est pas expirée (voir ligneExpiree()).
+     * ligne qui n'est pas expirée (voir ligneExpiree()), ni ne remplit
+     * l'autre condition de sa protection.
      *
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus
+     * @param  string|null  $suppressionPermise  la condition SQL sur la ligne effacée (OLD) sous laquelle sa suppression passe, null pour la refuser toujours
      * @return list<string>
      */
-    private static function instructionsSqlite(string $table, string $protection, array $refus, ?string $colonneDExpiration): array
+    private static function instructionsSqlite(string $table, string $protection, array $refus, ?string $suppressionPermise): array
     {
         $instructions = [];
 
         foreach (array_diff_key($refus, ['TRUNCATE' => true]) as $operation => $message) {
-            $condition = $colonneDExpiration !== null && $operation === 'DELETE'
-                ? ' WHEN NOT ('.self::ligneExpiree('sqlite', "OLD.{$colonneDExpiration}").')'
+            $condition = $suppressionPermise !== null && $operation === 'DELETE'
+                ? " WHEN NOT ({$suppressionPermise})"
                 : '';
             $instructions[] = "CREATE TRIGGER {$table}_{$protection}_".strtolower($operation)
                 ." BEFORE {$operation} ON {$table}{$condition} BEGIN SELECT RAISE(ABORT, '{$message}'); END";
@@ -288,6 +341,46 @@ final class DeclencheursDeProtection
         $maintenant = $pilote === 'pgsql' ? "(now() AT TIME ZONE 'UTC')" : 'CURRENT_TIMESTAMP';
 
         return "{$colonne} IS NOT NULL AND {$colonne} <= {$maintenant}";
+    }
+
+    /**
+     * Une ligne de la vérification d'une société dont la conservation a
+     * pris fin avec la relation : sans expire_le, de la catégorie donnée
+     * s'il y en a une, sa société ayant passé, à l'heure UTC du serveur de
+     * base, la fin de la conservation de ses données de vérification.
+     *
+     * @param  'pgsql'|'sqlite'  $pilote
+     * @param  string  $ligne  la ligne (OLD dans un déclencheur, le nom de sa table dans une requête)
+     */
+    private static function finDeLaRelationPassee(string $pilote, string $ligne, ?string $categorie): string
+    {
+        if ($categorie !== null && preg_match('/^[a-z_]+$/D', $categorie) !== 1) {
+            throw new InvalidArgumentException("Catégorie invalide pour un déclencheur : {$categorie}.");
+        }
+
+        return implode(' AND ', array_filter([
+            "{$ligne}.expire_le IS NULL",
+            $categorie === null ? null : "{$ligne}.categorie = '{$categorie}'",
+            "EXISTS (SELECT 1 FROM societes WHERE societes.id = {$ligne}.societe_id AND ".self::ligneExpiree($pilote, 'societes.verification_conservee_jusqu_au').')',
+        ]));
+    }
+
+    /**
+     * Le pilote de la connexion, s'il est pris en charge.
+     *
+     * @return 'pgsql'|'sqlite'
+     *
+     * @throws RuntimeException
+     */
+    private static function piloteGere(): string
+    {
+        $pilote = DB::connection()->getDriverName();
+
+        if (! in_array($pilote, ['pgsql', 'sqlite'], true)) {
+            throw new RuntimeException("Le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite).");
+        }
+
+        return $pilote;
     }
 
     private static function verifierLeNom(string $table): void

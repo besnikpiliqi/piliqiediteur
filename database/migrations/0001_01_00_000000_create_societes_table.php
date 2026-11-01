@@ -111,6 +111,14 @@ return new class extends Migration
             // seule ; son SIREN est libéré.
             $table->timestamp('close_le')->nullable();
             $table->string('motif_cloture', 30)->nullable();
+            // La fin de la conservation de ses données de vérification (son
+            // registre des vérifications, ses codes de courrier, les entrées
+            // de la vérification de son journal d'audit), instant en UTC
+            // (cast Instant) : cinq ans après la fin de la relation avec
+            // l'éditeur (Q4), posée à sa révocation (voir FinDeLaRelation),
+            // nulle jusque-là ; la base ne la laisse plus changer ensuite,
+            // et ses déclencheurs la lisent pour effacer ces données.
+            $table->dateTime('verification_conservee_jusqu_au')->nullable();
             $table->timestamps();
 
             $table->index('siren');
@@ -127,6 +135,11 @@ return new class extends Migration
 
         DeclencheursDeProtection::sansSuppression('societes');
 
+        // La fin de la conservation des données de vérification, une fois
+        // posée, ne s'efface ni ne se change plus : personne ne la rapproche
+        // pour effacer plus tôt ces données.
+        DeclencheursDeProtection::colonneFigee('societes', 'verification_conservee_jusqu_au');
+
         // Le type d'activité est connu et ne change jamais.
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::TYPE_FIXE);
     }
@@ -136,5 +149,6 @@ return new class extends Migration
         GardesDesTypesDActivite::retirer(GardesDesTypesDActivite::TYPE_FIXE);
         Schema::dropIfExists('societes');
         DeclencheursDeProtection::retirer('societes');
+        DeclencheursDeProtection::retirerLaColonneFigee('societes', 'verification_conservee_jusqu_au');
     }
 };

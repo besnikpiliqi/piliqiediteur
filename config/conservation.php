@@ -40,14 +40,31 @@ return [
     | (comptes, droits, mots de passe donnés, suspensions, rattachements,
     | transferts), 5 ans (Q4 de l'éditeur, voir CategorieAudit). Celles de
     | la vérification d'une société se gardent jusqu'à 5 ans après la fin
-    | de la relation. Effacées chaque nuit une fois cette durée passée, par
-    | le début de leur chaîne (voir app:purger-journal-audit).
+    | de la relation (voir plus bas). Effacées chaque nuit une fois cette
+    | durée passée, par le début de leur chaîne (voir
+    | app:purger-journal-audit).
     |
     */
 
     'journal_audit_operations_en_annees' => (int) env('CONSERVATION_AUDIT_OPERATIONS_EN_ANNEES', 10),
 
     'journal_audit_acces_en_annees' => (int) env('CONSERVATION_AUDIT_ACCES_EN_ANNEES', 5),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Vérification d'une société
+    |--------------------------------------------------------------------------
+    |
+    | Son registre des vérifications, ses codes de courrier recommandé et
+    | les entrées de la vérification de son journal d'audit se gardent
+    | jusqu'à 5 ans après la fin de la relation avec l'éditeur (Q4) : à sa
+    | révocation, la société reçoit la fin de leur conservation (voir
+    | FinDeLaRelation), puis ils s'effacent chaque nuit une fois cette date
+    | passée (voir app:purger-verifications et app:purger-journal-audit).
+    |
+    */
+
+    'verification_apres_la_fin_de_la_relation_en_annees' => (int) env('CONSERVATION_VERIFICATION_APRES_LA_FIN_DE_LA_RELATION_EN_ANNEES', 5),
 
     /*
     |--------------------------------------------------------------------------

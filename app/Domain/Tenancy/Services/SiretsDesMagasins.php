@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\SiretMagasin;
+use App\Domain\Tenancy\Models\Societe;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -20,9 +21,10 @@ use Illuminate\Support\Facades\DB;
  * société validée (voir MiseEnActiviteDesMagasins : la validation de la
  * société pour ses magasins actifs, la création d'un magasin dans une
  * société validée, une réouverture) et à un changement de SIRET (voir
- * remplacer()) ; elle ne prend fin que par la procédure de l'éditeur qui
- * la libère (voir liberer()). Le message de refus ne dit rien du magasin
- * ni de la société qui a réservé ce SIRET.
+ * remplacer()) ; elle ne prend fin que par une procédure de l'éditeur qui
+ * la libère (voir liberer(), et libererCeuxDeLaSociete() pour une société
+ * révoquée). Le message de refus ne dit rien du magasin ni de la société
+ * qui a réservé ce SIRET.
  */
 class SiretsDesMagasins
 {
@@ -81,6 +83,34 @@ class SiretsDesMagasins
             ->lockForUpdate()
             ->get()
             ->each(fn (SiretMagasin $reservation): bool => $reservation->forceFill(['libere_le' => now(), 'motif_liberation' => $motif])->save());
+    }
+
+    /**
+     * Libère, avec leur motif, tous les SIRET que les magasins de cette
+     * société réservent encore au registre, l'actuel de chacun comme ceux
+     * qu'un changement de SIRET a retirés : la révocation de la société par
+     * la procédure de l'éditeur (voir RevoquerSocieteAction), qui rend son
+     * SIREN et ses SIRET au vrai titulaire. Écriture filtrée par cette
+     * société, sous les verrous de ses registres et de sa ligne, pris par
+     * l'appelant ; les magasins gardent leur SIRET, que leurs documents
+     * ont signé.
+     *
+     * @return list<string> les SIRET libérés, dans l'ordre du registre
+     */
+    public function libererCeuxDeLaSociete(Societe $societe, string $motif): array
+    {
+        return SiretMagasin::query()
+            ->where('societe_id', $societe->getKey())
+            ->whereNull('libere_le')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->map(function (SiretMagasin $reservation) use ($motif): string {
+                $reservation->forceFill(['libere_le' => now(), 'motif_liberation' => $motif])->save();
+
+                return (string) $reservation->siret;
+            })
+            ->all();
     }
 
     /**

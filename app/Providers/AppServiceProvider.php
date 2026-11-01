@@ -30,6 +30,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
@@ -46,6 +47,7 @@ use App\Policies\ClotureCaissePersonnellePolicy;
 use App\Policies\ClotureCaissePolicy;
 use App\Policies\DevisPolicy;
 use App\Policies\EnregistrementFiscalPolicy;
+use App\Policies\EntreeAuditPolicy;
 use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
@@ -158,6 +160,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Cabinet::class, CabinetPolicy::class);
         Gate::policy(LienCabinet::class, LienCabinetPolicy::class);
         Gate::policy(InvitationCabinet::class, InvitationCabinetPolicy::class);
+        Gate::policy(EntreeAudit::class, EntreeAuditPolicy::class);
 
         Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
 

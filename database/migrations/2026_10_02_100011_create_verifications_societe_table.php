@@ -12,9 +12,11 @@ use Illuminate\Support\Facades\Schema;
  * l'éditeur sur des pièces, concluant, négatif ou impossible, avec ce
  * qu'il a lu (liste blanche par type, voir
  * TypeVerification::detailsRetenus()). Une ligne ne se modifie jamais et
- * ne s'efface qu'une fois sa durée de conservation fixée et passée
- * (expire_le, nulle jusqu'à la fin de la relation) ; la base refuse tout
- * le reste.
+ * ne s'efface qu'une fois passée la fin de sa conservation : cinq ans
+ * après la fin de la relation avec sa société, que porte la société
+ * (societes.verification_conservee_jusqu_au, voir FinDeLaRelation), ou
+ * plus tôt si sa ligne le dit (expire_le, nulle aujourd'hui pour toutes) ;
+ * la base refuse tout le reste (voir app:purger-verifications).
  */
 return new class extends Migration
 {
@@ -44,7 +46,7 @@ return new class extends Migration
             $table->index(['societe_id', 'type']);
         });
 
-        DeclencheursDeProtection::effacementApresExpiration('verifications_societe');
+        DeclencheursDeProtection::effacementApresExpirationOuFinDeLaRelation('verifications_societe');
     }
 
     public function down(): void

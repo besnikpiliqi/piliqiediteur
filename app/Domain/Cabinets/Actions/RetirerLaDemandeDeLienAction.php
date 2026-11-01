@@ -4,6 +4,7 @@ namespace App\Domain\Cabinets\Actions;
 
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
+use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
@@ -47,6 +48,25 @@ class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
             DB::afterCommit(function () use ($retiree, $motif): void {
                 $client = Societe::query()->findOrFail($retiree->societe_id);
                 self::prevenirLeCabinet($retiree, 'Demande de lien retirée', "La demande de lien avec le SIREN {$client->siren} a pris fin : {$motif->getLabel()}.");
+            });
+        }
+    }
+
+    /**
+     * Le retrait d'une demande en cours d'un cabinet que l'éditeur révoque,
+     * au nom du système, dans sa propre transaction, après la révocation
+     * (voir RevoquerSocieteAction) : le client qui avait désigné le cabinet
+     * en est prévenu ; une demande de rattachement du cabinet s'éteint sans
+     * rien dire au client, qui ne l'avait pas encore acceptée.
+     */
+    public function pourUnCabinetRevoque(LienCabinet $lien): void
+    {
+        $retiree = $this->cloreLaDemande(null, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, static fn (): null => null);
+
+        if ($retiree !== null && $retiree->origine === OrigineDuLien::DesignationDuClient) {
+            DB::afterCommit(function () use ($retiree): void {
+                $cabinet = Societe::query()->findOrFail($retiree->cabinet_id);
+                self::prevenirLeClient($retiree, 'Demande de lien retirée', "Votre demande de lien avec le cabinet {$cabinet->getFilamentName()} a pris fin : ".lcfirst(MotifDeFinDuLien::SocieteRevoquee->getLabel()).'.');
             });
         }
     }

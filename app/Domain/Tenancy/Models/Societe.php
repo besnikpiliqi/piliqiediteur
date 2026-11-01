@@ -63,7 +63,8 @@ use LogicException;
  * - son SIREN, celui que vérifie le courrier, ne change jamais (une
  *   erreur se traite par la procédure exceptionnelle de l'éditeur), et son
  *   mois de fin d'exercice plus après la première vente de l'un de ses
- *   magasins (voir aVenduUneFois()) ;
+ *   magasins (voir aVenduUneFois()), sauf par le changement légal de la
+ *   date de clôture (voir changerLeMoisDeFinDExerciceParLaProcedure()) ;
  * - ce que sa forme juridique exclut ne s'enregistre pas (voir
  *   retirerCeQueSaFormeExclut()) ;
  * - elle ne s'efface jamais (voir forceDelete() et le déclencheur de la
@@ -107,6 +108,14 @@ class Societe extends Model implements HasName
         'assurance_couverture',
     ];
 
+    /**
+     * Le changement de son mois de fin d'exercice en cours est-il le
+     * changement légal de la date de clôture, par la procédure de l'éditeur
+     * (voir changerLeMoisDeFinDExerciceParLaProcedure()) ? Le seul qui
+     * passe le verrou de la première vente.
+     */
+    private bool $changementLegalDeLaFinDExercice = false;
+
     protected $fillable = [
         'raison_sociale',
         'forme_juridique',
@@ -143,6 +152,7 @@ class Societe extends Model implements HasName
         'validee_le' => Instant::class,
         'close_le' => Instant::class,
         'motif_cloture' => MotifCloture::class,
+        'verification_conservee_jusqu_au' => Instant::class,
     ];
 
     protected static function booted(): void
@@ -165,7 +175,7 @@ class Societe extends Model implements HasName
                 throw new LogicException('Le SIREN d\'une société ne change jamais : une erreur se traite par la procédure exceptionnelle de l\'éditeur.');
             }
 
-            if ($societe->isDirty('mois_fin_exercice') && $societe->aVenduUneFois()) {
+            if ($societe->isDirty('mois_fin_exercice') && ! $societe->changementLegalDeLaFinDExercice && $societe->aVenduUneFois()) {
                 throw new LogicException('Le mois de fin d\'exercice est verrouillé depuis la première vente de l\'un de vos magasins : seul un changement légal de la date de clôture, par la procédure de l\'éditeur, le modifie.');
             }
         });
@@ -216,6 +226,25 @@ class Societe extends Model implements HasName
     public function delete(): never
     {
         throw new LogicException('Une société ne se supprime jamais : ses documents sont conservés.');
+    }
+
+    /**
+     * Le changement légal de la date de clôture de son exercice, sur
+     * procès-verbal, par la seule procédure de l'éditeur (voir
+     * ChangerFinExerciceAction), sous les verrous de ses registres, tenus
+     * par l'appelant : son mois de fin d'exercice change même après la
+     * première vente de l'un de ses magasins, et s'inscrit au journal des
+     * événements de chacun (JET 270, voir JournaliseSesParametresDeConformite).
+     */
+    public function changerLeMoisDeFinDExerciceParLaProcedure(int $mois): void
+    {
+        $this->changementLegalDeLaFinDExercice = true;
+
+        try {
+            $this->forceFill(['mois_fin_exercice' => $mois])->save();
+        } finally {
+            $this->changementLegalDeLaFinDExercice = false;
+        }
     }
 
     /**

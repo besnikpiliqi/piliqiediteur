@@ -27,7 +27,9 @@ use LogicException;
  * clients des liens demandés et de ceux qu'on retire (une prise de
  * registres de plusieurs sociétés, voir
  * RegistreFiscal::sousVerrouDesMagasinsDesClients()), puis ces liens, puis
- * les comptes ; chaque lien demandé doit être actif et de ce cabinet. La
+ * la vérification du cabinet (partagée : un cabinet qui n'est plus actif ou
+ * vérifié ne confie aucun client, voir PorteeDesDroits), puis les comptes ;
+ * chaque lien demandé doit être actif et de ce cabinet. La
  * différence s'écrit (ajouts, retraits), au JET 130 de chaque magasin réel
  * touché et au journal d'audit du cabinet ; le collaborateur est prévenu,
  * client par client, et, pour un client qui ne lui est plus confié, ses
@@ -90,6 +92,7 @@ class ConfierDesClientsAction
                 $changements['retires'] = LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all();
             }, function () use ($cabinet, $concernes): void {
                 LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->orderBy('id')->lockForUpdate()->get();
+                $cabinet->cabinet()->sharedLock()->first();
             });
         });
 

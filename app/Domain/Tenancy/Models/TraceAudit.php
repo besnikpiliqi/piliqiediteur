@@ -2,9 +2,9 @@
 
 namespace App\Domain\Tenancy\Models;
 
-use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -41,25 +41,15 @@ class TraceAudit extends Model
 
     /**
      * Note la trace de l'entrée que vient d'inscrire le journal d'audit,
-     * si une requête HTTP routée l'a fait inscrire : une commande ou un job
-     * n'a qu'une requête de façade, sans visiteur, et ne laisse aucune
-     * trace.
+     * si le visiteur d'une requête HTTP l'a fait inscrire dans la société
+     * où il agit (voir TraceDuVisiteur).
      */
     public static function noterPour(EntreeAudit $entree): void
     {
-        $requete = request();
+        $colonnes = app(TraceDuVisiteur::class)->colonnes();
 
-        if ($requete->route() === null) {
-            return;
+        if ($colonnes !== null) {
+            (new self)->forceFill(['entree_audit_id' => $entree->getKey(), ...$colonnes])->save();
         }
-
-        $navigateur = $requete->userAgent();
-
-        (new self)->forceFill([
-            'entree_audit_id' => $entree->getKey(),
-            'ip' => $requete->ip(),
-            'agent_utilisateur' => $navigateur === null ? null : mb_substr($navigateur, 0, 255),
-            'expire_le' => Calendrier::deParis()->decalerEnMoisSansDebordement(CarbonImmutable::now(), config('conservation.traces_en_mois')),
-        ])->save();
     }
 }

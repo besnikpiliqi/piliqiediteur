@@ -30,6 +30,8 @@ use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -149,6 +151,33 @@ class CollaborateursTest extends TestCase
         app(RedonnerLAccesAction::class)->handle($this->proprietaireDuCabinet($cabinet), $compte, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
         $this->assertAuthenticatedAs($compte);
+    }
+
+    /**
+     * Un collaborateur à qui un client est confié avant qu'il ait choisi
+     * son mot de passe n'ouvre pas son compte avec son identifiant depuis
+     * un poste reconnu d'un magasin de ce client, qu'il ouvre pourtant :
+     * ni lui ni son cabinet n'a reconnu ce poste. La réponse est celle de
+     * tout mot de passe égal à l'identifiant refusé.
+     */
+    public function test_un_collaborateur_dont_le_mot_de_passe_est_l_identifiant_est_refuse_sur_le_poste_reconnu_d_un_client(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        $this->lierLeCabinet($cabinet, $magasin);
+        $compte = app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Paul Lefèvre']);
+        $this->confier($compte, [$magasin]);
+        $identifiant = (string) $compte->identifiantDeConnexion();
+        app(PostesReconnus::class)->reconnaitre($this->proprietaireDe($magasin), $magasin, 'Caisse 1', request());
+        $poste = [PostesReconnus::TEMOIN => (string) Cookie::queued(PostesReconnus::TEMOIN)?->getValue()];
+        app(TenantContext::class)->clear();
+        $this->assertTrue($compte->fresh()->mot_de_passe_est_l_identifiant);
+        $this->assertSame([(int) $magasin->id], array_map(intval(...), $compte->fresh()->magasinsAccessibles()->modelKeys()));
+
+        $this->assertSame([Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE], $this->seConnecter($identifiant, $identifiant, postes: $poste)->errors()->get('data.login'));
+
+        $this->assertGuest();
+        $this->assertFalse(app(PostesReconnus::class)->ouvreLeCompte($compte->fresh(), Request::create('/', cookies: $poste)));
     }
 
     /**
@@ -395,15 +424,18 @@ class CollaborateursTest extends TestCase
     }
 
     /**
-     * La page de connexion envoyée avec cette saisie, sans poste reconnu.
+     * La page de connexion envoyée avec cette saisie, depuis un navigateur
+     * qui porte ces témoins de postes reconnus, aucun sauf mention.
+     *
+     * @param  array<string, string>  $postes
      */
-    private function seConnecter(string $saisie, string $motDePasse, string $panneau = 'app'): Testable
+    private function seConnecter(string $saisie, string $motDePasse, string $panneau = 'app', array $postes = []): Testable
     {
         $this->flushSession();
         auth()->logout();
         Filament::setCurrentPanel(Filament::getPanel($panneau));
 
-        return Livewire::withCookies([PostesReconnus::TEMOIN => '', PostesConnus::TEMOIN => ''])
+        return Livewire::withCookies([PostesReconnus::TEMOIN => '', PostesConnus::TEMOIN => '', ...$postes])
             ->test(Connexion::class)
             ->fillForm(['login' => $saisie, 'password' => $motDePasse])
             ->call('authenticate');

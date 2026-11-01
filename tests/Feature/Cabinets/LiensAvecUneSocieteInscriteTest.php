@@ -18,12 +18,15 @@ use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Cabinets\Services\RechercheDesCabinets;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Http\Controllers\RattachementAuCabinetController;
@@ -36,6 +39,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Livewire\Livewire;
+use Livewire\Mechanisms\ComponentRegistry;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -239,6 +243,73 @@ class LiensAvecUneSocieteInscriteTest extends TestCase
         $this->assertSame(EtatDuLien::Retire, $retiree->fresh()->etat);
         $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));
         $this->assertCount(1, $this->entreesDAudit($autre->societe, ActionAuditee::DemandeDeLienRetiree));
+    }
+
+    /**
+     * Le propriétaire du cabinet répond dans son espace aux demandes de
+     * deux clients, par de vraies requêtes de son navigateur : son adresse
+     * IP et son navigateur restent au journal d'audit de son cabinet,
+     * jamais à celui d'un client ni au journal des événements de ses
+     * magasins, que le refus ou l'acceptation y inscrivent aussi.
+     */
+    public function test_la_reponse_du_cabinet_a_une_demande_ne_laisse_sa_trace_qu_au_journal_du_cabinet(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $refuse = $this->ouvrirUneSociete(['nom' => 'Boutique refusée']);
+        $accepte = $this->ouvrirUneSociete(['nom' => 'Boutique acceptée']);
+        app(TenantContext::class)->clear();
+        $aRefuser = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($refuse), $refuse->societe, $cabinet);
+        $aAccepter = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($accepte), $accepte->societe, $cabinet);
+        $jet130 = fn (): array => app(TenantContext::class)->runAs($accepte, fn (): array => EnregistrementFiscal::query()->where('type', (string) CodeEvenement::ModificationDesDroits->value)->pluck('id')->all());
+        $avant = $jet130();
+        $this->actingAs($this->proprietaireDuCabinet($cabinet));
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.88'])->withHeader('User-Agent', 'NavigateurDuCabinet/1.0');
+
+        foreach (['refuserLaDemande' => $aRefuser, 'accepterLaDemande' => $aAccepter] as $geste => $demande) {
+            $page = $this->get(InvitationsEtDemandes::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk()->getContent();
+            $montee = $this->requeteLivewire($this->instantaneLivewire($page, app(ComponentRegistry::class)->getName(InvitationsEtDemandes::class)), [], 'mountAction', [$geste, ['uuid' => $demande->uuid]])->assertOk();
+            $this->requeteLivewire($montee->json('components.0.snapshot'), [], 'callMountedAction')->assertOk();
+        }
+
+        $this->assertSame([EtatDuLien::Refuse, EtatDuLien::Actif], [$aRefuser->fresh()->etat, $aAccepter->fresh()->etat]);
+        $traces = fn (array $entrees): array => DB::table('traces_audit')->whereIn('entree_audit_id', array_map(fn ($entree): int => (int) $entree->id, $entrees))->pluck('ip')->all();
+        $this->assertSame(['203.0.113.88', '203.0.113.88'], $traces([...$this->entreesDAudit($cabinet, ActionAuditee::LienRefuse), ...$this->entreesDAudit($cabinet, ActionAuditee::LienActive)]));
+        $this->assertSame([], $traces([...$this->entreesDAudit($refuse->societe, ActionAuditee::LienRefuse), ...$this->entreesDAudit($accepte->societe, ActionAuditee::LienActive)]));
+        $nouveaux = array_values(array_diff($jet130(), $avant));
+        $this->assertNotSame([], $nouveaux);
+        $this->assertFalse(app(TenantContext::class)->runAs($accepte, fn (): bool => DB::table('traces_evenements')->whereIn('enregistrement_fiscal_id', $nouveaux)->exists()));
+    }
+
+    /**
+     * Une désignation dont l'échéance est passée, que la tâche horaire n'a
+     * pas encore expirée, n'est jamais rendue comme une demande en cours :
+     * la désigner de nouveau la lit expirée et refuse une nouvelle demande
+     * avant 7 jours après son échéance, sans rien écrire ; ensuite, elle
+     * expire, aux deux journaux, et la nouvelle demande part.
+     */
+    public function test_designer_de_nouveau_apres_l_echeance_expire_la_demande_perimee_sans_attendre_la_tache_horaire(): void
+    {
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        app(TenantContext::class)->clear();
+        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
+
+        $this->travelTo(self::aParis('2026-10-19 10:30:00'));
+        $this->assertThrows(fn () => app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet), LogicException::class, DesignerUnCabinetAction::MESSAGE_DEJA_DEMANDE);
+
+        $this->assertSame(EtatDuLien::DemandeParLeClient, $designation->fresh()->etat);
+        $this->assertSame(1, LienCabinet::query()->withoutGlobalScopes()->count());
+        $this->assertCount(0, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienExpiree));
+
+        $this->travelTo(self::aParis('2026-10-26 10:00:01'));
+        $nouvelle = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
+
+        $this->assertTrue($nouvelle->isNot($designation));
+        $this->assertTrue($nouvelle->estUneDemandeValable());
+        $this->assertSame(EtatDuLien::Expire, $designation->fresh()->etat);
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienExpiree));
+        $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::DemandeDeLienExpiree));
     }
 
     public function test_une_demande_expire_apres_sept_jours(): void

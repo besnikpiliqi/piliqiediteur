@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use LogicException;
@@ -274,13 +275,15 @@ final class PorteeDesDroits
      * Confie-t-il des clients de son cabinet d'expertise comptable à ce
      * compte (voir ConfierDesClientsAction) ? Le propriétaire actif du
      * cabinet, qui gère son équipe, pour un collaborateur non retiré du
-     * même cabinet.
+     * même cabinet, tant que le cabinet est actif et vérifié : sinon, il
+     * n'a aucun accès à ses clients et ne peut que mettre fin à ses liens.
      */
     public function peutConfierDesClients(User $auteur, User $compte): bool
     {
         return $auteur->estProprietaire()
             && $auteur->estDUnCabinet()
             && $this->gereSonEquipe($auteur)
+            && Societe::query()->findOrFail($auteur->societe_id)->estUnCabinetVerifie()
             && $compte->estCollaborateur()
             && ! $compte->estRetire()
             && (int) $compte->societe_id === (int) $auteur->societe_id;

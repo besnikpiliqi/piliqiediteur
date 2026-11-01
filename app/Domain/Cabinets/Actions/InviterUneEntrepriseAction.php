@@ -23,6 +23,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Models\User;
@@ -84,6 +85,8 @@ class InviterUneEntrepriseAction
         private readonly JournalAudit $journalAudit,
         private readonly DebitDesEmails $debit,
         private readonly EnvoiDesLiensDesCabinets $envoi,
+        private readonly TraceDuVisiteur $traces,
+        private readonly RetirerLaDemandeDeLienAction $demandes,
     ) {}
 
     /**
@@ -188,7 +191,9 @@ class InviterUneEntrepriseAction
 
     /**
      * La demande de rattachement à la société qui tient le SIREN, dans son
-     * contexte, sous le verrou de sa ligne, après celui du cabinet.
+     * contexte, sous le verrou de sa ligne, après celui du cabinet ; une
+     * demande dont l'échéance est passée expire d'abord, sans attendre la
+     * tâche horaire (voir RetirerLaDemandeDeLienAction::expirerLesPerimees()).
      *
      * @param  array{id: int, type_activite: TypeDActivite}  $tenante
      * @return array{resultat: ResultatDInvitation, id: int|null}
@@ -202,8 +207,8 @@ class InviterUneEntrepriseAction
         $client = Societe::query()->findOrFail($tenante['id']);
 
         return app(TenantContext::class)->runAsSociete($client, function () use ($auteur, $cabinet, $client, $jeton): array {
-            Societe::query()->whereKey($client->getKey())->lockForUpdate()->firstOrFail();
-            $liens = LienCabinet::query()->where('cabinet_id', $cabinet->getKey())->orderBy('id')->lockForUpdate()->get();
+            Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
+            $liens = $this->demandes->expirerLesPerimees(LienCabinet::query()->where('cabinet_id', $cabinet->getKey())->orderBy('id')->lockForUpdate()->get());
 
             if ($liens->contains(fn (LienCabinet $lien): bool => $lien->estActif())) {
                 return ['resultat' => ResultatDInvitation::DejaLie, 'id' => null];
@@ -218,8 +223,7 @@ class InviterUneEntrepriseAction
             }
 
             if ($liens->contains(fn (LienCabinet $lien): bool => $lien->origine === OrigineDuLien::DemandeDuCabinet
-                && in_array($lien->etat, [EtatDuLien::Refuse, EtatDuLien::Retire, EtatDuLien::Expire], true)
-                && ($lien->repondu_le ?? $lien->expire_le)?->greaterThan(Calendrier::deParis()->decaler(now(), CarbonInterval::days(-self::DELAI_AVANT_UNE_NOUVELLE_INVITATION_EN_JOURS))))) {
+                && $lien->finDeLaDemande()?->greaterThan(Calendrier::deParis()->decaler(now(), CarbonInterval::days(-self::DELAI_AVANT_UNE_NOUVELLE_INVITATION_EN_JOURS))))) {
                 throw new LogicException(self::MESSAGE_DEMANDE_RECENTE);
             }
 
@@ -232,7 +236,7 @@ class InviterUneEntrepriseAction
                 'expire_le' => Calendrier::deParis()->decaler(now(), CarbonInterval::days(LienCabinet::DUREE_D_UNE_DEMANDE_EN_JOURS)),
                 'jeton_hache' => LienCabinet::empreinte($jeton),
             ]))->save();
-            $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteur, null, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien);
+            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteur, null, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
             app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteur, null, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::sirenSeul($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
 
             return ['resultat' => ResultatDInvitation::DemandeEnvoyee, 'id' => (int) $lien->getKey()];

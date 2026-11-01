@@ -11,7 +11,6 @@ use Filament\Actions\Action;
 use Filament\Pages\Dashboard;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Database\Eloquent\Collection;
 
 /**
  * La fiche d'un client lié que le cabinet ouvre au compte connecté (voir
@@ -62,22 +61,24 @@ class FicheDuClient extends ViewRecord
     }
 
     /**
-     * Ses magasins réels, par nom.
+     * Ses magasins réels, par nom, chacun avec l'adresse qui l'ouvre dans le
+     * panneau des magasins : lus par le seul client du lien ouvert, aucun
+     * identifiant de magasin n'entre ici par une requête.
      *
-     * @return Collection<int, Magasin>
+     * @return list<array{nom: string, code: string|null, ville: string|null, statut: string, url: string}>
      */
-    public function magasins(): Collection
+    public function magasins(): array
     {
         return Magasin::query()->where('societe_id', $this->lien()->societe_id)->where('est_demonstration', false)->orderBy('nom')->orderBy('id')
-            ->get(['id', 'uuid', 'nom', 'code', 'ville', 'statut']);
-    }
-
-    /**
-     * L'adresse qui ouvre ce magasin dans le panneau des magasins.
-     */
-    public function urlDuMagasin(Magasin $magasin): string
-    {
-        return Dashboard::getUrl(panel: 'app', tenant: $magasin);
+            ->get(['id', 'uuid', 'nom', 'code', 'ville', 'statut'])
+            ->map(fn (Magasin $magasin): array => [
+                'nom' => (string) $magasin->nom,
+                'code' => $magasin->code,
+                'ville' => $magasin->ville,
+                'statut' => (string) $magasin->statut->getLabel(),
+                'url' => Dashboard::getUrl(panel: 'app', tenant: $magasin),
+            ])
+            ->all();
     }
 
     /**

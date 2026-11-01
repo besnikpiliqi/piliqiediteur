@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -151,6 +152,35 @@ class LienCabinet extends Model
     public function estUneDemandeValable(): bool
     {
         return $this->estUneDemande() && $this->expire_le !== null && $this->expire_le->isFuture();
+    }
+
+    /**
+     * L'instant où une demande refusée, retirée ou expirée a pris fin : sa
+     * réponse, ou son échéance pour une demande expirée, même si la tâche
+     * horaire ne l'a expirée qu'ensuite ; null pour tout autre lien. Le
+     * délai avant une nouvelle demande de la même partie part de là (voir
+     * DesignerUnCabinetAction et InviterUneEntrepriseAction).
+     */
+    public function finDeLaDemande(): ?CarbonImmutable
+    {
+        return match ($this->etat) {
+            EtatDuLien::Expire => $this->expire_le,
+            EtatDuLien::Refuse, EtatDuLien::Retire => $this->repondu_le,
+            default => null,
+        };
+    }
+
+    /**
+     * Les demandes refusées, retirées ou expirées après cet instant (voir
+     * finDeLaDemande()).
+     *
+     * @param  Builder<LienCabinet>  $requete
+     */
+    public function scopeCloseApres(Builder $requete, CarbonImmutable $instant): void
+    {
+        $requete->where(fn (Builder $closes) => $closes
+            ->where(fn (Builder $repondues) => $repondues->whereIn('etat', [EtatDuLien::Refuse->value, EtatDuLien::Retire->value])->where('repondu_le', '>', $instant))
+            ->orWhere(fn (Builder $expirees) => $expirees->where('etat', EtatDuLien::Expire->value)->where('expire_le', '>', $instant)));
     }
 
     /**

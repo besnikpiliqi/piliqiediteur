@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use Illuminate\Support\Facades\DB;
 use SensitiveParameter;
@@ -18,14 +19,18 @@ use SensitiveParameter;
  * La personne qui a reçu le lien d'une invitation la refuse, sans compte
  * ni mot de passe : dans l'ordre des verrous de l'acceptation (la ligne du
  * cabinet, puis l'invitation), l'invitation encore ouverte passe à
- * « refusée », au journal d'audit du cabinet, au nom du système ; son
- * propriétaire est prévenu. Une invitation absente, close ou périmée donne
- * le message neutre de l'acceptation, sans rien écrire. Le cabinet
+ * « refusée », au journal d'audit du cabinet, au nom du système, sans
+ * trace de la personne, qui n'est pas du cabinet (voir TraceDuVisiteur) ;
+ * son propriétaire est prévenu. Une invitation absente, close ou périmée
+ * donne le message neutre de l'acceptation, sans rien écrire. Le cabinet
  * n'invite de nouveau ce SIREN qu'après 7 jours.
  */
 class RefuserLInvitationAction
 {
-    public function __construct(private readonly JournalAudit $journalAudit) {}
+    public function __construct(
+        private readonly JournalAudit $journalAudit,
+        private readonly TraceDuVisiteur $traces,
+    ) {}
 
     /**
      * @throws InvitationInvalideException
@@ -49,7 +54,7 @@ class RefuserLInvitationAction
             }
 
             $relue->forceFill(['etat' => EtatInvitation::Refusee, 'close_le' => now()])->save();
-            $this->journalAudit->inscrire(ActionAuditee::InvitationRefusee, null, null, null, ['siren' => $relue->siren], $relue);
+            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::InvitationRefusee, null, null, null, ['siren' => $relue->siren], $relue));
         }));
 
         $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(

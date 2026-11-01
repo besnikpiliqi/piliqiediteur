@@ -2,9 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
-use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\Cabinet;
-use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -393,19 +391,6 @@ class Societe extends Model implements HasName
             ->first(['id', 'type_activite']);
 
         return $tenante === null ? null : ['id' => (int) $tenante->getKey(), 'type_activite' => $tenante->type_activite];
-    }
-
-    /**
-     * Son lien actif avec un cabinet d'expertise comptable (voir
-     * LienCabinet), s'il y en a un : un client n'en a qu'un à la fois. La
-     * relation filtre déjà par la société : elle se lit sans SocieteScope,
-     * dans le contexte du client comme hors de tout contexte.
-     *
-     * @return HasOne<LienCabinet, $this>
-     */
-    public function lienActif(): HasOne
-    {
-        return $this->hasOne(LienCabinet::class)->withoutGlobalScope(SocieteScope::class)->where('etat', EtatDuLien::Actif->value);
     }
 
     /**

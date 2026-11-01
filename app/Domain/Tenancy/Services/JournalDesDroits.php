@@ -77,6 +77,7 @@ class JournalDesDroits
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
         private readonly AccesDesCabinets $acces,
+        private readonly TraceDuVisiteur $traces,
     ) {}
 
     /**
@@ -189,7 +190,10 @@ class JournalDesDroits
      * client (un lien activé, remplacé, terminé, ses autorisations
      * réglées), dans le contexte du client, sous les verrous, dans l'ordre :
      * les registres des magasins réels du client (voir
-     * RegistreFiscal::sousVerrouDesMagasins()), la ligne du client, les
+     * RegistreFiscal::sousVerrouDesMagasins()), la ligne du client (« for
+     * no key update », comme la clôture d'une inscription qui la tient déjà
+     * quand elle met fin au lien : ce verrou sérialise les gestes sur les
+     * liens d'un client sans retenir une insertion qui la référence), les
      * liens (ceux donnés, et le lien actif du client), la vérification de
      * leurs cabinets et de ceux qui entrent (partagée), puis les comptes :
      * l'auteur, et les comptes des cabinets qui ont accès par ces liens ou
@@ -227,7 +231,7 @@ class JournalDesDroits
                 $termine = false;
 
                 $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $magasins, &$termine): mixed {
-                    $clientVerrouille = Societe::query()->whereKey($client->getKey())->lockForUpdate()->firstOrFail();
+                    $clientVerrouille = Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
 
                     if (array_map(intval(...), $clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
                         return null;
@@ -463,7 +467,10 @@ class JournalDesDroits
      * droits des comptes du cabinet qu'elle concerne ; au journal d'un
      * cabinet, l'auteur n'est nommé que s'il est de ce cabinet ou du
      * client : le propriétaire du cabinet qui en remplace un autre n'y
-     * figure pas.
+     * figure pas. La trace du visiteur ne se note qu'au journal de la
+     * société de l'auteur, du client pour le système ou l'éditeur (voir
+     * TraceDuVisiteur) : le propriétaire d'un client ne laisse pas la sienne
+     * au journal de son cabinet, ni l'inverse.
      *
      * @param  Collection<int, LienCabinet>  $liens
      * @param  list<LienCabinet>  $concernes  les liens dont parlent les entrées, la première étant leur cible
@@ -474,6 +481,7 @@ class JournalDesDroits
     {
         $cabinets = $liens->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
         $journaux = [$client, ...$cabinets->map(fn (int $id): Societe => Societe::query()->findOrFail($id))->all()];
+        $duVisiteur = (int) ($auteur?->societe_id ?? $client->getKey());
 
         foreach ($journaux as $journal) {
             foreach ($entrees($journal, $concernes) as [$action, $valeurs, $cabinetId]) {
@@ -494,7 +502,7 @@ class JournalDesDroits
                     }
                 }
 
-                app(TenantContext::class)->runAsSociete($journal, fn () => $this->journalAudit->inscrire(
+                $inscrire = fn () => app(TenantContext::class)->runAsSociete($journal, fn () => $this->journalAudit->inscrire(
                     $action,
                     $journal->is($client) || ($auteur !== null && in_array((int) $auteur->societe_id, [(int) $journal->getKey(), (int) $client->getKey()], true)) ? $auteur : null,
                     null,
@@ -503,6 +511,7 @@ class JournalDesDroits
                     $concernes[0] ?? null,
                     $editeur,
                 ));
+                (int) $journal->getKey() === $duVisiteur ? $inscrire() : $this->traces->horsDeSaSociete($inscrire);
             }
         }
     }
@@ -527,7 +536,10 @@ class JournalDesDroits
     /**
      * Inscrit au JET 130 de chaque magasin ce qui y a changé pour ce compte,
      * chacun dans le contexte de sa société (celle d'un client, pour un
-     * compte d'un cabinet d'expertise comptable).
+     * compte d'un cabinet d'expertise comptable). L'opérateur d'une autre
+     * société que celle du magasin (le propriétaire d'un cabinet qui confie
+     * un client ou accepte un lien depuis l'espace du cabinet) n'y laisse
+     * pas sa trace (voir TraceDuVisiteur).
      *
      * @param  Collection<int, Magasin>  $magasins
      * @param  array<int, array<string, mixed>|null>  $avant
@@ -552,9 +564,11 @@ class JournalDesDroits
                 'apres' => $droitsApres,
             ]));
 
-            (int) $magasin->societe_id === (int) app(TenantContext::class)->societe()->getKey()
+            $dansSaSociete = fn () => (int) $magasin->societe_id === (int) app(TenantContext::class)->societe()->getKey()
                 ? $journaliser()
                 : app(TenantContext::class)->runAsSociete($magasin->societe, $journaliser);
+            $operateur = $this->operateur->actuel();
+            $operateur === null || (int) $operateur->societe_id === (int) $magasin->societe_id ? $dansSaSociete() : $this->traces->horsDeSaSociete($dansSaSociete);
         }
     }
 }

@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -21,8 +22,11 @@ use Illuminate\Support\Facades\DB;
  * de son cabinet et sa propre transaction, après celle de l'acceptation :
  * modifiées dans la transaction de l'acceptation, elles interbloqueraient
  * une acceptation simultanée du même SIREN. Seuls l'identifiant et le
- * cabinet de chacune se lisent hors de la société active ; son cabinet est
- * prévenu. La commande horaire d'expiration rattrape un job perdu (voir
+ * cabinet de chacune se lisent hors de la société active ; elle s'inscrit
+ * au journal du cabinet au nom du système, sans trace (voir
+ * TraceDuVisiteur) : sans file d'attente, le job suit la requête de la
+ * personne qui vient d'inscrire ce SIREN, qui n'est pas du cabinet ; son
+ * cabinet est prévenu. La commande horaire d'expiration rattrape un job perdu (voir
  * ExpirerInvitationsDesCabinets).
  */
 class RendreCaduquesLesInvitationsDuSiren implements ShouldQueue
@@ -65,7 +69,7 @@ class RendreCaduquesLesInvitationsDuSiren implements ShouldQueue
             }
 
             $invitation->forceFill(['etat' => EtatInvitation::Caduque, 'close_le' => now()])->save();
-            app(JournalAudit::class)->inscrire(ActionAuditee::InvitationCaduque, null, null, null, ['siren' => $invitation->siren, 'raison' => 'siren_pris'], $invitation);
+            app(TraceDuVisiteur::class)->horsDeSaSociete(fn () => app(JournalAudit::class)->inscrire(ActionAuditee::InvitationCaduque, null, null, null, ['siren' => $invitation->siren, 'raison' => 'siren_pris'], $invitation));
 
             return (string) $invitation->siren;
         }));

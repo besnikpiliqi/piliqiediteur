@@ -32,8 +32,9 @@ use Illuminate\Database\Eloquent\Model;
  * confié, donne 404. La liste montre de chaque client sa dénomination, son
  * SIREN, la ville de son siège, la date du lien et le nombre de ses
  * magasins réels, et, au propriétaire seul, les collaborateurs à qui il
- * est confié ; il y confie un client à ses collaborateurs et met fin au
- * lien. La fiche (voir FicheDuClient) montre son identité, ses réglages
+ * est confié ; elle se cherche par dénomination, sans casse ni accents, ou
+ * par SIREN, toujours parmi ces seuls liens ; le propriétaire y confie un
+ * client à ses collaborateurs et met fin au lien. La fiche (voir FicheDuClient) montre son identité, ses réglages
  * fiscaux, les autorisations qu'il accorde au cabinet et ses magasins
  * réels, chacun avec le bouton qui l'ouvre dans le panneau des magasins.
  */
@@ -90,8 +91,8 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('client.raison_sociale')->label('Client')->placeholder('Sans dénomination'),
-                Tables\Columns\TextColumn::make('client.siren')->label('SIREN'),
+                Tables\Columns\TextColumn::make('client.raison_sociale')->label('Client')->placeholder('Sans dénomination')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('client.siren')->label('SIREN')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('client.siege_ville')->label('Ville du siège')->placeholder('—'),
                 Tables\Columns\TextColumn::make('actif_depuis')->label('Lié depuis')->dateTime('d/m/Y'),
                 Tables\Columns\TextColumn::make('magasins')
@@ -104,7 +105,6 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                     ->placeholder('Aucun')
                     ->visible(fn (): bool => auth()->user()?->estProprietaire() ?? false),
             ])
-            ->searchable(false)
             ->filters([])
             ->actions([
                 Tables\Actions\ViewAction::make()->label('Ouvrir'),

@@ -45,7 +45,8 @@ use LogicException;
  * (registres, société, document) : deux magasins d'une même société ne
  * s'attendent jamais l'un l'autre sur l'audit. L'adresse IP et le
  * navigateur d'une requête HTTP vont dans la trace de l'entrée (voir
- * TraceAudit), rangée à part dans la même transaction.
+ * TraceAudit), rangée à part dans la même transaction, seulement au
+ * journal de la société où le visiteur agit (voir TraceDuVisiteur).
  *
  * L'entrée s'inscrit dans la société active (voir TenantContext) ; celle
  * d'un magasin, dans la chaîne d'un magasin de cette société. Une

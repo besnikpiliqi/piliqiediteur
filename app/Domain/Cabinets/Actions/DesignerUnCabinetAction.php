@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Models\User;
 use Carbon\CarbonInterval;
@@ -33,9 +34,13 @@ use LogicException;
  * AccepterLaDemandeDeLienAction, qui relit tout sous ses propres verrous) ;
  * une demande déjà en cours vers ce cabinet est rendue telle quelle ; une
  * demande refusée, retirée ou expirée depuis moins de 7 jours ne se
- * renouvelle pas. Une société qui attend son courrier lie un cabinet, sans
+ * renouvelle pas, une demande dont l'échéance est passée expirant d'abord,
+ * sans attendre la tâche horaire (voir
+ * RetirerLaDemandeDeLienAction::expirerLesPerimees()). Une société qui attend son courrier lie un cabinet, sans
  * que cela la valide jamais. Le propriétaire du cabinet est prévenu, par
- * e-mail compris, dans la limite d'e-mails de l'auteur.
+ * e-mail compris, dans la limite d'e-mails de l'auteur, par un avis qui
+ * nomme le client et s'efface de sa cloche quand le lien prend fin (voir
+ * MettreFinAuLienAction::prevenir()).
  */
 class DesignerUnCabinetAction
 {
@@ -53,6 +58,8 @@ class DesignerUnCabinetAction
         private readonly JournalDesDroits $journalDesDroits,
         private readonly JournalAudit $journalAudit,
         private readonly DebitDesEmails $debit,
+        private readonly TraceDuVisiteur $traces,
+        private readonly RetirerLaDemandeDeLienAction $demandes,
     ) {}
 
     /**
@@ -71,14 +78,14 @@ class DesignerUnCabinetAction
 
         try {
             $resultat = app(TenantContext::class)->runAsSociete($client, fn (): array => DB::transaction(function () use ($auteurRelu, $client, $cabinet): array {
-                Societe::query()->whereKey($client->getKey())->lockForUpdate()->firstOrFail();
-                $liens = LienCabinet::query()->where('cabinet_id', $cabinet->getKey())->orderBy('id')->lockForUpdate()->get();
+                Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
+                $liens = $this->demandes->expirerLesPerimees(LienCabinet::query()->where('cabinet_id', $cabinet->getKey())->orderBy('id')->lockForUpdate()->get());
 
                 if ($liens->contains(fn (LienCabinet $lien): bool => $lien->estActif())) {
                     throw new LogicException(self::MESSAGE_DEJA_LIE);
                 }
 
-                $duCabinet = $liens->first(fn (LienCabinet $lien): bool => $lien->etat === EtatDuLien::DemandeParLeCabinet && $lien->estUneDemandeValable());
+                $duCabinet = $liens->first(fn (LienCabinet $lien): bool => $lien->etat === EtatDuLien::DemandeParLeCabinet);
 
                 if ($duCabinet !== null) {
                     return ['accepter' => $duCabinet];
@@ -91,8 +98,7 @@ class DesignerUnCabinetAction
                 }
 
                 if ($liens->contains(fn (LienCabinet $lien): bool => $lien->origine === OrigineDuLien::DesignationDuClient
-                    && in_array($lien->etat, [EtatDuLien::Refuse, EtatDuLien::Retire, EtatDuLien::Expire], true)
-                    && ($lien->repondu_le ?? $lien->expire_le)?->greaterThan(Calendrier::deParis()->decaler(now(), CarbonInterval::days(-self::DELAI_AVANT_UNE_NOUVELLE_DEMANDE_EN_JOURS))))) {
+                    && $lien->finDeLaDemande()?->greaterThan(Calendrier::deParis()->decaler(now(), CarbonInterval::days(-self::DELAI_AVANT_UNE_NOUVELLE_DEMANDE_EN_JOURS))))) {
                     throw new LogicException(self::MESSAGE_DEJA_DEMANDE);
                 }
 
@@ -107,7 +113,7 @@ class DesignerUnCabinetAction
 
                 $valeurs = ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DesignationDuClient->value];
                 $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteurRelu, null, null, $valeurs, $lien);
-                app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteurRelu, null, null, $valeurs, $lien));
+                $this->traces->horsDeSaSociete(fn () => app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteurRelu, null, null, $valeurs, $lien)));
 
                 return ['lien' => $lien, 'nouveau' => true];
             }));
@@ -132,6 +138,7 @@ class DesignerUnCabinetAction
                 'Répondre',
                 AvisDuCabinet::INFORMATION,
                 parCourriel: true,
+                clientId: (int) $client->getKey(),
             ));
             $this->debit->compter($auteurRelu);
         }

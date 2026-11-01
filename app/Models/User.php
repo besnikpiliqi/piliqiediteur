@@ -391,8 +391,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * registre fiscal, les journaux) : son nom ; pour un compte d'un
      * cabinet d'expertise comptable, qui agit chez un client en son nom,
      * avec celui de son cabinet : « Nom (cabinet Dénomination) », ou le
-     * SIREN du cabinet sans dénomination, borné à 255 caractères, la
-     * dénomination raccourcie d'abord, puis le nom.
+     * SIREN du cabinet sans dénomination, borné à 255 caractères : la
+     * dénomination se raccourcit d'abord, en gardant au moins ses 40
+     * premiers caractères, puis le nom ; seul un texte vraiment raccourci
+     * finit par « … ».
      */
     public function nomPourLHistorique(): string
     {
@@ -403,11 +405,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         $cabinet = filled($this->societe->raison_sociale) ? (string) $this->societe->raison_sociale : (string) $this->societe->siren;
         $nom = $this->name;
         $place = self::LONGUEUR_D_UN_NOM_POUR_L_HISTORIQUE - mb_strlen(' (cabinet )');
-
-        if (mb_strlen($nom) + mb_strlen($cabinet) > $place) {
-            $cabinet = mb_substr($cabinet, 0, max(self::DENOMINATION_GARDEE_DU_CABINET, $place - mb_strlen($nom)) - 1).'…';
-            $nom = mb_strlen($nom) + mb_strlen($cabinet) > $place ? mb_substr($nom, 0, $place - mb_strlen($cabinet) - 1).'…' : $nom;
-        }
+        $raccourci = static fn (string $texte, int $longueur): string => mb_strlen($texte) <= $longueur ? $texte : mb_substr($texte, 0, $longueur - 1).'…';
+        $cabinet = $raccourci($cabinet, max(self::DENOMINATION_GARDEE_DU_CABINET, $place - mb_strlen($nom)));
+        $nom = $raccourci($nom, $place - mb_strlen($cabinet));
 
         return "{$nom} (cabinet {$cabinet})";
     }

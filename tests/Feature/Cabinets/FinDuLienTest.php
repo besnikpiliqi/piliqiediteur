@@ -114,6 +114,27 @@ class FinDuLienTest extends TestCase
         $this->assertContains('Lien terminé', $this->proprietaireDuCabinet($cabinet)->notifications()->get()->pluck('data.title')->all());
     }
 
+    /**
+     * Le propriétaire du cabinet, qui perd l'accès au client, ne garde dans
+     * sa cloche aucun avis qui le nomme, pas même celui de sa demande de
+     * lien : seul reste l'avis de la fin du lien, envoyé ensuite.
+     */
+    public function test_a_la_fin_du_lien_le_proprietaire_du_cabinet_ne_garde_aucun_avis_qui_nomme_le_client(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente', 'raison_sociale' => 'BOULANGERIE NOMMEE']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin);
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $avisQuiNommentLeClient = fn (): array => $proprietaire->notifications()->get()
+            ->filter(fn ($avis): bool => str_contains((string) ($avis->data['body'] ?? ''), 'BOULANGERIE NOMMEE'))
+            ->pluck('data.title')->values()->all();
+        $this->assertSame(['Demande de lien d\'un client'], $avisQuiNommentLeClient());
+
+        app(MettreFinAuLienAction::class)->handle($this->proprietaireDe($magasin), $lien);
+
+        $this->assertSame(['Lien terminé'], $avisQuiNommentLeClient());
+    }
+
     public function test_un_cabinet_suspendu_met_fin_a_un_lien_mais_ne_modifie_plus_son_identite(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

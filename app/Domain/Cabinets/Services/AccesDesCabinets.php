@@ -74,18 +74,6 @@ class AccesDesCabinets
     }
 
     /**
-     * Le lien actif entre ce cabinet et ce client, s'il y en a un.
-     */
-    public function lienActifEntre(int $cabinetId, int $clientId): ?LienCabinet
-    {
-        return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
-            ->where('cabinet_id', $cabinetId)
-            ->where('societe_id', $clientId)
-            ->where('etat', EtatDuLien::Actif->value)
-            ->first();
-    }
-
-    /**
      * Pour le seul propriétaire d'un cabinet qui n'est plus vérifié, ses
      * liens actifs, avec la dénomination et le SIREN de chaque client
      * (relation client), pour y mettre fin ; rien d'autre du client.
@@ -190,16 +178,6 @@ class AccesDesCabinets
                     ->select('user_id')))
             ->orderBy('id')
             ->get();
-    }
-
-    /**
-     * Les magasins réels de ce client, par identifiant.
-     *
-     * @return Collection<int, Magasin>
-     */
-    public function magasinsDuClient(int $clientId): Collection
-    {
-        return Magasin::query()->where('societe_id', $clientId)->where('est_demonstration', false)->orderBy('id')->get();
     }
 
     /**

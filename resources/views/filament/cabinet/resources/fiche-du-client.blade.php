@@ -40,10 +40,10 @@
         @forelse ($this->magasins() as $magasin)
             <div class="flex items-center justify-between gap-4 py-2">
                 <div>
-                    <p class="font-semibold">{{ $magasin->nom }} <span class="text-sm text-gray-500">({{ $magasin->code }})</span></p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ $magasin->ville ?? 'Ville non renseignée' }} · {{ $magasin->statut->getLabel() }}</p>
+                    <p class="font-semibold">{{ $magasin['nom'] }} <span class="text-sm text-gray-500">({{ $magasin['code'] }})</span></p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ $magasin['ville'] ?? 'Ville non renseignée' }} · {{ $magasin['statut'] }}</p>
                 </div>
-                <x-filament::button tag="a" :href="$this->urlDuMagasin($magasin)" icon="heroicon-o-arrow-top-right-on-square">Ouvrir le magasin</x-filament::button>
+                <x-filament::button tag="a" :href="$magasin['url']" icon="heroicon-o-arrow-top-right-on-square">Ouvrir le magasin</x-filament::button>
             </div>
         @empty
             <p>Ce client n'a encore aucun magasin réel.</p>

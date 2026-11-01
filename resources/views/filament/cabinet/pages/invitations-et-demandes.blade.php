@@ -29,18 +29,20 @@
 
     <x-filament::section icon="heroicon-o-arrow-up-right">
         <x-slot name="heading">Demandes de rattachement envoyées</x-slot>
-        <x-slot name="description">Les SIREN déjà inscrits que votre cabinet a invités : leur propriétaire répond dans son espace. Vous n'en voyez que le SIREN saisi tant que le lien n'est pas actif.</x-slot>
+        <x-slot name="description">Les SIREN déjà inscrits que votre cabinet a invités : leur propriétaire répond dans son espace. Vous n'en voyez que le SIREN saisi tant que le lien n'est pas actif. Une demande refusée, retirée ou expirée reste ici 7 jours, le temps pendant lequel ce SIREN ne peut pas recevoir de nouvelle demande.</x-slot>
 
         @forelse ($this->demandesEnvoyees() as $demande)
             <div class="flex items-center justify-between gap-4 border-b border-gray-100 py-2 dark:border-white/10">
                 <div>
                     <p class="font-semibold">SIREN {{ $demande['siren'] }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Envoyée le {{ $calendrier->afficher($demande['demande_le'], 'd/m/Y') }} · expire le {{ $calendrier->afficher($demande['expire_le'], 'd/m/Y') }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Envoyée le {{ $calendrier->afficher($demande['demande_le'], 'd/m/Y') }} · @if ($demande['en_cours']) expire le {{ $calendrier->afficher($demande['expire_le'], 'd/m/Y') }} · {{ $demande['etat'] }} @else {{ $demande['etat'] }} le {{ $calendrier->afficher($demande['fin'], 'd/m/Y') }} @endif</p>
                 </div>
-                {{ ($this->retirerLaDemandeAction)(['uuid' => $demande['uuid']]) }}
+                @if ($demande['en_cours'])
+                    {{ ($this->retirerLaDemandeAction)(['uuid' => $demande['uuid']]) }}
+                @endif
             </div>
         @empty
-            <p>Aucune demande en cours.</p>
+            <p>Aucune demande.</p>
         @endforelse
     </x-filament::section>
 

@@ -303,6 +303,41 @@ class AccepterLInvitationTest extends TestCase
         $this->assertThrows(fn () => $this->accepterLInvitation($jeton), InvitationInvalideException::class);
     }
 
+    /**
+     * La personne invitée, qui n'est pas du cabinet, ne laisse ni son
+     * adresse IP ni son navigateur au journal d'audit du cabinet, qu'elle
+     * refuse ou qu'elle accepte l'invitation ; à l'acceptation, ils restent
+     * au journal de la société née, dont elle devient propriétaire.
+     */
+    public function test_la_personne_invitee_ne_laisse_aucune_trace_au_journal_du_cabinet(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $refusee = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'refus@entreprise.test');
+        $acceptee = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'accord@entreprise.test');
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.77'])->withHeader('User-Agent', 'NavigateurDuClient/1.0');
+
+        $this->post(route('cabinets.invitation.refuser', ['jeton' => $refusee]))->assertOk();
+        $this->post(route('cabinets.invitation.accepter', ['jeton' => $acceptee]), [
+            'password' => self::MOT_DE_PASSE_CHOISI,
+            'password_confirmation' => self::MOT_DE_PASSE_CHOISI,
+            'type_activite' => TypeDActivite::Commerce->value,
+            'choix_definitif' => '1',
+        ])->assertRedirect();
+
+        $client = User::query()->where('email', 'accord@entreprise.test')->sole()->societe;
+        $entreesDuCabinet = array_map(fn ($entree): int => (int) $entree->id, [
+            ...$this->entreesDAudit($cabinet, ActionAuditee::InvitationRefusee),
+            ...$this->entreesDAudit($cabinet, ActionAuditee::InvitationAcceptee),
+            ...$this->entreesDAudit($cabinet, ActionAuditee::LienActive),
+        ]);
+        $this->assertCount(3, $entreesDuCabinet);
+        $this->assertSame(0, DB::table('traces_audit')->whereIn('entree_audit_id', $entreesDuCabinet)->count());
+        $this->assertSame(0, DB::table('traces_audit')->where('societe_id', $cabinet->id)->count());
+        $inscription = $this->entreesDAudit($client, ActionAuditee::SocieteInscrite)[0];
+        $trace = DB::table('traces_audit')->where('entree_audit_id', $inscription->id)->first(['ip', 'agent_utilisateur', 'societe_id']);
+        $this->assertSame(['203.0.113.77', 'NavigateurDuClient/1.0', (int) $client->id], [$trace?->ip, $trace?->agent_utilisateur, (int) $trace?->societe_id]);
+    }
+
     public function test_une_entreprise_cessee_entre_l_invitation_et_l_acceptation_ne_s_accepte_pas(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

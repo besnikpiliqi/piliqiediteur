@@ -17,14 +17,17 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\FicheDuClient;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
+use Filament\Pages\Dashboard;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
@@ -95,6 +98,24 @@ class IsolationDesCabinetsTest extends TestCase
         $this->actingAs($this->b)->get("/app/{$this->x->uuid}")->assertNotFound();
     }
 
+    /**
+     * La liste des clients se cherche par dénomination, sans casse ni
+     * accents, ou par SIREN, parmi les seuls clients que le cabinet ouvre
+     * au compte : jamais le client d'un autre cabinet, ni, pour un
+     * collaborateur, un client qui ne lui est pas confié.
+     */
+    public function test_la_liste_des_clients_se_cherche_par_denomination_ou_siren_parmi_les_seuls_clients_ouverts_au_compte(): void
+    {
+        $this->dansLEspaceDuCabinet($this->c1, $this->proprietaireDuCabinet($this->c1));
+        Livewire::test(ListClientsDuCabinet::class)
+            ->searchTable('clienté y')->assertCanSeeTableRecords([$this->lienY])->assertCanNotSeeTableRecords([$this->lienX, $this->lienZ])
+            ->searchTable((string) $this->x->societe->siren)->assertCanSeeTableRecords([$this->lienX])->assertCanNotSeeTableRecords([$this->lienY, $this->lienZ])
+            ->searchTable('CLIENTE Z')->assertCountTableRecords(0);
+
+        $this->dansLEspaceDuCabinet($this->c1, $this->a);
+        Livewire::test(ListClientsDuCabinet::class)->searchTable('cliente')->assertCanSeeTableRecords([$this->lienX])->assertCanNotSeeTableRecords([$this->lienY, $this->lienZ]);
+    }
+
     public function test_le_proprietaire_du_cabinet_voit_tous_ses_clients_et_jamais_ceux_d_un_autre_cabinet(): void
     {
         $this->dansLEspaceDuCabinet($this->c1, $this->proprietaireDuCabinet($this->c1));
@@ -162,6 +183,28 @@ class IsolationDesCabinetsTest extends TestCase
         $this->assertThrows(fn () => app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDuCabinet($this->c1), $this->lienX, []), AuthorizationException::class);
         $this->assertThrows(fn () => app(MettreFinAuLienAction::class)->handle($this->proprietaireDuCabinet($this->c2), $this->lienX), AuthorizationException::class);
         $this->assertSame('actif', DB::table('liens_cabinet')->where('id', $this->lienX->id)->value('etat'));
+    }
+
+    /**
+     * La fiche d'un client ne donne que l'adresse de ses magasins réels :
+     * une requête Livewire forgée qui lui passe l'identifiant d'un magasin
+     * d'une autre société, d'un autre client ou de la démonstration ne rend
+     * l'adresse d'aucun magasin.
+     */
+    public function test_une_requete_livewire_forgee_de_la_fiche_d_un_client_ne_rend_l_adresse_d_aucun_autre_magasin(): void
+    {
+        $demonstration = Magasin::query()->where('societe_id', $this->x->societe_id)->where('est_demonstration', true)->sole();
+        $this->dansLEspaceDuCabinet($this->c1, $this->a);
+        $fiche = Livewire::test(FicheDuClient::class, ['record' => $this->lienX->uuid]);
+
+        foreach ([$this->z, $this->y, $demonstration] as $magasin) {
+            $this->assertThrows(fn () => $fiche->call('urlDuMagasin', $magasin->id), MethodNotFoundException::class);
+            $fiche->assertDontSee($magasin->uuid);
+        }
+        $this->assertSame(
+            [Dashboard::getUrl(panel: 'app', tenant: $this->x), Dashboard::getUrl(panel: 'app', tenant: $this->xBis)],
+            array_column($fiche->instance()->magasins(), 'url'),
+        );
     }
 
     public function test_un_collaborateur_ne_voit_ni_les_invitations_ni_les_demandes_du_cabinet(): void

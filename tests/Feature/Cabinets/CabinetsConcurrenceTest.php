@@ -5,6 +5,7 @@ namespace Tests\Feature\Cabinets;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
 use App\Domain\Cabinets\Actions\AccepterLInvitationAction;
@@ -26,15 +27,19 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
+use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Enums\MotifCloture;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Factories\SocieteFactory;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Database\Events\QueryExecuted;
@@ -42,6 +47,8 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 use Throwable;
@@ -407,6 +414,67 @@ class CabinetsConcurrenceTest extends TestCase
         $this->assertTrue($this->attendre($concurrente)->successful());
         $this->assertTrue($societe->fresh()->estClose());
         $this->assertSame([EtatDuLien::Termine, 'inscription_close'], [$demande->fresh()->etat, $demande->fresh()->motif_fin->value]);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function liensDUneSocieteNonValidee(): array
+    {
+        return ['un lien actif' => ['lien'], 'une demande en cours' => ['demande']];
+    }
+
+    /**
+     * L'inscription d'une société sans magasin réel, donc sans registre que
+     * les deux transactions partageraient, se clôt (trente jours sans code)
+     * pendant qu'un administrateur accepte la transmission de la propriété :
+     * l'acceptation tient les comptes ; la clôture tient la ligne de la
+     * société (« for no key update ») et attend ces comptes avant de mettre
+     * fin à son lien ou à sa demande de lien, dont les entrées vont dans la
+     * même chaîne du journal d'audit que celle de l'acceptation ; l'entrée
+     * de l'acceptation, qui référence la société, passe, puis la clôture
+     * voit le nouveau propriétaire. Aucun interblocage.
+     */
+    #[DataProvider('liensDUneSocieteNonValidee')]
+    public function test_la_cloture_d_une_inscription_avec_un_cabinet_pendant_une_transmission_de_la_propriete_ne_s_interbloque_pas(string $avecLeCabinet): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+        $cabinet = $this->ouvrirUnCabinet();
+        $societe = $this->inscrireUneSociete(null, 'inscrite@example.test');
+        $proprietaire = $societe->proprietaire()->sole();
+        $lien = $avecLeCabinet === 'lien'
+            ? $this->lierLeCabinet($cabinet, $societe)
+            : app(DesignerUnCabinetAction::class)->handle($proprietaire, $societe->fresh(), $cabinet);
+        app(TenantContext::class)->clear();
+        $administrateur = $this->renseignerSonAdresse($this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe->fresh(), ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), AutorisationsSociete::toutes())), 'repreneur@example.test');
+        $this->travelTo(self::aParis('2026-11-04 09:00:00'));
+        $jeton = $this->demanderLaTransmission($proprietaire->refresh(), $administrateur, self::MOT_DE_PASSE_CHOISI);
+        $this->travelTo(self::aParis('2026-11-04 10:00:00'));
+        app(TenantContext::class)->clear();
+        $this->assertSame(0, $societe->magasinsReels()->count());
+        $societeId = (int) $societe->getKey();
+        $limite = self::aParis('2026-10-05 10:00:00')->getTimestamp();
+        $connexionDuTest = DB::getDefaultConnection();
+        $cloture = null;
+        DB::listen(function (QueryExecuted $requete) use (&$cloture, $connexionDuTest, $societeId, $limite): void {
+            if ($cloture === null && $requete->connectionName === $connexionDuTest && str_starts_with($requete->sql, 'update "users" set "role_societe"')) {
+                $cloture = $this->demarrerUnProcessusConcurrent(static function () use ($societeId, $limite): void {
+                    if (! app(CloreLInscriptionAction::class)->cloreSansCode(Societe::query()->findOrFail($societeId), CarbonImmutable::createFromTimestamp($limite, date_default_timezone_get()))) {
+                        throw new LogicException('L\'inscription n\'a pas été close.');
+                    }
+                });
+                $this->attendreQueLeProcessusAttendeUnVerrou($cloture);
+            }
+        });
+
+        app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, self::MOT_DE_PASSE_CHOISI);
+
+        $resultat = $this->attendre($cloture);
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $this->assertTrue(Societe::query()->findOrFail($societeId)->estClose());
+        $this->assertSame([RoleSociete::Proprietaire, null], [$administrateur->fresh()->role_societe, $administrateur->fresh()->email]);
+        $this->assertSame($avecLeCabinet === 'lien' ? EtatDuLien::Termine : EtatDuLien::Retire, $lien->fresh()->etat);
     }
 
     /**

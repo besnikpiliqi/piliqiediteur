@@ -12,9 +12,11 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Models\User;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -22,18 +24,23 @@ use LogicException;
 /**
  * Ce que partagent le refus, le retrait et l'expiration d'une demande de
  * lien entre un cabinet et un client, qui ne changent aucun accès : dans
- * le contexte du client, sous le verrou de la ligne du client (où se
- * sérialisent les liens d'un client) puis de la demande, la demande en
- * cours passe à son nouvel état, son jeton s'efface (le lien de l'e-mail
- * ne vaut plus rien), et le geste s'inscrit au journal d'audit des deux
- * sociétés : au journal du cabinet, d'une demande qu'il a envoyée et qui
- * n'est pas devenue un lien actif, la société n'est que son SIREN.
+ * le contexte du client, sous le verrou de la ligne du client (« for no
+ * key update », où se sérialisent les liens d'un client sans retenir une
+ * insertion qui la référence, voir JournalDesDroits::modifierLeLien()),
+ * puis de la demande, la demande en cours passe à son nouvel état, son
+ * jeton s'efface (le lien de l'e-mail ne vaut plus rien), et le geste
+ * s'inscrit au journal d'audit des deux sociétés : au journal du cabinet,
+ * d'une demande qu'il a envoyée et qui n'est pas devenue un lien actif, la
+ * société n'est que son SIREN. La trace du visiteur ne se note qu'au
+ * journal de la société de l'auteur, du client pour le système (voir
+ * TraceDuVisiteur).
  */
 abstract class RepondreAUneDemandeDeLien
 {
     public function __construct(
         protected readonly JournalDesDroits $journalDesDroits,
         protected readonly JournalAudit $journalAudit,
+        protected readonly TraceDuVisiteur $traces,
     ) {}
 
     /**
@@ -52,7 +59,7 @@ abstract class RepondreAUneDemandeDeLien
         $cabinet = Societe::query()->findOrFail($lien->cabinet_id);
 
         return app(TenantContext::class)->runAsSociete($client, fn (): ?LienCabinet => DB::transaction(function () use ($auteur, $lien, $etat, $action, $controle, $client, $cabinet): ?LienCabinet {
-            Societe::query()->whereKey($client->getKey())->lockForUpdate()->firstOrFail();
+            Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
             $relu = LienCabinet::query()->whereKey($lien->getKey())->lockForUpdate()->firstOrFail();
             $auteurRelu = $auteur === null ? null : User::query()->whereKey($auteur->getKey())->lockForUpdate()->firstOrFail();
 
@@ -65,14 +72,17 @@ abstract class RepondreAUneDemandeDeLien
             $relu->forceFill(['etat' => $etat, 'jeton_hache' => null, 'repondu_par' => $auteurRelu?->getKey(), 'repondu_le' => now()])->save();
             $duCabinet = $relu->origine === OrigineDuLien::DemandeDuCabinet;
 
-            $this->journalAudit->inscrire($action, $auteurRelu, null, null, [
+            $duVisiteur = (int) ($auteurRelu?->societe_id ?? $client->getKey());
+            $auJournalDe = fn (Societe $journal, Closure $inscrire): mixed => (int) $journal->getKey() === $duVisiteur ? $inscrire() : $this->traces->horsDeSaSociete($inscrire);
+
+            $auJournalDe($client, fn () => $this->journalAudit->inscrire($action, $auteurRelu, null, null, [
                 'cabinet' => IdentiteDansLeJournal::de($cabinet),
                 'client' => IdentiteDansLeJournal::de($client),
-            ], $relu);
-            app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire($action, $auteurRelu, null, null, [
+            ], $relu));
+            $auJournalDe($cabinet, fn () => app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire($action, $auteurRelu, null, null, [
                 'cabinet' => IdentiteDansLeJournal::de($cabinet),
                 'client' => $duCabinet ? IdentiteDansLeJournal::sirenSeul($client) : IdentiteDansLeJournal::de($client),
-            ], $relu));
+            ], $relu)));
 
             return $relu;
         }));

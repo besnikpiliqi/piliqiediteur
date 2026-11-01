@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -48,6 +49,31 @@ class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
                 self::prevenirLeCabinet($retiree, 'Demande de lien retirée', "La demande de lien avec le SIREN {$client->siren} a pris fin : {$motif->getLabel()}.");
             });
         }
+    }
+
+    /**
+     * Expire, au nom du système et sans trace (voir TraceDuVisiteur), chaque
+     * demande de ces liens encore en cours mais dont l'échéance est passée,
+     * sans attendre la tâche horaire, dans la transaction d'un geste sur les
+     * liens d'un client qui tient déjà la ligne du client et ces liens (voir
+     * DesignerUnCabinetAction et InviterUneEntrepriseAction) : une demande
+     * périmée n'est jamais rendue comme une demande en cours. Rend ces
+     * liens relus.
+     *
+     * @param  Collection<int, LienCabinet>  $liens
+     * @return Collection<int, LienCabinet>
+     */
+    public function expirerLesPerimees(Collection $liens): Collection
+    {
+        return $liens->map(function (LienCabinet $lien): LienCabinet {
+            if (! $lien->estUneDemande() || $lien->estUneDemandeValable()) {
+                return $lien;
+            }
+
+            $this->traces->horsDeSaSociete(fn () => $this->expirer($lien));
+
+            return $lien->refresh();
+        });
     }
 
     /**

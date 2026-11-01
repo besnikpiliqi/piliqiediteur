@@ -7,6 +7,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Tenancy\Contracts\SourceDeHasard;
 use App\Domain\Tenancy\Services\SourceDeHasardCryptographique;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,6 +26,9 @@ class TenancyServiceProvider extends ServiceProvider
         // Même raison : l'opérateur d'une requête ou d'un job ne survit
         // jamais au suivant (voir OperateurCourant).
         $this->app->scoped(OperateurCourant::class);
+        // Même raison : une écriture hors de la société du visiteur ne
+        // survit jamais à sa requête ni à son job (voir TraceDuVisiteur).
+        $this->app->scoped(TraceDuVisiteur::class);
         // Le hasard des identifiants de connexion : celui, cryptographique,
         // de PHP (voir GenerateurDIdentifiants).
         $this->app->bind(SourceDeHasard::class, SourceDeHasardCryptographique::class);

@@ -28,6 +28,7 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\TraceDuVisiteur;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
@@ -67,7 +68,9 @@ use SensitiveParameter;
  *   suivi, et son identifiant ; elle est validée par l'action unique de la
  *   validation, preuve « invitation du cabinet », sans courrier ni QR code
  *   ; le lien avec le cabinet naît actif, avec les autorisations par défaut
- *   de son type ; l'invitation est acceptée.
+ *   de son type ; l'invitation est acceptée. La personne, propriétaire de
+ *   la société née, ne laisse sa trace qu'au journal de celle-ci, jamais à
+ *   celui du cabinet (voir TraceDuVisiteur et JournalDesDroits).
  *
  * Le propriétaire est nommé comme celui d'une société qui s'inscrit : le
  * représentant légal que donne le registre ; sans lui, la dénomination du
@@ -106,6 +109,7 @@ class AccepterLInvitationAction
         private readonly JournalAudit $journalAudit,
         private readonly JournalDesDroits $journalDesDroits,
         private readonly ValiderLaSocieteAction $validation,
+        private readonly TraceDuVisiteur $traces,
     ) {}
 
     /**
@@ -285,7 +289,7 @@ class AccepterLInvitationAction
 
         app(TenantContext::class)->runAsSociete($cabinet, function () use ($relue, $client): void {
             $relue->forceFill(['etat' => EtatInvitation::Acceptee, 'close_le' => now()])->save();
-            $this->journalAudit->inscrire(ActionAuditee::InvitationAcceptee, null, null, null, ['siren' => $relue->siren, 'client' => IdentiteDansLeJournal::de($client->fresh())], $relue);
+            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::InvitationAcceptee, null, null, null, ['siren' => $relue->siren, 'client' => IdentiteDansLeJournal::de($client->fresh())], $relue));
         });
 
         return $proprietaire;

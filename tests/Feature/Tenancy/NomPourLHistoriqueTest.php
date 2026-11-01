@@ -75,4 +75,21 @@ class NomPourLHistoriqueTest extends TestCase
         app(MettreFinAuLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), LienCabinet::query()->withoutGlobalScopes()->sole());
         $this->assertLessThanOrEqual(255, mb_strlen((string) app(TenantContext::class)->runAsSociete($magasin->societe, fn () => EntreeAudit::query()->where('action', ActionAuditee::LienTermine->value)->value('auteur_libelle'))));
     }
+
+    /**
+     * Une dénomination courte reste entière, sans « … » : seul le nom trop
+     * long se raccourcit, et le nom pour l'historique fait exactement 255
+     * caractères.
+     */
+    public function test_une_denomination_courte_reste_entiere_et_seul_un_nom_trop_long_se_raccourcit(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        app(TenantContext::class)->runAsSociete($cabinet, fn (): bool => $cabinet->forceFill(['raison_sociale' => 'ABC'])->save());
+        $collaborateur = $this->collaborateur($cabinet, 'Paul '.Str::repeat('L', 245));
+
+        $nom = $collaborateur->fresh()->nomPourLHistorique();
+
+        $this->assertSame('Paul '.Str::repeat('L', 235).'… (cabinet ABC)', $nom);
+        $this->assertSame(255, mb_strlen($nom));
+    }
 }

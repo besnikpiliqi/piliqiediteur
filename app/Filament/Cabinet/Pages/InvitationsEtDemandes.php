@@ -12,8 +12,10 @@ use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Cabinets\Exceptions\CabinetNonVerifieException;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use Carbon\CarbonInterval;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
@@ -33,7 +35,8 @@ use LogicException;
  * (voir InviterUneEntrepriseAction), désactivé tant que le cabinet n'est
  * pas vérifié ; puis ses invitations (SIREN libres), qu'il retire ; les
  * demandes de rattachement qu'il a envoyées (SIREN déjà inscrits), dont il
- * ne voit que le SIREN saisi, et qu'il retire ; les demandes reçues des
+ * ne voit que le SIREN saisi, avec leur état, qu'il retire tant qu'elles
+ * sont en cours ; les demandes reçues des
  * clients qui l'ont désigné (dénomination, SIREN, ville), qu'il accepte ou
  * refuse. Chaque liste se lit dans le cabinet (ses invitations par leur
  * SocieteScope, ses liens par LienCabinet::duCabinet()) ; chaque geste
@@ -170,23 +173,34 @@ class InvitationsEtDemandes extends Page
     }
 
     /**
-     * Les demandes de rattachement envoyées par le cabinet et encore en
-     * cours, chacune avec le seul SIREN que le cabinet a saisi.
+     * Les demandes de rattachement envoyées par le cabinet : celles en
+     * cours, et celles refusées, retirées ou expirées depuis moins de 7
+     * jours, qui empêchent encore une nouvelle demande au même SIREN (voir
+     * InviterUneEntrepriseAction), chacune avec le seul SIREN que le
+     * cabinet a saisi, son état et la date de sa fin ; une demande dont
+     * l'échéance est passée se lit expirée, avant même que la tâche
+     * horaire ne l'expire.
      *
-     * @return Liste<int, array{uuid: string, siren: string, demande_le: mixed, expire_le: mixed}>
+     * @return Liste<int, array{uuid: string, siren: string, demande_le: mixed, expire_le: mixed, en_cours: bool, etat: string, fin: mixed}>
      */
     public function demandesEnvoyees(): Liste
     {
+        $depuis = Calendrier::deParis()->decaler(now(), CarbonInterval::days(-InviterUneEntrepriseAction::DELAI_AVANT_UNE_NOUVELLE_INVITATION_EN_JOURS));
+
         return LienCabinet::query()->duCabinet($this->cabinet())
             ->where('origine', OrigineDuLien::DemandeDuCabinet->value)
-            ->where('etat', EtatDuLien::DemandeParLeCabinet->value)
+            ->where(fn ($demandes) => $demandes->where('etat', EtatDuLien::DemandeParLeCabinet->value)->orWhere(fn ($closes) => $closes->closeApres($depuis)))
             ->orderByDesc('demande_le')
-            ->get(['id', 'uuid', 'societe_id', 'demande_le', 'expire_le'])
+            ->orderByDesc('id')
+            ->get(['id', 'uuid', 'societe_id', 'etat', 'demande_le', 'expire_le', 'repondu_le'])
             ->map(fn (LienCabinet $lien): array => [
                 'uuid' => (string) $lien->uuid,
                 'siren' => (string) Societe::query()->whereKey($lien->societe_id)->value('siren'),
                 'demande_le' => $lien->demande_le,
                 'expire_le' => $lien->expire_le,
+                'en_cours' => $lien->estUneDemandeValable(),
+                'etat' => $lien->estUneDemandeValable() ? 'En cours' : ($lien->estUneDemande() ? EtatDuLien::Expire : $lien->etat)->getLabel(),
+                'fin' => $lien->estUneDemandeValable() ? null : ($lien->estUneDemande() ? $lien->expire_le : $lien->finDeLaDemande()),
             ]);
     }
 

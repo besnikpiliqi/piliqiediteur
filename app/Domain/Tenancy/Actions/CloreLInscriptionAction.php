@@ -24,6 +24,7 @@ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Mail;
 use LogicException;
 use Throwable;
@@ -47,13 +48,16 @@ use Throwable;
  *   connexion, mais pas une insertion qui la référence, comme l'entrée du
  *   journal d'audit d'une transmission acceptée au même instant, qui tient
  *   déjà les comptes que la clôture attend ; puis sous celui des lignes de
- *   ses magasins réels, qui exclut tout geste en cours dans l'un d'eux
- *   (voir cloreSousVerrou()) : le lien avec un cabinet d'expertise
- *   comptable et les demandes de lien en cours prennent fin, cabinet
- *   prévenu (voir MettreFinAuLienAction::pourUneSocieteQuiChangeDeMains()),
+ *   ses magasins réels, qui exclut tout geste en cours dans l'un d'eux,
+ *   et de ses comptes (voir cloreSousVerrou()) : le lien avec un cabinet
+ *   d'expertise comptable et les demandes de lien en cours prennent fin,
+ *   cabinet prévenu (voir
+ *   MettreFinAuLienAction::pourUneSocieteQuiChangeDeMains(), qui reprend
+ *   la ligne de la société sous le même verrou, jamais plus fort : un
+ *   verrou exclusif retiendrait l'entrée d'audit de cette transmission),
  *   puis la clôture (close_le, motif_cloture) s'inscrit au journal d'audit
- *   avec son motif
- *   et, pour l'éditeur, sa justification ; les pièces déposées s'effacent,
+ *   avec son motif et, pour l'éditeur, sa justification ; les pièces
+ *   déposées s'effacent,
  *   dès la décision ; ses codes de confirmation encore actifs s'annulent ;
  *   l'adresse de son propriétaire cesse d'être une adresse de connexion
  *   (voir retirerLAdresseDeConnexion()) : le compte reste, ne se connecte
@@ -200,9 +204,15 @@ class CloreLInscriptionAction
      * ne s'écrit dans une société close. Les magasins se verrouillent après
      * la société, comme à leur réouverture (voir RouvrirMagasinAction), et
      * avant les comptes, comme le font ces gestes (le magasin, puis leur
-     * auteur). Viennent ensuite les lignes de ses comptes, puis celles de
-     * ses transmissions en attente, dans le même ordre que l'acceptation
-     * d'une transmission (les comptes, puis la demande). Le magasin de
+     * auteur). Viennent ensuite les lignes de ses comptes, par identifiant
+     * croissant, avant la fin de son lien avec un cabinet et de ses
+     * demandes de lien, qui inscrit ses entrées au journal d'audit, dont la
+     * tête se verrouille en dernier : une transmission de la propriété
+     * acceptée au même instant, qui tient ces comptes avant d'inscrire la
+     * sienne dans la même chaîne, passe tout entière avant la clôture, qui
+     * la voit à sa fin ; puis les lignes de ses transmissions en attente,
+     * dans le même ordre que l'acceptation d'une transmission (les comptes,
+     * puis la demande). Le magasin de
      * démonstration, qui se ferme après la clôture (voir apresLaCloture()),
      * ne se verrouille pas ici : un retour (voir EmettreAvoirAction) et la
      * clôture du jour (voir CloturerCaisseAction) y verrouillent la ligne
@@ -217,6 +227,7 @@ class CloreLInscriptionAction
     private function cloreSousVerrou(Societe $verrouillee, MotifCloture $motif, ?InterventionDeLEditeur $editeur = null): array
     {
         $verrouillee->magasinsReels()->orderBy('id')->lock('for no key update')->get();
+        $comptes = User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get();
         $this->finDesLiens->pourUneSocieteQuiChangeDeMains($verrouillee, MotifDeFinDuLien::InscriptionClose);
         $verrouillee->forceFill(['close_le' => now(), 'motif_cloture' => $motif])->save();
         $this->journalAudit->inscrire(ActionAuditee::InscriptionClose, null, null, null, ['motif' => $motif->value], $verrouillee, $editeur);
@@ -226,7 +237,7 @@ class CloreLInscriptionAction
             ->each(fn (CodeConfirmation $code) => $this->annulationDesCodes->annuler($code, AnnulationDesCodes::INSCRIPTION_CLOSE, editeur: $editeur));
 
         return [
-            'adresseRetiree' => $this->retirerLAdresseDeConnexion($verrouillee, $editeur),
+            'adresseRetiree' => $this->retirerLAdresseDeConnexion($comptes, $editeur),
             'destinataires' => $this->annulerLesTransmissionsEnAttente($verrouillee, $editeur),
         ];
     }
@@ -237,21 +248,21 @@ class CloreLInscriptionAction
      * confirmation s'effacent, comme une adresse en attente et son lien, et
      * le lien « Mot de passe oublié » de cette adresse ne sert plus ; le
      * retrait s'inscrit au journal d'audit de la société, sans aucune
-     * adresse. Les lignes de tous les comptes de la société se verrouillent,
-     * par identifiant croissant, avant d'y chercher le propriétaire : une
-     * transmission acceptée au même instant, qui tenait ces comptes, est
-     * vue à sa fin, et son nouveau propriétaire perd l'adresse de connexion
-     * qu'elle venait de lui donner. L'index unique des adresses de
-     * connexion ne porte que sur les adresses non nulles : une nouvelle
-     * inscription, ou le propriétaire d'une autre société, peut prendre
-     * cette adresse.
+     * adresse. Le propriétaire se cherche parmi les comptes de la société
+     * que la clôture a verrouillés, par identifiant croissant (voir
+     * cloreSousVerrou()) : une transmission acceptée au même instant, qui
+     * tenait ces comptes, est vue à sa fin, et son nouveau propriétaire perd
+     * l'adresse de connexion qu'elle venait de lui donner. L'index unique
+     * des adresses de connexion ne porte que sur les adresses non nulles :
+     * une nouvelle inscription, ou le propriétaire d'une autre société, peut
+     * prendre cette adresse.
      *
+     * @param  Collection<int, User>  $comptes  les comptes de la société, verrouillés
      * @return string|null l'adresse retirée, à prévenir après la transaction
      */
-    private function retirerLAdresseDeConnexion(Societe $verrouillee, ?InterventionDeLEditeur $editeur): ?string
+    private function retirerLAdresseDeConnexion(Collection $comptes, ?InterventionDeLEditeur $editeur): ?string
     {
-        $proprietaire = User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get()
-            ->first(fn (User $compte): bool => $compte->estProprietaire());
+        $proprietaire = $comptes->first(fn (User $compte): bool => $compte->estProprietaire());
 
         if ($proprietaire === null || ($proprietaire->email === null && $proprietaire->nouvelle_adresse === null)) {
             return null;

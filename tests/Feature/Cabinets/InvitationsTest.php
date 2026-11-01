@@ -21,6 +21,7 @@ use App\Domain\Cabinets\Services\EnvoiDesLiensDesCabinets;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\EntreeAudit;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
@@ -205,6 +206,49 @@ class InvitationsTest extends TestCase
         $this->assertStringNotContainsString('Villesecrete', $journal);
     }
 
+    /**
+     * Les demandes de rattachement envoyées montrent leur état : une
+     * demande refusée ou retirée reste visible, avec la date de sa fin, tant
+     * qu'elle empêche une nouvelle demande au même SIREN, sans le bouton
+     * « Retirer », que garde seule une demande en cours ; passé ce délai,
+     * elle disparaît ; une demande dont l'échéance est passée se lit
+     * expirée, avant même le passage de la tâche horaire.
+     */
+    public function test_les_demandes_envoyees_montrent_leur_etat_tant_qu_elles_empechent_une_nouvelle_demande(): void
+    {
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
+        $cabinet = $this->ouvrirUnCabinet();
+        $refusee = $this->ouvrirUneSociete(['nom' => 'Boutique refusée'])->societe;
+        $retiree = $this->ouvrirUneSociete(['nom' => 'Boutique retirée'])->societe;
+        $enCours = $this->ouvrirUneSociete(['nom' => 'Boutique en cours'])->societe;
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        foreach ([$refusee, $retiree, $enCours] as $client) {
+            $this->demanderLeRattachement($cabinet, $client, 'compta@cliente.test');
+        }
+        $demandeDe = fn (Societe $client): LienCabinet => LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $client->id)->sole();
+        $this->travelTo(self::aParis('2026-10-13 09:00:00'));
+        app(TenantContext::class)->clear();
+        app(RefuserLaDemandeDeLienAction::class)->handle($refusee->proprietaire()->sole(), $demandeDe($refusee));
+        app(RetirerLaDemandeDeLienAction::class)->handle($proprietaire, $demandeDe($retiree));
+
+        $this->dansLEspaceDuCabinet($cabinet, $proprietaire);
+        $page = Livewire::test(InvitationsEtDemandes::class);
+
+        $this->assertEqualsCanonicalizing([
+            [(string) $refusee->siren, 'Refusée', false],
+            [(string) $retiree->siren, 'Retirée', false],
+            [(string) $enCours->siren, 'En cours', true],
+        ], $page->instance()->demandesEnvoyees()->map(fn (array $demande): array => [$demande['siren'], $demande['etat'], $demande['en_cours']])->all());
+        $page->assertSeeText(['Refusée le 13/10/2026', 'Retirée le 13/10/2026', 'expire le 19/10/2026 · En cours']);
+        $this->assertSame(1, substr_count($page->html(), 'Retirer'));
+
+        $this->travelTo(self::aParis('2026-10-20 09:00:01'));
+        $page = Livewire::test(InvitationsEtDemandes::class);
+        $this->assertSame([[(string) $enCours->siren, 'Expirée', false]], $page->instance()->demandesEnvoyees()->map(fn (array $demande): array => [$demande['siren'], $demande['etat'], $demande['en_cours']])->all());
+        $page->assertSeeText('Expirée le 19/10/2026');
+        $this->assertSame(0, substr_count($page->html(), 'Retirer'));
+    }
+
     public function test_une_demande_compte_dans_les_cinquante_par_jour_et_ne_se_renouvelle_pas_avant_sept_jours(): void
     {
         $this->travelTo(self::aParis('2026-10-12 10:00:00'));
@@ -219,6 +263,36 @@ class InvitationsTest extends TestCase
 
         $this->travelTo(self::aParis('2026-10-19 10:01:00'));
         $this->assertSame(ResultatDInvitation::DemandeEnvoyee, app(InviterUneEntrepriseAction::class)->handle($proprietaire, $cabinet, (string) $client->siren, 'compta@cliente.test', self::MOT_DE_PASSE_CHOISI));
+    }
+
+    /**
+     * Une demande de rattachement dont l'échéance est passée, que la tâche
+     * horaire n'a pas encore expirée, n'est pas « déjà envoyée » : inviter
+     * de nouveau ce SIREN la lit expirée et refuse une nouvelle demande
+     * avant 7 jours après son échéance, sans rien écrire ; ensuite, elle
+     * expire, son lien ne valant plus rien, et la nouvelle demande part.
+     */
+    public function test_inviter_de_nouveau_apres_l_echeance_expire_la_demande_perimee_sans_attendre_la_tache_horaire(): void
+    {
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
+        $cabinet = $this->ouvrirUnCabinet();
+        $client = $this->ouvrirUneSociete(['nom' => 'Boutique cliente'])->societe;
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $this->demanderLeRattachement($cabinet, $client, 'compta@cliente.test');
+        $demande = LienCabinet::query()->withoutGlobalScopes()->sole();
+
+        $this->travelTo(self::aParis('2026-10-19 10:30:00'));
+        $this->assertThrows(fn () => app(InviterUneEntrepriseAction::class)->handle($proprietaire, $cabinet, (string) $client->siren, 'compta@cliente.test', self::MOT_DE_PASSE_CHOISI), LogicException::class, InviterUneEntrepriseAction::MESSAGE_DEMANDE_RECENTE);
+
+        $this->assertSame(EtatDuLien::DemandeParLeCabinet, $demande->fresh()->etat);
+        $this->assertSame(1, LienCabinet::query()->withoutGlobalScopes()->count());
+
+        $this->travelTo(self::aParis('2026-10-26 10:00:01'));
+        $this->assertSame(ResultatDInvitation::DemandeEnvoyee, app(InviterUneEntrepriseAction::class)->handle($proprietaire, $cabinet, (string) $client->siren, 'compta@cliente.test', self::MOT_DE_PASSE_CHOISI));
+
+        $this->assertSame([EtatDuLien::Expire, null], [$demande->fresh()->etat, $demande->fresh()->jeton_hache]);
+        $this->assertSame(2, LienCabinet::query()->withoutGlobalScopes()->count());
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienExpiree));
     }
 
     public function test_une_invitation_repetee_a_la_meme_adresse_ne_cree_ni_ne_renvoie_rien(): void
@@ -293,10 +367,16 @@ class InvitationsTest extends TestCase
         $this->assertThrows(fn () => $this->accepterLInvitation($jeton), InvitationInvalideException::class);
     }
 
+    /**
+     * La limite se compte par jour de Paris : la quatrième invitation de la
+     * journée est refusée, et la limite repart après minuit à Paris.
+     */
     public function test_un_cabinet_n_envoie_pas_plus_de_cinquante_invitations_par_jour(): void
     {
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         config(['cabinets.invitations_par_jour' => 3]);
         $cabinet = $this->ouvrirUnCabinet();
+        $this->travelTo(self::aParis('2026-10-12 23:58:00'));
 
         foreach (range(1, 3) as $numero) {
             $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), "client{$numero}@b.test");
@@ -305,6 +385,10 @@ class InvitationsTest extends TestCase
         $this->assertThrows(fn () => app(InviterUneEntrepriseAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, SocieteFactory::sirenFictif(), 'client4@b.test', self::MOT_DE_PASSE_CHOISI), LogicException::class, 'Votre cabinet a déjà envoyé 3 invitations ou demandes aujourd\'hui : réessayez demain.');
         $this->assertSame(3, DB::table('invitations_cabinet')->count());
         $this->assertSame(50, (require config_path('cabinets.php'))['invitations_par_jour']);
+
+        $this->travelTo(self::aParis('2026-10-13 00:00:01'));
+        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'client4@b.test');
+        $this->assertSame(4, DB::table('invitations_cabinet')->count());
     }
 
     public function test_l_invitation_ne_part_pas_si_le_cabinet_n_est_plus_verifie_au_moment_de_l_envoi(): void

@@ -70,7 +70,6 @@ class ReglesDuCalendrierTest extends TestCase
      */
     private const PARIS_PERMIS_DANS_UN_MAGASIN = [
         'app/Filament/App/Pages/Auth/ModifierProfil.php' => 'échéance du lien de l\'adresse de connexion du propriétaire : heure propre à un compte de la société, sur une page commune aux deux panneaux',
-        'app/Domain/CaisseSecurisee/Models/TraceEvenement.php' => 'expiration d\'une trace technique (adresse IP et navigateur) après un an : délai technique, qui ne date aucune opération du magasin',
     ];
 
     /**

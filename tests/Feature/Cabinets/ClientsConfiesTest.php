@@ -3,11 +3,13 @@
 namespace Tests\Feature\Cabinets;
 
 use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\FicheDuCollaborateur;
 use Database\Factories\SocieteFactory;
@@ -100,6 +102,33 @@ class ClientsConfiesTest extends TestCase
             $this->assertSame('collaborateur', $siens[0]['apres']['role_societe']);
         }
         $this->assertSame(0, DB::table('clients_confies')->count());
+    }
+
+    /**
+     * Un cabinet qui n'est plus actif et vérifié (ici suspendu) n'a plus
+     * accès à ses clients : son propriétaire ne confie plus aucun client,
+     * l'action « Clients confiés » disparaît de la fiche du collaborateur, et
+     * rien ne s'écrit, ni client confié, ni JET 130 chez le client, ni entrée
+     * d'audit.
+     */
+    public function test_un_cabinet_qui_n_est_plus_verifie_ne_confie_aucun_client(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin);
+        $collaborateur = $this->collaborateur($cabinet);
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $jet130 = count($this->modificationsDesDroits($magasin));
+        $cabinet->forceFill(['statut' => StatutSociete::Suspendue])->save();
+
+        $this->assertThrows(fn () => app(ConfierDesClientsAction::class)->handle($proprietaire, $collaborateur, [$lien->id]), AuthorizationException::class, CreerCollaborateurAction::MESSAGE_PROPRIETAIRE_DU_CABINET_SEUL);
+
+        $this->assertSame(0, DB::table('clients_confies')->count());
+        $this->assertCount($jet130, $this->modificationsDesDroits($magasin));
+        $this->assertCount(0, $this->entreesDAudit($cabinet, ActionAuditee::ClientsConfiesModifies));
+        $this->assertFalse($proprietaire->fresh()->can('confierDesClients', $collaborateur));
+        $this->dansLEspaceDuCabinet($cabinet->fresh(), $proprietaire);
+        Livewire::test(FicheDuCollaborateur::class, ['record' => $collaborateur->getRouteKey()])->assertActionHidden('confierDesClients');
     }
 
     public function test_un_collaborateur_ne_confie_rien(): void

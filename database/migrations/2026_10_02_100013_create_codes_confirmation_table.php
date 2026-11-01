@@ -30,11 +30,17 @@ return new class extends Migration
             $table->id();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
             // Le SIREN de l'entreprise à qui le courrier part : celui de la
-            // société, ou, pour l'examen d'un SIREN, celui de l'entité
-            // correcte (voir ExaminerSirenAction) ; la page du code retrouve
-            // le courrier par le SIREN saisi (voir
+            // société ; pour l'examen d'un SIREN, celui de l'entité correcte
+            // (voir ExaminerSirenAction) ; pour la libération d'un SIRET,
+            // celui du titulaire de ce SIRET, que forment ses neuf premiers
+            // chiffres (voir LibererUnSiretSaisiParErreurAction). La page du
+            // code retrouve le courrier par le SIREN saisi (voir
             // SaisirCodeDeConfirmationAction).
             $table->string('siren', 9);
+            // Pour la libération d'un SIRET, le SIRET que le courrier
+            // désigne : son code ne prouve la libération que de celui-ci ;
+            // nul pour tout autre motif.
+            $table->string('siret', 14)->nullable();
             // MotifCode.
             $table->string('motif', 30);
             // Le destinataire tel que le courrier l'imprime : le nom du
@@ -58,6 +64,11 @@ return new class extends Migration
             // SaisirCodeDeConfirmationAction).
             $table->unsignedInteger('tentatives')->default(0);
             $table->timestamp('utilise_le')->nullable();
+            // Le code d'une procédure de l'éditeur ne prouve qu'une
+            // procédure (une révocation, la libération de son SIRET) : posée
+            // quand elle se fait, dans sa transaction (voir
+            // CodeConfirmation::preuveDeLaRemise()).
+            $table->timestamp('procedure_faite_le')->nullable();
             $table->timestamp('annule_le')->nullable();
             // Le propriétaire qui l'a demandé, à la confirmation de son
             // inscription ou pour un nouvel envoi ; null pour l'éditeur.

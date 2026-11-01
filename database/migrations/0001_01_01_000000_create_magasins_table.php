@@ -85,15 +85,17 @@ return new class extends Migration
             // fermeture : jamais levée par une réouverture (voir
             // Magasin::estEnLectureSeule()).
             $table->timestamp('suspendu_le')->nullable();
-            // La libération de son SIRET par la procédure de l'éditeur (voir
-            // LibererLeSiretAction), une fois le magasin fermé pour
-            // cessation, son territoire ayant été mal lu au répertoire
-            // Sirene après son premier document numéroté : il garde son
-            // SIRET, que ses documents ont signé, et un nouveau magasin de
-            // la société peut s'ouvrir sur le même établissement. Posée une
-            // fois, elle ne s'efface plus (voir
-            // DeclencheursDeProtection::colonneFigee()), et le magasin ne se
-            // rouvre plus ni ne change de SIRET (voir Magasin::booted()).
+            // La libération de son SIRET par une procédure de l'éditeur, une
+            // fois le magasin fermé pour cessation, son territoire ayant été
+            // mal lu au répertoire Sirene après son premier document
+            // numéroté (voir LibererLeSiretAction), ou fermé pour de bon,
+            // pour cessation ou par sa cession, son SIRET ayant été saisi par
+            // erreur (voir LibererUnSiretSaisiParErreurAction) : il garde son
+            // SIRET, que ses documents ont signé, et un autre magasin peut
+            // s'ouvrir sur le même établissement. Posée une fois, elle ne
+            // s'efface plus (voir DeclencheursDeProtection::colonneFigee()),
+            // et le magasin ne se rouvre plus ni ne change de SIRET (voir
+            // Magasin::booted()).
             $table->timestamp('siret_libere_le')->nullable();
             // Barème de prix de vente (voir BaremePrixDeVente) : chaque
             // magasin démarre avec l'exemple du logiciel, désactivé (voir

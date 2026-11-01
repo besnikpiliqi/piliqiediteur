@@ -290,8 +290,8 @@ class Magasin extends Model implements HasName
                 throw new LogicException('Le territoire d\'un magasin ne change plus une fois fixé : un déménagement vers un autre territoire passe par un nouveau magasin.');
             }
 
-            if ($magasin->isDirty('siret_libere_le') && ($magasin->getOriginal('siret_libere_le') !== null || ! $magasin->estFermePourCessation() || $magasin->isDirty(['statut', 'motif_fermeture', 'siret']))) {
-                throw new LogicException('Seul le SIRET d\'un magasin fermé pour cessation se libère, une seule fois.');
+            if ($magasin->isDirty('siret_libere_le') && ($magasin->getOriginal('siret_libere_le') !== null || ! $magasin->estFermePourDeBon() || $magasin->isDirty(['statut', 'motif_fermeture', 'siret']))) {
+                throw new LogicException('Seul le SIRET d\'un magasin fermé pour cessation se libère, ou celui d\'un magasin cédé, une seule fois.');
             }
 
             if ($magasin->getOriginal('siret_libere_le') !== null && $magasin->isDirty(['statut', 'siret'])) {
@@ -462,8 +462,6 @@ class Magasin extends Model implements HasName
 
     /**
      * Est-il fermé pour cessation d'activité (voir FermerMagasinAction) ?
-     * Seul un tel magasin peut voir son SIRET libéré par l'éditeur (voir
-     * aLibereSonSiret()).
      */
     public function estFermePourCessation(): bool
     {
@@ -471,10 +469,21 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * L'éditeur a-t-il libéré son SIRET pour un nouveau magasin de la
-     * société sur le même établissement (voir LibererLeSiretAction) ? Il le
-     * garde, mais ne se rouvre plus et ne change plus de SIRET (voir
-     * booted()).
+     * Est-il fermé pour de bon, pour cessation ou par sa cession ? Seul un
+     * tel magasin peut voir son SIRET libéré par l'éditeur (voir
+     * aLibereSonSiret()).
+     */
+    public function estFermePourDeBon(): bool
+    {
+        return $this->estFermePourCessation() || ($this->estFerme() && $this->aEteCede());
+    }
+
+    /**
+     * L'éditeur a-t-il libéré son SIRET pour un autre magasin sur le même
+     * établissement, de la société (voir LibererLeSiretAction) ou du
+     * titulaire d'un SIRET saisi par erreur (voir
+     * LibererUnSiretSaisiParErreurAction) ? Il le garde, mais ne se rouvre
+     * plus et ne change plus de SIRET (voir booted()).
      */
     public function aLibereSonSiret(): bool
     {

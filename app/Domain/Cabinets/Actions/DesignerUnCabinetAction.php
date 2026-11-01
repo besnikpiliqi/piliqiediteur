@@ -113,7 +113,7 @@ class DesignerUnCabinetAction
 
                 $valeurs = ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DesignationDuClient->value];
                 $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteurRelu, null, null, $valeurs, $lien);
-                $this->traces->horsDeSaSociete(fn () => app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteurRelu, null, null, $valeurs, $lien)));
+                $this->traces->horsDeSaSociete(fn () => app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrireLeGesteDeLAutreSociete(ActionAuditee::LienDemande, null, $valeurs, $lien)));
 
                 return ['lien' => $lien, 'nouveau' => true];
             }));

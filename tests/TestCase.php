@@ -44,6 +44,8 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Enums\TypeVerification;
@@ -89,6 +91,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\MailFake;
+use Illuminate\Testing\PendingCommand;
 use Illuminate\Testing\TestResponse;
 use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
@@ -1171,6 +1174,56 @@ abstract class TestCase extends BaseTestCase
             ->orderBy('id')
             ->get()
             ->all());
+    }
+
+    /**
+     * La société garde exactement un propriétaire actif : l'invariant que
+     * respecte chaque procédure de l'éditeur (voir ProcedureDeLEditeur).
+     */
+    protected function assertUnSeulProprietaireActif(Societe $societe): void
+    {
+        $this->assertSame(1, User::query()
+            ->where('societe_id', $societe->id)
+            ->where('role_societe', RoleSociete::Proprietaire->value)
+            ->where('statut', StatutCompte::Actif->value)
+            ->count());
+    }
+
+    /**
+     * La signature de chaque enregistrement du registre fiscal du magasin,
+     * par son identifiant : une procédure qui ne réécrit aucun document
+     * émis les garde toutes, ce qu'elle inscrit s'ajoutant après.
+     *
+     * @return array<int, string>
+     */
+    protected function signaturesDuRegistre(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()->orderBy('id')->pluck('signature', 'id')->all());
+    }
+
+    /**
+     * La commande d'une procédure de l'éditeur (voir ProcedureDeLEditeur)
+     * sur cette société, avec ces paramètres (sa justification, sa pièce et
+     * la confirmation retapée compris), puis les opérateurs qui
+     * s'authentifient, chacun par son nom et son secret, dans l'ordre :
+     * $exiges dit combien la procédure en demande, ce qui nomme leurs
+     * questions (« (premier) », « (second) » pour une procédure grave) ; un
+     * refus s'arrête au premier opérateur refusé, et n'en donne pas plus.
+     *
+     * @param  array<string, mixed>  $parametres
+     * @param  list<array{0: string, 1: string}>  $operateurs
+     */
+    protected function lancerUneProcedureDeLEditeur(string $commande, Societe $societe, array $parametres, array $operateurs, int $exiges = 1): PendingCommand
+    {
+        app(TenantContext::class)->clear();
+        $pendante = $this->artisan($commande, ['societe' => (string) $societe->id, ...$parametres]);
+
+        foreach (array_values($operateurs) as $rang => [$nom, $secret]) {
+            $suffixe = $exiges === 1 ? '' : ($rang === 0 ? ' (premier)' : ' (second)');
+            $pendante->expectsQuestion("Nom de l'opérateur{$suffixe}", $nom)->expectsQuestion("Secret de l'opérateur{$suffixe}", $secret);
+        }
+
+        return $pendante;
     }
 
     /**

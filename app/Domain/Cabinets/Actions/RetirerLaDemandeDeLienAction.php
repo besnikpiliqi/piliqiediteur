@@ -9,10 +9,12 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Models\User;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use Throwable;
 
 /**
  * Le retrait d'une demande de lien par la partie qui l'a faite : le
@@ -36,19 +38,23 @@ class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
 
     /**
      * Le retrait d'une demande au nom du système, dans la transaction de la
-     * clôture d'une inscription ou de la saisie de son code par une autre
-     * personne : une société non validée qui change de mains, ou close, ne
-     * garde aucune demande ; le cabinet en est prévenu, par le seul SIREN.
+     * clôture d'une inscription, de la saisie de son code par une autre
+     * personne, ou de la révocation de la société par l'éditeur : une
+     * société non validée qui change de mains, close ou révoquée ne garde
+     * aucune demande. Le cabinet en est prévenu par le seul SIREN, sans le
+     * motif : d'une demande qui n'est jamais devenue un lien actif, il
+     * n'apprend rien d'autre de la société. Un avis qui ne part pas est
+     * signalé sans rien défaire.
      */
-    public function parLeSysteme(LienCabinet $lien, MotifDeFinDuLien $motif): void
+    public function parLeSysteme(LienCabinet $lien): void
     {
         $retiree = $this->cloreLaDemande(null, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, static fn (): null => null);
 
         if ($retiree !== null) {
-            DB::afterCommit(function () use ($retiree, $motif): void {
+            DB::afterCommit(static fn () => self::sansInterrompre(function () use ($retiree): void {
                 $client = Societe::query()->findOrFail($retiree->societe_id);
-                self::prevenirLeCabinet($retiree, 'Demande de lien retirée', "La demande de lien avec le SIREN {$client->siren} a pris fin : {$motif->getLabel()}.");
-            });
+                self::prevenirLeCabinet($retiree, 'Demande de lien retirée', "La demande de lien avec le SIREN {$client->siren} a pris fin.");
+            }));
         }
     }
 
@@ -57,17 +63,31 @@ class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
      * au nom du système, dans sa propre transaction, après la révocation
      * (voir RevoquerSocieteAction) : le client qui avait désigné le cabinet
      * en est prévenu ; une demande de rattachement du cabinet s'éteint sans
-     * rien dire au client, qui ne l'avait pas encore acceptée.
+     * rien dire au client, qui ne l'avait pas encore acceptée. Un avis qui
+     * ne part pas est signalé sans rien défaire.
      */
     public function pourUnCabinetRevoque(LienCabinet $lien): void
     {
         $retiree = $this->cloreLaDemande(null, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, static fn (): null => null);
 
         if ($retiree !== null && $retiree->origine === OrigineDuLien::DesignationDuClient) {
-            DB::afterCommit(function () use ($retiree): void {
+            DB::afterCommit(static fn () => self::sansInterrompre(function () use ($retiree): void {
                 $cabinet = Societe::query()->findOrFail($retiree->cabinet_id);
                 self::prevenirLeClient($retiree, 'Demande de lien retirée', "Votre demande de lien avec le cabinet {$cabinet->getFilamentName()} a pris fin : ".lcfirst(MotifDeFinDuLien::SocieteRevoquee->getLabel()).'.');
-            });
+            }));
+        }
+    }
+
+    /**
+     * Prévient sans interrompre ce qui suit : un avis qui ne part pas (une
+     * messagerie en panne) est signalé, et rien n'est défait.
+     */
+    private static function sansInterrompre(Closure $avis): void
+    {
+        try {
+            $avis();
+        } catch (Throwable $erreur) {
+            report($erreur);
         }
     }
 

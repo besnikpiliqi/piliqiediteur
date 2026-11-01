@@ -53,12 +53,18 @@ use LogicException;
  * (voir Calendrier::afficherDansUnJournal()), sa catégorie, son action, le
  * magasin qu'elle concerne ou la société, son auteur tel que le journal
  * a figé son nom au moment de l'opération (jamais le nom actuel de son
- * compte), l'éditeur pour une de ses procédures, ou le système ; et, sur
- * sa fiche, les anciennes et les nouvelles valeurs que son action retient,
- * l'intervention de l'éditeur (justification, pièce, opérateurs), la trace
+ * compte), l'éditeur pour une de ses procédures, le système, ou « l'autre
+ * société » pour le geste d'une personne d'une autre société sur une
+ * demande de lien avec un cabinet (voir
+ * JournalAudit::inscrireLeGesteDeLAutreSociete()) ; et, sur sa fiche, les
+ * anciennes et les nouvelles valeurs que son action retient, la trace
  * technique de la requête qui l'a inscrite (adresse IP et navigateur,
  * hors de son empreinte, effacée après sa durée de conservation, voir
- * TraceAudit), sa place dans sa chaîne et la fin de sa conservation.
+ * TraceAudit), sa place dans sa chaîne et la fin de sa conservation. D'une
+ * procédure de l'éditeur, la fiche dit seulement qu'il l'a faite : sa
+ * justification, sa pièce, ses opérateurs, l'utilisateur et la machine
+ * d'où elle a été lancée restent chez l'éditeur, comme dans les avis qu'il
+ * envoie, et ne se montrent jamais à une société.
  *
  * Les filtres ne proposent que la société affichée et ses magasins :
  * toute requête passe par SocieteScope et le tenant du panneau, et une
@@ -101,6 +107,7 @@ trait AfficheLeJournalDAudit
         'membre' => 'Une personne',
         'editeur' => 'L\'éditeur',
         'systeme' => 'Le système',
+        'autre_societe' => 'L\'autre société',
     ];
 
     /**
@@ -205,14 +212,9 @@ trait AfficheLeJournalDAudit
             Section::make('Intervention de l\'éditeur')
                 ->visible(fn (EntreeAudit $record): bool => $record->origine === 'editeur')
                 ->schema([
-                    TextEntry::make('justification')->label('Justification')->columnSpanFull(),
-                    TextEntry::make('operateur.piece')->label('Pièce'),
-                    TextEntry::make('operateurs')->label('Opérateurs')
-                        ->state(fn (EntreeAudit $record): string => implode(', ', (array) ($record->operateur['operateurs'] ?? []))),
-                    TextEntry::make('operateur.utilisateur_systeme')->label('Utilisateur du système'),
-                    TextEntry::make('operateur.hote')->label('Machine'),
-                    TextEntry::make('operateur.version_module')->label('Version du module fiscal'),
-                ])->columns(3),
+                    TextEntry::make('procedure')->hiddenLabel()
+                        ->state('Une procédure exceptionnelle de l\'éditeur, qui en garde la justification et les pièces : pour toute question, contactez-le.'),
+                ]),
 
             Section::make('Trace technique')
                 ->description(fn (): string => 'Hors de l\'empreinte de l\'entrée, effacée '.config('conservation.traces_en_mois').' mois après elle.')
@@ -226,9 +228,7 @@ trait AfficheLeJournalDAudit
             Section::make('Chaîne et conservation')->schema([
                 TextEntry::make('sequence')->label('Place dans sa chaîne'),
                 TextEntry::make('expire_le')->label('Conservée jusqu\'au')
-                    ->state(fn (EntreeAudit $record): string => $record->expire_le === null
-                        ? 'Cinq ans après la fin de la relation avec la société'
-                        : Calendrier::deParis()->afficher($record->expire_le, 'd/m/Y')),
+                    ->state(fn (EntreeAudit $record): string => self::finDeConservation($record)),
                 TextEntry::make('empreinte')->label('Empreinte')
                     ->fontFamily(FontFamily::Mono)->copyable()->columnSpanFull(),
             ])->columns(2),
@@ -245,15 +245,31 @@ trait AfficheLeJournalDAudit
 
     /**
      * L'auteur d'une entrée : le nom de la personne figé au moment de
-     * l'opération, l'éditeur ou le système.
+     * l'opération, l'éditeur, le système, ou l'autre société, sans rien
+     * d'elle.
      */
     private static function auteur(EntreeAudit $entree): string
     {
-        return match ($entree->origine) {
-            'editeur' => 'L\'éditeur',
-            'systeme' => 'Le système',
-            default => (string) $entree->auteur_libelle,
-        };
+        return $entree->origine === 'membre' ? (string) $entree->auteur_libelle : (self::ORIGINES[$entree->origine] ?? '');
+    }
+
+    /**
+     * La fin de la conservation d'une entrée : sa date d'expiration ; pour
+     * une entrée de la vérification de la société, la fin que la fin de la
+     * relation a fixée à la société, ou, tant qu'elle ne l'est pas, la durée
+     * réglée après cette fin (voir config/conservation.php).
+     */
+    private static function finDeConservation(EntreeAudit $entree): string
+    {
+        $fin = $entree->expire_le ?? self::societeAffichee()->verification_conservee_jusqu_au;
+
+        if ($fin !== null) {
+            return Calendrier::deParis()->afficher($fin, 'd/m/Y');
+        }
+
+        $annees = (int) config('conservation.verification_apres_la_fin_de_la_relation_en_annees');
+
+        return "{$annees} an".($annees > 1 ? 's' : '').' après la fin de la relation avec la société';
     }
 
     /**

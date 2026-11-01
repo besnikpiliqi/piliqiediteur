@@ -2,8 +2,8 @@
 
 namespace App\Domain\Tenancy\Services;
 
-use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Domain\Tenancy\Models\Societe;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
@@ -14,13 +14,14 @@ use Illuminate\Support\Str;
  * 10 lettres majuscules ou chiffres, sans espace ni tiret, puisque le
  * tiret sépare les segments du numéro. Il n'appartient qu'à un seul
  * magasin de la société (voir l'index unique (societe_id, code) de
- * magasins), n'est jamais repris d'un magasin d'une société révoquée du
- * même SIREN, dont les numéros ont pu être émis sous ce SIREN (voir
- * estPris()), et ne change plus dès le premier document du magasin (voir
- * Magasin::aNumeroteUnDocument()). Deux sociétés ont chacune leurs codes :
- * LYON1 peut exister dans l'une et dans l'autre. DEMO est réservé au
- * magasin de démonstration de chaque société (FAC-DEMO-2026-000001) :
- * aucun magasin réel ne le reçoit.
+ * magasins), n'est jamais repris d'un magasin d'une autre société qui a
+ * numéroté des documents sous le même SIREN : une société révoquée qui
+ * avait ce SIREN, ou une société dont l'éditeur a corrigé le SIREN, qui
+ * portait celui-ci (voir estPris()), et ne change plus dès le premier
+ * document du magasin (voir Magasin::aNumeroteUnDocument()). Deux sociétés
+ * ont chacune leurs codes : LYON1 peut exister dans l'une et dans l'autre.
+ * DEMO est réservé au magasin de démonstration de chaque société
+ * (FAC-DEMO-2026-000001) : aucun magasin réel ne le reçoit.
  */
 class CodeMagasin
 {
@@ -90,22 +91,36 @@ class CodeMagasin
 
     /**
      * Ce code est-il déjà celui d'un magasin de la société, autre que
-     * $saufPour, ou d'un magasin d'une société révoquée du même SIREN ?
-     * Seule lecture hors de la société (liste fermée des lectures hors du
-     * périmètre courant), limitée à l'existence de ce code : la réponse ne
-     * dit rien du magasin qui le porte.
+     * $saufPour, ou d'un magasin d'une autre société qui a numéroté des
+     * documents sous son SIREN (voir aServiSousCeSiren()) ?
      */
     public static function estPris(Societe $societe, string $code, ?Magasin $saufPour = null): bool
     {
         return Magasin::query()
             ->where('code', $code)
-            ->where(fn (Builder $proprietaires): Builder => $proprietaires
-                ->where('societe_id', $societe->getKey())
-                ->orWhereIn('societe_id', Societe::query()
-                    ->select('id')
-                    ->where('siren', $societe->siren)
-                    ->where('statut', StatutSociete::Revoquee->value)))
+            ->where('societe_id', $societe->getKey())
             ->when($saufPour, fn (Builder $requete): Builder => $requete->whereKeyNot($saufPour->getKey()))
+            ->exists()
+            || self::aServiSousCeSiren($societe, $code, (string) $societe->siren);
+    }
+
+    /**
+     * Ce code est-il celui d'un magasin d'une autre société que celle-ci,
+     * qui a porté un SIRET de ce SIREN au registre des SIRET réservés ?
+     * Seul un tel magasin a pu numéroter des documents sous ce SIREN : celui
+     * d'une société révoquée qui avait ce SIREN, ou d'une société dont
+     * l'éditeur a corrigé le SIREN, qui gardent leurs SIRET au registre
+     * (voir SiretsDesMagasins), même libérés ; un magasin jamais réservé
+     * n'a jamais vendu. Lecture hors de la société de la liste fermée de
+     * CLAUDE.md, limitée à l'existence de ce code : la réponse ne dit rien
+     * du magasin qui le porte, ni de sa société.
+     */
+    public static function aServiSousCeSiren(Societe $societe, string $code, string $siren): bool
+    {
+        return Magasin::query()
+            ->where('code', $code)
+            ->where('societe_id', '<>', $societe->getKey())
+            ->whereIn('id', SiretMagasin::query()->select('magasin_id')->where('siret', 'like', $siren.'%'))
             ->exists();
     }
 }

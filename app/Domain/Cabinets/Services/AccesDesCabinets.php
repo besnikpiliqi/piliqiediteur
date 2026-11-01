@@ -91,6 +91,26 @@ class AccesDesCabinets
     }
 
     /**
+     * Les liens de ce cabinet dans ces états, pour une procédure de
+     * l'éditeur qui leur met fin (sa révocation, le constat de sa radiation
+     * de l'Ordre) : lecture hors du cabinet courant, filtrée par ce cabinet,
+     * limitée à l'identifiant, au client, au cabinet, à l'état et à
+     * l'origine de chacun, rien d'autre du client ; la fin de chacun le
+     * relit sous verrou (voir JournalDesDroits::modifierLeLien()).
+     *
+     * @param  list<EtatDuLien>  $etats
+     * @return Collection<int, LienCabinet>
+     */
+    public function liensAMettreFin(Societe $cabinet, array $etats): Collection
+    {
+        return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
+            ->where('cabinet_id', $cabinet->getKey())
+            ->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, $etats))
+            ->orderBy('id')
+            ->get(['id', 'societe_id', 'cabinet_id', 'etat', 'origine']);
+    }
+
+    /**
      * Ce compte ouvre-t-il ce magasin : un magasin réel d'un client que lui
      * ouvrent ses liens (voir liensOuverts()) ?
      */

@@ -19,23 +19,32 @@ use LogicException;
 /**
  * La procédure de l'éditeur qui libère un SIRET saisi par erreur pour un
  * magasin d'une société validée (editeur:siret:liberer), procédure grave
- * lancée par deux opérateurs distincts, une fois remis le courrier de
- * libération envoyé au représentant légal, à l'adresse officielle du
- * siège (editeur:courrier:envoyer --motif=liberation_siret) : son code,
- * saisi sur sa page, en est la preuve. Un SIRET usurpé, lui, se libère
- * avec tous ceux de la société révoquée (voir RevoquerSocieteAction), et
- * celui d'un magasin dont le territoire a été mal lu, par sa propre
- * procédure (voir LibererLeSiretAction).
+ * lancée par deux opérateurs distincts, une fois remis au titulaire de ce
+ * SIRET le courrier de libération qui le désigne, envoyé au représentant
+ * légal de l'entreprise que forment ses neuf premiers chiffres, à
+ * l'adresse officielle de son siège (editeur:courrier:envoyer
+ * --motif=liberation_siret --siret=<SIRET>) : la société elle-même, ou le
+ * vrai titulaire de l'ancien SIREN d'une société dont l'éditeur a corrigé
+ * le SIREN, qui en garde les anciens SIRET réservés. Le code de ce
+ * courrier, saisi sur sa page sous le SIREN du titulaire, en est la preuve
+ * pour ce seul SIRET, dans les trente jours qui suivent sa saisie, et la
+ * libération le consomme (voir CodeConfirmation::preuveDeLaRemise()) : une
+ * autre libération exige un nouveau courrier. Un SIRET usurpé, lui, se
+ * libère avec tous ceux de la société révoquée (voir
+ * RevoquerSocieteAction), et celui d'un magasin dont le territoire a été
+ * mal lu, par sa propre procédure (voir LibererLeSiretAction).
  *
  * Le magasin fautif garde ses documents et le SIRET qu'ils ont signé :
  * la société lui a d'abord donné son bon SIRET (voir ChangerSiretAction,
- * qui garde l'ancien réservé), ou l'a fermé pour cessation, son SIRET
- * libéré ne se reprenant alors plus (siret_libere_le) ; jamais le SIRET
- * d'un magasin ouvert ou fermé temporairement. Sous le verrou du registre
- * du magasin, puis de sa ligne et de sa réservation : la réservation se
- * libère avec son motif, et la libération s'inscrit au journal d'audit,
- * dans la chaîne du magasin, avec l'intervention de l'éditeur. Le SIRET
- * se réserve ensuite pour le magasin qui doit le porter.
+ * qui garde l'ancien réservé), ou il est fermé pour de bon, pour
+ * cessation ou par sa cession, son SIRET libéré ne se reprenant alors
+ * plus (siret_libere_le) ; jamais le SIRET d'un magasin ouvert ou fermé
+ * temporairement, qui peut encore vendre. Sous le verrou du registre du
+ * magasin, puis de sa ligne, de sa réservation et de la preuve : la
+ * réservation se libère avec son motif, la preuve est consommée, et la
+ * libération s'inscrit au journal d'audit, dans la chaîne du magasin, avec
+ * l'intervention de l'éditeur. Le SIRET se réserve ensuite pour le magasin
+ * qui doit le porter.
  */
 class LibererUnSiretSaisiParErreurAction
 {
@@ -43,7 +52,7 @@ class LibererUnSiretSaisiParErreurAction
 
     public const MESSAGE_DEUX_OPERATEURS = 'La libération d\'un SIRET exige deux opérateurs distincts de l\'éditeur.';
 
-    public const MESSAGE_SANS_CODE = 'Aucun code de libération de SIRET n\'a été saisi pour cette société : envoyez d\'abord le courrier (editeur:courrier:envoyer --motif=liberation_siret) au représentant légal, à l\'adresse officielle du siège ; son code, saisi sur sa page, prouve la remise.';
+    public const MESSAGE_SANS_CODE = 'Aucun code du courrier de libération de ce SIRET n\'a été saisi depuis moins de trente jours, ou il a déjà servi : envoyez d\'abord le courrier (editeur:courrier:envoyer --motif=liberation_siret --siret=<SIRET>) au titulaire de ce SIRET, à l\'adresse officielle de son siège ; son code, saisi sur sa page, prouve la remise.';
 
     public const MESSAGE_PAS_RESERVE = 'Ce SIRET n\'est réservé par aucun magasin de cette société.';
 
@@ -66,12 +75,13 @@ class LibererUnSiretSaisiParErreurAction
         }
 
         return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $siret, $editeur): Magasin {
-            if (! CodeConfirmation::query()->where('motif', MotifCode::LiberationSiret->value)->whereNotNull('utilise_le')->exists()) {
+            $reservation = SiretMagasin::query()->where('societe_id', $societe->getKey())->where('siret', $siret)->whereNull('libere_le')->first()
+                ?? throw new LogicException(self::MESSAGE_PAS_RESERVE);
+
+            if (CodeConfirmation::preuveDeLaRemise(MotifCode::LiberationSiret, siret: $siret) === null) {
                 throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
             }
 
-            $reservation = SiretMagasin::query()->where('societe_id', $societe->getKey())->where('siret', $siret)->whereNull('libere_le')->first()
-                ?? throw new LogicException(self::MESSAGE_PAS_RESERVE);
             $magasin = Magasin::query()->where('societe_id', $societe->getKey())->findOrFail($reservation->magasin_id);
 
             return app(TenantContext::class)->runAs($magasin, fn (): Magasin => $this->operateur->pendantLeSysteme(fn (): Magasin => $this->registre->sousVerrou($magasin, function () use ($magasin, $siret, $editeur): Magasin {
@@ -79,14 +89,18 @@ class LibererUnSiretSaisiParErreurAction
                 $relue = SiretMagasin::query()->where('magasin_id', $verrouille->getKey())->where('siret', $siret)->whereNull('libere_le')->lockForUpdate()->first()
                     ?? throw new LogicException(self::MESSAGE_PAS_RESERVE);
 
-                if ($relue->retire_le === null && ! $verrouille->estFermePourCessation()) {
+                if ($relue->retire_le === null && ! $verrouille->estFermePourDeBon()) {
                     throw new LogicException(self::MESSAGE_ENCORE_UTILISE);
                 }
+
+                $preuve = CodeConfirmation::preuveDeLaRemise(MotifCode::LiberationSiret, siret: $siret)
+                    ?? throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
 
                 if ($relue->retire_le === null) {
                     $verrouille->forceFill(['siret_libere_le' => now()])->save();
                 }
 
+                $preuve->aProuveLaProcedure();
                 $relue->forceFill(['libere_le' => now(), 'motif_liberation' => self::MOTIF])->save();
                 $this->journalAudit->inscrire(ActionAuditee::SiretLibere, null, $verrouille, null, [
                     'siret' => $siret,

@@ -10,61 +10,42 @@ use InvalidArgumentException;
 /**
  * Les exercices d'une société, en jours de Paris : une même date de fin
  * pour tous ses magasins (voir CLAUDE.md, « Caisse et clôtures »). Un
- * exercice finit le dernier jour de son mois de fin d'exercice, sauf
- * quand le dernier changement légal de la date de clôture (voir
- * ChangementFinExercice) en a fixé un autre, par procès-verbal, à
- * l'exercice qui était en cours au jour de la procédure : celui-ci garde
- * le début qu'il avait et finit à la date du procès-verbal ; les
- * suivants finissent au nouveau mois, le premier pouvant être
- * transitoire. Les clôtures d'exercice de l'étape 3 suivront ces dates.
+ * exercice finit le dernier jour de son mois de fin d'exercice ; chaque
+ * changement légal de la date de clôture (voir ChangementFinExercice)
+ * fixe, par procès-verbal, la fin de l'exercice qui était en cours au jour
+ * de la procédure, qui garde son début, et le mois des exercices qui le
+ * suivent, le premier pouvant être transitoire.
  *
- * Lecture de la société donnée et de ses changements, dans son contexte
- * (SocieteScope).
+ * L'exercice de n'importe quel jour, passé ou à venir, se reconstitue par
+ * l'historique des changements, dans leur ordre : celui d'un jour antérieur
+ * à l'exercice du premier changement suit le mois que ce changement a
+ * quitté ; celui d'un jour qui suit l'exercice fixé par un changement, le
+ * mois de ce changement, celui que quitte le changement suivant ou, après
+ * le dernier, le mois de la société. Les clôtures d'exercice et leurs
+ * rattrapages de l'étape 3 suivront ces dates.
+ *
+ * Lecture de la société donnée et de ses changements, filtrés par elle.
  */
 class ExercicesDeLaSociete
 {
     /**
-     * Le premier jour de l'exercice en cours ce jour-là : le début gardé
-     * par le dernier changement légal tant que la fin qu'il a fixée n'est
-     * pas passée ; sinon le lendemain de la dernière fin passée, au mois de
-     * fin d'exercice de la société ou à la date de ce changement.
+     * Le premier jour de l'exercice qui comprend ce jour-là.
      *
      * @throws InvalidArgumentException
      */
     public function debutDeLExerciceEnCours(Societe $societe, string $jour): string
     {
-        $dernier = $this->dernierChangement($societe);
-
-        if ($dernier !== null && $dernier->fin_exercice_en_cours_apres >= $jour) {
-            return $dernier->debut_exercice_en_cours;
-        }
-
-        $finPassee = self::finDeMoisAvant((int) $societe->mois_fin_exercice, $jour);
-
-        if ($dernier !== null && $dernier->fin_exercice_en_cours_apres > $finPassee) {
-            $finPassee = $dernier->fin_exercice_en_cours_apres;
-        }
-
-        return Calendrier::ajouterJours($finPassee, 1);
+        return $this->exerciceDuJour($societe, $jour)[0];
     }
 
     /**
-     * Le dernier jour de l'exercice en cours ce jour-là : celui que le
-     * dernier changement légal a fixé, tant qu'il n'est pas passé ; sinon le
-     * dernier jour du mois de fin d'exercice de la société qui tombe ce
-     * jour-là ou après.
+     * Le dernier jour de l'exercice qui comprend ce jour-là.
      *
      * @throws InvalidArgumentException
      */
     public function finDeLExerciceEnCours(Societe $societe, string $jour): string
     {
-        $dernier = $this->dernierChangement($societe);
-
-        if ($dernier !== null && $dernier->fin_exercice_en_cours_apres >= $jour) {
-            return $dernier->fin_exercice_en_cours_apres;
-        }
-
-        return self::finDeMoisAuPlusTot((int) $societe->mois_fin_exercice, $jour);
+        return $this->exerciceDuJour($societe, $jour)[1];
     }
 
     /**
@@ -119,9 +100,52 @@ class ExercicesDeLaSociete
         return (int) Calendrier::afficherJour($lendemain, 'j') > (int) Calendrier::afficherJour($debut, 'j') ? $mois + 1 : $mois;
     }
 
-    private function dernierChangement(Societe $societe): ?ChangementFinExercice
+    /**
+     * Le premier et le dernier jour de l'exercice qui comprend ce jour :
+     * celui que fixe le dernier changement dont l'exercice commence ce
+     * jour-là ou avant, tant que sa fin n'est pas passée ; après elle, celui
+     * du mois qui suit ce changement, qui ne commence pas avant le
+     * lendemain de cette fin ; avant le premier changement, celui du mois
+     * que ce changement a quitté, ou du mois de la société sans changement.
+     *
+     * @return array{0: string, 1: string}
+     *
+     * @throws InvalidArgumentException
+     */
+    private function exerciceDuJour(Societe $societe, string $jour): array
     {
-        return ChangementFinExercice::query()->where('societe_id', $societe->getKey())->orderByDesc('id')->first();
+        $changements = ChangementFinExercice::query()->where('societe_id', $societe->getKey())->orderBy('id')->get()->values();
+        $rang = $changements->filter(fn (ChangementFinExercice $changement): bool => $changement->debut_exercice_en_cours <= $jour)->keys()->last();
+
+        if ($rang === null) {
+            return self::exerciceAuMois($changements->first()?->ancien_mois ?? (int) $societe->mois_fin_exercice, $jour, null);
+        }
+
+        $changement = $changements[$rang];
+
+        if ($jour <= $changement->fin_exercice_en_cours_apres) {
+            return [$changement->debut_exercice_en_cours, $changement->fin_exercice_en_cours_apres];
+        }
+
+        $moisSuivant = $changements->get($rang + 1)?->ancien_mois ?? (int) $societe->mois_fin_exercice;
+
+        return self::exerciceAuMois($moisSuivant, $jour, Calendrier::ajouterJours($changement->fin_exercice_en_cours_apres, 1));
+    }
+
+    /**
+     * L'exercice qui finit à ce mois et comprend ce jour : du lendemain de
+     * la fin de ce mois qui le précède, ou de $auPlusTot s'il vient après,
+     * jusqu'à la fin de ce mois qui tombe ce jour-là ou après.
+     *
+     * @return array{0: string, 1: string}
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function exerciceAuMois(int $mois, string $jour, ?string $auPlusTot): array
+    {
+        $debut = Calendrier::ajouterJours(self::finDeMoisAvant($mois, $jour), 1);
+
+        return [$auPlusTot !== null && $auPlusTot > $debut ? $auPlusTot : $debut, self::finDeMoisAuPlusTot($mois, $jour)];
     }
 
     private static function dernierJour(int $annee, int $mois): string

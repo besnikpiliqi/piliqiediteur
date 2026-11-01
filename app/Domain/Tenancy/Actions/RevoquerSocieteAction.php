@@ -10,7 +10,6 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\EtatInvitation;
 use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\Cabinets\Models\InvitationCabinet;
-use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
@@ -29,7 +28,6 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
-use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\AnnulationDesCodes;
 use App\Domain\Tenancy\Services\FinDeLaRelation;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -55,8 +53,10 @@ use Throwable;
  * révocation, envoyé au nom du représentant légal à l'adresse officielle
  * du siège (editeur:courrier:envoyer --motif=revocation) : son code saisi
  * sur sa page (voir SaisirCodeDeConfirmationAction::saisirUnCodeDeProcedure())
- * en est la preuve. Une inscription qui attend encore son code ne se
- * révoque pas : elle se clôt (voir CloreLInscriptionAction::parLEditeur()).
+ * depuis moins de trente jours en est la preuve, que la révocation
+ * consomme (voir CodeConfirmation::preuveDeLaRemise()). Une inscription
+ * qui attend encore son code ne se révoque pas : elle se clôt (voir
+ * CloreLInscriptionAction::parLEditeur()).
  *
  * La société révoquée ne s'efface jamais : ses documents se conservent,
  * consultables et téléchargeables par ses comptes, jamais modifiés ; plus
@@ -97,14 +97,23 @@ use Throwable;
  * (« for no key update », comme la clôture d'une inscription), et
  * pose la révocation comme pour toute société, sans magasin ; le cabinet
  * n'est dès lors plus vérifié, et toute acceptation l'attend puis est
- * refusée. Ensuite, ses liens actifs, relus (lecture hors de la société
- * courante, filtrée par ce cabinet et limitée aux champs nécessaires,
- * déclarée dans CLAUDE.md), prennent fin chacun dans sa propre
- * transaction, chaque client prévenu (voir
- * MettreFinAuLienAction::parLEditeur()) ; ses demandes en cours, dans les
- * deux sens, sont retirées (voir
- * RetirerLaDemandeDeLienAction::pourUnCabinetRevoque()) et ses invitations
- * ouvertes retirées (voir RetirerLInvitationAction::parLaRevocationDuCabinet()).
+ * refusée. Ensuite, ses liens actifs et ses demandes en cours, relus
+ * (lecture hors de la société courante, filtrée par ce cabinet et limitée
+ * aux champs nécessaires, déclarée dans CLAUDE.md, voir
+ * AccesDesCabinets::liensAMettreFin()), prennent fin chacun dans sa propre
+ * transaction : chaque lien par la procédure de l'éditeur qui vise le
+ * cabinet, chaque client prévenu (voir MettreFinAuLienAction::parLEditeur()),
+ * chaque demande, dans les deux sens, retirée (voir
+ * RetirerLaDemandeDeLienAction::pourUnCabinetRevoque()) ; puis ses
+ * invitations ouvertes sont retirées (voir
+ * RetirerLInvitationAction::parLaRevocationDuCabinet()). Un lien, une
+ * demande ou une invitation qui ne prend pas fin (un interblocage, des
+ * droits qui changent au même instant) est signalé sans arrêter les
+ * suivants, et la procédure le compte (en_echec) ; relancée sur ce cabinet
+ * déjà révoqué, sans nouvelle preuve, elle termine ce qui reste au lieu
+ * de refuser, et ne dit « déjà révoquée » qu'une fois tout terminé. Chaque
+ * avis part sans interrompre la suite : une messagerie en panne n'arrête
+ * ni la fin des liens ni les suites de la révocation.
  */
 class RevoquerSocieteAction
 {
@@ -116,7 +125,7 @@ class RevoquerSocieteAction
 
     public const MESSAGE_PAS_VALIDEE = 'Cette société n\'est pas validée : une inscription qui attend son code, ou close, ne se révoque pas (une inscription qui attend son code se clôt par editeur:societe:clore, ce qui libère son SIREN).';
 
-    public const MESSAGE_SANS_CODE = 'Aucun code de révocation n\'a été saisi pour cette société : envoyez d\'abord le courrier (editeur:courrier:envoyer --motif=revocation) au représentant légal, à l\'adresse officielle du siège ; son code, saisi sur sa page, prouve la remise.';
+    public const MESSAGE_SANS_CODE = 'Aucun code de révocation n\'a été saisi pour cette société depuis moins de trente jours : envoyez d\'abord le courrier (editeur:courrier:envoyer --motif=revocation) au représentant légal, à l\'adresse officielle du siège ; son code, saisi sur sa page, prouve la remise.';
 
     private const ESSAIS_SI_LES_MAGASINS_CHANGENT = 3;
 
@@ -140,7 +149,7 @@ class RevoquerSocieteAction
     ) {}
 
     /**
-     * @return list<string> les SIRET libérés
+     * @return array{sirets: list<string>, reprise: bool, en_echec: int} les SIRET libérés ; vrai pour la reprise d'un cabinet déjà révoqué ; le nombre de ses liens, demandes ou invitations qui n'ont pas pu prendre fin (relancer la procédure les termine)
      *
      * @throws VerificationRefuseeException quand la société ou la preuve ne permettent pas la révocation
      * @throws LogicException
@@ -151,34 +160,31 @@ class RevoquerSocieteAction
             throw new VerificationRefuseeException(self::MESSAGE_DEUX_OPERATEURS);
         }
 
-        $revocation = $societe->estUnCabinet()
-            ? $this->revoquerUnCabinet($societe, $editeur)
-            : $this->revoquerUneSociete($societe, $editeur);
+        if ($societe->estUnCabinet()) {
+            return $this->revoquerUnCabinet($societe, $editeur);
+        }
 
+        $revocation = $this->revoquerUneSociete($societe, $editeur);
         $this->apresLaRevocation($societe->fresh(), $revocation);
 
-        return $revocation['sirets'];
+        return ['sirets' => $revocation['sirets'], 'reprise' => false, 'en_echec' => 0];
     }
 
     /**
-     * La société, relue sous son verrou, se révoque-t-elle ? Validée, ni
-     * déjà révoquée, et le code du courrier de révocation saisi.
+     * La société, relue sous son verrou et pas encore révoquée, se
+     * révoque-t-elle ? Validée, et le code du courrier de révocation saisi
+     * depuis moins de trente jours, qu'elle consomme alors : rend cette
+     * preuve.
      *
      * @throws VerificationRefuseeException
      */
-    private static function verifierQuElleSeRevoque(Societe $verrouillee): void
+    private static function preuveQuElleSeRevoque(Societe $verrouillee): CodeConfirmation
     {
-        if ($verrouillee->statut === StatutSociete::Revoquee) {
-            throw new VerificationRefuseeException(self::MESSAGE_DEJA_REVOQUEE);
-        }
-
         if (! $verrouillee->estValidee()) {
             throw new VerificationRefuseeException(self::MESSAGE_PAS_VALIDEE);
         }
 
-        if (! CodeConfirmation::query()->where('motif', MotifCode::Revocation->value)->whereNotNull('utilise_le')->exists()) {
-            throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
-        }
+        return CodeConfirmation::preuveDeLaRemise(MotifCode::Revocation) ?? throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
     }
 
     /**
@@ -186,7 +192,7 @@ class RevoquerSocieteAction
      * verrous de ses registres, de sa ligne, de ses magasins réels et de
      * ses comptes.
      *
-     * @return array{sirets: list<string>, magasins: array<int, CarbonImmutable>, transmissions: list<int>, liens: list<LienCabinet>}
+     * @return array{sirets: list<string>, magasins: array<int, CarbonImmutable>, transmissions: list<int>}
      *
      * @throws VerificationRefuseeException
      * @throws LogicException
@@ -204,13 +210,17 @@ class RevoquerSocieteAction
                         return self::MAGASINS_CHANGES;
                     }
 
-                    self::verifierQuElleSeRevoque($verrouillee);
+                    if ($verrouillee->statut === StatutSociete::Revoquee) {
+                        throw new VerificationRefuseeException(self::MESSAGE_DEJA_REVOQUEE);
+                    }
+
+                    $preuve = self::preuveQuElleSeRevoque($verrouillee);
                     $magasinsVerrouilles = $verrouillee->magasinsReels()->orderBy('id')->lock('for no key update')->get();
                     User::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->lock('for no key update')->get();
                     $fermes = $this->arreterLesMagasins($magasinsVerrouilles);
                     $this->finDesLiens->pourUnClientRevoque($verrouillee, $editeur);
 
-                    return [...$this->revoquerSousVerrou($verrouillee, $editeur, $magasinsVerrouilles), 'magasins' => $fermes, 'liens' => []];
+                    return [...$this->revoquerSousVerrou($verrouillee, $editeur, $magasinsVerrouilles, $preuve), 'magasins' => $fermes];
                 }));
 
                 if ($resultat !== self::MAGASINS_CHANGES) {
@@ -225,44 +235,57 @@ class RevoquerSocieteAction
     /**
      * Un cabinet d'expertise comptable, en deux temps : la révocation sous
      * les verrous de sa ligne, de sa vérification et de ses comptes ; puis
-     * la fin de ses liens actifs, relus, le retrait de ses demandes et de
-     * ses invitations ouvertes, chacun dans sa propre transaction.
+     * la fin de ses liens actifs, le retrait de ses demandes en cours et de
+     * ses invitations ouvertes, chacun dans sa propre transaction, un échec
+     * signalé n'arrêtant pas les suivants. Un cabinet déjà révoqué ne passe
+     * que par le second temps, s'il en reste quelque chose, sans nouvelle
+     * preuve et sans prévenir de nouveau son propriétaire ; sinon il est
+     * refusé comme déjà révoqué.
      *
-     * @return array{sirets: list<string>, magasins: array<int, CarbonImmutable>, transmissions: list<int>, liens: list<LienCabinet>}
+     * @return array{sirets: list<string>, reprise: bool, en_echec: int}
      *
      * @throws VerificationRefuseeException
      */
     private function revoquerUnCabinet(Societe $cabinet, InterventionDeLEditeur $editeur): array
     {
-        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn (): array => $this->operateur->pendantLeSysteme(fn (): array => DB::transaction(function () use ($cabinet, $editeur): array {
+        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn (): ?array => $this->operateur->pendantLeSysteme(fn (): ?array => DB::transaction(function () use ($cabinet, $editeur): ?array {
             $verrouille = Societe::query()->whereKey($cabinet->getKey())->lock('for no key update')->firstOrFail();
-            self::verifierQuElleSeRevoque($verrouille);
+
+            if ($verrouille->statut === StatutSociete::Revoquee) {
+                return null;
+            }
+
+            $preuve = self::preuveQuElleSeRevoque($verrouille);
             $verrouille->cabinet()->lockForUpdate()->first();
             User::query()->where('societe_id', $verrouille->getKey())->orderBy('id')->lock('for no key update')->get();
 
-            return [...$this->revoquerSousVerrou($verrouille, $editeur, $verrouille->magasinsReels()->get()), 'magasins' => []];
+            return [...$this->revoquerSousVerrou($verrouille, $editeur, $verrouille->magasinsReels()->get(), $preuve), 'magasins' => []];
         })));
 
-        $liens = $this->acces->liensActifsDuCabinet($cabinet);
+        $liens = $this->acces->liensAMettreFin($cabinet, [EtatDuLien::Actif, ...EtatDuLien::demandes()]);
+        $invitations = app(TenantContext::class)->runAsSociete($cabinet, fn () => InvitationCabinet::query()->where('etat', EtatInvitation::Ouverte->value)->orderBy('id')->get());
 
-        foreach ($liens as $lien) {
-            $this->finDesLiens->parLEditeur($lien, MotifDeFinDuLien::SocieteRevoquee, $editeur);
+        if ($revocation === null && $liens->isEmpty() && $invitations->isEmpty()) {
+            throw new VerificationRefuseeException(self::MESSAGE_DEJA_REVOQUEE);
         }
 
-        LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
-            ->where('cabinet_id', $cabinet->getKey())
-            ->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::demandes()))
-            ->orderBy('id')
-            ->get(['id', 'societe_id', 'cabinet_id', 'etat', 'origine'])
-            ->each(fn (LienCabinet $demande) => $this->retraitDesDemandes->pourUnCabinetRevoque($demande));
+        $enEchec = 0;
 
-        app(TenantContext::class)->runAsSociete($cabinet, fn () => InvitationCabinet::query()
-            ->where('etat', EtatInvitation::Ouverte->value)
-            ->orderBy('id')
-            ->get()
-            ->each(fn (InvitationCabinet $invitation) => $this->retraitDesInvitations->parLaRevocationDuCabinet($invitation, $editeur)));
+        foreach ($liens as $lien) {
+            $enEchec += $this->sansInterrompre(fn () => $lien->etat === EtatDuLien::Actif
+                ? $this->finDesLiens->parLEditeur($lien, MotifDeFinDuLien::SocieteRevoquee, $editeur, $cabinet)
+                : $this->retraitDesDemandes->pourUnCabinetRevoque($lien)) ? 0 : 1;
+        }
 
-        return [...$revocation, 'liens' => $liens->all()];
+        foreach ($invitations as $invitation) {
+            $enEchec += $this->sansInterrompre(fn () => $this->retraitDesInvitations->parLaRevocationDuCabinet($invitation, $editeur)) ? 0 : 1;
+        }
+
+        if ($revocation !== null) {
+            $this->apresLaRevocation($cabinet->fresh(), $revocation);
+        }
+
+        return ['sirets' => [], 'reprise' => $revocation === null, 'en_echec' => $enEchec];
     }
 
     /**
@@ -300,14 +323,15 @@ class RevoquerSocieteAction
     /**
      * La révocation elle-même, sous les verrous de l'appelant : le statut
      * au journal des événements de chaque magasin réel (JET 270), le statut
-     * de la société, ses SIRET libérés, ses pièces effacées, ses codes et
-     * ses transmissions en attente annulés, la fin de la relation, puis la
-     * révocation au journal d'audit, la tête du journal en dernier.
+     * de la société, la preuve de la remise du courrier consommée, ses
+     * SIRET libérés, ses pièces effacées, ses codes et ses transmissions en
+     * attente annulés, la fin de la relation, puis la révocation au journal
+     * d'audit, la tête du journal en dernier.
      *
      * @param  iterable<Magasin>  $magasins  ses magasins réels, verrouillés
      * @return array{sirets: list<string>, transmissions: list<int>}
      */
-    private function revoquerSousVerrou(Societe $verrouillee, InterventionDeLEditeur $editeur, iterable $magasins): array
+    private function revoquerSousVerrou(Societe $verrouillee, InterventionDeLEditeur $editeur, iterable $magasins, CodeConfirmation $preuve): array
     {
         foreach ($magasins as $magasin) {
             app(TenantContext::class)->runAs($magasin, fn () => $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
@@ -319,6 +343,7 @@ class RevoquerSocieteAction
 
         $ancienStatut = $verrouillee->statut;
         $verrouillee->forceFill(['statut' => StatutSociete::Revoquee])->save();
+        $preuve->aProuveLaProcedure();
         $sirets = $this->siretsDesMagasins->libererCeuxDeLaSociete($verrouillee, self::MOTIF_LIBERATION);
         $this->pieces->effacerToutes($verrouillee, PiecesDeVerification::MOTIF_DECISION, $editeur);
 
@@ -375,7 +400,7 @@ class RevoquerSocieteAction
      * administrateur à qui une transmission annulée proposait la propriété
      * l'apprend.
      *
-     * @param  array{sirets: list<string>, magasins: array<int, CarbonImmutable>, transmissions: list<int>, liens: list<LienCabinet>}  $revocation
+     * @param  array{sirets: list<string>, magasins: array<int, CarbonImmutable>, transmissions: list<int>}  $revocation
      */
     private function apresLaRevocation(Societe $societe, array $revocation): void
     {
@@ -402,12 +427,21 @@ class RevoquerSocieteAction
         });
     }
 
-    private function sansInterrompre(Closure $suite): void
+    /**
+     * Fait cette suite sans interrompre les suivantes : un échec est
+     * signalé (report()), et rien de ce qui précède n'est défait. Rend
+     * vrai si la suite s'est faite.
+     */
+    private function sansInterrompre(Closure $suite): bool
     {
         try {
             $suite();
         } catch (Throwable $erreur) {
             report($erreur);
+
+            return false;
         }
+
+        return true;
     }
 }

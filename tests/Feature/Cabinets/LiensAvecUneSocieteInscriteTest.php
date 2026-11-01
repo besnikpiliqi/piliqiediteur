@@ -509,6 +509,26 @@ class LiensAvecUneSocieteInscriteTest extends TestCase
         $this->assertFalse($societe->proprietaire()->sole()->can('gererSonCabinet', $societe->fresh()));
     }
 
+    /**
+     * Un cabinet a demandé le rattachement d'une inscription qui attend
+     * encore son code, dont il ne connaît que le SIREN : quand l'éditeur la
+     * clôt, la demande prend fin, et l'avis qu'il reçoit le dit sans le
+     * motif ; il n'apprend pas que l'inscription est close, ni que ce SIREN
+     * est libéré.
+     */
+    public function test_la_cloture_d_une_inscription_previent_le_cabinet_de_la_fin_de_sa_demande_sans_le_motif(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $societe = $this->inscrireUneSociete();
+        $this->demanderLeRattachement($cabinet, $societe, 'compta@inscription.test');
+
+        app(CloreLInscriptionAction::class)->parLEditeur($societe->fresh(), new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-2026-0070', ['alice']), MotifCloture::Refus);
+
+        $this->assertSame([EtatDuLien::Retire], LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->id)->pluck('etat')->all());
+        $avis = $this->proprietaireDuCabinet($cabinet)->notifications()->get()->firstWhere('data.title', 'Demande de lien retirée');
+        $this->assertSame("La demande de lien avec le SIREN {$societe->siren} a pris fin.", $avis->data['body']);
+    }
+
     public function test_la_base_refuse_une_demande_de_lien_rattachee_au_cabinet(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

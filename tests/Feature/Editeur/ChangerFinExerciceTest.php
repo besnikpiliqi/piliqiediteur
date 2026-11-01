@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ExercicesDeLaSociete;
+use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Database\QueryException;
@@ -32,8 +33,10 @@ use Tests\TestCase;
  * chaque magasin, dans changements_fin_exercice et au journal d'audit.
  * Jamais un exercice clos ne se modifie, ni une clôture ne se repousse, et
  * la durée de l'exercice transitoire est validée par l'expert-comptable de
- * la société. Le temps est figé au 2 novembre 2026, à Paris : l'exercice en
- * cours, de décembre, va du 1er janvier au 31 décembre 2026.
+ * la société ; un changement n'est jamais rétroactif, et les exercices de
+ * tout jour passé se reconstituent par l'historique des changements. Le
+ * temps est figé au 2 novembre 2026, à Paris : l'exercice en cours, de
+ * décembre, va du 1er janvier au 31 décembre 2026.
  */
 class ChangerFinExerciceTest extends TestCase
 {
@@ -68,6 +71,8 @@ class ChangerFinExerciceTest extends TestCase
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $this->vendre($lyon);
         $societe = $lyon->societe;
+        $signaturesDeLyon = $this->signaturesDuRegistre($lyon);
+        $signaturesDeVilleurbanne = $this->signaturesDuRegistre($villeurbanne);
 
         $this->artisan('editeur:societe:changer-fin-exercice', [
             'societe' => (string) $societe->id,
@@ -99,6 +104,10 @@ class ChangerFinExerciceTest extends TestCase
         [$entree] = $this->entreesDAudit($societe, ActionAuditee::FinExerciceChangee);
         $this->assertSame(['editeur', ['fin_exercice_en_cours' => '2026-12-31', 'mois_fin_exercice' => 12]], [$entree->origine, $entree->anciennes_valeurs]);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('changements_fin_exercice')->update(['nouveau_mois' => 3])), QueryException::class, 'changements_fin_exercice : table en ajout seul, modification refusée');
+        foreach ([[$lyon, $signaturesDeLyon], [$villeurbanne, $signaturesDeVilleurbanne]] as [$magasin, $signatures]) {
+            $this->assertSame($signatures, array_intersect_key($this->signaturesDuRegistre($magasin), $signatures));
+        }
+        $this->assertUnSeulProprietaireActif($societe);
     }
 
     /**
@@ -169,18 +178,92 @@ class ChangerFinExerciceTest extends TestCase
     }
 
     /**
-     * Une décision postérieure à la fin de l'exercice en cours, ou à
-     * aujourd'hui, est refusée.
+     * Jamais rétroactif : un procès-verbal du 15 octobre 2026 qui fixe la
+     * fin de l'exercice en cours au 30 septembre 2026, deux semaines avant
+     * lui, est refusé, comme une décision postérieure à aujourd'hui ; rien
+     * ne s'écrit. La même fin, décidée le 15 septembre, avant elle, passe.
      */
-    public function test_une_decision_posterieure_a_la_fin_d_origine_est_refusee(): void
+    public function test_une_decision_posterieure_a_la_fin_qu_elle_fixe_est_refusee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $this->vendre($magasin);
 
-        $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2026-12-31', '2027-01-15'), LogicException::class, sprintf(ChangerFinExerciceAction::MESSAGE_DECISION_APRES_LA_FIN, '31/12/2026'));
+        $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2026-09-30', '2026-10-15'), LogicException::class, sprintf(ChangerFinExerciceAction::MESSAGE_DECISION_APRES_LA_FIN, '30/09/2026'));
         $this->assertThrows(fn () => $this->changer($magasin->societe, 6, '2026-12-31', '2026-11-20'), LogicException::class, ChangerFinExerciceAction::MESSAGE_DECISION_FUTURE);
-
         $this->assertNothingChanged($magasin->societe);
+
+        $this->changer($magasin->societe, 6, '2026-09-30', '2026-09-15');
+
+        $this->assertSame(['2026-10-01', '2027-06-30'], $this->exerciceEnCours($magasin->societe, '2026-11-02'));
+    }
+
+    /**
+     * Les exercices d'un jour passé se reconstituent par l'historique des
+     * changements : avant le premier, au mois qu'il a quitté (décembre) ;
+     * entre deux changements, au mois que le second a quitté (juin) ;
+     * après le dernier, au mois de la société (septembre), le premier
+     * exercice après lui, du 1er juillet au 30 septembre 2027, étant
+     * transitoire.
+     */
+    public function test_les_exercices_d_un_jour_passe_se_reconstituent_par_l_historique_des_changements(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $this->vendre($magasin);
+        $this->changer($magasin->societe, 6, '2026-12-31', '2026-10-15');
+        $this->travelTo(self::aParis('2027-02-01 10:00:00'));
+        $this->changer($magasin->societe, 9, '2027-06-30', '2027-01-20');
+
+        $this->assertSame(['2025-01-01', '2025-12-31'], $this->exerciceEnCours($magasin->societe, '2025-06-15'));
+        $this->assertSame(['2026-01-01', '2026-12-31'], $this->exerciceEnCours($magasin->societe, '2026-05-01'));
+        $this->assertSame(['2027-01-01', '2027-06-30'], $this->exerciceEnCours($magasin->societe, '2027-03-01'));
+        $this->assertSame(['2027-07-01', '2027-09-30'], $this->exerciceEnCours($magasin->societe, '2027-08-01'));
+        $this->assertSame(['2027-10-01', '2028-09-30'], $this->exerciceEnCours($magasin->societe, '2027-10-01'));
+    }
+
+    /**
+     * Par la commande, sans la confirmation retapée, en mode non
+     * interactif, avec un opérateur inconnu ou un secret faux, ou quand la
+     * procédure refuse le changement (une décision rétroactive), rien ne
+     * change ; la société garde son seul propriétaire actif, et le registre
+     * de son magasin, ses signatures.
+     */
+    public function test_la_commande_refuse_sans_confirmation_ni_operateur_authentifie(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $this->vendre($magasin);
+        $societe = $magasin->societe;
+        $signatures = $this->signaturesDuRegistre($magasin);
+        $parametres = [
+            '--mois' => '6',
+            '--fin-exercice-en-cours' => '2026-12-31',
+            '--decision-du' => '2026-10-15',
+            '--duree-validee-par' => self::EXPERT_COMPTABLE,
+            '--justification' => self::JUSTIFICATION,
+            '--piece' => self::PIECE,
+            '--confirmer' => $societe->siren,
+        ];
+
+        $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, [...$parametres, '--confirmer' => '000000018'], [])
+            ->expectsOutputToContain('Confirmation absente ou différente : rien n\'est fait.')
+            ->assertFailed();
+        $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, [...$parametres, '--confirmer' => null, '--no-interaction' => true], [])
+            ->expectsOutputToContain('Confirmation absente ou différente : rien n\'est fait.')
+            ->assertFailed();
+        $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, [...$parametres, '--no-interaction' => true], [])
+            ->expectsOutputToContain('ne se lance que dans un terminal interactif')
+            ->assertFailed();
+        foreach ([['mallory', 'secret-d-alice'], ['alice', 'faux-secret']] as $operateur) {
+            $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, $parametres, [$operateur])
+                ->expectsOutputToContain(RegistreDesOperateurs::MESSAGE_REFUS)
+                ->assertFailed();
+        }
+        $this->lancerUneProcedureDeLEditeur('editeur:societe:changer-fin-exercice', $societe, [...$parametres, '--fin-exercice-en-cours' => '2026-09-30'], [['alice', 'secret-d-alice']])
+            ->expectsOutputToContain(sprintf(ChangerFinExerciceAction::MESSAGE_DECISION_APRES_LA_FIN, '30/09/2026'))
+            ->assertFailed();
+
+        $this->assertNothingChanged($societe);
+        $this->assertSame($signatures, $this->signaturesDuRegistre($magasin));
+        $this->assertUnSeulProprietaireActif($societe);
     }
 
     /**

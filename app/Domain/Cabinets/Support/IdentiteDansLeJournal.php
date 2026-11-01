@@ -8,8 +8,8 @@ use App\Domain\Tenancy\Models\Societe;
  * Ce que le journal d'audit retient d'une société dans les entrées d'un
  * lien entre un cabinet et un client : son identifiant, son SIREN et sa
  * dénomination ; au journal d'un cabinet, d'une société qui n'a pas
- * accepté sa demande, seulement son identifiant et le SIREN que le cabinet
- * a saisi.
+ * accepté sa demande, seulement le SIREN que le cabinet a saisi, ni son
+ * identifiant ni rien d'autre d'elle.
  */
 final class IdentiteDansLeJournal
 {
@@ -22,10 +22,10 @@ final class IdentiteDansLeJournal
     }
 
     /**
-     * @return array{id: int, siren: string}
+     * @return array{siren: string}
      */
     public static function sirenSeul(Societe $societe): array
     {
-        return ['id' => (int) $societe->getKey(), 'siren' => (string) $societe->siren];
+        return ['siren' => (string) $societe->siren];
     }
 }

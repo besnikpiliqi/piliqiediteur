@@ -236,7 +236,7 @@ class InviterUneEntrepriseAction
                 'expire_le' => Calendrier::deParis()->decaler(now(), CarbonInterval::days(LienCabinet::DUREE_D_UNE_DEMANDE_EN_JOURS)),
                 'jeton_hache' => LienCabinet::empreinte($jeton),
             ]))->save();
-            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteur, null, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
+            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrireLeGesteDeLAutreSociete(ActionAuditee::LienDemande, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
             app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteur, null, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::sirenSeul($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
 
             return ['resultat' => ResultatDInvitation::DemandeEnvoyee, 'id' => (int) $lien->getKey()];

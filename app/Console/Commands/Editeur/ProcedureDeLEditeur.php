@@ -18,7 +18,8 @@ use LogicException;
  * - elle exige sa justification (--justification, au moins vingt
  *   caractères) et la référence de sa pièce (--piece) ;
  * - elle affiche son résumé, puis fait retaper la valeur attendue (le
- *   SIREN de la société) : --confirmer=<valeur> la donne d'avance ; sans
+ *   SIREN de la société, ou ce que la procédure désigne d'autre, voir
+ *   valeurAConfirmer()) : --confirmer=<valeur> la donne d'avance ; sans
  *   elle, la commande la demande, et la refuse en mode non interactif ;
  * - l'opérateur saisit son nom et son secret personnel dans un champ
  *   masqué, jamais en option de la ligne de commande, pour ne pas le
@@ -39,7 +40,7 @@ abstract class ProcedureDeLEditeur extends Command
 
     public const MESSAGE_MEME_OPERATEUR = 'Cette procédure exige deux opérateurs distincts : rien n\'est fait.';
 
-    public const OPTIONS_COMMUNES = '{--justification= : Pourquoi l\'éditeur intervient, en vingt caractères au moins} {--piece= : La référence de la pièce qui fonde l\'intervention} {--confirmer= : La valeur attendue, retapée d\'avance (le SIREN de la société)}';
+    public const OPTIONS_COMMUNES = '{--justification= : Pourquoi l\'éditeur intervient, en vingt caractères au moins} {--piece= : La référence de la pièce qui fonde l\'intervention} {--confirmer= : La valeur attendue, retapée d\'avance (le SIREN de la société, ou ce que la procédure désigne d\'autre)}';
 
     /**
      * Combien d'opérateurs distincts la procédure exige : un, sauf pour une
@@ -56,6 +57,18 @@ abstract class ProcedureDeLEditeur extends Command
      * @return list<string>
      */
     abstract protected function resume(Societe $societe): array;
+
+    /**
+     * Ce que l'opérateur retape pour confirmer, avec son nom : le SIREN de
+     * la société, sauf pour une procédure qui vise d'abord autre chose (le
+     * SIREN ou le SIRET à qui part un courrier, par exemple).
+     *
+     * @return array{0: string, 1: string} le nom de la valeur, la valeur
+     */
+    protected function valeurAConfirmer(Societe $societe): array
+    {
+        return ['le SIREN', (string) $societe->siren];
+    }
 
     /**
      * Fait la procédure, une fois tout confirmé ; le message de réussite
@@ -88,8 +101,8 @@ abstract class ProcedureDeLEditeur extends Command
             $this->line($ligne);
         }
 
-        $attendu = (string) $societe->siren;
-        $saisie = $this->option('confirmer') ?? ($this->input->isInteractive() ? $this->ask("Retapez le SIREN {$attendu} pour confirmer") : null);
+        [$nom, $attendu] = $this->valeurAConfirmer($societe);
+        $saisie = $this->option('confirmer') ?? ($this->input->isInteractive() ? $this->ask("Retapez {$nom} {$attendu} pour confirmer") : null);
 
         if (! is_string($saisie) || ! hash_equals($attendu, trim($saisie))) {
             $this->error('Confirmation absente ou différente : rien n\'est fait.');

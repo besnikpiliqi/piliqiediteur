@@ -2,6 +2,7 @@
 
 namespace App\Domain\CaisseSecurisee\Support;
 
+use App\Domain\Tenancy\Enums\StatutSociete;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
@@ -37,7 +38,10 @@ use RuntimeException;
  *   plus et ne change plus, sauf, si la migration le dit, tant qu'une
  *   condition sur la ligne tient encore (le territoire d'un magasin, voir
  *   Territoire, que la procédure de l'éditeur corrige tant que le magasin
- *   n'a numéroté aucun document) ; le reste de la ligne se modifie.
+ *   n'a numéroté aucun document) ; si la migration le dit aussi, elle ne
+ *   se pose que sur une ligne qui remplit une condition (la fin de la
+ *   conservation des données de vérification d'une société, posée
+ *   seulement à la fin de la relation) ; le reste de la ligne se modifie.
  *
  * Seuls PostgreSQL (production) et SQLite (développement et tests) sont
  * pris en charge : sur tout autre pilote, la migration échoue au lieu de
@@ -164,28 +168,34 @@ final class DeclencheursDeProtection
      * UPDATE OF <colonne>.
      *
      * @param  string|null  $remplacableTantQue  une condition SQL sur l'ancienne ligne (OLD), valable sous les deux moteurs, tant que tient laquelle une valeur renseignée peut encore être remplacée par une autre (jamais effacée) ; null pour ne jamais la remplacer
+     * @param  string|null  $poseeSeulementSi  une condition SQL sur la nouvelle ligne (NEW), valable sous les deux moteurs, sans laquelle une valeur ne se pose pas sur la colonne nulle ; null pour la laisser se poser sur toute ligne
      */
-    public static function colonneFigee(string $table, string $colonne, ?string $remplacableTantQue = null): void
+    public static function colonneFigee(string $table, string $colonne, ?string $remplacableTantQue = null, ?string $poseeSeulementSi = null): void
     {
         self::verifierLeNom($table);
         self::verifierLeNom($colonne);
 
         $message = "{$table}.{$colonne} : valeur figée, changement refusé";
+        $messageDeLaPose = "{$table}.{$colonne} : valeur refusée sur cette ligne";
         $remplacementRefuse = $remplacableTantQue === null ? '1 = 1' : "NOT ({$remplacableTantQue})";
+        $poseRefusee = $poseeSeulementSi === null ? '1 = 0' : "OLD.{$colonne} IS NULL AND NEW.{$colonne} IS NOT NULL AND NOT ({$poseeSeulementSi})";
         $connexion = DB::connection();
 
         $instructions = match ($pilote = $connexion->getDriverName()) {
             'pgsql' => [
                 "CREATE OR REPLACE FUNCTION refus_{$table}_{$colonne}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN "
                 ."IF OLD.{$colonne} IS NOT NULL AND (NEW.{$colonne} IS NULL OR (NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne} AND {$remplacementRefuse})) "
-                ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; RETURN NEW; END \$\$",
-                "CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} FOR EACH ROW EXECUTE FUNCTION refus_{$table}_{$colonne}('{$message}')",
+                ."THEN RAISE EXCEPTION '%', TG_ARGV[0]; END IF; "
+                ."IF {$poseRefusee} THEN RAISE EXCEPTION '%', TG_ARGV[1]; END IF; RETURN NEW; END \$\$",
+                "CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} FOR EACH ROW EXECUTE FUNCTION refus_{$table}_{$colonne}('{$message}', '{$messageDeLaPose}')",
             ],
-            'sqlite' => [
+            'sqlite' => array_filter([
                 "CREATE TRIGGER {$table}_{$colonne}_figee BEFORE UPDATE OF {$colonne} ON {$table} "
                 ."WHEN OLD.{$colonne} IS NOT NULL AND (NEW.{$colonne} IS NULL OR (NEW.{$colonne} <> OLD.{$colonne} AND {$remplacementRefuse})) "
                 ."BEGIN SELECT RAISE(ABORT, '{$message}'); END",
-            ],
+                $poseeSeulementSi === null ? null : "CREATE TRIGGER {$table}_{$colonne}_posee BEFORE UPDATE OF {$colonne} ON {$table} "
+                ."WHEN {$poseRefusee} BEGIN SELECT RAISE(ABORT, '{$messageDeLaPose}'); END",
+            ]),
             default => throw new RuntimeException("La colonne {$table}.{$colonne} doit refuser de changer une fois renseignée : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
         };
 
@@ -344,10 +354,25 @@ final class DeclencheursDeProtection
     }
 
     /**
+     * La condition SQL sur la nouvelle ligne d'une société (NEW) d'une
+     * relation avec l'éditeur qui a pris fin : société révoquée, ou
+     * résiliée (étape 12). Seule une telle société reçoit la fin de la
+     * conservation de ses données de vérification (voir FinDeLaRelation),
+     * et seules ses données s'effacent une fois cette fin passée.
+     */
+    public static function relationFinie(string $ligne = 'NEW'): string
+    {
+        self::verifierLeNom(strtolower($ligne));
+
+        return "{$ligne}.statut IN ('".StatutSociete::Revoquee->value."', '".StatutSociete::Resiliee->value."')";
+    }
+
+    /**
      * Une ligne de la vérification d'une société dont la conservation a
      * pris fin avec la relation : sans expire_le, de la catégorie donnée
-     * s'il y en a une, sa société ayant passé, à l'heure UTC du serveur de
-     * base, la fin de la conservation de ses données de vérification.
+     * s'il y en a une, sa société, révoquée ou résiliée, ayant passé, à
+     * l'heure UTC du serveur de base, la fin de la conservation de ses
+     * données de vérification.
      *
      * @param  'pgsql'|'sqlite'  $pilote
      * @param  string  $ligne  la ligne (OLD dans un déclencheur, le nom de sa table dans une requête)
@@ -361,7 +386,7 @@ final class DeclencheursDeProtection
         return implode(' AND ', array_filter([
             "{$ligne}.expire_le IS NULL",
             $categorie === null ? null : "{$ligne}.categorie = '{$categorie}'",
-            "EXISTS (SELECT 1 FROM societes WHERE societes.id = {$ligne}.societe_id AND ".self::ligneExpiree($pilote, 'societes.verification_conservee_jusqu_au').')',
+            'EXISTS (SELECT 1 FROM societes WHERE societes.id = '.$ligne.'.societe_id AND '.self::relationFinie('societes').' AND '.self::ligneExpiree($pilote, 'societes.verification_conservee_jusqu_au').')',
         ]));
     }
 

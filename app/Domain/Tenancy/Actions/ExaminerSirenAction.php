@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -18,7 +19,10 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\LazyCollection;
 
 /**
  * La procédure de l'éditeur qui examine le SIREN d'une société validée
@@ -27,15 +31,29 @@ use Illuminate\Support\Facades\DB;
  * correcte, une fois remis le courrier d'examen envoyé au représentant
  * légal de cette entité, à l'adresse officielle de son siège
  * (editeur:courrier:envoyer --motif=examen_siren --siren=<SIREN correct>) :
- * son code, saisi sur sa page, en est la preuve. Pas de correction
- * systématique : l'examen liste, magasin par magasin, les documents émis
- * concernés (type, numéro, date, client, montant TTC, montant réglé ou,
- * pour un avoir, crédit imputé, en centimes, SIREN signé), sans en
- * modifier aucun, et inscrit au journal d'audit sa décision motivée : une
- * erreur, que la correction répare ensuite (voir CorrigerSirenAction) ;
- * une usurpation, que la révocation traite (voir RevoquerSocieteAction) ;
- * rien à régulariser, qui le clôt. Lecture des documents des magasins réels de
- * cette seule société, chacun sous son magasin : la lecture « l'examen
+ * son code, saisi sur sa page depuis moins de trente jours, en est la
+ * preuve, pour autant d'examens que l'éditeur en reprend dans ce délai
+ * (voir CodeConfirmation::preuveDeLaRemise()). Pas de correction
+ * systématique : l'examen passe en revue, magasin par magasin, les
+ * documents émis concernés (type, numéro, date, client, montant TTC,
+ * montant réglé ou, pour un avoir, crédit imputé, en centimes, SIREN
+ * signé), sans en modifier aucun, chacun rendu à qui le demande
+ * ($pourChaqueDocument : la commande les affiche), et inscrit au journal
+ * d'audit sa décision motivée : une erreur, que la correction répare
+ * ensuite (voir CorrigerSirenAction) ; une usurpation, que la révocation
+ * traite (voir RevoquerSocieteAction) ; rien à régulariser, qui le clôt.
+ *
+ * Les documents se lisent par lots (LOT), jamais tous en mémoire, et
+ * l'entrée d'audit n'en garde qu'un résumé, quel que soit leur nombre : les
+ * documents émis jusqu'à l'instant de l'examen (documents_emis_jusqu_au, en
+ * UTC), et, pour chaque magasin et chaque type, leur nombre, leur premier
+ * et leur dernier numéro, avec l'empreinte SHA-256 de la liste entière
+ * (une ligne « code du magasin, type, numéro » séparés par des
+ * tabulations, dans l'ordre de l'examen : magasin par magasin, par
+ * identifiant, ses factures et tickets puis ses avoirs, chacun par date
+ * d'émission puis identifiant). Ces documents, qui ne changent jamais, se
+ * retrouvent ainsi à l'identique. Lecture des documents des magasins réels
+ * de cette seule société, chacun sous son magasin : la lecture « l'examen
  * exceptionnel d'un SIREN par l'éditeur » de CLAUDE.md.
  */
 class ExaminerSirenAction
@@ -46,7 +64,12 @@ class ExaminerSirenAction
 
     public const MESSAGE_SIREN = 'Le SIREN correct est un SIREN valide, différent de celui de la société.';
 
-    public const MESSAGE_SANS_CODE = 'Aucun code d\'examen n\'a été saisi pour ce SIREN : envoyez d\'abord le courrier (editeur:courrier:envoyer --motif=examen_siren --siren=<SIREN correct>) au représentant légal de l\'entité correcte, à l\'adresse officielle de son siège ; son code, saisi sur sa page, prouve la remise.';
+    public const MESSAGE_SANS_CODE = 'Aucun code d\'examen n\'a été saisi pour ce SIREN depuis moins de trente jours : envoyez d\'abord le courrier (editeur:courrier:envoyer --motif=examen_siren --siren=<SIREN correct>) au représentant légal de l\'entité correcte, à l\'adresse officielle de son siège ; son code, saisi sur sa page, prouve la remise.';
+
+    /**
+     * Le nombre de documents lus à la fois.
+     */
+    private const LOT = 500;
 
     public function __construct(
         private readonly JournalAudit $journalAudit,
@@ -54,37 +77,57 @@ class ExaminerSirenAction
     ) {}
 
     /**
-     * @return list<array{magasin: string, type: string, numero: string, date: string, client: string|null, montant_ttc: int, regle: int, siren_signe: string|null}> les documents émis concernés, leurs montants en centimes
+     * @param  (Closure(array{magasin: string, type: string, numero: string, date: string, client: string|null, montant_ttc: int, regle: int, siren_signe: string|null}): void)|null  $pourChaqueDocument  reçoit chaque document émis concerné, ses montants en centimes
+     * @return int le nombre de documents émis concernés
      *
      * @throws VerificationRefuseeException
      */
-    public function handle(Societe $societe, string $sirenCorrect, DecisionExamenSiren $decision, InterventionDeLEditeur $editeur): array
+    public function handle(Societe $societe, string $sirenCorrect, DecisionExamenSiren $decision, InterventionDeLEditeur $editeur, ?Closure $pourChaqueDocument = null): int
     {
         $sirenCorrect = (string) preg_replace('/\s+/', '', $sirenCorrect);
 
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $sirenCorrect, $decision, $editeur): array {
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $sirenCorrect, $decision, $editeur, $pourChaqueDocument): int {
             self::exigerUneSocieteValideeNonRevoquee($societe);
 
             if (! IdentifiantsInsee::sirenValide($sirenCorrect) || $sirenCorrect === (string) $societe->siren) {
                 throw new VerificationRefuseeException(self::MESSAGE_SIREN);
             }
 
-            if (! CodeConfirmation::query()->where('motif', MotifCode::ExamenSiren->value)->where('siren', $sirenCorrect)->whereNotNull('utilise_le')->exists()) {
+            if (CodeConfirmation::preuveDeLaRemise(MotifCode::ExamenSiren, siren: $sirenCorrect) === null) {
                 throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
             }
 
-            $documents = $societe->magasinsReels()->orderBy('id')->get()
-                ->flatMap(fn (Magasin $magasin): array => app(TenantContext::class)->runAs($magasin, fn (): array => $this->documentsDuMagasin($magasin)))
-                ->values()
-                ->all();
+            $jusquAu = CarbonImmutable::now()->startOfSecond();
+            $resume = [];
+            $empreinte = hash_init('sha256');
+            $nombre = 0;
+
+            foreach ($societe->magasinsReels()->orderBy('id')->get() as $magasin) {
+                app(TenantContext::class)->runAs($magasin, function () use ($magasin, $jusquAu, $pourChaqueDocument, &$resume, $empreinte, &$nombre): void {
+                    foreach ($this->documentsDuMagasin($magasin, $jusquAu) as $document) {
+                        $cle = "{$document['magasin']}\t{$document['type']}";
+                        $resume[$cle] ??= ['magasin' => $document['magasin'], 'type' => $document['type'], 'nombre' => 0, 'premier' => $document['numero'], 'dernier' => $document['numero']];
+                        $resume[$cle]['nombre']++;
+                        $resume[$cle]['dernier'] = $document['numero'];
+                        hash_update($empreinte, "{$cle}\t{$document['numero']}\n");
+                        $nombre++;
+
+                        if ($pourChaqueDocument !== null) {
+                            $pourChaqueDocument($document);
+                        }
+                    }
+                });
+            }
 
             DB::transaction(fn () => $this->journalAudit->inscrire(ActionAuditee::SirenExamine, null, null, null, [
                 'siren_correct' => $sirenCorrect,
                 'decision' => $decision->value,
-                'documents' => array_map(static fn (array $document): array => ['magasin' => $document['magasin'], 'type' => $document['type'], 'numero' => $document['numero']], $documents),
+                'documents_emis_jusqu_au' => Instant::enBase($jusquAu),
+                'documents' => array_values($resume),
+                'empreinte_des_documents' => hash_final($empreinte),
             ], $societe, $editeur));
 
-            return $documents;
+            return $nombre;
         });
     }
 
@@ -108,13 +151,14 @@ class ExaminerSirenAction
     }
 
     /**
-     * Les documents émis du magasin actif, factures et tickets puis avoirs,
-     * dans l'ordre de leur émission, avec leurs montants enregistrés, en
-     * centimes, et le SIREN que leur contenu signé porte.
+     * Les documents du magasin actif émis jusqu'à cet instant, factures et
+     * tickets puis avoirs, chacun dans l'ordre de leur émission, lus par
+     * lots, avec leurs montants enregistrés, en centimes, et le SIREN que
+     * leur contenu signé porte.
      *
-     * @return list<array{magasin: string, type: string, numero: string, date: string, client: string|null, montant_ttc: int, regle: int, siren_signe: string|null}>
+     * @return LazyCollection<int, array{magasin: string, type: string, numero: string, date: string, client: string|null, montant_ttc: int, regle: int, siren_signe: string|null}>
      */
-    private function documentsDuMagasin(Magasin $magasin): array
+    private function documentsDuMagasin(Magasin $magasin, CarbonImmutable $jusquAu): LazyCollection
     {
         $calendrier = $magasin->calendrier();
         $ligne = fn (Facture|Avoir $document, string $type, int $regleEnCentimes): array => [
@@ -128,13 +172,9 @@ class ExaminerSirenAction
             'siren_signe' => $document->emetteur()->siren,
         ];
 
-        return [
-            ...Facture::query()->whereNotNull('numero')->with(['allocationsPaiement', 'allocationsAvoir'])->orderBy('date_emission')->orderBy('id')->get()
-                ->map(fn (Facture $facture): array => $ligne($facture, $facture->type_client === TypeClient::Particulier ? 'ticket' : 'facture', $facture->regleEnCentimes()))
-                ->all(),
-            ...Avoir::query()->whereNotNull('numero')->orderBy('date_emission')->orderBy('id')->get()
-                ->map(fn (Avoir $avoir): array => $ligne($avoir, 'avoir', $this->calculateur->enCentiemes($avoir->total_ttc) - $avoir->creditEnCentimes()))
-                ->all(),
-        ];
+        return Facture::query()->whereNotNull('numero')->where('date_emission', '<=', $jusquAu)->with(['allocationsPaiement', 'allocationsAvoir'])->orderBy('date_emission')->orderBy('id')->lazy(self::LOT)
+            ->map(fn (Facture $facture): array => $ligne($facture, $facture->type_client === TypeClient::Particulier ? 'ticket' : 'facture', $facture->regleEnCentimes()))
+            ->concat(Avoir::query()->whereNotNull('numero')->where('date_emission', '<=', $jusquAu)->orderBy('date_emission')->orderBy('id')->lazy(self::LOT)
+                ->map(fn (Avoir $avoir): array => $ligne($avoir, 'avoir', $this->calculateur->enCentiemes($avoir->total_ttc) - $avoir->creditEnCentimes())));
     }
 }

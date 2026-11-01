@@ -3,11 +3,14 @@
 namespace Tests\Feature\Editeur;
 
 use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Actions\RetirerLaDemandeDeLienAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\EtatInvitation;
 use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -16,6 +19,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
@@ -37,6 +41,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\VerificateurJournalAudit;
@@ -46,10 +51,18 @@ use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\PendingCommand;
 use LogicException;
+use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\TransportInterface;
+use Symfony\Component\Mime\RawMessage;
 use Tests\TestCase;
 
 /**
@@ -59,8 +72,11 @@ use Tests\TestCase;
  * seule pour toujours, ses documents intacts et consultables ; son SIREN
  * et ses SIRET se libèrent pour le vrai titulaire, qui s'inscrit ensuite
  * sans reprendre aucun code de magasin de la société révoquée ; ses liens
- * avec un cabinet prennent fin ; ses données de vérification se gardent
- * cinq ans, puis s'effacent.
+ * avec un cabinet prennent fin, même quand la messagerie est en panne,
+ * et la révocation d'un cabinet interrompue se termine quand on la
+ * relance ; ses données de vérification se gardent cinq ans, puis
+ * s'effacent. Le temps est figé au 2 novembre 2026, à Paris, sauf où un
+ * test le fait voyager.
  */
 class RevoquerSocieteTest extends TestCase
 {
@@ -78,6 +94,7 @@ class RevoquerSocieteTest extends TestCase
             'alice' => password_hash('secret-d-alice', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]),
             'bruno' => password_hash('secret-de-bruno', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]),
         ]]);
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
     }
 
     /**
@@ -328,6 +345,214 @@ class RevoquerSocieteTest extends TestCase
     }
 
     /**
+     * La messagerie en panne (un serveur SMTP qui ne répond pas) pendant la
+     * révocation d'un cabinet lié à deux clients, qui a aussi une demande
+     * de rattachement et une invitation ouvertes : chaque avis qui ne part
+     * pas est signalé, sans arrêter la fin de chaque lien (le second
+     * compris, avec la perte des droits de ses comptes au journal des
+     * événements du client), le retrait de la demande et de l'invitation,
+     * ni l'avis au propriétaire du cabinet dans sa cloche.
+     */
+    public function test_une_messagerie_en_panne_n_arrete_pas_la_revocation_d_un_cabinet(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $premier = $this->ouvrirUneSociete(['nom' => 'Première cliente']);
+        $second = $this->ouvrirUneSociete(['nom' => 'Seconde cliente']);
+        $liens = [$this->lierLeCabinet($cabinet, $premier), $this->lierLeCabinet($cabinet, $second)];
+        $rattachee = $this->ouvrirUneSociete(['nom' => 'Cliente rattachée']);
+        $this->demanderLeRattachement($cabinet, $rattachee->societe, 'proprietaire@rattachee.test');
+        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'futur@client.test');
+        $this->prouverLaRemiseDuCourrierDeRevocation($cabinet);
+        $this->mettreLaMessagerieEnPanne();
+        Exceptions::fake();
+
+        $revocation = app(RevoquerSocieteAction::class)->handle($cabinet->fresh(), $this->editeur());
+
+        $this->assertSame(['sirets' => [], 'reprise' => false, 'en_echec' => 0], $revocation);
+        foreach ($liens as $lien) {
+            $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::SocieteRevoquee], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
+        }
+        $this->assertSame([EtatDuLien::Retire], LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $rattachee->societe_id)->pluck('etat')->all());
+        $this->assertSame([EtatInvitation::Retiree], InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $cabinet->id)->pluck('etat')->all());
+        $this->assertNull(collect($this->modificationsDesDroits($second))->where('membre.id', $this->proprietaireDuCabinet($cabinet)->id)->last()['apres']);
+        $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($second)->notifications()->get()->pluck('data.title')->all());
+        $this->assertContains('Votre société est révoquée', $this->proprietaireDuCabinet($cabinet)->notifications()->get()->pluck('data.title')->all());
+        Exceptions::assertReported(TransportException::class);
+    }
+
+    /**
+     * La messagerie en panne pendant la révocation d'un client lié à un
+     * cabinet : l'avis au cabinet, qui part après la transaction, ne
+     * l'interrompt pas ; la caisse personnelle restée ouverte du vendeur se
+     * ferme d'office et le propriétaire est prévenu.
+     */
+    public function test_une_messagerie_en_panne_n_arrete_pas_les_suites_de_la_revocation_d_un_client(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Cliente usurpatrice']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin);
+        $this->vendre($magasin);
+        $this->prouverLaRemiseDuCourrierDeRevocation($magasin->societe);
+        $this->mettreLaMessagerieEnPanne();
+        Exceptions::fake();
+
+        app(RevoquerSocieteAction::class)->handle($magasin->societe->fresh(), $this->editeur());
+
+        $this->assertSame(EtatDuLien::Termine, $lien->fresh()->etat);
+        $this->assertSame(1, app(TenantContext::class)->runAs($magasin->fresh(), fn (): int => ClotureCaissePersonnelle::query()->count()));
+        $this->assertContains('Votre société est révoquée', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+        Exceptions::assertReported(TransportException::class);
+    }
+
+    /**
+     * Le premier lien d'un cabinet ne prend pas fin pendant sa révocation
+     * (ses droits changent au même instant) : la commande le dit et
+     * échoue, le cabinet étant révoqué et son second lien terminé ;
+     * relancée, sans nouveau courrier, elle termine le premier lien ; une
+     * fois tout terminé, elle répond que la société est déjà révoquée.
+     */
+    public function test_la_revocation_d_un_cabinet_interrompue_se_termine_quand_on_la_relance(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        [$premier, $second] = [$this->lierLeCabinet($cabinet, $this->ouvrirUneSociete(['nom' => 'Première cliente'])), $this->lierLeCabinet($cabinet, $this->ouvrirUneSociete(['nom' => 'Seconde cliente']))];
+        $this->prouverLaRemiseDuCourrierDeRevocation($cabinet);
+        $this->app->instance(MettreFinAuLienAction::class, new class(app(JournalDesDroits::class), app(AccesDesCabinets::class), app(RetirerLaDemandeDeLienAction::class)) extends MettreFinAuLienAction
+        {
+            public int $echecs = 1;
+
+            public function parLEditeur(LienCabinet $lien, MotifDeFinDuLien $motif, InterventionDeLEditeur $editeur, Societe $visee): void
+            {
+                if ($this->echecs-- > 0) {
+                    throw new LogicException('Les droits de ce cabinet changent en ce moment : recommencez.');
+                }
+
+                parent::parLEditeur($lien, $motif, $editeur, $visee);
+            }
+        });
+
+        $this->revoquerParLaCommande($cabinet, 'alice', 'bruno')
+            ->expectsOutputToContain('Société révoquée, mais 1 lien(s), demande(s) ou invitation(s) de ce cabinet n\'ont pas pu prendre fin')
+            ->assertFailed();
+        $this->assertSame([StatutSociete::Revoquee, EtatDuLien::Actif, EtatDuLien::Termine], [$cabinet->fresh()->statut, $premier->fresh()->etat, $second->fresh()->etat]);
+
+        $this->revoquerParLaCommande($cabinet, 'alice', 'bruno')
+            ->expectsOutputToContain('Révocation terminée : les liens, demandes et invitations qui restaient à ce cabinet ont pris fin.')
+            ->assertSuccessful();
+        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::SocieteRevoquee], [$premier->fresh()->etat, $premier->fresh()->motif_fin]);
+
+        $this->revoquerParLaCommande($cabinet, 'alice', 'bruno')
+            ->expectsOutputToContain(RevoquerSocieteAction::MESSAGE_DEJA_REVOQUEE)
+            ->assertFailed();
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::SocieteRevoquee));
+        $this->assertSame(1, $this->proprietaireDuCabinet($cabinet)->notifications()->get()->where('data.title', 'Votre société est révoquée')->count());
+    }
+
+    /**
+     * Un cabinet qui a demandé le rattachement d'une société inscrite n'en
+     * connaît que le SIREN : quand l'éditeur révoque cette société, sa
+     * demande prend fin, et l'avis qu'il reçoit le dit sans en donner le
+     * motif ; il n'apprend pas que la société est révoquée.
+     */
+    public function test_le_cabinet_n_apprend_pas_la_revocation_d_une_societe_qu_il_ne_connait_que_par_son_siren(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
+        $this->demanderLeRattachement($cabinet, $magasin->societe, 'proprietaire@usurpatrice.test');
+
+        $this->revoquer($magasin->societe);
+
+        $avis = $this->proprietaireDuCabinet($cabinet)->notifications()->get()->firstWhere('data.title', 'Demande de lien retirée');
+        $this->assertSame("La demande de lien avec le SIREN {$magasin->societe->siren} a pris fin.", $avis->data['body']);
+    }
+
+    /**
+     * La justification et les opérateurs d'une révocation ne s'inscrivent
+     * qu'au journal de la société révoquée : au journal de l'autre partie
+     * d'un lien qui prend fin, le cabinet d'un client révoqué ou le client
+     * d'un cabinet révoqué, l'entrée dit seulement que l'éditeur l'a faite.
+     */
+    public function test_la_justification_d_une_revocation_ne_s_inscrit_qu_au_journal_de_la_societe_revoquee(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $client = $this->ouvrirUneSociete(['nom' => 'Cliente usurpatrice']);
+        $this->lierLeCabinet($cabinet, $client);
+        $autreCabinet = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux');
+        $autreClient = $this->ouvrirUneSociete(['nom' => 'Cliente du cabinet révoqué']);
+        $this->lierLeCabinet($autreCabinet, $autreClient);
+
+        $this->revoquer($client->societe);
+        $this->revoquer($autreCabinet);
+
+        foreach ([[$cabinet, $client->societe], [$autreClient->societe, $autreCabinet]] as [$autrePartie, $revoquee]) {
+            [$fin] = $this->entreesDAudit($autrePartie, ActionAuditee::LienTermine);
+            $this->assertSame(['editeur', null, null], [$fin->origine, $fin->justification, $fin->operateur]);
+            [$finChezLaRevoquee] = $this->entreesDAudit($revoquee, ActionAuditee::LienTermine);
+            $this->assertSame(['editeur', self::JUSTIFICATION, ['alice', 'bruno']], [$finChezLaRevoquee->origine, $finChezLaRevoquee->justification, $finChezLaRevoquee->operateur['operateurs']]);
+        }
+    }
+
+    /**
+     * Le code d'un courrier envoyé à la société après sa révocation (pour
+     * récupérer le compte de son propriétaire) reçoit la fin de
+     * conservation qu'elle porte, et s'efface avec ses autres données de
+     * vérification.
+     */
+    public function test_un_courrier_envoye_apres_la_fin_de_la_relation_s_efface_avec_les_donnees_de_verification(): void
+    {
+        $this->travelTo(self::aParis('2019-03-04 10:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $this->saisirLeCodeDuCourrier($societe);
+        $this->revoquer($societe);
+        $this->travelTo(self::aParis('2019-03-05 10:00:00'));
+
+        $courrier = app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::Recuperation, $this->editeur());
+
+        $this->assertMemeInstant(self::aParis('2024-03-04 10:00:00'), $courrier->conserver_jusqu_au);
+        $this->travelTo(self::aParis('2024-03-05 10:00:00'));
+        $this->artisan('app:purger-verifications')->assertSuccessful();
+        $this->assertFalse(CodeConfirmation::withoutGlobalScopes()->whereKey($courrier->id)->exists());
+    }
+
+    /**
+     * Le code du courrier de révocation ne prouve la remise que dans les
+     * trente jours qui suivent sa saisie, et la révocation le consomme.
+     */
+    public function test_le_code_de_revocation_ne_vaut_que_trente_jours_et_une_fois(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
+        $societe = $magasin->societe;
+        $this->prouverLaRemiseDuCourrierDeRevocation($societe);
+        $this->travelTo(self::aParis('2026-12-02 10:00:01'));
+
+        $this->assertThrows(fn () => app(RevoquerSocieteAction::class)->handle($societe->fresh(), $this->editeur()), VerificationRefuseeException::class, RevoquerSocieteAction::MESSAGE_SANS_CODE);
+        $this->assertSame(StatutSociete::Active, $societe->fresh()->statut);
+
+        $this->prouverLaRemiseDuCourrierDeRevocation($societe);
+        app(RevoquerSocieteAction::class)->handle($societe->fresh(), $this->editeur());
+
+        $preuves = app(TenantContext::class)->runAsSociete($societe, fn () => CodeConfirmation::query()->where('motif', MotifCode::Revocation->value)->orderBy('id')->get());
+        $this->assertSame([false, true], $preuves->map(fn (CodeConfirmation $code): bool => $code->procedure_faite_le !== null)->all());
+    }
+
+    /**
+     * La fin de la conservation des données de vérification ne se pose,
+     * même par une requête qui contourne le modèle, que sur une société
+     * révoquée ou résiliée : sur une société active, une date passée est
+     * refusée, et ses données de vérification ne s'effacent pas.
+     */
+    public function test_la_fin_de_la_conservation_ne_se_pose_pas_sur_une_societe_active(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $this->saisirLeCodeDuCourrier($societe);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): int => DB::table('societes')->where('id', $societe->id)->update(['verification_conservee_jusqu_au' => self::enUtc('2000-01-01 00:00:00')->format('Y-m-d H:i:s')])), QueryException::class, 'societes.verification_conservee_jusqu_au : valeur refusée sur cette ligne');
+
+        $this->assertNull($societe->fresh()->verification_conservee_jusqu_au);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): int => DB::table('journal_audit')->where('societe_id', $societe->id)->where('categorie', CategorieAudit::Verification->value)->delete()), QueryException::class, 'journal_audit : suppression refusée avant expiration');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn (): int => DB::table('verifications_societe')->where('societe_id', $societe->id)->delete()), QueryException::class, 'verifications_societe : suppression refusée avant expiration');
+    }
+
+    /**
      * L'éditeur envoie le courrier de révocation au représentant légal, à
      * l'adresse officielle du siège, et son code est saisi sur sa page :
      * la preuve de sa remise.
@@ -354,6 +579,35 @@ class RevoquerSocieteTest extends TestCase
     private function editeur(): InterventionDeLEditeur
     {
         return new InterventionDeLEditeur(self::JUSTIFICATION, self::PIECE, ['alice', 'bruno']);
+    }
+
+    /**
+     * La messagerie de l'application en panne : chaque e-mail, notifications
+     * comprises, échoue comme devant un serveur SMTP qui ne répond pas, et
+     * l'erreur remonte à qui l'envoie. Une messagerie simulée par le test
+     * (Mail::fake()) rend d'abord la place à la vraie, et les canaux des
+     * notifications se refont sur elle.
+     */
+    private function mettreLaMessagerieEnPanne(): void
+    {
+        if (Mail::isFake()) {
+            Mail::swap(Mail::getFacadeRoot()->manager);
+        }
+
+        app(ChannelManager::class)->forgetDrivers();
+        Mail::extend('en_panne', fn (): TransportInterface => new class implements TransportInterface
+        {
+            public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
+            {
+                throw new TransportException('Connexion au serveur SMTP impossible : délai dépassé.');
+            }
+
+            public function __toString(): string
+            {
+                return 'en_panne://';
+            }
+        });
+        config(['mail.mailers.en_panne' => ['transport' => 'en_panne'], 'mail.default' => 'en_panne']);
     }
 
     /**

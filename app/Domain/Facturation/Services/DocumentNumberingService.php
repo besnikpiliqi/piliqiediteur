@@ -20,9 +20,11 @@ use LogicException;
  * La plateforme contrôle l'unicité d'un numéro sur le SIREN du vendeur,
  * le numéro et l'année : deux magasins d'une même société, qui ont chacun
  * leurs séries, ne produisent donc jamais le même numéro, leurs codes
- * étant différents dans la société, et jamais repris d'une société
- * révoquée du même SIREN (voir CodeMagasin::estPris()). Les références de produits (PRD-000001), qui ne sont
- * pas des numéros de document, ne portent ni code de magasin ni année.
+ * étant différents dans la société, et jamais repris d'une autre société
+ * qui a numéroté sous le même SIREN, révoquée ou dont l'éditeur a corrigé
+ * le SIREN (voir CodeMagasin::estPris()). Les références de produits
+ * (PRD-000001), qui ne sont pas des numéros de document, ne portent ni
+ * code de magasin ni année.
  *
  * L'année d'un numéro est celle du calendrier du magasin, que seul son
  * territoire donne (voir Territoire) : un magasin sans territoire, dont

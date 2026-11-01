@@ -51,7 +51,12 @@ use LogicException;
  * L'entrée s'inscrit dans la société active (voir TenantContext) ; celle
  * d'un magasin, dans la chaîne d'un magasin de cette société. Une
  * procédure de l'éditeur s'y inscrit avec son origine, sa justification et
- * ses opérateurs (voir InterventionDeLEditeur).
+ * ses opérateurs (voir InterventionDeLEditeur), sauf au journal de l'autre
+ * partie d'un lien entre un cabinet et un client qu'elle ne vise pas, qui
+ * n'en garde que l'origine. Le geste d'une personne d'une autre société
+ * sur une demande de lien qui n'est jamais devenue un lien actif s'y
+ * inscrit sans rien d'elle, origine « autre société » (voir
+ * inscrireLeGesteDeLAutreSociete()).
  */
 class JournalAudit
 {
@@ -61,16 +66,57 @@ class JournalAudit
 
     private const ORIGINE_SYSTEME = 'systeme';
 
+    private const ORIGINE_AUTRE_SOCIETE = 'autre_societe';
+
     /**
      * @param  User|null  $auteur  la personne qui fait l'action ; null pour le système et l'éditeur
      * @param  array<string, mixed>|null  $anciennesValeurs
      * @param  array<string, mixed>|null  $nouvellesValeurs
      * @param  InterventionDeLEditeur|null  $editeur  la procédure de l'éditeur qui fait l'action
+     * @param  bool  $detailsDeLEditeur  faux au journal de la société qu'une procédure de l'éditeur ne vise pas : sans sa justification ni ses opérateurs
      *
      * @throws JournalAuditNonConfigureException
      * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
      */
-    public function inscrire(ActionAuditee $action, ?User $auteur, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null, ?InterventionDeLEditeur $editeur = null): EntreeAudit
+    public function inscrire(ActionAuditee $action, ?User $auteur, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null, ?InterventionDeLEditeur $editeur = null, bool $detailsDeLEditeur = true): EntreeAudit
+    {
+        return $this->ecrire($action, match (true) {
+            $editeur !== null => self::ORIGINE_EDITEUR,
+            $auteur === null => self::ORIGINE_SYSTEME,
+            default => self::ORIGINE_MEMBRE,
+        }, $auteur, $magasin, $anciennesValeurs, $nouvellesValeurs, $cible, $detailsDeLEditeur ? $editeur : null);
+    }
+
+    /**
+     * Inscrit, au journal de la société active, le geste qu'une personne
+     * d'une autre société a fait sur une demande de lien entre un cabinet
+     * et un client qui n'est pas devenue un lien actif (sa désignation, sa
+     * demande, son refus, son retrait) : sans rien de cette personne, ni
+     * son nom ni son compte, l'origine « autre société » disant seulement
+     * que le geste ne vient ni de la société, ni de l'éditeur, ni du
+     * système ; les valeurs disent de l'autre société ce que la société en
+     * sait.
+     *
+     * @param  array<string, mixed>|null  $anciennesValeurs
+     * @param  array<string, mixed>|null  $nouvellesValeurs
+     *
+     * @throws JournalAuditNonConfigureException
+     * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
+     */
+    public function inscrireLeGesteDeLAutreSociete(ActionAuditee $action, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null): EntreeAudit
+    {
+        return $this->ecrire($action, self::ORIGINE_AUTRE_SOCIETE, null, null, $anciennesValeurs, $nouvellesValeurs, $cible, null);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $anciennesValeurs
+     * @param  array<string, mixed>|null  $nouvellesValeurs
+     * @param  InterventionDeLEditeur|null  $details  la procédure de l'éditeur dont l'entrée garde la justification et les opérateurs
+     *
+     * @throws JournalAuditNonConfigureException
+     * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
+     */
+    private function ecrire(ActionAuditee $action, string $origine, ?User $auteur, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible, ?InterventionDeLEditeur $details): EntreeAudit
     {
         [$cle, $cleId] = self::cleCourante();
         $societe = app(TenantContext::class)->societe();
@@ -86,18 +132,14 @@ class JournalAudit
         $maintenant = CarbonImmutable::now()->startOfSecond();
         $duree = $categorie->dureeDeConservation();
 
-        return DB::transaction(function () use ($action, $magasin, $anciennesValeurs, $nouvellesValeurs, $cible, $cle, $cleId, $societe, $auteur, $categorie, $maintenant, $duree, $editeur): EntreeAudit {
+        return DB::transaction(function () use ($action, $origine, $magasin, $anciennesValeurs, $nouvellesValeurs, $cible, $cle, $cleId, $societe, $auteur, $categorie, $maintenant, $duree, $details): EntreeAudit {
             $tete = $this->teteVerrouillee($societe->getKey(), $magasin?->getKey(), $categorie);
 
             $entree = (new EntreeAudit)->forceFill([
                 'magasin_id' => $magasin?->getKey(),
                 'categorie' => $categorie,
                 'sequence' => $tete->sequence + 1,
-                'origine' => match (true) {
-                    $editeur !== null => self::ORIGINE_EDITEUR,
-                    $auteur === null => self::ORIGINE_SYSTEME,
-                    default => self::ORIGINE_MEMBRE,
-                },
+                'origine' => $origine,
                 'auteur_id' => $auteur?->getKey(),
                 'auteur_libelle' => $auteur?->nomPourLHistorique(),
                 'action' => $action,
@@ -105,8 +147,8 @@ class JournalAudit
                 'cible_id' => $cible?->getKey(),
                 'anciennes_valeurs' => $anciennesValeurs === null ? null : self::trier($anciennesValeurs),
                 'nouvelles_valeurs' => $nouvellesValeurs === null ? null : self::trier($nouvellesValeurs),
-                'justification' => $editeur?->justification,
-                'operateur' => $editeur?->operateur(),
+                'justification' => $details?->justification,
+                'operateur' => $details?->operateur(),
                 'cle_id' => $cleId,
                 'expire_le' => $duree === null ? null : Calendrier::deParis()->decaler($maintenant, $duree),
                 'created_at' => $maintenant,

@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 
 /**
@@ -31,9 +32,11 @@ use LogicException;
  * autre mouvement de stock que les sorties de la cession.
  *
  * Sous le verrou du registre du magasin, puis de sa ligne : chaque
- * produit que la cession avait fait sortir rentre en stock, la même
- * quantité au même coût moyen que sa sortie (voir
- * StockLedgerService::rentrerApresAnnulationDeCession()) ; le magasin
+ * produit que sa dernière cession avait fait sortir rentre en stock, la
+ * même quantité au même coût moyen que sa sortie (voir
+ * StockLedgerService::rentrerApresAnnulationDeCession()), une cession
+ * annulée puis refaite ne faisant rentrer que les sorties de la dernière,
+ * celles qui suivent la rentrée de l'annulation précédente ; le magasin
  * retrouve le motif de fermeture qu'il avait avant sa cession (temporaire
  * ou cessation, lu à l'entrée d'audit de la cession d'un magasin déjà
  * fermé), ou, cédé alors qu'il était ouvert, devient fermé temporairement
@@ -84,12 +87,7 @@ class AnnulerCessionAction
 
             $cession = $this->entreeDeLaCession($verrouille);
             $instant = $cession->created_at;
-            $sorties = MouvementStock::query()
-                ->where('type', TypeMouvementStock::SortieCession->value)
-                ->where('source_type', $verrouille->getMorphClass())
-                ->where('source_id', $verrouille->getKey())
-                ->orderBy('id')
-                ->get();
+            $sorties = $this->sortiesDeLaDerniereCession($verrouille);
 
             $this->exigerAucuneOperationApres($instant, $sorties->modelKeys());
             $motif = $cession->action === ActionAuditee::MagasinCede
@@ -138,6 +136,28 @@ class AnnulerCessionAction
             ->get()
             ->first(fn (EntreeAudit $entree): bool => ($entree->nouvelles_valeurs['motif'] ?? null) === MotifFermeture::Cession->value)
             ?? throw new LogicException(self::MESSAGE_PAS_CEDE);
+    }
+
+    /**
+     * Les sorties de stock de la dernière cession du magasin, dans l'ordre
+     * : ses sorties de cession qui suivent la dernière rentrée d'une
+     * annulation de cession, celles d'une cession déjà annulée ayant déjà
+     * rendu leur stock.
+     *
+     * @return Collection<int, MouvementStock>
+     */
+    private function sortiesDeLaDerniereCession(Magasin $magasin): Collection
+    {
+        $duMagasin = fn (TypeMouvementStock $type) => MouvementStock::query()
+            ->where('type', $type->value)
+            ->where('source_type', $magasin->getMorphClass())
+            ->where('source_id', $magasin->getKey());
+        $derniereRentree = $duMagasin(TypeMouvementStock::EntreeAnnulationCession)->max('id');
+
+        return $duMagasin(TypeMouvementStock::SortieCession)
+            ->when($derniereRentree !== null, fn ($sorties) => $sorties->where('id', '>', $derniereRentree))
+            ->orderBy('id')
+            ->get();
     }
 
     /**

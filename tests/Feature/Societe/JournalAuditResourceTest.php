@@ -4,12 +4,15 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\RefuserLaDemandeDeLienAction;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\Cabinet\Resources\JournalAuditDuCabinetResource;
 use App\Filament\Societe\Resources\JournalAuditResource;
 use App\Filament\Societe\Resources\JournalAuditResource\Pages\ListEntreesAudit;
@@ -202,6 +205,83 @@ class JournalAuditResourceTest extends TestCase
         $this->actingAs($this->proprietaireDuCabinet($cabinet))->get($liste)->assertOk()->assertSee('Collaborateur du cabinet créé');
         $this->flushSession();
         $this->actingAs($collaborateur)->get($liste)->assertForbidden();
+    }
+
+    /**
+     * D'une procédure de l'éditeur, la fiche ne dit que l'éditeur et la
+     * nature de la procédure : ni sa justification, qui peut nommer un
+     * tiers, ni sa pièce, ni ses opérateurs, ni l'utilisateur et la machine
+     * d'où elle a été lancée, que l'entrée garde pour l'éditeur.
+     */
+    public function test_la_fiche_d_une_procedure_de_l_editeur_ne_montre_ni_sa_justification_ni_ses_operateurs(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $societe = $magasin->societe;
+        $justification = 'Le vrai titulaire, Jean Valjean, a présenté son Kbis et sa pièce d\'identité';
+        $entree = app(TenantContext::class)->runAsSociete($societe, fn (): EntreeAudit => DB::transaction(fn (): EntreeAudit => app(JournalAudit::class)->inscrire(ActionAuditee::IdentiteModifiee, null, null, null, ['raison_sociale' => 'Martin et Fils'], null, new InterventionDeLEditeur($justification, 'DOSSIER-2026-0077', ['alice', 'bruno']))));
+
+        $this->actingAs($this->proprietaireDe($magasin))->get(JournalAuditResource::getUrl('view', ['record' => $entree], panel: 'societe', tenant: $societe))
+            ->assertOk()
+            ->assertSee('Une procédure exceptionnelle de l\'éditeur, qui en garde la justification et les pièces')
+            ->assertDontSee('Jean Valjean')
+            ->assertDontSee('DOSSIER-2026-0077')
+            ->assertDontSee('Opérateurs')
+            ->assertDontSee('Utilisateur du système')
+            ->assertDontSee('Machine');
+        $this->assertSame([$justification, ['alice', 'bruno']], [$entree->justification, $entree->operateur['operateurs']]);
+    }
+
+    /**
+     * La propriétaire d'une société inscrite refuse la demande de
+     * rattachement d'un cabinet, qui ne connaît d'elle que le SIREN qu'il a
+     * saisi : au journal du cabinet, la liste et la fiche disent que le
+     * refus vient de l'autre société, sans son nom ni l'identifiant de la
+     * société.
+     */
+    public function test_le_journal_du_cabinet_ne_nomme_pas_la_personne_d_une_societe_qui_refuse_sa_demande(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique discrète']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $proprietaire->forceFill(['name' => 'Jeanne Discrète-Dupont'])->save();
+        $this->demanderLeRattachement($cabinet, $magasin->societe, 'jeanne@discrete.test');
+        $demande = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->sole();
+        app(TenantContext::class)->clear();
+
+        app(RefuserLaDemandeDeLienAction::class)->handle($proprietaire->fresh(), $demande);
+
+        [$refus] = $this->entreesDAudit($cabinet, ActionAuditee::LienRefuse);
+        $this->assertSame(['autre_societe', null, null, ['siren' => (string) $magasin->societe->siren]], [$refus->origine, $refus->auteur_id, $refus->auteur_libelle, $refus->nouvelles_valeurs['client']]);
+        $this->actingAs($this->proprietaireDuCabinet($cabinet))->get(JournalAuditDuCabinetResource::getUrl('index', panel: 'cabinet', tenant: $cabinet))
+            ->assertOk()
+            ->assertSee('L&#039;autre société', false)
+            ->assertDontSee('Jeanne Discrète-Dupont');
+        $this->get(JournalAuditDuCabinetResource::getUrl('view', ['record' => $refus], panel: 'cabinet', tenant: $cabinet))
+            ->assertOk()
+            ->assertDontSee('Jeanne Discrète-Dupont');
+        [$auJournalDuClient] = $this->entreesDAudit($magasin->societe, ActionAuditee::LienRefuse);
+        $this->assertSame('Jeanne Discrète-Dupont', $auJournalDuClient->auteur_libelle);
+    }
+
+    /**
+     * Une entrée de la vérification de la société se garde jusqu'à la
+     * durée réglée après la fin de la relation, tant que cette fin n'est pas
+     * venue ; ensuite, jusqu'à la date que la fin de la relation a fixée à
+     * la société.
+     */
+    public function test_la_fin_de_conservation_d_une_entree_de_la_verification_suit_le_reglage_puis_la_date_de_la_societe(): void
+    {
+        config(['conservation.verification_apres_la_fin_de_la_relation_en_annees' => 6]);
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $societe = $magasin->societe;
+        $verification = $this->inscrire($societe, null, ActionAuditee::VerificationEnregistree, ['type' => 'courrier']);
+        $fiche = JournalAuditResource::getUrl('view', ['record' => $verification], panel: 'societe', tenant: $societe);
+
+        $this->actingAs($this->proprietaireDe($magasin))->get($fiche)->assertSee('6 ans après la fin de la relation avec la société');
+
+        DB::table('societes')->where('id', $societe->id)->update(['statut' => 'revoquee', 'verification_conservee_jusqu_au' => self::aParis('2032-11-02 10:00:00')->utc()->format('Y-m-d H:i:s')]);
+        $this->get($fiche)->assertSee('02/11/2032')->assertDontSee('après la fin de la relation');
     }
 
     /**

@@ -11,9 +11,10 @@ use Illuminate\Contracts\Validation\ValidationRule;
 /**
  * Le code saisi pour un magasin d'une société : lu en majuscules
  * (« lyon1 » est LYON1), au format de CodeMagasin, autre que DEMO, réservé
- * au magasin de démonstration, et qu'aucun autre magasin de la société ne
- * porte (voir CodeMagasin::estPris()). Le refus ne dit rien du magasin qui
- * le porte.
+ * au magasin de démonstration, qu'aucun autre magasin de la société ne
+ * porte, ni aucun magasin d'une autre société qui a numéroté sous son
+ * SIREN (voir CodeMagasin::estPris()). Le refus ne dit rien du magasin qui
+ * le porte, ni de sa société.
  */
 class CodeMagasinLibre implements ValidationRule
 {

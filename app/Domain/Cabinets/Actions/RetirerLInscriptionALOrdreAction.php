@@ -3,6 +3,7 @@
 namespace App\Domain\Cabinets\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
@@ -23,9 +24,13 @@ use LogicException;
  * l'inscrit à son journal d'audit, sans prendre d'autre verrou ; le
  * cabinet n'est dès lors plus vérifié, et toute acceptation de lien, qui
  * tient cette ligne sous un verrou partagé, l'attend puis est refusée ;
- * ensuite, ses liens actifs, relus, prennent fin chacun dans sa propre
- * transaction (voir MettreFinAuLienAction::parLEditeur()), le propriétaire
- * de chaque client prévenu. Le propriétaire du cabinet est prévenu.
+ * ensuite, ses liens actifs, relus (lecture hors du cabinet courant,
+ * limitée aux champs nécessaires, voir AccesDesCabinets::liensAMettreFin()),
+ * prennent fin chacun dans sa propre transaction (voir
+ * MettreFinAuLienAction::parLEditeur()), la procédure visant le cabinet :
+ * le propriétaire de chaque client est prévenu, et son journal d'audit ne
+ * garde pas la justification de l'éditeur. Le propriétaire du cabinet est
+ * prévenu.
  */
 class RetirerLInscriptionALOrdreAction
 {
@@ -59,10 +64,10 @@ class RetirerLInscriptionALOrdreAction
             $this->journalAudit->inscrire(ActionAuditee::OrdreRetire, null, null, null, ['motif' => $motif], $cabinet, $editeur);
         })));
 
-        $liens = $this->acces->liensActifsDuCabinet($cabinet);
+        $liens = $this->acces->liensAMettreFin($cabinet, [EtatDuLien::Actif]);
 
         foreach ($liens as $lien) {
-            $this->mettreFin->parLEditeur($lien, MotifDeFinDuLien::CabinetPlusVerifie, $editeur);
+            $this->mettreFin->parLEditeur($lien, MotifDeFinDuLien::CabinetPlusVerifie, $editeur, $cabinet);
         }
 
         $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(

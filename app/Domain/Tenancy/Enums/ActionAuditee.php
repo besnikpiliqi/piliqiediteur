@@ -226,10 +226,12 @@ enum ActionAuditee: string implements HasLabel
             // au registre des SIRET réservés (voir RevoquerSocieteAction).
             self::SocieteRevoquee => ['statut', 'sirets_liberes'],
             // Le SIREN de l'entité correcte, la décision motivée de l'examen
-            // (voir DecisionExamenSiren) et les documents émis concernés,
-            // par leur magasin, leur type et leur numéro (voir
-            // ExaminerSirenAction).
-            self::SirenExamine => ['siren_correct', 'decision', 'documents'],
+            // (voir DecisionExamenSiren) et le résumé des documents émis
+            // concernés, quel que soit leur nombre : l'instant jusqu'auquel
+            // ils ont été émis, leur nombre, leur premier et leur dernier
+            // numéro par magasin et par type, et l'empreinte de leur liste
+            // (voir ExaminerSirenAction).
+            self::SirenExamine => ['siren_correct', 'decision', 'documents_emis_jusqu_au', 'documents', 'empreinte_des_documents'],
             // Le SIREN, le n° de TVA et le SIRET de chaque magasin qui en
             // change, par son code, avant et après la correction (voir
             // CorrigerSirenAction).

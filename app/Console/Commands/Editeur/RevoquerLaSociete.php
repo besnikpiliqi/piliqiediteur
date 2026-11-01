@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
+use LogicException;
 
 /**
  * La révocation par l'éditeur d'une société validée qui a pris le SIREN
@@ -17,7 +18,9 @@ use Illuminate\Console\Attributes\Signature;
  * lecture seule pour toujours, ses documents restent consultables, son
  * SIREN et ses SIRET se libèrent, ses liens avec un cabinet prennent fin,
  * et la conservation de ses données de vérification prend fin cinq ans
- * plus tard.
+ * plus tard. Pour un cabinet dont un lien, une demande ou une invitation
+ * n'a pas pu prendre fin, la commande échoue en le disant : relancée, elle
+ * termine ce qui reste.
  */
 #[Signature('editeur:societe:revoquer {societe : Identifiant ou uuid de la société} '.ProcedureDeLEditeur::OPTIONS_COMMUNES)]
 #[Description('Révoque une société validée qui a pris le SIREN d\'une autre entreprise, ce qui libère son SIREN et ses SIRET')]
@@ -39,8 +42,16 @@ class RevoquerLaSociete extends ProcedureDeLEditeur
 
     protected function executer(Societe $societe, InterventionDeLEditeur $editeur): string
     {
-        $sirets = app(RevoquerSocieteAction::class)->handle($societe, $editeur);
+        $revocation = app(RevoquerSocieteAction::class)->handle($societe, $editeur);
 
-        return 'Société révoquée : son SIREN est libéré'.($sirets === [] ? '.' : ', ainsi que les SIRET '.implode(', ', $sirets).'.');
+        if ($revocation['en_echec'] > 0) {
+            throw new LogicException("Société révoquée, mais {$revocation['en_echec']} lien(s), demande(s) ou invitation(s) de ce cabinet n'ont pas pu prendre fin (erreur signalée au journal de l'application) : relancez la procédure pour les terminer.");
+        }
+
+        if ($revocation['reprise']) {
+            return 'Révocation terminée : les liens, demandes et invitations qui restaient à ce cabinet ont pris fin.';
+        }
+
+        return 'Société révoquée : son SIREN est libéré'.($revocation['sirets'] === [] ? '.' : ', ainsi que les SIRET '.implode(', ', $revocation['sirets']).'.');
     }
 }

@@ -12,14 +12,14 @@ use Illuminate\Console\Attributes\Signature;
  * La libération par l'éditeur d'un SIRET saisi par erreur pour un magasin
  * d'une société validée (voir LibererUnSiretSaisiParErreurAction),
  * procédure grave lancée par deux opérateurs distincts, une fois saisi le
- * code du courrier de libération envoyé au représentant légal, à
- * l'adresse officielle du siège (editeur:courrier:envoyer
- * --motif=liberation_siret), et le magasin fautif passé à son bon SIRET ou
- * fermé pour cessation : le SIRET peut alors se réserver pour le magasin
- * qui doit le porter.
+ * code du courrier de libération de ce SIRET envoyé à son titulaire, à
+ * l'adresse officielle de son siège (editeur:courrier:envoyer
+ * --motif=liberation_siret --siret=<SIRET>), et le magasin fautif passé à
+ * son bon SIRET, ou fermé pour cessation ou cédé : le SIRET peut alors se
+ * réserver pour le magasin qui doit le porter.
  */
 #[Signature('editeur:siret:liberer {societe : Identifiant ou uuid de la société} {siret : Le SIRET saisi par erreur} '.ProcedureDeLEditeur::OPTIONS_COMMUNES)]
-#[Description('Libère un SIRET saisi par erreur pour un magasin, une fois le magasin passé à son bon SIRET ou fermé pour cessation')]
+#[Description('Libère un SIRET saisi par erreur pour un magasin, une fois le magasin passé à son bon SIRET, ou fermé pour cessation ou cédé')]
 class LibererUnSiretSaisiParErreur extends ProcedureDeLEditeur
 {
     protected function operateursExiges(): int
@@ -31,7 +31,7 @@ class LibererUnSiretSaisiParErreur extends ProcedureDeLEditeur
     {
         return [
             'SIRET à libérer : '.$this->siret().'.',
-            'Il ne se libère que réservé par un magasin de cette société qui porte désormais un autre SIRET, ou fermé pour cessation, et une fois saisi le code du courrier de libération.',
+            'Il ne se libère que réservé par un magasin de cette société qui porte désormais un autre SIRET, ou fermé pour cessation ou cédé, et une fois saisi, depuis moins de trente jours, le code du courrier de libération de ce SIRET, qui ne sert qu\'une fois.',
             'Procédure grave : deux opérateurs distincts s\'authentifient chacun par son secret.',
         ];
     }

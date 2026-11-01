@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\AnnulationDesCodes;
@@ -72,6 +73,8 @@ class EnvoyerCodeDeConfirmationAction
 
     public const MESSAGE_SIREN_DE_L_EXAMEN = 'Le courrier de l\'examen d\'un SIREN, et lui seul, part sous le SIREN de l\'entité correcte (--siren), valide et différent de celui de la société.';
 
+    public const MESSAGE_SIRET_A_LIBERER = 'Le courrier de la libération d\'un SIRET, et lui seul, désigne le SIRET à libérer (--siret), que réserve un magasin de cette société : il part à son titulaire, sous le SIREN de ce SIRET.';
+
     public const MESSAGE_PLUS_DE_NOUVEL_ENVOI = 'Un seul nouveau courrier peut être demandé : déposez des pièces pour que l\'éditeur traite votre demande, ou contactez-le.';
 
     public function __construct(
@@ -126,20 +129,34 @@ class EnvoyerCodeDeConfirmationAction
      * courrier de l'examen exceptionnel d'un SIREN part au représentant
      * légal de l'entité correcte, à l'adresse officielle de son siège, sous
      * son SIREN ($sirenDeLExamen), sa page le retrouvant par ce SIREN (voir
-     * ExaminerSirenAction) ; tout autre, sous le SIREN de la société.
+     * ExaminerSirenAction) ; celui de la libération d'un SIRET que réserve
+     * un magasin de la société ($siretALiberer) part au titulaire de ce
+     * SIRET, sous le SIREN que forment ses neuf premiers chiffres (la
+     * société elle-même, ou le vrai titulaire de l'ancien SIREN d'une
+     * société corrigée), et son code ne prouve que la libération de ce
+     * SIRET (voir LibererUnSiretSaisiParErreurAction) ; tout autre part
+     * sous le SIREN de la société.
      *
      * @throws VerificationRefuseeException
      */
-    public function parLEditeur(Societe $societe, MotifCode $motif, InterventionDeLEditeur $editeur, ?string $sirenDeLExamen = null): CodeConfirmation
+    public function parLEditeur(Societe $societe, MotifCode $motif, InterventionDeLEditeur $editeur, ?string $sirenDeLExamen = null, ?string $siretALiberer = null): CodeConfirmation
     {
         if (($sirenDeLExamen !== null) !== ($motif === MotifCode::ExamenSiren)
             || ($sirenDeLExamen !== null && (! IdentifiantsInsee::sirenValide($sirenDeLExamen) || $sirenDeLExamen === (string) $societe->siren))) {
             throw new VerificationRefuseeException(self::MESSAGE_SIREN_DE_L_EXAMEN);
         }
 
-        $siren = $sirenDeLExamen ?? (string) $societe->siren;
+        if (($siretALiberer !== null) !== ($motif === MotifCode::LiberationSiret)) {
+            throw new VerificationRefuseeException(self::MESSAGE_SIRET_A_LIBERER);
+        }
 
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $siren, $motif, $editeur): CodeConfirmation {
+        $siren = $sirenDeLExamen ?? ($siretALiberer === null ? (string) $societe->siren : substr($siretALiberer, 0, 9));
+
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $siren, $siretALiberer, $motif, $editeur): CodeConfirmation {
+            if ($siretALiberer !== null && ! SiretMagasin::query()->where('societe_id', $societe->getKey())->where('siret', $siretALiberer)->whereNull('libere_le')->exists()) {
+                throw new VerificationRefuseeException(self::MESSAGE_SIRET_A_LIBERER);
+            }
+
             if ($motif === MotifCode::Verification) {
                 if (! $societe->attendSonCode()) {
                     throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
@@ -150,14 +167,14 @@ class EnvoyerCodeDeConfirmationAction
 
             $destinataire = $this->destinataireOfficiel->du($siren);
 
-            return DB::transaction(function () use ($societe, $siren, $motif, $editeur, $destinataire): CodeConfirmation {
+            return DB::transaction(function () use ($societe, $siren, $siretALiberer, $motif, $editeur, $destinataire): CodeConfirmation {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($motif === MotifCode::Verification && ! $verrouillee->attendSonCode()) {
                     throw new VerificationRefuseeException(self::MESSAGE_N_ATTEND_PLUS);
                 }
 
-                return $this->envoyer($verrouillee, $siren, $motif, $destinataire, null, $editeur);
+                return $this->envoyer($verrouillee, $siren, $motif, $destinataire, null, $editeur, $siretALiberer);
             });
         });
     }
@@ -165,29 +182,34 @@ class EnvoyerCodeDeConfirmationAction
     /**
      * Le code, sa ligne, le courrier et son inscription au journal d'audit,
      * dans une transaction (celle de l'appelant s'il en a une) : si le
-     * prestataire ne répond pas, rien ne s'enregistre.
+     * prestataire ne répond pas, rien ne s'enregistre. Le code d'une
+     * société dont la relation avec l'éditeur a déjà pris fin reçoit la fin
+     * de conservation qu'elle porte : il s'efface avec ses autres données
+     * de vérification (voir FinDeLaRelation).
      *
      * @throws VerificationRefuseeException
      */
-    private function envoyer(Societe $societe, string $siren, MotifCode $motif, DestinataireDuCourrier $destinataire, ?User $proprietaire, ?InterventionDeLEditeur $editeur): CodeConfirmation
+    private function envoyer(Societe $societe, string $siren, MotifCode $motif, DestinataireDuCourrier $destinataire, ?User $proprietaire, ?InterventionDeLEditeur $editeur, ?string $siret = null): CodeConfirmation
     {
         $code = $this->codes->generer();
         $expireLe = Calendrier::deParis()->decaler(now(), CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
 
         try {
-            return DB::transaction(function () use ($societe, $siren, $motif, $destinataire, $proprietaire, $editeur, $code, $expireLe): CodeConfirmation {
+            return DB::transaction(function () use ($societe, $siren, $siret, $motif, $destinataire, $proprietaire, $editeur, $code, $expireLe): CodeConfirmation {
                 $this->annulerLesCodesQuiNeServirontPlus($siren, $motif);
                 CodeConfirmation::query()->where('motif', $motif->value)->whereNull('utilise_le')->whereNull('annule_le')->orderBy('id')->lockForUpdate()->get()
                     ->each(fn (CodeConfirmation $remplace) => $this->annulationDesCodes->annuler($remplace, AnnulationDesCodes::NOUVEAU_COURRIER, $proprietaire, $editeur));
 
                 $confirmation = tap((new CodeConfirmation)->forceFill([
                     'siren' => $siren,
+                    'siret' => $siret,
                     'motif' => $motif,
                     'destinataire' => $destinataire->enTableau(),
                     'code_hache' => $this->codes->hacher($code),
                     'expire_le' => $expireLe,
                     'envoye_le' => now(),
                     'demande_par' => $proprietaire?->getKey(),
+                    'conserver_jusqu_au' => $societe->verification_conservee_jusqu_au,
                 ]))->save();
 
                 $reference = $this->envoi->envoyerCourrier($destinataire, $this->courrier->pdf($destinataire, $siren, $societe->type_activite, $motif, $code, $expireLe), remiseEnPersonne: true);
@@ -252,11 +274,13 @@ class EnvoyerCodeDeConfirmationAction
     /**
      * Annule les codes de ce SIREN et de ce motif qui ne serviront plus,
      * sans les avoir servis : ceux qui ont expiré, et ceux d'une société de
-     * ce SIREN close ou révoquée (une révocation ne passe pas par
-     * l'annulation de ses codes) ; seul un code encore valable d'une
-     * société qui garde ce SIREN reste actif, et l'index d'un seul code
-     * actif par SIREN et par motif admet le nouveau. Écriture limitée à ce
-     * SIREN, qui ne lit des sociétés qui l'ont eu que leur identifiant.
+     * ce SIREN close ou révoquée (la révocation annule les codes encore
+     * actifs de la société, mais l'éditeur peut lui en envoyer ensuite, par
+     * exemple pour récupérer le compte de son propriétaire) ; seul un code
+     * encore valable d'une société qui garde ce SIREN reste actif, et
+     * l'index d'un seul code actif par SIREN et par motif admet le nouveau.
+     * Écriture limitée à ce SIREN, qui ne lit des sociétés qui l'ont eu que
+     * leur identifiant.
      */
     private function annulerLesCodesQuiNeServirontPlus(string $siren, MotifCode $motif): void
     {

@@ -4,6 +4,8 @@ namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
+use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -14,6 +16,7 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
+use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -44,11 +47,20 @@ use Throwable;
  *
  * Les contrôles du répertoire se font avant toute écriture ; puis, sous
  * les verrous des registres de tous ses magasins réels, de sa ligne, puis
- * de chaque magasin qui change de SIRET : le SIREN change, avec son n° de
- * TVA quand il était celui que formait l'ancien SIREN (remplacé par celui
- * du nouveau) ou par celui que donne l'éditeur
- * (Societe::changerLeSirenParLaProcedure(), seul passage de sa garde), et
- * s'inscrit au journal des événements de chacun (JET 270 siren et
+ * de chaque magasin qui change de SIRET, et seulement si aucun de ces
+ * magasins ne porte le code d'un magasin d'une autre inscription qui a
+ * déjà numéroté des documents sous le nouveau SIREN (une société révoquée
+ * qui l'avait, voir CodeMagasin::aServiSousCeSiren()), dont il répéterait
+ * les numéros : le SIREN change (Societe::changerLeSirenParLaProcedure(),
+ * seul passage de sa garde), avec son n° de TVA : celui que donne
+ * l'éditeur, au format d'un n° de TVA comme sur l'écran de l'identité de
+ * la société ; sinon, celui que forme le nouveau SIREN quand l'ancien n°
+ * était celui que formait l'ancien SIREN ; un n° qui ne l'était pas (celui
+ * d'un assujetti unique, ou une faute de saisie) n'est gardé que si
+ * l'éditeur confirme qu'il reste celui de l'assujetti unique dont la
+ * société est membre, et la correction est refusée sans l'un ou l'autre ;
+ * une société sans n° de TVA n'en reçoit pas. Le SIREN et le n° de TVA
+ * s'inscrivent au journal des événements de chacun (JET 270 siren et
  * numero_tva, voir JournaliseSesParametresDeConformite) ; chaque magasin
  * passe à son nouveau SIRET, l'ancien restant réservé (voir
  * SiretsDesMagasins::remplacer(), JET 270 siret) ; les contrôles du
@@ -78,6 +90,12 @@ class CorrigerSirenAction
 
     public const MESSAGE_MAGASINS_CHANGES = 'Les magasins de la société ont changé pendant la procédure : rien n\'est corrigé, relancez-la.';
 
+    public const MESSAGE_NUMERO_TVA_A_CONFIRMER = 'Le n° de TVA de la société (%s) n\'est pas celui que formait son SIREN : donnez le nouveau (--numero-tva), ou confirmez qu\'il reste celui de l\'assujetti unique dont elle est membre (--assujetti-unique). Rien n\'est corrigé.';
+
+    public const MESSAGE_NUMERO_TVA_OU_ASSUJETTI = 'Donnez le nouveau n° de TVA (--numero-tva) ou confirmez que l\'ancien reste celui de l\'assujetti unique (--assujetti-unique), pas les deux.';
+
+    public const MESSAGE_CODE_DEJA_EMIS = 'Le magasin %s ne peut pas numéroter sous ce SIREN : une autre inscription de ce SIREN a déjà émis des documents sous son code, et ses numéros se répéteraient. Rien n\'est corrigé.';
+
     public function __construct(
         private readonly ControleSirene $controleSirene,
         private readonly SiretsDesMagasins $siretsDesMagasins,
@@ -89,19 +107,29 @@ class CorrigerSirenAction
     /**
      * @param  array<string, string>  $siretsParCode  le nouveau SIRET de chaque magasin ouvert ou fermé temporairement, par son code
      * @param  string|null  $numeroTva  le nouveau n° de TVA, s'il n'est pas celui que forme le nouveau SIREN
+     * @param  bool  $assujettiUnique  l'éditeur confirme que l'ancien n° de TVA, qui n'était pas celui que formait l'ancien SIREN, reste celui de l'assujetti unique dont la société est membre
      *
-     * @throws VerificationRefuseeException quand la société, l'examen, le répertoire ou les opérateurs ne permettent pas la correction
+     * @throws VerificationRefuseeException quand la société, l'examen, le répertoire, le n° de TVA ou les opérateurs ne permettent pas la correction
      * @throws LogicException
      */
-    public function handle(Societe $societe, string $nouveauSiren, array $siretsParCode, ?string $numeroTva, InterventionDeLEditeur $editeur): Societe
+    public function handle(Societe $societe, string $nouveauSiren, array $siretsParCode, ?string $numeroTva, InterventionDeLEditeur $editeur, bool $assujettiUnique = false): Societe
     {
         if (count(array_unique($editeur->operateurs)) < 2) {
             throw new VerificationRefuseeException(self::MESSAGE_DEUX_OPERATEURS);
         }
 
-        $nouveauSiren = (string) preg_replace('/\s+/', '', $nouveauSiren);
+        if ($numeroTva !== null && $assujettiUnique) {
+            throw new VerificationRefuseeException(self::MESSAGE_NUMERO_TVA_OU_ASSUJETTI);
+        }
 
-        $corrigee = app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $nouveauSiren, $siretsParCode, $numeroTva, $editeur): Societe {
+        if ($numeroTva !== null && ! NumeroTva::estAuFormat($numeroTva)) {
+            throw new VerificationRefuseeException(NumeroTvaAuFormat::MESSAGE);
+        }
+
+        $nouveauSiren = (string) preg_replace('/\s+/', '', $nouveauSiren);
+        $numeroTva = $numeroTva === null ? null : NumeroTva::normaliser($numeroTva);
+
+        $corrigee = app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $nouveauSiren, $siretsParCode, $numeroTva, $assujettiUnique, $editeur): Societe {
             ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($societe);
 
             if ($societe->estUnCabinet()) {
@@ -122,7 +150,7 @@ class CorrigerSirenAction
             $magasins = $societe->magasinsReels()->orderBy('id')->get();
             $etablissements = $this->etablissementsDesMagasins(self::quiChangentDeSiret($magasins), $siretsParCode, $nouveauSiren);
 
-            return $this->operateur->pendantLeSysteme(fn (): Societe => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $nouveauSiren, $numeroTva, $editeur, $magasins, $etablissements, $unite): Societe {
+            return $this->operateur->pendantLeSysteme(fn (): Societe => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $nouveauSiren, $numeroTva, $assujettiUnique, $editeur, $magasins, $etablissements, $unite): Societe {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($verrouillee);
                 $relus = $verrouillee->magasinsReels()->orderBy('id')->get();
@@ -131,9 +159,15 @@ class CorrigerSirenAction
                     throw new VerificationRefuseeException(self::MESSAGE_MAGASINS_CHANGES);
                 }
 
+                foreach (self::quiChangentDeSiret($relus) as $magasin) {
+                    if (CodeMagasin::aServiSousCeSiren($verrouillee, (string) $magasin->code, $nouveauSiren)) {
+                        throw new VerificationRefuseeException(sprintf(self::MESSAGE_CODE_DEJA_EMIS, $magasin->code));
+                    }
+                }
+
                 $ancienSiren = (string) $verrouillee->siren;
                 $ancienNumeroTva = $verrouillee->numero_tva;
-                $nouveauNumeroTva = $numeroTva ?? ($ancienNumeroTva === IdentifiantsInsee::numeroTvaPropose($ancienSiren) ? IdentifiantsInsee::numeroTvaPropose($nouveauSiren) : $ancienNumeroTva);
+                $nouveauNumeroTva = $numeroTva ?? self::numeroTvaApresLaCorrection($ancienNumeroTva, $ancienSiren, $nouveauSiren, $assujettiUnique);
 
                 try {
                     $verrouillee->changerLeSirenParLaProcedure($nouveauSiren, $nouveauNumeroTva);
@@ -174,6 +208,26 @@ class CorrigerSirenAction
         $this->prevenirLeProprietaire($corrigee);
 
         return $corrigee;
+    }
+
+    /**
+     * Le n° de TVA de la société après la correction de son SIREN, sans n°
+     * donné par l'éditeur : aucun pour une société qui n'en a pas ; celui
+     * que forme le nouveau SIREN pour celle dont le n° était celui que
+     * formait l'ancien ; l'ancien n°, qui ne l'était pas, seulement si
+     * l'éditeur confirme qu'il reste celui de l'assujetti unique dont la
+     * société est membre.
+     *
+     * @throws VerificationRefuseeException
+     */
+    private static function numeroTvaApresLaCorrection(?string $ancienNumeroTva, string $ancienSiren, string $nouveauSiren, bool $assujettiUnique): ?string
+    {
+        return match (true) {
+            $ancienNumeroTva === null => null,
+            $ancienNumeroTva === IdentifiantsInsee::numeroTvaPropose($ancienSiren) => IdentifiantsInsee::numeroTvaPropose($nouveauSiren),
+            $assujettiUnique => $ancienNumeroTva,
+            default => throw new VerificationRefuseeException(sprintf(self::MESSAGE_NUMERO_TVA_A_CONFIRMER, $ancienNumeroTva)),
+        };
     }
 
     /**

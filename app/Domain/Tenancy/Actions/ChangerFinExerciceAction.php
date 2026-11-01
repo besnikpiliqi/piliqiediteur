@@ -31,13 +31,15 @@ use LogicException;
  * comptable de la société qui l'a validée est nommé.
  *
  * Refusée, sans rien écrire : un nouveau mois égal à l'ancien ; une
- * décision postérieure à la fin de l'exercice en cours, ou à aujourd'hui
- * ; une fin qui n'est pas le dernier jour d'un mois, qui tombe dans un
- * exercice déjà clos (avant le début de l'exercice en cours), ou qui
- * repousserait la clôture obligatoire de l'exercice en cours (après sa
- * fin) ; une durée validée par personne. Une fin déjà passée, dans
- * l'exercice en cours, sera rattrapée par les clôtures d'exercice de
- * l'étape 3, comme les journées manquées.
+ * décision postérieure à aujourd'hui, ou à la fin de l'exercice qu'elle
+ * fixe (un changement de la date de clôture n'est jamais rétroactif : un
+ * exercice ne se modifie qu'avant sa clôture) ; une fin qui n'est pas le
+ * dernier jour d'un mois, qui tombe dans un exercice déjà clos (avant le
+ * début de l'exercice en cours), ou qui repousserait la clôture
+ * obligatoire de l'exercice en cours (après sa fin) ; une durée validée
+ * par personne. Une fin déjà passée, dans l'exercice en cours, décidée
+ * avant elle, sera rattrapée par les clôtures d'exercice de l'étape 3,
+ * comme les journées manquées.
  *
  * Sous le verrou des registres des magasins réels de la société, puis de
  * sa ligne : le nouveau mois s'enregistre et s'inscrit au journal des
@@ -57,7 +59,7 @@ class ChangerFinExerciceAction
 
     public const MESSAGE_JOUR = 'La décision et la fin de l\'exercice en cours s\'écrivent « AAAA-MM-JJ ».';
 
-    public const MESSAGE_DECISION_APRES_LA_FIN = 'La décision est postérieure à la fin de l\'exercice en cours (%s) : elle ne modifie plus cet exercice.';
+    public const MESSAGE_DECISION_APRES_LA_FIN = 'La décision est postérieure à la fin de l\'exercice qu\'elle fixe (%s) : un changement de la date de clôture n\'est jamais rétroactif.';
 
     public const MESSAGE_DECISION_FUTURE = 'La décision ne peut pas être postérieure à aujourd\'hui.';
 
@@ -194,11 +196,11 @@ class ChangerFinExerciceAction
         $afficher = static fn (string $jour): string => Calendrier::afficherJour($jour, 'd/m/Y');
 
         $refus = match (true) {
-            $decisionDu > $apercu['fin_d_origine'] => sprintf(self::MESSAGE_DECISION_APRES_LA_FIN, $afficher($apercu['fin_d_origine'])),
             $decisionDu > Calendrier::deParis()->aujourdhui() => self::MESSAGE_DECISION_FUTURE,
             ! ExercicesDeLaSociete::estUneFinDeMois($fin) => self::MESSAGE_FIN_DE_MOIS,
             $fin < $apercu['debut'] => sprintf(self::MESSAGE_EXERCICE_CLOS, $afficher($apercu['debut'])),
             $fin > $apercu['fin_d_origine'] => sprintf(self::MESSAGE_CLOTURE_REPOUSSEE, $afficher($apercu['fin_d_origine'])),
+            $decisionDu > $fin => sprintf(self::MESSAGE_DECISION_APRES_LA_FIN, $afficher($fin)),
             default => null,
         };
 

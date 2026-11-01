@@ -209,7 +209,10 @@ class JournalDesDroits
      * journal, ses entrées (l'action, ses autres valeurs, et le cabinet
      * dont elle porte les droits des comptes) ; au journal d'un cabinet,
      * une entrée ne porte que les droits de ses comptes : un cabinet ne lit
-     * jamais l'identité ni les comptes d'un autre cabinet.
+     * jamais l'identité ni les comptes d'un autre cabinet. Une procédure de
+     * l'éditeur ($editeur) ne laisse sa justification et ses opérateurs
+     * qu'au journal de la société qu'elle vise ($visee) : au journal de
+     * l'autre partie, l'entrée dit seulement que l'éditeur l'a faite.
      *
      * @template TResultat
      *
@@ -217,20 +220,21 @@ class JournalDesDroits
      * @param  Closure(User|null, Societe, list<LienCabinet>): TResultat  $modification
      * @param  Closure(Societe, list<LienCabinet>): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int}>  $entrees
      * @param  list<int>  $cabinetsQuiEntrent  les cabinets d'un lien que la modification crée
+     * @param  Societe|null  $visee  la société que vise la procédure de l'éditeur, le client ou le cabinet
      * @return TResultat
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function modifierLeLien(?User $auteur, Societe $client, array $liens, Closure $modification, Closure $entrees, array $cabinetsQuiEntrent = [], ?InterventionDeLEditeur $editeur = null): mixed
+    public function modifierLeLien(?User $auteur, Societe $client, array $liens, Closure $modification, Closure $entrees, array $cabinetsQuiEntrent = [], ?InterventionDeLEditeur $editeur = null, ?Societe $visee = null): mixed
     {
-        return app(TenantContext::class)->runAsSociete($client, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur): mixed {
+        return app(TenantContext::class)->runAsSociete($client, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee): mixed {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
                 $magasins = $client->magasinsReels()->orderBy('id')->get();
                 $termine = false;
 
-                $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $magasins, &$termine): mixed {
+                $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins, &$termine): mixed {
                     $clientVerrouille = Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
 
                     if (array_map(intval(...), $clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
@@ -254,7 +258,7 @@ class JournalDesDroits
                     $auteurRelu = $auteur === null ? null : ($comptesVerrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.'));
                     $auNomDe = fn (Closure $operation): mixed => $auteurRelu === null ? $this->operateur->pendantLeSysteme($operation) : $this->operateur->pendant($auteurRelu, $operation);
 
-                    $resultat = $auNomDe(function () use ($auteurRelu, $clientVerrouille, $relus, $verrouilles, $modification, $entrees, $editeur, $magasins, $comptesAvant): mixed {
+                    $resultat = $auNomDe(function () use ($auteurRelu, $clientVerrouille, $relus, $verrouilles, $modification, $entrees, $editeur, $visee, $magasins, $comptesAvant): mixed {
                         $avant = $this->etats($magasins, $comptesAvant->values()->all());
                         $resultat = $modification($auteurRelu, $clientVerrouille, $relus);
                         $liensApres = LienCabinet::query()
@@ -269,7 +273,7 @@ class JournalDesDroits
                         }
 
                         $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : $liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has((int) $lien->getKey()))->values()->all();
-                        $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, $entrees, $editeur);
+                        $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, $entrees, $editeur, $visee);
 
                         return $resultat;
                     });
@@ -470,14 +474,16 @@ class JournalDesDroits
      * figure pas. La trace du visiteur ne se note qu'au journal de la
      * société de l'auteur, du client pour le système ou l'éditeur (voir
      * TraceDuVisiteur) : le propriétaire d'un client ne laisse pas la sienne
-     * au journal de son cabinet, ni l'inverse.
+     * au journal de son cabinet, ni l'inverse. Une procédure de l'éditeur
+     * n'inscrit sa justification et ses opérateurs qu'au journal de la
+     * société qu'elle vise.
      *
      * @param  Collection<int, LienCabinet>  $liens
      * @param  list<LienCabinet>  $concernes  les liens dont parlent les entrées, la première étant leur cible
      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $avant
      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $apres
      */
-    private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, ?InterventionDeLEditeur $editeur): void
+    private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, ?InterventionDeLEditeur $editeur, ?Societe $visee): void
     {
         $cabinets = $liens->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
         $journaux = [$client, ...$cabinets->map(fn (int $id): Societe => Societe::query()->findOrFail($id))->all()];
@@ -510,6 +516,7 @@ class JournalDesDroits
                     ['droits' => $droitsApres, ...$valeurs],
                     $concernes[0] ?? null,
                     $editeur,
+                    detailsDeLEditeur: $visee === null || $journal->is($visee),
                 ));
                 (int) $journal->getKey() === $duVisiteur ? $inscrire() : $this->traces->horsDeSaSociete($inscrire);
             }

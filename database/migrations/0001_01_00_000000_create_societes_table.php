@@ -116,8 +116,9 @@ return new class extends Migration
             // de la vérification de son journal d'audit), instant en UTC
             // (cast Instant) : cinq ans après la fin de la relation avec
             // l'éditeur (Q4), posée à sa révocation (voir FinDeLaRelation),
-            // nulle jusque-là ; la base ne la laisse plus changer ensuite,
-            // et ses déclencheurs la lisent pour effacer ces données.
+            // nulle jusque-là ; la base ne la laisse poser que sur une
+            // société révoquée ou résiliée, puis plus changer, et ses
+            // déclencheurs la lisent pour effacer ces données.
             $table->dateTime('verification_conservee_jusqu_au')->nullable();
             $table->timestamps();
 
@@ -135,10 +136,13 @@ return new class extends Migration
 
         DeclencheursDeProtection::sansSuppression('societes');
 
-        // La fin de la conservation des données de vérification, une fois
-        // posée, ne s'efface ni ne se change plus : personne ne la rapproche
-        // pour effacer plus tôt ces données.
-        DeclencheursDeProtection::colonneFigee('societes', 'verification_conservee_jusqu_au');
+        // La fin de la conservation des données de vérification ne se pose
+        // que sur une société révoquée ou résiliée, dont la relation avec
+        // l'éditeur a pris fin, et, une fois posée, ne s'efface ni ne se
+        // change plus : personne ne la pose ni ne la rapproche pour effacer
+        // plus tôt ces données, même par une requête qui contourne le
+        // modèle.
+        DeclencheursDeProtection::colonneFigee('societes', 'verification_conservee_jusqu_au', poseeSeulementSi: DeclencheursDeProtection::relationFinie());
 
         // Le type d'activité est connu et ne change jamais.
         GardesDesTypesDActivite::poser(GardesDesTypesDActivite::TYPE_FIXE);

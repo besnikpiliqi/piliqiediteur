@@ -20,6 +20,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use Throwable;
 
 /**
  * La fin du lien entre un cabinet d'expertise comptable et un client :
@@ -42,7 +43,9 @@ use LogicException;
  * compte garde son espace et ses autres clients (choix de Claude, que
  * l'éditeur peut contester). L'autre propriétaire est prévenu, et les
  * collaborateurs qui avaient ce client, dont les avis sur lui s'effacent
- * d'abord de la cloche.
+ * d'abord de la cloche ; un avis qui ne part pas (une messagerie en panne)
+ * est signalé sans rien défaire, et n'arrête ni le geste qui l'a demandé
+ * ni la suite d'une procédure qui termine plusieurs liens.
  */
 class MettreFinAuLienAction
 {
@@ -66,14 +69,16 @@ class MettreFinAuLienAction
     }
 
     /**
-     * La fin d'un lien décidée par une procédure de l'éditeur, sans auteur :
-     * le propriétaire du cabinet est prévenu, et celui du client, sauf quand
-     * c'est le client que l'éditeur révoque (il l'apprend avec sa
-     * révocation).
+     * La fin d'un lien décidée par une procédure de l'éditeur qui vise le
+     * cabinet ou le client ($visee), sans auteur : sa justification et ses
+     * opérateurs ne s'inscrivent qu'au journal de la société visée (voir
+     * JournalDesDroits::modifierLeLien()) ; le propriétaire du cabinet est
+     * prévenu, et celui du client, sauf quand c'est le client que l'éditeur
+     * vise (il l'apprend avec sa révocation).
      */
-    public function parLEditeur(LienCabinet $lien, MotifDeFinDuLien $motif, InterventionDeLEditeur $editeur, bool $prevenirLeClient = true): void
+    public function parLEditeur(LienCabinet $lien, MotifDeFinDuLien $motif, InterventionDeLEditeur $editeur, Societe $visee): void
     {
-        $this->terminer(null, $lien, $motif, $editeur, static fn (): null => null, $prevenirLeClient);
+        $this->terminer(null, $lien, $motif, $editeur, static fn (): null => null, (int) $visee->getKey() !== (int) $lien->societe_id, $visee);
     }
 
     /**
@@ -83,7 +88,8 @@ class MettreFinAuLienAction
      * ligne (voir RevoquerSocieteAction) : le lien par la procédure de
      * l'éditeur (voir parLEditeur()), motif « société révoquée », le
      * cabinet prévenu ; chaque demande retirée au nom du système, son jeton
-     * effacé, son cabinet prévenu.
+     * effacé, son cabinet prévenu sans le motif (voir
+     * RetirerLaDemandeDeLienAction::parLeSysteme()).
      */
     public function pourUnClientRevoque(Societe $client, InterventionDeLEditeur $editeur): void
     {
@@ -95,8 +101,8 @@ class MettreFinAuLienAction
 
         foreach ($liens as $lien) {
             $lien->estActif()
-                ? $this->parLEditeur($lien, MotifDeFinDuLien::SocieteRevoquee, $editeur, prevenirLeClient: false)
-                : $this->retraitDesDemandes->parLeSysteme($lien, MotifDeFinDuLien::SocieteRevoquee);
+                ? $this->parLEditeur($lien, MotifDeFinDuLien::SocieteRevoquee, $editeur, $client)
+                : $this->retraitDesDemandes->parLeSysteme($lien);
         }
     }
 
@@ -118,8 +124,10 @@ class MettreFinAuLienAction
      * personne saisit le code et devient propriétaire, prennent fin au nom
      * du système, dans la transaction de ce geste : le lien est terminé
      * (voir parLeSysteme()), chaque demande retirée, son jeton effacé, et
-     * chaque cabinet prévenu ; le nouveau propriétaire choisit lui-même son
-     * cabinet, et une société close n'en gère plus.
+     * chaque cabinet prévenu, celui d'une demande sans le motif (voir
+     * RetirerLaDemandeDeLienAction::parLeSysteme()) ; le nouveau
+     * propriétaire choisit lui-même son cabinet, et une société close n'en
+     * gère plus.
      */
     public function pourUneSocieteQuiChangeDeMains(Societe $client, MotifDeFinDuLien $motif): void
     {
@@ -130,7 +138,7 @@ class MettreFinAuLienAction
             ->get();
 
         foreach ($liens as $lien) {
-            $lien->estActif() ? $this->parLeSysteme($lien, $motif) : $this->retraitDesDemandes->parLeSysteme($lien, $motif);
+            $lien->estActif() ? $this->parLeSysteme($lien, $motif) : $this->retraitDesDemandes->parLeSysteme($lien);
         }
     }
 
@@ -156,7 +164,9 @@ class MettreFinAuLienAction
      * Prévient, à la fin d'un lien, le propriétaire du client et celui du
      * cabinet (sauf l'auteur, qui le sait ; le client, sur demande, quand
      * il a lui-même lié un autre cabinet), et les collaborateurs qui avaient
-     * ce client, dont les avis sur lui s'effacent d'abord.
+     * ce client, dont les avis sur lui s'effacent d'abord. Chaque avis part
+     * à part : celui qui ne part pas (une messagerie en panne) est signalé
+     * sans empêcher les suivants.
      *
      * @param  Collection<int, User>  $comptesDuCabinet  les comptes du cabinet qui avaient accès
      */
@@ -172,7 +182,7 @@ class MettreFinAuLienAction
                 continue;
             }
 
-            $compte->notify(new AvisDuCabinet(
+            self::notifierSansInterrompre($compte, new AvisDuCabinet(
                 $cabinet,
                 'Lien terminé',
                 "Le lien entre votre cabinet et {$client->getFilamentName()} a pris fin : {$raison} Vous n'avez plus accès à ce client.",
@@ -186,7 +196,7 @@ class MettreFinAuLienAction
         $proprietaire = $client->proprietaire()->first();
 
         if ($prevenirLeClient && $proprietaire !== null && ! $proprietaire->is($auteur) && $client->close_le === null) {
-            $proprietaire->notify(new AvisDuCabinet(
+            self::notifierSansInterrompre($proprietaire, new AvisDuCabinet(
                 $client,
                 'Lien avec votre cabinet terminé',
                 "Le lien avec le cabinet {$cabinet->getFilamentName()} a pris fin : {$raison} Il n'a plus accès à votre société.",
@@ -199,9 +209,23 @@ class MettreFinAuLienAction
     }
 
     /**
-     * @param  callable(User|null, LienCabinet): mixed  $controle
+     * Envoie cet avis sans interrompre ce qui suit : un avis qui ne part pas
+     * est signalé, et rien n'est défait.
      */
-    private function terminer(?User $auteur, LienCabinet $lien, MotifDeFinDuLien $motif, ?InterventionDeLEditeur $editeur, callable $controle, bool $prevenirLeClient = true): void
+    private static function notifierSansInterrompre(User $destinataire, AvisDuCabinet $avis): void
+    {
+        try {
+            $destinataire->notify($avis);
+        } catch (Throwable $erreur) {
+            report($erreur);
+        }
+    }
+
+    /**
+     * @param  callable(User|null, LienCabinet): mixed  $controle
+     * @param  Societe|null  $visee  la société que vise la procédure de l'éditeur qui met fin au lien
+     */
+    private function terminer(?User $auteur, LienCabinet $lien, MotifDeFinDuLien $motif, ?InterventionDeLEditeur $editeur, callable $controle, bool $prevenirLeClient = true, ?Societe $visee = null): void
     {
         $client = Societe::query()->findOrFail($lien->societe_id);
         $avant = $this->acces->comptesQuiOntAcces($lien);
@@ -224,10 +248,16 @@ class MettreFinAuLienAction
                 'client' => IdentiteDansLeJournal::de($client),
                 'motif' => $motif->value,
             ], (int) $relu->cabinet_id]];
-        }, editeur: $editeur);
+        }, editeur: $editeur, visee: $visee);
 
         if ($termine) {
-            DB::afterCommit(fn () => self::prevenir($lien, $avant, $auteur, $motif->getLabel().'.', $prevenirLeClient));
+            DB::afterCommit(static function () use ($lien, $avant, $auteur, $motif, $prevenirLeClient): void {
+                try {
+                    self::prevenir($lien, $avant, $auteur, $motif->getLabel().'.', $prevenirLeClient);
+                } catch (Throwable $erreur) {
+                    report($erreur);
+                }
+            });
         }
     }
 }

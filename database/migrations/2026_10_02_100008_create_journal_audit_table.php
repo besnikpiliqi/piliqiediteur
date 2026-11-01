@@ -36,7 +36,9 @@ return new class extends Migration
             // CategorieAudit.
             $table->string('categorie', 30);
             $table->unsignedBigInteger('sequence');
-            // membre, editeur ou systeme.
+            // membre, editeur, systeme ou autre_societe (le geste d'une
+            // personne d'une autre société sur une demande de lien avec un
+            // cabinet, inscrit sans rien d'elle, voir JournalAudit).
             $table->string('origine', 20);
             $table->foreignId('auteur_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('auteur_libelle', 255)->nullable();
@@ -46,7 +48,10 @@ return new class extends Migration
             $table->unsignedBigInteger('cible_id')->nullable();
             $table->json('anciennes_valeurs')->nullable();
             $table->json('nouvelles_valeurs')->nullable();
-            // Obligatoires pour une procédure de l'éditeur.
+            // Celles d'une procédure de l'éditeur, au journal de la société
+            // qu'elle vise ; nulles au journal de l'autre partie d'un lien
+            // avec un cabinet, qui n'en garde que l'origine (voir
+            // JournalAudit).
             $table->text('justification')->nullable();
             $table->json('operateur')->nullable();
             $table->string('cle_id', 40);

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 01:19 UTC par pilotage-sync.sh : « Fiche corrigée après sa relecture à froid (11 constats) ».
+Mis à jour le 01/11/2026 à 02:07 UTC par pilotage-sync.sh : « Directive : effort Extra avec ultracode, Max signalé par la session ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

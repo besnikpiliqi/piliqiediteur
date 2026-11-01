@@ -4143,3 +4143,47 @@ Sans exception
 
 Dit moi la vérité. Je dois utiliser quoi comme effort et quel modele pour que mon logiciel soit construit hyper propre , hyper sécurisé, hyper performant, hyper efficace et sans erreurs
 
+## 303. 2026-11-01 01:30 UTC
+
+Montre moi le journal de la simulation
+
+## 304. 2026-11-01 01:31 UTC
+
+Tu fait quoi maintenant
+
+## 305. 2026-11-01 01:33 UTC
+
+Tu dis « 24 fichiers modifiés, pas encore commités. » mais c’est quoi c’est fichier et pourquoi modifier
+
+## 306. 2026-11-01 01:44 UTC
+
+J’ai pas compris qu’est-ce tu dis avec « 17 heures de test »?
+
+## 307. 2026-11-01 01:47 UTC
+
+Mais pourquoi tu trouves des failles ou erreurs que maintenant et pas avant ???
+
+## 308. 2026-11-01 01:50 UTC
+
+Mais le devis est fait avant et pas aujourd’hui
+
+## 309. 2026-11-01 01:52 UTC
+
+Donc il n’y a pas d’autres failles ou erreurs dans le code ?
+
+## 310. 2026-11-01 01:56 UTC
+
+Donc le lot 21 la campagne de te l’étape 1 bis trouveras des failles ou erreurs s’ils existent ??
+
+## 311. 2026-11-01 01:59 UTC
+
+Quand le logiciel sera fini pour mettre en production
+
+## 312. 2026-11-01 02:03 UTC
+
+La avec effort extra et ultracode est-ce que ça va durer plus longtemps
+
+## 313. 2026-11-01 02:07 UTC
+
+Alors l’effort sera extra avec ultracode et tu me dis quand il faut passer en effort max
+

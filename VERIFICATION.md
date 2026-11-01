@@ -1,77 +1,51 @@
 # Vérification de la fiche de reprise
 
-Date : 26/10/2026, 21 h 35 UTC.
+Date : 01/11/2026, 02 h 50 UTC. Lot : TA (étape `TA:fiche` de la course `wf_22d43798-897`).
 
-Relecture faite à la main, avant le lot TA. Tête poussée de la branche de travail au moment de la relecture : `89f092f` (relecture de PU). Les trois commits locaux du lot TA (`7832bb0`, `ad19e0b`, `e2d790a`) ne sont ni relus ni poussés : ils ne sont pas comptés comme faits.
-
-Vérifié contre : `git log origin/claude/saas-invoice-editor-architecture-q6eizh` (lecture seule), la liste `LOTS` de `serie8-lots.js` (identique à la copie de `notes/`), `ETAT.md`, `notes/etat-chaines.md`, et l'existence de chaque fichier de `notes/` que cite la fiche (tous présents), ainsi que les sections citées (§ 0, 3.4, D12, D29 et § 4 de `DIRECTIVES.md` ; § 45 du prompt maître ; section 14 de `societe/conception-v2-finale.md` ; 3.5.14 de `serie8/avenant-cabinets.md` ; § 1.5 de `tva/plan-execution.md` ; 4.2 et 3.4.2 de `serie8/plan-serie8.md` ; point 10 de `serie9/reponses-serie9.md` ; grille faketime de 17 instants du README du dépôt ; numéros 128, 156, 275, 276 et 280 de `messages-editeur.md`). Les chemins des trois scripts adaptés au § 4.4 ne contiennent que le dossier de travail et la session d'origine, comme la fiche le dit.
+Vérifié contre : `git -C /home/user/piliqiediteur log` et `origin/claude/saas-invoice-editor-architecture-q6eizh` (lecture seule ; tête poussée `9ce20c3`, aucun commit local non poussé, arbre propre), la boucle du § 5 (TA : 4 commits sur `origin` ; EC, L1, A7, S9-L, S9-A, 21 : aucun), le `journal.jsonl` de la course (`TA:correction` → `9ce20c3`, `TA:poussee` → `pousse: true`, `89f092f..9ce20c3`, `TA:fiche` commencée), la liste `LOTS` de `serie8-lots.js` (identique à `notes/serie8-lots.js` ; ordre TA, EC, L1, A7, S9-L, S9-A, 21 conforme au § 6), `LOTS_SENSIBLES = ['A7', '21']`, les sauvegardes `serie8-lots.avant-*.js`, `notes/etat-chaines.md`, `notes/historique/DIRECTIVES.md` (D49, D50), `notes/reprises/`, `notes/simulation/reprise-2026-10-31.md`, l'existence de chaque fichier de `notes/` cité par la fiche (tous présents), et la CI GitHub de `9ce20c3` (courses 190, push, et 191, PR : en cours à 02 h 46 UTC, pas encore conclues).
 
 ## 1. Corrigé dans README.md
 
-1. En-tête (`VERIFICATION.md`) : « absent tant qu'aucun lot n'est passé par cette étape » était faux depuis cette relecture à la main ; la phrase dit maintenant que la première version a été écrite à la main avant TA.
-2. § 0, « Pour la nouvelle session », point 3 : « il n'existe qu'après la relecture à froid du premier lot que pousse la chaîne » contredisait l'en-tête ; remplacé de la même façon.
-3. § 5, « Lots restants » : la boucle de contrôle listait `PU TA EC L1 A7 21`, sans S9-L ni S9-A (présents dans `LOTS` depuis le 26/10) et avec PU, déjà poussé. Elle liste maintenant `TA EC L1 A7 S9-L S9-A 21`.
-4. § 6, « Fait » : PU complété (poussé vers 17 h 15 UTC, CI verte selon `etat-chaines.md`, étape `PU:fiche` jamais faite).
-5. § 6, « Reste dans la chaîne » : le paragraphe décrivait la course `wf_fb31205c-c06` comme en cours avec « PU (commencé) ». En réalité cette course (tâche `wq32xpqqr`) a été arrêtée pendant `PU:fiche`, et la course en cours est `wf_a77da96f-9ee` (tâche `wmnbuda2x`, `ouverts` = TA, EC, L1, A7, S9-L, S9-A, 21), à l'étape `TA:implementation`, avec trois commits locaux non relus ni poussés.
+1. Titre de l'encadré : « TA repris à sa correction » → « TA corrigé et poussé, EC suit ».
+2. Encadré, 2e puce : « Les trois commits de TA restent non poussés… Tant que TA n'est pas poussé, `ouverts` commence par TA » était devenu faux. Remplacé : TA poussé (`89f092f..9ce20c3`, vers 02 h 45 UTC), CI en cours, le correctif et le fichier d'arguments de TA ne servent plus, `ouverts` commence par EC.
+3. § 6, « Fait » : TA ajouté (trois commits + correction `9ce20c3`, 6 défauts traités, poussé le 01/11/2026).
+4. § 6, « Reste dans la chaîne » : paragraphe d'état réécrit (tête `9ce20c3`, course à `TA:fiche`, puis `TA:notes` et `EC:implementation` ; lancée avant les changements de script de 02 h 11 et 02 h 38 UTC) ; TA retiré de la liste, renumérotée de 1 (EC) à 6 (21).
+5. § 5, « Lots restants » : la boucle ne liste plus TA (`for l in EC L1 A7 S9-L S9-A 21`), puisque le § 6 dit que sa liste est celle de « Reste dans la chaîne ».
 
-## 2. Faux, ambigu ou manquant, non corrigé (propositions)
+## 2. Faux, ambigu ou manquant, non corrigé (propositions ; la session décide)
 
-### 2.1 La boucle du § 5 ne voit pas les commits du lot TA (bloquant pour le calcul des lots restants)
+### 2.1 La course en cours ignore D49 et D50 (important)
 
-Les commits de TA s'intitulent « (lot TA 1/3) », « (lot TA 2/3) », « (lot TA 3/3) ». `grep -F -e "(lot $l)"` ne les trouve pas : une fois TA poussé, la boucle afficherait TA comme non fait si sa relecture n'a trouvé aucun défaut (pas de commit « Relecture du lot TA »), et une nouvelle session remettrait TA dans `ouverts`, ce que le § 5 interdit. La chaîne elle-même n'en dépend pas (elle prend les commits que rend l'agent). Texte proposé pour la commande du § 5 :
+`wf_22d43798-897` a été lancée à 01 h 03 UTC. `effortDuLot`/`LOTS_SENSIBLES` ont été ajoutés à 02 h 11 UTC (sauvegarde `serie8-lots.avant-effort-par-lot.js`, sans `effortDuLot`) et la grille faketime reportée à 02 h 38 UTC (`serie8-lots.avant-faketime-a-la-fin.js`). Le § 5 dit lui-même qu'une course lancée ne voit pas les modifications du script. Conséquences si on la laisse continuer : EC, L1, A7, S9-L, S9-A et 21 relanceront la grille faketime avant leurs commits (contraire à D50, « la règle vaut à partir du lot EC ») et A7 et 21 ne recevront pas l'effort Max (contraire à D49). Preuve : l'agent `TA:correction` a fait la grille de 17 instants (son rapport et le message de `9ce20c3`). Texte proposé, à ajouter à l'encadré :
 
-> `for l in TA EC L1 A7 S9-L S9-A 21; do echo "== $l"; git -C /home/user/piliqiediteur log --oneline origin/claude/saas-invoice-editor-architecture-q6eizh | grep -F -e "(lot $l)" -e "(lot $l " -e "Relecture du lot $l "; done`
->
-> (un lot peut numéroter ses commits, « (lot TA 1/3) » : le motif `(lot $l ` les attrape.)
+> La course `wf_22d43798-897` suit le script de 01 h 03 UTC (grille faketime encore exigée, pas d'`effortDuLot`). Pour appliquer D49 et D50 à partir d'EC, l'arrêter juste après `TA:notes` (avant que `EC:implementation` n'ait commité) et relancer `serie8-lots.js` avec `{"ouverts": ["EC", "L1", "A7", "S9-L", "S9-A", "21"]}`, sans `reprise` ; sauver les arguments dans `notes/reprises/args-course-<nouvelle course>.json`. Si EC a déjà commencé, le reprendre selon le § 5 (« Reprendre un lot coupé »).
 
-Variante plus sûre, à décider par la session : dire aussi dans `REGLES` de `serie8-lots.js` que chaque commit d'un lot finit par « (lot X) » ou « (lot X n/m) ».
+### 2.2 Encadré, 1re puce : instruction de plage devenue caduque
 
-### 2.2 `VERIFICATION.md` n'est pas encore sur la branche distante
+« la prochaine reprise écrit `89f092f..<dernier commit>` » ne vaut plus pour TA (poussé). Proposition : remplacer par « (TA étant poussé, ces arguments ne servent plus ; une reprise d'EC aura pour premier hash `9ce20c3`) ».
 
-Ce fichier est écrit dans le dossier de travail `pilotage-reprise`, mais tant que `pilotage-sync.sh` n'a pas été lancé, il n'est ni commité ni poussé sur `claude/pilotage-reprise` : l'éditeur ne peut pas le voir sur GitHub. La session doit lancer `bash <scratchpad>/pilotage-sync.sh "Relecture à froid de la fiche (à la main, avant TA)"` (il fait `git add -A` dans ce dossier, donc il prend `VERIFICATION.md`). Texte proposé à ajouter au § 10 :
+### 2.3 § 4, point 1 : commande d'arguments propre à TA
 
-> `VERIFICATION.md` et `README.md` s'écrivent directement dans `<scratchpad>/pilotage-reprise/` : ils ne sont visibles sur GitHub qu'après `pilotage-sync.sh`, à lancer aussitôt après chaque relecture.
+La commande `python3 … a['reprise']['TA']['commit']=…` et `args-course-wf_22d43798-897.json` ne concernent que TA. Le garde-fou (« seulement si la boucle du § 5 montre que ce lot n'a encore aucun commit sur origin ») suffit à empêcher une fausse application, mais une session neuve peut s'y attarder. Proposition : ajouter en tête de ce passage « Aujourd'hui aucun correctif n'est à appliquer (TA est sur `origin`) ; ce qui suit sert d'exemple pour un futur lot sauvé ».
 
-### 2.3 S9-A et les questions Q-AF10, Q-AF12, Q-AF13
+### 2.4 § 5, exemple de plage
 
-Le § 6 dit « Avant ce lot, reposer à l'éditeur Q-AF10, Q-AF12 et Q-AF13 ». Or la course en cours enchaînera seule jusqu'à S9-A sans arrêt prévu. La règle 8 de `serie9/reponses-serie9.md` prévoit un comportement par défaut si les réponses manquent, et le complément de S9-A fait relire ce fichier au début du lot. Il manque donc l'échéance concrète. Texte proposé, à la suite de la phrase du § 6 (point 6) :
+« pour TA : `89f092f..e2d790a`, ou `89f092f..<commit « Relecture du lot TA… »>` » reste juste comme exemple ; proposition : « exemple tiré de TA (`89f092f..9ce20c3` pour le lot entier) ».
 
-> La course en cours y arrivera sans s'arrêter : poser ces trois questions à l'éditeur dès que possible, et écrire ses réponses dans `serie9/reponses-serie9.md` avant le début de S9-A ; sans réponse, S9-A applique la règle 8 de ce fichier (comportement par défaut) et le dit dans « laisses ».
+### 2.5 CI de `9ce20c3` non encore conclue
 
-Ces trois questions manquent aussi dans « Questions encore ouvertes » (§ 6) et au § 9. Texte proposé pour la liste du § 6 :
+À 02 h 46 UTC, les courses 190 (push) et 191 (PR) étaient « in_progress ». La session doit en noter la conclusion dans `etat-chaines.md` et, si elle est verte, remplacer « CI de `9ce20c3` en cours » par « CI verte » dans l'encadré et au § 6.
 
-> - Série 9 : Q-AF10 (délai d'urgence d'une preuve d'export), Q-AF12 (preuve d'export reçue après la fermeture du magasin), Q-AF13 (les trois choses sans fin), point 10 de `serie9/reponses-serie9.md`.
+### 2.6 Compte rendu de TA à l'éditeur (§ 5, « Suivi »)
 
-### 2.4 Série 9 absente des § 7 et § 8
+TA change une migration (`2026_10_03_100001_create_devis_table.php`, colonne `emetteur_fige`) et celles de ses trois commits : rappeler à l'éditeur, pour son PC, `git pull`, `php artisan migrate:fresh`, `php artisan optimize:clear` et une nouvelle inscription. Le compte rendu doit aussi signaler deux choix de la correction : un devis envoyé fige désormais son émetteur (assurance comprise) ; un cabinet ne crée plus d'administrateurs ni d'experts-comptables et ne voit plus ses réglages fiscaux (le lot EC garde ces refus).
 
-Le tableau du § 7 n'a pas de ligne pour la série 9, alors que S9-L et S9-A sont dans la chaîne. Texte proposé :
+### 2.7 Points de la relecture du 26/10 toujours ouverts
 
-> | Série 9 (un produit = une ligne ; « À faire » au tableau de bord) | `serie9/reponses-serie9.md`, puis `serie9/demande-editeur.md`, `serie9/critique.md`, `serie9/analyse-lignes.md`, `serie9/analyse-a-faire.md` |
+Toujours non repris dans la fiche, à décider par la session : § 2.2 de l'ancienne VERIFICATION (visibilité de `VERIFICATION.md` seulement après `pilotage-sync.sh`), § 2.3 (échéance des questions Q-AF10, Q-AF12, Q-AF13 avant S9-A, absentes des « Questions encore ouvertes » et du § 9), § 2.5 (déjà couvert au § 8, mais pas au § 4, point 6), § 2.6 (T3 commité à 12 h 44, poussé vers 12 h 57 UTC), § 2.7 (complément de A7 qui cite aussi la section 7 de l'avenant). Textes proposés inchangés : voir la version précédente de ce fichier dans l'historique de `claude/pilotage-reprise`. Les points 2.1, 2.4 (§ 7) et 2.8 de cette relecture sont repris dans la fiche.
 
-Et dans la liste des priorités du § 7 :
+### 2.8 `ETAT.md`
 
-> - `serie9/reponses-serie9.md` (26/10) sur `serie9/analyse-lignes.md`, `serie9/analyse-a-faire.md` et `serie9/critique.md`, et (règle 7) sur les « badges » du plan TVA.
-
-Le § 8 ne résume pas la série 9. Texte proposé :
-
-> - **Série 9** : un produit = une ligne partout où l'on ajoute des produits, achats compris (clic répété = quantité) ; ligne remisée selon le droit des remises ; même règle pour les services ; « À faire » et « À surveiller » au tableau de bord de chaque magasin, nombres par magasin dans l'espace de la société, plus aucun nombre dans les menus ni les onglets (règle 7) ; Q-AF10, 12 et 13 sans réponse.
-
-### 2.5 Source officielle autorisée et dossier `notes/sources/`
-
-Le § 4, point 6, dit que WebFetch et curl sont souvent bloqués. `etat-chaines.md` (26/10, 17 h 50 UTC) note que l'éditeur a autorisé entreprendre.service-public.gouv.fr, lisible par curl via le proxy (pas par WebFetch), et que la fiche F24271 est sauvée dans `notes/sources/service-public-F24271.txt` (listée dans `pilotage-fichiers.txt`). La fiche ne mentionne ni l'autorisation ni le dossier. Texte proposé, à la fin du § 4, point 6 :
-
-> L'éditeur a autorisé entreprendre.service-public.gouv.fr le 26/10/2026 (lisible par curl via le proxy, pas par WebFetch) ; les pages officielles lues sont gardées dans `notes/sources/` (par exemple `service-public-F24271.txt`, prix HT = TTC ÷ (1 + taux), arrondi au centime).
-
-### 2.6 Heure de poussée de T3
-
-Le § 6 dit T3 « poussée le 26/10/2026 à 12 h 44 UTC » : c'est l'heure du commit `fa83824` (12 h 43 min 57 s) ; `etat-chaines.md` note la poussée à 12 h 57 UTC. Sans conséquence ; proposition : « commitée à 12 h 44 UTC et poussée vers 12 h 57 UTC ».
-
-### 2.7 Description de A7 au § 6
-
-Le § 6 cite pour A7 « section 14 de `societe/conception-v2-finale.md`, section 3.5.14 de `serie8/avenant-cabinets.md` », alors que le complément de A7 dans `LOTS` dit aussi « corrigé par la section 7 de l'avenant et ses compléments ». Proposition : ajouter « corrigée par la section 7 de l'avenant de l'architecture société et ses compléments (`societe/avenant-A4-serie6.md`, `societe/avenant-A4-complements.md`) », après vérification par la session de l'avenant exact visé.
-
-### 2.8 Point 2 du § 0 « Pour la nouvelle session » et le lot TA en cours
-
-Si la passation a lieu pendant TA, `ETAT.md` montrera des commits locaux du lot TA ; la fiche dit bien qu'ils sont perdus et que le lot se refait, mais ne dit pas qu'il faut alors remettre TA en tête de `ouverts`. Le § 5 le couvre implicitement (« ceux qui ne sont pas faits »). Proposition, au § 6 « Reste dans la chaîne » : « Si TA n'est pas poussé au moment de la passation, `ouverts` commence par TA. »
+Il montre encore les trois commits de TA « pas encore poussés » et l'arbre de la correction « non commité » (généré à 02 h 39 UTC) : normal, l'étape `TA:notes` le régénère. Rien à corriger à la main.
 
 Aucune valeur secrète n'a été lue ni écrite dans cette relecture.

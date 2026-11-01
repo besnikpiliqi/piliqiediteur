@@ -4199,3 +4199,11 @@ J’arrive pas à comprendre pourquoi ça prend tout ce temps alors que c’est 
 
 En fait tu enlèves faketime pour toujours et on le met juste à la fin du logiciel pour tout regler car maintenant normalement pas besoin car la c’est important de construire le logiciel au plus vite et la faketime on fait juste à la fin pour confirmer que tout va bien et à la fin se réglera plus rapide. D’accord
 
+## 317. 2026-11-01 02:45 UTC
+
+Comment ça ça prend combien temps maintenant
+
+## 318. 2026-11-01 02:47 UTC
+
+Tu dit sql à chaque passage! C’est quoi les passages
+

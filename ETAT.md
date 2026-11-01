@@ -1,20 +1,21 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 02:39 UTC par pilotage-sync.sh : « Décision de l'éditeur : grille faketime reportée à la fin du logiciel ».
+Mis à jour le 01/11/2026 à 02:48 UTC par pilotage-sync.sh : « Après le lot TA ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `89f092f`. Commits locaux pas encore poussés :
+Tête poussée : `9ce20c3`. Commits locaux pas encore poussés :
 
 ```
-e2d790a Imprime l'assurance professionnelle facultative de la société (lot TA 3/3)
-ad19e0b Range les autorisations par famille et retire les articles aux sociétés de services (lot TA 2/3)
-7832bb0 Fait choisir à l'inscription un type d'activité définitif (lot TA 1/3)
 ```
 
 Derniers commits poussés :
 
 ```
+9ce20c3 Relecture du lot TA des types d’activité
+e2d790a Imprime l'assurance professionnelle facultative de la société (lot TA 3/3)
+ad19e0b Range les autorisations par famille et retire les articles aux sociétés de services (lot TA 2/3)
+7832bb0 Fait choisir à l'inscription un type d'activité définitif (lot TA 1/3)
 89f092f Relecture du lot PU de l’affichage des prix unitaires
 e70f18e Affiche les prix unitaires au centime et complète la note de calcul (lot PU)
 fa83824 Relecture du lot T3 de l’heure locale des magasins
@@ -31,39 +32,11 @@ a188773 Relit sous verrou ce que décident l'envoi d'un e-mail et le passage en 
 5f71b60 Relecture du lot FA2 de la concurrence des brouillons et des fiches
 c2b2512 Protège les fiches et les achats contre les gestes simultanés (lot FA2)
 08854d5 Relecture du lot FA1 de la concurrence des brouillons et des fiches
-fc8a711 Protège les brouillons et les fiches contre les gestes simultanés (lot FA1)
-6b5baba Relecture du lot V2b des compléments de la vérification
-65819c6 Confirme l'adresse choisie au code et libère celle d'une inscription close (lot V2b)
-79216b1 Relecture du lot V2 de la vérification par courrier
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Authorization/ControleDesDroits.php
- M app/Domain/Facturation/Actions/EmettreDevisAction.php
- M app/Domain/Facturation/Actions/ModifierDevisAction.php
- M app/Domain/Facturation/Contracts/DocumentEnvoyable.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/Devis.php
- M app/Domain/Facturation/Services/DevisPdfGenerator.php
- M app/Domain/Facturation/Services/Emetteur.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/PiedDePage.php
- M app/Domain/Tenancy/Actions/CreerAdministrateurAction.php
- M app/Domain/Tenancy/Actions/CreerExpertComptableAction.php
- M app/Domain/Tenancy/Actions/ModifierParametresFiscauxSocieteAction.php
- M app/Filament/Societe/Pages/ParametresFiscauxSociete.php
- M app/Filament/Societe/Resources/MembreResource/Pages/ListMembres.php
- M app/Policies/MembrePolicy.php
- M app/Policies/SocietePolicy.php
- M database/migrations/2026_10_03_100001_create_devis_table.php
- M resources/views/devis/pdf.blade.php
- M tests/Feature/Facturation/AssuranceProfessionnelleTest.php
- M tests/Feature/Facturation/EmetteurFigeTest.php
- M tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php
- M tests/Feature/Filament/EcransSelonLeTypeTest.php
- M tests/Feature/Societe/TypeDActiviteTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -72,4 +45,7 @@ Course `wf_22d43798-897`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 TA:correction
+TA:poussee
+TA:fiche
+TA:notes
 ```

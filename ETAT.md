@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 02:48 UTC par pilotage-sync.sh : « Après le lot TA ».
+Mis à jour le 01/11/2026 à 02:52 UTC par pilotage-sync.sh : « Chaîne relancée sur EC avec l'effort par lot et sans grille faketime ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,11 +41,8 @@ c2b2512 Protège les fiches et les achats contre les gestes simultanés (lot FA2
 
 ## Dernière course de la chaîne
 
-Course `wf_22d43798-897`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_d67322b9-242`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-TA:correction
-TA:poussee
-TA:fiche
-TA:notes
+EC:implementation
 ```

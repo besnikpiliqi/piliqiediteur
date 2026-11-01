@@ -146,3 +146,17 @@ tu as dit que mtn sont 5000 teste ? et alors combien de assertions. et tous ceux
 
 mais tout les testes il faut qu'il passe deja à partir de mtn mais aussi à la fin
 
+## 28. 2026-11-01 23:24 UTC
+
+<!-- attach -->
+
+> Une question reste ouverte : voulez-vous que j’ajoute la mesure de la couverture du code, qui montre ce que les tests ne touchent jamais ?
+
+
+
+tu peux m'explique de quoi s agit
+
+## 29. 2026-11-01 23:29 UTC
+
+fait ce qui est le meilleur donc s'il faut ajouter alors ajoute tout pour que le logiciel soit hyper performant avec zero de faille ou erreurs. je veux que le logiciel soit le meilleur de tout
+

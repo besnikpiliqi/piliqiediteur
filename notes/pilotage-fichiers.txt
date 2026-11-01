@@ -95,3 +95,4 @@ decisions/client-comptoir-01-11.md
 navigateur/decision-tests-navigateur.md
 navigateur/decision-sl.md
 navigateur/plan-nav.md
+qualite/decision-qualite.md

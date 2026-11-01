@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 18:32 UTC par pilotage-sync.sh : « Après le lot A7 ».
+Mis à jour le 01/11/2026 à 18:51 UTC par pilotage-sync.sh : « A7 poussé (53ed088), CI verte ; ML en cours ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -50,4 +50,5 @@ A7:correction
 A7:poussee
 A7:fiche
 A7:notes
+ML:implementation
 ```

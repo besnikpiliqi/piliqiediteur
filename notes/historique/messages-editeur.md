@@ -102,3 +102,9 @@ Réessayez
 
 quand ce magasin est invite par son comptable et lui accepte alors c'est pas bon car le magasin peut il sais pas de quoi il s'agit car lui il recois jamais le courier. donc quand c'est par invitation alors le "Saisir le code du courrier recommandé" et "Essayer le magasin de démonstration" pas besoin d'etre afficher car ce genre de societe ils savent rien du tout pour ces etapes car ces etapes sont peur eux qui creer eux meme leurs compte chez piliqi. la 2 eme et 3eme photo il y a un problem car quand le comptable clique sur son client alors il ramen sur une page 404 !
 
+## 18. 2026-11-01 21:37 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+le client comptoir n'as pas besoin de ce genre d'info et meme chez le client comptoir ne doit pas pouvoir aller voir ou editer car c'est un client comptoir inconnu et c'est normal que c'est un client particulier sauf si ce client veux apres transformer son ticket de vente en facture alors la on choisi les info du client. ETTT commen je t'ai deja dis si un jour un client viens avec son ticket et veut transformer son ticket en facture alors ca doit se faire uniquement latransformation en facture en un clique sans pouvoir creer d'abort l'avoir et apres la facture. donc le client donne son ticket avec son numer de ticket et le magasin transform en facture juste avec un clique car un client comptoir ne doit pas avoir une avoir car c'est inconnu et donc comme dans la 2eme photo marque le "Solde créditeur" 0.00€ alors ce client ne doit jamais avoir un avoir car c'est inconnu. donc juste une transformation en facture en un clique avec son num de ticket
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 21:27 UTC par pilotage-sync.sh : « Course wf_1ce3e4cc-2f2 lancée (A7b, ML, EC2, S9-L, S9-A, 21) ; cahier définitif d'EC2 en place ».
+Mis à jour le 01/11/2026 à 21:39 UTC par pilotage-sync.sh : « Client comptoir et ticket transformé en facture : questions à l'éditeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,19 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Filament/Societe/Pages/AccepterLaTransmission.php
+ M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
+ M app/Http/Controllers/CodeDuCourrierController.php
+ M app/Http/Controllers/ConfirmerInscriptionController.php
+ M app/Http/Middleware/MenerUnCompteSansMagasin.php
+ M app/Providers/Filament/AppPanelProvider.php
+ M app/Providers/Filament/SocietePanelProvider.php
+ M tests/Feature/Cabinets/CabinetInscriptionTest.php
+ M tests/Feature/Cabinets/CollaborateursTest.php
+ M tests/Feature/Cabinets/PanneauCabinetTest.php
+ M tests/Feature/Societe/TypeDActiviteTest.php
+?? app/Filament/EspaceDeLaSociete.php
+?? app/Http/Middleware/MenerUnCabinetASonEspace.php
 ```
 
 ## Dernière course de la chaîne

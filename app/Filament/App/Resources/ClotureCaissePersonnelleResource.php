@@ -24,7 +24,8 @@ use Illuminate\Database\Eloquent\Builder;
  * Le menu et la page s'appellent « Ma caisse » pour qui tient une caisse
  * dans le magasin sans voir les relevés de toute l'équipe, « Les caisses »
  * pour tous les autres (le propriétaire, un responsable, un administrateur
- * qui ne fait que fermer la caisse d'un vendeur, un expert-comptable...),
+ * qui ne fait que fermer la caisse d'un vendeur, un compte du cabinet
+ * lié...),
  * qui y voient aussi les caisses encore ouvertes (voir neVoitQueSaCaisse()
  * et CaissesOuvertesDeLEquipeApercu).
  */

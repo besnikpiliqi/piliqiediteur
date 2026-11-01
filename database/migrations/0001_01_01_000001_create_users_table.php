@@ -7,9 +7,10 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Un compte appartient pour toujours à une seule société (voir User) : son
- * propriétaire, un administrateur, un expert-comptable ou un membre (voir
- * RoleSociete). Un compte ne s'efface pas : retiré, il garde son rôle, son
- * identifiant de connexion et son historique (voir StatutCompte).
+ * propriétaire, un administrateur, un membre ou, dans un cabinet
+ * d'expertise comptable, un collaborateur (voir RoleSociete). Un compte
+ * ne s'efface pas : retiré, il garde son rôle, son identifiant de
+ * connexion et son historique (voir StatutCompte).
  *
  * Chaque compte a un identifiant de connexion de 8 chiffres, tiré au hasard
  * et jamais redonné (voir la table identifiants). Le propriétaire se
@@ -21,10 +22,11 @@ use Illuminate\Support\Facades\Schema;
  * (voir CloreLInscriptionAction). L'adresse de tout autre compte est
  * facultative, renseignée par la personne seule dans son profil, et n'est
  * qu'un contact (voir ModifierProfil). Un compte créé par la société (voir
- * CreerMembreAction, CreerAdministrateurAction et CreerExpertComptableAction)
- * a pour premier mot de passe son identifiant ; la personne choisit le sien
- * quand elle le veut, ou à sa première connexion pour un responsable, un
- * administrateur ou un expert-comptable (voir ExigerSonPropreMotDePasse).
+ * CreerMembreAction et CreerAdministrateurAction) a pour premier mot de
+ * passe son identifiant ; la personne choisit le sien quand elle le veut,
+ * ou à sa première connexion pour un responsable ou un administrateur
+ * (voir ExigerSonPropreMotDePasse) ; un collaborateur d'un cabinet choisit
+ * le sien à la création de son compte (voir CreerCollaborateurAction).
  *
  * Les gardes de la base qui lient le rôle de société aux affectations, aux
  * autorisations de société et aux identifiants se posent avec la table des
@@ -39,8 +41,8 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
-            // proprietaire, administrateur, expert_comptable, membre ou
-            // collaborateur (voir RoleSociete) ; collaborateur seulement
+            // proprietaire, administrateur, membre ou collaborateur (voir
+            // RoleSociete) ; collaborateur seulement
             // dans une société de type cabinet, administrateur et membre
             // jamais (voir GardesDesDroits).
             $table->string('role_societe', 20)->default('membre');

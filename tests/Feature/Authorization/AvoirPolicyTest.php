@@ -52,19 +52,19 @@ class AvoirPolicyTest extends TestCase
     }
 
     /**
-     * L'expert-comptable lit les avoirs de tout le magasin, mais n'en envoie
-     * aucun, contrairement à l'ancien comptable de magasin.
+     * Un compte du cabinet lié lit les avoirs de tout le magasin, mais n'en
+     * envoie aucun, contrairement à l'ancien comptable de magasin.
      */
-    public function test_l_expert_comptable_voit_les_avoirs_de_toute_l_equipe_sans_les_envoyer(): void
+    public function test_un_compte_de_cabinet_voit_les_avoirs_de_toute_l_equipe_sans_les_envoyer(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = $this->vendeurQuiFaitDesAvoirs($magasin, 'paul@example.test');
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $avoir = $this->emettreUnAvoirEnTantQue($vendeur);
 
-        $this->assertTrue($expert->can('view', $avoir));
-        $this->assertFalse($expert->can('envoyer', $avoir));
+        $this->assertTrue($collaborateur->can('view', $avoir));
+        $this->assertFalse($collaborateur->can('envoyer', $avoir));
     }
 
     public function test_personne_n_envoie_l_avoir_d_un_autre_magasin(): void

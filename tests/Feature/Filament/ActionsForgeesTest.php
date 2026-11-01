@@ -4,6 +4,8 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -34,6 +36,10 @@ use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\FicheDuClient;
+use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\FicheDuCollaborateur;
+use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\ListCollaborateurs;
+use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource\Pages\ModifierMagasin;
@@ -41,7 +47,9 @@ use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Closure;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -121,7 +129,10 @@ class ActionsForgeesTest extends TestCase
             'transférer la propriété',
             'créer un vendeur',
             'nommer un responsable',
-            'créer l\'expert-comptable',
+            'créer un collaborateur',
+            'confier des clients',
+            'mettre fin au lien depuis le cabinet',
+            'régler les autorisations du cabinet',
             'fermer un magasin',
             'rouvrir un magasin',
         ], array_map(static fn (string $nom): array => [$nom], $noms));
@@ -196,12 +207,38 @@ class ActionsForgeesTest extends TestCase
 
                 return fn (): bool => Affectation::query()->where('user_id', $vendeur->id)->sole()->role === RoleMagasin::Vendeur;
             })(),
-            'créer l\'expert-comptable' => (function () use ($magasin, $societe): Closure {
-                $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
-                $this->dansLEspaceDeLaSociete($societe, $administrateur);
-                $this->forgerLAction(Livewire::test(ListMembres::class)->assertActionHidden('creerUnExpertComptable'), 'creerUnExpertComptable', ['name' => 'Cabinet']);
+            'créer un collaborateur' => (function () use ($magasin): Closure {
+                $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+                $cabinet = $collaborateur->societe;
+                $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
+                Livewire::test(ListCollaborateurs::class)->assertForbidden();
 
-                return fn (): bool => User::query()->where('role_societe', RoleSociete::ExpertComptable->value)->doesntExist();
+                return fn (): bool => User::query()->where('societe_id', $cabinet->id)->where('role_societe', RoleSociete::Collaborateur->value)->count() === 1;
+            })(),
+            'confier des clients' => (function () use ($magasin): Closure {
+                $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+                $collegue = $this->collaborateur($collaborateur->societe, 'Marc Girard');
+                $this->dansLEspaceDuCabinet($collaborateur->societe, $collaborateur);
+                $this->assertThrows(fn () => Livewire::test(FicheDuCollaborateur::class, ['record' => $collegue->getRouteKey()]), ModelNotFoundException::class);
+
+                return fn (): bool => DB::table('clients_confies')->where('user_id', $collegue->id)->doesntExist();
+            })(),
+            'mettre fin au lien depuis le cabinet' => (function () use ($magasin): Closure {
+                $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+                $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+                $this->dansLEspaceDuCabinet($collaborateur->societe, $collaborateur);
+                $this->forgerLAction(Livewire::test(FicheDuClient::class, ['record' => $lien->uuid])->assertActionHidden('mettreFin'), 'mettreFin');
+
+                return fn (): bool => $lien->fresh()->etat === EtatDuLien::Actif;
+            })(),
+            'régler les autorisations du cabinet' => (function () use ($magasin, $societe): Closure {
+                $this->collaborateurDuCabinetLie($magasin);
+                $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->id)->where('etat', EtatDuLien::Actif->value)->sole();
+                $avant = $lien->autorisations();
+                $this->dansLEspaceDeLaSociete($societe, $this->administrateur($magasin, null, AutorisationsSociete::toutes()));
+                Livewire::test(CabinetComptable::class)->assertForbidden();
+
+                return fn (): bool => $lien->fresh()->autorisations() === $avant;
             })(),
             'fermer un magasin' => (function () use ($magasin, $societe): Closure {
                 $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());

@@ -37,7 +37,7 @@ use SensitiveParameter;
  * magasins, pour un magasin de sa portée, dans une société qui n'est pas
  * en lecture seule (voir MagasinDeLaSocietePolicy::rouvrirLeMagasin()),
  * en redonnant son mot de passe (voir MotDePasseRedemande). Jamais un
- * responsable ni un expert-comptable. La suspension décidée par l'éditeur
+ * responsable ni un compte du cabinet lié. La suspension décidée par l'éditeur
  * (suspendu_le) n'est jamais levée par une réouverture : un magasin
  * suspendu rouvert reste en lecture seule.
  *

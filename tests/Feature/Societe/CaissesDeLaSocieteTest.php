@@ -141,11 +141,11 @@ class CaissesDeLaSocieteTest extends TestCase
         }
     }
 
-    public function test_un_membre_ou_un_expert_comptable_n_ouvre_pas_la_page(): void
+    public function test_un_membre_ou_un_compte_de_cabinet_n_ouvre_pas_la_page(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
 
-        foreach ([$this->responsableDeTest($magasin), $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]), $this->expertComptable($magasin)] as $compte) {
+        foreach ([$this->responsableDeTest($magasin), $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]), $this->collaborateurDuCabinetLie($magasin)] as $compte) {
             $this->dansLEspaceDeLaSociete($magasin->societe, $compte);
 
             $this->assertFalse(LesCaisses::canAccess(), $compte->name);

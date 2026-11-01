@@ -8,7 +8,6 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
@@ -24,8 +23,8 @@ use LogicException;
  * Les gestes qui touchent tout un compte de la société, selon les règles
  * de PorteeDesDroits, sur l'auteur et le compte relus sous les verrous des
  * registres de tous les magasins du compte (tous les magasins de la
- * société pour un administrateur de tous les magasins ou un
- * expert-comptable) et de leurs lignes, avec le JET 130 de chacun et
+ * société pour un administrateur de tous les magasins, ceux des clients
+ * confiés pour un collaborateur d'un cabinet) et de leurs lignes, avec le JET 130 de chacun et
  * l'entrée d'audit (voir JournalDesDroits) :
  * - suspendre : le compte n'ouvre plus rien et n'a plus aucun droit dès la
  *   requête suivante, ses sessions se ferment et ses notifications, qui ne
@@ -41,8 +40,8 @@ use LogicException;
  *   propriétaire ;
  * - réintégrer un compte retiré, dans son rôle et, pour un membre, dans son
  *   magasin, selon les règles de la création de ce rôle : comme membre
- *   (voir PorteeDesDroits::peutReintegrer()), comme administrateur ou comme
- *   expert-comptable par le propriétaire seul, comme collaborateur d'un
+ *   (voir PorteeDesDroits::peutReintegrer()), comme administrateur par le
+ *   propriétaire seul, comme collaborateur d'un
  *   cabinet par le propriétaire du cabinet seul, sans client confié. Un
  *   compte retiré par le propriétaire ne se réintègre que par le
  *   propriétaire.
@@ -186,33 +185,6 @@ class ChangerStatutCompteAction
 
                 $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
                 $this->porteeDesAdministrateurs->ecrire($compteRelu, $portee);
-            });
-        });
-
-        $compte->refresh();
-    }
-
-    /**
-     * Réintègre un expert-comptable retiré : le propriétaire seul, tant
-     * qu'il gère son équipe (pas dans une société révoquée, voir
-     * PorteeDesDroits::gereSonEquipe()).
-     *
-     * @throws AuthorizationException
-     */
-    public function reintegrerLExpertComptable(User $auteur, User $compte): void
-    {
-        $societe = $compte->societe()->firstOrFail();
-
-        $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $societe): void {
-            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], Magasin::query()->where('societe_id', $societe->getKey())->get(), function (User $auteurRelu, array $relus) use ($societe): void {
-                [$compteRelu] = $relus;
-                CreerExpertComptableAction::exigerLeProprietaire($auteurRelu, $societe);
-
-                if (! $compteRelu->estRetire() || ! $compteRelu->estExpertComptable() || (int) $compteRelu->societe_id !== $societe->getKey()) {
-                    throw new AuthorizationException(PorteeDesDroits::REFUS);
-                }
-
-                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
             });
         });
 

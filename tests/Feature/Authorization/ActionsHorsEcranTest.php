@@ -11,6 +11,9 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Actions\ExporterJournalDesEvenementsAction;
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
 use App\Domain\Calendrier\Calendrier;
@@ -48,7 +51,6 @@ use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
@@ -83,9 +85,9 @@ use Throwable;
 /**
  * Chaque action métier contrôle elle-même son auteur, appelée sans aucun
  * écran (une commande, un job, une requête forgée) : un compte sans le
- * droit, d'une autre société, suspendu, retiré, ou l'expert-comptable
- * pour toute écriture, est refusé pour ce motif, et rien n'est écrit en
- * base ni envoyé.
+ * droit, d'une autre société, suspendu, retiré, ou un compte du cabinet
+ * lié pour toute écriture que le client ne lui accorde pas, est refusé
+ * pour ce motif, et rien n'est écrit en base ni envoyé.
  */
 class ActionsHorsEcranTest extends TestCase
 {
@@ -102,7 +104,6 @@ class ActionsHorsEcranTest extends TestCase
         PorteeDesDroits::REFUS,
         PorteeDesDroits::REFUS_AU_DELA,
         CreerAdministrateurAction::MESSAGE_PROPRIETAIRE_SEUL,
-        CreerExpertComptableAction::MESSAGE_PROPRIETAIRE_SEUL,
         CreerEtablissementAction::MESSAGE_SANS_AUTORISATION,
         ModifierEtablissementAction::MESSAGE_SANS_AUTORISATION,
         ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION,
@@ -113,9 +114,16 @@ class ActionsHorsEcranTest extends TestCase
     ];
 
     /**
-     * Les gestes de consultation : l'expert-comptable les fait.
+     * Les gestes de consultation : le cabinet lié les fait, avec les
+     * autorisations par défaut.
      */
     private const CONSULTATIONS = ['exporter le journal des événements', 'vérifier l\'intégrité'];
+
+    /**
+     * Les gestes des achats, qu'un client qui a des articles peut accorder
+     * à son cabinet lié (voir PermissionRegistry::ajoutablesAuCabinet()).
+     */
+    private const ACHATS = ['saisir une facture d\'achat', 'modifier une facture d\'achat', 'valider une facture d\'achat', 'créer un avoir fournisseur', 'émettre un avoir fournisseur'];
 
     /**
      * Une donnée par action : son nom (voir geste()), qui en a le droit
@@ -141,7 +149,7 @@ class ActionsHorsEcranTest extends TestCase
         ];
         $societe = [
             'créer un administrateur', 'changer le rôle de société', 'modifier un administrateur',
-            'créer l\'expert-comptable', 'réintégrer l\'expert-comptable', 'annuler une nomination', 'demander la transmission de la propriété',
+            'régler les autorisations du cabinet', 'annuler une nomination', 'demander la transmission de la propriété',
             'créer un magasin', 'modifier un magasin', 'modifier l\'identité de la société', 'modifier les réglages fiscaux',
         ];
         $verification = [
@@ -212,14 +220,34 @@ class ActionsHorsEcranTest extends TestCase
         $this->assertRefuseSansRienEcrire($geste, $retire);
     }
 
+    /**
+     * Un compte du cabinet lié, avec les autorisations par défaut (les
+     * consultations), n'écrit rien ; quand le client lui accorde en plus
+     * les achats, il ne fait que les gestes des achats.
+     */
     #[DataProvider('actionsDEcriture')]
-    public function test_l_expert_comptable_n_ecrit_rien_meme_par_l_action(string $nom, string $porte, bool $aVerifier): void
+    public function test_un_compte_de_cabinet_n_ecrit_que_ce_que_le_client_autorise_meme_par_l_action(string $nom, string $porte, bool $aVerifier): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => $aVerifier]);
         $geste = $this->geste($nom, $magasin);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
 
-        $this->assertRefuseSansRienEcrire($geste, $expert);
+        $this->assertRefuseSansRienEcrire($geste, $collaborateur);
+
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [...PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), ...PermissionRegistry::ajoutablesAuCabinet(TypeDActivite::Commerce)]);
+        app(TenantContext::class)->set($magasin);
+        $collaborateur = $collaborateur->fresh();
+
+        if (! in_array($nom, self::ACHATS, true)) {
+            $this->assertRefuseSansRienEcrire($geste, $collaborateur);
+
+            return;
+        }
+
+        $avant = $this->empreinteDeLaBase();
+        $geste($collaborateur);
+        $this->assertNotSame($avant, $this->empreinteDeLaBase());
     }
 
     /**
@@ -297,11 +325,10 @@ class ActionsHorsEcranTest extends TestCase
             'créer un administrateur' => fn (User $auteur) => app(CreerAdministrateurAction::class)->handle($auteur, $societe, ['name' => 'Alice'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []),
             'changer le rôle de société' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($auteur, $vendeur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [])),
             'modifier un administrateur' => $this->avec($this->administrateur($magasin), fn (User $administrateur, User $auteur) => app(ModifierAdministrateurAction::class)->modifier($auteur, $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), AutorisationsSociete::toutes())),
-            'créer l\'expert-comptable' => fn (User $auteur) => app(CreerExpertComptableAction::class)->handle($auteur, $societe, ['name' => 'Émile']),
-            'réintégrer l\'expert-comptable' => $this->avec($this->expertComptable($magasin), function (User $expert) use ($proprietaire): Closure {
-                app(ChangerStatutCompteAction::class)->retirer($proprietaire, $expert);
+            'régler les autorisations du cabinet' => $this->avec($this->lierLeCabinet($this->ouvrirUnCabinet(), $magasin), function (LienCabinet $lien) use ($magasin): Closure {
+                app(TenantContext::class)->set($magasin);
 
-                return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($auteur, $expert);
+                return fn (User $auteur) => app(ReglerLesAutorisationsDuCabinetAction::class)->handle($auteur, $lien, [PermissionRegistry::FACTURE_VIEW]);
             }),
             'annuler une nomination' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur) use ($magasin): Closure {
                 app(ModifierMembreAction::class)->handle($this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]), $vendeur, RoleMagasin::Responsable);

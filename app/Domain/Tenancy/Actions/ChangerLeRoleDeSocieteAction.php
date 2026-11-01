@@ -22,29 +22,28 @@ use LogicException;
 
 /**
  * Le propriétaire, et lui seul, change le rôle de société d'un compte
- * actif : membre, administrateur ou expert-comptable. Le compte, son
- * identifiant et son historique restent les mêmes ; seuls son rôle et ses
- * autorisations changent (voir PorteeDesDroits::peutChangerLeRoleDeSociete()) :
+ * actif : membre ou administrateur. Le compte, son identifiant et son
+ * historique restent les mêmes ; seuls son rôle et ses autorisations
+ * changent (voir PorteeDesDroits::peutChangerLeRoleDeSociete()) :
  * - vers administrateur : son affectation de membre disparaît, puis il
  *   reçoit la portée et les cases que le propriétaire choisit, précochées
  *   selon le modèle de l'administrateur, aucune de la vente ; son magasin
  *   de rattachement reste inscrit sans limiter sa portée ; ses ventes
  *   passées restent à son nom ;
  * - vers membre : dans le magasin de rattachement de son identifiant ; un
- *   compte qui n'en a pas (né administrateur, expert-comptable ou
- *   propriétaire) reçoit le magasin réel ouvert que le propriétaire lui
- *   choisit, écrit une fois pour toutes ; un magasin de rattachement fermé
- *   ou cédé refuse le changement ;
- * - vers expert-comptable : sa portée, son affectation et ses autorisations
- *   de société disparaissent ; il lit tous les magasins réels.
- * Jamais pour un compte d'entraînement (rattaché au magasin de
- * démonstration), que la base refuse aussi (voir GardesDesDroits). Les
- * droits avant et après s'inscrivent au JET 130 de chaque magasin touché,
- * puis au journal d'audit (RoleDeSocieteChange), avec l'ancien et le
- * nouveau rôle, la date et l'auteur (voir JournalDesDroits). Dans l'ordre
- * qu'exigent les gardes de la base : les droits d'avant s'effacent, le
- * rôle change, le magasin de rattachement s'écrit, puis les droits
- * nouveaux.
+ *   compte qui n'en a pas (né administrateur ou propriétaire) reçoit le
+ *   magasin réel ouvert que le propriétaire lui choisit, écrit une fois
+ *   pour toutes ; un magasin de rattachement fermé ou cédé refuse le
+ *   changement.
+ * Jamais pour un compte d'un cabinet d'expertise comptable, qui n'a ni
+ * administrateur ni membre, ni pour un compte d'entraînement (rattaché au
+ * magasin de démonstration), que la base refuse aussi (voir
+ * GardesDesDroits). Les droits avant et après s'inscrivent au JET 130 de
+ * chaque magasin touché, puis au journal d'audit (RoleDeSocieteChange),
+ * avec l'ancien et le nouveau rôle, la date et l'auteur (voir
+ * JournalDesDroits). Dans l'ordre qu'exigent les gardes de la base : les
+ * droits d'avant s'effacent, le rôle change, le magasin de rattachement
+ * s'écrit, puis les droits nouveaux.
  */
 class ChangerLeRoleDeSocieteAction
 {
@@ -112,23 +111,6 @@ class ChangerLeRoleDeSocieteAction
                 $this->affectations->ecrire($auteurRelu, $compteRelu, $magasin, $demandee['role'], $cases);
             }];
         });
-    }
-
-    /**
-     * @throws AuthorizationException
-     * @throws LogicException
-     */
-    public function versExpertComptable(User $auteur, User $compte): User
-    {
-        $societe = $compte->societe()->firstOrFail();
-
-        return $this->changer($auteur, $compte, $societe, RoleSociete::ExpertComptable, fn (): array => [
-            Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->get(),
-            function (User $auteurRelu, User $compteRelu): void {
-                $this->porteeDesAdministrateurs->effacer($compteRelu);
-                $compteRelu->forceFill(['role_societe' => RoleSociete::ExpertComptable])->save();
-            },
-        ]);
     }
 
     /**

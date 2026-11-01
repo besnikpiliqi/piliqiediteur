@@ -5,6 +5,10 @@ namespace Tests\Feature\Stock;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
@@ -34,8 +38,11 @@ use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Widgets\StockNegatifApercu;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use InvalidArgumentException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -281,11 +288,12 @@ class VenteSansStockTest extends TestCase
 
     /**
      * Ni le modèle de l'administrateur, ni ceux du vendeur et de
-     * l'observateur ne cochent « vendre sans stock » ; l'expert-comptable
-     * ne l'a jamais, et le propriétaire, qui ne vend jamais, non plus ;
-     * un responsable l'a toujours.
+     * l'observateur ne cochent « vendre sans stock » ; un cabinet lié ne
+     * l'a jamais, ni par l'action qui règle ses autorisations, ni par une
+     * ligne écrite en base, et le propriétaire, qui ne vend jamais, non
+     * plus ; un responsable l'a toujours.
      */
-    public function test_vendre_sans_stock_n_est_precoche_dans_aucun_modele_et_jamais_donne_a_l_expert_comptable(): void
+    public function test_vendre_sans_stock_n_est_precoche_dans_aucun_modele_et_jamais_accordee_a_un_cabinet_lie(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
@@ -294,7 +302,14 @@ class VenteSansStockTest extends TestCase
         $this->assertFalse($this->administrateur($magasin)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Vendeur)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Observateur)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
-        $this->assertFalse($this->expertComptable($magasin)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+        $this->assertFalse($collaborateur->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
+
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        $this->assertThrows(fn () => app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [PermissionRegistry::STOCK_VENDRE_SANS_STOCK]), InvalidArgumentException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('autorisations_cabinet')->insert(['societe_id' => $magasin->societe_id, 'lien_id' => $lien->id, 'autorisation' => PermissionRegistry::STOCK_VENDRE_SANS_STOCK])), QueryException::class, GardesDesCabinets::AUTORISATIONS);
+        $this->assertNotContains(PermissionRegistry::STOCK_VENDRE_SANS_STOCK, $lien->fresh()->autorisations());
+        $this->assertFalse($collaborateur->fresh()->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
     }
 
     /**

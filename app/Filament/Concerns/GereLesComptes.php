@@ -201,11 +201,11 @@ trait GereLesComptes
      * redonner l'accès ; sans lui, elle ne s'ouvre pas.
      *
      * L'identifiant n'ouvre le compte que depuis un poste reconnu d'un
-     * magasin que ce compte ouvre (voir PostesReconnus), et un responsable,
-     * un administrateur ou un expert-comptable y choisit son mot de passe à
-     * sa première connexion (voir ExigerSonPropreMotDePasse) : la fenêtre le
-     * dit. Un administrateur ou un expert-comptable qui travaille à
-     * distance, ou dont aucun magasin n'a de poste reconnu, ne peut pas se
+     * magasin que ce compte ouvre (voir PostesReconnus), et un responsable
+     * ou un administrateur y choisit son mot de passe à sa première
+     * connexion (voir ExigerSonPropreMotDePasse) : la fenêtre le dit. Un
+     * administrateur qui travaille à distance, ou dont aucun magasin n'a
+     * de poste reconnu, ne peut pas se
      * connecter avec son identifiant : pour lui, la fenêtre propose d'abord
      * que la personne présente choisisse son mot de passe. Un collaborateur
      * d'un cabinet ne se connecte jamais avec son identifiant (voir

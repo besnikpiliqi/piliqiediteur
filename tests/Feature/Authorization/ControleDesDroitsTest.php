@@ -29,7 +29,6 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -428,7 +427,9 @@ class ControleDesDroitsTest extends TestCase
      * Une autorisation de société ne suffit jamais seule : l'administrateur
      * d'une sélection, même autorisé à gérer les magasins et à nommer les
      * responsables, ne gère ni ne nomme rien dans un magasin hors de sa
-     * sélection, et n'y a aucune autorisation de magasin.
+     * sélection, et n'y a aucune autorisation de magasin. Un collaborateur
+     * du cabinet lié, qui lit chaque magasin réel du client, n'a aucune
+     * autorisation de société chez lui et n'y gère ni n'y nomme rien.
      */
     public function test_une_autorisation_de_societe_ne_vaut_jamais_seule_pour_un_magasin_hors_de_la_portee(): void
     {
@@ -449,39 +450,16 @@ class ControleDesDroitsTest extends TestCase
         foreach (PermissionRegistry::toutes() as $permission) {
             $this->assertFalse($administrateur->can($permission), $permission);
         }
-    }
 
-    /**
-     * L'expert-comptable n'a que les consultations, quelles que soient les
-     * lignes que garderait la base : une affectation de responsable, des
-     * cases et des autorisations de société glissées sans les gardes ne lui
-     * donnent aucune écriture ni aucune autorisation de société.
-     */
-    public function test_l_expert_comptable_n_a_que_les_consultations_quelles_que_soient_les_lignes_en_base(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $expert = $this->expertComptable($magasin);
-        $this->retirerLaGardeDesDroits(GardesDesDroits::AFFECTATIONS);
-        $this->retirerLaGardeDesDroits(GardesDesDroits::CASES);
-        $this->retirerLaGardeDesDroits(GardesDesDroits::AUTORISATIONS_SOCIETE);
-        $affectation = DB::table('affectations')->insertGetId(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'magasin_id' => $magasin->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()]);
-        DB::table('affectations')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'magasin_id' => null, 'role' => null, 'created_at' => now(), 'updated_at' => now()]);
-        DB::table('autorisations_affectations')->insert(array_map(fn (string $autorisation): array => ['affectation_id' => $affectation, 'autorisation' => $autorisation], PermissionRegistry::toutes()));
-        DB::table('autorisations_societe')->insert(array_map(fn (string $autorisation): array => ['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'autorisation' => $autorisation], AutorisationsSociete::toutes()));
-        $expert = $expert->refresh();
-
-        app(TenantContext::class)->set($magasin);
-        foreach (PermissionRegistry::toutes() as $permission) {
-            $this->assertSame(in_array($permission, PermissionRegistry::consultations(), true), $expert->can($permission), $permission);
-        }
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+        $this->assertTrue($collaborateur->can('viewAny', Facture::class));
+        $this->assertSame([], $collaborateur->autorisationsDeSociete());
         foreach (AutorisationsSociete::toutes() as $autorisation) {
-            $this->assertFalse($expert->can($autorisation), $autorisation);
+            $this->assertFalse($collaborateur->can($autorisation), $autorisation);
         }
-        $this->assertTrue($expert->can('viewAny', Facture::class));
-        $this->assertFalse($expert->can('create', Facture::class));
-        $this->assertFalse($expert->can('create', Client::class));
-        $this->assertFalse($expert->can('cloturer', ClotureCaisse::class));
-        $this->assertSame([], $expert->autorisationsDeSociete());
+        $this->assertFalse($collaborateur->can('nommerUnResponsable', $horsPortee));
+        $this->assertFalse($collaborateur->can('gererLesMagasins', $magasin->societe));
+        $this->assertFalse($collaborateur->can('creerUnMagasin', $magasin->societe));
     }
 
     private function suspendre(Magasin $magasin): void

@@ -36,7 +36,9 @@ use Illuminate\Support\Str;
 
 /**
  * Un compte n'appartient qu'à une seule société (societe_id), avec son
- * rôle dans la société (voir RoleSociete) :
+ * rôle dans la société (voir RoleSociete) ; un compte d'un cabinet
+ * d'expertise comptable appartient au cabinet et n'entre chez un client
+ * que par le lien de son cabinet (voir AccesDesCabinets) :
  * - son propriétaire, qui supervise et contrôle : tous les droits dans la
  *   société et dans chacun de ses magasins, sans case ni affectation, sauf
  *   celui de vendre, qu'il n'a jamais (voir
@@ -44,8 +46,6 @@ use Illuminate\Support\Str;
  * - un administrateur, avec ses autorisations de société et sa portée
  *   (tous les magasins ou une sélection : ses affectations sans rôle, qui
  *   portent ses cases) ;
- * - un expert-comptable, sans affectation ni case, qui lit chaque magasin
- *   réel de la société (voir PermissionRegistry::consultations()) ;
  * - dans un cabinet d'expertise comptable, qui n'a ni administrateur ni
  *   membre, un collaborateur, créé par le propriétaire du cabinet, sans
  *   affectation, ni case, ni autorisation de société (voir
@@ -69,10 +69,11 @@ use Illuminate\Support\Str;
  * chiffres, tiré au hasard, qui ne change jamais, même quand le compte
  * change de rôle (voir Identifiant). Un compte créé par la société a pour
  * premier mot de passe son identifiant (mot_de_passe_est_l_identifiant),
- * que la personne change quand elle le veut ; un responsable, un
- * administrateur ou un expert-comptable le change à sa première connexion
- * (voir doitChoisirSonMotDePasse()). Seul un compte actif agit (voir
- * peutAgir()).
+ * que la personne change quand elle le veut ; un responsable ou un
+ * administrateur le change à sa première connexion (voir
+ * doitChoisirSonMotDePasse()), un collaborateur d'un cabinet le choisit
+ * à la création de son compte (voir CreerCollaborateurAction). Seul un
+ * compte actif agit (voir peutAgir()).
  *
  * Un compte ne s'efface pas : retiré, il garde son rôle, son identifiant
  * et son historique. Son adresse e-mail est l'adresse de connexion du
@@ -233,7 +234,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * Son magasin de rattachement : celui pour lequel son compte de membre
      * a été créé, ou que le propriétaire lui a choisi une fois quand il est
      * devenu membre (voir Identifiant) ; null pour un compte né
-     * propriétaire, administrateur ou expert-comptable qui n'a jamais été
+     * propriétaire, administrateur ou collaborateur qui n'a jamais été
      * membre.
      */
     public function magasinDeSonIdentifiant(): ?Magasin
@@ -248,7 +249,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * qui lui a été redonné) : celui du magasin de son identifiant pour un
      * membre, qui vit à l'heure de son magasin (voir Magasin::calendrier()),
      * celui de Paris pour un compte de la société (propriétaire,
-     * administrateur, expert-comptable).
+     * administrateur, collaborateur d'un cabinet).
      */
     public function calendrier(): Calendrier
     {
@@ -319,11 +320,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return $this->societe?->estUnCabinet() === true;
     }
 
-    public function estExpertComptable(): bool
-    {
-        return $this->role_societe === RoleSociete::ExpertComptable;
-    }
-
     public function estMembre(): bool
     {
         return $this->role_societe === RoleSociete::Membre;
@@ -352,8 +348,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * l'espace d'administration ou de l'espace du cabinet après
      * « Bonjour » : « Propriétaire de » suivi de la dénomination de la
      * société quand elle est connue (« Propriétaire du cabinet » pour un
-     * cabinet d'expertise comptable), sinon le libellé de son rôle
-     * (« Administrateur », « Expert-comptable »).
+     * cabinet d'expertise comptable), « Collaborateur du cabinet » suivi
+     * de sa dénomination pour un collaborateur, sinon le libellé de son
+     * rôle (« Administrateur »).
      */
     public function libelleDuRoleDeSociete(): string
     {
@@ -373,8 +370,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * magasin, suivi du nom du magasin (« Vendeur · Boutique Lyon 1 ») ;
      * pour un compte d'un cabinet d'expertise comptable chez un client, son
      * rôle dans son cabinet suivi du nom du magasin (« Collaborateur du
-     * cabinet Martin · Boutique Lyon 1 ») ; pour le propriétaire, un
-     * administrateur ou un expert-comptable, son rôle de société (voir
+     * cabinet Martin · Boutique Lyon 1 ») ; pour le propriétaire ou un
+     * administrateur, son rôle de société (voir
      * libelleDuRoleDeSociete()) ; suivi de « (démonstration) » dans le
      * magasin de démonstration.
      */
@@ -441,16 +438,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Doit-il choisir son mot de passe à sa connexion, avant toute autre
-     * page (voir ExigerSonPropreMotDePasse) ? Un responsable, un
-     * administrateur ou un expert-comptable dont le mot de passe est encore
-     * son identifiant : à sa première connexion, et à sa connexion suivante
-     * quand il vient d'être promu à l'un de ces rôles. Un vendeur ou un
-     * observateur le garde tant qu'il le veut.
+     * page (voir ExigerSonPropreMotDePasse) ? Un responsable ou un
+     * administrateur dont le mot de passe est encore son identifiant : à
+     * sa première connexion, et à sa connexion suivante quand il vient
+     * d'être promu à l'un de ces rôles. Un vendeur ou un observateur le
+     * garde tant qu'il le veut.
      */
     public function doitChoisirSonMotDePasse(): bool
     {
         return $this->mot_de_passe_est_l_identifiant
-            && ($this->estAdministrateur() || $this->estExpertComptable() || $this->estResponsable());
+            && ($this->estAdministrateur() || $this->estResponsable());
     }
 
     /**
@@ -570,7 +567,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * pour le propriétaire et un administrateur de tous les magasins, ceux
      * de sa sélection pour un autre administrateur ; aucun pour un
      * administrateur à la fois affecté à tous les magasins et à une
-     * sélection, ni pour un membre ou un expert-comptable. Une requête sur
+     * sélection, ni pour un membre ou un collaborateur. Une requête sur
      * les magasins de sa société seulement.
      *
      * @return Builder<Magasin>
@@ -642,7 +639,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * ventes » l'exigent, voir FacturePolicy::viewAny()), et, pour un
      * membre, il est autorisé à contre-passer un paiement (un responsable
      * l'est toujours), pour le propriétaire, un administrateur ou un
-     * expert-comptable, il voit celles de toute l'équipe. Lue sur ses
+     * compte d'un cabinet, il voit celles de toute l'équipe. Lue sur ses
      * cases cochées dans ce magasin (voir autorisationsDans()), pas sur le
      * droit d'agir du moment : dans un magasin en lecture seule, où plus
      * rien ne se contre-passe, la facture reste due et l'alerte reste.
@@ -683,10 +680,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * Ses droits dans ce magasin, tels que la base les donne, son statut
      * compris, pour le journal des événements (JET 130, voir
      * JournalDesDroits) : son rôle de société, son rôle de magasin (nul
-     * pour le propriétaire, un administrateur, un expert-comptable et un
-     * compte d'un cabinet), son statut et ses autorisations par ordre
-     * alphabétique, et, pour un compte d'un cabinet d'expertise comptable
-     * chez un client lié, son cabinet (identifiant, SIREN, dénomination) ;
+     * pour le propriétaire, un administrateur et un compte d'un cabinet),
+     * son statut et ses autorisations par ordre alphabétique, et, pour un
+     * compte d'un cabinet d'expertise comptable chez un client lié, son
+     * cabinet (identifiant, SIREN, dénomination) ;
      * null quand il n'y en a aucun (magasin d'une autre société hors d'un
      * client lié, aucun droit qui vaille ici).
      *
@@ -721,8 +718,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * celle de ce magasin, avec un rôle ; pour un administrateur qui n'a
      * pas à la fois les deux sortes d'affectations, celle de ce magasin,
      * sinon celle de tous les magasins, sans rôle ; aucune sinon (le
-     * propriétaire, un expert-comptable, une affectation qui contredit le
-     * rôle du compte).
+     * propriétaire, un compte d'un cabinet, une affectation qui contredit
+     * le rôle du compte).
      */
     public function affectationQuiVautDans(Magasin $magasin): ?Affectation
     {
@@ -771,10 +768,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * - le propriétaire : toutes sauf celles de la vente (voir
      *   PermissionRegistry::duProprietaire()), dans chaque magasin,
      *   démonstration comprise : il ne vend jamais ;
-     * - un expert-comptable : les consultations, dans un magasin réel ;
-     *   rien dans le magasin de démonstration, ni une fois retiré de la
-     *   société (il garde son rôle, sans plus aucun droit, comme un membre
-     *   ou un administrateur retiré, dont les affectations ont disparu) ;
      * - un administrateur : les cases de son affectation à ce magasin, ou
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
@@ -793,10 +786,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
         if ($this->estProprietaire()) {
             return PermissionRegistry::duProprietaire($magasin->societe->type_activite);
-        }
-
-        if ($this->estExpertComptable()) {
-            return $magasin->est_demonstration || $this->estRetire() ? null : self::trieesDans(PermissionRegistry::consultations(), $duType);
         }
 
         $affectation = $this->affectationQuiVautDans($magasin);
@@ -848,9 +837,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Peut-il administrer sa société (son espace d'administration) ? Son
      * propriétaire et ses administrateurs, avec un compte actif ; jamais
-     * un membre ni un expert-comptable, ni un compte d'un cabinet
-     * d'expertise comptable, qui a son propre espace (voir
-     * CabinetPanelProvider).
+     * un membre, ni un compte d'un cabinet d'expertise comptable, qui a
+     * son propre espace (voir CabinetPanelProvider).
      */
     public function peutAdministrer(): bool
     {
@@ -862,9 +850,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * peutAgir()), un compte d'un cabinet d'expertise comptable vérifié
      * ouvre les magasins réels d'un client lié qui lui est ouvert (voir
      * AccesDesCabinets::ouvre()) ; tout autre compte, un magasin de sa
-     * société : le propriétaire ouvre tous ceux de sa société ; un expert-comptable, tous ses magasins réels, jamais la
-     * démonstration ; tout autre compte, ceux où une affectation lui donne
-     * des droits (voir affectationQuiVautDans()).
+     * société : le propriétaire ouvre tous ceux de sa société ; tout autre
+     * compte, ceux où une affectation lui donne des droits (voir
+     * affectationQuiVautDans()).
      */
     public function peutOuvrir(Magasin $magasin): bool
     {
@@ -878,10 +866,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
         if ($this->estProprietaire()) {
             return true;
-        }
-
-        if ($this->estExpertComptable()) {
-            return ! $magasin->est_demonstration;
         }
 
         return $this->affectationQuiVautDans($magasin) !== null;
@@ -909,9 +893,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
         $magasins = Magasin::query()->where('societe_id', $this->societe_id);
 
-        if ($this->estExpertComptable()) {
-            $magasins->where('est_demonstration', false);
-        } elseif ($this->estMembre()) {
+        if ($this->estMembre()) {
             $magasins->whereIn('id', $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->select('magasin_id'));
         } elseif ($this->estAdministrateur()) {
             $magasins->whereIn('id', $this->magasinsDeSaPortee()->select('magasins.id'));

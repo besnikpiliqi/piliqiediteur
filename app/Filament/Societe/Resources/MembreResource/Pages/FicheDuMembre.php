@@ -118,8 +118,8 @@ class FicheDuMembre extends ViewRecord
     }
 
     /**
-     * Le propriétaire change le rôle de société de ce compte (membre,
-     * administrateur, expert-comptable), qui garde son identifiant et son
+     * Le propriétaire change le rôle de société de ce compte (membre ou
+     * administrateur), qui garde son identifiant et son
      * historique (voir ChangerLeRoleDeSocieteAction) ; un compte qui n'a pas
      * encore de magasin et devient membre reçoit, une fois pour toutes, le
      * magasin réel ouvert choisi ici. Quand son mot de passe est encore son
@@ -137,7 +137,7 @@ class FicheDuMembre extends ViewRecord
             ->form([
                 Select::make('role_societe')
                     ->label('Nouveau rôle')
-                    ->options(fn (): array => collect([RoleSociete::Membre, RoleSociete::Administrateur, RoleSociete::ExpertComptable])
+                    ->options(fn (): array => collect([RoleSociete::Membre, RoleSociete::Administrateur])
                         ->reject(fn (RoleSociete $role): bool => $role === $this->compte()->role_societe)
                         ->mapWithKeys(fn (RoleSociete $role): array => [$role->value => $role->getLabel()])
                         ->all())
@@ -170,7 +170,7 @@ class FicheDuMembre extends ViewRecord
                     ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
                 ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => $this->compte()->mot_de_passe_est_l_identifiant && $get('mode') === 'present'),
             ])
-            ->modalDescription('Le compte garde son identifiant et son historique ; seuls son rôle et ses autorisations changent. Un administrateur ou un expert-comptable ne garde aucune affectation de membre ; ses ventes passées restent à son nom.')
+            ->modalDescription('Le compte garde son identifiant et son historique ; seuls son rôle et ses autorisations changent. Un administrateur ne garde aucune affectation de membre ; ses ventes passées restent à son nom.')
             ->action(function (array $data, Form $form): void {
                 $compte = $this->compte();
                 $enPresence = $compte->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
@@ -185,8 +185,7 @@ class FicheDuMembre extends ViewRecord
                     match (RoleSociete::from((string) $data['role_societe'])) {
                         RoleSociete::Membre => $action->versMembre($this->auteur(), $compte, MembreResource::roleSaisi($data)['role'], MembreResource::roleSaisi($data)['autorisations'], filled($data['magasin_id'] ?? null) ? (int) $data['magasin_id'] : null),
                         RoleSociete::Administrateur => $action->versAdministrateur(...$this->porteeSaisie($data)),
-                        RoleSociete::ExpertComptable => $action->versExpertComptable($this->auteur(), $compte),
-                        RoleSociete::Proprietaire => throw new AuthorizationException(PorteeDesDroits::REFUS),
+                        RoleSociete::Proprietaire, RoleSociete::Collaborateur => throw new AuthorizationException(PorteeDesDroits::REFUS),
                     };
 
                     if ($enPresence) {
@@ -288,7 +287,7 @@ class FicheDuMembre extends ViewRecord
                 $this->compte()->estMembre() && $this->auteur()->estProprietaire() => MembreResource::champsDuRoleDeMembre(),
                 default => [],
             })
-            ->requiresConfirmation(fn (): bool => $this->compte()->estExpertComptable() || ! $this->auteur()->estProprietaire())
+            ->requiresConfirmation(fn (): bool => ! $this->auteur()->estProprietaire())
             ->modalDescription(fn (): string => $this->compte()->estMembre() ? 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()?->nom ?? '—').'.' : 'Il retrouve son rôle.')
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
@@ -297,8 +296,6 @@ class FicheDuMembre extends ViewRecord
 
                     if ($compte->estAdministrateur()) {
                         $action->reintegrerLAdministrateur(...$this->porteeSaisie($data));
-                    } elseif ($compte->estExpertComptable()) {
-                        $action->reintegrerLExpertComptable($this->auteur(), $compte);
                     } elseif ($this->auteur()->estProprietaire()) {
                         $role = MembreResource::roleSaisi($data);
                         $action->reintegrer($this->auteur(), $compte, $role['role'], $role['autorisations']);
@@ -319,10 +316,6 @@ class FicheDuMembre extends ViewRecord
 
         if ($compte->estAdministrateur()) {
             return $this->auteur()->can('modifierUnAdministrateur', $compte);
-        }
-
-        if ($compte->estExpertComptable()) {
-            return $this->gereLEquipe() && $this->auteur()->can('creerLExpertComptable', User::class);
         }
 
         return collect(RoleMagasin::cases())->contains(fn (RoleMagasin $role): bool => app(PorteeDesDroits::class)->peutReintegrer($this->auteur(), $compte, $role));

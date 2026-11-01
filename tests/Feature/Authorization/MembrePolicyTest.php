@@ -14,8 +14,8 @@ use Tests\TestCase;
  * d'administration (voir MembrePolicy et PorteeDesDroits) : le propriétaire
  * tous, sauf le sien ; un administrateur autorisé à nommer les
  * responsables, les seuls responsables de ses magasins ; personne d'autre.
- * Les administrateurs et l'expert-comptable se gèrent par le propriétaire
- * seul.
+ * Les administrateurs se gèrent par le propriétaire seul ; les
+ * collaborateurs d'un cabinet, par le propriétaire du cabinet seul.
  */
 class MembrePolicyTest extends TestCase
 {
@@ -30,7 +30,6 @@ class MembrePolicyTest extends TestCase
             $this->membre($magasin, RoleMagasin::Observateur),
             $this->responsable($magasin),
             $this->administrateur($magasin),
-            $this->expertComptable($magasin),
         ];
         app(TenantContext::class)->clear();
         app(TenantContext::class)->poserSociete($magasin->societe);
@@ -57,7 +56,7 @@ class MembrePolicyTest extends TestCase
      * Un administrateur autorisé à nommer les responsables voit les seuls
      * responsables des magasins de sa portée : ni les vendeurs, ni les
      * observateurs, ni un responsable d'un magasin hors de sa portée, ni un
-     * autre administrateur, ni l'expert-comptable, ni le propriétaire. Sans
+     * autre administrateur, ni le propriétaire. Sans
      * l'autorisation, il ne voit aucun compte.
      */
     public function test_un_administrateur_autorise_ne_voit_que_les_responsables_de_sa_portee(): void
@@ -73,7 +72,6 @@ class MembrePolicyTest extends TestCase
             $this->membre($magasin, RoleMagasin::Observateur),
             $responsableAilleurs,
             $sansAutorisation,
-            $this->expertComptable($magasin),
             $this->proprietaireDe($magasin),
         ];
         app(TenantContext::class)->clear();
@@ -96,36 +94,60 @@ class MembrePolicyTest extends TestCase
     }
 
     /**
-     * Créer, modifier, suspendre, retirer un expert-comptable ou un
-     * administrateur : le propriétaire seul. Un administrateur, même de
-     * tous les magasins et autorisé à tout, ne les voit ni ne les gère.
+     * Créer, modifier, suspendre, retirer un administrateur : le
+     * propriétaire seul. Un administrateur, même de tous les magasins et
+     * autorisé à tout, ni un responsable ne les créent ni ne les gèrent.
      */
-    public function test_seul_le_proprietaire_voit_et_gere_l_expert_comptable(): void
+    public function test_seul_le_proprietaire_cree_et_gere_les_administrateurs(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $expert = $this->expertComptable($magasin);
         $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
         $autreAdministrateur = $this->administrateur($magasin);
         $responsable = $this->responsable($magasin);
         app(TenantContext::class)->clear();
         app(TenantContext::class)->poserSociete($magasin->societe);
 
-        $this->assertTrue($proprietaire->can('creerLExpertComptable', User::class));
-        $this->assertTrue($proprietaire->can('view', $expert));
-        $this->assertTrue($proprietaire->can('suspendreOuReactiver', $expert));
-        $this->assertTrue($proprietaire->can('retirerDeLaSociete', $expert));
+        $this->assertTrue($proprietaire->can('creerUnAdministrateur', User::class));
         $this->assertTrue($proprietaire->can('modifierUnAdministrateur', $autreAdministrateur));
 
         foreach ([$administrateur, $responsable] as $compte) {
-            $this->assertFalse($compte->can('creerLExpertComptable', User::class), $compte->name);
             $this->assertFalse($compte->can('creerUnAdministrateur', User::class), $compte->name);
-            $this->assertFalse($compte->can('view', $expert), $compte->name);
-            $this->assertFalse($compte->can('suspendreOuReactiver', $expert), $compte->name);
-            $this->assertFalse($compte->can('retirerDeLaSociete', $expert), $compte->name);
-            $this->assertFalse($compte->can('redonnerLAcces', $expert), $compte->name);
             $this->assertFalse($compte->can('modifierUnAdministrateur', $autreAdministrateur), $compte->name);
             $this->assertFalse($compte->can('suspendreOuReactiver', $autreAdministrateur), $compte->name);
+        }
+    }
+
+    /**
+     * Le propriétaire d'un cabinet d'expertise comptable, et lui seul, crée,
+     * voit, suspend, réactive, retire et réintègre ses collaborateurs, leur
+     * redonne l'accès et leur confie des clients ; ni un autre
+     * collaborateur, ni le propriétaire d'un client lié, ni un
+     * administrateur de ce client ne les voient ni ne les gèrent.
+     */
+    public function test_seul_le_proprietaire_du_cabinet_voit_et_gere_ses_collaborateurs(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $cabinet = $this->ouvrirUnCabinet();
+        $this->lierLeCabinet($cabinet, $magasin);
+        $collaborateur = $this->confier($this->collaborateur($cabinet), [$magasin]);
+        $autreCollaborateur = $this->collaborateur($cabinet, 'Marc Girard');
+        $proprietaireDuCabinet = $this->proprietaireDuCabinet($cabinet);
+        $administrateurDuClient = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
+        app(TenantContext::class)->clear();
+        app(TenantContext::class)->poserSociete($cabinet);
+
+        $this->assertTrue($proprietaireDuCabinet->can('creerUnCollaborateur', User::class));
+        $this->assertFalse($proprietaireDuCabinet->can('creerUnAdministrateur', User::class));
+        foreach (['view', 'suspendreOuReactiver', 'retirerDeLaSociete', 'redonnerLAcces', 'confierDesClients'] as $geste) {
+            $this->assertTrue($proprietaireDuCabinet->can($geste, $collaborateur), $geste);
+        }
+
+        foreach ([$autreCollaborateur, $this->proprietaireDe($magasin), $administrateurDuClient] as $compte) {
+            $this->assertFalse($compte->can('creerUnCollaborateur', User::class), $compte->name);
+            foreach (['view', 'suspendreOuReactiver', 'retirerDeLaSociete', 'redonnerLAcces', 'confierDesClients'] as $geste) {
+                $this->assertFalse($compte->can($geste, $collaborateur), "{$compte->name} : {$geste}");
+            }
         }
     }
 }

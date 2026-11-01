@@ -678,8 +678,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertFalse($compte->peutOuvrir($reel));
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert(['societe_id' => $societe->id, 'user_id' => $compte->id, 'magasin_id' => $reel->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()])), QueryException::class);
         $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($societe->proprietaire, $compte, null, [], []), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
-        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versExpertComptable($societe->proprietaire, $compte), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => RoleSociete::ExpertComptable->value])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => RoleSociete::Administrateur->value])), QueryException::class);
 
         $this->assertSame([RoleSociete::Membre, [(int) $demonstration->id]], [$compte->refresh()->role_societe, $compte->magasinsAccessibles()->modelKeys()]);
         $this->assertFalse($compte->peutOuvrir($reel));

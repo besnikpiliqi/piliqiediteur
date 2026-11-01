@@ -5,7 +5,6 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
@@ -35,8 +34,8 @@ use Tests\TestCase;
  * d'observateur du magasin, qui ne valent que pour lui, et cochent leurs
  * cases ; un responsable gère les vendeurs et les observateurs de son
  * magasin, voit leur identifiant, et ne touche jamais un autre
- * responsable, un administrateur, l'expert-comptable ni le propriétaire,
- * ni un compte d'un autre magasin.
+ * responsable, un administrateur ni le propriétaire, ni un compte d'un
+ * autre magasin, ni un compte du cabinet lié, d'une autre société.
  */
 class EquipeDuMagasinTest extends TestCase
 {
@@ -130,23 +129,31 @@ class EquipeDuMagasinTest extends TestCase
         $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeur->id)->sole()->role);
     }
 
-    public function test_un_responsable_ne_cree_ni_ne_touche_l_expert_comptable(): void
+    /**
+     * L'équipe du magasin ne montre jamais un compte du cabinet lié, ni au
+     * propriétaire ni à un responsable, et un responsable n'a aucun geste
+     * sur lui : ni le suspendre, ni le retirer, ni changer son rôle, ni lui
+     * redonner l'accès.
+     */
+    public function test_l_equipe_du_magasin_ne_montre_ni_ne_touche_jamais_les_comptes_du_cabinet_lie(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin, nom: 'Paul Lefèvre');
+        $proprietaireDuCabinet = $collaborateur->societe->proprietaire()->firstOrFail();
 
-        $this->dansLeMagasin($magasin, $responsable);
-        Livewire::test(ListEquipeDuMagasin::class)->assertCanNotSeeTableRecords(Affectation::query()->where('user_id', $expert->id)->get());
-        $this->assertFalse($responsable->can('creerLExpertComptable', User::class));
-        $this->assertThrows(fn () => app(CreerExpertComptableAction::class)->handle($responsable, $magasin->societe, ['name' => 'Cabinet']), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $expert), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $expert), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $expert, RoleMagasin::Vendeur), AuthorizationException::class);
-        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $expert, false), AuthorizationException::class);
+        foreach ([$this->proprietaireDe($magasin), $responsable] as $compte) {
+            $this->dansLeMagasin($magasin, $compte);
+            Livewire::test(ListEquipeDuMagasin::class)->assertDontSee(['Paul Lefèvre', $proprietaireDuCabinet->name]);
+        }
+        $this->assertFalse($responsable->can('view', $collaborateur));
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $collaborateur), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $collaborateur), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $collaborateur, RoleMagasin::Vendeur), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $collaborateur, false), AuthorizationException::class);
 
-        $this->assertSame([StatutCompte::Actif, true], [$expert->refresh()->statut, $expert->estExpertComptable()]);
-        $this->assertFalse(User::query()->where('name', 'Cabinet')->exists());
+        $this->assertSame([StatutCompte::Actif, true], [$collaborateur->refresh()->statut, $collaborateur->estCollaborateur()]);
+        $this->assertSame(0, Affectation::query()->where('user_id', $collaborateur->id)->count());
     }
 
     /**
@@ -414,8 +421,8 @@ class EquipeDuMagasinTest extends TestCase
 
     /**
      * L'écran de l'équipe ne liste que les affectations de membre du
-     * magasin actif : ni le propriétaire, ni les administrateurs, ni
-     * l'expert-comptable, ni les membres d'un autre magasin.
+     * magasin actif : ni le propriétaire, ni les administrateurs, ni les
+     * comptes du cabinet lié, ni les membres d'un autre magasin.
      */
     public function test_l_ecran_de_l_equipe_ne_liste_que_les_affectations_de_membre_du_magasin_actif(): void
     {
@@ -426,7 +433,7 @@ class EquipeDuMagasinTest extends TestCase
         $responsable = $this->responsable($magasin);
         $administrateurDeLaSelection = $this->administrateur($magasin, [$magasin->id]);
         $this->administrateur($magasin);
-        $this->expertComptable($magasin);
+        $this->collaborateurDuCabinetLie($magasin);
         $vendeurDeLAutre = $this->membre($autre, RoleMagasin::Vendeur);
 
         $this->dansLeMagasin($magasin, $proprietaire);

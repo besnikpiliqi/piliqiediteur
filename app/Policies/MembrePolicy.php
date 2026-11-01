@@ -18,12 +18,12 @@ use App\Models\User;
  * - créer un compte : le propriétaire, ou un administrateur autorisé à
  *   nommer les responsables (le compte d'un responsable) ; jamais un
  *   administrateur qui n'est autorisé qu'à redonner l'accès ;
- * - les administrateurs et les experts-comptables se créent et se
- *   modifient par le propriétaire seul, qui seul change le rôle de société
- *   d'un compte et transmet la propriété ;
+ * - les administrateurs se créent et se modifient par le propriétaire
+ *   seul, qui seul change le rôle de société d'un compte et transmet la
+ *   propriété ;
  * - un cabinet d'expertise comptable n'a ni magasin, ni administrateur, ni
- *   membre, ni expert-comptable (voir aUneEquipe()) : son propriétaire
- *   seul crée et gère ses collaborateurs (voir creerUnCollaborateur()) ;
+ *   membre (voir aUneEquipe()) : son propriétaire seul crée et gère ses
+ *   collaborateurs (voir creerUnCollaborateur()) ;
  * - suspendre, réactiver, retirer de la société, redonner l'accès,
  *   afficher l'identifiant : qui en a le droit pour ce compte ;
  * - personne ne touche à son propre compte, ni au propriétaire.
@@ -115,9 +115,9 @@ class MembrePolicy
     }
 
     /**
-     * Changer le rôle de société de ce compte (membre, administrateur,
-     * expert-comptable) : le propriétaire seul, pour un compte actif qui
-     * n'est pas un compte d'entraînement.
+     * Changer le rôle de société de ce compte (membre ou administrateur) :
+     * le propriétaire seul, pour un compte actif qui n'est pas un compte
+     * d'entraînement, jamais dans un cabinet d'expertise comptable.
      */
     public function changerLeRoleDeSociete(User $user, User $membre): bool
     {
@@ -151,9 +151,9 @@ class MembrePolicy
      * DemanderLaTransmissionDeLaProprieteAction, qui exige en plus son
      * propre mot de passe, son adresse renseignée par lui et le mot de
      * passe du propriétaire, sans aucune preuve de qualité de
-     * représentant) : le propriétaire seul, jamais à un expert-comptable ni
-     * à un membre ; dans un cabinet d'expertise comptable, à un
-     * collaborateur actif, aux mêmes conditions. Un geste sur l'équipe : permis dans une société
+     * représentant) : le propriétaire seul, jamais à un membre ; dans un
+     * cabinet d'expertise comptable, à un collaborateur actif, aux mêmes
+     * conditions. Un geste sur l'équipe : permis dans une société
      * suspendue, jamais dans une société révoquée (voir ControleDesDroits),
      * ni dans une inscription close, dont le propriétaire n'a plus
      * d'adresse de connexion (voir CloreLInscriptionAction).
@@ -187,18 +187,9 @@ class MembrePolicy
     }
 
     /**
-     * Créer ou réintégrer un expert-comptable : le propriétaire seul,
-     * jamais dans un cabinet d'expertise comptable (voir aUneEquipe()).
-     */
-    public function creerLExpertComptable(User $user): bool
-    {
-        return $this->creerUnAdministrateur($user);
-    }
-
-    /**
      * La société du compte a-t-elle une équipe à créer ? Jamais un cabinet
      * d'expertise comptable, qui n'a ni magasin, donc ni membre, ni
-     * administrateur ni expert-comptable, et ne configure que son identité
+     * administrateur : il configure son identité et ses collaborateurs
      * (voir CLAUDE.md, « Vérification de la société »).
      */
     private static function aUneEquipe(User $user): bool

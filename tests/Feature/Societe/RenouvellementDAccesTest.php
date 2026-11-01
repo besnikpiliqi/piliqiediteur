@@ -151,7 +151,7 @@ class RenouvellementDAccesTest extends TestCase
             $this->responsable($magasin),
             $this->membre($horsPortee, RoleMagasin::Vendeur),
             $this->administrateur($magasin),
-            $this->expertComptable($magasin),
+            $this->collaborateurDuCabinetLie($magasin),
             $this->proprietaireDe($magasin),
         ];
 
@@ -323,19 +323,18 @@ class RenouvellementDAccesTest extends TestCase
         }
     }
 
-    public function test_seul_le_proprietaire_redonne_l_acces_d_un_administrateur_ou_d_un_expert_comptable(): void
+    public function test_seul_le_proprietaire_redonne_l_acces_d_un_administrateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autreAdministrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
         $responsable = $this->responsable($magasin);
+        $cible = $this->administrateur($magasin);
 
-        foreach ([$this->administrateur($magasin), $this->expertComptable($magasin)] as $cible) {
-            foreach ([$autreAdministrateur, $responsable] as $auteur) {
-                $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $cible, false), AuthorizationException::class);
-            }
-            $this->assertTrue(app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $cible, false));
-            $this->assertTrue($cible->refresh()->mot_de_passe_est_l_identifiant);
+        foreach ([$autreAdministrateur, $responsable] as $auteur) {
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $cible, false), AuthorizationException::class);
         }
+        $this->assertTrue(app(RedonnerLAccesAction::class)->handle($this->proprietaireDe($magasin), $cible, false));
+        $this->assertTrue($cible->refresh()->mot_de_passe_est_l_identifiant);
     }
 
     public function test_personne_ne_redonne_l_acces_du_proprietaire(): void

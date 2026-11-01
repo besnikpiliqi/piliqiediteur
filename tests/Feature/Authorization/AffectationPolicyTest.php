@@ -17,8 +17,8 @@ use Tests\TestCase;
  * L'équipe d'un magasin, dans son panneau (voir AffectationPolicy) : les
  * affectations de membre du magasin actif, que voient et gèrent son
  * propriétaire et ses responsables, jamais celles d'un autre magasin ; un
- * vendeur, même avec toutes les cases, un administrateur ou
- * l'expert-comptable n'en voient aucune. Personne ne modifie ni ne retire
+ * vendeur, même avec toutes les cases, un administrateur ou un compte du
+ * cabinet lié n'en voient aucune. Personne ne modifie ni ne retire
  * sa propre affectation.
  */
 class AffectationPolicyTest extends TestCase
@@ -76,9 +76,9 @@ class AffectationPolicyTest extends TestCase
 
     /**
      * Ni un vendeur qui a toutes les cases, ni un administrateur, même de
-     * tous les magasins et autorisé à tout, ni l'expert-comptable ne voient
-     * une affectation du magasin : la policy refuse, et l'adresse de la
-     * fiche répond 403.
+     * tous les magasins et autorisé à tout, ni un compte du cabinet lié ne
+     * voient une affectation du magasin : la policy refuse, et l'adresse de
+     * la fiche répond 403.
      */
     public function test_un_vendeur_ou_un_administrateur_ne_voit_aucune_affectation_du_magasin(): void
     {
@@ -87,7 +87,7 @@ class AffectationPolicyTest extends TestCase
         $comptes = [
             $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes()),
             $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes()),
-            $this->expertComptable($magasin),
+            $this->collaborateurDuCabinetLie($magasin),
         ];
         app(TenantContext::class)->set($magasin);
 

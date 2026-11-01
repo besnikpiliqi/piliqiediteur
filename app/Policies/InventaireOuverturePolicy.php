@@ -19,9 +19,10 @@ use App\Models\User;
  * SupprimerInventaireOuvertureAction).
  *
  * Le propriétaire et les responsables du magasin ont toujours ces
- * autorisations ; un expert-comptable le consulte sans jamais le saisir
- * (voir ControleDesDroits), et un magasin en lecture seule ne le saisit
- * plus.
+ * autorisations ; un compte du cabinet lié le consulte, et ne le saisit
+ * ou ne le valide que si le client lui accorde les achats et la création
+ * des produits (voir ControleDesDroits), et un magasin en lecture seule
+ * ne le saisit plus.
  */
 class InventaireOuverturePolicy extends MagasinPolicy
 {

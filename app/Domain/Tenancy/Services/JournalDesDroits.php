@@ -35,10 +35,10 @@ use LogicException;
  * son statut et ses autorisations, ou null quand elle n'y en a aucun (avant
  * sa création ou son affectation, après son retrait) ; puis au journal
  * d'audit de la société, en une entrée qui donne, pour chaque compte
- * touché, ses droits avant et après. Le propriétaire, un administrateur de
- * tous les magasins et un expert-comptable touchent tous les magasins de
- * la société ; un compte d'un cabinet d'expertise comptable, les magasins
- * réels des clients de son cabinet qu'il voit (voir
+ * touché, ses droits avant et après. Le propriétaire et un administrateur
+ * de tous les magasins touchent tous les magasins de la société ; un
+ * compte d'un cabinet d'expertise comptable, les magasins réels des
+ * clients de son cabinet qu'il voit (voir
  * AccesDesCabinets::magasinsDuCompte()) ; tout autre compte, ceux de ses
  * affectations, avant comme après.
  *
@@ -304,10 +304,10 @@ class JournalDesDroits
     /**
      * Inscrit, au JET 130 de ce nouveau magasin, les droits de chaque
      * personne qui y en a sans affectation (le propriétaire de la société,
-     * ses administrateurs de tous les magasins, ses experts-comptables pour
-     * un magasin réel, et, pour un magasin réel, les comptes du cabinet lié
-     * qui ont accès à la société), avant nul : le magasin doit être le magasin actif,
-     * dans la transaction de l'appelant (voir MiseEnActiviteDesMagasins et
+     * ses administrateurs de tous les magasins, et, pour un magasin réel,
+     * les comptes du cabinet lié qui ont accès à la société), avant nul :
+     * le magasin doit être le magasin actif, dans la transaction de
+     * l'appelant (voir MiseEnActiviteDesMagasins et
      * OuvrirLaDemonstrationAction).
      *
      * @throws ModuleFiscalNonConfigureException
@@ -321,7 +321,7 @@ class JournalDesDroits
             ->where('societe_id', $magasin->societe_id)
             ->where('statut', '<>', StatutCompte::Retire->value)
             ->where(fn ($comptes) => $comptes
-                ->whereIn('role_societe', [RoleSociete::Proprietaire->value, RoleSociete::ExpertComptable->value])
+                ->where('role_societe', RoleSociete::Proprietaire->value)
                 ->orWhereIn('id', Affectation::query()->where('societe_id', $magasin->societe_id)->whereNull('magasin_id')->select('user_id')))
             ->orderBy('id')
             ->get();
@@ -358,7 +358,7 @@ class JournalDesDroits
 
         $societeId = $societe->getKey();
         $tous = User::query()->whereKey($comptes)->where('societe_id', $societeId)->where(fn ($touchant) => $touchant
-            ->whereIn('role_societe', [RoleSociete::Proprietaire->value, RoleSociete::ExpertComptable->value])
+            ->where('role_societe', RoleSociete::Proprietaire->value)
             ->orWhereIn('id', Affectation::query()->where('societe_id', $societeId)->whereNull('magasin_id')->select('user_id')))->exists();
 
         $magasins = Magasin::query()->where('societe_id', $societeId);

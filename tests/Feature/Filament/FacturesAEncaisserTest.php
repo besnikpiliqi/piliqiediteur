@@ -3,6 +3,9 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -202,24 +205,31 @@ class FacturesAEncaisserTest extends TestCase
     }
 
     /**
-     * L'expert-comptable, qui a toutes les consultations, voit l'alerte de
-     * chaque magasin réel, toutes les factures comprises, sans pouvoir
-     * contre-passer ni encaisser.
+     * Un compte du cabinet lié, à qui le client accorde par défaut de voir
+     * les factures de toute l'équipe, voit l'alerte, toutes les factures
+     * comprises, sans pouvoir contre-passer ni encaisser ; quand le client
+     * lui retire « voir celles de toute l'équipe », il ne la voit plus.
      */
-    public function test_l_expert_comptable_voit_l_alerte_en_lecture(): void
+    public function test_un_compte_de_cabinet_voit_l_alerte_si_le_client_lui_accorde_les_factures_de_toute_l_equipe(): void
     {
         $magasin = $this->magasin();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $deLEquipe = $this->facture($vendeur, 'Client du vendeur', 50);
         $duResponsable = $this->facture($this->responsableDeTest($magasin), 'Client du responsable', 120);
-        $expertComptable = $this->expertComptable($magasin);
-        $this->dansLeMagasin($magasin, $expertComptable);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+        $this->dansLeMagasin($magasin, $collaborateur);
 
         $alerte = Livewire::test(FacturesAEncaisserApercu::class);
 
         $this->assertTrue(FacturesAEncaisserApercu::canView());
         $alerte->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $deLEquipe->numero, $duResponsable->numero]);
-        $this->assertSame([false, false], [$expertComptable->can(PermissionRegistry::PAIEMENT_CONTRE_PASSER), $expertComptable->can(PermissionRegistry::PAIEMENT_CREER)]);
+        $this->assertSame([false, false], [$collaborateur->can(PermissionRegistry::PAIEMENT_CONTRE_PASSER), $collaborateur->can(PermissionRegistry::PAIEMENT_CREER)]);
+
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, array_values(array_diff(PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), [PermissionRegistry::FACTURE_VIEW_TOUTES])));
+        $this->dansLeMagasin($magasin, $collaborateur->fresh());
+
+        $this->assertFalse(FacturesAEncaisserApercu::canView());
     }
 
     /**

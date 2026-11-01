@@ -41,7 +41,7 @@ use Throwable;
  * propriétaire seul (voir MagasinDeLaSocietePolicy::cederLeMagasin()), en
  * retapant le nom du magasin, et seulement une fois la société validée
  * (avant, le magasin n'a aucune activité à céder et se ferme pour
- * cessation). Jamais un responsable ni un expert-comptable. Un magasin
+ * cessation). Jamais un responsable ni un compte du cabinet lié. Un magasin
  * suspendu par l'éditeur se ferme et se cède aussi, et reste suspendu ;
  * le magasin de démonstration se ferme par FermerLaDemonstrationAction.
  *
@@ -90,7 +90,7 @@ use Throwable;
  * échec est signalé sans défaire la fermeture. Pour une cession, le
  * propriétaire reçoit la valeur du stock sorti, à rapprocher du prix de
  * cession. Les affectations de l'équipe restent : l'équipe d'un magasin
- * fermé reste gérable, et l'expert-comptable le lit toujours.
+ * fermé reste gérable, et le cabinet lié le lit toujours.
  *
  * Fermé, le magasin passe en lecture seule et ne produit plus de ticket Z
  * (voir JourneesDeCaisse) ; il se rouvre, sauf après une cession (voir

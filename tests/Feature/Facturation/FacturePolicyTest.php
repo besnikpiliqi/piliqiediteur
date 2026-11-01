@@ -67,7 +67,7 @@ class FacturePolicyTest extends TestCase
         $contexte = app(TenantContext::class);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
@@ -81,7 +81,7 @@ class FacturePolicyTest extends TestCase
         $this->actingAs($comptable);
         $contexte->set($magasin);
         $this->assertTrue($comptable->can('view', $facture));
-        $this->assertTrue($expert->can('view', $facture));
+        $this->assertTrue($collaborateur->can('view', $facture));
     }
 
     /**
@@ -112,18 +112,18 @@ class FacturePolicyTest extends TestCase
     }
 
     /**
-     * L'expert-comptable voit les factures de toute l'équipe mais n'en
-     * envoie ni n'en relance aucune, contrairement à l'ancien comptable de
-     * magasin.
+     * Un compte du cabinet lié voit les factures de toute l'équipe mais
+     * n'en envoie ni n'en relance aucune, contrairement à l'ancien
+     * comptable de magasin.
      */
-    public function test_l_expert_comptable_n_envoie_aucune_facture(): void
+    public function test_un_compte_de_cabinet_n_envoie_aucune_facture(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $facture = $this->emettreUneFactureEnTantQue($this->responsableDeTest($magasin), $magasin);
 
-        $this->assertTrue($expert->can('view', $facture));
-        $this->assertFalse($expert->can('envoyer', $facture));
+        $this->assertTrue($collaborateur->can('view', $facture));
+        $this->assertFalse($collaborateur->can('envoyer', $facture));
     }
 
     public function test_un_vendeur_envoie_ses_propres_factures(): void

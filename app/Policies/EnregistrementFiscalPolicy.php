@@ -8,9 +8,9 @@ use App\Models\User;
 
 /**
  * Le registre fiscal (caisse sécurisée) se consulte avec
- * caisse_securisee.consulter : le propriétaire, les responsables du
- * magasin et les experts-comptables l'ont toujours, un administrateur ou un
- * vendeur si on la lui coche, sans confidentialité par vendeur, puisqu'il
+ * caisse_securisee.consulter : le propriétaire et les responsables du
+ * magasin l'ont toujours, le cabinet lié par défaut, un administrateur ou
+ * un vendeur si on la lui coche, sans confidentialité par vendeur, puisqu'il
  * retrace l'activité de tout le magasin. L'autorisation est celle du
  * magasin actif (voir ControleDesDroits) : sans magasin actif, aucune ne
  * s'applique, et un enregistrement ne se consulte que dans son propre

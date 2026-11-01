@@ -35,7 +35,6 @@ use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
@@ -790,8 +789,7 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Les cases que précochait le modèle « comptable » de magasin, que
-     * l'éditeur a supprimé (un expert-comptable de la société, en lecture
-     * seule, le remplace) : un vendeur à qui on les coche garde, dans les
+     * l'éditeur a supprimé (un cabinet lié, en consultation, le remplace) : un vendeur à qui on les coche garde, dans les
      * tests des policies, les mêmes droits que l'ancien comptable, la
      * consultation des services comprise, qui a ses propres autorisations
      * depuis que celles des produits ne valent plus pour eux.
@@ -885,19 +883,28 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Un expert-comptable de la société du magasin, créé par le
-     * propriétaire (voir CreerExpertComptableAction), son mot de passe
-     * choisi.
+     * Un collaborateur d'un cabinet d'expertise comptable lié à la société
+     * de ce magasin, à qui ce client est confié, comme dans le vrai
+     * parcours : le cabinet déjà lié à ce client, sinon un cabinet vérifié
+     * ouvert sous un SIREN fictif (voir ouvrirUnCabinet()) et lié avec ces
+     * autorisations, celles par défaut sauf mention (voir lierLeCabinet()) ;
+     * le collaborateur choisit son mot de passe en sa présence (voir
+     * collaborateur()). Le contexte d'avant est rétabli ensuite.
+     *
+     * @param  list<string>|null  $autorisations
      */
-    protected function expertComptable(Magasin $magasin): User
+    protected function collaborateurDuCabinetLie(Magasin $magasin, ?array $autorisations = null, ?string $nom = null): User
     {
-        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerExpertComptableAction::class)->handle(
-            $this->proprietaireDe($magasin),
-            $magasin->societe()->firstOrFail(),
-            ['name' => fake()->name()],
-        ));
+        return app(TenantContext::class)->runAs($magasin, function () use ($magasin, $autorisations, $nom): User {
+            $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->first();
+            $cabinet = $lien === null ? $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), fake()->name()) : Societe::query()->findOrFail($lien->cabinet_id);
 
-        return $this->choisirSonMotDePasse($compte);
+            if ($lien === null) {
+                $this->lierLeCabinet($cabinet, $magasin, $autorisations);
+            }
+
+            return $this->confier($this->collaborateur($cabinet, $nom ?? fake()->name()), [$magasin]);
+        });
     }
 
     /**

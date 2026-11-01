@@ -4,6 +4,10 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Cabinets\Support\GardesDesCabinets;
 use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
@@ -31,7 +35,9 @@ use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -260,6 +266,12 @@ class RemisesEtPrixTest extends TestCase
         $this->assertSame(5, app(ModifierDevisAction::class)->handle($responsable, $devis, $client, [['produit_id' => $cable->id, 'quantite' => 5, 'remise_pourcentage' => 10]])->lignes->sole()->quantite);
     }
 
+    /**
+     * Le propriétaire et un responsable ont toujours « accorder des remises
+     * et fixer le prix d'un service », le modèle de l'administrateur la
+     * précoche, aucun autre modèle ; jamais un cabinet lié, ni par l'action
+     * qui règle ses autorisations, ni par une ligne écrite en base.
+     */
     public function test_le_proprietaire_et_le_responsable_ont_toujours_remises_et_prix_le_modele_de_l_administrateur_la_precoche_et_aucun_autre_modele(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -272,7 +284,13 @@ class RemisesEtPrixTest extends TestCase
         $this->assertNotContains(PermissionRegistry::VENTE_REMISES_ET_PRIX, RoleMagasin::Observateur->permissionsParDefaut(TypeDActivite::Commerce));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Vendeur)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Observateur)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
-        $this->assertFalse($this->expertComptable($magasin)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+        $this->assertFalse($collaborateur->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
+
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        $this->assertThrows(fn () => app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [PermissionRegistry::VENTE_REMISES_ET_PRIX]), InvalidArgumentException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('autorisations_cabinet')->insert(['societe_id' => $magasin->societe_id, 'lien_id' => $lien->id, 'autorisation' => PermissionRegistry::VENTE_REMISES_ET_PRIX])), QueryException::class, GardesDesCabinets::AUTORISATIONS);
+        $this->assertFalse($collaborateur->fresh()->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
     }
 
     public function test_un_vendeur_a_qui_le_responsable_coche_remises_et_prix_accorde_une_remise(): void

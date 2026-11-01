@@ -3,10 +3,10 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Tenancy\Actions\AfficherLIdentifiantAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
@@ -65,7 +65,7 @@ class IdentifiantsTest extends TestCase
         $comptes = [
             $this->proprietaireDe($magasin),
             $this->administrateur($magasin),
-            $this->expertComptable($magasin),
+            $this->collaborateurDuCabinetLie($magasin),
             $this->responsable($magasin),
             $this->membre($magasin, RoleMagasin::Vendeur),
             $this->membre($magasin, RoleMagasin::Observateur),
@@ -115,12 +115,13 @@ class IdentifiantsTest extends TestCase
     {
         $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
         $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $cabinet = $this->ouvrirUnCabinet();
         $source = $this->sourceQuiRend([73519046, 20864517, 95173208, 41620937]);
 
         $comptes = [
             $this->membre($magasinB, RoleMagasin::Vendeur),
             $this->administrateur($magasinA),
-            $this->expertComptable($magasinB),
+            $this->collaborateur($cabinet),
             $this->membre($magasinA, RoleMagasin::Responsable),
         ];
 
@@ -339,7 +340,7 @@ class IdentifiantsTest extends TestCase
         $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
         DB::table('affectations')->where('user_id', $entrainement->id)->delete();
 
-        foreach ([RoleSociete::Administrateur, RoleSociete::ExpertComptable] as $role) {
+        foreach ([RoleSociete::Administrateur, RoleSociete::Collaborateur] as $role) {
             $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => $role->value])), QueryException::class);
         }
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $administrateur->id)->update(['magasin_id' => $demonstration->id])), QueryException::class);
@@ -356,10 +357,11 @@ class IdentifiantsTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
+        $cabinet = $this->ouvrirUnCabinet();
         $comptes = [
             app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Membre', 'email' => 'membre@example.test'], RoleMagasin::Vendeur),
             app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Administrateur', 'email' => 'admin@example.test'], null, [], []),
-            app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Expert', 'email' => 'expert@example.test']),
+            app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Collaborateur', 'email' => 'collaborateur@example.test']),
         ];
 
         $this->dansLeMagasin($magasin, $proprietaire);

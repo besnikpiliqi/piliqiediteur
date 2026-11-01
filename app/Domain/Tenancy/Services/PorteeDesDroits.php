@@ -29,11 +29,10 @@ use LogicException;
  *   identifiant (voir User::magasinDeSonIdentifiant()) : une personne qui
  *   travaille dans plusieurs magasins y a un compte dans chacun, et aucun
  *   geste ne fait changer un compte de magasin ;
- * - seul le propriétaire gère les administrateurs et les
- *   experts-comptables, et change le rôle de société d'un compte ; dans un
- *   cabinet d'expertise comptable, seul son propriétaire gère les
- *   collaborateurs (les règles générales suffisent : un collaborateur
- *   n'est pas un membre), et aucun rôle ne change ;
+ * - seul le propriétaire gère les administrateurs et change le rôle de
+ *   société d'un compte ; dans un cabinet d'expertise comptable, seul son
+ *   propriétaire gère les collaborateurs (les règles générales suffisent :
+ *   un collaborateur n'est pas un membre), et aucun rôle ne change ;
  * - responsable d'un magasin : nommé ou retiré par le propriétaire, ou par
  *   un administrateur autorisé à nommer les responsables, dans les
  *   magasins réels de sa portée (voir peutNommerUnResponsable()), jamais
@@ -48,8 +47,7 @@ use LogicException;
  *   pour un responsable d'un magasin réel de sa portée, et par un
  *   administrateur autorisé à redonner l'accès pour un vendeur ou un
  *   observateur d'un magasin réel de sa portée ; jamais pour le
- *   propriétaire, un administrateur ou un expert-comptable par un autre que
- *   le propriétaire ;
+ *   propriétaire ou un administrateur par un autre que le propriétaire ;
  * - un compte suspendu par le propriétaire ne se réactive, ni ne se retire
  *   de la société, que par le propriétaire ; retiré par lui, il ne se
  *   réintègre que par le propriétaire. La décision se lit sur le compte,
@@ -244,8 +242,8 @@ final class PorteeDesDroits
      * responsable d'un magasin réel de sa portée ; un administrateur que le
      * propriétaire autorise à redonner l'accès, pour un vendeur ou un
      * observateur d'un magasin réel de sa portée. Personne d'autre que le
-     * propriétaire ne redonne l'accès d'un administrateur ou d'un
-     * expert-comptable, et personne celui du propriétaire. Un compte
+     * propriétaire ne redonne l'accès d'un administrateur, et personne
+     * celui du propriétaire. Un compte
      * suspendu se réactive d'abord, par qui le peut.
      */
     public function peutRedonnerLAcces(User $auteur, User $compte): bool
@@ -341,8 +339,8 @@ final class PorteeDesDroits
     }
 
     /**
-     * Peut-il changer le rôle de société de ce compte (membre,
-     * administrateur, expert-comptable ; voir
+     * Peut-il changer le rôle de société de ce compte (membre ou
+     * administrateur ; voir
      * ChangerLeRoleDeSocieteAction) ? Le propriétaire seul, pour un compte
      * actif de sa société qui n'est pas un compte d'entraînement ; jamais
      * dans un cabinet d'expertise comptable, dont les collaborateurs ne
@@ -426,7 +424,7 @@ final class PorteeDesDroits
 
     /**
      * Les comptes de sa société qu'il voit dans l'espace d'administration :
-     * tous pour le propriétaire, experts-comptables compris ; pour un
+     * tous pour le propriétaire ; pour un
      * administrateur, les responsables des magasins réels de sa portée s'il
      * est autorisé à nommer les responsables, et leurs vendeurs et leurs
      * observateurs s'il est autorisé à leur redonner l'accès ; aucun pour

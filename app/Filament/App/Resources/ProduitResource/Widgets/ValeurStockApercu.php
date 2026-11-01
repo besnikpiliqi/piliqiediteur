@@ -31,10 +31,9 @@ use Illuminate\Support\Number;
  *
  * Information sensible (elle révèle la trésorerie immobilisée en stock) :
  * réservée par défaut au propriétaire, aux responsables, aux
- * administrateurs et à l'expert-comptable, via produit.voir_valeur_stock
- * (voir PermissionRegistry::modeleDeLAdministrateur() et
- * PermissionRegistry::consultations()),
- * un vendeur continue de voir le prix et la quantité de chaque produit
+ * administrateurs et au cabinet lié, via produit.voir_valeur_stock (voir
+ * PermissionRegistry::modeleDeLAdministrateur() et
+ * PermissionRegistry::parDefautDuCabinet()) ; un vendeur continue de voir le prix et la quantité de chaque produit
  * dans le tableau, juste pas ce total agrégé.
  *
  * PAS de tuile "valeur des produits épuisés" : la valeur d'un stock est

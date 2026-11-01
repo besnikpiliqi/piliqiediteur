@@ -3,7 +3,6 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
-use App\Filament\App\Pages\AucunMagasin;
 use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
@@ -38,12 +37,11 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
  * Panneau applicatif quotidien des magasins : le propriétaire de la
- * société, dans chacun de ses magasins, ses administrateurs, ses
- * experts-comptables (en lecture), les membres de l'équipe de chaque
- * magasin, et les comptes d'un cabinet d'expertise comptable lié, dans
- * les magasins réels des clients qui leur sont confiés, selon les
- * autorisations que chaque client accorde au cabinet, y gèrent clients,
- * produits, factures, et le propriétaire et les
+ * société, dans chacun de ses magasins, ses administrateurs, les membres
+ * de l'équipe de chaque magasin, et les comptes d'un cabinet d'expertise
+ * comptable lié, dans les magasins réels des clients qui leur sont
+ * confiés, selon les autorisations que chaque client accorde au cabinet,
+ * y gèrent clients, produits, factures, et le propriétaire et les
  * responsables d'un magasin son équipe (voir EquipeDuMagasinResource).
  * C'est le panneau par défaut (->default()), avec la tenancy Filament
  * branchée sur Magasin (URL /app/{magasin:uuid}/...), et celui de
@@ -57,10 +55,10 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * JournaliserOuvertureDeSession le suit : une fois le magasin actif
  * positionné, il inscrit l'ouverture de session (JET 80) au journal des
  * événements de ce magasin. Avant tout cela, ExigerSonPropreMotDePasse
- * mène un responsable, un administrateur ou un expert-comptable dont le
- * mot de passe est encore son identifiant au choix du sien, puis
- * MenerUnCompteSansMagasin mène un compte qui n'a encore aucun magasin à
- * l'espace de sa société ou à la page qui le lui dit (voir AucunMagasin).
+ * mène un responsable ou un administrateur dont le mot de passe est
+ * encore son identifiant au choix du sien, puis MenerUnCompteSansMagasin
+ * mène un compte qui n'a encore aucun magasin à l'espace de sa société,
+ * et un compte d'un cabinet à l'espace de son cabinet.
  * Le sélecteur de magasin n'apparaît qu'à qui en ouvre plusieurs : un
  * compte de membre n'en a qu'un, un compte d'un cabinet n'y voit que les
  * magasins du client ouvert.
@@ -85,7 +83,6 @@ class AppPanelProvider extends PanelProvider
             ->passwordReset(DemandeDeLien::class, PageDuLien::class)
             ->authenticatedRoutes(function (): void {
                 ChoisirSonMotDePasse::registerRoutes();
-                AucunMagasin::registerRoutes();
             })
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')

@@ -13,7 +13,7 @@ use App\Models\User;
  * que voient et gèrent son propriétaire et ses responsables, selon les
  * règles de PorteeDesDroits ; jamais une affectation d'un autre magasin,
  * ni celle d'un administrateur, que ni un vendeur, ni un administrateur, ni
- * un expert-comptable ne voient. Une affectation ne se supprime que par le
+ * un compte du cabinet lié ne voient. Une affectation ne se supprime que par le
  * retrait du membre de ce magasin (delete).
  */
 class AffectationPolicy

@@ -6,14 +6,12 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Filament\App\Pages\AucunMagasin;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
@@ -28,10 +26,12 @@ use Tests\TestCase;
  * Qui ouvre quel panneau (voir User::canAccessPanel(), getTenants() et
  * canAccessTenant()) : le panneau des magasins s'ouvre à tout compte
  * actif, et mène celui qui n'a encore aucun magasin à l'espace de sa
- * société ou à une page qui le lui dit, jamais à une erreur (voir
- * MenerUnCompteSansMagasin) ; celui de l'administration de la société à
- * son propriétaire et à ses administrateurs, et aucun autre ; un magasin
- * ne s'ouvre qu'au propriétaire de sa société et à ses membres actifs.
+ * société, et un compte d'un cabinet d'expertise comptable à l'espace de
+ * son cabinet, jamais à une erreur (voir MenerUnCompteSansMagasin) ;
+ * celui de l'administration de la société à son propriétaire et à ses
+ * administrateurs, et aucun autre ; un magasin ne s'ouvre qu'au
+ * propriétaire de sa société, à ses membres actifs et aux comptes du
+ * cabinet lié à qui elle est confiée.
  */
 class AccesAuxPanneauxTest extends TestCase
 {
@@ -147,7 +147,6 @@ class AccesAuxPanneauxTest extends TestCase
 
         $this->assertAuthenticatedAs($proprietaire);
         $this->get('/app')->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $societe));
-        $this->get('/app/aucun-magasin')->assertRedirect(route('filament.app.tenant'));
     }
 
     /**
@@ -184,25 +183,6 @@ class AccesAuxPanneauxTest extends TestCase
     }
 
     /**
-     * Un expert-comptable d'une société sans magasin réel ouvre l'accueil
-     * du panneau des magasins sans erreur : une page claire lui dit
-     * pourquoi il n'y voit rien, et il n'a pas d'espace de société. (Un
-     * compte de membre a toujours son magasin : retiré de son magasin, il
-     * est retiré de la société.)
-     */
-    public function test_un_expert_comptable_sans_magasin_ouvre_app_sur_une_page_claire(): void
-    {
-        $sansMagasin = $this->inscrireUneSociete();
-        $expert = $this->choisirSonMotDePasse(app(CreerExpertComptableAction::class)->handle($sansMagasin->proprietaire()->firstOrFail(), $sansMagasin, ['name' => 'Cabinet Durand']));
-        app(TenantContext::class)->clear();
-        $this->actingAs($expert->refresh());
-
-        $this->get('/app')->assertRedirect(route('filament.app.aucun-magasin'));
-        $this->get('/app/aucun-magasin')->assertOk()->assertSeeText(AucunMagasin::MESSAGE_EXPERT_COMPTABLE)->assertSeeText('Me déconnecter');
-        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $expert->societe))->assertForbidden();
-    }
-
-    /**
      * Une adresse dont le magasin n'est pas un uuid ne désigne aucun
      * magasin : 404, jamais l'erreur de la colonne uuid, typée sous
      * PostgreSQL.
@@ -231,17 +211,26 @@ class AccesAuxPanneauxTest extends TestCase
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
     }
 
-    public function test_l_expert_comptable_ouvre_les_magasins_reels_et_pas_l_espace_societe(): void
+    /**
+     * Un collaborateur d'un cabinet lié ouvre les magasins réels du client
+     * qui lui est confié, jamais ceux d'un client qui ne l'est pas, et
+     * jamais l'espace d'administration d'une société.
+     */
+    public function test_un_collaborateur_ouvre_les_magasins_reels_des_clients_confies_et_jamais_l_espace_societe(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        $expert = $this->expertComptable($lyon);
+        $nonConfie = $this->ouvrirUneSociete(['nom' => 'Non confié']);
+        $collaborateur = $this->collaborateurDuCabinetLie($lyon);
+        $this->lierLeCabinet($collaborateur->societe, $nonConfie);
+        $collaborateur->refresh();
 
-        $this->assertTrue($expert->canAccessPanel(Filament::getPanel('app')));
-        $this->assertSame([true, true], [$expert->canAccessTenant($lyon), $expert->canAccessTenant($villeurbanne)]);
-        $this->actingAs($expert)->get("/app/{$villeurbanne->uuid}")->assertOk();
-        $this->assertFalse($expert->canAccessPanel(Filament::getPanel('societe')));
-        $this->assertSame([], $expert->getTenants(Filament::getPanel('societe'))->modelKeys());
+        $this->assertTrue($collaborateur->canAccessPanel(Filament::getPanel('app')));
+        $this->assertSame([true, true, false], [$collaborateur->canAccessTenant($lyon), $collaborateur->canAccessTenant($villeurbanne), $collaborateur->canAccessTenant($nonConfie)]);
+        $this->actingAs($collaborateur)->get("/app/{$villeurbanne->uuid}")->assertOk();
+        $this->get("/app/{$nonConfie->uuid}")->assertNotFound();
+        $this->assertFalse($collaborateur->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertSame([], $collaborateur->getTenants(Filament::getPanel('societe'))->modelKeys());
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
     }
 

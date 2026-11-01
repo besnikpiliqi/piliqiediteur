@@ -186,11 +186,11 @@ class ResponsablesTest extends TestCase
         $this->assertSame(0, app(PorteeDesDroits::class)->candidatsResponsables($administrateur, $horsPortee)->count());
     }
 
-    public function test_un_administrateur_autorise_ne_nomme_jamais_le_proprietaire_ni_un_administrateur_ni_l_expert_comptable(): void
+    public function test_un_administrateur_autorise_ne_nomme_jamais_le_proprietaire_ni_un_administrateur(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
-        $cibles = [$this->proprietaireDe($magasin), $this->administrateur($magasin), $this->expertComptable($magasin), $administrateur];
+        $cibles = [$this->proprietaireDe($magasin), $this->administrateur($magasin), $administrateur];
 
         foreach ($cibles as $cible) {
             $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($administrateur, $cible, RoleMagasin::Responsable), AuthorizationException::class);

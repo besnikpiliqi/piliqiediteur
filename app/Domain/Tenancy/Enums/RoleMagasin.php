@@ -18,8 +18,8 @@ use Filament\Support\Contracts\HasLabel;
  *   seul magasin, jamais au-delà de ses propres autorisations (voir
  *   PorteeDesDroits).
  *
- * Le propriétaire, un administrateur et un expert-comptable n'ont aucun
- * rôle de magasin (voir RoleSociete) : la base refuse toute autre valeur
+ * Le propriétaire, un administrateur et un collaborateur d'un cabinet
+ * n'ont aucun rôle de magasin (voir RoleSociete) : la base refuse toute autre valeur
  * (voir GardesDesDroits).
  */
 enum RoleMagasin: string implements HasLabel

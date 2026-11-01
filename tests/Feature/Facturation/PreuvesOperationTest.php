@@ -543,7 +543,8 @@ class PreuvesOperationTest extends TestCase
      * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
      * réponse (b) de l'éditeur à Q-V2) : le propriétaire, qui ne vend pas,
      * l'a ; un comptable, qui voit toutes les factures, ne l'a pas, ni un
-     * expert-comptable. Il n'apparaît pas non plus sur une vente en France.
+     * compte du cabinet lié, qui ne note jamais une preuve. Il n'apparaît
+     * pas non plus sur une vente en France.
      */
     public function test_le_bouton_ajouter_une_preuve_est_reserve_a_qui_est_autorise_a_noter_les_preuves_d_une_vente_exoneree(): void
     {
@@ -553,11 +554,11 @@ class PreuvesOperationTest extends TestCase
 
         Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionVisible('ajouter_preuve');
         Livewire::test(ViewFacture::class, ['record' => $enFrance->getRouteKey()])->assertActionHidden('ajouter_preuve');
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable()));
 
         Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionHidden('ajouter_preuve');
-        $this->actingAs($expert);
+        $this->actingAs($collaborateur);
 
         Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionHidden('ajouter_preuve');
     }

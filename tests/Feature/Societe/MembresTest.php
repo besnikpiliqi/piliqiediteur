@@ -3,9 +3,9 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -243,17 +243,19 @@ class MembresTest extends TestCase
 
     /**
      * Aucun compte créé par la société n'a d'adresse, ni donc d'adresse
-     * confirmée : membre, responsable, administrateur ou expert-comptable.
+     * confirmée : membre, responsable, administrateur ; ni un collaborateur
+     * créé par le propriétaire d'un cabinet.
      */
     public function test_un_compte_cree_par_la_societe_n_a_pas_d_adresse_confirmee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
+        $cabinet = $this->ouvrirUnCabinet();
         $comptes = [
             app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Membre'], RoleMagasin::Vendeur),
             app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Responsable'], RoleMagasin::Responsable),
             app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Administrateur'], null, [], []),
-            app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Expert']),
+            app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Collaborateur']),
         ];
 
         foreach ($comptes as $compte) {

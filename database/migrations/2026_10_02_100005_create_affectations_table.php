@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Schema;
  *   sélection, ou une seule, sans magasin, pour tous les magasins, présents
  *   et futurs, jamais les deux ; elles délimitent sa portée et portent les
  *   cases que le propriétaire lui a cochées ;
- * - le propriétaire et un expert-comptable n'en ont aucune.
+ * - le propriétaire et un collaborateur d'un cabinet n'en ont aucune.
  * La base refuse toute autre combinaison (voir GardesDesDroits, posées
  * avec la table des autorisations de société, la dernière qu'elles lisent).
  *

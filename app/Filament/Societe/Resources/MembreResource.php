@@ -34,13 +34,12 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * Les comptes de la société, dans son espace d'administration (voir
  * MembrePolicy et PorteeDesDroits) :
- * - pour le propriétaire, tous les comptes, experts-comptables compris,
- *   avec leur identifiant de connexion, leur magasin et leurs
- *   autorisations, et tous les gestes : créer un membre (pour un seul
- *   magasin), un administrateur, un expert-comptable ; changer le rôle de
- *   société d'un compte ; modifier un administrateur ; suspendre,
- *   réactiver, retirer, réintégrer ; redonner l'accès ; annuler la
- *   nomination d'un responsable par un administrateur ; demander,
+ * - pour le propriétaire, tous les comptes, avec leur identifiant de
+ *   connexion, leur magasin et leurs autorisations, et tous les gestes :
+ *   créer un membre (pour un seul magasin) ou un administrateur ; changer
+ *   le rôle de société d'un compte ; modifier un administrateur ;
+ *   suspendre, réactiver, retirer, réintégrer ; redonner l'accès ; annuler
+ *   la nomination d'un responsable par un administrateur ; demander,
  *   renvoyer ou annuler la transmission de la propriété à un
  *   administrateur ;
  * - pour un administrateur autorisé à nommer les responsables, les
@@ -170,7 +169,7 @@ class MembreResource extends RessourceDuPanneauSociete
                         TextEntry::make('nomination')->label('Nomination')->placeholder('—'),
                     ])
                     ->columns(4),
-            ])->visible(fn (User $record): bool => ! $record->estProprietaire() && ! $record->estExpertComptable()),
+            ])->visible(fn (User $record): bool => ! $record->estProprietaire()),
             Section::make('Autorisations de société')->schema([
                 TextEntry::make('autorisations_de_societe')
                     ->label('')
@@ -220,10 +219,6 @@ class MembreResource extends RessourceDuPanneauSociete
     {
         if ($compte->estProprietaire()) {
             return 'Tous les magasins (propriétaire)';
-        }
-
-        if ($compte->estExpertComptable()) {
-            return 'Tous les magasins réels, en lecture';
         }
 
         if ($compte->estAdministrateur() && $compte->administreTousLesMagasins()) {

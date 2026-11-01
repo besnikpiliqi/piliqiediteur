@@ -19,8 +19,8 @@ use LogicException;
 
 /**
  * Ce que partage la création d'un compte par la société (voir
- * CreerMembreAction, CreerAdministrateurAction et
- * CreerExpertComptableAction) :
+ * CreerMembreAction et CreerAdministrateurAction) ou par un cabinet
+ * d'expertise comptable (voir CreerCollaborateurAction) :
  * - son nom, et aucune adresse e-mail : seule la personne renseigne la
  *   sienne, dans son profil, jamais qui crée son compte ;
  * - son identifiant de connexion, tiré au hasard (voir

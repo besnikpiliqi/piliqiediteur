@@ -12,16 +12,16 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * L'accueil du panneau des magasins (/app) pour un compte qui n'a encore
- * aucun magasin à ouvrir (voir User::magasinsAccessibles()) : jamais une
- * erreur. Un compte d'un cabinet d'expertise comptable va toujours à
- * l'espace de son cabinet (voir TableauDeBordDuCabinet). Le propriétaire et
- * un administrateur vont à l'espace de leur
- * société, où se créent les magasins (voir TableauDeBord) ; un
- * expert-comptable d'une société sans magasin réel, à une page qui le lui
- * dit (voir AucunMagasin). Un compte de membre a toujours son magasin, où
- * il va, comme Filament l'y mène. Après ExigerSonPropreMotDePasse : un
- * responsable, un administrateur ou un expert-comptable dont le mot de
- * passe est encore son identifiant choisit d'abord le sien.
+ * aucun magasin à ouvrir (voir User::magasinsAccessibles()). Un compte
+ * d'un cabinet d'expertise comptable va toujours à l'espace de son cabinet
+ * (voir TableauDeBordDuCabinet). Le propriétaire et un administrateur vont
+ * à l'espace de leur société, où se créent les magasins (voir
+ * TableauDeBord). Un compte de membre a toujours son magasin, où il va,
+ * comme Filament l'y mène : aucun autre compte actif n'est sans magasin,
+ * et un état que contrediraient les données ne trouve qu'une page
+ * introuvable, comme un magasin qu'il n'ouvre pas. Après
+ * ExigerSonPropreMotDePasse : un responsable ou un administrateur dont le
+ * mot de passe est encore son identifiant choisit d'abord le sien.
  */
 class MenerUnCompteSansMagasin
 {
@@ -41,9 +41,9 @@ class MenerUnCompteSansMagasin
             return $next($request);
         }
 
-        return redirect()->to($compte->peutAdministrer()
-            ? TableauDeBord::getUrl(panel: 'societe', tenant: $compte->societe)
-            : route('filament.app.aucun-magasin'));
+        abort_unless($compte->peutAdministrer(), 404);
+
+        return redirect()->to(TableauDeBord::getUrl(panel: 'societe', tenant: $compte->societe));
     }
 
     /**

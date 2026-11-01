@@ -38,7 +38,7 @@ class CreerAdministrateurAction
 
     public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire crée et modifie les administrateurs.';
 
-    public const MESSAGE_CABINET = 'Un cabinet d\'expertise comptable n\'a ni administrateur ni expert-comptable.';
+    public const MESSAGE_CABINET = 'Un cabinet d\'expertise comptable n\'a pas d\'administrateur.';
 
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
@@ -100,9 +100,9 @@ class CreerAdministrateurAction
     }
 
     /**
-     * Jamais dans un cabinet d'expertise comptable, qui n'a ni magasin, ni
-     * administrateur, ni expert-comptable, et ne configure que son
-     * identité (voir MembrePolicy::creerUnAdministrateur()). Le type d'une
+     * Jamais dans un cabinet d'expertise comptable, qui n'a ni magasin ni
+     * administrateur, et configure son identité et ses collaborateurs
+     * (voir MembrePolicy::creerUnAdministrateur()). Le type d'une
      * société ne change jamais : il se lit une fois, hors des verrous.
      *
      * @throws LogicException

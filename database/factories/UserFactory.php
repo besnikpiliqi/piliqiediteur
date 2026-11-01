@@ -24,9 +24,10 @@ use Illuminate\Support\Str;
  * CreerSocieteAction), avec son identifiant de connexion tiré par
  * GenerateurDIdentifiants : un magasin s'ouvre ensuite dans sa société
  * (voir TestCase::ouvrirUneSociete()). Avec ->for($societe), le
- * propriétaire de cette société. Les membres, les administrateurs et les
- * experts-comptables se créent par la société (voir CreerMembreAction,
- * CreerAdministrateurAction et CreerExpertComptableAction), sauf les
+ * propriétaire de cette société. Les membres et les administrateurs se
+ * créent par la société (voir CreerMembreAction et
+ * CreerAdministrateurAction), les collaborateurs par le cabinet (voir
+ * CreerCollaborateurAction), sauf les
  * comptes de préparation des tests : un compte de membre rattaché à un
  * magasin (voir membreDe()), et le responsable de test (voir
  * responsableDeTest()).

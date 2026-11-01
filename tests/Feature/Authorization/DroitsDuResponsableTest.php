@@ -4,16 +4,21 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -58,7 +63,9 @@ class DroitsDuResponsableTest extends TestCase
      * L'espace d'administration de la société lui répond 403, et aucune
      * action de la société ne passe, même appelée directement : ni
      * l'identité, ni la fiscalité, ni créer ou modifier un magasin, ni les
-     * administrateurs, l'expert-comptable ou un autre responsable.
+     * administrateurs ou un autre responsable, ni le cabinet lié : il ne le
+     * désigne pas, ne met pas fin au lien et n'a aucun geste sur un compte
+     * du cabinet, d'une autre société.
      */
     public function test_un_responsable_n_a_aucun_droit_de_societe(): void
     {
@@ -66,6 +73,9 @@ class DroitsDuResponsableTest extends TestCase
         $societe = $magasin->societe;
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->id)->where('etat', EtatDuLien::Actif->value)->sole();
+        $autreCabinet = $this->ouvrirUnCabinet();
 
         $this->actingAs($responsable)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertForbidden();
         foreach (AutorisationsSociete::toutes() as $autorisation) {
@@ -80,23 +90,29 @@ class DroitsDuResponsableTest extends TestCase
             'modifier son magasin' => fn () => app(ModifierEtablissementAction::class)->handle($responsable, $magasin, ['nom' => 'Pris']),
             'créer un administrateur' => fn () => app(CreerAdministrateurAction::class)->handle($responsable, $societe, ['name' => 'Admin'], null, [], []),
             'nommer administrateur' => fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($responsable, $vendeur, null, [], []),
-            'créer l\'expert-comptable' => fn () => app(CreerExpertComptableAction::class)->handle($responsable, $societe, ['name' => 'Cabinet']),
             'nommer un responsable' => fn () => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Chef'], RoleMagasin::Responsable),
+            'désigner un cabinet' => fn () => app(DesignerUnCabinetAction::class)->handle($responsable, $societe, $autreCabinet),
+            'mettre fin au lien' => fn () => app(MettreFinAuLienAction::class)->handle($responsable, $lien),
+            'suspendre un compte du cabinet' => fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $collaborateur),
+            'redonner l\'accès à un compte du cabinet' => fn () => app(RedonnerLAccesAction::class)->handle($responsable, $collaborateur, false),
         ];
 
         foreach ($gestes as $geste => $appel) {
             $this->assertThrows($appel, Throwable::class, null);
             $this->assertNotSame('Prise', $societe->fresh()->raison_sociale, $geste);
         }
-        foreach (['créer un administrateur', 'nommer administrateur', 'créer l\'expert-comptable', 'nommer un responsable'] as $geste) {
+        foreach (['créer un administrateur', 'nommer administrateur', 'nommer un responsable', 'désigner un cabinet', 'mettre fin au lien', 'suspendre un compte du cabinet', 'redonner l\'accès à un compte du cabinet'] as $geste) {
             $this->assertThrows($gestes[$geste], AuthorizationException::class);
         }
 
         $this->assertSame('Ma Boutique', $magasin->fresh()->nom);
         $this->assertSame(1, $societe->magasinsReels()->count());
         $this->assertSame(12, (int) $societe->fresh()->mois_fin_exercice);
-        $this->assertFalse(User::query()->where('societe_id', $societe->id)->whereIn('name', ['Admin', 'Cabinet', 'Chef'])->exists());
+        $this->assertFalse(User::query()->where('societe_id', $societe->id)->whereIn('name', ['Admin', 'Chef'])->exists());
         $this->assertTrue($vendeur->refresh()->estMembre());
+        $this->assertSame(EtatDuLien::Actif, $lien->fresh()->etat);
+        $this->assertTrue($collaborateur->refresh()->estActif());
+        $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $autreCabinet->id)->count());
     }
 
     public function test_un_responsable_n_a_aucun_droit_dans_un_autre_magasin(): void

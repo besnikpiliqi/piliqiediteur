@@ -112,13 +112,14 @@ class CoordonneesMagasinTest extends TestCase
     }
 
     /**
-     * L'expert-comptable ne règle rien ; un magasin fermé, en lecture
-     * seule, ne règle plus ses coordonnées, pas même son propriétaire.
+     * Un compte du cabinet lié ne règle rien ; un magasin fermé, en
+     * lecture seule, ne règle plus ses coordonnées, pas même son
+     * propriétaire.
      */
-    public function test_ni_l_expert_comptable_ni_un_magasin_ferme_ne_reglent_les_coordonnees(): void
+    public function test_ni_un_compte_de_cabinet_ni_un_magasin_ferme_ne_reglent_les_coordonnees(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $this->dansLeMagasin($magasin, $this->expertComptable($magasin));
+        $this->dansLeMagasin($magasin, $this->collaborateurDuCabinetLie($magasin));
         Livewire::test(CoordonneesMagasin::class)->assertForbidden();
 
         $magasin->forceFill(['statut' => StatutMagasin::Ferme])->save();

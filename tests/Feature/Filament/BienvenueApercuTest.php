@@ -43,15 +43,17 @@ class BienvenueApercuTest extends TestCase
             ->assertDontSee('Propriétaire');
     }
 
-    public function test_un_expert_comptable_lit_expert_comptable(): void
+    public function test_un_collaborateur_lit_collaborateur_du_cabinet_et_le_nom_du_magasin(): void
     {
         $magasin = $this->boutiqueLyon1();
-        $expertComptable = $this->expertComptable($magasin);
-        $this->dansLeMagasin($magasin, $expertComptable);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
+        $this->dansLeMagasin($magasin, $collaborateur);
 
         $bienvenue = Livewire::test(BienvenueApercu::class);
 
-        $bienvenue->assertSeeInOrder(['Bonjour '.$expertComptable->name, 'Expert-comptable']);
+        $this->assertNotEmpty($collaborateur->societe->raison_sociale);
+        $bienvenue->assertSeeInOrder(['Bonjour '.$collaborateur->name, "Collaborateur du cabinet {$collaborateur->societe->raison_sociale} · {$magasin->nom}"])
+            ->assertDontSee('Propriétaire');
     }
 
     public function test_un_responsable_lit_responsable_et_son_magasin(): void

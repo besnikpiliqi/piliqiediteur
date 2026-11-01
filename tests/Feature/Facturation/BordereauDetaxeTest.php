@@ -404,7 +404,8 @@ class BordereauDetaxeTest extends TestCase
      * réponse (b) de l'éditeur à Q-V2), sur un ticket qui se détaxe : le
      * propriétaire, qui ne vend pas, le voit ; pas sur une facture à un
      * professionnel, ni pour un vendeur aux cases de l'ancien comptable de
-     * magasin, ni pour un expert-comptable, qui n'écrit rien.
+     * magasin, ni pour un compte du cabinet lié, qui ne note jamais un
+     * bordereau.
      */
     public function test_le_bouton_noter_le_bordereau_est_reserve_a_qui_est_autorise_a_noter_les_preuves_sur_un_ticket_detaxable(): void
     {
@@ -414,11 +415,11 @@ class BordereauDetaxeTest extends TestCase
 
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionVisible('noter_bordereau_detaxe');
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable()));
 
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
-        $this->actingAs($expert);
+        $this->actingAs($collaborateur);
 
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
     }

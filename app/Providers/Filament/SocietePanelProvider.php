@@ -34,7 +34,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * identité légale et ses paramètres fiscaux, ses magasins (voir
  * MagasinResource), ses comptes (voir MembreResource), ouverts à son
  * propriétaire et à ses administrateurs actifs, selon leurs autorisations
- * et leur portée, jamais à un membre ni à un expert-comptable (voir
+ * et leur portée, jamais à un membre ni à un compte d'un cabinet (voir
  * User::canAccessPanel(), SocietePolicy, MagasinDeLaSocietePolicy et
  * MembrePolicy). Un administrateur dont le mot de passe est encore son
  * identifiant y choisit d'abord le sien (voir ExigerSonPropreMotDePasse).

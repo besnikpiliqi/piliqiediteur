@@ -85,39 +85,34 @@ class AdministrateursTest extends TestCase
     }
 
     /**
-     * L'identifiant d'un administrateur ou d'un expert-comptable n'ouvre son
-     * compte que depuis un poste reconnu d'un magasin de sa portée : la
+     * L'identifiant d'un administrateur n'ouvre son compte que depuis un
+     * poste reconnu d'un magasin de sa portée : la
      * fenêtre « Compte créé » le dit, et propose d'abord que la personne
      * présente choisisse son mot de passe, avec lequel elle se connecte de
      * partout ; pour un vendeur, elle propose de lui remettre son
      * identifiant.
      */
-    public function test_la_fenetre_du_compte_cree_propose_a_un_administrateur_ou_un_expert_comptable_de_choisir_son_mot_de_passe_tout_de_suite(): void
+    public function test_la_fenetre_du_compte_cree_propose_a_un_administrateur_de_choisir_son_mot_de_passe_tout_de_suite(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
 
-        foreach ([
-            'creerUnAdministrateur' => ['name' => 'Alix', 'portee' => 'tous'],
-            'creerUnExpertComptable' => ['name' => 'Cabinet Durand'],
-        ] as $creation => $donnees) {
-            Livewire::test(ListMembres::class)
-                ->mountAction($creation)
-                ->setActionData($donnees)
-                ->callMountedAction()
-                ->assertHasNoActionErrors()
-                ->assertActionMounted('compteCree')
-                ->assertActionDataSet(['mode' => 'present'])
-                ->assertSee('poste reconnu d\'un magasin de sa portée, où la personne choisira son propre mot de passe à sa première connexion')
-                ->assertSee('À distance, ou si aucun magasin de sa portée n\'a de poste reconnu, elle ne pourra pas se connecter avec son identifiant')
-                ->setActionData(['mot_de_passe' => self::MOT_DE_PASSE_CHOISI, 'mot_de_passe_confirmation' => self::MOT_DE_PASSE_CHOISI])
-                ->callMountedAction()
-                ->assertHasNoActionErrors();
+        Livewire::test(ListMembres::class)
+            ->mountAction('creerUnAdministrateur')
+            ->setActionData(['name' => 'Alix', 'portee' => 'tous'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertActionMounted('compteCree')
+            ->assertActionDataSet(['mode' => 'present'])
+            ->assertSee('poste reconnu d\'un magasin de sa portée, où la personne choisira son propre mot de passe à sa première connexion')
+            ->assertSee('À distance, ou si aucun magasin de sa portée n\'a de poste reconnu, elle ne pourra pas se connecter avec son identifiant')
+            ->setActionData(['mot_de_passe' => self::MOT_DE_PASSE_CHOISI, 'mot_de_passe_confirmation' => self::MOT_DE_PASSE_CHOISI])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
 
-            $compte = User::query()->where('name', $donnees['name'])->sole();
-            $this->assertFalse($compte->mot_de_passe_est_l_identifiant, $creation);
-            $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $compte->password), $creation);
-        }
+        $compte = User::query()->where('name', 'Alix')->sole();
+        $this->assertFalse($compte->mot_de_passe_est_l_identifiant);
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $compte->password));
 
         Livewire::test(ListMembres::class)
             ->mountAction('creerUnMembre')
@@ -366,7 +361,7 @@ class AdministrateursTest extends TestCase
         $this->administrateur($magasin);
         $this->membre($magasin, RoleMagasin::Vendeur);
         $this->responsable($magasin);
-        $this->expertComptable($magasin);
+        $this->collaborateurDuCabinetLie($magasin);
 
         $globales = Affectation::query()->whereNull('magasin_id')->pluck('user_id')->all();
 

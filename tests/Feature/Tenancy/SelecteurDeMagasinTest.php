@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -12,9 +11,9 @@ use Tests\TestCase;
 /**
  * Le sélecteur de magasin du panneau (voir User::getTenants()) propose à
  * chacun les magasins qu'il ouvre, et eux seuls : tous ceux de la société
- * au propriétaire, son seul magasin à un compte de membre, sans sélecteur,
- * les magasins réels à l'expert-comptable, jamais un magasin d'une autre
- * société.
+ * au propriétaire, son seul magasin à un compte de membre, sans
+ * sélecteur, jamais un magasin d'une autre société (pour un compte d'un
+ * cabinet lié, voir AccesDuCollaborateurChezLeClientTest).
  */
 class SelecteurDeMagasinTest extends TestCase
 {
@@ -59,20 +58,5 @@ class SelecteurDeMagasinTest extends TestCase
 
         $this->assertEqualsCanonicalizing([$lyon->id, $villeurbanne->id], $proprietaire->getTenants(Filament::getPanel('app'))->modelKeys());
         $this->assertFalse($proprietaire->canAccessTenant($ailleurs));
-    }
-
-    public function test_l_expert_comptable_voit_tous_les_magasins_reels_et_pas_la_demonstration(): void
-    {
-        $societe = $this->inscrireUneSociete();
-        $lyon = $this->creerLeMagasinDuSiege($societe, 'Lyon');
-        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
-        $expert = $this->expertComptable($lyon);
-
-        $magasins = $expert->getTenants(Filament::getPanel('app'))->modelKeys();
-
-        $this->assertEqualsCanonicalizing([$lyon->id, $villeurbanne->id], $magasins);
-        $this->assertNotContains($demonstration->id, $magasins);
-        $this->assertFalse($expert->canAccessTenant($demonstration));
     }
 }

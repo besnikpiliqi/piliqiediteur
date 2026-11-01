@@ -17,25 +17,20 @@ use Filament\Support\Contracts\HasLabel;
  *   pour lui, dans la société (voir AutorisationsSociete) et dans les
  *   magasins (voir Affectation), celles de la vente seulement s'il les lui
  *   coche ;
- * - un expert-comptable, créé par le propriétaire seul (un compte par
- *   collaborateur du cabinet), sans affectation ni case : il lit chaque
- *   magasin réel de la société, présent ou futur, et n'écrit rien (voir
- *   PermissionRegistry::consultations()) ;
  * - un collaborateur d'un cabinet d'expertise comptable, créé par le
  *   propriétaire du cabinet seul, qui n'existe que dans un cabinet (voir
  *   GardesDesDroits) : sans affectation ni case ni autorisation de
  *   société, il n'entre chez un client que par le lien de son cabinet,
  *   pour les clients que le propriétaire lui confie ;
- * - un membre, affecté à un ou plusieurs magasins avec un rôle de magasin
- *   dans chacun (voir RoleMagasin) : responsable, nommé par le propriétaire
- *   ou un administrateur autorisé ; vendeur ou observateur, créé par le
- *   propriétaire ou un responsable du magasin.
+ * - un membre, affecté à un seul magasin, celui de son identifiant, avec
+ *   un rôle de magasin (voir RoleMagasin) : responsable, nommé par le
+ *   propriétaire ou un administrateur autorisé ; vendeur ou observateur,
+ *   créé par le propriétaire ou un responsable du magasin.
  */
 enum RoleSociete: string implements HasLabel
 {
     case Proprietaire = 'proprietaire';
     case Administrateur = 'administrateur';
-    case ExpertComptable = 'expert_comptable';
     case Membre = 'membre';
     case Collaborateur = 'collaborateur';
 
@@ -44,7 +39,6 @@ enum RoleSociete: string implements HasLabel
         return match ($this) {
             self::Proprietaire => 'Propriétaire',
             self::Administrateur => 'Administrateur',
-            self::ExpertComptable => 'Expert-comptable',
             self::Membre => 'Membre',
             self::Collaborateur => 'Collaborateur du cabinet',
         };

@@ -4,13 +4,15 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\AfficherLIdentifiantAction;
 use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
@@ -20,6 +22,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -51,6 +54,8 @@ class PorteeDesDroitsTest extends TestCase
     private Magasin $n;
 
     private Magasin $o;
+
+    private ?Societe $cabinet = null;
 
     /**
      * @var array<string, User>
@@ -210,17 +215,23 @@ class PorteeDesDroitsTest extends TestCase
      * par le propriétaire seul ; la propriété se transmet par un lien ;
      * plus de refus d'un compte ni de rattachement. A= est un
      * administrateur à qui le propriétaire n'a coché que « redonner
-     * l'accès aux vendeurs et aux observateurs ».
+     * l'accès aux vendeurs et aux observateurs ». C est un collaborateur du
+     * cabinet d'expertise comptable lié, à qui la société de M est confiée,
+     * qui n'a aucun geste sur les comptes de la société. La matrice I est
+     * celle du cabinet : son propriétaire (PC), seul, crée, suspend,
+     * réactive, retire et réintègre ses collaborateurs, leur redonne
+     * l'accès, leur confie des clients et leur transmet la propriété
+     * (Q-EC3) ; ni un collaborateur (C, C2), ni le propriétaire de la
+     * société cliente (P) ne le font.
      *
      * @return array<string, array{0: string, 1: string|null, 2: string, 3: bool}>
      */
     public static function matrice(): array
     {
-        $tous = static fn (bool $p, bool $ap, bool $am, bool $rm, bool $v, bool $e): array => ['P' => $p, 'A+' => $ap, 'A-' => $am, 'R(M)' => $rm, 'V' => $v, 'E' => $e];
+        $tous = static fn (bool $p, bool $ap, bool $am, bool $rm, bool $v, bool $c): array => ['P' => $p, 'A+' => $ap, 'A-' => $am, 'R(M)' => $rm, 'V' => $v, 'C' => $c];
         $lignes = [
             ['A', 'créer un administrateur', null, [...$tous(true, false, false, false, false, false), 'A=' => false]],
             ['A', 'changer le rôle vers administrateur', 'vendeur de M', [...$tous(true, false, false, false, false, false), 'A=' => false]],
-            ['A', 'changer le rôle vers administrateur', 'expert-comptable', ['P' => true, 'A+' => false]],
             ['A', 'modifier l\'administrateur', 'administrateur', $tous(true, false, false, false, false, false)],
             ['A', 'changer le rôle vers membre', 'administrateur', [...$tous(true, false, false, false, false, false), 'A=' => false]],
             ['A', 'suspendre', 'administrateur', $tous(true, false, false, false, false, false)],
@@ -230,27 +241,27 @@ class PorteeDesDroitsTest extends TestCase
             ['A', 'afficher l\'identifiant', 'administrateur', [...$tous(false, false, false, false, false, false), 'A=' => false]],
             ['A', 'demander la transmission de la propriété', 'administrateur prêt à reprendre', [...$tous(true, false, false, false, false, false), 'A=' => false]],
 
-            ['B', 'créer un responsable de M', null, ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['B', 'nommer responsable de M', 'vendeur de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['B', 'rétrograder en vendeur dans M', 'responsable de M', ['P' => true, 'A+' => false, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['B', 'créer un responsable de M', null, ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['B', 'nommer responsable de M', 'vendeur de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['B', 'rétrograder en vendeur dans M', 'responsable de M', ['P' => true, 'A+' => false, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
             ['B', 'cocher des cases dans M', 'responsable de M', ['P' => false]],
-            ['B', 'suspendre', 'responsable de M', ['P' => true, 'A+' => false, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['B', 'réactiver', 'responsable de M suspendu', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false, 'E' => false]],
-            ['B', 'retirer de la société', 'responsable de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['B', 'suspendre', 'responsable de M', ['P' => true, 'A+' => false, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['B', 'réactiver', 'responsable de M suspendu', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false, 'C' => false]],
+            ['B', 'retirer de la société', 'responsable de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
             ['B', 'retirer de la société', 'responsable de M suspendu', ['P' => true, 'A+' => false]],
-            ['B', 'redonner l\'accès', 'responsable de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['B', 'redonner l\'accès', 'responsable de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
             ['B', 'afficher l\'identifiant', 'responsable de M', ['P' => false, 'A+' => true, 'A+ hors de M' => false, 'A=' => false, 'A-' => false, 'R(M)' => false]],
 
-            ['C', 'créer un vendeur de M', null, ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['C', 'cocher des cases dans M', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['C', 'nommer responsable de M', 'vendeur de M', ['P' => true, 'A+' => true, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['C', 'suspendre', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
-            ['C', 'réactiver', 'vendeur de M suspendu par R(M)', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['C', 'créer un vendeur de M', null, ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['C', 'cocher des cases dans M', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['C', 'nommer responsable de M', 'vendeur de M', ['P' => true, 'A+' => true, 'A=' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['C', 'suspendre', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'C' => false]],
+            ['C', 'réactiver', 'vendeur de M suspendu par R(M)', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'C' => false]],
             ['C', 'réactiver', 'vendeur de M suspendu par le propriétaire', ['P' => true, 'R(M)' => false]],
-            ['C', 'retirer de la société', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['C', 'retirer de la société', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'C' => false]],
             ['C', 'retirer de la société', 'vendeur de M suspendu par R(M)', ['P' => true, 'R(M)' => true]],
             ['C', 'retirer de la société', 'vendeur de M suspendu par le propriétaire', ['P' => true, 'R(M)' => false]],
-            ['C', 'redonner l\'accès', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => true, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['C', 'redonner l\'accès', 'vendeur de M', ['P' => true, 'A+' => false, 'A=' => true, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'C' => false]],
             ['C', 'redonner l\'accès', 'vendeur de N', ['P' => true, 'A=' => true, 'R(M)' => false, 'R(N)' => true]],
             ['C', 'redonner l\'accès', 'vendeur de O', ['P' => true, 'A=' => false, 'A+ hors de M' => false]],
             ['C', 'afficher l\'identifiant', 'vendeur de M', ['P' => false, 'A+' => false, 'A=' => true, 'A-' => false, 'R(M)' => false, 'V' => false]],
@@ -271,21 +282,23 @@ class PorteeDesDroitsTest extends TestCase
             ['H', 'réintégrer comme responsable de M', 'ancien responsable retiré par A+', ['P' => true, 'A+' => true, 'R(M)' => false]],
             ['H', 'réintégrer comme vendeur de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'R(M)' => false]],
             ['H', 'réintégrer comme responsable de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'A+' => false]],
-            ['H', 'réintégrer comme expert-comptable', 'ancien vendeur retiré par R(M)', ['P' => false, 'A+' => false, 'R(M)' => false]],
+            ['H', 'réintégrer comme collaborateur', 'ancien vendeur retiré par R(M)', ['P' => false, 'A+' => false, 'R(M)' => false]],
             ['H', 'changer le rôle vers administrateur', 'ancien vendeur retiré par R(M)', ['P' => false, 'A+' => false, 'R(M)' => false]],
 
-            ['I', 'créer un expert-comptable', null, ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
-            ['I', 'créer un second expert-comptable', null, ['P' => true, 'A+' => false]],
-            ['I', 'suspendre', 'expert-comptable', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
-            ['I', 'réactiver', 'expert-comptable suspendu', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
-            ['I', 'retirer de la société', 'expert-comptable', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
-            ['I', 'réintégrer comme expert-comptable', 'expert-comptable retiré', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
-            ['I', 'redonner l\'accès', 'expert-comptable', ['P' => true, 'A+' => false, 'A=' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
-            ['I', 'nommer responsable de M', 'expert-comptable', ['P' => false, 'A+' => false]],
-            ['I', 'demander la transmission de la propriété', 'expert-comptable prêt à reprendre', [...$tous(false, false, false, false, false, false), 'A=' => false]],
+            ['I', 'créer un collaborateur', null, ['PC' => true, 'C' => false, 'C2' => false, 'P' => false]],
+            ['I', 'créer un second collaborateur', null, ['PC' => true, 'C2' => false]],
+            ['I', 'suspendre', 'collaborateur', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false, 'A+' => false]],
+            ['I', 'réactiver', 'collaborateur suspendu', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false]],
+            ['I', 'retirer de la société', 'collaborateur', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false, 'A+' => false]],
+            ['I', 'réintégrer comme collaborateur', 'collaborateur retiré', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false]],
+            ['I', 'redonner l\'accès', 'collaborateur', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false, 'A=' => false]],
+            ['I', 'afficher l\'identifiant', 'collaborateur', ['PC' => false, 'C' => false, 'C2' => false, 'P' => false, 'A=' => false]],
+            ['I', 'confier un client', 'collaborateur', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false]],
+            ['I', 'nommer responsable de M', 'collaborateur', ['P' => false, 'A+' => false]],
+            ['I', 'demander la transmission de la propriété', 'collaborateur prêt à reprendre', ['PC' => true, 'C' => false, 'C2' => false, 'P' => false]],
 
             ['J', 'voir la liste des comptes de la société', null, [...$tous(true, true, false, false, false, false), 'A=' => true]],
-            ['J', 'voir ce compte dans l\'espace société', 'expert-comptable', [...$tous(true, false, false, false, false, false), 'A=' => false]],
+            ['J', 'voir ce compte dans l\'espace société', 'collaborateur', [...$tous(false, false, false, false, false, false), 'A=' => false]],
             ['J', 'voir ce compte dans l\'espace société', 'responsable de M', [...$tous(true, true, false, false, false, false), 'A=' => false]],
             ['J', 'voir ce compte dans l\'espace société', 'vendeur de M', [...$tous(true, false, false, false, false, false), 'A=' => true]],
             ['J', 'voir ce compte dans l\'espace société', 'vendeur de O', ['A=' => false]],
@@ -319,6 +332,10 @@ class PorteeDesDroitsTest extends TestCase
             default => $this->cible($cible),
         };
 
+        if (in_array($geste, ['créer un collaborateur', 'créer un second collaborateur'], true)) {
+            $this->poserLeContexteDuGeste($this->acteur('PC'));
+        }
+
         try {
             $this->faire($geste, $auteur, $compte);
             $reussi = true;
@@ -340,8 +357,35 @@ class PorteeDesDroitsTest extends TestCase
             'R(M)' => $this->responsable($this->m),
             'R(N)' => $this->responsable($this->n),
             'V' => $this->membre($this->m, RoleMagasin::Vendeur, PermissionRegistry::toutes()),
-            'E' => $this->expertComptable($this->m),
+            'PC' => $this->proprietaireDuCabinet($this->cabinet()),
+            'C' => $this->collaborateurQuiSuitM('Paul Lefèvre'),
+            'C2' => $this->collaborateurQuiSuitM('Marc Girard'),
         };
+    }
+
+    /**
+     * Le cabinet d'expertise comptable lié à la société de M, ouvert et lié
+     * au premier besoin. Le contexte d'avant est rétabli ensuite.
+     */
+    private function cabinet(): Societe
+    {
+        return $this->cabinet ??= app(TenantContext::class)->runAs($this->m, function (): Societe {
+            $cabinet = $this->ouvrirUnCabinet();
+            $this->lierLeCabinet($cabinet, $this->m);
+
+            return $cabinet;
+        });
+    }
+
+    /**
+     * Un collaborateur du cabinet lié, à qui la société de M est confiée.
+     * Le contexte d'avant est rétabli ensuite.
+     */
+    private function collaborateurQuiSuitM(string $nom): User
+    {
+        $cabinet = $this->cabinet();
+
+        return app(TenantContext::class)->runAs($this->m, fn (): User => $this->confier($this->collaborateur($cabinet, $nom), [$this->m]));
     }
 
     private function cible(string $nom): User
@@ -352,26 +396,49 @@ class PorteeDesDroitsTest extends TestCase
             'propriétaire' => $proprietaire,
             'administrateur', 'administrateur suspendu' => $this->administrateur($this->m, [$this->m->id]),
             'administrateur prêt à reprendre' => $this->administrateurPretAReprendre($this->m),
-            'expert-comptable prêt à reprendre' => $this->expertComptablePretAReprendre(),
+            'collaborateur prêt à reprendre' => $this->collaborateurPretAReprendre(),
             'responsable de M', 'responsable de M suspendu', 'ancien responsable retiré par A+' => $this->responsable($this->m),
             'vendeur de M', 'vendeur de M suspendu par R(M)', 'vendeur de M suspendu par le propriétaire', 'ancien vendeur retiré par R(M)', 'ancien vendeur retiré par le propriétaire' => $this->membre($this->m, RoleMagasin::Vendeur),
             'vendeur de N' => $this->membre($this->n, RoleMagasin::Vendeur),
             'vendeur de O' => $this->membre($this->o, RoleMagasin::Vendeur),
-            'expert-comptable', 'expert-comptable suspendu', 'expert-comptable retiré' => $this->expertComptable($this->m),
+            'collaborateur', 'collaborateur suspendu', 'collaborateur retiré' => $this->collaborateurQuiSuitM('Julie Moreau'),
         };
 
+        if ($compte->estDUnCabinet()) {
+            app(TenantContext::class)->clear();
+        }
+
         match ($nom) {
-            'administrateur suspendu', 'responsable de M suspendu', 'vendeur de M suspendu par le propriétaire', 'expert-comptable suspendu' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $compte),
+            'administrateur suspendu', 'responsable de M suspendu', 'vendeur de M suspendu par le propriétaire' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $compte),
+            'collaborateur suspendu' => app(ChangerStatutCompteAction::class)->suspendre($this->acteur('PC'), $compte),
+            'collaborateur retiré' => app(ChangerStatutCompteAction::class)->retirer($this->acteur('PC'), $compte),
             'vendeur de M suspendu par R(M)' => app(ChangerStatutCompteAction::class)->suspendre($this->acteur('R(M)'), $compte),
             'ancien vendeur retiré par R(M)' => app(ChangerStatutCompteAction::class)->retirer($this->acteur('R(M)'), $compte),
-            'ancien vendeur retiré par le propriétaire', 'expert-comptable retiré' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $compte),
+            'ancien vendeur retiré par le propriétaire' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $compte),
             'ancien responsable retiré par A+' => app(ChangerStatutCompteAction::class)->retirer($this->acteur('A+'), $compte),
             default => null,
         };
 
-        app(TenantContext::class)->set($this->m);
+        $this->poserLeContexteDuGeste($compte);
 
         return $compte->refresh();
+    }
+
+    /**
+     * Le contexte où se fait un geste sur ce compte : l'espace du cabinet
+     * pour un compte d'un cabinet d'expertise comptable, où son
+     * propriétaire gère ses collaborateurs ; le magasin M sinon.
+     */
+    private function poserLeContexteDuGeste(User $compte): void
+    {
+        if (! $compte->estDUnCabinet()) {
+            app(TenantContext::class)->set($this->m);
+
+            return;
+        }
+
+        app(TenantContext::class)->clear();
+        app(TenantContext::class)->poserSociete($this->cabinet());
     }
 
     /**
@@ -395,7 +462,7 @@ class PorteeDesDroitsTest extends TestCase
             'retirer de la société' => app(ChangerStatutCompteAction::class)->retirer($auteur, $compte),
             'redonner l\'accès' => app(RedonnerLAccesAction::class)->handle($auteur, $compte, true, 'un-mot-de-passe-solide'),
             'afficher l\'identifiant' => app(AfficherLIdentifiantAction::class)->handle($auteur, $compte),
-            'demander la transmission de la propriété' => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($auteur, $compte, 'password'),
+            'demander la transmission de la propriété' => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($auteur, $compte, $auteur->estDUnCabinet() ? self::MOT_DE_PASSE_CHOISI : 'password'),
             'créer un responsable de M' => app(CreerMembreAction::class)->handle($auteur, $this->m, $nouveau, RoleMagasin::Responsable),
             'créer un vendeur de M' => app(CreerMembreAction::class)->handle($auteur, $this->m, $nouveau, RoleMagasin::Vendeur),
             'nommer responsable de M' => app(ModifierMembreAction::class)->handle($auteur, $compte, RoleMagasin::Responsable),
@@ -403,9 +470,10 @@ class PorteeDesDroitsTest extends TestCase
             'cocher des cases dans M' => $this->cocher($auteur, $compte),
             'réintégrer comme vendeur de M' => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $compte, RoleMagasin::Vendeur),
             'réintégrer comme responsable de M' => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $compte, RoleMagasin::Responsable),
-            'réintégrer comme expert-comptable' => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($auteur, $compte),
-            'créer un expert-comptable' => app(CreerExpertComptableAction::class)->handle($auteur, $societe, $nouveau),
-            'créer un second expert-comptable' => $this->secondExpertComptable($auteur),
+            'réintégrer comme collaborateur' => app(ChangerStatutCompteAction::class)->reintegrerLeCollaborateur($auteur, $compte),
+            'créer un collaborateur' => app(CreerCollaborateurAction::class)->handle($auteur, $this->cabinet(), $nouveau),
+            'créer un second collaborateur' => $this->secondCollaborateur($auteur),
+            'confier un client' => app(ConfierDesClientsAction::class)->handle($auteur, $compte, [(int) LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $this->cabinet()->id)->value('id')]),
             'voir la liste des comptes de la société' => $this->exiger($auteur->can('viewAny', User::class)),
             'voir ce compte dans l\'espace société' => $this->exiger($auteur->can('view', $compte)),
             'gérer ce compte dans l\'espace société' => $this->exiger($auteur->can('update', $compte)),
@@ -436,23 +504,24 @@ class PorteeDesDroitsTest extends TestCase
     }
 
     /**
-     * Plusieurs experts-comptables par société : un second se crée comme
-     * le premier.
+     * Plusieurs collaborateurs par cabinet : un second se crée comme le
+     * premier.
      */
-    private function secondExpertComptable(User $auteur): void
+    private function secondCollaborateur(User $auteur): void
     {
-        $this->expertComptable($this->m);
-        app(CreerExpertComptableAction::class)->handle($auteur, $this->m->societe, ['name' => 'Second']);
+        $this->collaborateur($this->cabinet(), 'Premier collaborateur');
+        $this->poserLeContexteDuGeste($this->acteur('PC'));
+        app(CreerCollaborateurAction::class)->handle($auteur, $this->cabinet(), ['name' => 'Second collaborateur']);
     }
 
     /**
-     * Un expert-comptable qui remplirait les conditions de la transmission
-     * de la propriété s'il était administrateur : son mot de passe choisi,
-     * son adresse renseignée par lui.
+     * Un collaborateur qui remplit les conditions de la transmission de la
+     * propriété d'un cabinet, les mêmes que pour un administrateur (Q-EC3) :
+     * son mot de passe choisi, son adresse renseignée par lui.
      */
-    private function expertComptablePretAReprendre(): User
+    private function collaborateurPretAReprendre(): User
     {
-        return $this->renseignerSonAdresse($this->expertComptable($this->m), 'cabinet@example.test');
+        return $this->renseignerSonAdresse($this->collaborateurQuiSuitM('Julie Moreau'), 'collaborateur@example.test');
     }
 
     private function exiger(bool $permis): void

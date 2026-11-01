@@ -18,8 +18,8 @@ use Tests\TestCase;
  * son SIRET, le fermer et le rouvrir, pour qui gère les magasins de sa
  * portée ; le céder, pour le propriétaire seul ; l'indiquer comme
  * établissement principal, avec tous les magasins dans sa portée. Jamais
- * un responsable, un vendeur, l'expert-comptable ni le compte d'une autre
- * société ; jamais le magasin de démonstration ; plus rien dans une
+ * un responsable, un vendeur, un compte du cabinet lié ni le compte d'une
+ * autre société ; jamais le magasin de démonstration ; plus rien dans une
  * société en lecture seule.
  */
 class MagasinDeLaSocietePolicyTest extends TestCase
@@ -40,7 +40,7 @@ class MagasinDeLaSocietePolicyTest extends TestCase
             'administrateur sans l\'autorisation' => $this->administrateur($magasin),
             'responsable' => $this->responsable($magasin),
             'vendeur' => $this->membre($magasin, RoleMagasin::Vendeur),
-            'expert-comptable' => $this->expertComptable($magasin),
+            'collaborateur du cabinet lié' => $this->collaborateurDuCabinetLie($magasin),
             'propriétaire d\'une autre société' => $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ailleurs'])),
         ];
         $this->dansLaSociete($magasin);
@@ -53,7 +53,7 @@ class MagasinDeLaSocietePolicyTest extends TestCase
             'administrateur sans l\'autorisation' => self::gestes(false, false, false),
             'responsable' => self::gestes(false, false, false),
             'vendeur' => self::gestes(false, false, false),
-            'expert-comptable' => self::gestes(false, false, false),
+            'collaborateur du cabinet lié' => self::gestes(false, false, false),
             'propriétaire d\'une autre société' => self::gestes(false, false, false),
         ], array_map(fn (User $compte): array => self::permis($compte, $magasin), $comptes));
     }

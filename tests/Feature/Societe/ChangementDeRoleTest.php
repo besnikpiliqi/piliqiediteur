@@ -37,8 +37,8 @@ use Tests\TestCase;
 /**
  * Un changement de rôle garde le compte, son identifiant et son historique
  * (voir ModifierMembreAction et ChangerLeRoleDeSocieteAction) : un vendeur
- * devient responsable dans son magasin, administrateur ou expert-comptable
- * de la société, et un administrateur ne redevient membre que dans le
+ * devient responsable dans son magasin ou administrateur de la société,
+ * et un administrateur ne redevient membre que dans le
  * magasin de son identifiant, écrit une seule fois. Chaque changement
  * s'inscrit au journal d'audit ; seul le propriétaire change le rôle de
  * société, jamais celui d'un compte d'entraînement.
@@ -141,13 +141,13 @@ class ChangementDeRoleTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
 
-        app(ChangerLeRoleDeSocieteAction::class)->versExpertComptable($proprietaire, $vendeur);
+        app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $vendeur, null, [], []);
 
         [$entree] = $this->entreesDAudit($magasin->societe, ActionAuditee::RoleDeSocieteChange);
-        $this->assertSame([RoleSociete::Membre->value, RoleSociete::ExpertComptable->value], [$entree->anciennes_valeurs['droits'][$vendeur->id]['role_societe'], $entree->nouvelles_valeurs['droits'][$vendeur->id]['role_societe']]);
+        $this->assertSame([RoleSociete::Membre->value, RoleSociete::Administrateur->value], [$entree->anciennes_valeurs['droits'][$vendeur->id]['role_societe'], $entree->nouvelles_valeurs['droits'][$vendeur->id]['role_societe']]);
         $this->assertSame(['Paul', (int) $proprietaire->id, true], [$entree->nouvelles_valeurs['droits'][$vendeur->id]['nom'], (int) $entree->auteur_id, $entree->created_at->equalTo(now())]);
         $dernier = collect($this->modificationsDesDroits($magasin))->last();
-        $this->assertSame([$vendeur->id, 'membre', 'expert_comptable'], [$dernier['membre']['id'], $dernier['avant']['role_societe'], $dernier['apres']['role_societe']]);
+        $this->assertSame([$vendeur->id, 'membre', 'administrateur'], [$dernier['membre']['id'], $dernier['avant']['role_societe'], $dernier['apres']['role_societe']]);
     }
 
     public function test_les_ventes_passees_restent_au_nom_du_compte_apres_un_changement_de_role(): void
@@ -179,11 +179,11 @@ class ChangementDeRoleTest extends TestCase
 
         foreach ([$administrateur, $responsable] as $auteur) {
             $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($auteur, $vendeur, null, [], []), AuthorizationException::class);
-            $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versExpertComptable($auteur, $vendeur), AuthorizationException::class);
+            $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versMembre($auteur, $this->administrateur($magasin), RoleMagasin::Vendeur, null, $magasin->id), AuthorizationException::class);
         }
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
         $fiche = Livewire::test(FicheDuMembre::class, ['record' => $responsableNomme->getRouteKey()])->assertActionHidden('changerLeRoleDeSociete');
-        $this->forgerLAction($fiche, 'changerLeRoleDeSociete', ['role_societe' => RoleSociete::ExpertComptable->value]);
+        $this->forgerLAction($fiche, 'changerLeRoleDeSociete', ['role_societe' => RoleSociete::Administrateur->value, 'portee' => 'tous']);
 
         $this->assertSame([RoleSociete::Membre, RoleSociete::Membre], [$vendeur->refresh()->role_societe, $responsableNomme->refresh()->role_societe]);
         $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::RoleDeSocieteChange));
@@ -192,8 +192,7 @@ class ChangementDeRoleTest extends TestCase
     /**
      * Retiré, un compte garde son rôle de société, et se réintègre dans ce
      * rôle : un membre dans son magasin, un administrateur avec la portée
-     * choisie, un expert-comptable comme tel ; le rôle d'un compte retiré
-     * ne se change pas.
+     * choisie ; le rôle d'un compte retiré ne se change pas.
      */
     public function test_un_compte_retire_garde_son_role_et_se_reintegre_dans_ce_role(): void
     {
@@ -201,22 +200,19 @@ class ChangementDeRoleTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $administrateur = $this->administrateur($magasin);
-        $expert = $this->expertComptable($magasin);
         $statuts = app(ChangerStatutCompteAction::class);
-        foreach ([$vendeur, $administrateur, $expert] as $compte) {
+        foreach ([$vendeur, $administrateur] as $compte) {
             $statuts->retirer($proprietaire, $compte);
         }
 
-        $this->assertSame([RoleSociete::Membre, RoleSociete::Administrateur, RoleSociete::ExpertComptable], [$vendeur->refresh()->role_societe, $administrateur->refresh()->role_societe, $expert->refresh()->role_societe]);
+        $this->assertSame([RoleSociete::Membre, RoleSociete::Administrateur], [$vendeur->refresh()->role_societe, $administrateur->refresh()->role_societe]);
         $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $vendeur, null, [], []), AuthorizationException::class);
 
         $statuts->reintegrer($proprietaire, $vendeur, RoleMagasin::Observateur);
         $statuts->reintegrerLAdministrateur($proprietaire, $administrateur, [$magasin->id], [], []);
-        $statuts->reintegrerLExpertComptable($proprietaire, $expert);
 
         $this->assertSame([StatutCompte::Actif, RoleMagasin::Observateur, (int) $magasin->id], [$vendeur->refresh()->statut, Affectation::query()->where('user_id', $vendeur->id)->sole()->role, (int) Affectation::query()->where('user_id', $vendeur->id)->sole()->magasin_id]);
         $this->assertSame([StatutCompte::Actif, RoleSociete::Administrateur, true], [$administrateur->refresh()->statut, $administrateur->role_societe, $administrateur->administreLeMagasin($magasin)]);
-        $this->assertSame([StatutCompte::Actif, RoleSociete::ExpertComptable], [$expert->refresh()->statut, $expert->role_societe]);
     }
 
     /**
@@ -240,31 +236,30 @@ class ChangementDeRoleTest extends TestCase
             ->assertHasNoActionErrors();
         Livewire::test(FicheDuMembre::class, ['record' => $present->getRouteKey()])
             ->mountAction('changerLeRoleDeSociete')
-            ->setActionData(['role_societe' => RoleSociete::ExpertComptable->value, 'mode' => 'present', 'mot_de_passe' => 'mon-propre-mot', 'mot_de_passe_confirmation' => 'mon-propre-mot'])
+            ->setActionData(['role_societe' => RoleSociete::Administrateur->value, 'portee' => 'tous', 'mode' => 'present', 'mot_de_passe' => 'mon-propre-mot', 'mot_de_passe_confirmation' => 'mon-propre-mot'])
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
         $this->assertSame([RoleSociete::Administrateur, true], [$absent->refresh()->role_societe, $absent->mot_de_passe_est_l_identifiant]);
-        $this->assertSame([RoleSociete::ExpertComptable, false], [$present->refresh()->role_societe, $present->mot_de_passe_est_l_identifiant]);
+        $this->assertSame([RoleSociete::Administrateur, false], [$present->refresh()->role_societe, $present->mot_de_passe_est_l_identifiant]);
     }
 
     /**
      * Un compte d'entraînement de la démonstration ne devient jamais
-     * administrateur ni expert-comptable : l'action le refuse avec son
-     * message, la fiche ne le propose pas, et la base le refuse.
+     * administrateur : l'action le refuse avec son message, la fiche ne le
+     * propose pas, et la base le refuse.
      */
-    public function test_un_compte_d_entrainement_ne_devient_ni_administrateur_ni_expert_comptable(): void
+    public function test_un_compte_d_entrainement_ne_devient_pas_administrateur(): void
     {
         $societe = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
         $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
 
         $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($societe->proprietaire, $entrainement, null, [], []), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
-        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versExpertComptable($societe->proprietaire, $entrainement), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
         $this->dansLEspaceDeLaSociete($societe, $societe->proprietaire);
         Livewire::test(FicheDuMembre::class, ['record' => $entrainement->getRouteKey()])->assertActionHidden('changerLeRoleDeSociete');
         DB::table('affectations')->where('user_id', $entrainement->id)->delete();
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::ExpertComptable->value])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::Administrateur->value])), QueryException::class);
 
         $this->assertSame(RoleSociete::Membre, $entrainement->refresh()->role_societe);
     }

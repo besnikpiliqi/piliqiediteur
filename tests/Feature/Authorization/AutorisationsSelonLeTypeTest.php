@@ -78,7 +78,7 @@ class AutorisationsSelonLeTypeTest extends TestCase
      * Dans une société de services, aucun rôle n'a d'autorisation de la
      * famille des articles : ni le propriétaire, ni un responsable, ni un
      * administrateur au modèle, ni un vendeur ou un observateur, ni un
-     * expert-comptable ; chacun garde celles de la famille commune.
+     * compte du cabinet lié ; chacun garde celles de la famille commune.
      */
     public function test_sans_articles_aucun_role_n_a_d_autorisation_d_articles(): void
     {
@@ -89,7 +89,7 @@ class AutorisationsSelonLeTypeTest extends TestCase
             'administrateur' => $this->administrateur($magasin),
             'vendeur' => $this->membre($magasin, RoleMagasin::Vendeur),
             'observateur' => $this->membre($magasin, RoleMagasin::Observateur),
-            'expert-comptable' => $this->expertComptable($magasin),
+            'cabinet lié' => $this->collaborateurDuCabinetLie($magasin),
         ];
 
         foreach ($comptes as $role => $compte) {

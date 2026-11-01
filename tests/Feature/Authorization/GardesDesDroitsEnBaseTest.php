@@ -6,7 +6,6 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -62,19 +61,6 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         $this->assertSame(RoleMagasin::Vendeur, $affectation->fresh()->role);
         $this->assertSame(RoleSociete::Membre, $vendeur->refresh()->role_societe);
-    }
-
-    public function test_la_base_refuse_une_affectation_ou_une_autorisation_de_societe_a_l_expert_comptable(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $expert = $this->expertComptable($magasin);
-
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $expert, $magasin->id, RoleMagasin::Observateur->value)));
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $expert, null, null)));
-        $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'autorisation' => AutorisationsSociete::MAGASINS_GERER]));
-
-        $this->assertSame(0, Affectation::query()->where('user_id', $expert->id)->count());
-        $this->assertSame(0, DB::table('autorisations_societe')->where('user_id', $expert->id)->count());
     }
 
     public function test_la_base_refuse_une_affectation_globale_ou_sans_role_a_un_membre(): void
@@ -169,7 +155,12 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $this->assertSame([RoleSociete::Administrateur, RoleSociete::Administrateur], [$deTous->refresh()->role_societe, $autorise->refresh()->role_societe]);
     }
 
-    public function test_la_base_refuse_de_rendre_proprietaire_ou_expert_comptable_un_compte_qui_garde_des_droits(): void
+    /**
+     * Ni propriétaire, ni collaborateur hors d'un cabinet d'expertise
+     * comptable : un compte qui garde une affectation ou une autorisation
+     * de société ne prend aucun de ces rôles.
+     */
+    public function test_la_base_refuse_de_rendre_proprietaire_ou_collaborateur_hors_d_un_cabinet_un_compte_qui_garde_des_droits(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
@@ -177,7 +168,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $administrateurSansAffectation = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]);
         DB::table('affectations')->where('user_id', $administrateurSansAffectation->id)->delete();
 
-        foreach ([RoleSociete::Proprietaire, RoleSociete::ExpertComptable] as $role) {
+        foreach ([RoleSociete::Proprietaire, RoleSociete::Collaborateur] as $role) {
             foreach ([$vendeur, $administrateur, $administrateurSansAffectation] as $compte) {
                 $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), "{$role->value} {$compte->name}");
             }
@@ -192,9 +183,9 @@ class GardesDesDroitsEnBaseTest extends TestCase
      * contrediraient le nouveau rôle s'effacent d'abord), passent : nommer
      * administrateur, le ramener membre dans son magasin, transmettre la
      * propriété (l'adresse confirmée et le rôle du nouveau propriétaire
-     * dans la même mise à jour), promouvoir un vendeur responsable ; créer,
-     * retirer et réintégrer un expert-comptable, qui garde son rôle une fois
-     * retiré.
+     * dans la même mise à jour), promouvoir un vendeur responsable ; dans
+     * un cabinet d'expertise comptable, créer, retirer et réintégrer un
+     * collaborateur, qui garde son rôle une fois retiré.
      */
     public function test_les_transitions_permises_passent(): void
     {
@@ -223,22 +214,13 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $this->assertTrue($nouveauProprietaire->refresh()->estProprietaire());
         $this->assertTrue($proprietaire->refresh()->estAdministrateur());
 
-        $expert = $this->expertComptableCreePar($nouveauProprietaire, $magasin);
-        app(ChangerStatutCompteAction::class)->retirer($nouveauProprietaire, $expert);
-        $this->assertSame([true, true], [$expert->refresh()->estExpertComptable(), $expert->estRetire()]);
-        app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($nouveauProprietaire, $expert);
-        $this->assertSame([true, true], [$expert->refresh()->estExpertComptable(), $expert->estActif()]);
-    }
-
-    /**
-     * Un expert-comptable créé par ce propriétaire, qui a choisi son mot de
-     * passe.
-     */
-    private function expertComptableCreePar(User $proprietaire, Magasin $magasin): User
-    {
-        $expert = app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe()->firstOrFail(), ['name' => 'Cabinet']);
-
-        return $this->choisirSonMotDePasse($expert);
+        $cabinet = $this->ouvrirUnCabinet();
+        $proprietaireDuCabinet = $this->proprietaireDuCabinet($cabinet);
+        $collaborateur = $this->collaborateur($cabinet);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaireDuCabinet, $collaborateur);
+        $this->assertSame([true, true], [$collaborateur->refresh()->estCollaborateur(), $collaborateur->estRetire()]);
+        app(ChangerStatutCompteAction::class)->reintegrerLeCollaborateur($proprietaireDuCabinet, $collaborateur);
+        $this->assertSame([true, true], [$collaborateur->refresh()->estCollaborateur(), $collaborateur->estActif()]);
     }
 
     /**

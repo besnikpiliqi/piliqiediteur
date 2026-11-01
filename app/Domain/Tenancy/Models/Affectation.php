@@ -27,7 +27,7 @@ use LogicException;
  *
  * Gardes, quel que soit l'écran ou la commande qui l'enregistre, ici avec
  * un message clair, puis dans la base (voir GardesDesDroits) :
- * - le propriétaire et un expert-comptable n'en ont aucune ;
+ * - le propriétaire et un collaborateur d'un cabinet n'en ont aucune ;
  * - un membre a un rôle de magasin dans chaque affectation, jamais une
  *   affectation à tous les magasins ;
  * - un administrateur n'a pas de rôle de magasin, et a une affectation à
@@ -61,8 +61,8 @@ class Affectation extends Model
             $roleDuCompte = User::query()->find($affectation->user_id)?->role_societe;
             $ailleurs = static::query()->where('user_id', $affectation->user_id)->whereKeyNot($affectation->getKey() ?? 0);
 
-            if (in_array($roleDuCompte, [RoleSociete::Proprietaire, RoleSociete::ExpertComptable, RoleSociete::Collaborateur], true)) {
-                throw new LogicException('Le propriétaire, un expert-comptable et un collaborateur d\'un cabinet n\'ont aucune affectation.');
+            if (in_array($roleDuCompte, [RoleSociete::Proprietaire, RoleSociete::Collaborateur], true)) {
+                throw new LogicException('Le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation.');
             }
 
             if ($roleDuCompte === RoleSociete::Administrateur) {

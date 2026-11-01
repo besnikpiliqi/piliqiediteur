@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\DB;
  * ouvrir le magasin et y a l'autorisation, par la case de son affectation
  * à ce magasin ou, pour un administrateur, à tous les magasins (vendeurs,
  * observateurs, administrateurs) ; jamais un compte d'une autre société,
- * ni un compte suspendu, retiré ou qui n'a pas encore choisi son mot de
- * passe, ni un expert-comptable, qui n'a que les consultations (voir
- * User::peutOuvrir() et User::autorisationsDans()).
+ * donc jamais un compte d'un cabinet d'expertise comptable lié, ni un
+ * compte suspendu, retiré ou qui n'a pas encore choisi son mot de passe
+ * (voir User::peutOuvrir() et User::autorisationsDans()).
  *
  * Lecture hors du magasin courant, filtrée par la société et par le
  * magasin, limitée aux comptes : les affectations n'ont pas de scope

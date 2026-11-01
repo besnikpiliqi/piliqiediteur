@@ -139,7 +139,8 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
      * caisse dans le magasin sans voir les relevés de toute l'équipe, « Les
      * caisses » à tous les autres : le propriétaire, un responsable, un
      * vendeur qui voit les relevés de toute l'équipe, un administrateur sans
-     * vente et un expert-comptable.
+     * vente et un compte du cabinet lié, qui les lit avec
+     * cloture_caisse.view_toutes.
      */
     public function test_le_menu_s_appelle_les_caisses_sauf_pour_qui_ne_voit_que_sa_caisse(): void
     {
@@ -151,7 +152,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
                 $this->responsableDeTest($magasin),
                 $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]),
                 $this->administrateur($magasin),
-                $this->expertComptable($magasin),
+                $this->collaborateurDuCabinetLie($magasin),
             ],
         ];
 
@@ -198,11 +199,11 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     /**
      * Les caisses encore ouvertes s'affichent en tête de la page des
      * caisses quand elle s'appelle « Les caisses » (le propriétaire, un
-     * expert-comptable, un administrateur sans vente qui ne fait que fermer
-     * la caisse d'un vendeur), jamais quand elle s'appelle « Ma caisse »,
-     * même pour un vendeur autorisé à clôturer la journée. Sur la liste des
-     * clôtures, elles restent réservées à qui peut clôturer la journée :
-     * un expert-comptable ne les y voit pas.
+     * compte du cabinet lié, un administrateur sans vente qui ne fait que
+     * fermer la caisse d'un vendeur), jamais quand elle s'appelle « Ma
+     * caisse », même pour un vendeur autorisé à clôturer la journée. Sur
+     * la liste des clôtures, elles restent réservées à qui peut clôturer
+     * la journée : un compte du cabinet lié ne les y voit pas.
      */
     public function test_les_caisses_ouvertes_s_affichent_en_tete_de_la_page_des_caisses(): void
     {
@@ -212,9 +213,9 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $this->vendreAuComptoir(Client::factory()->create(), 12);
         $vendeurQuiCloture = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $administrateurQuiFerme = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES])));
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
 
-        foreach ([$this->proprietaireDe($magasin), $expert, $administrateurQuiFerme] as $compte) {
+        foreach ([$this->proprietaireDe($magasin), $collaborateur, $administrateurQuiFerme] as $compte) {
             $this->dansLeMagasin($magasin, $compte);
 
             $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeText('Les caisses')->assertSeeLivewire(CaissesOuvertesDeLEquipeApercu::class);
@@ -226,7 +227,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
             $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeText('Ma caisse')->assertDontSeeLivewire(CaissesOuvertesDeLEquipeApercu::class);
             $this->assertFalse(CaissesOuvertesDeLEquipeApercu::canView(), $compte->name);
         }
-        $this->dansLeMagasin($magasin, $expert);
+        $this->dansLeMagasin($magasin, $collaborateur);
         $this->get(ClotureCaisseResource::getUrl('index', tenant: $magasin))->assertOk()->assertDontSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
         $this->dansLeMagasin($magasin, $vendeurQuiCloture);
         $this->get(ClotureCaisseResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeLivewire(CaissesPersonnellesOuvertesApercu::class);

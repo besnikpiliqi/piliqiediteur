@@ -804,20 +804,6 @@ class TransfererProprieteTest extends TestCase
         $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::TransmissionDemandee));
     }
 
-    public function test_la_propriete_ne_va_jamais_a_l_expert_comptable(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
-        $expert = $this->renseignerSonAdresse($this->expertComptable($magasin), 'cabinet@example.test');
-
-        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
-        Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->assertActionHidden('transmettreLaPropriete');
-        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $expert, self::MOT_DE_PASSE_DU_PROPRIETAIRE), AuthorizationException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_ADMINISTRATEUR);
-
-        $this->assertSame(RoleSociete::ExpertComptable, $expert->refresh()->role_societe);
-        $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
-    }
-
     /**
      * La transmission entière, comme dans le vrai parcours : le
      * propriétaire la demande, puis l'administrateur suit le lien reçu et

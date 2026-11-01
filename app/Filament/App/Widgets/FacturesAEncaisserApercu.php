@@ -27,9 +27,10 @@ use Illuminate\Database\Eloquent\Builder;
  * Qui la voit (voir canView() et User::suitLesFacturesAEncaisserDans()),
  * parmi les factures qu'il voit (voir Facture::scopeVisiblesPar()), et
  * toujours quelqu'un qui peut ouvrir la liste où elle mène :
- * - le propriétaire, un responsable du magasin et un expert-comptable,
- *   qui voient toutes les factures du magasin ;
- * - un administrateur, seulement s'il voit celles de toute l'équipe ;
+ * - le propriétaire et un responsable du magasin, qui voient toutes les
+ *   factures du magasin ;
+ * - un administrateur ou un compte du cabinet lié, seulement s'il voit
+ *   celles de toute l'équipe ;
  * - un vendeur ou un observateur, seulement s'il est autorisé à
  *   contre-passer un paiement : les siennes, ou toutes avec « voir celles
  *   de toute l'équipe ».

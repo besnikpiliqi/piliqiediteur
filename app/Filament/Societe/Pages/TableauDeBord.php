@@ -149,7 +149,7 @@ class TableauDeBord extends Dashboard
             [
                 'titre' => self::ETAPE_EQUIPE,
                 'faite' => $comptes > 0,
-                'etat' => $comptes > 0 ? trans_choice('{1} 1 compte en plus du vôtre|[2,*] :count comptes en plus du vôtre', $comptes) : 'Créez les comptes de vos administrateurs, responsables, vendeurs et experts-comptables.',
+                'etat' => $comptes > 0 ? trans_choice('{1} 1 compte en plus du vôtre|[2,*] :count comptes en plus du vôtre', $comptes) : 'Créez les comptes de vos administrateurs, responsables, vendeurs et observateurs.',
                 'url' => MembreResource::canViewAny() ? MembreResource::getUrl('index') : null,
             ],
             [

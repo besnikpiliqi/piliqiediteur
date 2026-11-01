@@ -36,15 +36,6 @@ use App\Models\User;
  * Un compte qui ne peut pas agir n'a aucun droit, où que ce soit :
  * suspendu ou retiré (voir User::peutAgir()).
  *
- * Un expert-comptable lit et n'écrit rien, quelles que soient les lignes
- * que garderait la base : aucune autorisation de société ; dans un magasin
- * réel de sa société, les seules consultations (voir
- * PermissionRegistry::consultations()) ; à toute question de policy autre
- * qu'une consultation (viewAny, view, voirLesParametres et
- * voirLesParametresFiscaux, l'identité et les réglages fiscaux de la
- * société, que SocietePolicy ne lui ouvre pas),
- * y compris une question future, un refus.
- *
  * Un compte d'un cabinet d'expertise comptable (son propriétaire ou un
  * collaborateur) n'a d'autorisation de société que dans l'espace de son
  * cabinet (les paramètres, son identité, pour son propriétaire) ; dans
@@ -66,9 +57,9 @@ use App\Models\User;
  * les a toutes, un administrateur celles que le propriétaire a cochées pour
  * lui, tout autre compte aucune ; une société en lecture seule ne garde que
  * celles qui y restent permises (nommer et retirer les responsables,
- * redonner l'accès, sauf dans une société révoquée). Aucune ne suffit seule pour un geste sur un
- * magasin : les policies et les actions vérifient en plus la portée de
- * l'administrateur.
+ * redonner l'accès, sauf dans une société révoquée). Aucune ne suffit
+ * seule pour un geste sur un magasin : les policies et les actions
+ * vérifient en plus la portée de l'administrateur.
  *
  * Dans l'espace d'administration d'une société (une société posée sans
  * magasin), il refuse tout au compte d'une autre société ; quand la
@@ -82,9 +73,8 @@ use App\Models\User;
  * PermissionRegistry : seulement dans un magasin de la société du compte
  * (jamais ailleurs, propriétaire compris) ; oui s'il l'a dans ce magasin
  * (voir User::autorisationsDans() : toutes sauf celles de la vente pour le
- * propriétaire, toutes pour un responsable du magasin, les consultations
- * pour un expert-comptable, ses cases pour tout autre compte), sinon la
- * question passe aux policies.
+ * propriétaire, toutes pour un responsable du magasin, ses cases pour
+ * tout autre compte), sinon la question passe aux policies.
  * Quel que soit le compte, il refuse dans ce magasin :
  * - en lecture seule (voir Magasin::estEnLectureSeule()), tout ce qui n'y
  *   reste pas permis : viewAny et view, sur tout modèle (consulter et
@@ -167,13 +157,7 @@ final class ControleDesDroits
             return $this->pourUnCompteDeCabinet($user, $ability, $arguments[0] ?? null, $contexte);
         }
 
-        $estDeSociete = in_array($ability, AutorisationsSociete::toutes(), true);
-
-        if ($user->estExpertComptable() && ($estDeSociete || ! $this->estUneConsultationPermise($ability))) {
-            return false;
-        }
-
-        if ($estDeSociete) {
+        if (in_array($ability, AutorisationsSociete::toutes(), true)) {
             return $this->autorisationDeSociete($user, $ability, $contexte->aUneSociete() ? $contexte->societe() : $user->societe);
         }
 
@@ -204,15 +188,6 @@ final class ControleDesDroits
         }
 
         return in_array($ability, $user->autorisationsDans($magasin), true) ?: null;
-    }
-
-    /**
-     * Ce qu'un expert-comptable peut demander : une consultation de
-     * PermissionRegistry, ou une question de consultation à une policy.
-     */
-    private function estUneConsultationPermise(string $ability): bool
-    {
-        return in_array($ability, PermissionRegistry::consultations(), true) || in_array($ability, self::CONSULTATIONS, true);
     }
 
     /**

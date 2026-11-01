@@ -20,9 +20,10 @@ use InvalidArgumentException;
  * propriétaire de la société les a toutes sauf celles de la vente (voir
  * deVente() et duProprietaire()) dans chacun de ses magasins, démonstration
  * comprise : il supervise et contrôle, et ne vend jamais ; un responsable
- * les a toutes dans son magasin, et un expert-comptable les seules
- * consultations dans chaque magasin réel de la société (voir
- * consultations()). Un vendeur ou un observateur a celles de son
+ * les a toutes dans son magasin, et un compte du cabinet d'expertise
+ * comptable lié celles que le client accorde au cabinet dans chacun de
+ * ses magasins réels (voir parDefautDuCabinet() et ajoutablesAuCabinet()).
+ * Un vendeur ou un observateur a celles de son
  * affectation à ce magasin, cochées par le propriétaire ou un responsable
  * du magasin à partir du modèle de son rôle (voir
  * RoleMagasin::permissionsParDefaut()) : le propriétaire peut toutes les
@@ -103,16 +104,17 @@ final class PermissionRegistry
      * baissé. Une autorisation de vente (voir deVente()) : les responsables
      * du magasin l'ont toujours, le propriétaire, qui ne vend jamais,
      * jamais ; aucun modèle ne la coche d'office, pas même celui de
-     * l'administrateur (voir modeleDeLAdministrateur()), et un
-     * expert-comptable ne l'a jamais (elle n'est pas une consultation).
+     * l'administrateur (voir modeleDeLAdministrateur()), et un cabinet lié
+     * ne l'a jamais (voir ajoutablesAuCabinet()).
      */
     public const STOCK_VENDRE_SANS_STOCK = 'stock.vendre_sans_stock';
 
     // Un vendeur voit le prix/stock de chaque produit (nécessaire pour
     // vendre), mais pas la valorisation globale du stock du magasin --
     // information sensible : aucun modèle de vendeur ou d'observateur ne
-    // la coche d'office ; le propriétaire, un responsable et un
-    // expert-comptable l'ont toujours (voir ProduitResource).
+    // la coche d'office ; le propriétaire et un responsable l'ont
+    // toujours, un cabinet lié par défaut (voir ProduitResource et
+    // parDefautDuCabinet()).
     public const PRODUIT_VOIR_VALEUR_STOCK = 'produit.voir_valeur_stock';
 
     /**
@@ -130,8 +132,8 @@ final class PermissionRegistry
      * Les responsables du magasin et le propriétaire l'ont toujours (le
      * propriétaire, qui ne vend jamais, pour le prix de référence d'un
      * service et les lignes d'un devis) ; le modèle de l'administrateur la
-     * précoche, aucun modèle de vendeur ou d'observateur ; un
-     * expert-comptable ne l'a jamais.
+     * précoche, aucun modèle de vendeur ou d'observateur ; un cabinet lié
+     * ne l'a jamais.
      */
     public const VENTE_REMISES_ET_PRIX = 'vente.remises_et_prix';
 
@@ -171,8 +173,8 @@ final class PermissionRegistry
      * une vente. Le propriétaire et les responsables du magasin l'ont
      * toujours ; les modèles du vendeur et de l'administrateur la
      * précochent, pas celui de l'observateur, à qui le propriétaire ou un
-     * responsable du magasin peut la cocher ; un expert-comptable ne l'a
-     * jamais (elle n'est pas une consultation).
+     * responsable du magasin peut la cocher ; un cabinet lié ne l'a jamais
+     * (voir ajoutablesAuCabinet()).
      */
     public const FACTURE_JUSTIFIER = 'facture.justifier';
 
@@ -286,13 +288,13 @@ final class PermissionRegistry
      * Les autorisations qui ne font que lire : les fiches, les documents,
      * les paiements, les achats, les clôtures, la caisse sécurisée (son
      * registre, son journal des événements, leur export et le contrôle
-     * d'intégrité) et les téléchargements. Ce sont toutes les autorisations
-     * d'un expert-comptable dans chaque magasin réel de sa société (voir
-     * User::autorisationsDans()), et celles qui restent permises dans un
+     * d'intégrité) et les téléchargements. Ce sont celles qu'un client
+     * accorde par défaut au cabinet d'expertise comptable qu'il lie (voir
+     * parDefautDuCabinet()), et celles qui restent permises dans un
      * magasin en lecture seule (voir permisesEnLectureSeule()). Une
      * nouvelle autorisation de consultation s'ajoute ici ; oubliée, elle
-     * manque à l'expert-comptable et est refusée en lecture seule, ce qui
-     * reste sûr.
+     * manque au cabinet lié et est refusée en lecture seule, ce qui reste
+     * sûr.
      *
      * @return list<string>
      */

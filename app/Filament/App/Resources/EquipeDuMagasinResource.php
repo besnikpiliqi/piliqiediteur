@@ -47,7 +47,7 @@ use Illuminate\Support\Str;
  * celui des vendeurs et des observateurs de son magasin, avec les badges
  * « Mot de passe : l'identifiant » et « Jamais connecté » et le filtre des
  * mots de passe encore égaux à l'identifiant. Ni les administrateurs ni
- * les experts-comptables n'y figurent.
+ * les comptes du cabinet lié n'y figurent.
  *
  * Le modèle Affectation n'a pas de MagasinScope (les droits se lisent avant
  * tout contexte) : la requête se filtre ici explicitement par le magasin

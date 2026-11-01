@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * Le magasin de rattachement est celui pour lequel un compte de membre a
  * été créé : nul pour un compte né propriétaire, administrateur ou
- * expert-comptable, il ne s'écrit qu'une fois, de nul à une valeur, quand
+ * collaborateur, il ne s'écrit qu'une fois, de nul à une valeur, quand
  * un tel compte devient membre (voir ChangerLeRoleDeSocieteAction). Un
  * compte de membre ne change donc jamais de magasin, et une affectation de
  * membre n'existe que dans ce magasin (voir GardesDesDroits). Le magasin de

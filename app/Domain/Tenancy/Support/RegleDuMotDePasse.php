@@ -11,9 +11,10 @@ use SensitiveParameter;
 /**
  * La règle d'un mot de passe que la personne choisit une fois son compte
  * créé : dans son profil, sur l'écran de qui lui redonne l'accès en sa
- * présence, à sa première connexion pour un responsable, un administrateur
- * ou un expert-comptable, et sur la page du lien « Mot de passe oublié »
- * du propriétaire. Au moins 8 caractères ; jamais l'identifiant du compte,
+ * présence, à sa première connexion pour un responsable ou un
+ * administrateur, à la création de son compte pour un collaborateur d'un
+ * cabinet, et sur la page du lien « Mot de passe oublié » du
+ * propriétaire. Au moins 8 caractères ; jamais l'identifiant du compte,
  * ni une chaîne qui le contient ; ni un seul caractère répété, ni une suite
  * de chiffres croissante ou décroissante.
  *

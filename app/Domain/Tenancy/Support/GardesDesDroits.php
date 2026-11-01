@@ -17,7 +17,7 @@ use RuntimeException;
  * droits, dans l'ordre de leurs transitions (voir JournalDesDroits) :
  * - affectations_coherentes_avec_le_role (affectations) : un rôle de
  *   magasin qui n'est ni nul ni responsable, vendeur ou observateur ;
- *   l'affectation du propriétaire ou d'un expert-comptable ; une
+ *   l'affectation du propriétaire ou d'un collaborateur ; une
  *   affectation sans rôle hors d'un administrateur, ou avec rôle pour un
  *   administrateur ; une affectation à tous les magasins avec un rôle ;
  *   une affectation qui devient celle d'un responsable avec des cases ; un
@@ -32,7 +32,7 @@ use RuntimeException;
  *   une autorisation de société pour un compte qui n'est pas
  *   administrateur ;
  * - users_role_coherent_avec_les_droits (users) : un rôle de société
- *   inconnu ; devenir propriétaire ou expert-comptable avec une
+ *   inconnu ; devenir propriétaire ou collaborateur avec une
  *   affectation ou une autorisation de société ; devenir administrateur
  *   avec l'affectation d'un membre ; devenir membre avec l'affectation d'un
  *   administrateur ou une autorisation de société ; un propriétaire dont
@@ -40,13 +40,11 @@ use RuntimeException;
  *   confirmation ; un propriétaire sans adresse de connexion passe, voir
  *   SaisirCodeDeConfirmationAction et CloreLInscriptionAction), ou dont le
  *   mot de passe est encore son identifiant ; le rôle de propriétaire,
- *   d'administrateur, d'expert-comptable ou de collaborateur pour un compte
- *   d'entraînement (rattaché au magasin de démonstration), qui n'ouvre
- *   jamais un magasin réel ; un collaborateur hors d'un cabinet
- *   d'expertise comptable, un administrateur ou un membre dans un cabinet
- *   (le type d'une société ne change jamais : lu sans verrou) ; un
- *   collaborateur, comme le propriétaire, n'a ni affectation ni
- *   autorisation de société.
+ *   d'administrateur ou de collaborateur pour un compte d'entraînement
+ *   (rattaché au magasin de démonstration), qui n'ouvre jamais un magasin
+ *   réel ; un collaborateur hors d'un cabinet d'expertise comptable, un
+ *   administrateur ou un membre dans un cabinet (le type d'une société ne
+ *   change jamais : lu sans verrou).
  *
  * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE INSERT OR
  * UPDATE par garde. Chaque fonction verrouille d'abord la ligne parente
@@ -163,14 +161,14 @@ final class GardesDesDroits
     {
         $rolesDeMagasin = self::liste(array_map(static fn (RoleMagasin $role): string => $role->value, RoleMagasin::cases()));
         $rolesDeSociete = self::liste(array_map(static fn (RoleSociete $role): string => $role->value, RoleSociete::cases()));
-        $sansAffectation = self::liste([RoleSociete::Proprietaire->value, RoleSociete::ExpertComptable->value, RoleSociete::Collaborateur->value]);
+        $sansAffectation = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Collaborateur->value]);
         $administrateur = "'".RoleSociete::Administrateur->value."'";
         $membre = "'".RoleSociete::Membre->value."'";
         $responsable = "'".RoleMagasin::Responsable->value."'";
         $roleDuCompte = 'COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), \'\')';
         $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> COALESCE(NEW.id, 0)';
         $magasinDeSonIdentifiant = 'COALESCE((SELECT magasin_id FROM identifiants WHERE user_id = NEW.user_id), -1)';
-        $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::ExpertComptable->value, RoleSociete::Collaborateur->value]);
+        $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::Collaborateur->value]);
         $collaborateur = "'".RoleSociete::Collaborateur->value."'";
         $typeDeLaSociete = "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), '')";
         $cabinet = "'".TypeDActivite::Cabinet->value."'";
@@ -180,7 +178,7 @@ final class GardesDesDroits
         return [
             self::AFFECTATIONS => [
                 ["NEW.role IS NOT NULL AND NEW.role NOT IN ({$rolesDeMagasin})", 'rôle de magasin inconnu'],
-                ["{$roleDuCompte} IN ({$sansAffectation})", 'le propriétaire, un expert-comptable et un collaborateur d\'un cabinet n\'ont aucune affectation'],
+                ["{$roleDuCompte} IN ({$sansAffectation})", 'le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation'],
                 ["NEW.role IS NULL AND {$roleDuCompte} <> {$administrateur}", 'seul un administrateur a une affectation sans rôle'],
                 ["NEW.role IS NOT NULL AND {$roleDuCompte} = {$administrateur}", 'un administrateur n\'a aucun rôle de magasin'],
                 ['NEW.magasin_id IS NULL AND NEW.role IS NOT NULL', 'une affectation à tous les magasins n\'a pas de rôle de magasin'],
@@ -197,7 +195,7 @@ final class GardesDesDroits
             ],
             self::ROLES => [
                 ["NEW.role_societe NOT IN ({$rolesDeSociete})", 'rôle de société inconnu'],
-                ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire, un expert-comptable et un collaborateur d\'un cabinet n\'ont ni affectation ni autorisation de société'],
+                ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire et un collaborateur d\'un cabinet n\'ont ni affectation ni autorisation de société'],
                 ["NEW.role_societe = {$collaborateur} AND {$typeDeLaSociete} <> {$cabinet}", 'un collaborateur n\'existe que dans un cabinet d\'expertise comptable'],
                 ["NEW.role_societe IN ({$administrateur}, {$membre}) AND {$typeDeLaSociete} = {$cabinet}", 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre'],
                 ["NEW.role_societe = {$administrateur} AND EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NOT NULL)", 'un administrateur n\'a aucune affectation de membre'],

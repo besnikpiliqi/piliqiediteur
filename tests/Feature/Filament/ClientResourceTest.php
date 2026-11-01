@@ -1024,8 +1024,8 @@ class ClientResourceTest extends TestCase
     /**
      * Une vérification VIES est une preuve fiscale : qui voit les clients
      * la consulte sur leur fiche, même sans le droit de les modifier, donc
-     * sans « Modifier » ni « Vérifier sur VIES ». L'expert-comptable, sans
-     * rôle de magasin, la consulte de même.
+     * sans « Modifier » ni « Vérifier sur VIES ». Un compte du cabinet lié,
+     * sans rôle de magasin, la consulte de même.
      *
      * @param  list<string>|null  $autorisations
      */
@@ -1033,7 +1033,7 @@ class ClientResourceTest extends TestCase
     public function test_un_membre_qui_voit_les_clients_sans_les_modifier_consulte_leurs_verifications_vies(?RoleMagasin $role, ?array $autorisations): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = $role === null ? $this->expertComptable($magasin) : $this->membre($magasin, $role, $autorisations);
+        $membre = $role === null ? $this->collaborateurDuCabinetLie($magasin) : $this->membre($magasin, $role, $autorisations);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->consultationValide($allemand);
 
@@ -1055,7 +1055,7 @@ class ClientResourceTest extends TestCase
         return [
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable()],
             'observateur' => [RoleMagasin::Observateur, null],
-            'expert-comptable' => [null, null],
+            'cabinet lié' => [null, null],
         ];
     }
 

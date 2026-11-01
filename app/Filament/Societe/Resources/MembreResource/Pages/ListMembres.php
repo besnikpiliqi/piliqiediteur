@@ -3,7 +3,6 @@
 namespace App\Filament\Societe\Resources\MembreResource\Pages;
 
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -28,8 +27,8 @@ use Illuminate\Support\Str;
 
 /**
  * La liste des comptes, avec les créations que permet le rôle de la
- * personne connectée : un membre (pour un seul magasin), un administrateur
- * ou un expert-comptable pour le propriétaire ; un responsable pour lui et
+ * personne connectée : un membre (pour un seul magasin) ou un
+ * administrateur pour le propriétaire ; un responsable pour lui et
  * pour un administrateur autorisé à nommer les responsables, dans un
  * magasin réel de sa portée. Chaque fenêtre de création tire son jeton à
  * son ouverture (une demande répétée après une réponse perdue ne crée
@@ -53,7 +52,6 @@ class ListMembres extends ListRecords
             $this->nommerUnResponsableAction(),
             $this->creerUnMembreAction(),
             $this->creerUnAdministrateurAction(),
-            $this->creerUnExpertComptableAction(),
         ];
     }
 
@@ -204,31 +202,6 @@ class ListMembres extends ListRecords
                         array_values($data['autorisations_societe'] ?? []),
                         filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null,
                     );
-                });
-
-                if ($cree instanceof User) {
-                    $this->montrerLeCompteCree($cree);
-                }
-            });
-    }
-
-    public function creerUnExpertComptableAction(): Action
-    {
-        return Action::make('creerUnExpertComptable')
-            ->label('Créer un expert-comptable')
-            ->icon('heroicon-o-calculator')
-            ->visible(fn (): bool => $this->auteur()->can('creerLExpertComptable', User::class))
-            ->modalDescription('Un compte par collaborateur du cabinet : il lit tous les magasins réels de la société, présents et futurs, et n\'écrit rien. Il choisira son propre mot de passe à sa première connexion, depuis un poste reconnu d\'un magasin réel de la société, ou tout de suite, dans la fenêtre suivante, s\'il est là.')
-            ->fillForm(fn (): array => ['jeton' => (string) Str::uuid()])
-            ->form([
-                Hidden::make('jeton'),
-                TextInput::make('name')->label('Nom complet')->required()->maxLength(255),
-            ])
-            ->action(function (array $data): void {
-                $cree = null;
-
-                MembreResource::executerLeGeste(function () use ($data, &$cree): void {
-                    $cree = app(CreerExpertComptableAction::class)->handle($this->auteur(), MembreResource::societe(), ['name' => $data['name']], filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null);
                 });
 
                 if ($cree instanceof User) {

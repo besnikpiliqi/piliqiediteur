@@ -36,12 +36,12 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable());
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $releveDuVendeur = ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $vendeur->id]);
 
         $this->assertTrue($comptable->can('view', $releveDuVendeur));
-        $this->assertTrue($expert->can('view', $releveDuVendeur));
-        $this->assertFalse($expert->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]));
+        $this->assertTrue($collaborateur->can('view', $releveDuVendeur));
+        $this->assertFalse($collaborateur->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]));
     }
 
     /**

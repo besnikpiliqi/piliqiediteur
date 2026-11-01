@@ -17,8 +17,8 @@ use App\Models\User;
  * le propriétaire, ou un administrateur autorisé, tant que la société
  * n'est pas en lecture seule) ; le céder, au propriétaire seul ; indiquer
  * l'établissement principal, à qui a tous les magasins dans sa portée.
- * Jamais un responsable, un vendeur, un observateur ni un
- * expert-comptable, qui n'ont pas d'espace d'administration ; jamais le
+ * Jamais un responsable, un vendeur, un observateur ni un compte d'un
+ * cabinet, qui n'ont pas d'espace d'administration ; jamais le
  * magasin de démonstration, qui s'ouvre et se ferme à part (voir
  * OuvrirLaDemonstrationAction et FermerLaDemonstrationAction). Ce qu'un
  * geste exige de l'état du magasin (actif, fermé, cédé...), son action le

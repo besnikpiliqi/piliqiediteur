@@ -10,7 +10,7 @@ use InvalidArgumentException;
  * CreerAdministrateurAction) : le propriétaire les a toutes sans case,
  * sauf le propriétaire d'un cabinet d'expertise comptable, qui n'a que
  * les paramètres, son identité (voir duProprietaireDUnCabinet()) ; un
- * membre ou un expert-comptable n'en a aucune, quelle que soit la ligne
+ * membre ou un collaborateur n'en a aucune, quelle que soit la ligne
  * qu'en garderait la base (voir User::autorisationsDeSociete()). Aucune
  * chaîne magique ailleurs : on référence toujours ces constantes. La base
  * ne connaît qu'elles : la migration du référentiel des autorisations de

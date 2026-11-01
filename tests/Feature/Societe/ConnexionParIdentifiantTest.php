@@ -4,11 +4,12 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
@@ -34,6 +35,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -457,13 +459,15 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
-     * Un responsable, un administrateur ou un expert-comptable dont le mot
-     * de passe est encore son identifiant choisit le sien à sa première
-     * connexion, avant toute autre page, et aucune requête Livewire d'un
-     * autre écran ne passe ; un vendeur garde son identifiant pour mot de
-     * passe tant qu'il le veut.
+     * Un responsable ou un administrateur dont le mot de passe est encore
+     * son identifiant choisit le sien à sa première connexion, avant toute
+     * autre page, et aucune requête Livewire d'un autre écran ne passe ; un
+     * collaborateur d'un cabinet lié n'ouvre jamais son compte avec son
+     * identifiant, même depuis un poste reconnu du client, et choisit le
+     * sien en sa présence sur l'écran du propriétaire du cabinet ; un
+     * vendeur garde son identifiant pour mot de passe tant qu'il le veut.
      */
-    public function test_un_responsable_un_administrateur_ou_un_expert_comptable_choisit_son_mot_de_passe_a_sa_premiere_connexion(): void
+    public function test_un_responsable_un_administrateur_ou_un_collaborateur_choisit_son_mot_de_passe_avant_d_agir(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -471,7 +475,6 @@ class ConnexionParIdentifiantTest extends TestCase
         $comptes = [
             $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable)[0],
             app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []),
-            app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Cabinet Durand']),
         ];
 
         foreach ($comptes as $compte) {
@@ -493,6 +496,20 @@ class ConnexionParIdentifiantTest extends TestCase
             $this->assertFalse($compte->refresh()->mot_de_passe_est_l_identifiant, $compte->name);
             $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
         }
+
+        $cabinet = $this->ouvrirUnCabinet();
+        $this->lierLeCabinet($cabinet, $magasin);
+        $collaborateur = app(CreerCollaborateurAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet, ['name' => 'Paul Lefèvre']);
+        $this->confier($collaborateur, [$magasin]);
+        $identifiant = (string) $collaborateur->identifiantDeConnexion();
+        auth()->logout();
+        $this->assertSame([Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE], $this->seConnecter($identifiant, $identifiant, postes: $poste)->errors()->get('data.login'));
+        $this->assertGuest();
+        app(RedonnerLAccesAction::class)->handle($this->proprietaireDuCabinet($cabinet), $collaborateur, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($collaborateur);
+        $this->assertFalse($collaborateur->refresh()->doitChoisirSonMotDePasse());
+        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
 
         [$vendeur, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
         $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();

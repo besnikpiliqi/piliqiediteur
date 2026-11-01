@@ -4,12 +4,13 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
-use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
@@ -80,11 +81,11 @@ class PanneauSocieteTest extends TestCase
      * fiscalité au seul administrateur de tous les magasins autorisé à
      * gérer les paramètres de la société, le cabinet comptable et la page
      * de rattachement d'un cabinet au propriétaire seul ; ni à un
-     * responsable, un vendeur
-     * ou l'expert-comptable, ni au propriétaire d'une autre société, ni à
-     * un compte suspendu, ni sans connexion. Chaque ressource hérite de la
-     * base stricte, et le modèle qu'elle gère a une policy explicite : sans
-     * elle, la Gate refuserait tout.
+     * responsable, un vendeur ou un compte du cabinet lié, ni au
+     * propriétaire d'une autre société, ni à un compte suspendu, ni sans
+     * connexion. Chaque ressource hérite de la base stricte, et le modèle
+     * qu'elle gère a une policy explicite : sans elle, la Gate refuserait
+     * tout.
      */
     public function test_chaque_ressource_et_page_du_panneau_societe_a_une_policy_complete(): void
     {
@@ -92,7 +93,7 @@ class PanneauSocieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $responsable = $this->responsable($magasin);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $administrateur = $this->administrateur($magasin, [$magasin->id]);
         $administrateurDesParametres = $this->administrateur($magasin, null, [AutorisationsSociete::PARAMETRES_GERER]);
         $proprietaireDUneAutre = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Autre Boutique']));
@@ -116,7 +117,7 @@ class PanneauSocieteTest extends TestCase
                     'administrateur_des_parametres' => ! in_array($page, $pagesDuProprietaire, true),
                     'responsable' => false,
                     'vendeur' => false,
-                    'expert_comptable' => false,
+                    'collaborateur_du_cabinet_lie' => false,
                     'autre_societe' => false,
                     'sans_connexion' => false,
                 ],
@@ -126,7 +127,7 @@ class PanneauSocieteTest extends TestCase
                     'administrateur_des_parametres' => $this->ouvre($page, $administrateurDesParametres, $magasin->societe),
                     'responsable' => $this->ouvre($page, $responsable, $magasin->societe),
                     'vendeur' => $this->ouvre($page, $vendeur, $magasin->societe),
-                    'expert_comptable' => $this->ouvre($page, $expert, $magasin->societe),
+                    'collaborateur_du_cabinet_lie' => $this->ouvre($page, $collaborateur, $magasin->societe),
                     'autre_societe' => $this->ouvre($page, $proprietaireDUneAutre, $magasin->societe),
                     'sans_connexion' => $this->ouvre($page, null, $magasin->societe),
                 ],
@@ -154,29 +155,34 @@ class PanneauSocieteTest extends TestCase
             'responsable' => ['responsable'],
             'vendeur' => ['vendeur'],
             'observateur' => ['observateur'],
-            'expert-comptable' => ['expert-comptable'],
+            'propriétaire d\'un cabinet' => ['propriétaire d\'un cabinet'],
+            'collaborateur' => ['collaborateur'],
         ];
     }
 
     /**
-     * L'espace d'administration de la société ne s'ouvre ni à un membre,
-     * responsable compris, ni à l'expert-comptable : 403, et le panneau ne
-     * leur propose aucune société.
+     * L'espace d'administration d'une société ne s'ouvre ni à un membre,
+     * responsable compris, ni à un compte du cabinet lié, son propriétaire
+     * ou un collaborateur, qui a l'espace de son cabinet : 403, ni pour la
+     * société cliente ni pour le cabinet, et le panneau ne leur propose
+     * aucune société.
      */
     #[DataProvider('comptesSansEspaceSociete')]
-    public function test_ni_un_membre_ni_l_expert_comptable_n_ouvrent_l_espace_societe(string $compte): void
+    public function test_ni_un_membre_ni_un_compte_de_cabinet_n_ouvrent_l_espace_societe(string $compte): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $visiteur = match ($compte) {
             'responsable' => $this->responsable($magasin),
             'vendeur' => $this->membre($magasin, RoleMagasin::Vendeur),
             'observateur' => $this->membre($magasin, RoleMagasin::Observateur),
-            'expert-comptable' => $this->expertComptable($magasin),
+            'propriétaire d\'un cabinet' => $this->collaborateurDuCabinetLie($magasin)->societe->proprietaire()->firstOrFail(),
+            'collaborateur' => $this->collaborateurDuCabinetLie($magasin),
         };
 
         $this->assertFalse($visiteur->canAccessPanel(Filament::getPanel('societe')));
         $this->assertSame([], $visiteur->getTenants(Filament::getPanel('societe'))->modelKeys());
         $this->actingAs($visiteur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $visiteur->societe))->assertForbidden();
     }
 
     /**
@@ -287,10 +293,9 @@ class PanneauSocieteTest extends TestCase
     /**
      * Une société révoquée (un usurpateur) garde son espace et son équipe
      * consultables, mais plus rien ne s'y gère, ni par l'écran ni par les
-     * actions : aucun compte créé, suspendu, nommé, réintégré (comme
-     * membre ou comme expert-comptable), changé de rôle ou dont l'accès est
-     * redonné, aucun administrateur ni expert-comptable, aucune
-     * transmission de la propriété demandée.
+     * actions : aucun compte créé, suspendu, nommé, réintégré, changé de
+     * rôle ou dont l'accès est redonné, aucun administrateur, aucune
+     * transmission de la propriété demandée, aucun cabinet désigné.
      */
     public function test_une_societe_revoquee_ne_gere_plus_son_equipe(): void
     {
@@ -302,9 +307,8 @@ class PanneauSocieteTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $administrateur = $this->administrateurPretAReprendre($magasin);
         $vendeurRetire = $this->membre($magasin, RoleMagasin::Vendeur);
-        $expertRetire = $this->expertComptable($magasin);
+        $cabinet = $this->ouvrirUnCabinet();
         app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeurRetire);
-        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $expertRetire);
         $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
         app(TenantContext::class)->clear();
         $avant = User::query()->where('societe_id', $societe->id)->orderBy('id')->get(['id', 'role_societe', 'statut'])->toArray();
@@ -316,12 +320,11 @@ class PanneauSocieteTest extends TestCase
             fn () => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
             fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Responsable),
             fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $vendeurRetire, RoleMagasin::Vendeur),
-            fn () => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($proprietaire, $expertRetire),
             fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $vendeur, null, [], []),
             fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $vendeur, false),
             fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice'], null, [], []),
-            fn () => app(CreerExpertComptableAction::class)->handle($proprietaire, $societe, ['name' => 'Émile']),
             fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, 'password'),
+            fn () => app(DesignerUnCabinetAction::class)->handle($proprietaire, $societe, $cabinet),
         ];
         foreach ($gestes as $geste) {
             $this->assertThrows($geste, AuthorizationException::class);
@@ -329,6 +332,7 @@ class PanneauSocieteTest extends TestCase
 
         $this->assertSame($avant, User::query()->where('societe_id', $societe->id)->orderBy('id')->get(['id', 'role_societe', 'statut'])->toArray());
         $this->assertSame($affectations, Affectation::query()->where('societe_id', $societe->id)->count());
+        $this->assertSame(0, LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->id)->count());
         $this->dansLeMagasin($magasin, $responsable);
         Livewire::test(ListEquipeDuMagasin::class)->assertActionHidden('creerUnCompte');
         $this->dansLEspaceDeLaSociete($societe, $proprietaire);

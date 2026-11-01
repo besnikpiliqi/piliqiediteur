@@ -296,7 +296,7 @@ class StockLedgerServiceTest extends TestCase
         $this->assertSame([1, 1, 0], [$responsable->notifications()->count(), $coResponsable->notifications()->count(), $responsableDAilleurs->notifications()->count()]);
     }
 
-    public function test_l_alerte_de_stock_ne_va_ni_a_un_compte_suspendu_ni_retire_ni_a_un_administrateur_hors_de_sa_selection_ni_a_l_expert_comptable(): void
+    public function test_l_alerte_de_stock_ne_va_ni_a_un_compte_suspendu_ni_retire_ni_a_un_administrateur_hors_de_sa_selection_ni_a_un_compte_du_cabinet_lie(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autreMagasin = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
@@ -306,14 +306,16 @@ class StockLedgerServiceTest extends TestCase
         app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
         app(ChangerStatutCompteAction::class)->retirer($proprietaire, $retire);
         $administrateurDAilleurs = $this->administrateur($magasin, [$autreMagasin->id]);
-        $expert = $this->expertComptable($magasin);
+        $this->collaborateurDuCabinetLie($magasin);
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+        $avant = DB::table('notifications')->pluck('id')->all();
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
 
-        $this->assertSame(1, $proprietaire->notifications()->count());
-        $this->assertSame([0, 0, 0, 0], [$suspendu->notifications()->count(), $retire->notifications()->count(), $administrateurDAilleurs->notifications()->count(), $expert->notifications()->count()]);
+        $destinataires = DB::table('notifications')->whereNotIn('id', $avant)->pluck('notifiable_id')->map(intval(...))->all();
+        $this->assertSame([(int) $proprietaire->id], $destinataires);
+        $this->assertSame([0, 0, 0], [$suspendu->notifications()->count(), $retire->notifications()->count(), $administrateurDAilleurs->notifications()->count()]);
     }
 
     /**

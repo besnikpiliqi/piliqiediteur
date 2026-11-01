@@ -402,20 +402,20 @@ class FermerEtRouvrirMagasinTest extends TestCase
     }
 
     /**
-     * Le responsable n'agit jamais sur le cycle de vie de son magasin,
-     * l'expert-comptable non plus : ni fermeture, ni cession, ni
+     * Le responsable n'agit jamais sur le cycle de vie de son magasin, un
+     * compte du cabinet lié non plus : ni fermeture, ni cession, ni
      * réouverture, ni changement de SIRET, même avec leur bon mot de passe.
      */
-    public function test_ni_un_responsable_ni_l_expert_comptable_ne_ferment_ne_rouvrent_ni_ne_cedent_un_magasin(): void
+    public function test_ni_un_responsable_ni_un_compte_de_cabinet_ne_ferment_ne_rouvrent_ni_ne_cedent_un_magasin(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $ferme = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique fermée']);
         $responsable = $this->responsable($magasin);
         $responsableDuMagasinFerme = $this->responsable($ferme);
         $this->fermer($ferme, MotifFermeture::Temporaire);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
 
-        foreach ([$responsable, $responsableDuMagasinFerme, $expert] as $compte) {
+        foreach ([$responsable, $responsableDuMagasinFerme, $collaborateur] as $compte) {
             $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Temporaire, $compte, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
             $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Cession, $compte, self::MOT_DE_PASSE_CHOISI, 'Ma Boutique'), AuthorizationException::class);
             $this->assertThrows(fn () => $this->rouvrir($ferme, $compte, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);

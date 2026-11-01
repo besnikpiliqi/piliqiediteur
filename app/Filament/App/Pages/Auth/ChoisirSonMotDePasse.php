@@ -18,11 +18,11 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Route;
 
 /**
- * La page où un responsable, un administrateur ou un expert-comptable dont
- * le mot de passe est encore son identifiant choisit le sien, avant toute
- * autre page des deux panneaux (voir ExigerSonPropreMotDePasse) : à sa
- * première connexion, ou à sa connexion suivante après avoir été promu à
- * l'un de ces rôles. Le mot de passe suit la règle du mot de passe choisi
+ * La page où un responsable ou un administrateur dont le mot de passe
+ * est encore son identifiant choisit le sien, avant toute autre page des
+ * deux panneaux (voir ExigerSonPropreMotDePasse) : à sa première
+ * connexion, ou à sa connexion suivante après avoir été promu à l'un de
+ * ces rôles. Le mot de passe suit la règle du mot de passe choisi
  * (voir RegleDuMotDePasse) ; ses autres sessions se ferment, celle-ci reste
  * (voir ChangerSonMotDePasseAction), et n'exige plus rien.
  *

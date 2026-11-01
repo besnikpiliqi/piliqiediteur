@@ -7,6 +7,9 @@ use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -21,6 +24,7 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -293,23 +297,39 @@ class InventaireOuvertureTest extends TestCase
     }
 
     /**
-     * Un expert-comptable, qui a toutes les consultations, voit
-     * l'inventaire d'ouverture sans jamais le saisir ni le valider.
+     * Un compte du cabinet lié, avec les consultations accordées par
+     * défaut, voit l'inventaire d'ouverture sans le saisir ni le valider ;
+     * quand le client lui accorde les achats et la création des produits,
+     * il le saisit et le valide.
      */
-    public function test_un_expert_comptable_consulte_un_inventaire_sans_pouvoir_le_saisir_ni_le_valider(): void
+    public function test_un_compte_de_cabinet_consulte_un_inventaire_et_ne_le_saisit_que_si_le_client_lui_accorde_achats_et_produits(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $brouillon = $this->saisir([self::ligneDUnNouveauCarnet()], $this->proprietaireDe($magasin));
-        $expertComptable = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
 
         $this->assertSame([true, false, false, false], [
-            $expertComptable->can('view', $brouillon),
-            $expertComptable->can('create', InventaireOuverture::class),
-            $expertComptable->can('update', $brouillon),
-            $expertComptable->can('valider', $brouillon),
+            $collaborateur->can('view', $brouillon),
+            $collaborateur->can('create', InventaireOuverture::class),
+            $collaborateur->can('update', $brouillon),
+            $collaborateur->can('valider', $brouillon),
         ]);
-        $this->assertThrows(fn () => $this->valider($brouillon, $expertComptable), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => $this->valider($brouillon, $collaborateur), AuthorizationException::class, LecteurDesDroits::REFUS);
         $this->assertSame(0, Produit::query()->count());
+
+        $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($magasin), $lien, [...PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_CREATE]);
+        app(TenantContext::class)->set($magasin);
+        $collaborateur = $collaborateur->fresh();
+
+        $this->assertSame([true, true, true], [
+            $collaborateur->can('create', InventaireOuverture::class),
+            $collaborateur->can('update', $brouillon),
+            $collaborateur->can('valider', $brouillon),
+        ]);
+        $inventaire = $this->valider($brouillon, $collaborateur);
+        $this->assertSame([StatutInventaireOuverture::Valide, $collaborateur->id], [$inventaire->statut, (int) $inventaire->valide_par]);
+        $this->assertSame(1, Produit::query()->count());
     }
 
     /**

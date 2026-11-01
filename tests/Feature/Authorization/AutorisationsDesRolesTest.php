@@ -20,8 +20,9 @@ use Tests\TestCase;
  * DroitsDuResponsableTest) ; un vendeur ou un observateur reçoit d'office
  * le modèle de son rôle (voir RoleMagasin::permissionsParDefaut()), que
  * l'on coche ou décoche ensuite ; un nouvel administrateur, le modèle de
- * PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce). Il n'existe plus de rôle
- * « comptable » de magasin : l'expert-comptable de la société le remplace.
+ * PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce). Il
+ * n'existe plus de rôle « comptable » de magasin : le cabinet lié, en
+ * consultation, le remplace.
  */
 class AutorisationsDesRolesTest extends TestCase
 {
@@ -120,8 +121,8 @@ class AutorisationsDesRolesTest extends TestCase
     /**
      * La caisse sécurisée (registre fiscal et journal des événements) se
      * consulte d'office par le propriétaire, un responsable, un
-     * administrateur et l'expert-comptable, qui la présentent à
-     * l'administration ; ni par le vendeur ni par l'observateur.
+     * administrateur et un compte du cabinet lié, avec les autorisations
+     * par défaut, qui la présentent à l'administration ; ni par le vendeur ni par l'observateur.
      *
      * @return array<string, array{0: string, 1: bool}>
      */
@@ -130,7 +131,7 @@ class AutorisationsDesRolesTest extends TestCase
         return [
             'responsable' => ['responsable', true],
             'administrateur' => ['administrateur', true],
-            'expert-comptable' => ['expert-comptable', true],
+            'cabinet lié' => ['cabinet lié', true],
             'vendeur' => ['vendeur', false],
             'observateur' => ['observateur', false],
         ];
@@ -144,7 +145,7 @@ class AutorisationsDesRolesTest extends TestCase
         $compte = match ($role) {
             'responsable' => $this->responsable($magasin),
             'administrateur' => $this->administrateur($magasin),
-            'expert-comptable' => $this->expertComptable($magasin),
+            'cabinet lié' => $this->collaborateurDuCabinetLie($magasin),
             'vendeur' => $this->membre($magasin, RoleMagasin::Vendeur),
             'observateur' => $this->membre($magasin, RoleMagasin::Observateur),
         };

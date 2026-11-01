@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  * propriétaire (voir AutorisationsSociete et CreerAdministrateurAction) :
  * gérer les magasins, nommer et retirer les responsables, gérer les
  * paramètres de la société. Le propriétaire les a toutes sans case ; un
- * membre ou un expert-comptable n'en a aucune. Chacune référence le
+ * membre ou un collaborateur d'un cabinet n'en a aucune. Chacune référence le
  * référentiel des autorisations de société, et la clé étrangère composite
  * (societe_id, user_id) les garde dans la société du compte.
  *

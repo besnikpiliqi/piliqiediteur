@@ -46,11 +46,11 @@ class PaiementPolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable());
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $paiementDuVendeur = $this->encaisserUnPaiementEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $paiementDuVendeur));
-        $this->assertTrue($expert->can('view', $paiementDuVendeur));
+        $this->assertTrue($collaborateur->can('view', $paiementDuVendeur));
     }
 
     /**

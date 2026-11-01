@@ -33,9 +33,9 @@ class TenancyServiceProvider extends ServiceProvider
     /**
      * Le seul rappel exécuté avant les policies : les droits du compte dans
      * le magasin actif selon son rôle, la lecture seule d'un magasin, la
-     * porte de validation et la lecture seule de l'expert-comptable (voir
-     * ControleDesDroits). Il passe en closure pour que la
-     * Gate lise ses paramètres : sans utilisateur connecté, elle ne
+     * porte de validation et les seules autorisations qu'un client accorde
+     * à son cabinet lié (voir ControleDesDroits). Il passe en closure pour
+     * que la Gate lise ses paramètres : sans utilisateur connecté, elle ne
      * l'appelle pas.
      */
     public function boot(): void

@@ -26,8 +26,8 @@ use App\Models\User;
  * qui lui est donc ouverte même s'il ne vend ni n'encaisse ; et toute
  * caisse encore ouverte se ferme d'office avec la journée (voir
  * FermerLesCaissesPersonnellesAction). Quiconque a
- * cloture_caisse.view_toutes (le propriétaire, un responsable,
- * l'expert-comptable...) voit les relevés de toute l'équipe, pour la
+ * cloture_caisse.view_toutes (le propriétaire, un responsable, un compte
+ * du cabinet lié...) voit les relevés de toute l'équipe, pour la
  * réconciliation de fin de journée ; tout autre membre ne voit que les
  * siens, même quand il ferme la caisse d'un autre (voir
  * ListClotureCaissePersonnelles).

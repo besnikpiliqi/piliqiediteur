@@ -12,8 +12,8 @@ use SensitiveParameter;
 
 /**
  * La personne choisit elle-même son mot de passe : dans son profil (voir
- * ModifierProfil), ou à sa première connexion quand elle est responsable,
- * administrateur ou expert-comptable (voir ChoisirSonMotDePasse). Il suit
+ * ModifierProfil), ou à sa première connexion quand elle est responsable
+ * ou administrateur (voir ChoisirSonMotDePasse). Il suit
  * la règle du mot de passe choisi (voir RegleDuMotDePasse) ; sous le verrou
  * de la ligne du compte relue, il remplace l'ancien, le mot de passe n'est
  * plus l'identifiant, ses autres sessions se ferment et son « se souvenir

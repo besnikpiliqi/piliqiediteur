@@ -37,12 +37,12 @@ class ClotureCaissePolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
-        $expert = $this->expertComptable($magasin);
+        $collaborateur = $this->collaborateurDuCabinetLie($magasin);
         $clotureDuVendeur = ClotureCaisse::factory()->create(['cree_par' => $vendeur->id]);
 
         $this->assertTrue($comptable->can('view', $clotureDuVendeur));
-        $this->assertTrue($expert->can('view', $clotureDuVendeur));
-        $this->assertFalse($expert->can('cloturer', ClotureCaisse::class));
+        $this->assertTrue($collaborateur->can('view', $clotureDuVendeur));
+        $this->assertFalse($collaborateur->can('cloturer', ClotureCaisse::class));
     }
 
     private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User

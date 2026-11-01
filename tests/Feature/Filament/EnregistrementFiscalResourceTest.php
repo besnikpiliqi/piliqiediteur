@@ -373,7 +373,7 @@ class EnregistrementFiscalResourceTest extends TestCase
      * que par le propriétaire. Un membre aux cases de l'ancien comptable de
      * magasin, qui consulte la caisse sécurisée et exporte son journal,
      * voit l'événement et son contenu signé, et laisse vides les deux
-     * colonnes de la trace dans l'export ; un expert-comptable voit
+     * colonnes de la trace dans l'export ; un compte du cabinet lié voit
      * l'événement sans sa trace.
      */
     public function test_seul_le_proprietaire_lit_l_adresse_ip_et_le_navigateur_d_un_evenement(): void
@@ -397,7 +397,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->assertSame(['260', '130', '80', '110'], array_column($lignes, 3));
         $this->assertSame([['', ''], ['', ''], ['', ''], ['', '']], array_map(static fn (array $ligne): array => [$ligne[7], $ligne[8]], $lignes));
         $this->assertDatabaseCount('traces_evenements', 2);
-        Livewire::actingAs($this->expertComptable($magasin))->test(ViewEnregistrementFiscal::class, ['record' => $ouverture->getRouteKey()])
+        Livewire::actingAs($this->collaborateurDuCabinetLie($magasin))->test(ViewEnregistrementFiscal::class, ['record' => $ouverture->getRouteKey()])
             ->assertSee('80 – Ouverture de session dans le magasin')->assertDontSee('Trace technique')->assertDontSee('Navigateur du propriétaire');
     }
 

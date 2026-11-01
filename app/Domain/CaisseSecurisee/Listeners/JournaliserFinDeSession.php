@@ -26,11 +26,10 @@ use Illuminate\Support\Facades\DB;
  * l'opérateur de la fin de session. Elle s'écrit dans le registre de
  * chaque magasin (TenantContext::runAs()), seulement si l'utilisateur y a
  * encore des droits, quel que soit son statut (voir User::droitsDans()) :
- * le propriétaire de la société, un expert-comptable dans un magasin réel,
- * un compte affecté à ce magasin ou à tous, ou un compte d'un cabinet
- * d'expertise comptable dans un magasin réel d'un client que son lien
- * actif lui ouvre, dans le contexte de ce client ; qui n'y en a plus n'a
- * plus rien à y inscrire.
+ * le propriétaire de la société, un compte affecté à ce magasin ou à
+ * tous, ou un compte d'un cabinet d'expertise comptable dans un magasin
+ * réel d'un client que son lien actif lui ouvre, dans le contexte de ce
+ * client ; qui n'y en a plus n'a plus rien à y inscrire.
  *
  * Une déconnexion n'est jamais bloquée : laisser une session ouverte
  * parce que le registre refuse d'écrire (clé de signature absente,

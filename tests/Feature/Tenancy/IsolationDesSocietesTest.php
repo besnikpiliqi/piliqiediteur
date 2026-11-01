@@ -630,7 +630,8 @@ class IsolationDesSocietesTest extends TestCase
     /**
      * Une vente de Lyon, ouverte à l'adresse du magasin de Villeurbanne,
      * répond 404 à chaque compte qui a pourtant accès aux deux magasins :
-     * le propriétaire, un administrateur des deux, l'expert-comptable.
+     * le propriétaire, un administrateur des deux, un compte du cabinet lié
+     * à la société, qui ouvre ses deux magasins.
      */
     public function test_l_url_d_un_enregistrement_d_un_autre_magasin_de_la_societe_repond_404_meme_pour_un_compte_autorise_dans_les_deux(): void
     {
@@ -638,7 +639,7 @@ class IsolationDesSocietesTest extends TestCase
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $venteDeLyon = $this->vendre($lyon);
 
-        foreach ([$this->proprietaireDe($lyon), $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], PermissionRegistry::toutes()), $this->expertComptable($lyon)] as $compte) {
+        foreach ([$this->proprietaireDe($lyon), $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], PermissionRegistry::toutes()), $this->collaborateurDuCabinetLie($lyon)] as $compte) {
             $this->flushSession();
             $this->actingAs($compte);
             $this->get(FactureResource::getUrl('view', ['record' => $venteDeLyon], tenant: $lyon))->assertOk();

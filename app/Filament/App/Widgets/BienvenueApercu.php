@@ -12,8 +12,8 @@ use Filament\Widgets\Widget;
  * nom de la personne, puis son rôle dans le magasin ouvert (voir
  * User::libelleDuRoleDans() : « Vendeur · Boutique Lyon 1 »,
  * « Propriétaire de Ma Boutique SAS », « Administrateur »,
- * « Expert-comptable », suivi de « (démonstration) » dans le magasin de
- * démonstration), et le bouton de déconnexion. Elle remplace la bienvenue
+ * « Collaborateur du cabinet Martin · Boutique Lyon 1 », suivi de
+ * « (démonstration) » dans le magasin de démonstration), et le bouton de déconnexion. Elle remplace la bienvenue
  * de Filament, qui ne disait que le nom.
  */
 class BienvenueApercu extends Widget

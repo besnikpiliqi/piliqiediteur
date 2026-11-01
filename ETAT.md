@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 23:31 UTC par pilotage-sync.sh : « Lot QA (couverture, mutation, analyse statique, audit, N+1) inséré après NAV-1 ».
+Mis à jour le 01/11/2026 à 23:41 UTC par pilotage-sync.sh : « Lot QA : tests au hasard avec règles invariantes (point 5 bis) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

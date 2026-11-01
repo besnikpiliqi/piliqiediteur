@@ -160,3 +160,17 @@ tu peux m'explique de quoi s agit
 
 fait ce qui est le meilleur donc s'il faut ajouter alors ajoute tout pour que le logiciel soit hyper performant avec zero de faille ou erreurs. je veux que le logiciel soit le meilleur de tout
 
+## 30. 2026-11-01 23:37 UTC
+
+mais tout "test du calcul des lignes de vente fait 581 740 vérifications" alors la sera hyper bizarre d'avoir des fautes si tous passent ok
+
+## 31. 2026-11-01 23:40 UTC
+
+<!-- attach -->
+
+> La pièce est juste, mais on l’utilise mal. Le calcul est exact si on lui donne les bonnes valeurs. Si un écran lui passe le mauvais taux de TVA, ou applique la remise deux fois, le total sera faux alors que le test du calcul reste vert. C’est comme une calculatrice parfaite sur laquelle on tape le mauvais chiffre.
+
+
+
+mais toi tu teste tout les options alors comment peux encore avoir des inantendu
+

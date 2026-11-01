@@ -4441,3 +4441,7 @@ comment ca va marcher mnt chez piliqi pour tester, tu va mettre à jours ou ce f
 
 malgre que c'est un siren d'un comptable il dit non vous etes pas un comptable. la 2eme photo dit toujours creer votre premier magasin alors que le prelier est deja cree. donc ou laisser un texte par defaut comme "Ajouter un magasin" ou ecrire par deuxieme, troxiem etc ca depend des magasin qu'ils ont deja creer
 
+## 334. 2026-11-01 16:39 UTC
+
+1a 2a 3 oui
+

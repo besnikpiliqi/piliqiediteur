@@ -1,13 +1,12 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 20:31 UTC par pilotage-sync.sh : « EC2 : une seule case « voir toutes » pour un cabinet (R23, décision § 5.4) ».
+Mis à jour le 01/11/2026 à 21:16 UTC par pilotage-sync.sh : « Conteneur remplacé : notes restaurées ; constats 404 (A7b § 2.6) et étapes d'une société invitée (EC2 R24) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `53ed088`. Commits locaux pas encore poussés :
 
 ```
-335620b Vérifie les e-mails sur la boîte de test de Mailtrap et borne le délai SMTP (lot ML)
 ```
 
 Derniers commits poussés :
@@ -38,28 +37,8 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M README.md
- M app/Console/Commands/EssayerLesCourriels.php
- M app/Integrations/Mailtrap/TransportMailtrap.php
- M resources/views/mail/essai.blade.php
- M tests/Feature/Console/EssayerLesCourrielsTest.php
- M tests/Feature/Integrations/TransportMailtrapTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_b5c2413b-8c6`, étapes commencées (de la plus ancienne à la plus récente) :
-
-```
-A7:relecture1
-A7:relecture2
-A7:correction
-A7:poussee
-A7:fiche
-A7:notes
-ML:implementation
-ML:relecture1
-ML:relecture2
-ML:correction
-```
+Aucune course trouvée.

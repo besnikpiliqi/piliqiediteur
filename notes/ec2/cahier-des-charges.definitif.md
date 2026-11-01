@@ -275,6 +275,15 @@ Exemples : 000 000 943 (actif, 69.20Z) passe, avec la dénomination « CABINET P
 - Le tableau de bord du cabinet et l'alerte des factures à encaisser lisent toujours « voir les factures de toute l'équipe » (`CLAUDE.md`), désormais accordé par la seule case des factures.
 - Tests : la fenêtre et l'e-mail montrent une seule case ou un seul libellé par paire ; cocher la case accorde les deux permissions et la décocher retire les deux ; la garde refuse en base une paire incomplète (insertion directe), pour un cabinet comme pour une déclaration ; un compte d'un cabinet à qui la case des factures est accordée voit toutes les factures du magasin, et sans elle aucune.
 
+
+### R24 — Une société validée par l'invitation de son cabinet ne voit ni l'étape du courrier ni celle de la démonstration (décision § 5.5 ; message de l'éditeur du 01/11/2026, 22 h 00)
+
+- Constat de l'éditeur (capture du tableau de bord d'une société validée par l'invitation de son cabinet) : « Vos premières étapes » montre « Saisir le code du courrier recommandé » (« Validée le 01/11/2026. ») et « Essayer le magasin de démonstration » (« Plus disponible : votre société est validée. »). Or cette société n'a jamais reçu de courrier ni eu de démonstration : « ces étapes sont pour eux qui créent eux-mêmes leur compte chez PILIQI ».
+- Règle : dans `TableauDeBord::etapes()` (`app/Filament/Societe/Pages/TableauDeBord.php`, la même méthode que R22), pour une société validée par l'invitation acceptée d'un cabinet (`CLAUDE.md`, « Cabinets d'expertise comptable », (a)), la liste ne montre que l'étape des magasins (R22 : « Créer votre premier magasin » puis « Ajouter un magasin ») et « Ajouter votre équipe ». La section « Vérification de la société » du tableau de bord et la page « Vérification » de l'espace de la société ne parlent ni de courrier, ni de code, ni de démonstration : « Votre société est validée depuis le JJ/MM/AAAA, par l'invitation de votre cabinet d'expertise comptable. » (sans le nom du cabinet, qui a pu changer depuis). Le lien « Saisir le code » et l'action d'ouverture de la démonstration n'y apparaissent pas.
+- L'indicateur : la preuve de validation que l'acceptation de l'invitation enregistre déjà (preuve « invitation du cabinet » du registre des vérifications et du journal d'audit, celle qui fait signer les attestations à la main ; `AccepterLInvitationAction`) ; ne créer une colonne, dans la migration de création de la table concernée, que si aucune donnée enregistrée ne le dit avec certitude, et le dire dans « faits ».
+- Rien ne change pour une société qui s'inscrit elle-même, avant comme après sa validation.
+- Tests : société validée par une invitation (deux étapes seulement, textes de la vérification sans courrier ni démonstration, ni lien ni action correspondants) ; société inscrite elle-même avant sa validation (quatre étapes inchangées) et après (inchangée) ; la page « Vérification » des deux.
+
 ---
 
 ## 2. Points à trancher par l'éditeur

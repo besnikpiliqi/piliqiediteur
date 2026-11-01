@@ -118,3 +118,15 @@ le client comptoir n'as pas besoin de ce genre d'info et meme chez le client com
 
 quand on ouvre la fenetre pour chercher les client et meme les produits il fait comme ca, donc pas possible d'appuyer sur le "" pour selecter car il  y aura ces problemes des photo 2 et 3
 
+## 21. 2026-11-01 22:08 UTC
+
+c'est pas question  recharger la page. il y a un problem car meme dans un navigateur (mem prive) jamais utilise fait la meme chose
+
+## 22. 2026-11-01 22:45 UTC
+
+il faut faire tous les testes en navigateur et pas que le code car tu vois dans navigateur peut avoir d'autre erreurs. donc il faut que tu fasse tous les testes aussi dans les navigateur
+
+## 23. 2026-11-01 22:46 UTC
+
+je parle de tous les actions qui se font sur navigateurs, à chaque clique il y a un comportement donc qqch qui doit se finir comme prevu
+

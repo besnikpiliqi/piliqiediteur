@@ -92,3 +92,4 @@ ec2/cahier-des-charges.proposition.md
 ec2/cahier-des-charges.definitif.md
 reprises/args-course-wf_1ce3e4cc-2f2.json
 decisions/client-comptoir-01-11.md
+navigateur/decision-tests-navigateur.md

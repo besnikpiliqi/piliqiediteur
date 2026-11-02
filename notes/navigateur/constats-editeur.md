@@ -24,6 +24,8 @@ Message de l'éditeur : « et là il faut que les factures sur Crédit appliqué
 
 ## C3 — PDF des factures et des tickets : les modes de paiement ne se voient pas (02/11/2026, vers 10 h 30 et 10 h 45 UTC ; lot NAV-2, sauf si le diagnostic désigne un défaut à corriger plus tôt)
 
+**Traité par le lot TR** (`tr/decision-tr.md`, § 4, réponses de l'éditeur « r1 = oui, r2 = oui » du 02/11 vers 22 h 10 UTC) : bloc à gauche des totaux, « Émettre et encaisser », reçu de paiement. Le lot NAV-2 le teste seulement en navigateur.
+
 Constat de l'éditeur : « je vois que dans les factures et même dans les tickets ne marque pas les méthodes de paiements. et il faut placer tout à gauche du TTC total. donc tu mets pour tous les règlements dans cet endroit » ; précision, à la question de savoir ce que veut dire « tous les règlements » : « je parle si le règlement de la facture est fait en plusieurs méthodes, dont par carte ou espèces etc ».
 
 Puis, vers 11 h 10 UTC : « pareil pour les tickets » : la même règle vaut pour les tickets que pour les factures.

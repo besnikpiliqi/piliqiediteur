@@ -1,12 +1,14 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 18:01 UTC par pilotage-sync.sh : « SL poussé ; NAV-1 en cours ».
+Mis à jour le 02/11/2026 à 23:44 UTC par pilotage-sync.sh : « Lot TR : TVA des achats, Émettre et encaisser, reçu de paiement (réponses de l'éditeur) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `92fd524`. Commits locaux pas encore poussés :
 
 ```
+523e74f Balaye chaque panneau rôle par rôle et ajoute les premiers parcours en navigateur (lot NAV-1 2/2)
+9053757 Outille les tests en navigateur avec Pest 4 et Playwright (lot NAV-1 1/2)
 ```
 
 Derniers commits poussés :
@@ -37,13 +39,27 @@ ad19e0b Range les autorisations par famille et retire les articles aux société
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M composer.json
- M composer.lock
-?? node_modules/
-?? package-lock.json
-?? package.json
-?? tests/Browser/
-?? tests/Pest.php
+ M README.md
+ M app/Filament/App/Resources/FactureAchatResource.php
+ M app/Filament/App/Resources/FactureResource.php
+ M tests/Browser/AidesCommunesTest.php
+ M tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php
+ M tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php
+ M tests/Browser/InventaireDesActionsTest.php
+ M tests/Browser/Parcours/InscriptionDUneSocieteTest.php
+ M tests/Browser/Parcours/VentesDeBoutEnBoutTest.php
+ M tests/Browser/Support/ActionsDeLInterface.php
+ M tests/Browser/Support/Balayeur.php
+ M tests/Browser/Support/CouvertureDuBalayage.php
+ M tests/Browser/Support/JournalDesReponses.php
+ M tests/Browser/Support/Navigation.php
+ M tests/Browser/Support/NoyauDUneRequeteNeuve.php
+ M tests/Browser/Support/surveillance.js
+ M tests/Browser/TestCaseDuNavigateur.php
+ M tests/Browser/inventaire-des-actions.php
+?? tests/Browser/AvoirsFournisseurTest.php
+?? tests/Browser/Parcours/JournalDesEvenementsTest.php
+?? tests/Browser/Support/DemonstrationDeTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -66,4 +82,7 @@ SL:poussee
 SL:fiche
 SL:notes
 NAV-1:implementation
+NAV-1:relecture1
+NAV-1:relecture2
+NAV-1:correction
 ```

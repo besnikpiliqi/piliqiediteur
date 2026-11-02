@@ -108,3 +108,4 @@ calculs/impact.md
 calculs/synthese.md
 calculs/tva-deductible-et-ca3.md
 paiements/diag-reglements-rapport.md
+tr/decision-tr.md

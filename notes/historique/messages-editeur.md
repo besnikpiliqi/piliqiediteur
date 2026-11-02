@@ -308,3 +308,7 @@ je suis pas content avec les calcules. ce que j'ai compris il y aura toujours de
 
 mais ce que je veux que ce soit rassuré que ne pas avoir problem avec l'etat, ou c'est important que l'etat regarde ce que t'as recolté et ce que t'as payé comme tva
 
+## 57. 2026-11-02 23:40 UTC
+
+T1 =oui,T2= oui,t3=oui, r1=oui,r2=oui, les C=non
+

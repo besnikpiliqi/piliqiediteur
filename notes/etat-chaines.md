@@ -155,3 +155,5 @@
 - 02/11 12:32 UTC — A7b poussé (f9b669c, fiche et notes faites : 5072d83) ; SL:implementation arrêté par la limite d'usage de 5 heures (reprise à 12:40), travail non commité gardé. Puis deux redémarrages du conteneur (14:25 et 15:43 UTC). 15:43 : course reprise par resumeFromRunId wf_f59a9064-d8d (mêmes ouverts, DV compris), installation refaite au code 0 juste après (PostgreSQL relancé).
 
 - 02/11 17:57 UTC — SL poussé (b06c922 puis relecture 92fd524), CI verte ; compte rendu fait à l'éditeur (commandes du PC : git pull, migrate:fresh pour les tables d'A7b, optimize:clear). NAV-1 en cours. Point de suivi de 18:01 : course vivante, PostgreSQL en marche.
+
+- 02/11 22:15 UTC — réponses de l'éditeur (T1-T3, R1-R2 oui ; C non) : lot TR écrit (tr/decision-tr.md) et inséré dans serie8-lots.js avant QA, sensible (effort max) ; sauvegarde serie8-lots.avant-TR.js. La course en cours ne le connaît pas : arrêt et relance par resumeFromRunId wf_f59a9064-d8d à la frontière NAV-1 → QA (pendant la fiche ou les notes de NAV-1, arbre propre), ouverts dans reprises/args-course-wf_f59a9064-d8d.json (TR compris).

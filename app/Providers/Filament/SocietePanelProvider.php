@@ -109,6 +109,9 @@ class SocietePanelProvider extends PanelProvider
                 ExigerSonPropreMotDePasse::class,
             ], isPersistent: true)
             // Tant que la société n'est pas validée, ce qui reste désactivé.
-            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => null, 'societe' => Filament::getTenant()]));
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => null, 'societe' => Filament::getTenant()]))
+            // Une requête refusée (419, 404) dit en français quoi faire, au
+            // lieu de la question en anglais de Livewire.
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.requete-refusee'));
     }
 }

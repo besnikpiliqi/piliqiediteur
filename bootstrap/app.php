@@ -20,6 +20,7 @@ use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
 use App\Http\Responses\ReponseAUnDocumentDisparu;
+use App\Http\Responses\ReponseAUnePageExpiree;
 use App\Http\Responses\ReponseDansUnMagasinEnLectureSeule;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
@@ -148,4 +149,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // ReponseDansUnMagasinEnLectureSeule). Laravel a déjà changé un
         // refus d'autorisation en HttpException.
         $exceptions->render(fn (HttpException $exception, Request $request) => ReponseDansUnMagasinEnLectureSeule::pour($exception, $request));
+        // Une page expirée (419) : la page en français, avec un lien qui
+        // recharge la page du formulaire, et, pour une requête Livewire,
+        // une ligne au journal, que Laravel n'écrit jamais pour une erreur
+        // HTTP (voir ReponseAUnePageExpiree).
+        $exceptions->render(fn (HttpException $exception, Request $request) => ReponseAUnePageExpiree::pour($exception, $request));
     })->create();

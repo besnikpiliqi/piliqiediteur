@@ -61,6 +61,12 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * Le sélecteur de magasin n'apparaît qu'à qui en ouvre plusieurs : un
  * compte de membre n'en a qu'un, un compte d'un cabinet n'y voit que les
  * magasins du client ouvert.
+ *
+ * Tout composant Livewire monté par une vue hors des ressources, des pages
+ * et des widgets découverts (les tableaux des clients et des produits des
+ * pages de vente, dans app/Filament/App/Livewire) s'enregistre ici : sans
+ * cela, Livewire ne retrouve pas sa classe d'après le nom inscrit dans son
+ * instantané, et chacune de ses requêtes répond 419 « Page Expired ».
  */
 class AppPanelProvider extends PanelProvider
 {
@@ -124,6 +130,11 @@ class AppPanelProvider extends PanelProvider
             // (voir BienvenueApercu) et les factures à encaisser (voir
             // FacturesAEncaisserApercu), en tête.
             ->discoverWidgets(in: app_path('Filament/App/Widgets'), for: 'App\\Filament\\App\\Widgets')
+            // Les tableaux des clients et des produits que montent les
+            // fenêtres des pages de vente (voir SelecteurDeClients et
+            // SelecteurDeProduits), retrouvés par leur nom à chacune de
+            // leurs requêtes (voir plus haut).
+            ->discoverLivewireComponents(in: app_path('Filament/App/Livewire'), for: 'App\\Filament\\App\\Livewire')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -143,6 +154,9 @@ class AppPanelProvider extends PanelProvider
             // Avant les scripts de Filament/Livewire : le script doit
             // s'abonner à "livewire:init" avant que Livewire ne démarre.
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.app.saisie-protegee'))
+            // Une requête refusée (419, 404) dit en français quoi faire, au
+            // lieu de la question en anglais de Livewire.
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.requete-refusee'))
             // En tête de chaque page d'un magasin en lecture seule : ce qui
             // l'y met et ce qui lui reste possible (voir ControleDesDroits).
             ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.app.magasin-en-lecture-seule', ['magasin' => Filament::getTenant()]))

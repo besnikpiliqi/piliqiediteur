@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 10:14 UTC par pilotage-sync.sh : « C3 : pareil pour les tickets ; relance après interruption ».
+Mis à jour le 02/11/2026 à 11:12 UTC par pilotage-sync.sh : « C3 : diagnostic vérifié des règlements sur les PDF, questions posées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,10 +39,14 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
+ M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
  M app/Domain/Cabinets/Services/AccesDesCabinets.php
+D  app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
  M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
  M app/Domain/Facturation/Actions/CreerAvoirAction.php
  M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
  M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
  M app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
  M app/Domain/Facturation/Enums/StatutFacture.php
@@ -54,11 +58,16 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
  M app/Domain/Tenancy/Actions/ExaminerSirenAction.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/Societe.php
  M app/Filament/App/Resources/AvoirResource.php
  M app/Filament/App/Resources/FactureResource.php
  M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
  M database/migrations/2026_10_03_100003_create_factures_table.php
  M database/migrations/2026_10_05_100001_create_avoirs_table.php
+ M tests/Feature/Editeur/CorrectionDuSirenDUnCabinetTest.php
+ M tests/Feature/Editeur/SirenErroneTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
 ?? app/Domain/Cabinets/Jobs/PrevenirLesClientsDuCabinet.php
 ```
 

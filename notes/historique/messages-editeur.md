@@ -298,3 +298,13 @@ je parle si le reglement de la facture est fait en plusieurs method, dont par ca
 
 pareille pour les tickets
 
+## 55. 2026-11-02 10:28 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je suis pas content avec les calcules. ce que j'ai compris il y aura toujours des centime d ecart mais moi je veux pas
+
+## 56. 2026-11-02 10:55 UTC
+
+mais ce que je veux que ce soit rassuré que ne pas avoir problem avec l'etat, ou c'est important que l'etat regarde ce que t'as recolté et ce que t'as payé comme tva
+

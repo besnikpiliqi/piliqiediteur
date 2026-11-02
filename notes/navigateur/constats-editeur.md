@@ -32,6 +32,14 @@ Décision de l'éditeur (elle tranche la question métier) : il s'agit des règl
 
 Diagnostic en cours (atelier wf_e6d5221e-141, rapport `paiements/diag-reglements-rapport.md`, captures dans `paiements/diag-reglements/captures/`) : il établit pourquoi l'éditeur ne voit aucun mode (règlements absents du contexte signé d'un ticket ou d'une facture réglée à l'émission, ou facture réglée après son émission) et mesure la nouvelle place avec dompdf. Le rapport vérifié fait foi pour la cause et la correction.
 
+Diagnostic vérifié (02/11/2026 vers 11 h 50 UTC, rapport et section « Vérification » : `paiements/diag-reglements-rapport.md`) :
+- aucun défaut dans les règlements retenus : une vente à la caisse en plusieurs modes, une facture réglée à la caisse, un bon d'avoir ou un crédit imputé à l'émission ont chacun leurs modes dans le contexte signé et les impriment ;
+- cause principale : une facture (ou un ticket) faite par « Factures > Créer », émise, puis réglée par « Encaisser » n'imprime aucun règlement, par la règle « le PDF reproduit le document tel qu'émis » ; hors de la caisse, aucun geste n'encaisse au moment de l'émission (`FactureResource.php`, émission sans règlement) ;
+- le bloc existant est petit, sous les totaux, se coupe entre deux pages près du bas de page (Total TTC seul en page 2 à 20 lignes) et coupe les références au milieu ;
+- un paiement contre-passé après l'émission reste imprimé avec « Restant dû 0,00 € » : le libellé doit dire « à l'émission » ;
+- la variante « à gauche du Total TTC » (une rangée de tableau : règlements à gauche en colonnes Date / Mode / Référence / Montant, totaux à droite) est compatible dompdf, jamais coupée, au-dessus du pied, sur 35 PDF réels mesurés ; 4 tests de `FacturePdfGeneratorTest` (lignes 418, 499, 830, 996) lisent l'ancienne structure et seront à réécrire avec les mêmes attentes ; diff dans `paiements/diag-reglements/captures/donnees/`.
+Questions posées à l'éditeur (02/11 vers 11 h 55 UTC) : (1) un geste « Émettre et encaisser » sur les factures, et une part inférieure au total à l'émission est-elle permise ; (2) pour une facture réglée après son émission, un « reçu de paiement » PDF par encaissement (le PDF de la facture ne changeant jamais) ; (3) libellé « Restant dû à l'émission » (choix de Claude).
+
 À faire :
 - chaque règlement reçu à l'émission (date, mode, référence, montant), chaque crédit d'avoir (numéro de l'avoir, montant) et le restant dû s'impriment dans un bloc « Règlements » placé à gauche du tableau des totaux, sur la même bande, dans le PDF des tickets et des factures, duplicatas compris ;
 - la variante tient sur une page A4 portrait avec un, deux et cinq règlements, une référence longue et un crédit d'avoir, sans chevaucher le pied fixé en bas, en HTML compatible dompdf (tableaux) ;

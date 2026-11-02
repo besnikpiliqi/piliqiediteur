@@ -61,6 +61,12 @@ return new class extends Migration
 
             $table->foreign(['societe_id', 'magasin_id'])->references(['societe_id', 'id'])->on('magasins')->restrictOnDelete();
             $table->index(['societe_id', 'created_at']);
+            // Les entrées d'une action dans le journal d'une société : la
+            // dernière décision d'examen de son SIREN se relit à chaque
+            // fiche d'une facture à un professionnel (voir
+            // RegularisationDUneFacture::estDesignee()), sans parcourir tout
+            // son journal.
+            $table->index(['societe_id', 'action']);
             $table->index(['cible_type', 'cible_id']);
         });
 

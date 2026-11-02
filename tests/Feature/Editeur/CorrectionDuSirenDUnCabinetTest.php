@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\Cabinet\Pages\VerificationDuCabinet;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
@@ -230,7 +231,8 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
      * le cabinet reste non vérifié : son inscription à l'Ordre se vérifie,
      * mais son activité ne se contrôle pas, pas même par l'éditeur, dont la
      * procédure est refusée sans rien écrire ; son client n'apprend aucun
-     * retour de l'accès.
+     * retour de l'accès ; le tableau de bord et la page de vérification du
+     * cabinet disent pourquoi.
      */
     public function test_une_autre_activite_laisse_le_cabinet_non_verifie_et_ne_se_controle_pas(): void
     {
@@ -251,6 +253,9 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
         $this->assertSame('autre_activite', collect($this->entreesDAudit($cabinet, ActionAuditee::ActiviteDuCabinetControlee))->last()->nouvelles_valeurs['resultat']);
         $this->assertFalse($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
         $this->assertCount(0, $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', AvisAuxClientsDuCabinet::TITRE_RETABLI));
+        $this->dansLEspaceDuCabinet($cabinet->fresh(), $this->proprietaireDuCabinet($cabinet));
+        $this->get(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk()->assertSeeText('qui n\'est pas 69.20Z (activités comptables) : il ne peut pas être vérifié.');
+        $this->get(VerificationDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk()->assertSeeText('Ce code n\'est pas 69.20Z (activités comptables) : votre cabinet ne peut pas être vérifié.');
     }
 
     /**

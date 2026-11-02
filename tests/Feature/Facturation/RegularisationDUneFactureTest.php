@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -39,12 +41,15 @@ use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Resources\AvoirResource;
+use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
 use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -178,6 +183,24 @@ class RegularisationDUneFactureTest extends TestCase
     }
 
     /**
+     * La rectificative ne corrige que l'identité du vendeur : quand la fiche
+     * du client a changé depuis la facture (nom, adresse, SIREN retiré,
+     * devenu particulier), elle reprend la copie du client que la facture a
+     * figée, reste une facture à un professionnel, et s'émet sans demander
+     * de réenregistrer un brouillon ni de renseigner le SIREN du client.
+     */
+    public function test_la_rectificative_reprend_le_client_fige_par_la_facture_meme_si_sa_fiche_a_change(): void
+    {
+        [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee();
+        $client->forceFill(['nom' => 'Dupont et Fils', 'adresse' => '9 rue Neuve', 'type_client' => TypeClient::Particulier, 'siren' => null])->save();
+
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+
+        $this->assertSame([TypeClient::Professionnel, 'Dupont SAS'], [$rectificative->type_client, $rectificative->client_nom]);
+        $this->assertSame($facture->copieClient()->enTableau(), $rectificative->copieClient()->enTableau());
+    }
+
+    /**
      * Une facture de 240,00 € payée 100,00 € : l'avoir de régularisation
      * règle les 140,00 € qui en restent dus et garde 100,00 € pour la
      * rectificative, qui en reste due de 140,00 € ; le client paie ces
@@ -260,7 +283,8 @@ class RegularisationDUneFactureTest extends TestCase
      * Une facture déjà régularisée ne se régularise plus : un second avoir
      * de régularisation et une seconde rectificative sont refusés, et la
      * facture rectifiée ne reçoit plus d'avoir ordinaire, un retour se
-     * faisant sur sa rectificative.
+     * faisant sur sa rectificative : sa fiche ne propose plus « Avoir », et
+     * « Nouvel avoir » refuse son numéro en le disant.
      */
     public function test_une_facture_deja_regularisee_ne_se_regularise_plus(): void
     {
@@ -270,6 +294,10 @@ class RegularisationDUneFactureTest extends TestCase
 
         $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture->fresh()), LogicException::class, RegularisationDUneFacture::REFUS_RECTIFICATIVE_DEJA_EMISE);
         $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour'), LogicException::class, sprintf(CreerAvoirAction::REFUS_FACTURE_RECTIFIEE, 'FAC-LYON-2026-000001'));
+        $this->dansLeMagasin($magasin->fresh(), $responsable);
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('avoir');
+        $recherche = Livewire::test(CreateAvoir::class)->fillForm(['recherche' => $facture->numero])->callFormComponentAction('recherche', 'chercher');
+        $this->assertSame([sprintf(CreerAvoirAction::REFUS_FACTURE_RECTIFIEE, 'FAC-LYON-2026-000001')], $recherche->errors()->get('data.recherche'));
         app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh());
         $this->assertThrows(fn () => app(FaireLAvoirDeRegularisationAction::class)->handle($this->proprietaireDe($magasin), $facture->fresh()), LogicException::class, RegularisationDUneFacture::REFUS_AVOIR_DEJA_EMIS);
 
@@ -382,6 +410,28 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle($collaborateur, $facture->fresh()), AuthorizationException::class);
 
         $this->assertSame([0, 1], [Avoir::query()->count(), Facture::query()->count()]);
+    }
+
+    /**
+     * Un vendeur qui ne voit que ses factures, même autorisé à faire les
+     * avoirs, ne fait ni l'avoir de régularisation ni la facture
+     * rectificative d'une facture du responsable, comme pour tout avoir ;
+     * avec « voir celles de toute l'équipe », il émet la rectificative, en
+     * son nom.
+     */
+    public function test_un_vendeur_ne_regularise_que_les_factures_qu_il_voit(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
+        $sesVentes = $this->membre($magasin->fresh(), RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER]);
+        $toutes = $this->membre($magasin->fresh(), RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+
+        $this->assertThrows(fn () => app(FaireLAvoirDeRegularisationAction::class)->handle($sesVentes, $facture->fresh()), AuthorizationException::class);
+        $this->assertThrows(fn () => app(EmettreLaFactureRectificativeAction::class)->handle($sesVentes, $facture->fresh()), AuthorizationException::class);
+        $this->assertSame([0, 1], [Avoir::query()->count(), Facture::query()->count()]);
+
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($toutes, $facture->fresh());
+
+        $this->assertSame([$toutes->id, $facture->id], [$rectificative->cree_par, $rectificative->facture_rectifiee_id]);
     }
 
     /**

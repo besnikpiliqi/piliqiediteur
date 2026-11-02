@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 01:09 UTC par pilotage-sync.sh : « Redémarrage : course wf_f59a9064-d8d (A7b puis SL, NAV, QA…), atelier des e-mails ».
+Mis à jour le 02/11/2026 à 01:31 UTC par pilotage-sync.sh : « Diagnostic 419 confirmé ; point 4 de SL corrigé selon le vérificateur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

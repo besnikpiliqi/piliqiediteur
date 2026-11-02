@@ -200,3 +200,17 @@ tu fais quoi mtn ?
 
 tous les envois des mails ils s'envoient pas, comme ex une facture ou ticket ou devis donc rien ne s'envoie
 
+## 38. 2026-11-02 01:14 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+il envoie comme ca et pas en pdf
+
+## 39. 2026-11-02 01:17 UTC
+
+oui j ai trouvé le pdf
+
+## 40. 2026-11-02 01:29 UTC
+
+je vois que le vendeur ne vois pas ce qui reste à payer ou Factures à encaisser ou si qqch qui reste à regler
+

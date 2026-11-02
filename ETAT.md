@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 02:30 UTC par pilotage-sync.sh : « Diagnostic vérifié des e-mails : corrections pour le lot ML ».
+Mis à jour le 02/11/2026 à 07:46 UTC par pilotage-sync.sh : « Redémarrages de 02:30 et 04:01 : course reprise, TRAVAIL_COUPE complété ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

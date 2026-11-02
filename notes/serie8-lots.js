@@ -177,7 +177,7 @@ if (REPRISES_FAUSSES.length > 0) {
 }
 
 // Une étape coupée par un redémarrage de la machine laisse ses modifications non commitées : la reprise les retrouve.
-const TRAVAIL_COUPE = `Avant de commencer, regarde git status --short dans ${DEPOT} : s'il n'est pas vide, ce sont les modifications non commitées d'une tentative précédente de cette même étape, coupée par un redémarrage de la machine ; relis-les en entier, garde ce qui est juste, corrige ou retire le reste, puis termine le travail. Ne les jette jamais sans les avoir lues.`
+const TRAVAIL_COUPE = `Avant de commencer, regarde git status --short dans ${DEPOT} : s'il n'est pas vide, ce sont les modifications non commitées d'une tentative précédente de cette même étape, coupée par un redémarrage de la machine ; relis-les en entier, garde ce qui est juste, corrige ou retire le reste, puis termine le travail. Ne les jette jamais sans les avoir lues. Regarde aussi git log --oneline origin/${BRANCHE}..HEAD : des commits de ce même lot peuvent y être, faits par la tentative coupée ; ne les refais pas, relis-les, continue après eux, et ta plage « commit » les inclut (premier hash de cette liste..dernier).`
 
 // Effort des agents qui écrivent, relisent et corrigent : décision de l'éditeur du 01/11/2026 (DIRECTIVES.md, D49) :
 // Extra (xhigh) pour le travail courant, Max pour les lots sensibles, fixé ici par la session sans le lui redemander.

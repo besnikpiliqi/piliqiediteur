@@ -13,6 +13,9 @@
 /.phpunit.cache
 /.vscode
 /.zed
+/node_modules
+/tests/Browser/Screenshots
+/tests/Browser/Traces
 /auth.json
 /public/storage
 /storage/*.key

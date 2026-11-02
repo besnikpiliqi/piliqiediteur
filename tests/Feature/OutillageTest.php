@@ -16,7 +16,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Aucun paquet inutilisé et aucun outil Node (décisions de l'éditeur) :
+ * Aucun paquet inutilisé et aucun outil Node hors Playwright, qui ne sert
+ * qu'aux tests en navigateur (décisions de l'éditeur) :
  * Filament Shield et Sanctum, retirés, n'exposent plus ni route ni
  * commande, et rien de ce que lisent les agents ne renvoie à un outil
  * absent du projet. La base, PostgreSQL ou SQLite, trie les textes dans
@@ -153,7 +154,9 @@ class OutillageTest extends TestCase
      * Le gabarit de Boost écrit sans condition la consigne « Frontend
      * Bundling » (npm run build, npm run dev, composer run dev) et la
      * lecture de package.json : un boost:install les remettrait dans
-     * CLAUDE.md alors que le projet n'a ni package.json ni script « dev ».
+     * CLAUDE.md alors que le projet n'a ni outil de construction des écrans
+     * ni script « dev » (son package.json ne déclare que Playwright, pour
+     * les tests en navigateur).
      */
     public function test_les_consignes_des_agents_ne_renvoient_a_aucun_outil_absent(): void
     {

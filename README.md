@@ -15,7 +15,7 @@ Il couvre :
 
 ## Technique
 
-Laravel 13, Filament 3 (panneau des magasins sous `/app`), PHP 8.3 ou plus avec les extensions openssl, zip et pdo_pgsql. Aucun outil Node n'est nécessaire : Filament publie ses propres fichiers.
+Laravel 13, Filament 3 (panneau des magasins sous `/app`), PHP 8.3 ou plus avec les extensions openssl, zip et pdo_pgsql. L'application n'utilise aucun outil Node : Filament publie ses propres fichiers. Seuls les tests en navigateur utilisent Node.js, pour Playwright (voir plus bas).
 
 PostgreSQL (17 ou 18) en production, SQLite en développement et pour les tests rapides. La suite complète passe sur les deux moteurs, en local avant chaque commit et en CI. La base PostgreSQL est en UTF8 avec la collation déterministe C.UTF-8 : elle trie dans l'ordre binaire, comme SQLite. Les recherches ignorent la casse et les accents par une même fonction SQL sur les deux moteurs, que crée une migration sous PostgreSQL : aucune extension à installer.
 
@@ -23,7 +23,7 @@ PostgreSQL (17 ou 18) en production, SQLite en développement et pour les tests 
 
 ## Installation locale
 
-1. **PHP 8.3 ou plus et ses extensions.** Activez dans `php.ini` (une ligne `extension=…` par extension, sans le `;` qui la commente) : curl, fileinfo, intl, mbstring, openssl, pdo_pgsql, pdo_sqlite, sqlite3 et zip. `php -m` liste les extensions chargées : chacune doit y figurer (sous Windows, `php -m | findstr /i "curl fileinfo intl mbstring openssl pdo_pgsql pdo_sqlite sqlite3 zip"`). `composer check-platform-reqs` ne suffit pas : il ne contrôle que les extensions qu'exigent `composer.json` et les dépendances, jamais pdo_sqlite, sqlite3 ni curl, et tient mbstring pour présente grâce à une bibliothèque de remplacement ; sans pdo_sqlite, `php artisan migrate` échoue sur SQLite avec « could not find driver ».
+1. **PHP 8.3 ou plus et ses extensions.** Activez dans `php.ini` (une ligne `extension=…` par extension, sans le `;` qui la commente) : curl, fileinfo, intl, mbstring, openssl, pdo_pgsql, pdo_sqlite, sockets (pour les tests en navigateur), sqlite3 et zip. `php -m` liste les extensions chargées : chacune doit y figurer (sous Windows, `php -m | findstr /i "curl fileinfo intl mbstring openssl pdo_pgsql pdo_sqlite sockets sqlite3 zip"`). `composer check-platform-reqs` ne suffit pas : il ne contrôle que les extensions qu'exigent `composer.json` et les dépendances, jamais pdo_sqlite, sqlite3 ni curl, et tient mbstring pour présente grâce à une bibliothèque de remplacement ; sans pdo_sqlite, `php artisan migrate` échoue sur SQLite avec « could not find driver ».
 2. **Sous Windows (XAMPP compris).** Le fichier `php.ini` de XAMPP est `C:\xampp\php\php.ini`. PHP n'y trouve le fichier `openssl.cnf` que si la variable d'environnement `OPENSSL_CONF` le désigne : sans elle, aucune clé ne se génère, et toute la suite de tests échoue avec « OpenSSL n'a pas pu générer de clé ECDSA P-256 ». Réglez-la une fois dans une invite de commandes :
 
    ```bat
@@ -43,7 +43,7 @@ PostgreSQL (17 ou 18) en production, SQLite en développement et pour les tests 
 6. **Clé du journal d'audit.** `php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"` affiche une clé aléatoire : recopiez-la dans `JOURNAL_AUDIT_CLE`, et donnez-lui un identifiant de votre choix dans `JOURNAL_AUDIT_CLE_ID` (par exemple `dev-1`). Sans elle, aucune action auditée ne s'enregistre : la confirmation d'une inscription échoue (`JournalAuditNonConfigureException`).
 7. **Base.** `php artisan migrate`.
 8. **Contrôle.** `php artisan caisse:diagnostiquer` vérifie OpenSSL (une clé s'y génère et s'exporte), zip, les clés de signature, la clé du journal d'audit et les fuseaux, sans jamais afficher une clé ; chaque ligne doit dire OK, et une ligne en échec dit quoi faire.
-9. **Tests.** `php artisan test`, ou `php artisan test --parallel`.
+9. **Tests.** `php artisan test`, ou `php artisan test --parallel`, tests en navigateur compris, une fois Playwright installé (voir « Tests en navigateur » plus bas).
 10. **Lancement.** Les trois commandes du développement (voir plus bas) : `php artisan serve`, `php artisan queue:listen` et `php artisan schedule:work`.
 11. **Première inscription.** Sur `/app/register` (voir plus bas), le lien de confirmation de l'inscription, valable 24 heures, s'écrit dans `storage/logs/laravel.log` : ouvrez l'adresse en `/inscription/…` de l'e-mail « Confirmez l'inscription de votre société », le dernier du fichier.
 
@@ -63,6 +63,24 @@ Puis, avant chaque commit, la suite sur SQLite et sur PostgreSQL (le mot de pass
 php artisan test --parallel
 DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=piliqi_test DB_USERNAME=piliqi DB_PASSWORD="$PILIQI_PG_MOT_DE_PASSE" php artisan test --parallel
 ```
+
+**Tests en navigateur.** Les tests de `tests/Browser` cliquent dans l'application comme une personne, dans un vrai Chromium que pilote Playwright, avec Pest 4 et son module browser ; ils font partie de la suite complète, sur les deux moteurs, et la CI les passe aussi. Le module sert lui-même l'application, depuis le processus du test : ni `php artisan serve` ni Apache ne sont nécessaires. Chaque test vérifie qu'aucune erreur JavaScript ou de la console n'apparaît et qu'aucune réponse du serveur n'est un refus ou une erreur qu'il n'attendait pas. Sur le PC de l'éditeur (Windows, XAMPP), installez une fois Node.js (version LTS, depuis nodejs.org), puis, dans le dossier du projet :
+
+```bat
+npm install
+npx playwright install chromium
+```
+
+Puis les tests en navigateur seuls, ou la suite complète :
+
+```bat
+php artisan test --testsuite=Browser
+php artisan test --parallel
+```
+
+`package.json` fixe Playwright à la version 1.59.1, celle que demande le module browser de Pest 4 : à partir de Playwright 1.62, le serveur n'applique plus le délai que le module lui envoie, et un clic sur un élément caché attendrait sans fin. Ne la changez pas sans changer le module. Une capture de la page d'un test en échec s'écrit dans `tests/Browser/Screenshots`. Ne lancez pas deux suites en navigateur en même temps dans le même dossier : le module y garde l'adresse de son serveur Playwright (`vendor/pestphp/pest-plugin-browser/.temp`), que la première suite finie efface.
+
+L'inventaire des actions (`tests/Browser/inventaire-des-actions.php`) liste chaque action de l'interface, le lot qui écrit ses tests et les tests qui la couvrent déjà, et `InventaireDesActionsTest` le compare au code.
 
 **Suite sous faketime.** Avant un commit qui touche aux dates, la suite passe aussi à des instants choisis (`sudo apt-get install faketime`). `TZ=UTC` fixe le fuseau de l'instant donné à faketime ; `NO_FAKE_STAT=1` laisse aux fichiers leur vraie date, comme sur l'horloge réelle.
 

@@ -21,3 +21,19 @@ Message de l'éditeur : « et là il faut que les factures sur Crédit appliqué
 - même règle partout où un numéro de document s'affiche sans lien alors que les autres le sont : imputations et paiements d'une facture, bons d'avoir utilisés, documents d'une clôture, avoirs d'une facture, facture d'origine d'un avoir, retours d'une facture d'achat (choix de Claude : tout numéro de document affiché devient un lien vers lui quand on peut le voir) ;
 - un ticket est nommé « Ticket » et une facture « Facture » (aujourd'hui « Facture TK-… » pour un ticket) ;
 - test en navigateur : le clic sur chaque numéro ouvre le bon document ; un vendeur qui ne voit pas ce document ne reçoit pas de lien.
+
+## C3 — PDF des factures et des tickets : les modes de paiement ne se voient pas (02/11/2026, vers 10 h 30 et 10 h 45 UTC ; lot NAV-2, sauf si le diagnostic désigne un défaut à corriger plus tôt)
+
+Constat de l'éditeur : « je vois que dans les factures et même dans les tickets ne marque pas les méthodes de paiements. et il faut placer tout à gauche du TTC total. donc tu mets pour tous les règlements dans cet endroit » ; précision, à la question de savoir ce que veut dire « tous les règlements » : « je parle si le règlement de la facture est fait en plusieurs méthodes, dont par carte ou espèces etc ».
+
+Puis, vers 11 h 10 UTC : « pareil pour les tickets » : la même règle vaut pour les tickets que pour les factures.
+
+Décision de l'éditeur (elle tranche la question métier) : il s'agit des règlements d'un même document en plusieurs modes (carte, espèces, chèque…). Chacun s'imprime sur sa ligne, et le bloc se place tout à gauche, sur la même bande que les totaux (Total HT, Total TVA, Total TTC), au lieu d'être en dessous. La règle de `CLAUDE.md` ne change pas : le PDF imprime les règlements reçus à l'émission et reproduit le document tel qu'émis ; un paiement reçu ensuite reste sur la fiche.
+
+Diagnostic en cours (atelier wf_e6d5221e-141, rapport `paiements/diag-reglements-rapport.md`, captures dans `paiements/diag-reglements/captures/`) : il établit pourquoi l'éditeur ne voit aucun mode (règlements absents du contexte signé d'un ticket ou d'une facture réglée à l'émission, ou facture réglée après son émission) et mesure la nouvelle place avec dompdf. Le rapport vérifié fait foi pour la cause et la correction.
+
+À faire :
+- chaque règlement reçu à l'émission (date, mode, référence, montant), chaque crédit d'avoir (numéro de l'avoir, montant) et le restant dû s'impriment dans un bloc « Règlements » placé à gauche du tableau des totaux, sur la même bande, dans le PDF des tickets et des factures, duplicatas compris ;
+- la variante tient sur une page A4 portrait avec un, deux et cinq règlements, une référence longue et un crédit d'avoir, sans chevaucher le pied fixé en bas, en HTML compatible dompdf (tableaux) ;
+- tout défaut que le diagnostic confirme (par exemple des règlements reçus à l'émission absents du contexte signé) se corrige avec un test du domaine qui le reproduit ;
+- test en navigateur : une vente à la caisse en espèces et par carte puis une facture réglée à l'émission en plusieurs modes, PDF téléchargés, chaque mode et son montant lus dans le PDF, à gauche du Total TTC.

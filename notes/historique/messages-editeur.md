@@ -280,3 +280,21 @@ je choisi le a) mais une chose doit etre faite car ca n'existe pas encore. le de
 
 j'accepte tes proposition de 1 à 5
 
+## 52. 2026-11-02 10:07 UTC
+
+je vois que dans les factures et meme dans les ticketes ne marque pas les methode de paiements. et il faut place tout à gauche du ttc total. donc tu mets pour tous les regelments dans cette endroit
+
+## 53. 2026-11-02 10:12 UTC
+
+<!-- attach -->
+
+> Une question à trancher
+
+
+
+je parle si le reglement de la facture est fait en plusieurs method, dont par carte ou ecpece etc
+
+## 54. 2026-11-02 10:13 UTC
+
+pareille pour les tickets
+

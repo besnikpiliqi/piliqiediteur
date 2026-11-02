@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 10:01 UTC par pilotage-sync.sh : « Devis : propositions 1 à 5 acceptées par l'éditeur (lot DV) ».
+Mis à jour le 02/11/2026 à 10:14 UTC par pilotage-sync.sh : « C3 : pareil pour les tickets ; relance après interruption ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,27 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
+ M app/Domain/Facturation/Actions/CreerAvoirAction.php
+ M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
+ M app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
+ M app/Domain/Facturation/Enums/StatutFacture.php
+ M app/Domain/Facturation/Listeners/RestaurerStockApresEmissionAvoir.php
+ M app/Domain/Facturation/Models/Avoir.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Services/ImputationDuCredit.php
+ M app/Domain/Facturation/Services/RegularisationDUneFacture.php
+ M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
+ M app/Domain/Tenancy/Actions/ExaminerSirenAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Filament/App/Resources/AvoirResource.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/migrations/2026_10_05_100001_create_avoirs_table.php
+?? app/Domain/Cabinets/Jobs/PrevenirLesClientsDuCabinet.php
 ```
 
 ## Dernière course de la chaîne

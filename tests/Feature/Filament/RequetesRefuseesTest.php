@@ -10,29 +10,37 @@ use App\Http\Responses\ReponseAUnePageExpiree;
 use Filament\Pages\Dashboard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Session\TokenMismatchException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
 use Livewire\Exceptions\LivewireReleaseTokenMismatchException;
 use Livewire\Mechanisms\ComponentRegistry;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\Process\ExecutableFinder;
 use Tests\TestCase;
 
 /**
  * Une requête refusée parce que la page n'est plus à jour (419) ou n'est
  * plus accessible au compte connecté (404) : jamais une page technique en
  * anglais. Dans chaque panneau, un avis en français remplace la question
- * de Livewire (voir la vue filament/requete-refusee) ; un formulaire
- * classique reçoit la page « Page expirée » en français, avec un lien qui
- * recharge le formulaire ; chaque 419 d'une requête Livewire s'inscrit au
- * journal, sans jeton (voir ReponseAUnePageExpiree) ; la page d'un magasin
- * que le compte connecté n'ouvre pas reste introuvable, en français. Le
- * refus lui-même ne change jamais.
+ * de Livewire (voir la vue filament/requete-refusee), sans jamais prendre
+ * le focus, rejoué par Node.js en attendant les tests en navigateur ; un
+ * formulaire classique reçoit la page « Page expirée » en français, avec
+ * un lien qui recharge le formulaire ; chaque 419 d'une requête Livewire
+ * s'inscrit au journal, borné, sans jeton (voir ReponseAUnePageExpiree) ;
+ * la page d'un magasin que le compte connecté n'ouvre pas reste
+ * introuvable, en français. Le refus lui-même ne change jamais.
  */
 class RequetesRefuseesTest extends TestCase
 {
     use RefreshDatabase;
 
     private const JETON_PERIME = 'jeton-que-la-session-ne-connait-pas';
+
+    private const TITRE_404 = 'Cette page n\'est plus accessible.';
+
+    private const TITRE_419 = 'Cette page n\'est plus à jour.';
 
     /**
      * Une page de chaque panneau, ouverte par qui y entre : la connexion,
@@ -64,6 +72,92 @@ class RequetesRefuseesTest extends TestCase
         $page = $this->get($adresse);
 
         $this->assertStringContainsString(view('filament.requete-refusee')->render(), $page->assertOk()->getContent());
+    }
+
+    /**
+     * Le sondage des notifications refusé toutes les 30 secondes pendant
+     * que la personne écrit : l'avis s'affiche sans jamais prendre le
+     * focus ni recharger la page, puis reste tel quel, le même, aux refus
+     * suivants (son texte suit le dernier motif).
+     */
+    public function test_l_avis_ne_prend_jamais_le_focus_ni_ne_recharge_la_page_et_reste_tel_quel(): void
+    {
+        $constats = $this->rejouerLAvis([
+            ['faire' => 'refus', 'statut' => 404, 'geste' => false],
+            ['faire' => 'refus', 'statut' => 404, 'geste' => false],
+            ['faire' => 'refus', 'statut' => 419, 'geste' => true],
+        ]);
+
+        $this->assertSame([
+            'empeche' => true,
+            'avis' => 1,
+            'place' => 'page',
+            'titre' => self::TITRE_404,
+            'boutons' => ['Recharger la page', 'Fermer'],
+            'focus' => 'champ',
+            'rechargements' => 0,
+        ], Arr::except($constats[0], 'numero'));
+        $this->assertSame([1, $constats[0]['numero'], self::TITRE_404, 'champ', 0], [$constats[1]['avis'], $constats[1]['numero'], $constats[1]['titre'], $constats[1]['focus'], $constats[1]['rechargements']]);
+        $this->assertSame([1, $constats[0]['numero'], self::TITRE_419, 'champ', 0], [$constats[2]['avis'], $constats[2]['numero'], $constats[2]['titre'], $constats[2]['focus'], $constats[2]['rechargements']]);
+    }
+
+    /**
+     * Fermé par la personne, l'avis ne revient pas pour une requête de fond
+     * refusée pour le même motif, qui ne montre pas non plus la question de
+     * Livewire ; il revient pour un autre motif, ou pour un geste de la
+     * personne, qui doit savoir que ce geste n'a pas abouti.
+     */
+    public function test_un_avis_ferme_ne_revient_que_pour_un_autre_motif_ou_un_geste_de_la_personne(): void
+    {
+        $constats = $this->rejouerLAvis([
+            ['faire' => 'refus', 'statut' => 404, 'geste' => false],
+            ['faire' => 'fermer'],
+            ['faire' => 'refus', 'statut' => 404, 'geste' => false],
+            ['faire' => 'refus', 'statut' => 419, 'geste' => false],
+            ['faire' => 'fermer'],
+            ['faire' => 'refus', 'statut' => 419, 'geste' => false],
+            ['faire' => 'refus', 'statut' => 419, 'geste' => true],
+        ]);
+
+        $this->assertSame(
+            [[1, self::TITRE_404], [0, null], [0, null], [1, self::TITRE_419], [0, null], [0, null], [1, self::TITRE_419]],
+            array_map(fn (array $constat): array => [$constat['avis'], $constat['titre']], $constats),
+        );
+        $this->assertTrue($constats[2]['empeche']);
+        $this->assertTrue($constats[5]['empeche']);
+        $this->assertSame(['champ'], array_values(array_unique(array_column($constats, 'focus'))));
+    }
+
+    /**
+     * Une fenêtre de Filament ouverte (« Chercher un client ») garde le
+     * clavier pour elle : l'avis s'y place, sans prendre le focus de la
+     * ligne cliquée, et revient dans la page une fois la fenêtre fermée ;
+     * une fenêtre fermée ne le reçoit jamais.
+     */
+    public function test_dans_une_fenetre_ouverte_l_avis_se_place_sous_son_verrou_de_focus(): void
+    {
+        $constats = $this->rejouerLAvis([
+            ['faire' => 'ouvrirLaFenetre'],
+            ['faire' => 'refus', 'statut' => 419, 'geste' => true],
+            ['faire' => 'fermerLaFenetre'],
+            ['faire' => 'refus', 'statut' => 419, 'geste' => true],
+        ]);
+
+        $this->assertSame([1, 'fenetre', 'ligne de la fenêtre'], [$constats[1]['avis'], $constats[1]['place'], $constats[1]['focus']]);
+        $this->assertSame([1, 'page', 'champ', $constats[1]['numero']], [$constats[3]['avis'], $constats[3]['place'], $constats[3]['focus'], $constats[3]['numero']]);
+    }
+
+    /**
+     * Toute autre erreur (500) garde le comportement de Livewire : aucun
+     * avis.
+     */
+    public function test_une_autre_erreur_garde_le_comportement_de_livewire(): void
+    {
+        $constats = $this->rejouerLAvis([
+            ['faire' => 'refus', 'statut' => 500, 'geste' => true],
+        ]);
+
+        $this->assertSame([false, 0], [$constats[0]['empeche'], $constats[0]['avis']]);
     }
 
     public function test_un_formulaire_au_jeton_perime_montre_la_page_expiree_en_francais_qui_recharge_le_formulaire(): void
@@ -126,6 +220,7 @@ class RequetesRefuseesTest extends TestCase
         Log::shouldHaveReceived('warning')->once()->with(ReponseAUnePageExpiree::MESSAGE_DU_JOURNAL, [
             'classe' => LivewireReleaseTokenMismatchException::class,
             'cause' => null,
+            'nombre_de_composants' => 2,
             'composants' => [$page, '?'],
         ]);
     }
@@ -150,7 +245,59 @@ class RequetesRefuseesTest extends TestCase
         Log::shouldHaveReceived('warning')->once()->with(ReponseAUnePageExpiree::MESSAGE_DU_JOURNAL, [
             'classe' => HttpException::class,
             'cause' => TokenMismatchException::class,
+            'nombre_de_composants' => 1,
             'composants' => [$page],
+        ]);
+    }
+
+    /**
+     * Une requête fabriquée, sans connexion ni jeton valide, dont les
+     * instantanés ne sont pas des chaînes : le refus reste un 419, chaque
+     * nom illisible devient « ? », jamais une erreur du serveur.
+     */
+    public function test_un_instantane_qui_n_est_pas_une_chaine_garde_le_refus_et_s_inscrit_sans_nom(): void
+    {
+        $this->app->detectEnvironment(fn (): string => 'local');
+        Log::spy();
+
+        $reponse = $this->withHeaders(['X-Livewire' => 'true'])->postJson('/livewire/update', ['_token' => self::JETON_PERIME, 'components' => [
+            ['snapshot' => ['a']],
+            ['snapshot' => ['memo' => ['name' => 'x']]],
+            ['snapshot' => 12],
+            'pas-un-composant',
+        ]]);
+
+        $reponse->assertStatus(419);
+        Log::shouldHaveReceived('warning')->once()->with(ReponseAUnePageExpiree::MESSAGE_DU_JOURNAL, [
+            'classe' => HttpException::class,
+            'cause' => TokenMismatchException::class,
+            'nombre_de_composants' => 4,
+            'composants' => ['?'],
+        ]);
+    }
+
+    /**
+     * Une requête fabriquée, sans connexion ni jeton valide, qui porte de
+     * très nombreux composants : la ligne du journal ne garde que le nombre
+     * de composants et les noms distincts des dix premiers.
+     */
+    public function test_le_journal_d_un_419_de_livewire_reste_borne_quel_que_soit_le_nombre_de_composants(): void
+    {
+        $this->app->detectEnvironment(fn (): string => 'local');
+        $composants = array_map(
+            fn (int $rang): array => ['snapshot' => json_encode(['memo' => ['name' => 'composant-'.intdiv($rang, 2)]])],
+            range(0, 999),
+        );
+        Log::spy();
+
+        $reponse = $this->withHeaders(['X-Livewire' => 'true'])->postJson('/livewire/update', ['_token' => self::JETON_PERIME, 'components' => $composants]);
+
+        $reponse->assertStatus(419);
+        Log::shouldHaveReceived('warning')->once()->with(ReponseAUnePageExpiree::MESSAGE_DU_JOURNAL, [
+            'classe' => HttpException::class,
+            'cause' => TokenMismatchException::class,
+            'nombre_de_composants' => 1000,
+            'composants' => ['composant-0', 'composant-1', 'composant-2', 'composant-3', 'composant-4'],
         ]);
     }
 
@@ -173,6 +320,43 @@ class RequetesRefuseesTest extends TestCase
             ->assertSee('<a class="bouton" href="'.url('/').'">Revenir à l\'accueil</a>', false)
             ->assertDontSee('Ma Boutique')
             ->assertDontSee('Not Found');
+    }
+
+    /**
+     * Le script de l'avis (vue filament/requete-refusee), rejoué par Node.js
+     * dans la page réduite de tests/Fixtures/avis-de-requete-refusee.js :
+     * ce que la page montre après chaque étape (nombre d'avis, numéro de
+     * l'élément de l'avis, élément qui le contient, titre, boutons, élément
+     * qui a le focus, rechargements, et pour un refus, si la question de
+     * Livewire est empêchée).
+     *
+     * @param  list<array<string, mixed>>  $etapes
+     * @return list<array<string, mixed>>
+     */
+    private function rejouerLAvis(array $etapes): array
+    {
+        $node = (new ExecutableFinder)->find('node');
+
+        if ($node === null) {
+            $this->markTestSkipped('Node.js est absent : le script de l\'avis ne se rejoue pas.');
+        }
+
+        preg_match('#<script>(.*)</script>#s', view('filament.requete-refusee')->render(), $script);
+        $fichierDuScript = (string) tempnam(sys_get_temp_dir(), 'avis-script-');
+        $fichierDesEtapes = (string) tempnam(sys_get_temp_dir(), 'avis-etapes-');
+
+        try {
+            file_put_contents($fichierDuScript, $script[1]);
+            file_put_contents($fichierDesEtapes, json_encode($etapes, JSON_THROW_ON_ERROR));
+            $rejeu = Process::run([$node, base_path('tests/Fixtures/avis-de-requete-refusee.js'), $fichierDuScript, $fichierDesEtapes]);
+        } finally {
+            unlink($fichierDuScript);
+            unlink($fichierDesEtapes);
+        }
+
+        $this->assertTrue($rejeu->successful(), $rejeu->errorOutput());
+
+        return json_decode($rejeu->output(), true, flags: JSON_THROW_ON_ERROR);
     }
 
     /**

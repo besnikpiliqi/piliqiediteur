@@ -14,6 +14,18 @@
     ReponseAUnePageExpiree). Toute autre erreur garde le comportement de
     Livewire.
 
+    L'avis ne prend jamais le focus : une requête de fond refusée (le
+    sondage des notifications, toutes les 30 secondes) l'affiche pendant
+    que la personne écrit, et une touche tapée ne doit jamais agir sur un
+    de ses boutons. Affiché, il reste tel quel aux refus suivants, sans être
+    recréé ; fermé, il ne revient pas pour une requête de fond, seulement
+    pour un geste de la personne (une action ou une saisie envoyée), qui
+    doit savoir que ce geste n'a pas abouti. Quand une fenêtre de Filament
+    est ouverte, il se place dans la fenêtre du dessus, que son verrou de
+    focus (x-trap) laisse seule au clavier, hors du cadre que sa fermeture
+    cache : il reste ainsi atteignable au clavier, et visible une fois la
+    fenêtre fermée.
+
     Avant les scripts de Filament et de Livewire : le script s'abonne à
     « livewire:init » avant que Livewire ne démarre.
 --}}
@@ -40,24 +52,29 @@
             ],
         ]);
 
-        const montrer = ({ titre, texte }) => {
-            document.getElementById('avis-de-requete-refusee')?.remove();
+        const fermesParLaPersonne = new Set();
 
+        const deFond = (payload) => {
+            try {
+                return JSON.parse(payload).components.every(({ calls, updates }) => calls.length === 0 && Object.keys(updates).length === 0);
+            } catch {
+                return false;
+            }
+        };
+
+        const conteneur = () => [...document.querySelectorAll('.fi-modal.fi-modal-open')].pop() ?? document.body;
+
+        const creer = () => {
             const cadre = document.createElement('div');
             cadre.id = 'avis-de-requete-refusee';
             cadre.className = 'avis-de-requete-refusee';
-            cadre.setAttribute('role', 'alertdialog');
-            cadre.setAttribute('aria-labelledby', 'avis-de-requete-refusee-titre');
-            cadre.setAttribute('aria-describedby', 'avis-de-requete-refusee-texte');
+            cadre.setAttribute('role', 'alert');
 
             const enTete = document.createElement('p');
-            enTete.id = 'avis-de-requete-refusee-titre';
             enTete.className = 'titre';
-            enTete.textContent = titre;
 
             const corps = document.createElement('p');
-            corps.id = 'avis-de-requete-refusee-texte';
-            corps.textContent = texte;
+            corps.className = 'texte';
 
             const recharger = document.createElement('button');
             recharger.type = 'button';
@@ -69,24 +86,51 @@
             fermer.type = 'button';
             fermer.className = 'fermer';
             fermer.textContent = 'Fermer';
-            fermer.addEventListener('click', () => cadre.remove());
+            fermer.addEventListener('click', () => {
+                fermesParLaPersonne.add(cadre.dataset.statut);
+                cadre.remove();
+            });
 
             const boutons = document.createElement('div');
             boutons.className = 'boutons';
             boutons.append(recharger, fermer);
             cadre.append(enTete, corps, boutons);
-            document.body.append(cadre);
-            recharger.focus();
+
+            return cadre;
         };
 
-        Livewire.hook('request', ({ fail }) => {
+        const montrer = (statut, deLaPersonne) => {
+            let cadre = document.getElementById('avis-de-requete-refusee');
+
+            if (cadre === null) {
+                if (! deLaPersonne && fermesParLaPersonne.has(statut)) {
+                    return;
+                }
+
+                cadre = creer();
+            }
+
+            if (cadre.dataset.statut !== statut) {
+                cadre.dataset.statut = statut;
+                cadre.querySelector('.titre').textContent = avis[statut].titre;
+                cadre.querySelector('.texte').textContent = avis[statut].texte;
+            }
+
+            const place = conteneur();
+
+            if (cadre.parentElement !== place && ! cadre.contains(document.activeElement)) {
+                place.append(cadre);
+            }
+        };
+
+        Livewire.hook('request', ({ payload, fail }) => {
             fail(({ status, preventDefault }) => {
                 if (avis[status] === undefined) {
                     return;
                 }
 
                 preventDefault();
-                montrer(avis[status]);
+                montrer(String(status), ! deFond(payload));
             });
         });
     });

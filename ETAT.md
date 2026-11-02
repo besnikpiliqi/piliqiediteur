@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 01/11/2026 à 23:41 UTC par pilotage-sync.sh : « Lot QA : tests au hasard avec règles invariantes (point 5 bis) ».
+Mis à jour le 02/11/2026 à 01:09 UTC par pilotage-sync.sh : « Redémarrage : course wf_f59a9064-d8d (A7b puis SL, NAV, QA…), atelier des e-mails ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -101,7 +101,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 
 ## Dernière course de la chaîne
 
-Course `wf_1ce3e4cc-2f2`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
 A7b:implementation

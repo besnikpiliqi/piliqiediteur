@@ -174,3 +174,29 @@ mais tout "test du calcul des lignes de vente fait 581 740 vérifications" alors
 
 mais toi tu teste tout les options alors comment peux encore avoir des inantendu
 
+## 32. 2026-11-01 23:45 UTC
+
+581 740 vérifications et ne couvre pas tout c'est horrible et ca fais peur que tout ces testes ne garanti pas mais alors les developeur comment peuvent etre meilleur que toi
+
+## 33. 2026-11-01 23:50 UTC
+
+ce que t'as fait et ce que tu va faire alors meme les meilleurs dev experimente ne pourrais pas faire meiux que toi normalemet
+
+## 34. 2026-11-01 23:55 UTC
+
+et meme moi je vais tester tout dans navigateur meme avec plusieur navigateur et des magasin differenetes et meme un societe avec ces membre en plusieurs navigateurs pour voir comment se comporte et aussi tout les autres
+
+## 35. 2026-11-02 00:00 UTC
+
+tu fais quoi mtn ?
+
+## 36. 2026-11-02 00:15 UTC
+
+"Les procédures exceptionnelles de l'éditeur : `php artisan list editeur` (opérateurs déclarés dans `EDITEUR_OPERATEURS`) ; le code d'un courrier d'une procédure se saisit sur la page de son motif (`/code/recuperation`, `/code/liberation_siret`, `/code/revocation`, `/code/examen_siren`), qui prévient l'éditeur ; une procédure grave, comme la révocation d'une société qui a pris le SIREN d'une autre entreprise (`php artisan editeur:societe:revoquer`, une fois saisi le code du courrier de révocation), exige deux opérateurs distincts. Un SIREN saisi par erreur s'examine (`php artisan editeur:societe:examiner-siren`), une fois saisi le code du courrier d'examen envoyé à l'entité correcte (`php artisan editeur:courrier:envoyer --motif=examen_siren --siren=<SIREN correct>`), puis se corrige par deux opérateurs (`php artisan editeur:societe:corriger-siren`), sans toucher aux documents émis. Le propriétaire consulte le journal d'audit de sa société dans son espace (`/societe/{uuid}/journal-audit`, ou `/cabinet/{uuid}/journal-audit` pour un cabinet), traces techniques comprises ; les données de vérification d'une société révoquée s'effacent cinq ans après sa révocation (`php artisan app:purger-verifications`, chaque nuit)." je lis ca sur readme.md mais je comprends pas comme ca marche ca
+
+## 37. 2026-11-02 01:05 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+tous les envois des mails ils s'envoient pas, comme ex une facture ou ticket ou devis donc rien ne s'envoie
+

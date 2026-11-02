@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 11:12 UTC par pilotage-sync.sh : « C3 : diagnostic vérifié des règlements sur les PDF, questions posées ».
+Mis à jour le 02/11/2026 à 12:07 UTC par pilotage-sync.sh : « Après le lot A7b ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `53ed088`. Commits locaux pas encore poussés :
+Tête poussée : `f9b669c`. Commits locaux pas encore poussés :
 
 ```
-81de7e8 Complète les tests du lot A7b et indexe le journal d'audit par action
-0d2b6a3 Régularise les factures après une correction de SIREN et corrige le SIREN d'un cabinet (lot A7b)
 ```
 
 Derniers commits poussés :
 
 ```
+f9b669c Relecture du lot A7b des suites du lot A7
+81de7e8 Complète les tests du lot A7b et indexe le journal d'audit par action
+0d2b6a3 Régularise les factures après une correction de SIREN et corrige le SIREN d'un cabinet (lot A7b)
 53ed088 Relecture du lot A7 de l'architecture société
 137334e Ajoute l'examen et la correction d'un SIREN par l'éditeur (lot A7)
 0772af0 Ouvre le journal d'audit au propriétaire et ajoute les procédures de l'éditeur (lot A7)
@@ -31,44 +32,11 @@ ad19e0b Range les autorisations par famille et retire les articles aux société
 7832bb0 Fait choisir à l'inscription un type d'activité définitif (lot TA 1/3)
 89f092f Relecture du lot PU de l’affichage des prix unitaires
 e70f18e Affiche les prix unitaires au centime et complète la note de calcul (lot PU)
-fa83824 Relecture du lot T3 de l’heure locale des magasins
-5f86951 Passe toutes les heures les tâches du calendrier des magasins (lot T3)
-60962cc Met chaque magasin à l'heure locale de son territoire (lot T3)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
- M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
- M app/Domain/Cabinets/Services/AccesDesCabinets.php
-D  app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
- M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
- M app/Domain/Facturation/Actions/CreerAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
- M app/Domain/Facturation/Enums/StatutFacture.php
- M app/Domain/Facturation/Listeners/RestaurerStockApresEmissionAvoir.php
- M app/Domain/Facturation/Models/Avoir.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/ImputationDuCredit.php
- M app/Domain/Facturation/Services/RegularisationDUneFacture.php
- M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
- M app/Domain/Tenancy/Actions/ExaminerSirenAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Models/Societe.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M database/migrations/2026_10_03_100003_create_factures_table.php
- M database/migrations/2026_10_05_100001_create_avoirs_table.php
- M tests/Feature/Editeur/CorrectionDuSirenDUnCabinetTest.php
- M tests/Feature/Editeur/SirenErroneTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureConcurrenceTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
-?? app/Domain/Cabinets/Jobs/PrevenirLesClientsDuCabinet.php
 ```
 
 ## Dernière course de la chaîne
@@ -80,4 +48,7 @@ A7b:implementation
 A7b:relecture1
 A7b:relecture2
 A7b:correction
+A7b:poussee
+A7b:fiche
+A7b:notes
 ```

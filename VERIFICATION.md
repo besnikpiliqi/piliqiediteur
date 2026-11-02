@@ -1,44 +1,40 @@
-# Vérification de la fiche de reprise
+# Relecture à froid de la fiche de reprise
 
-Date : 01/11/2026, 18 h 30 UTC (`date -u` du conteneur). Lot : A7 (étape `A7:fiche` de la course `wf_b5c2413b-8c6`).
+- Date : 02/11/2026, vers 12 h 10 UTC.
+- Lot : A7b (étape `A7b:fiche` de la course `wf_f59a9064-d8d`).
+- Vérifié contre : `git log` de `origin/claude/saas-invoice-editor-architecture-q6eizh` (tête `f9b669c`, arbre propre, rien de non poussé), le `journal.jsonl` de la course, la liste `LOTS` de `serie8-lots.js` (copie de travail identique à `notes/serie8-lots.js`), les notes citées, et les courses GitHub Actions de la branche.
 
-Vérifié contre : `git -C /home/user/piliqiediteur log` et `origin/claude/saas-invoice-editor-architecture-q6eizh`, en lecture seule (tête poussée `53ed088`, égale à `HEAD`, `origin/…..HEAD` vide, arbre propre) ; les commits du lot (`0772af0`, `137334e` « (lot A7) », `53ed088` « Relecture du lot A7 de l'architecture société », commité à 18 h 27 UTC) ; le `journal.jsonl` de la course (relectures : 12 et 14 constats, un bloquant ; `A7:correction` → `53ed088`, 26 constats traités, 7 paires de doublons, aucun écarté ; `A7:poussee` → `pousse: true`, `d232b4f..53ed088` ; `A7:fiche` commencée) ; `notes/reprises/args-course-wf_b5c2413b-8c6.json` (`ouverts` = A7, ML, EC2, S9-L, S9-A, 21 ; `reprise` de A7 `0772af0..137334e` sans `defauts`) ; la liste `LOTS` de `serie8-lots.js` (identique à `notes/serie8-lots.js` ; ordre … L1, A7, A7b, ML, EC2, S9-L, S9-A, 21 ; `LOTS_SENSIBLES = ['A7', 'A7b', '21']`) ; `notes/ec2/cahier-des-charges.md` (commence encore par « BROUILLON ») ; `notes/a7b/decision-a7b.md`, `notes/courriels/constat-queue-listen.md` (présents) ; la CI GitHub (courses 196/197 de `d232b4f` vertes ; 194/195 de `5745e7a` en échec ; 198, push, et 199, PR, de `53ed088` en cours à 18 h 29 UTC).
+## Corrigé dans README.md
 
-## 1. Corrigé dans README.md
+1. Titre de l'encadré : « TA, EC, L1 et A7 corrigés et poussés, ML suit » devient « TA, EC, L1, A7 et A7b corrigés et poussés, SL suit ».
+2. CI de `53ed088` : notée « en cours » à deux endroits (encadré et § 6 « Fait ») ; elle est verte (courses 198 et 199, `success`).
+3. Encadré, course en cours : ajout des trois reprises de `wf_f59a9064-d8d` par `resumeFromRunId` (04 h 05, 08 h 37, 10 h 13 UTC) et de DV, mis dans ses `ouverts` à 10 h 13 (`notes/etat-chaines.md`) ; retrait de « Tête poussée : `53ed088` ».
+4. Encadré : nouvelle puce « A7b est fini » : `0d2b6a3`, `81de7e8`, correction `f9b669c` (9 constats traités sur 10, le constat 3 laissé à l'éditeur), poussés vers 12 h 03 UTC (`53ed088..f9b669c`), CI en cours (courses 200 et 201), premier hash d'une reprise suivante : `f9b669c`.
+5. Redémarrages : quatre de plus le 02/11 (01 h 04, 02 h 30, 04 h 01, 08 h 34 UTC), dans l'encadré et au § 4, point 5 (« au moins quatorze »).
+6. § 5, boucle des lots poussés : `A7b ML EC2 S9-L S9-A 21` devient `SL NAV-1 QA NAV-2 NAV-3 NAV-4 NAV-5 ML DV EC2 S9-L S9-A 21` (la liste d'avant omettait SL, NAV-1 à NAV-5, QA et DV).
+7. § 6 « Fait » : A7b ajouté, avec ses « laisses ».
+8. § 6 « Reste dans la chaîne » : nouveau texte d'introduction (tête `f9b669c`, `ouverts` de la course reprise) ; A7b retiré ; SL n'exige plus d'arrêter une course (`wf_f59a9064-d8d` le connaît) ; renvoi à `navigateur/constats-editeur.md` (C1 à C3) dans l'entrée NAV ; ML : course qui le connaît mise à jour ; **DV ajouté** entre ML et EC2 (absent de la fiche alors qu'il est dans `LOTS`) ; EC2 : le cahier est définitif et ne commence plus par « BROUILLON ».
+9. Copie `serie8-lots.avant-SL-NAV.js` : elle est publiée dans `notes/qualite/`, pas dans `notes/`.
 
-1. Titre de l'encadré : « TA, EC et L1 corrigés et poussés, A7 suit » → « TA, EC, L1 et A7 corrigés et poussés, ML suit ».
-2. Encadré, puce L1 : « CI de `5745e7a` en cours » était périmé : elle a échoué (194, 195) et `d232b4f` l'a corrigée (CI verte, 196, 197). Retiré « une reprise de A7 aura pour premier hash `5745e7a` », faux (la tête poussée était devenue `d232b4f`).
-3. Encadré, puce A7 : « A7 est implémenté, non poussé » n'est plus vrai ; les trois points laissés à l'éditeur sont dits tranchés (lot A7b). Nouvelle puce « A7 est fini » (`53ed088`, 26 constats, poussée `d232b4f..53ed088` vers 18 h 29 UTC, CI 198/199 en cours ; la course passe à `A7:fiche`, `A7:notes`, puis ML ; elle ne connaît pas A7b et s'arrêtera à EC2 ; premier hash d'une reprise suivante : `53ed088`).
-4. § 2 : « Max pour A7 et 21 » → « Max pour A7, A7b et 21 » (`LOTS_SENSIBLES` du script).
-5. § 5, « Lots restants » : la boucle `for l in A7 EC2 S9-L S9-A 21` oubliait A7b et ML, présents dans `LOTS` ; devenue `for l in A7b ML EC2 S9-L S9-A 21`.
-6. § 6, « Fait » : L1 corrigé (CI rouge puis `d232b4f`) ; A7 ajouté.
-7. § 6, « Reste dans la chaîne » : paragraphe d'état réécrit (tête `53ed088`) ; A7 retiré, liste renumérotée de 1 (A7b) à 6 (21).
+## Faux, ambigu ou manquant, non corrigé (texte proposé ; la session décide)
 
-## 2. Faux, ambigu ou manquant, non corrigé (propositions ; la session décide)
+1. **Arguments de la course sans DV.** `notes/reprises/args-course-wf_f59a9064-d8d.json` garde les `ouverts` du lancement, sans DV, alors que la reprise de 10 h 13 UTC les a reçus avec DV. Une session qui suivrait le § 5 (« Sauver dans `notes/reprises/args-course-<course>.json` les arguments de chaque course lancée ») lirait des arguments périmés. Proposition : réécrire le fichier avec `{"ouverts": ["A7b", "SL", "NAV-1", "QA", "NAV-2", "NAV-3", "NAV-4", "NAV-5", "ML", "DV", "EC2", "S9-L", "S9-A", "21"]}` et ajouter au § 5, après « Sauver dans … » : « et les réécrire à chaque reprise par `resumeFromRunId` qui change `ouverts` ».
+2. **Copies d'avant perdues.** La fiche cite `serie8-lots.avant-A7b.js`, `serie8-lots.avant-ML.js` et `serie8-lots.avant-plage-des-relectures.js` ; aucune n'existe ni dans le dossier de travail ni dans `notes/` (perdues avec le conteneur remplacé le 01/11 vers 21 h UTC, ou jamais publiées). Proposition : ajouter après chaque citation « (perdue avec le conteneur du 01/11 ; l'historique de `notes/serie8-lots.js` dans cette branche en tient lieu : `git -C <scratchpad>/pilotage-reprise log -p -- notes/serie8-lots.js`) », et publier désormais chaque copie d'avant (ajout à `pilotage-fichiers.txt`), comme `qualite/serie8-lots.avant-QA.js`.
+3. **Rapport de diagnostic C3 non publié.** `navigateur/constats-editeur.md` (C3) dit que « le rapport vérifié fait foi pour la cause et la correction » et cite `paiements/diag-reglements-rapport.md` et `paiements/diag-reglements/captures/` ; ils existent dans le dossier de travail mais ne sont pas dans `pilotage-fichiers.txt`, donc absents de cette branche. Le lot NAV-2 d'une autre session ne pourrait pas le lire. Proposition : ajouter `paiements/diag-reglements-rapport.md` à `pilotage-fichiers.txt` (les captures, volumineuses, peuvent rester hors de la branche si le rapport se suffit ; sinon `paiements/diag-reglements/captures/donnees/`, qui contient le diff des 4 tests de `FacturePdfGeneratorTest`).
+4. **Questions ouvertes non reportées au § 6.** « Questions encore ouvertes » ne contient ni les trois questions C3 posées à l'éditeur le 02/11 vers 11 h 55 UTC, ni les points qu'A7b lui laisse. Texte proposé, à ajouter à cette liste :
+   « - C3 (PDF des factures et des tickets, `navigateur/constats-editeur.md`) : (1) un geste « Émettre et encaisser » sur les factures, et une part inférieure au total à l'émission est-elle permise ; (2) pour une facture réglée après son émission, un « reçu de paiement » PDF par encaissement ; (3) libellé « Restant dû à l'émission ». Le lot NAV-2 en dépend : réponses à écrire dans `constats-editeur.md` avant qu'il commence.
+   - A7b : constat 3 (arrondi de la facture rectificative : (a) reliquat exact de la facture d'origine, recommandé, avec une note propre sur la rectificative ; (b) calcul comme une vente, un centime de TVA d'écart avec l'avoir de régularisation) ; PDF d'une rectificative émise avant son avoir, qui montre tout son montant dû (avertir dans la fenêtre, ou imprimer une mention) ; rectificative comptée dans le « TTC vendu » du relevé de caisse personnelle (étape 3) ; contre-passation d'un paiement de la facture d'origine après sa régularisation, qui rouvre le dû sur l'ancienne facture ; choix gardés de la tentative coupée (correction refusée si une facture à un professionnel a été émise depuis l'examen, échéance de la rectificative, module fiscal en version 1.5, avis aux propriétaires des clients d'un cabinet corrigé). »
+5. **Index du § 7 incomplet.** Il manque des lignes pour les dossiers ajoutés depuis le 01/11. Lignes proposées :
+   `| Suites du lot A7 (régularisation, SIREN d'un cabinet) | a7b/decision-a7b.md |`
+   `| Expert-comptable de la société (EC2) | ec2/decision-expert-comptable-societe.md, ec2/cahier-des-charges.md (définitif ; copie de cahier-des-charges.definitif.md) |`
+   `| Tests en navigateur, erreur 419, constats de l'éditeur | navigateur/decision-tests-navigateur.md, navigateur/plan-nav.md, navigateur/decision-sl.md, navigateur/diag-419-rapport.md, navigateur/constats-editeur.md |`
+   `| Qualité (couverture, mutation, analyse statique, N+1) | qualite/decision-qualite.md |`
+   `| E-mails (Mailtrap, file d'attente) | courriels/decision-mailtrap.md, courriels/constat-queue-listen.md, courriels/diag-courriel-rapport.md |`
+   `| Devis en ligne (DV) | paiements/demande-devis-en-ligne.md |`
+   et, dans la liste des priorités au-dessus du tableau : « `paiements/demande-devis-en-ligne.md` (02/11, sections « Lot DV » et « Stock d'un devis accepté… », décisions de l'éditeur) sur la puce « Documents de vente » de `CLAUDE.md` pour les devis, jusqu'au lot DV ; `navigateur/constats-editeur.md` (décision C3) pour la place des règlements sur les PDF. »
+6. **§ 4, point 1 : exemple de plage figé sur TA.** La commande `python3 … a['reprise']['TA']['commit']=… args-course-wf_22d43798-897.json` ne vaut que pour TA, que la fiche dit désormais inutile. Proposition : « … `a['reprise']['<lot>']['commit']=sys.argv[2]` … `<scratchpad>/reprises/args-course-<course coupée>.json` ».
+7. **§ 0, point 2, et § 1** disent de vérifier que `ETAT.md` montre « Passation » ou « Pause » ; au moment de cette relecture, `ETAT.md` (11 h 12 UTC) montre encore deux commits locaux d'A7b non poussés et un arbre sale, d'avant la poussée : c'est normal tant que l'étape `A7b:notes` n'a pas tourné, mais une session qui lirait la branche entre la poussée et `:notes` verrait un état contradictoire avec l'encadré. Proposition, au § 0 point 2 : « Si `ETAT.md` est plus ancien que la dernière puce de l'encadré, l'encadré et `origin` font foi. »
+8. **CI de `f9b669c`** en cours à la rédaction (courses 200 et 201) : à confirmer par la session au point de suivi, puis « en cours » à remplacer par « verte » (ou rouge, avec sa correction) dans l'encadré et le § 6.
+9. **Demande relayée « pareille pour les tickets ».** Elle porte sur C3 (modes de paiement sur les PDF des tickets, même règle que les factures), déjà notée dans `navigateur/constats-editeur.md` ; elle ne concerne pas A7b et n'appelle aucune modification de la fiche hors du point 4 ci-dessus.
 
-### 2.1 CI de `53ed088` non conclue
-Les courses 198 et 199 tournaient à 18 h 29 UTC. Après conclusion, remplacer « CI de `53ed088` en cours à 18 h 29 UTC » (encadré et § 6, « Fait ») par « CI de `53ed088` verte (courses 198 et 199) », ou, si rouge, décrire le correctif comme pour `d232b4f`.
-
-### 2.2 `ETAT.md` périmé jusqu'à `A7:notes`
-`ETAT.md` (18 h 26 UTC) dit encore tête poussée `d232b4f`, deux commits A7 non poussés et 46 fichiers modifiés : état d'avant le commit `53ed088`. L'étape `A7:notes` le régénère ; aucune action si elle aboutit. Sinon : `bash <scratchpad>/pilotage-sync.sh "Après le lot A7"` (§ 5, « Coupure après la poussée »).
-
-### 2.3 Ordre réel A7b / ML différent de l'ordre de `LOTS`
-Le § 6 dit « dans cet ordre (celui de `LOTS`) » et met A7b avant ML, mais la course en cours fera ML avant A7b (elle ne connaît pas A7b). Texte proposé, en tête de la liste du § 6 : « Ordre réel dans le conteneur d'origine : ML (course `wf_b5c2413b-8c6`), arrêt à EC2 (cahier en brouillon), puis A7b, EC2, S9-L, S9-A, 21 dans une nouvelle course. Une nouvelle session, elle, suit l'ordre de `LOTS` pour ce qui n'est pas sur `origin`. » Vérifier aussi que le complément de ML ne suppose rien du lot A7b (le constat 403 du cabinet, `a7b/decision-a7b.md` § 2.5, reste à A7b).
-
-### 2.4 EC2 : cahier toujours en brouillon, 13 questions à l'éditeur
-`ec2/cahier-des-charges.md` commence par « BROUILLON » ; `ec2/cahier-des-charges.proposition.md` existe (« proposition … en relecture ») et la branche de reprise note « 13 questions posées à l'éditeur » (commit `9cee076`), absentes de la fiche. Texte proposé pour le point EC2 du § 6 : « La proposition (`ec2/cahier-des-charges.proposition.md`) attend les réponses de l'éditeur à 13 questions ; une fois tranchées et écrites dans `ec2/`, elle remplace `cahier-des-charges.md`, sans la mention BROUILLON, avant de relancer la chaîne. » Ajouter ces 13 questions à « Questions encore ouvertes ».
-
-### 2.5 « Laisses » de A7 qui ne sont rattachées à aucun lot
-La correction laisse, hors de ses constats : (a) `codes_confirmation.conserver_jusqu_au` encore posable par une requête brute avant effacement (comportement voulu par V2, documenté dans `VerificationSocieteTest`) ; (b) la boucle de la radiation de l'Ordre ni reprenable ni protégée contre un échec autre que la messagerie ; (c) des choix de Claude contestables (preuve d'un code de procédure valable 30 jours, SIRET d'un magasin cédé libérable, justification et opérateurs cachés à toute société, refus d'une correction vers un SIREN où une société révoquée a numéroté le même code de magasin). Texte proposé au § 6, « Après la poussée du lot 21 », point 2 bis : « Suivis laissés par A7 (journal de `wf_b5c2413b-8c6`, `A7:correction`, champ `laisses`) : (a) et (b) ci-dessus, à vérifier dans le rapport du lot 21 ; (c) à présenter à l'éditeur dans le compte rendu de A7. »
-
-### 2.6 Compte rendu de A7 à l'éditeur
-La fiche ne dit pas qu'il reste à faire (§ 5, « Suivi ») : CI, puis compte rendu simple avec exemple, 26 constats dont le bloquant (un numéro de document déjà émis sous un SIREN corrigé aurait pu être réémis par le vrai titulaire), et les choix contestables (2.5 c). L'ajouter à l'encadré une fois fait, comme pour EC.
-
-### 2.7 Message de l'éditeur sur `queue:listen` relayé de nouveau
-La requête qui a déclenché cette course est encore la sortie de `php artisan queue:listen` coupée à 60 s sur le PC de l'éditeur. Elle est couverte par `courriels/constat-queue-listen.md` et le lot ML (délai SMTP `MAIL_TIMEOUT`, commande d'e-mail d'essai, README), que la course fait juste après A7 ; A7 n'a traité que la robustesse de la révocation quand l'envoi échoue. Proposition : dans le compte rendu, rappeler à l'éditeur le diagnostic de ce fichier (`Test-NetConnection sandbox.smtp.mailtrap.io -Port 2525` puis 587, `php artisan queue:work --once`, dernière erreur de `storage\logs\laravel.log`) en attendant ML.
-
-### 2.8 Exemple du § 4, point 1, figé sur TA
-La commande `python3 … a['reprise']['TA'] … args-course-wf_22d43798-897.json` ne vaut plus que comme modèle (TA est poussé). Texte proposé : remplacer `'TA'` par `sys.argv[3]` et le fichier par « le fichier `args-course-<course>.json` nommé dans l'encadré », avec le lot en troisième argument.
-
-### 2.9 Encadré de plus en plus long
-L'encadré garde l'histoire de TA, EC et L1, déjà résumée au § 6. Proposition : n'y laisser que la course en cours, la tête poussée et l'étape atteinte, et renvoyer le reste à `notes/etat-chaines.md`.
+Aucune valeur secrète n'a été lue ni écrite.

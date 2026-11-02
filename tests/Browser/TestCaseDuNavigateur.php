@@ -21,6 +21,8 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -30,6 +32,9 @@ use Database\Factories\SocieteFactory;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Support\Facades\Event;
+use Tests\Browser\Support\Balayeur;
+use Tests\Browser\Support\CouvertureDuBalayage;
+use Tests\Browser\Support\Inventaire;
 use Tests\Browser\Support\JournalDesReponses;
 use Tests\Browser\Support\Navigation;
 use Tests\Browser\Support\NoyauDUneRequeteNeuve;
@@ -145,6 +150,43 @@ abstract class TestCaseDuNavigateur extends TestCase
     }
 
     /**
+     * Balaye, dans cet onglet connecté, chaque page atteignable depuis ce
+     * chemin dans ces préfixes, et chaque action visible de chacune (voir
+     * Balayeur) ; puis vérifie que tout ce qui a été ouvert est déclaré
+     * dans le code (voir ActionsDeLInterface), et que ce balayage a ouvert
+     * chaque action que l'inventaire des actions dit couverte par ce test,
+     * dont le fichier est donné (__FILE__). Rend les pages balayées.
+     *
+     * @param  list<string>  $prefixes
+     * @return list<string>
+     */
+    protected function balayer(Navigation $onglet, string $depart, array $prefixes, string $fichierDuTest): array
+    {
+        $couverture = new CouvertureDuBalayage;
+        $couverture->ecouter();
+        $pages = (new Balayeur($onglet, $couverture))->balayer($depart, $prefixes);
+        $bilan = $couverture->bilan();
+
+        if ($bilan['inconnus'] !== []) {
+            $this->fail('Le balayage a ouvert des actions que la lecture du code ne trouve pas (voir ActionsDeLInterface) :'.PHP_EOL.implode(PHP_EOL, $bilan['inconnus']));
+        }
+
+        $manquantes = [];
+
+        foreach (Inventaire::promisesPar(Inventaire::reference($fichierDuTest, $this->getPrintableTestCaseMethodName())) as $fichier => $actions) {
+            foreach (array_diff($actions, $bilan['couverts'][$fichier] ?? []) as $action) {
+                $manquantes[] = $fichier.' : '.$action;
+            }
+        }
+
+        if ($manquantes !== []) {
+            $this->fail('L\'inventaire des actions dit ce balayage couvrir des actions qu\'il n\'a pas ouvertes :'.PHP_EOL.implode(PHP_EOL, $manquantes));
+        }
+
+        return $pages;
+    }
+
+    /**
      * Une société validée de « Commerce ou atelier » avec tous ses rôles,
      * comme le vrai parcours les crée (voir SocieteDeTest) : son magasin
      * « Boutique du Port » et un autre magasin ; un administrateur de tous
@@ -239,5 +281,34 @@ abstract class TestCaseDuNavigateur extends TestCase
             app(EnregistrerAvoirAction::class)->handle($responsable, $particulier, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
             app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         });
+    }
+
+    /**
+     * Le magasin de démonstration d'une société inscrite qui attend le code
+     * de son courrier, ouvert par son propriétaire (voir
+     * OuvrirLaDemonstrationAction), et un vendeur d'entraînement qu'il y
+     * crée, avec les autorisations du modèle du vendeur, son mot de passe
+     * choisi : le magasin et le compte. Aucun magasin n'est le magasin actif
+     * ensuite.
+     *
+     * @return array{0: Magasin, 1: User}
+     */
+    protected function demonstrationAvecUnCompteDEntrainement(): array
+    {
+        $this->travelTo(self::aParis('2026-03-09 08:00:00'));
+        $societe = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+        $vendeur = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle(
+            $societe->proprietaire,
+            $demonstration,
+            ['name' => 'Valentin d\'essai'],
+            RoleMagasin::Vendeur,
+            RoleMagasin::Vendeur->permissionsParDefaut($societe->type_activite),
+        ));
+        $this->choisirSonMotDePasse($vendeur);
+        $this->travelTo(self::instantDuTest());
+        app(TenantContext::class)->clear();
+
+        return [$demonstration->fresh(), $vendeur->refresh()];
     }
 }

@@ -7,13 +7,16 @@
 //   autre site (la police de Filament) n'est pas celle de l'application ;
 // - chaque requête fetch en cours (celles de Livewire comprises) se compte
 //   dans window.__piliqi.enCours, avec l'instant de la dernière activité,
-//   pour attendre que la page soit au repos (voir Navigation::attendre()).
+//   pour attendre que la page soit au repos (voir Navigation::attendre()),
+//   et chaque requête lancée dans window.__piliqi.lancees, pour attendre
+//   celle qu'un geste ne lance qu'après un délai (la recherche d'un
+//   tableau, voir Navigation::gesteQuiAppelleLeServeur()).
 (() => {
     if (window.__piliqi) {
         return;
     }
 
-    const etat = { erreurs: [], enCours: 0, derniereActivite: performance.now() };
+    const etat = { erreurs: [], enCours: 0, lancees: 0, derniereActivite: performance.now() };
     window.__piliqi = etat;
 
     const texte = (valeur) => {
@@ -54,6 +57,7 @@
     const fetchOriginal = window.fetch;
     window.fetch = function (...arguments_) {
         etat.enCours++;
+        etat.lancees++;
         etat.derniereActivite = performance.now();
 
         return fetchOriginal.apply(this, arguments_).finally(() => {

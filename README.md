@@ -80,7 +80,7 @@ php artisan test --parallel
 
 `package.json` fixe Playwright à la version 1.59.1, celle que demande le module browser de Pest 4 : à partir de Playwright 1.62, le serveur n'applique plus le délai que le module lui envoie, et un clic sur un élément caché attendrait sans fin. Ne la changez pas sans changer le module. Une capture de la page d'un test en échec s'écrit dans `tests/Browser/Screenshots`. Ne lancez pas deux suites en navigateur en même temps dans le même dossier : le module y garde l'adresse de son serveur Playwright (`vendor/pestphp/pest-plugin-browser/.temp`), que la première suite finie efface.
 
-L'inventaire des actions (`tests/Browser/inventaire-des-actions.php`) liste chaque action de l'interface, le lot qui écrit ses tests et les tests qui la couvrent déjà, et `InventaireDesActionsTest` le compare au code.
+Les balayages (`tests/Browser/Balayage`) ouvrent, rôle par rôle, chaque page de chaque panneau et chaque action visible, fenêtre ouverte puis fermée sans rien valider ; l'inventaire des actions (`tests/Browser/inventaire-des-actions.php`) liste chaque action de l'interface, le lot qui écrit ses tests et les tests qui la couvrent déjà, et `InventaireDesActionsTest` le compare au code.
 
 **Suite sous faketime.** Avant un commit qui touche aux dates, la suite passe aussi à des instants choisis (`sudo apt-get install faketime`). `TZ=UTC` fixe le fuseau de l'instant donné à faketime ; `NO_FAKE_STAT=1` laisse aux fichiers leur vraie date, comme sur l'horloge réelle.
 

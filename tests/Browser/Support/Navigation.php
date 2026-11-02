@@ -8,6 +8,7 @@ use Pest\Browser\Api\PendingAwaitablePage;
 use Pest\Browser\Execution;
 use Pest\Browser\Playwright\Locator;
 use Pest\Browser\Playwright\Page;
+use Pest\Browser\Support\ComputeUrl;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\ExpectationFailedException;
 
@@ -80,11 +81,13 @@ final class Navigation
 
     /**
      * Ouvre cette adresse de l'application dans l'onglet, comme une adresse
-     * tapée à la main.
+     * tapée à la main, en un seul chargement, dans le délai d'un geste (la
+     * navigation de la page de Pest recommence le chargement toutes les
+     * secondes tant qu'il n'est pas fini).
      */
     public function aller(string $chemin): self
     {
-        $this->onglet->navigate($chemin);
+        $this->page()->goto(ComputeUrl::from($chemin));
 
         return $this->attendre()->verifier();
     }
@@ -99,13 +102,17 @@ final class Navigation
 
     /**
      * Attend que la page soit chargée et au repos : aucune requête en cours,
-     * ni aucune depuis REPOS_EN_MS. Playwright attend ensuite de lui-même
-     * qu'un élément soit immobile (fenêtre ouverte) avant de cliquer dessus.
+     * ni aucune depuis REPOS_EN_MS, et chaque composant visible que
+     * Filament charge à part (x-load : la liste à recherche d'un champ)
+     * démarré, pour qu'il ne lance pas sa requête après le repos. Playwright
+     * attend ensuite de lui-même qu'un élément soit immobile (fenêtre
+     * ouverte) avant de cliquer dessus.
      */
     public function attendre(): self
     {
         $this->attendreQue(
-            'document.readyState === "complete" && window.__piliqi !== undefined && window.__piliqi.enCours === 0 && performance.now() - window.__piliqi.derniereActivite > '.self::REPOS_EN_MS,
+            'document.readyState === "complete" && window.__piliqi !== undefined && window.__piliqi.enCours === 0 && performance.now() - window.__piliqi.derniereActivite > '.self::REPOS_EN_MS
+                .' && [...document.querySelectorAll("[x-load]")].every((composant) => composant.offsetParent === null || composant._x_dataStack !== undefined)',
             'la page ne revient pas au repos',
         );
 
@@ -139,15 +146,19 @@ final class Navigation
     /**
      * Le résultat de cette fonction JavaScript dans la page, ou false si la
      * page change sous elle (un clic qui mène à une autre page détruit le
-     * contexte de l'ancienne).
+     * contexte de l'ancienne) ou n'a pas encore de contexte où l'évaluer
+     * (Playwright l'attend alors jusqu'à son délai) : l'attente qui
+     * l'appelle recommence jusqu'au sien.
      */
     private function evaluerPendantUneNavigation(string $fonction): mixed
     {
         try {
             return $this->page()->evaluate($fonction);
         } catch (ExpectationFailedException $exception) {
-            if (str_contains($exception->getMessage(), 'Execution context was destroyed') || str_contains($exception->getMessage(), 'Cannot find context')) {
-                return false;
+            foreach (['Execution context was destroyed', 'Cannot find context', 'Timeout'] as $pendantUneNavigation) {
+                if (str_contains($exception->getMessage(), $pendantUneNavigation)) {
+                    return false;
+                }
             }
 
             throw $exception;
@@ -170,6 +181,21 @@ final class Navigation
         $this->journal->verifier();
 
         return $this;
+    }
+
+    /**
+     * Fait ce geste, qui appelle le serveur après un délai (la recherche
+     * d'un tableau attend que la frappe s'arrête), attend que la requête
+     * parte, puis que la page revienne au repos, et la vérifie.
+     */
+    public function gesteQuiAppelleLeServeur(Closure $geste, string $description): self
+    {
+        $avant = (int) $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.lancees : 0');
+        $this->geste($geste, $description);
+
+        return $this->attendreQue('window.__piliqi.lancees > '.$avant, $description.' n\'a appelé aucune fois le serveur')
+            ->attendre()
+            ->verifier();
     }
 
     /**

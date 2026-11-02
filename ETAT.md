@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 23:44 UTC par pilotage-sync.sh : « Lot TR : TVA des achats, Émettre et encaisser, reçu de paiement (réponses de l'éditeur) ».
+Mis à jour le 02/11/2026 à 23:49 UTC par pilotage-sync.sh : « D52 : gestes à faire sur le PC de l'éditeur ; lot TR dans la fiche ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

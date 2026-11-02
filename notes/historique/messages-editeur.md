@@ -312,3 +312,7 @@ mais ce que je veux que ce soit rassuré que ne pas avoir problem avec l'etat, o
 
 T1 =oui,T2= oui,t3=oui, r1=oui,r2=oui, les C=non
 
+## 58. 2026-11-02 23:47 UTC
+
+sil y a qqch à faire moi à la main comme .env alors tu me dit toujours
+

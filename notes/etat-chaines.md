@@ -157,3 +157,5 @@
 - 02/11 17:57 UTC — SL poussé (b06c922 puis relecture 92fd524), CI verte ; compte rendu fait à l'éditeur (commandes du PC : git pull, migrate:fresh pour les tables d'A7b, optimize:clear). NAV-1 en cours. Point de suivi de 18:01 : course vivante, PostgreSQL en marche.
 
 - 02/11 22:15 UTC — réponses de l'éditeur (T1-T3, R1-R2 oui ; C non) : lot TR écrit (tr/decision-tr.md) et inséré dans serie8-lots.js avant QA, sensible (effort max) ; sauvegarde serie8-lots.avant-TR.js. La course en cours ne le connaît pas : arrêt et relance par resumeFromRunId wf_f59a9064-d8d à la frontière NAV-1 → QA (pendant la fiche ou les notes de NAV-1, arbre propre), ouverts dans reprises/args-course-wf_f59a9064-d8d.json (TR compris).
+
+- 02/11 22:25 UTC — directive D52 (gestes à faire sur le PC de l'éditeur toujours dits) : POSTE_EDITEUR ajouté aux complements des lots non commencés (TR, QA, NAV-2…21), invites des lots déjà faits inchangées (reprise intacte) ; sauvegarde serie8-lots.avant-poste.js ; fiche § 2 et liste des lots (TR) mises à jour.

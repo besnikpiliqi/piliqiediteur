@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 01:54 UTC par pilotage-sync.sh : « Constat C2 (numéros de documents cliquables) pour NAV-2 ».
+Mis à jour le 02/11/2026 à 02:30 UTC par pilotage-sync.sh : « Diagnostic vérifié des e-mails : corrections pour le lot ML ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `53ed088`. Commits locaux pas encore poussés :
 
 ```
+0d2b6a3 Régularise les factures après une correction de SIREN et corrige le SIREN d'un cabinet (lot A7b)
 ```
 
 Derniers commits poussés :
@@ -37,66 +38,8 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M README.md
- M app/Console/Commands/Editeur/CorrigerLeSiren.php
- M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
- M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
- M app/Domain/Cabinets/Models/Cabinet.php
- M app/Domain/Cabinets/Models/LienCabinet.php
- M app/Domain/Cabinets/Services/AccesDesCabinets.php
- M app/Domain/CaisseSecurisee/ModuleFiscal.php
- M app/Domain/CaisseSecurisee/Services/ContenuFiscal.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
- M app/Domain/Facturation/Actions/CreerAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/ImputerAvoirSurSesFacturesAction.php
- M app/Domain/Facturation/Listeners/DecrementerStockApresEmissionFacture.php
- M app/Domain/Facturation/Listeners/RestaurerStockApresEmissionAvoir.php
- M app/Domain/Facturation/Models/Avoir.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/ImputationDuCredit.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/PiedDePage.php
- M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
- M app/Domain/Tenancy/Actions/CreerSocieteAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Services/ActionsUniques.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
- M app/Filament/Cabinet/Resources/ClientDuCabinetResource.php
- M app/Filament/Societe/Pages/AccepterLaTransmission.php
- M app/Http/Controllers/AccepterLInvitationDuCabinetController.php
- M app/Http/Controllers/CodeDuCourrierController.php
- M app/Http/Controllers/ConfirmerInscriptionController.php
- M app/Http/Middleware/MenerUnCompteSansMagasin.php
- M app/Providers/Filament/AppPanelProvider.php
- M app/Providers/Filament/SocietePanelProvider.php
- M database/migrations/2026_10_03_100003_create_factures_table.php
- M database/migrations/2026_10_05_100001_create_avoirs_table.php
- M resources/views/filament/cabinet/pages/verification-du-cabinet.blade.php
- M tests/Feature/Cabinets/CabinetInscriptionTest.php
- M tests/Feature/Cabinets/CollaborateursTest.php
- M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
- M tests/Feature/Cabinets/PanneauCabinetTest.php
- M tests/Feature/CaisseSecurisee/EmissionSigneeTest.php
- M tests/Feature/CaisseSecurisee/VerificateurIntegriteTest.php
- M tests/Feature/Editeur/SirenErroneTest.php
- M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
- M tests/Feature/Societe/PanneauSocieteTest.php
- M tests/Feature/Societe/TypeDActiviteTest.php
- M tests/Fixtures/contenu-signe/jour.json
- M tests/Fixtures/contenu-signe/nouvel-an.json
- M tests/Fixtures/contenu-signe/nuit-d-ete.json
- M tests/Fixtures/contenu-signe/nuit-d-hiver.json
- M tests/Fixtures/contenu-signe/outre-mer.json
- M tests/Fixtures/contenu-signe/premier-passage.json
- M tests/Fixtures/contenu-signe/second-passage.json
- M tests/TestCase.php
-?? app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
+ M tests/Feature/Editeur/CorrectionDuSirenDUnCabinetTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
 ```
 
 ## Dernière course de la chaîne

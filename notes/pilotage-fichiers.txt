@@ -99,3 +99,4 @@ qualite/decision-qualite.md
 reprises/args-course-wf_f59a9064-d8d.json
 navigateur/diag-419-rapport.md
 navigateur/constats-editeur.md
+courriels/diag-courriel-rapport.md

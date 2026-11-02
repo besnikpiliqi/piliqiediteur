@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 01:33 UTC par pilotage-sync.sh : « S9-A : chacun voit toutes les siennes (précision de l'éditeur) ».
+Mis à jour le 02/11/2026 à 01:51 UTC par pilotage-sync.sh : « Constat C1 de l'éditeur (message répété à la caisse) pour NAV-2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -45,6 +45,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M app/Domain/Cabinets/Models/Cabinet.php
  M app/Domain/Cabinets/Models/LienCabinet.php
  M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/CaisseSecurisee/ModuleFiscal.php
  M app/Domain/CaisseSecurisee/Services/ContenuFiscal.php
  M app/Domain/Contacts/Models/Client.php
  M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
@@ -83,6 +84,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M tests/Feature/Cabinets/PanneauCabinetTest.php
  M tests/Feature/CaisseSecurisee/EmissionSigneeTest.php
  M tests/Feature/Editeur/SirenErroneTest.php
+ M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php
  M tests/Feature/Societe/TypeDActiviteTest.php
  M tests/Fixtures/contenu-signe/jour.json
@@ -95,8 +97,6 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M tests/TestCase.php
 ?? app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
 ?? app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
-?? app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
-?? app/Domain/Facturation/Services/RegularisationDUneFacture.php
 ```
 
 ## Dernière course de la chaîne

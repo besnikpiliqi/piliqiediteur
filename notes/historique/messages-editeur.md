@@ -218,3 +218,13 @@ je vois que le vendeur ne vois pas ce qui reste à payer ou Factures à encaisse
 
 si "je coche « Factures : voir celles de toute l’équipe »" alors il voit tous les factures des autres et je veux pas comme ca. donc par defaut il faut que chacun voit tout les siennes
 
+## 42. 2026-11-02 01:50 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+la ici affiche 2 fois "Il reste 20,00 € à répartir.
+
+
+
+Il reste 20,00 € à répartir." donc une fois quand on choisi l'avoit mais si je clique sur encaisser alors il affiche encore une le meme message. donc il faut affiche une seul fois meme si cliquer sur encaisser
+

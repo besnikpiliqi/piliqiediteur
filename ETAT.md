@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 07:46 UTC par pilotage-sync.sh : « Redémarrages de 02:30 et 04:01 : course reprise, TRAVAIL_COUPE complété ».
+Mis à jour le 02/11/2026 à 07:48 UTC par pilotage-sync.sh : « Rythme des nouvelles tentatives d'un envoi : 0, +30 s, +2 min (décision de l'éditeur) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

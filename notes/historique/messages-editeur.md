@@ -234,3 +234,7 @@ Il reste 20,00 € à répartir." donc une fois quand on choisi l'avoit mais si 
 
 et la il faut que les factures sur Crédit appliqué soit cliquable pour aller vois la facture ou ticket  comme les avoir
 
+## 44. 2026-11-02 07:47 UTC
+
+Fais comme tu proposes - recommandé
+

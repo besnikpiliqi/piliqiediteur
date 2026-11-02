@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 07:48 UTC par pilotage-sync.sh : « Rythme des nouvelles tentatives d'un envoi : 0, +30 s, +2 min (décision de l'éditeur) ».
+Mis à jour le 02/11/2026 à 08:55 UTC par pilotage-sync.sh : « Lot DV (devis accepté ou refusé en ligne, lien secret) ajouté après ML ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M database/migrations/2026_10_02_100008_create_journal_audit_table.php
  M tests/Feature/Editeur/CorrectionDuSirenDUnCabinetTest.php
  M tests/Feature/Facturation/RegularisationDUneFactureTest.php
 ```

@@ -238,3 +238,23 @@ et la il faut que les factures sur Crédit appliqué soit cliquable pour aller v
 
 Fais comme tu proposes - recommandé
 
+## 45. 2026-11-02 08:34 UTC
+
+pourquoi tu fait rien ??
+
+## 46. 2026-11-02 08:47 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je sais si tu te rappelle que je t'avais dit que pour les devis envoyer au client par mail,il faut avoir un lien ou button pour que le client accepete ou refuse son devis. et aussi de pouvoir payer le devis, donc il accepte et se transform en facture et il paye par la suite tout de suite. mais tu me propose quelle facon d'apliquer les paiements à distance, car je veux pas avoir pour l'instan des reglemenat sur place ou à distance mais à distance sera bien de proposer des paeiments et pas sur place. donc j'ai une option ou idee par quoi proposer les paiements mais tu me confirme ou tu me propose meileurs. je te mets en photo mon option: donc pay par banque ou paypal ou bien meuiller par appel pay ou google pay
+
+## 47. 2026-11-02 08:54 UTC
+
+<!-- attach -->
+
+> Une question : voulez-vous que le bouton « Accepter / Refuser » du devis arrive plus tôt, sans attendre les paiements ?
+
+
+
+oui mais j'ai une question? est ce que c'est une bonne idee ou pas de donnes acces au client donc les client ne sont pas connu pour le logiciel car eux n'ont pas un compte chez piliqi, donc est ce que c'est bon idee de mettre des lien en publique et en plus si tu peut faire hyper securise si oui
+

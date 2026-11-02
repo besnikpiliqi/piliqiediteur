@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 08:55 UTC par pilotage-sync.sh : « Lot DV (devis accepté ou refusé en ligne, lien secret) ajouté après ML ».
+Mis à jour le 02/11/2026 à 09:50 UTC par pilotage-sync.sh : « Devis : stock prévenu (a), transformation en facture, mention du devis (lot DV) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `53ed088`. Commits locaux pas encore poussés :
 
 ```
+81de7e8 Complète les tests du lot A7b et indexe le journal d'audit par action
 0d2b6a3 Régularise les factures après une correction de SIREN et corrige le SIREN d'un cabinet (lot A7b)
 ```
 
@@ -38,9 +39,6 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M database/migrations/2026_10_02_100008_create_journal_audit_table.php
- M tests/Feature/Editeur/CorrectionDuSirenDUnCabinetTest.php
- M tests/Feature/Facturation/RegularisationDUneFactureTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -49,4 +47,7 @@ Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus r�
 
 ```
 A7b:implementation
+A7b:relecture1
+A7b:relecture2
+A7b:correction
 ```

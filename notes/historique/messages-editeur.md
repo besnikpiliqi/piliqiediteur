@@ -258,3 +258,21 @@ je sais si tu te rappelle que je t'avais dit que pour les devis envoyer au clien
 
 oui mais j'ai une question? est ce que c'est une bonne idee ou pas de donnes acces au client donc les client ne sont pas connu pour le logiciel car eux n'ont pas un compte chez piliqi, donc est ce que c'est bon idee de mettre des lien en publique et en plus si tu peut faire hyper securise si oui
 
+## 48. 2026-11-02 09:33 UTC
+
+<!-- attach -->
+
+> puisque le propriétaire ne fait jamais de facture. La transformation
+
+
+
+je me rappelle pas pourquoi on a dis que le propriataire ne fait pas des factures de vente
+
+## 49. 2026-11-02 09:43 UTC
+
+j'ai une question par rapport aux devis! quand le devis ce cree avec les produit la dedans alors qu'est ce qui se passe avec les produit car par exemple le client accepte le devis mais peut etre les produis ne sont plus en stock ?
+
+## 50. 2026-11-02 09:50 UTC
+
+je choisi le a) mais une chose doit etre faite car ca n'existe pas encore. le devis accepter n'a pas l'option de le transformer en facture! et de plus de ca peut etre sera mieux d'ajouter sur la facture transformer que cette vient à partir du devis accepet numero de devis. et quand le devis se transform alors le devis reste toujours donc ne se supprime pas. c'est quoi tes idees
+

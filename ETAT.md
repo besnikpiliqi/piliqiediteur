@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 01:31 UTC par pilotage-sync.sh : « Diagnostic 419 confirmé ; point 4 de SL corrigé selon le vérificateur ».
+Mis à jour le 02/11/2026 à 01:33 UTC par pilotage-sync.sh : « S9-A : chacun voit toutes les siennes (précision de l'éditeur) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

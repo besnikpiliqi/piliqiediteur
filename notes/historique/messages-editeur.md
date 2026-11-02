@@ -214,3 +214,7 @@ oui j ai trouvé le pdf
 
 je vois que le vendeur ne vois pas ce qui reste à payer ou Factures à encaisser ou si qqch qui reste à regler
 
+## 41. 2026-11-02 01:33 UTC
+
+si "je coche « Factures : voir celles de toute l’équipe »" alors il voit tous les factures des autres et je veux pas comme ca. donc par defaut il faut que chacun voit tout les siennes
+

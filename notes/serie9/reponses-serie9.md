@@ -72,3 +72,12 @@ Réponse de l'éditeur, mot pour mot, aux questions de `decisions/client-comptoi
    - visibilité par rôle (propriétaire, responsable, vendeur avec et sans le droit de voir les avoirs, compte d'un cabinet lié qui ne voit rien) ;
    - nombres par magasin dans l'espace d'administration, isolés entre magasins et entre sociétés ;
    - client comptoir absent de la liste et des sélecteurs, fiche refusée par son adresse, caisse et bons d'avoir inchangés.
+
+## Précision de l'éditeur du 02/11/2026, vers 01 h 40 : chacun voit toutes les siennes (lot S9-A)
+
+Constat de l'éditeur : « je vois que le vendeur ne vois pas ce qui reste à payer ou Factures à encaisser ou si qqch qui reste à regler » ; puis, après l'explication de l'autorisation « voir celles de toute l'équipe » : « si je coche « Factures : voir celles de toute l'équipe » alors il voit tous les factures des autres et je veux pas comme ca. donc par defaut il faut que chacun voit tout les siennes ».
+
+Ce lot applique, en plus de la règle 4 (« qui encaisse voit ») :
+1. Par défaut, sans aucune case de plus, chaque compte qui vend (vendeur, responsable, administrateur ou observateur à qui la vente est cochée) voit toutes ses propres factures et tickets, chacun avec son restant dû, son échéance et son retard, dans la liste des factures, sur sa fiche, dans son « À faire » (factures à encaisser : nombre, restant dû, dont en retard, et celles dont un paiement a été contre-passé) et dans l'alerte de son tableau de bord ; et il peut les encaisser.
+2. Jamais les factures des autres sans l'autorisation « voir celles de toute l'équipe », qui reste non cochée par défaut pour les vendeurs et les observateurs (`CLAUDE.md`, « Vendeurs ») ; rien ne change pour le propriétaire, les responsables et les administrateurs qui voient celles de toute l'équipe.
+3. Tests, en navigateur une fois NAV-1 poussé : un vendeur sans autorisation de contre-passer voit ses factures à encaisser (liste, restant dû, retard, « À faire », alerte du tableau de bord) et aucune facture d'un autre vendeur, ni par la liste, ni par la fiche, ni par une adresse tapée à la main ; avec « voir celles de toute l'équipe », il voit aussi celles des autres.

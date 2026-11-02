@@ -48,7 +48,8 @@ use Illuminate\Support\ItemNotFoundException;
  * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
  * la société par l'éditeur, après sa correction (voir
  * estUneRegularisation() et FaireLAvoirDeRegularisationAction), crédite
- * toute cette facture, sans retour en stock, imprime l'émetteur qu'elle a
+ * ce qui reste à créditer de cette facture, ce que les avoirs déjà émis
+ * n'en ont pas crédité, sans retour en stock, imprime l'émetteur qu'elle a
  * figé, et son crédit lui est réservé, puis à sa facture rectificative
  * (voir ImputationDuCredit).
  */

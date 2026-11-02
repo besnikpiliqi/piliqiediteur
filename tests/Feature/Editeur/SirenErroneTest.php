@@ -15,6 +15,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Actions\CorrigerSirenAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
@@ -82,16 +83,18 @@ class SirenErroneTest extends TestCase
      * la commande liste chaque document émis, avec le SIREN qu'il a signé,
      * et l'examen s'inscrit au journal d'audit avec sa décision et le
      * résumé de ces documents (leur nombre, leur premier et leur dernier
-     * numéro par magasin et par type, l'instant jusqu'auquel ils ont été
+     * numéro par magasin et par type, l'instant avant lequel ils ont été
      * émis et l'empreinte de leur liste), sans toucher au registre du
      * magasin.
      */
     public function test_l_examen_liste_les_documents_concernes_sans_en_modifier_aucun(): void
     {
+        $this->travelTo(self::aParis('2026-11-02 09:55:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']);
         $societe = $magasin->societe;
         $ticket = $this->vendre($magasin);
         $signatures = $this->signatures($magasin);
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         $sirenCorrect = SocieteFactory::sirenFictif();
         $jour = Calendrier::afficherJour($magasin->calendrier()->jourDe($ticket->date_emission), 'd/m/Y');
 
@@ -116,7 +119,7 @@ class SirenErroneTest extends TestCase
         $this->assertSame([
             'decision' => 'erreur',
             'documents' => [['dernier' => $ticket->numero, 'magasin' => 'LYON', 'nombre' => 1, 'premier' => $ticket->numero, 'type' => 'ticket']],
-            'documents_emis_jusqu_au' => self::enUtc('2026-11-02 09:00:00')->format('Y-m-d H:i:s'),
+            'documents_emis_avant' => self::enUtc('2026-11-02 09:00:00')->format('Y-m-d H:i:s'),
             'empreinte_des_documents' => hash('sha256', "LYON\tticket\t{$ticket->numero}\n"),
             'siren_correct' => $sirenCorrect,
         ], $examen->nouvelles_valeurs);
@@ -490,10 +493,50 @@ class SirenErroneTest extends TestCase
 
         $this->assertThrows(fn () => $this->corriger($societe, $sirenCorrect, $sirets), VerificationRefuseeException::class, CorrigerSirenAction::MESSAGE_FACTURES_DEPUIS_L_EXAMEN);
         $this->assertNotSame($sirenCorrect, $societe->fresh()->siren);
+        $this->travelTo(self::aParis('2026-11-02 10:10:00'));
         $this->examiner($societe, $sirenCorrect, DecisionExamenSiren::Erreur);
         $this->corriger($societe, $sirenCorrect, $sirets);
 
         $this->assertSame($sirenCorrect, $societe->fresh()->siren);
+    }
+
+    /**
+     * L'examen ne liste que les documents émis avant lui : une facture
+     * émise dans sa seconde, avant comme après lui, n'est pas de sa liste et
+     * rend la correction impossible jusqu'à un nouvel examen, dont la liste
+     * la désigne ; une fois le SIREN corrigé, la régularisation désigne
+     * exactement les factures de cette liste, jamais une facture émise dans
+     * la seconde de ce nouvel examen, après la correction (constat 8 de la
+     * relecture du lot A7b : une facture émise dans la seconde de l'examen,
+     * après sa lecture, était désignée sans figurer dans sa liste).
+     */
+    public function test_une_facture_emise_dans_la_seconde_de_l_examen_n_est_pas_de_sa_liste_et_attend_un_nouvel_examen(): void
+    {
+        $this->travelTo(self::aParis('2026-11-02 09:50:00'));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));
+        $societe = $magasin->societe;
+        $sirenCorrect = SocieteFactory::sirenFictif();
+        $sirets = ['LYON' => IdentifiantsInsee::avecSaCle($sirenCorrect.'0001')];
+        $this->prouverLaRemiseDuCourrierDExamen($societe, $sirenCorrect);
+        $this->travelTo(self::aParis('2026-11-02 09:59:59'));
+        $avant = $this->facturerUnProfessionnel($magasin);
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
+        $dansLaSecondeAvant = $this->facturerUnProfessionnel($magasin);
+
+        $this->examiner($societe, $sirenCorrect, DecisionExamenSiren::Erreur);
+        $dansLaSecondeApres = $this->facturerUnProfessionnel($magasin);
+
+        [$examen] = $this->entreesDAudit($societe, ActionAuditee::SirenExamine);
+        $this->assertSame([['dernier' => $avant->numero, 'magasin' => 'LYON', 'nombre' => 1, 'premier' => $avant->numero, 'type' => 'facture']], $examen->nouvelles_valeurs['documents']);
+        $this->assertThrows(fn () => $this->corriger($societe, $sirenCorrect, $sirets), VerificationRefuseeException::class, CorrigerSirenAction::MESSAGE_FACTURES_DEPUIS_L_EXAMEN);
+        $this->travelTo(self::aParis('2026-11-02 10:00:01'));
+        $this->examiner($societe, $sirenCorrect, DecisionExamenSiren::Erreur);
+        $this->corriger($societe, $sirenCorrect, $sirets);
+        [, $nouvelExamen] = $this->entreesDAudit($societe, ActionAuditee::SirenExamine);
+        $this->assertSame([['dernier' => $dansLaSecondeApres->numero, 'magasin' => 'LYON', 'nombre' => 3, 'premier' => $avant->numero, 'type' => 'facture']], $nouvelExamen->nouvelles_valeurs['documents']);
+        $apresLaCorrection = $this->facturerUnProfessionnel($magasin);
+        app(TenantContext::class)->set($magasin->fresh());
+        $this->assertSame([true, true, true, false], array_map(fn (Facture $facture): bool => app(RegularisationDUneFacture::class)->estDesignee($facture->fresh()), [$avant, $dansLaSecondeAvant, $dansLaSecondeApres, $apresLaCorrection]));
     }
 
     /**
@@ -609,6 +652,21 @@ class SirenErroneTest extends TestCase
             ->expectsQuestion('Secret de l\'opérateur (premier)', $secrets[$premier])
             ->expectsQuestion('Nom de l\'opérateur (second)', $second)
             ->expectsQuestion('Secret de l\'opérateur (second)', $secrets[$second]);
+    }
+
+    /**
+     * Une facture de 12,00 € TTC émise par le responsable du magasin à un
+     * client professionnel, à l'heure figée.
+     */
+    private function facturerUnProfessionnel(Magasin $magasin): Facture
+    {
+        app(TenantContext::class)->set($magasin->fresh());
+        $responsable = self::responsableDeTest($magasin);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS']);
+        $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]));
+        app(TenantContext::class)->clear();
+
+        return $facture;
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -41,8 +42,13 @@ use LogicException;
  * crédit imputé sur ce qui reste dû de la facture puis sur sa facture
  * rectificative déjà émise (voir ImputationDuCredit), signé avec
  * l'émetteur figé de la facture et la mention de la régularisation (voir
- * ContenuFiscal) ; il s'inscrit enfin au journal d'audit, dans la chaîne
- * du magasin. Sans clé de signature, rien de tout cela n'a lieu.
+ * ContenuFiscal). La rectificative émise avant lui, qui l'attendait (voir
+ * StatutFacture::EnAttenteDeRegularisation), en sort, même quand son
+ * crédit n'a rien laissé pour elle (la facture n'avait rien reçu) : elle
+ * reste alors due de ce que le client devait encore sur la facture, et
+ * son statut suit ce qui en reste dû. L'avoir s'inscrit enfin au journal
+ * d'audit, dans la chaîne du magasin. Sans clé de signature, rien de tout
+ * cela n'a lieu.
  *
  * La demande porte un jeton (R3, voir ActionsUniques), cherché sous le
  * verrou du registre : répétée après une réponse perdue, elle rend l'avoir
@@ -90,6 +96,7 @@ class FaireLAvoirDeRegularisationAction
                 sprintf(RegularisationDUneFacture::MOTIF_DE_L_AVOIR, $origine->numero),
                 regularisation: true,
             ));
+            $origine->rectificative()->where('statut', StatutFacture::EnAttenteDeRegularisation)->lockForUpdate()->first()?->constaterUnReglement();
 
             $this->journalAudit->inscrire(ActionAuditee::AvoirDeRegularisationEmis, $compte, $magasin, null, [
                 'avoir' => $avoir->numero,

@@ -34,7 +34,8 @@ use Tests\TestCase;
  * première, puis relit sous ce verrou ce que la première a émis. Deux
  * avoirs de régularisation, ou deux factures rectificatives, ne naissent
  * jamais ; l'avoir et la rectificative faits en même temps naissent tous
- * deux, et le crédit de l'avoir ne règle la rectificative qu'une fois.
+ * deux, dans un ordre comme dans l'autre, et le crédit de l'avoir ne règle
+ * la rectificative qu'une fois.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -138,14 +139,54 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     }
 
     /**
-     * Une facture de deux articles à 120,00 € TTC, émise par le responsable
-     * du magasin de Lyon à un client professionnel, puis le SIREN de la
-     * société corrigé par l'éditeur après un examen qui l'a désignée.
+     * L'ordre inverse : la rectificative passe la première et attend
+     * l'avoir de régularisation, qui, passé second dans l'autre processus,
+     * la règle une seule fois de tout son crédit et la fait sortir de son
+     * attente.
+     */
+    #[Group('concurrence')]
+    public function test_la_rectificative_puis_l_avoir_simultanes_reglent_une_seule_fois_la_rectificative(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
+        app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $facture->client, [
+            'mode_paiement' => ModePaiement::Virement->value,
+            'montant' => '240.00',
+            'recu_le' => '2026-11-02',
+        ], [['facture_id' => $facture->id, 'montant' => '240.00']]);
+        $magasinId = $magasin->id;
+        $factureId = $facture->id;
+        $proprietaireId = $this->proprietaireDe($magasin)->id;
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $factureId, $proprietaireId): void {
+            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
+            app(FaireLAvoirDeRegularisationAction::class)->handle(User::query()->findOrFail($proprietaireId), Facture::query()->findOrFail($factureId));
+        }, $concurrente);
+
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(self::responsableDeTest($magasin), $facture->fresh());
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $this->assertSame(StatutFacture::EnAttenteDeRegularisation, $rectificative->statut);
+        $avoir = Avoir::query()->sole();
+        $this->assertSame([[$rectificative->id, '240.00']], AvoirAllocation::query()->where('avoir_id', $avoir->id)->get()->map(fn (AvoirAllocation $allocation): array => [(int) $allocation->facture_id, $allocation->montant_alloue])->all());
+        $this->assertSame([StatutFacture::Payee, 0], [$rectificative->fresh()->statut, $avoir->creditEnCentimes()]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin->fresh())->anomalies());
+    }
+
+    /**
+     * Une facture de deux articles à 120,00 € TTC, émise à 9 h 55 par le
+     * responsable du magasin de Lyon à un client professionnel, puis le
+     * SIREN de la société corrigé par l'éditeur à 10 h, après un examen qui
+     * l'a désignée (l'examen ne liste que les documents émis avant lui,
+     * jamais dans sa seconde).
      *
      * @return array{0: Magasin, 1: Facture}
      */
     private function factureDUneSocieteCorrigee(): array
     {
+        $this->travelTo(self::aParis('2026-11-02 09:55:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));
         app(TenantContext::class)->set($magasin->fresh());
         $responsable = self::responsableDeTest($magasin);
@@ -153,6 +194,7 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->id, 'quantite' => 2]]));
         $sirenCorrect = SocieteFactory::sirenFictif();
+        $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         $this->corrigerLeSirenParLEditeur($magasin->societe, $sirenCorrect, ['LYON' => IdentifiantsInsee::avecSaCle($sirenCorrect.'0001')]);
         app(TenantContext::class)->set($magasin->fresh());
 

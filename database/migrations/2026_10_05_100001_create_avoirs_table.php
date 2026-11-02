@@ -34,9 +34,11 @@ return new class extends Migration
             $table->string('nature_operation', 40)->default('vente_france');
             // L'avoir de régularisation d'une facture que désigne l'examen
             // du SIREN de la société par l'éditeur, après sa correction
-            // (voir FaireLAvoirDeRegularisationAction) : il crédite toute la
-            // facture, sans retour en stock, imprime son émetteur figé, et
-            // son crédit ne règle qu'elle, puis sa facture rectificative.
+            // (voir FaireLAvoirDeRegularisationAction) : il crédite ce qui
+            // reste à créditer de la facture, ce que les avoirs déjà émis
+            // n'en ont pas crédité, sans retour en stock, imprime son
+            // émetteur figé, et son crédit ne règle qu'elle, puis sa facture
+            // rectificative.
             $table->boolean('regularisation')->default(false);
             // La copie du client prise à l'émission de l'avoir sur le
             // document qu'il corrige, le plus récent s'il en corrige

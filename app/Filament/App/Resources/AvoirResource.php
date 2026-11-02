@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -231,10 +232,11 @@ class AvoirResource extends Resource
         $designation = self::designation($document);
         [$credite, $pronom, $autre] = $document->serie() === TypeDocument::TicketCaisse ? ['crédité', 'il', 'celui'] : ['créditée', 'elle', 'celle'];
         $premier = $documents[0] ?? null;
+        $refusDeLaRegularisation = app(RegularisationDUneFacture::class)->refusDUnAvoirOrdinaire($document);
 
         return match (true) {
             ! $document->possedeDesLignesCreditables() => "{$designation} est déjà entièrement {$credite} : {$pronom} n'a plus rien à rendre.",
-            $document->rectificative()->exists() => sprintf(CreerAvoirAction::REFUS_FACTURE_RECTIFIEE, $document->numero),
+            $refusDeLaRegularisation !== null => $refusDeLaRegularisation,
             $premier === null => null,
             (int) $document->client_id !== (int) $premier->client_id => "{$designation} est {$autre} d'un autre client : un avoir ne corrige que les documents d'un même client.",
             default => CreerAvoirAction::incompatibilite($premier, $document),
@@ -361,20 +363,24 @@ class AvoirResource extends Resource
 
     /**
      * Un avoir se fait sur ce ticket ou cette facture : émis, avec encore
-     * une ligne à créditer, sans facture rectificative (un retour se fait
-     * alors sur elle, voir CreerAvoirAction), par une personne qui peut
-     * créer un avoir. Le bouton « Avoir » de la liste des factures, une
-     * fenêtre qui ne quitte pas la liste, apparaît ainsi (la liste charge
-     * la rectificative de ses factures avec elles, voir
-     * FactureResource::table()) ; celui de la fiche, qui ouvre « Nouvel
-     * avoir », exige en plus peutOuvrirLaRecherche().
+     * une ligne à créditer, par une personne qui peut créer un avoir, et
+     * que sa régularisation n'en empêche pas (une facture désignée par
+     * l'examen du SIREN de la société, ou sa facture rectificative qui
+     * attend encore l'avoir de régularisation, voir
+     * RegularisationDUneFacture::refusDUnAvoirOrdinaire()). Le bouton
+     * « Avoir » de la liste des factures, une fenêtre qui ne quitte pas la
+     * liste, apparaît ainsi (la liste charge avec ses factures leur
+     * rectificative, et ne lit qu'une fois la dernière décision d'examen du
+     * SIREN de la société, voir FactureResource::table()) ; celui de la
+     * fiche, qui ouvre « Nouvel avoir », exige en plus
+     * peutOuvrirLaRecherche().
      */
     public static function peutCrediter(Facture $facture): bool
     {
         return $facture->statut !== StatutFacture::Brouillon
             && $facture->possedeDesLignesCreditables()
-            && $facture->rectificative === null
-            && auth()->user()->can(PermissionRegistry::AVOIR_CREER);
+            && auth()->user()->can(PermissionRegistry::AVOIR_CREER)
+            && app(RegularisationDUneFacture::class)->refusDUnAvoirOrdinaire($facture) === null;
     }
 
     /**

@@ -4,8 +4,8 @@ namespace App\Domain\Cabinets\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
+use App\Domain\Cabinets\Jobs\PrevenirLesClientsDuCabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
-use App\Domain\Cabinets\Services\AvisAuxClientsDuCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -30,7 +30,8 @@ use LogicException;
  * constat s'inscrit au journal d'audit du cabinet, origine « éditeur »,
  * sous le verrou de sa ligne de vérification ; son propriétaire est
  * prévenu, et, quand le cabinet devient vérifié, le propriétaire de chacun
- * de ses clients liés, dont l'accès revient (voir AvisAuxClientsDuCabinet).
+ * de ses clients liés, dont l'accès revient, par un job en file d'attente
+ * (voir PrevenirLesClientsDuCabinet).
  * Une société qui n'est pas un cabinet, ou dont l'inscription est close,
  * est refusée sans rien écrire.
  */
@@ -45,7 +46,6 @@ class ConstaterLInscriptionALOrdreAction
     public function __construct(
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
-        private readonly AvisAuxClientsDuCabinet $avisAuxClients,
     ) {}
 
     /**
@@ -110,7 +110,7 @@ class ConstaterLInscriptionALOrdreAction
         ));
 
         if ($devenuVerifie) {
-            $this->avisAuxClients->accesRetabli($cabinet->fresh());
+            PrevenirLesClientsDuCabinet::dispatch((int) $cabinet->getKey(), accesRetabli: true);
         }
     }
 

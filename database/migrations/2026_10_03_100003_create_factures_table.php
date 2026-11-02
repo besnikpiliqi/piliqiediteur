@@ -103,7 +103,7 @@ return new class extends Migration
             // son compte.
             $table->string('cree_par_nom')->nullable();
             $table->string('numero', 40)->nullable();
-            $table->string('statut', 20)->default('brouillon');
+            $table->string('statut', 30)->default('brouillon');
             // L'instant du registre fiscal à l'émission, en UTC (cast
             // Instant, voir HorodateSonEmission).
             $table->dateTime('date_emission')->nullable();

@@ -78,7 +78,7 @@ class ViewFacture extends ViewRecord
             ->color('warning')
             ->requiresConfirmation()
             ->modalHeading('Faire l\'avoir de régularisation')
-            ->modalDescription('L\'avoir crédite toute cette facture, sous l\'identité qu\'elle a signée et avec la mention de la correction du SIREN, sans rien rendre au stock. Son crédit règle ce qui en reste dû, puis sa facture rectificative, et rien d\'autre.')
+            ->modalDescription('L\'avoir crédite ce qui reste à créditer de cette facture, ce que les avoirs déjà émis n\'en ont pas crédité, sous l\'identité qu\'elle a signée et avec la mention de la correction du SIREN, sans rien rendre au stock. Son crédit règle ce qui en reste dû, puis sa facture rectificative, et rien d\'autre.')
             ->form([FactureResource::champDuJeton()])
             ->visible(fn (Facture $record): bool => (auth()->user()?->can('create', Avoir::class) ?? false) && app(RegularisationDUneFacture::class)->refusDeLAvoir($record) === null)
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {

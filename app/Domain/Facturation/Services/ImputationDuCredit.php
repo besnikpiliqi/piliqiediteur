@@ -31,10 +31,13 @@ use Illuminate\Support\Collection;
  *    le numéro, son bon d'avoir, et ne s'impute d'office que sur les
  *    tickets qu'il corrige. L'avoir de régularisation d'une facture, après
  *    la correction du SIREN de la société, ne règle, avant les autres, que
- *    la facture rectificative de cette facture, déjà émise et encore due :
- *    ce qui lui reste de crédit lui est réservé (voir
- *    RegularisationDUneFacture), et cette imputation n'est jamais un
- *    encaissement.
+ *    la facture rectificative de cette facture, déjà émise et encore due,
+ *    ou qui l'attendait (voir StatutFacture::EnAttenteDeRegularisation) :
+ *    rien d'autre ne règle celle-ci, ni l'étape 2, ni la contre-passation
+ *    d'un paiement, qui ne prennent que les factures qui attendent un
+ *    règlement. Ce qui reste du crédit de cet avoir est réservé à la
+ *    rectificative tant qu'elle manque (voir RegularisationDUneFacture),
+ *    et cette imputation n'est jamais un encaissement.
  *
  * Chaque facture reçoit au plus une imputation de chaque avoir, son
  * montant des deux étapes réunies, en centimes. Les factures et les avoirs
@@ -128,12 +131,17 @@ class ImputationDuCredit
 
         foreach ($regularisations as $avoir) {
             $rectificative = $avoir->factureRegularisee()?->rectificative()
-                ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
+                ->whereIn('statut', [...StatutFacture::quiAttendentUnReglement(), StatutFacture::EnAttenteDeRegularisation])
                 ->lockForUpdate()
                 ->first();
 
             if ($rectificative !== null) {
-                $imputer($avoir, $factures[$rectificative->getKey()] ??= $rectificative, PHP_INT_MAX);
+                $rectificative = $factures[$rectificative->getKey()] ??= $rectificative;
+                // La rectificative qui attendait cet avoir n'attend aucun
+                // autre règlement : ce qui en reste dû ne compte que pour
+                // lui.
+                $restes[$rectificative->getKey()] ??= $rectificative->resteDuEnCentimes();
+                $imputer($avoir, $rectificative, PHP_INT_MAX);
             }
         }
 

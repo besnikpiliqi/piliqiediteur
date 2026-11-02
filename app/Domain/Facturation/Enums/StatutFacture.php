@@ -16,11 +16,20 @@ use Filament\Support\Contracts\HasLabel;
  * partiel, qui est un document à part (voir EnregistrerAvoirAction).
  * Seul un brouillon, qui n'a pas encore de numéro, se supprime (voir
  * FacturePolicy::delete()).
+ *
+ * La facture rectificative émise, après la correction du SIREN de la
+ * société, avant l'avoir de régularisation de la facture qu'elle rectifie
+ * est « en attente de régularisation » (voir RegularisationDUneFacture) :
+ * elle n'attend aucun règlement, ce que le client doit encore se réglant
+ * sur la facture rectifiée, jusqu'à ce que cet avoir, à son émission, la
+ * règle de ce que cette facture avait reçu ; elle suit ensuite ce qui en
+ * reste dû.
  */
 enum StatutFacture: string implements HasColor, HasLabel
 {
     case Brouillon = 'brouillon';
     case Emise = 'emise';
+    case EnAttenteDeRegularisation = 'en_attente_regularisation';
     case Envoyee = 'envoyee';
     case PartiellementPayee = 'partiellement_payee';
     case Payee = 'payee';
@@ -38,8 +47,12 @@ enum StatutFacture: string implements HasColor, HasLabel
     public function transitionsAutorisees(): array
     {
         return match ($this) {
-            self::Brouillon => [self::Emise],
+            self::Brouillon => [self::Emise, self::EnAttenteDeRegularisation],
             self::Emise => [self::Envoyee, self::PartiellementPayee, self::Payee, self::EnRetard],
+            // La facture rectificative en sort à l'émission de l'avoir de
+            // régularisation de la facture qu'elle rectifie, selon ce
+            // qu'il lui en reste dû (voir ImputationDuCredit).
+            self::EnAttenteDeRegularisation => [self::Emise, self::Envoyee, self::PartiellementPayee, self::Payee, self::EnRetard],
             self::Envoyee => [self::PartiellementPayee, self::Payee, self::EnRetard],
             // Une facture partiellement payée devient "payee" une fois le
             // solde réglé (un deuxième paiement par exemple), et reste
@@ -80,6 +93,7 @@ enum StatutFacture: string implements HasColor, HasLabel
         return match ($this) {
             self::Brouillon => 'Brouillon',
             self::Emise => 'Émise',
+            self::EnAttenteDeRegularisation => 'En attente de régularisation',
             self::Envoyee => 'Envoyée',
             self::PartiellementPayee => 'Partiellement payée',
             self::Payee => 'Payée',
@@ -90,7 +104,7 @@ enum StatutFacture: string implements HasColor, HasLabel
     public function getColor(): string
     {
         return match ($this) {
-            self::Brouillon => 'gray',
+            self::Brouillon, self::EnAttenteDeRegularisation => 'gray',
             self::Emise, self::Envoyee => 'info',
             self::PartiellementPayee => 'warning',
             self::Payee => 'success',

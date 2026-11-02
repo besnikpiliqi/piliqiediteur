@@ -16,7 +16,9 @@ use App\Domain\Stock\Services\StockLedgerService;
  * ne se corrige que par un avoir. L'avoir de régularisation d'une facture,
  * après la correction du SIREN de la société, ne rend rien : les articles
  * restent vendus, à la facture rectificative (voir
- * RegularisationDUneFacture).
+ * RegularisationDUneFacture). Un retour sur cette rectificative, qui n'a
+ * rien sorti du stock, rend ce que la vente de la facture rectifiée a
+ * sorti et qui n'y est pas encore revenu.
  */
 class RestaurerStockApresEmissionAvoir
 {

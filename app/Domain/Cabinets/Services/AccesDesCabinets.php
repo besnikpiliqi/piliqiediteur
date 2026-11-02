@@ -74,11 +74,9 @@ class AccesDesCabinets
     }
 
     /**
-     * Les liens actifs de ce cabinet, avec la dénomination et le SIREN de
-     * chaque client (relation client), rien d'autre du client : pour le
-     * seul propriétaire d'un cabinet qui n'est plus vérifié, pour y mettre
-     * fin ; pour prévenir le propriétaire de chaque client que l'accès du
-     * cabinet s'arrête ou revient (voir AvisAuxClientsDuCabinet).
+     * Pour le seul propriétaire d'un cabinet qui n'est plus vérifié, ses
+     * liens actifs, avec la dénomination et le SIREN de chaque client
+     * (relation client), pour y mettre fin ; rien d'autre du client.
      *
      * @return Collection<int, LienCabinet>
      */
@@ -90,6 +88,25 @@ class AccesDesCabinets
             ->with(['client' => fn ($client) => $client->select(['id', 'siren', 'raison_sociale'])])
             ->orderBy('id')
             ->get(['id', 'uuid', 'societe_id', 'cabinet_id', 'actif_depuis']);
+    }
+
+    /**
+     * Les liens actifs de ce cabinet, avec, de chaque client, de quoi
+     * prévenir son propriétaire que l'accès du cabinet s'arrête ou revient
+     * (voir PrevenirLesClientsDuCabinet) : la dénomination, le SIREN et
+     * l'uuid de la société (relation client) et son propriétaire, lus d'un
+     * coup quel que soit le nombre de clients ; rien d'autre du client.
+     *
+     * @return Collection<int, LienCabinet>
+     */
+    public function clientsAPrevenir(Societe $cabinet): Collection
+    {
+        return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
+            ->where('cabinet_id', $cabinet->getKey())
+            ->where('etat', EtatDuLien::Actif->value)
+            ->with(['client' => fn ($client) => $client->select(['id', 'uuid', 'siren', 'raison_sociale']), 'client.proprietaire'])
+            ->orderBy('id')
+            ->get(['id', 'societe_id', 'cabinet_id']);
     }
 
     /**

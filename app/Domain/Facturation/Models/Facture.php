@@ -73,9 +73,10 @@ use LogicException;
  *
  * Après la correction du SIREN de la société par l'éditeur, une facture
  * que désigne son examen se régularise (voir RegularisationDUneFacture) :
- * un avoir de régularisation la crédite en entier, et une facture
- * rectificative (voir factureRectifiee()) en reprend les lignes sous
- * l'identité corrigée de la société.
+ * un avoir de régularisation crédite ce qui reste à créditer de cette
+ * facture, ce que les avoirs déjà émis n'en ont pas crédité, et une
+ * facture rectificative (voir factureRectifiee()) en reprend les lignes
+ * sous l'identité corrigée de la société.
  */
 class Facture extends Model implements DocumentEnvoyable
 {
@@ -527,23 +528,58 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Ce que cette facture a fait sortir du stock pour ce produit à son
-     * émission (voir DecrementerStockApresEmissionFacture) et qui n'y est
-     * pas encore revenu par un avoir sur l'une de ses lignes (voir
-     * RestaurerStockApresEmissionAvoir) : jamais plus ne peut y revenir. Un
-     * article vendu sans suivi du stock n'en est jamais sorti.
+     * Ce que la vente de cette facture a fait sortir du stock pour ce
+     * produit (voir DecrementerStockApresEmissionFacture) et qui n'y est pas
+     * encore revenu par un avoir (voir RestaurerStockApresEmissionAvoir) :
+     * jamais plus ne peut y revenir. Un article vendu sans suivi du stock
+     * n'en est jamais sorti. Une facture rectificative, après la correction
+     * du SIREN de la société, ne sort rien du stock : elle reprend la vente
+     * de la facture qu'elle rectifie, dont les articles sont déjà sortis
+     * (voir RegularisationDUneFacture). La vente se compte donc depuis la
+     * première facture de cette suite, et les retours sur les lignes de
+     * chacune de ses factures : un retour sur la rectificative rend ce que
+     * la facture rectifiée a sorti et que ni ses avoirs ni ceux de la
+     * rectificative n'ont déjà rendu.
      */
     public function quantiteSortieDuStock(Produit $produit): int
     {
+        $factures = $this->facturesDeLaMemeVente();
         $mouvements = MouvementStock::query()
             ->where('produit_id', $produit->getKey())
             ->where(fn (Builder $mouvements) => $mouvements
-                ->whereMorphedTo('source', $this)
+                ->where(fn (Builder $ventes) => $ventes->where('source_type', $this->getMorphClass())->whereIn('source_id', $factures))
                 ->orWhereHasMorph('source', [LigneAvoir::class], fn (Builder $ligneAvoir) => $ligneAvoir
-                    ->whereHas('ligneFacture', fn (Builder $ligneFacture) => $ligneFacture->where('facture_id', $this->getKey()))))
+                    ->whereHas('ligneFacture', fn (Builder $ligneFacture) => $ligneFacture->whereIn('facture_id', $factures))))
             ->get(['type', 'quantite']);
 
         return -$mouvements->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite));
+    }
+
+    /**
+     * Les identifiants des factures d'une même vente, de la première à la
+     * dernière : cette facture, la facture qu'elle rectifie, et ainsi de
+     * suite, puis sa rectificative et la rectificative de celle-ci (une
+     * facture n'en a qu'une, une seconde correction du SIREN pouvant
+     * rectifier une rectificative). Une facture qui n'a jamais été
+     * régularisée est seule de sa vente.
+     *
+     * @return list<int>
+     */
+    private function facturesDeLaMemeVente(): array
+    {
+        $precedentes = [];
+
+        for ($facture = $this; $facture->facture_rectifiee_id !== null; $facture = $facture->factureRectifiee()->firstOrFail()) {
+            array_unshift($precedentes, (int) $facture->facture_rectifiee_id);
+        }
+
+        $suivantes = [];
+
+        for ($facture = $this; ($rectificative = $facture->rectificative()->first(['id', 'facture_rectifiee_id'])) !== null; $facture = $rectificative) {
+            $suivantes[] = (int) $rectificative->getKey();
+        }
+
+        return [...$precedentes, (int) $this->getKey(), ...$suivantes];
     }
 
     public function possedeDesLignesCreditables(): bool

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -23,6 +24,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Models\Contracts\HasName;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -320,6 +322,24 @@ class Societe extends Model implements HasName
     public function proprietaire(): HasOne
     {
         return $this->hasOne(User::class)->where('role_societe', RoleSociete::Proprietaire->value);
+    }
+
+    /**
+     * La dernière décision d'examen de son SIREN par l'éditeur, inscrite à
+     * son journal d'audit (SirenExamine, voir ExaminerSirenAction), dont
+     * la régularisation de ses factures se déduit (voir
+     * RegularisationDUneFacture::estDesignee()). La relation filtre déjà
+     * par la société, et ne lit que cette entrée : elle se lit sans
+     * SocieteScope, une fois par société chargée, pour toutes les factures
+     * d'une liste qui partagent son magasin (voir FactureResource::table()).
+     *
+     * @return HasOne<EntreeAudit, $this>
+     */
+    public function dernierExamenDuSiren(): HasOne
+    {
+        return $this->hasOne(EntreeAudit::class)
+            ->withoutGlobalScope(SocieteScope::class)
+            ->ofMany(['id' => 'max'], fn (Builder $entrees): Builder => $entrees->where('action', ActionAuditee::SirenExamine->value));
     }
 
     /**

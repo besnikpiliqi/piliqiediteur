@@ -10,6 +10,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -62,17 +63,17 @@ use LogicException;
  * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
  * la société se crée ici comme tout avoir, régularisation notée (voir
  * FaireLAvoirDeRegularisationAction, qui en choisit les lignes). Une
- * facture qui a sa facture rectificative ne reçoit plus d'autre avoir : un
- * retour se fait sur la rectificative, qui en a repris les lignes (voir
- * RegularisationDUneFacture).
+ * facture désignée ne reçoit pas d'autre avoir, ni la facture
+ * rectificative qui attend encore l'avoir de régularisation : un retour se
+ * fait sur la rectificative, qui en a repris les lignes, une fois cet avoir
+ * émis (voir RegularisationDUneFacture::refusDUnAvoirOrdinaire()).
  */
 class CreerAvoirAction
 {
-    public const REFUS_FACTURE_RECTIFIEE = 'La facture %s a sa facture rectificative : un retour se fait sur la rectificative.';
-
     public function __construct(
         private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
+        private readonly RegularisationDUneFacture $regularisationDUneFacture,
     ) {}
 
     /**
@@ -125,8 +126,10 @@ class CreerAvoirAction
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
-                if (! $regularisation && $facture->rectificative()->exists()) {
-                    throw new LogicException(sprintf(self::REFUS_FACTURE_RECTIFIEE, $facture->numero));
+                $refus = $regularisation ? null : $this->regularisationDUneFacture->refusDUnAvoirOrdinaire($facture);
+
+                if ($refus !== null) {
+                    throw new LogicException($refus);
                 }
 
                 $premiere ??= $facture;

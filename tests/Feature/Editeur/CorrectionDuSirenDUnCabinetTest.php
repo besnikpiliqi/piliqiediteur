@@ -10,9 +10,11 @@ use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Exceptions\CabinetNonVerifieException;
+use App\Domain\Cabinets\Jobs\PrevenirLesClientsDuCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
-use App\Domain\Cabinets\Services\AvisAuxClientsDuCabinet;
+use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -28,7 +30,11 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use Database\Factories\SocieteFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Livewire\Mechanisms\ComponentRegistry;
 use LogicException;
@@ -167,7 +173,7 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
         $this->assertStringContainsString("désormais {$sirenCorrect}", $avis->data['body']);
         $this->assertStringContainsString('n\'ouvre plus aucun client', $avis->data['body']);
         foreach ([$premier, $second] as $magasin) {
-            $suspendu = $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', AvisAuxClientsDuCabinet::TITRE_SUSPENDU);
+            $suspendu = $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', PrevenirLesClientsDuCabinet::TITRE_SUSPENDU);
             $this->assertCount(1, $suspendu);
             $this->assertSame("L'accès du cabinet {$cabinet->fresh()->getFilamentName()} à votre société est suspendu jusqu'à sa nouvelle vérification.", $suspendu->sole()->data['body']);
             $this->assertStringNotContainsString('SIREN', $suspendu->sole()->data['body']);
@@ -197,7 +203,7 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
         $this->assertTrue($collaborateur->fresh()->peutOuvrir($magasin));
         $this->flushSession();
         $this->actingAs($collaborateur)->get("/app/{$magasin->uuid}")->assertOk();
-        $retabli = $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', AvisAuxClientsDuCabinet::TITRE_RETABLI);
+        $retabli = $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', PrevenirLesClientsDuCabinet::TITRE_RETABLI);
         $this->assertCount(1, $retabli);
         $this->assertSame("Le cabinet {$cabinet->fresh()->getFilamentName()} accède de nouveau à votre société, selon les autorisations que vous lui accordez.", $retabli->sole()->data['body']);
     }
@@ -223,7 +229,7 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
 
         $this->assertTrue($cabinet->fresh()->estUnCabinetVerifie());
         $this->assertTrue($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
-        $this->assertCount(1, $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', AvisAuxClientsDuCabinet::TITRE_RETABLI));
+        $this->assertCount(1, $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', PrevenirLesClientsDuCabinet::TITRE_RETABLI));
     }
 
     /**
@@ -252,7 +258,7 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
         $this->assertSame([FauxRepertoireSirene::ACTIVITE_PAR_DEFAUT, true, false], [$verification->code_activite, $verification->aUneAutreActivite(), $cabinet->fresh()->estUnCabinetVerifie()]);
         $this->assertSame('autre_activite', collect($this->entreesDAudit($cabinet, ActionAuditee::ActiviteDuCabinetControlee))->last()->nouvelles_valeurs['resultat']);
         $this->assertFalse($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
-        $this->assertCount(0, $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', AvisAuxClientsDuCabinet::TITRE_RETABLI));
+        $this->assertCount(0, $this->proprietaireDe($magasin)->notifications()->get()->where('data.title', PrevenirLesClientsDuCabinet::TITRE_RETABLI));
         $this->dansLEspaceDuCabinet($cabinet->fresh(), $this->proprietaireDuCabinet($cabinet));
         $this->get(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk()->assertSeeText('qui n\'est pas 69.20Z (activités comptables) : il ne peut pas être vérifié.');
         $this->get(VerificationDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk()->assertSeeText('Ce code n\'est pas 69.20Z (activités comptables) : votre cabinet ne peut pas être vérifié.');
@@ -286,6 +292,59 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
     }
 
     /**
+     * Les avis aux propriétaires des clients liés partent par un job en file
+     * d'attente, après la validation de la procédure ou de la requête qui
+     * change l'accès du cabinet, jamais pendant elle : la correction de son
+     * SIREN y place l'avis de la suspension, sa nouvelle vérification à
+     * l'Ordre celui du retour. Quand il passe, chacun relit le cabinet et
+     * ne part que s'il dit encore vrai : l'accès revenu, l'avis de la
+     * suspension ne part plus (constat 10 de la relecture du lot A7b).
+     */
+    public function test_les_avis_aux_clients_partent_par_un_job_en_file_d_attente_qui_ne_dit_que_le_vrai(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Cliente']);
+        $this->lierLeCabinet($cabinet, $magasin);
+        $sirenCorrect = $this->sirenDActiviteComptable();
+        Queue::fake([PrevenirLesClientsDuCabinet::class]);
+        $this->corrigerLeSirenParLEditeur($cabinet, $sirenCorrect);
+        app(AnnuaireDeLOrdre::class)->inscrire($sirenCorrect, '75-00042', FauxAnnuaireDeLOrdre::CONSEIL_DU_CABINET_DE_TEST);
+
+        app(VerifierLOrdreAction::class)->handle($this->proprietaireDuCabinet($cabinet), $cabinet->fresh(), ['numero_ordre' => '75-00042', 'conseil_regional' => FauxAnnuaireDeLOrdre::CONSEIL_DU_CABINET_DE_TEST]);
+
+        $avis = Queue::pushed(PrevenirLesClientsDuCabinet::class);
+        $this->assertSame([[$cabinet->id, false], [$cabinet->id, true]], $avis->map(fn (PrevenirLesClientsDuCabinet $job): array => [$job->cabinetId, $job->accesRetabli])->all());
+        $this->assertSame(0, $this->avisDuCabinet($magasin)->count());
+        $avis->each(fn (PrevenirLesClientsDuCabinet $job) => $job->handle(app(AccesDesCabinets::class)));
+        $this->assertSame([PrevenirLesClientsDuCabinet::TITRE_RETABLI], $this->avisDuCabinet($magasin)->pluck('data.title')->all());
+    }
+
+    /**
+     * Le job prévient le propriétaire de chaque client lié du cabinet, et
+     * de lui seul, en lisant ses destinataires d'un coup : autant de
+     * lectures pour trois clients que pour un ; le client d'un autre
+     * cabinet n'est prévenu de rien.
+     */
+    public function test_le_job_previent_le_proprietaire_de_chaque_client_lie_en_lisant_ses_destinataires_d_un_coup(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $clients = collect(['Première cliente', 'Deuxième cliente', 'Troisième cliente'])->map(fn (string $nom): Magasin => $this->ouvrirUneSociete(['nom' => $nom]));
+        $this->lierLeCabinet($cabinet, $clients[0]);
+        $autreCabinet = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux');
+        $clientDeLAutre = $this->ouvrirUneSociete(['nom' => 'Cliente de l\'autre']);
+        $this->lierLeCabinet($autreCabinet, $clientDeLAutre);
+        $lecturesPourUnClient = $this->lecturesDuJob($cabinet);
+        $this->lierLeCabinet($cabinet, $clients[1]);
+        $this->lierLeCabinet($cabinet, $clients[2]);
+
+        $lecturesPourTroisClients = $this->lecturesDuJob($cabinet);
+
+        $this->assertSame($lecturesPourUnClient, $lecturesPourTroisClients);
+        $this->assertSame([2, 1, 1, 0], [...$clients->map(fn (Magasin $magasin): int => $this->avisDuCabinet($magasin)->count())->all(), $this->avisDuCabinet($clientDeLAutre)->count()]);
+        $this->assertSame(0, $this->proprietaireDuCabinet($cabinet)->notifications()->get()->where('data.title', PrevenirLesClientsDuCabinet::TITRE_RETABLI)->count());
+    }
+
+    /**
      * Un SIREN libre, d'activité 69.20Z en NAF rév. 2 au répertoire Sirene
      * factice.
      */
@@ -295,6 +354,34 @@ class CorrectionDuSirenDUnCabinetTest extends TestCase
         app(RepertoireSirene::class)->exercer($siren, ControleSirene::CODE_ACTIVITES_COMPTABLES);
 
         return $siren;
+    }
+
+    /**
+     * Les avis de la suspension et du retour de l'accès du cabinet reçus
+     * par le propriétaire de ce client.
+     *
+     * @return Collection<int, DatabaseNotification>
+     */
+    private function avisDuCabinet(Magasin $magasin): Collection
+    {
+        return $this->proprietaireDe($magasin)->notifications()->get()
+            ->whereIn('data.title', [PrevenirLesClientsDuCabinet::TITRE_SUSPENDU, PrevenirLesClientsDuCabinet::TITRE_RETABLI])
+            ->values();
+    }
+
+    /**
+     * Le nombre de lectures que fait le job qui annonce le retour de
+     * l'accès de ce cabinet à ses clients liés.
+     */
+    private function lecturesDuJob(Societe $cabinet): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        (new PrevenirLesClientsDuCabinet((int) $cabinet->id, accesRetabli: true))->handle(app(AccesDesCabinets::class));
+        $lectures = collect(DB::getQueryLog())->filter(fn (array $requete): bool => str_starts_with(strtolower(ltrim($requete['query'])), 'select'))->count();
+        DB::disableQueryLog();
+
+        return $lectures;
     }
 
     private function editeur(): InterventionDeLEditeur

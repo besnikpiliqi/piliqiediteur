@@ -2,6 +2,9 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Models\Avoir;
@@ -43,18 +46,32 @@ use Illuminate\Support\LazyCollection;
  * ensuite (voir CorrigerSirenAction) ; une usurpation, que la révocation
  * traite (voir RevoquerSocieteAction) ; rien à régulariser, qui le clôt.
  *
+ * L'instant de l'examen se prend sous les verrous des registres de tous
+ * ses magasins réels : le premier des instants que ces verrous notent
+ * (voir RegistreFiscal::verrouiller()), ou maintenant sans magasin réel.
+ * Une émission en cours s'est alors validée, et toute émission qui suit
+ * la levée de ces verrous prend un instant qui n'est pas antérieur à celui
+ * que le verrou de son registre a noté, donc à celui de l'examen, quelle
+ * que soit l'horloge du serveur qui la fait. L'examen porte sur les
+ * documents émis avant cet instant, tous validés quand il les lit, jamais
+ * sur un document émis dans sa seconde ou après, qui n'est pas de sa liste
+ * (voir RegularisationDUneFacture::estDesignee()) : une facture à un
+ * professionnel émise dans cette seconde, avant comme après lui, rend la
+ * correction impossible jusqu'à un nouvel examen (voir
+ * CorrigerSirenAction).
+ *
  * Les documents se lisent par lots (LOT), jamais tous en mémoire, et
- * l'entrée d'audit n'en garde qu'un résumé, quel que soit leur nombre : les
- * documents émis jusqu'à l'instant de l'examen (documents_emis_jusqu_au, en
- * UTC), et, pour chaque magasin et chaque type, leur nombre, leur premier
- * et leur dernier numéro, avec l'empreinte SHA-256 de la liste entière
- * (une ligne « code du magasin, type, numéro » séparés par des
- * tabulations, dans l'ordre de l'examen : magasin par magasin, par
- * identifiant, ses factures et tickets puis ses avoirs, chacun par date
- * d'émission puis identifiant). Ces documents, qui ne changent jamais, se
- * retrouvent ainsi à l'identique. Lecture des documents des magasins réels
- * de cette seule société, chacun sous son magasin : la lecture « l'examen
- * exceptionnel d'un SIREN par l'éditeur » de CLAUDE.md.
+ * l'entrée d'audit n'en garde qu'un résumé, quel que soit leur nombre :
+ * l'instant avant lequel ils ont été émis (documents_emis_avant, en UTC),
+ * et, pour chaque magasin et chaque type, leur nombre, leur premier et
+ * leur dernier numéro, avec l'empreinte SHA-256 de la liste entière (une
+ * ligne « code du magasin, type, numéro » séparés par des tabulations,
+ * dans l'ordre de l'examen : magasin par magasin, par identifiant, ses
+ * factures et tickets puis ses avoirs, chacun par date d'émission puis
+ * identifiant). Ces documents, qui ne changent jamais, se retrouvent ainsi
+ * à l'identique. Lecture des documents des magasins réels de cette seule
+ * société, chacun sous son magasin : la lecture « l'examen exceptionnel
+ * d'un SIREN par l'éditeur » de CLAUDE.md.
  */
 class ExaminerSirenAction
 {
@@ -74,6 +91,7 @@ class ExaminerSirenAction
     public function __construct(
         private readonly JournalAudit $journalAudit,
         private readonly CalculateurLigne $calculateur,
+        private readonly RegistreFiscal $registre,
     ) {}
 
     /**
@@ -81,6 +99,8 @@ class ExaminerSirenAction
      * @return int le nombre de documents émis concernés
      *
      * @throws VerificationRefuseeException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
      */
     public function handle(Societe $societe, string $sirenCorrect, DecisionExamenSiren $decision, InterventionDeLEditeur $editeur, ?Closure $pourChaqueDocument = null): int
     {
@@ -97,14 +117,17 @@ class ExaminerSirenAction
                 throw new VerificationRefuseeException(self::MESSAGE_SANS_CODE);
             }
 
-            $jusquAu = CarbonImmutable::now()->startOfSecond();
+            $magasins = $societe->magasinsReels()->orderBy('id')->get();
+            $avant = $this->registre->sousVerrouDesMagasins($magasins, fn (): CarbonImmutable => $magasins
+                ->map(fn (Magasin $magasin): CarbonImmutable => app(TenantContext::class)->runAs($magasin, fn (): CarbonImmutable => $this->registre->verrouiller($magasin)->utc))
+                ->min() ?? CarbonImmutable::now()->startOfSecond());
             $resume = [];
             $empreinte = hash_init('sha256');
             $nombre = 0;
 
-            foreach ($societe->magasinsReels()->orderBy('id')->get() as $magasin) {
-                app(TenantContext::class)->runAs($magasin, function () use ($magasin, $jusquAu, $pourChaqueDocument, &$resume, $empreinte, &$nombre): void {
-                    foreach ($this->documentsDuMagasin($magasin, $jusquAu) as $document) {
+            foreach ($magasins as $magasin) {
+                app(TenantContext::class)->runAs($magasin, function () use ($magasin, $avant, $pourChaqueDocument, &$resume, $empreinte, &$nombre): void {
+                    foreach ($this->documentsDuMagasin($magasin, $avant) as $document) {
                         $cle = "{$document['magasin']}\t{$document['type']}";
                         $resume[$cle] ??= ['magasin' => $document['magasin'], 'type' => $document['type'], 'nombre' => 0, 'premier' => $document['numero'], 'dernier' => $document['numero']];
                         $resume[$cle]['nombre']++;
@@ -122,7 +145,7 @@ class ExaminerSirenAction
             DB::transaction(fn () => $this->journalAudit->inscrire(ActionAuditee::SirenExamine, null, null, null, [
                 'siren_correct' => $sirenCorrect,
                 'decision' => $decision->value,
-                'documents_emis_jusqu_au' => Instant::enBase($jusquAu),
+                'documents_emis_avant' => Instant::enBase($avant),
                 'documents' => array_values($resume),
                 'empreinte_des_documents' => hash_final($empreinte),
             ], $societe, $editeur));
@@ -151,14 +174,14 @@ class ExaminerSirenAction
     }
 
     /**
-     * Les documents du magasin actif émis jusqu'à cet instant, factures et
+     * Les documents du magasin actif émis avant cet instant, factures et
      * tickets puis avoirs, chacun dans l'ordre de leur émission, lus par
      * lots, avec leurs montants enregistrés, en centimes, et le SIREN que
      * leur contenu signé porte.
      *
      * @return LazyCollection<int, array{magasin: string, type: string, numero: string, date: string, client: string|null, montant_ttc: int, regle: int, siren_signe: string|null}>
      */
-    private function documentsDuMagasin(Magasin $magasin, CarbonImmutable $jusquAu): LazyCollection
+    private function documentsDuMagasin(Magasin $magasin, CarbonImmutable $avant): LazyCollection
     {
         $calendrier = $magasin->calendrier();
         $ligne = fn (Facture|Avoir $document, string $type, int $regleEnCentimes): array => [
@@ -172,9 +195,9 @@ class ExaminerSirenAction
             'siren_signe' => $document->emetteur()->siren,
         ];
 
-        return Facture::query()->whereNotNull('numero')->where('date_emission', '<=', $jusquAu)->with(['allocationsPaiement', 'allocationsAvoir'])->orderBy('date_emission')->orderBy('id')->lazy(self::LOT)
+        return Facture::query()->whereNotNull('numero')->where('date_emission', '<', $avant)->with(['allocationsPaiement', 'allocationsAvoir'])->orderBy('date_emission')->orderBy('id')->lazy(self::LOT)
             ->map(fn (Facture $facture): array => $ligne($facture, $facture->type_client === TypeClient::Particulier ? 'ticket' : 'facture', $facture->regleEnCentimes()))
-            ->concat(Avoir::query()->whereNotNull('numero')->where('date_emission', '<=', $jusquAu)->orderBy('date_emission')->orderBy('id')->lazy(self::LOT)
+            ->concat(Avoir::query()->whereNotNull('numero')->where('date_emission', '<', $avant)->orderBy('date_emission')->orderBy('id')->lazy(self::LOT)
                 ->map(fn (Avoir $avoir): array => $ligne($avoir, 'avoir', $this->calculateur->enCentiemes($avoir->total_ttc) - $avoir->creditEnCentimes())));
     }
 }

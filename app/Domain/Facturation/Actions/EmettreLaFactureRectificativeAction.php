@@ -49,8 +49,10 @@ use LogicException;
  * DecrementerStockApresEmissionFacture), avec la copie du client que la
  * facture a figée et la mention qui la rectifie (voir MentionsFiscales) ;
  * le crédit encore réservé de son avoir de régularisation déjà émis la
- * règle avant tout autre (voir AppliquerAvoirsDisponiblesAction). Elle
- * s'inscrit enfin au journal d'audit, dans la chaîne du magasin.
+ * règle avant tout autre (voir AppliquerAvoirsDisponiblesAction) ; émise
+ * avant cet avoir, elle l'attend, sans rien recevoir d'ici là (voir
+ * StatutFacture::EnAttenteDeRegularisation). Elle s'inscrit enfin au
+ * journal d'audit, dans la chaîne du magasin.
  *
  * La demande porte un jeton (R3, voir ActionsUniques), cherché sous le
  * verrou du registre : répétée après une réponse perdue, elle rend la

@@ -3,7 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
-use App\Domain\Cabinets\Services\AvisAuxClientsDuCabinet;
+use App\Domain\Cabinets\Jobs\PrevenirLesClientsDuCabinet;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -65,14 +65,16 @@ use Throwable;
  * (voir Societe::estUnCabinetVerifie(), VerifierLOrdreAction et
  * ConstaterLInscriptionALOrdreAction). Ensuite, s'il était vérifié, le
  * propriétaire de chacun de ses clients liés est prévenu que l'accès de
- * son cabinet est suspendu (voir AvisAuxClientsDuCabinet).
+ * son cabinet est suspendu, par un job en file d'attente (voir
+ * PrevenirLesClientsDuCabinet).
  *
  * Les contrôles du répertoire se font avant toute écriture ; puis, sous
  * les verrous des registres de tous ses magasins réels, de sa ligne, puis
  * de chaque magasin qui change de SIRET, seulement si aucun de ses
  * magasins réels n'a émis de facture à un professionnel depuis l'instant
- * de l'examen (sa liste désigne alors toutes celles que l'ancien SIREN a
- * signées, les seules qui se régularisent ensuite), et si aucun de ces
+ * de l'examen, ni dans sa seconde (sa liste, des documents émis avant
+ * lui, désigne alors toutes celles que l'ancien SIREN a signées, les
+ * seules qui se régularisent ensuite), et si aucun de ces
  * magasins ne porte le code d'un magasin d'une autre inscription qui a
  * déjà numéroté des documents sous le nouveau SIREN (une société révoquée
  * qui l'avait, voir CodeMagasin::aServiSousCeSiren()), dont il répéterait
@@ -120,7 +122,7 @@ class CorrigerSirenAction
 
     public const MESSAGE_CODE_DEJA_EMIS = 'Le magasin %s ne peut pas numéroter sous ce SIREN : une autre inscription de ce SIREN a déjà émis des documents sous son code, et ses numéros se répéteraient. Rien n\'est corrigé.';
 
-    public const MESSAGE_FACTURES_DEPUIS_L_EXAMEN = 'Des factures ont été émises depuis l\'examen du SIREN : examinez-le de nouveau (editeur:societe:examiner-siren --decision=erreur), pour que sa liste les désigne. Rien n\'est corrigé.';
+    public const MESSAGE_FACTURES_DEPUIS_L_EXAMEN = 'Des factures ont été émises depuis l\'examen du SIREN, ou dans sa seconde : examinez-le de nouveau (editeur:societe:examiner-siren --decision=erreur), pour que sa liste les désigne. Rien n\'est corrigé.';
 
     /**
      * Le motif, au journal d'audit d'un cabinet, de la vérification de son
@@ -134,7 +136,6 @@ class CorrigerSirenAction
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
-        private readonly AvisAuxClientsDuCabinet $avisAuxClients,
     ) {}
 
     /**
@@ -239,7 +240,7 @@ class CorrigerSirenAction
         $this->prevenirLeProprietaire($corrigee);
 
         if ($cabinetQuiEtaitVerifie) {
-            $this->avisAuxClients->accesSuspendu($corrigee);
+            PrevenirLesClientsDuCabinet::dispatch((int) $corrigee->getKey(), accesRetabli: false);
         }
 
         return $corrigee;
@@ -330,7 +331,8 @@ class CorrigerSirenAction
 
     /**
      * Aucune facture à un professionnel n'a été émise par l'un de ces
-     * magasins depuis l'instant de l'examen : la liste de l'examen désigne
+     * magasins dans la seconde de l'examen ou depuis : la liste de l'examen,
+     * des documents émis avant cet instant (voir ExaminerSirenAction), désigne
      * ainsi toutes les factures que l'ancien SIREN a signées, les seules qui
      * se régularisent ensuite (voir RegularisationDUneFacture). Lu sous les
      * verrous de leurs registres, que toute émission prend.
@@ -341,13 +343,13 @@ class CorrigerSirenAction
      */
     private static function exigerAucuneFactureDepuisLExamen(Collection $magasins, EntreeAudit $examen): void
     {
-        $jusquAu = Instant::depuisLaBase((string) $examen->nouvelles_valeurs['documents_emis_jusqu_au']);
+        $avant = Instant::depuisLaBase((string) $examen->nouvelles_valeurs['documents_emis_avant']);
 
         foreach ($magasins as $magasin) {
             $emise = app(TenantContext::class)->runAs($magasin, fn (): bool => Facture::query()
                 ->whereNotNull('numero')
                 ->where('type_client', TypeClient::Professionnel->value)
-                ->where('date_emission', '>', $jusquAu)
+                ->where('date_emission', '>=', $avant)
                 ->exists());
 
             if ($emise) {

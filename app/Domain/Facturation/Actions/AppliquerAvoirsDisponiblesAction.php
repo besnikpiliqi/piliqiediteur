@@ -34,10 +34,16 @@ use Illuminate\Support\Facades\DB;
  * Le crédit de l'avoir de régularisation d'une facture, après la
  * correction du SIREN de la société, n'est pas un crédit disponible : il
  * est réservé à cette facture, puis à sa facture rectificative (voir
- * RegularisationDUneFacture). À l'émission de cette rectificative, ce qui
- * lui en reste la règle d'abord, avant tout autre crédit du client ; il ne
- * règle jamais une autre facture. Cette imputation n'est jamais un
- * encaissement.
+ * RegularisationDUneFacture), et il ne règle jamais une autre facture.
+ * Émise après cet avoir, la rectificative reçoit d'abord ce qui lui en
+ * reste, puis, comme toute facture, le crédit disponible du client. Émise
+ * avant, elle attend cet avoir (voir
+ * StatutFacture::EnAttenteDeRegularisation) et ne reçoit rien ici : tant
+ * qu'elle attend, aucun crédit du client ne la règle, et c'est l'avoir qui
+ * la règle à son émission (voir ImputationDuCredit). Quel que soit l'ordre
+ * des deux gestes, la rectificative reçoit ainsi ce que la facture avait
+ * reçu, et reste due de ce que le client devait encore sur la facture.
+ * Cette imputation n'est jamais un encaissement.
  */
 class AppliquerAvoirsDisponiblesAction
 {
@@ -54,7 +60,7 @@ class AppliquerAvoirsDisponiblesAction
             $client = $facture->client;
             $resteDu = $facture->resteDuEnCentimes();
 
-            if ($resteDu <= 0 || $client->estComptoir()) {
+            if ($resteDu <= 0 || $client->estComptoir() || ! $facture->statut->attendUnReglement()) {
                 return;
             }
 

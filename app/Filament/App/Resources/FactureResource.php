@@ -32,6 +32,7 @@ use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Tenancy\Models\Magasin;
@@ -266,7 +267,17 @@ class FactureResource extends Resource
                     ->state(fn (Facture $record) => $record->montantCrediteParAvoir())
                     ->money('EUR')
                     ->visible(fn (Facture $record) => $record->montantCrediteParAvoir() > 0),
-                TextEntry::make('montant_restant')->label('Restant dû')->state(fn (Facture $record) => $record->montantRestant())->money('EUR'),
+                // La facture rectificative qui attend l'avoir de
+                // régularisation de la facture qu'elle rectifie n'attend
+                // aucun règlement (voir StatutFacture::EnAttenteDeRegularisation) :
+                // sa fiche le dit sous ce qu'il en reste dû.
+                TextEntry::make('montant_restant')
+                    ->label('Restant dû')
+                    ->state(fn (Facture $record) => $record->montantRestant())
+                    ->money('EUR')
+                    ->helperText(fn (Facture $record): ?string => $record->statut === StatutFacture::EnAttenteDeRegularisation
+                        ? sprintf(RegularisationDUneFacture::ATTENTE_DE_L_AVOIR, $record->factureRectifiee?->numero)
+                        : null),
             ])->columns(3),
 
             InfolistSection::make('Paiements reçus')
@@ -673,8 +684,12 @@ class FactureResource extends Resource
             // requête par facture. La fiche, qui montre la date, le mode et
             // la référence de chaque paiement, lit ses imputations en
             // entier. La facture rectificative de chacune, après une
-            // correction du SIREN de la société, dit si l'action « Avoir »
-            // s'y propose (voir AvoirResource::peutCrediter()).
+            // correction du SIREN de la société, et la dernière décision
+            // d'examen de ce SIREN disent si l'action « Avoir » s'y propose
+            // (voir AvoirResource::peutCrediter()) : les factures de la
+            // liste partagent le magasin que getEloquentQuery() charge avec
+            // elles, et sa société lit cette décision une seule fois (voir
+            // Societe::dernierExamenDuSiren()).
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id']))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),

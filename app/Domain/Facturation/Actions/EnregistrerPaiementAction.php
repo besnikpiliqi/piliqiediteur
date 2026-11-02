@@ -11,12 +11,14 @@ use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -228,6 +230,10 @@ class EnregistrerPaiementAction
     {
         if ((int) $facture->client_id !== $client->getKey()) {
             throw new LogicException("La facture {$facture->numero} n'appartient pas au client de ce paiement.");
+        }
+
+        if ($facture->statut === StatutFacture::EnAttenteDeRegularisation) {
+            throw new LogicException(sprintf(RegularisationDUneFacture::REFUS_PAIEMENT_EN_ATTENTE, $facture->numero, $facture->factureRectifiee()->value('numero')));
         }
 
         if (! $facture->statut->attendUnReglement()) {

@@ -99,6 +99,37 @@ class IsolationDesCabinetsTest extends TestCase
     }
 
     /**
+     * L'adresse de la fiche d'un client que produit la table du cabinet,
+     * par l'action « Ouvrir » comme par le clic sur la ligne, porte l'uuid
+     * du lien, jamais son identifiant numérique : elle ouvre la fiche pour
+     * le propriétaire du cabinet et pour le collaborateur à qui ce client
+     * est confié ; la même adresse donne 404 au collaborateur à qui il ne
+     * l'est pas et au propriétaire d'un autre cabinet, qui ne la trouve pas
+     * non plus dans son propre espace ; l'adresse qui porte l'identifiant
+     * numérique du lien donne 404.
+     */
+    public function test_l_adresse_de_la_fiche_produite_par_la_table_porte_l_uuid_du_lien_et_ne_s_ouvre_qu_a_qui_le_client_est_ouvert(): void
+    {
+        $adresse = url("/cabinet/{$this->c1->uuid}/clients/{$this->lienX->uuid}");
+
+        foreach (['propriétaire' => $this->proprietaireDuCabinet($this->c1), 'collaborateur confié' => $this->a] as $qui => $compte) {
+            $this->dansLEspaceDuCabinet($this->c1, $compte);
+            $liste = Livewire::test(ListClientsDuCabinet::class)->assertTableActionHasUrl('view', $adresse, $this->lienX);
+
+            $this->assertSame($adresse, $liste->instance()->getTable()->getRecordUrl($this->lienX), $qui);
+            $this->get($adresse)->assertOk()->assertSeeText('CLIENTE X');
+        }
+
+        $this->dansLEspaceDuCabinet($this->c1, $this->b);
+        $this->get($adresse)->assertNotFound();
+        $this->dansLEspaceDuCabinet($this->c2, $this->proprietaireDuCabinet($this->c2));
+        $this->get($adresse)->assertNotFound();
+        $this->get(url("/cabinet/{$this->c2->uuid}/clients/{$this->lienX->uuid}"))->assertNotFound();
+        $this->dansLEspaceDuCabinet($this->c1, $this->proprietaireDuCabinet($this->c1));
+        $this->get(url("/cabinet/{$this->c1->uuid}/clients/{$this->lienX->getKey()}"))->assertNotFound();
+    }
+
+    /**
      * La liste des clients se cherche par dénomination, sans casse ni
      * accents, ou par SIREN, parmi les seuls clients que le cabinet ouvre
      * au compte : jamais le client d'un autre cabinet, ni, pour un

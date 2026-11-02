@@ -19,6 +19,7 @@ use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\Connexion;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\FicheDuCollaborateur;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages\ListCollaborateurs;
@@ -264,9 +265,9 @@ class CollaborateursTest extends TestCase
 
     /**
      * Un collaborateur n'ouvre jamais l'espace d'administration d'une
-     * société, pas même de son cabinet, et ne change jamais de rôle : le
-     * propriétaire du cabinet n'a pas ce geste, et un cabinet n'a ni
-     * administrateur ni membre.
+     * société, pas même de son cabinet, dont l'adresse le mène à l'espace
+     * du cabinet, et ne change jamais de rôle : le propriétaire du cabinet
+     * n'a pas ce geste, et un cabinet n'a ni administrateur ni membre.
      */
     public function test_un_collaborateur_n_ouvre_jamais_l_espace_societe_et_ne_change_jamais_de_role(): void
     {
@@ -275,7 +276,7 @@ class CollaborateursTest extends TestCase
         $collaborateur = $this->collaborateur($cabinet);
 
         $this->assertSame([false, true], [$collaborateur->canAccessPanel(Filament::getPanel('societe')), $collaborateur->canAccessPanel(Filament::getPanel('cabinet'))]);
-        $this->actingAs($collaborateur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $cabinet))->assertForbidden();
+        $this->actingAs($collaborateur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $cabinet))->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet));
         $this->assertFalse(app(PorteeDesDroits::class)->peutChangerLeRoleDeSociete($proprietaire, $collaborateur));
         $this->assertFalse($proprietaire->can('changerLeRoleDeSociete', $collaborateur));
         $this->assertSame([false, false, false], [$proprietaire->can('creerUnAdministrateur', User::class), $proprietaire->can('create', User::class), $collaborateur->can('creerUnCollaborateur', User::class)]);

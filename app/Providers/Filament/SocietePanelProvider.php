@@ -10,8 +10,8 @@ use App\Filament\Societe\Pages\AccepterLaTransmission;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
+use App\Http\Middleware\MenerUnCabinetASonEspace;
 use Filament\Facades\Filament;
-use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -36,8 +36,10 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * propriétaire et à ses administrateurs actifs, selon leurs autorisations
  * et leur portée, jamais à un membre ni à un compte d'un cabinet (voir
  * User::canAccessPanel(), SocietePolicy, MagasinDeLaSocietePolicy et
- * MembrePolicy). Un administrateur dont le mot de passe est encore son
- * identifiant y choisit d'abord le sien (voir ExigerSonPropreMotDePasse).
+ * MembrePolicy) : l'adresse de son propre cabinet mène celui-ci à l'espace
+ * de son cabinet (voir MenerUnCabinetASonEspace). Un administrateur dont
+ * le mot de passe est encore son identifiant y choisit d'abord le sien
+ * (voir ExigerSonPropreMotDePasse).
  * Un administrateur y accepte la transmission de la propriété par le lien
  * reçu à son adresse (voir AccepterLaTransmission), hors de toute
  * société. La tenancy Filament y est branchée sur Societe, sans menu de
@@ -98,8 +100,12 @@ class SocietePanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            // L'authentification de Filament, qui mène en plus un compte
+            // d'un cabinet d'expertise comptable qui ouvre ici l'adresse de
+            // son propre cabinet à l'espace de son cabinet (voir
+            // MenerUnCabinetASonEspace).
             ->authMiddleware([
-                Authenticate::class,
+                MenerUnCabinetASonEspace::class,
                 ExigerSonPropreMotDePasse::class,
             ], isPersistent: true)
             // Tant que la société n'est pas validée, ce qui reste désactivé.

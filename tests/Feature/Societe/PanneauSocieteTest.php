@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
@@ -147,28 +148,33 @@ class PanneauSocieteTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string}>
+     * Chaque compte sans espace d'administration, avec ce que l'adresse de
+     * l'espace sous le uuid de sa propre société lui répond : un refus pour
+     * un membre, l'espace de son cabinet pour un compte d'un cabinet.
+     *
+     * @return array<string, array{0: string, 1: string}>
      */
     public static function comptesSansEspaceSociete(): array
     {
         return [
-            'responsable' => ['responsable'],
-            'vendeur' => ['vendeur'],
-            'observateur' => ['observateur'],
-            'propriétaire d\'un cabinet' => ['propriétaire d\'un cabinet'],
-            'collaborateur' => ['collaborateur'],
+            'responsable' => ['responsable', 'refus'],
+            'vendeur' => ['vendeur', 'refus'],
+            'observateur' => ['observateur', 'refus'],
+            'propriétaire d\'un cabinet' => ['propriétaire d\'un cabinet', 'espace du cabinet'],
+            'collaborateur' => ['collaborateur', 'espace du cabinet'],
         ];
     }
 
     /**
      * L'espace d'administration d'une société ne s'ouvre ni à un membre,
      * responsable compris, ni à un compte du cabinet lié, son propriétaire
-     * ou un collaborateur, qui a l'espace de son cabinet : 403, ni pour la
-     * société cliente ni pour le cabinet, et le panneau ne leur propose
-     * aucune société.
+     * ou un collaborateur, qui a l'espace de son cabinet : 403 pour la
+     * société cliente ; pour sa propre société, 403 pour un membre, et
+     * l'espace de son cabinet pour un compte d'un cabinet ; le panneau ne
+     * leur propose aucune société.
      */
     #[DataProvider('comptesSansEspaceSociete')]
-    public function test_ni_un_membre_ni_un_compte_de_cabinet_n_ouvrent_l_espace_societe(string $compte): void
+    public function test_ni_un_membre_ni_un_compte_de_cabinet_n_ouvrent_l_espace_societe(string $compte, string $saSociete): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $visiteur = match ($compte) {
@@ -182,7 +188,11 @@ class PanneauSocieteTest extends TestCase
         $this->assertFalse($visiteur->canAccessPanel(Filament::getPanel('societe')));
         $this->assertSame([], $visiteur->getTenants(Filament::getPanel('societe'))->modelKeys());
         $this->actingAs($visiteur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
-        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $visiteur->societe))->assertForbidden();
+        $reponse = $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $visiteur->societe));
+        match ($saSociete) {
+            'refus' => $reponse->assertForbidden(),
+            'espace du cabinet' => $reponse->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $visiteur->societe)),
+        };
     }
 
     /**

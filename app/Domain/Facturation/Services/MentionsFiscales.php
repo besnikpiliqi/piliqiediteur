@@ -34,15 +34,24 @@ use App\Domain\Tenancy\Enums\RegimeTva;
  *   réimprimé après un changement de l'option, il garde la mention de
  *   son émission.
  *
- * S'y ajoute, sous les lignes de tout document hors franchise en base,
- * l'explication de son calcul (voir calcul()), qui ne se signe pas, et,
- * sur l'avoir d'un client comptoir, la mention de son bon d'avoir (voir
- * bonDAvoir()). Le motif d'un taux de 0 % se répète aussi dans le tableau
- * de la TVA, à côté de ce taux (voir motifDuTauxZero()).
+ * Une facture rectificative, après la correction du SIREN de la société,
+ * dit d'abord quelle facture elle rectifie (« Facture rectificative de la
+ * facture n° FAC-LYON-2026-000001 du 15/10/2026 », voir
+ * RegularisationDUneFacture). S'y ajoute, sous les lignes de tout document
+ * hors franchise en base, l'explication de son calcul (voir calcul()), qui
+ * ne se signe pas ; sur l'avoir d'un client comptoir, la mention de son
+ * bon d'avoir (voir bonDAvoir()) ; sur un avoir de régularisation, celle de
+ * la régularisation, avec le SIREN correct (voir regularisation()). Le
+ * motif d'un taux de 0 % se répète aussi dans le tableau de la TVA, à côté
+ * de ce taux (voir motifDuTauxZero()).
  */
 class MentionsFiscales
 {
     private const OPTION_DEBITS = 'Option pour le paiement de la taxe d\'après les débits';
+
+    public const RECTIFICATIVE = 'Facture rectificative de la facture n° %s du %s';
+
+    public const REGULARISATION = 'Avoir de régularisation émis après correction de l\'identité du vendeur (SIREN correct : %s)';
 
     private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
 
@@ -61,6 +70,11 @@ class MentionsFiscales
     public function pour(Facture|Avoir|Devis $document, Emetteur $emetteur): array
     {
         $mentions = [];
+
+        if ($document instanceof Facture && $document->estUneRectificative()) {
+            $rectifiee = $document->factureRectifiee()->firstOrFail();
+            $mentions[] = sprintf(self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher($rectifiee->date_emission, 'd/m/Y'));
+        }
 
         if (! $document instanceof Devis) {
             $mentions[] = 'Catégorie de l\'opération : '.CategorieOperation::depuisNatures($document->lignes->pluck('nature'))->getLabel();
@@ -109,6 +123,19 @@ class MentionsFiscales
         }
 
         return 'Ce n° vaut bon d\'avoir de '.app(CalculateurLigne::class)->enEuros($credit).' à présenter lors d\'un prochain achat.';
+    }
+
+    /**
+     * La mention qu'imprime l'avoir de régularisation d'une facture, après
+     * la correction du SIREN de la société, avec ce SIREN correct, celui de
+     * la société à l'émission de l'avoir (voir RegularisationDUneFacture).
+     * Calculée et signée à l'émission (voir ContenuFiscal), elle se relit
+     * ensuite dans le contenu signé (voir Avoir::mentionDeRegularisation()).
+     * Null pour tout autre avoir.
+     */
+    public function regularisation(Avoir $avoir): ?string
+    {
+        return $avoir->estUneRegularisation() ? sprintf(self::REGULARISATION, $avoir->magasin->societe->siren) : null;
     }
 
     /**

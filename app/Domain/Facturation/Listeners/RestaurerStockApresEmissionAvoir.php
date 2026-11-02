@@ -13,7 +13,10 @@ use App\Domain\Stock\Services\StockLedgerService;
  * stock n'en est jamais sorti, son retour n'y fait rien entrer. Chaque
  * retour a pour source la ligne de l'avoir, qui relie l'avoir à la facture
  * reprise. C'est le seul retour au stock d'une vente : une facture émise
- * ne se corrige que par un avoir.
+ * ne se corrige que par un avoir. L'avoir de régularisation d'une facture,
+ * après la correction du SIREN de la société, ne rend rien : les articles
+ * restent vendus, à la facture rectificative (voir
+ * RegularisationDUneFacture).
  */
 class RestaurerStockApresEmissionAvoir
 {
@@ -21,6 +24,10 @@ class RestaurerStockApresEmissionAvoir
 
     public function handle(AvoirEmis $event): void
     {
+        if ($event->avoir->estUneRegularisation()) {
+            return;
+        }
+
         foreach ($event->avoir->lignes as $ligne) {
             $produit = $ligne->produit;
             $facture = $ligne->ligneFacture?->facture;

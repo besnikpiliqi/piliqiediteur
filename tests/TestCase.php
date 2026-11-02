@@ -33,14 +33,18 @@ use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
+use App\Domain\Tenancy\Actions\CorrigerSirenAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
+use App\Domain\Tenancy\Actions\ExaminerSirenAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -60,6 +64,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use App\Integrations\Ordre\FauxAnnuaireDeLOrdre;
@@ -1224,6 +1229,33 @@ abstract class TestCase extends BaseTestCase
         }
 
         return $pendante;
+    }
+
+    /**
+     * Le SIREN de cette société validée corrigé par l'éditeur, comme dans
+     * le vrai parcours : le courrier d'examen envoyé au représentant légal
+     * de l'entité de ce SIREN correct, son code saisi sur sa page, l'examen
+     * qui conclut à une erreur, puis la correction par deux opérateurs
+     * (voir CorrigerSirenAction), avec le nouveau SIRET de chaque magasin
+     * qui peut encore vendre, par son code (aucun pour un cabinet
+     * d'expertise comptable). Rend la société corrigée ; aucun contexte
+     * n'est actif ensuite.
+     *
+     * @param  array<string, string>  $sirets
+     */
+    protected function corrigerLeSirenParLEditeur(Societe $societe, string $sirenCorrect, array $sirets = []): Societe
+    {
+        $editeur = new InterventionDeLEditeur('SIREN d\'une filiale saisi à la place de celui de la société', 'DOSSIER-2026-0095', ['alice', 'bruno']);
+        app(TenantContext::class)->clear();
+        app(EnvoyerCodeDeConfirmationAction::class)->parLEditeur($societe->fresh(), MotifCode::ExamenSiren, $editeur, $sirenCorrect);
+        app(SaisirCodeDeConfirmationAction::class)->saisirUnCodeDeProcedure($sirenCorrect, MotifCode::ExamenSiren, $this->codeDuCourrier($societe, MotifCode::ExamenSiren), '127.0.0.1');
+        app(TenantContext::class)->clear();
+        app(ExaminerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, DecisionExamenSiren::Erreur, $editeur);
+        app(TenantContext::class)->clear();
+        $corrigee = app(CorrigerSirenAction::class)->handle($societe->fresh(), $sirenCorrect, $sirets, null, $editeur);
+        app(TenantContext::class)->clear();
+
+        return $corrigee->fresh();
     }
 
     /**

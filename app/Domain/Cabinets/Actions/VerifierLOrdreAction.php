@@ -7,6 +7,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
 use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
+use App\Domain\Cabinets\Services\AvisAuxClientsDuCabinet;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
@@ -43,7 +44,10 @@ use Illuminate\Validation\ValidationException;
  *
  * L'écriture se fait dans une transaction qui verrouille la ligne de
  * vérification du cabinet puis relit son auteur, au nom duquel elle
- * s'inscrit au journal d'audit ; le propriétaire est prévenu après.
+ * s'inscrit au journal d'audit ; le propriétaire est prévenu après, et,
+ * quand le cabinet devient ainsi vérifié, le propriétaire de chacun de ses
+ * clients liés (des liens gardés après la correction de son SIREN, voir
+ * CorrigerSirenAction), dont l'accès revient (voir AvisAuxClientsDuCabinet).
  */
 class VerifierLOrdreAction
 {
@@ -63,6 +67,7 @@ class VerifierLOrdreAction
         private readonly JournalAudit $journalAudit,
         private readonly AlerteEditeur $alerteEditeur,
         private readonly OperateurCourant $operateur,
+        private readonly AvisAuxClientsDuCabinet $avisAuxClients,
     ) {}
 
     /**
@@ -109,6 +114,10 @@ class VerifierLOrdreAction
             }
 
             $this->prevenir($cabinet, 'Inscription à l\'Ordre vérifiée', 'L\'annuaire de l\'Ordre confirme l\'inscription de votre cabinet au tableau.', AvisDuCabinet::SUCCES);
+
+            if ($cabinet->fresh()->estUnCabinetVerifie()) {
+                $this->avisAuxClients->accesRetabli($cabinet->fresh());
+            }
 
             return $resultat;
         });

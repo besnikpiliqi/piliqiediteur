@@ -234,6 +234,7 @@ class AvoirResource extends Resource
 
         return match (true) {
             ! $document->possedeDesLignesCreditables() => "{$designation} est déjà entièrement {$credite} : {$pronom} n'a plus rien à rendre.",
+            $document->rectificative()->exists() => sprintf(CreerAvoirAction::REFUS_FACTURE_RECTIFIEE, $document->numero),
             $premier === null => null,
             (int) $document->client_id !== (int) $premier->client_id => "{$designation} est {$autre} d'un autre client : un avoir ne corrige que les documents d'un même client.",
             default => CreerAvoirAction::incompatibilite($premier, $document),
@@ -360,15 +361,19 @@ class AvoirResource extends Resource
 
     /**
      * Un avoir se fait sur ce ticket ou cette facture : émis, avec encore
-     * une ligne à créditer, par une personne qui peut créer un avoir. Le
-     * bouton « Avoir » de la liste des factures, une fenêtre qui ne quitte
-     * pas la liste, apparaît ainsi ; celui de la fiche, qui ouvre « Nouvel
+     * une ligne à créditer, sans facture rectificative (un retour se fait
+     * alors sur elle, voir CreerAvoirAction), par une personne qui peut
+     * créer un avoir. Le bouton « Avoir » de la liste des factures, une
+     * fenêtre qui ne quitte pas la liste, apparaît ainsi (la liste charge
+     * la rectificative de ses factures avec elles, voir
+     * FactureResource::table()) ; celui de la fiche, qui ouvre « Nouvel
      * avoir », exige en plus peutOuvrirLaRecherche().
      */
     public static function peutCrediter(Facture $facture): bool
     {
         return $facture->statut !== StatutFacture::Brouillon
             && $facture->possedeDesLignesCreditables()
+            && $facture->rectificative === null
             && auth()->user()->can(PermissionRegistry::AVOIR_CREER);
     }
 
@@ -415,6 +420,14 @@ class AvoirResource extends Resource
                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y à H:i'),
                 TextEntry::make('cree_par_nom')->label('Émis par'),
                 TextEntry::make('motif')->label('Motif')->columnSpanFull(),
+                // La mention que l'avoir de régularisation d'une facture a
+                // signée, après la correction du SIREN de la société (voir
+                // RegularisationDUneFacture), comme son PDF l'imprime.
+                TextEntry::make('regularisation')
+                    ->label('Régularisation')
+                    ->state(fn (Avoir $record): ?string => $record->mentionDeRegularisation())
+                    ->visible(fn (Avoir $record): bool => $record->estUneRegularisation())
+                    ->columnSpanFull(),
             ])->columns(2),
 
             InfolistSection::make('Totaux')->schema([
@@ -426,15 +439,23 @@ class AvoirResource extends Resource
                 // d'intégration bancaire) : tant qu'il reste du crédit non
                 // imputé (voir Avoir::montantNonAlloue()), ce doit être
                 // visible ici aussi, pas seulement sur la fiche du client ;
-                // celui d'un avoir au client comptoir est son bon d'avoir.
+                // celui d'un avoir au client comptoir est son bon d'avoir,
+                // celui d'un avoir de régularisation reste réservé à la
+                // facture rectificative de la facture qu'il régularise.
                 TextEntry::make('montant_non_alloue')
-                    ->label(fn (Avoir $record): string => $record->client?->estComptoir() ? 'Bon d\'avoir encore disponible' : 'Crédit encore disponible')
+                    ->label(fn (Avoir $record): string => match (true) {
+                        $record->client?->estComptoir() === true => 'Bon d\'avoir encore disponible',
+                        $record->estUneRegularisation() => 'Crédit réservé à sa facture rectificative',
+                        default => 'Crédit encore disponible',
+                    })
                     ->state(fn (Avoir $record) => $record->montantNonAlloue())
                     ->money('EUR')
                     ->visible(fn (Avoir $record) => $record->montantNonAlloue() > 0),
             ])->columns(4),
 
-            InfolistSection::make('Produits retournés')->schema([
+            // Un avoir de régularisation ne rend rien au stock (voir
+            // RestaurerStockApresEmissionAvoir) : ses lignes régularisent.
+            InfolistSection::make(fn (Avoir $record): string => $record->estUneRegularisation() ? 'Lignes régularisées, sans retour en stock' : 'Produits retournés')->schema([
                 FactureResource::lignesEntry($infolist->getRecord()),
             ]),
 

@@ -79,6 +79,17 @@ class LienCabinet extends Model
     }
 
     /**
+     * Un lien se désigne dans une adresse par son uuid, jamais par son
+     * identifiant numérique : l'adresse de la fiche d'un client du cabinet
+     * que produisent sa table, ses actions et ses avis est celle que la
+     * ressource lit (voir ClientDuCabinetResource::resolveRecordRouteBinding()).
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
+    }
+
+    /**
      * Celle de cet uuid, venu d'une adresse ou d'un geste de l'écran : un
      * texte qui n'est pas un uuid ne désigne rien, sans interroger la
      * colonne, typée sous PostgreSQL.

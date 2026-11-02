@@ -9,7 +9,10 @@ use Illuminate\Support\Facades\Schema;
  * Les factures et les tickets de caisse d'un magasin. Le propriétaire, qui
  * ne vend jamais, n'en crée aucun : la base refuse une facture créée à son
  * nom, qu'on lui attribue ensuite ou qu'on émet à son nom (voir
- * GardesDeLaVente).
+ * GardesDeLaVente). Une facture rectificative, après la correction du
+ * SIREN de la société par l'éditeur, désigne la facture de son magasin
+ * qu'elle rectifie, et une facture n'en a qu'une (voir
+ * RegularisationDUneFacture).
  */
 return new class extends Migration
 {
@@ -24,6 +27,12 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
             $table->foreignId('devis_id')->nullable()->constrained('devis')->restrictOnDelete();
+            // La facture que rectifie une facture rectificative, émise après
+            // la correction du SIREN de la société par l'éditeur (voir
+            // EmettreLaFactureRectificativeAction) : une facture de son
+            // magasin (clé étrangère sur le magasin et la facture), qui n'en
+            // a qu'une (index unique) ; vide pour toute autre facture.
+            $table->unsignedBigInteger('facture_rectifiee_id')->nullable();
             // Le type du client (TypeClient), écrit à chaque enregistrement
             // du brouillon et contrôlé à l'émission (voir
             // EmettreFactureAction) : il choisit la série, ticket de caisse
@@ -118,6 +127,9 @@ return new class extends Migration
             // FacturePolicy::delete()).
 
             $table->unique(['magasin_id', 'numero']);
+            $table->unique(['magasin_id', 'id']);
+            $table->unique('facture_rectifiee_id');
+            $table->foreign(['magasin_id', 'facture_rectifiee_id'])->references(['magasin_id', 'id'])->on('factures')->restrictOnDelete();
             $table->index(['magasin_id', 'statut']);
             $table->index(['magasin_id', 'client_id']);
             $table->index(['magasin_id', 'cloture_caisse_id']);

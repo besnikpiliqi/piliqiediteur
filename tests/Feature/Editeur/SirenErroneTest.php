@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Editeur;
 
+use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -9,6 +10,8 @@ use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
@@ -31,11 +34,13 @@ use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
+use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -465,18 +470,69 @@ class SirenErroneTest extends TestCase
     }
 
     /**
-     * Le code d'activité et l'inscription à l'Ordre d'un cabinet
-     * d'expertise comptable ont été vérifiés sous son SIREN : cette
-     * procédure ne le corrige pas.
+     * Une facture émise depuis l'examen, que sa liste ne désigne pas, rend
+     * la correction impossible : l'éditeur examine de nouveau le SIREN,
+     * dont la liste la désigne alors, puis le corrige.
      */
-    public function test_le_siren_d_un_cabinet_ne_se_corrige_pas_par_cette_procedure(): void
+    public function test_la_correction_est_refusee_quand_une_facture_a_ete_emise_depuis_l_examen(): void
+    {
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));
+        $societe = $magasin->societe;
+        $sirenCorrect = SocieteFactory::sirenFictif();
+        $sirets = ['LYON' => IdentifiantsInsee::avecSaCle($sirenCorrect.'0001')];
+        $this->prouverLaRemiseDuCourrierDExamen($societe, $sirenCorrect);
+        $this->examiner($societe, $sirenCorrect, DecisionExamenSiren::Erreur);
+        $this->travelTo(self::aParis('2026-11-02 10:05:00'));
+        app(TenantContext::class)->set($magasin->fresh());
+        $responsable = self::responsableDeTest($magasin);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Dupont SAS']);
+        app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]));
+
+        $this->assertThrows(fn () => $this->corriger($societe, $sirenCorrect, $sirets), VerificationRefuseeException::class, CorrigerSirenAction::MESSAGE_FACTURES_DEPUIS_L_EXAMEN);
+        $this->assertNotSame($sirenCorrect, $societe->fresh()->siren);
+        $this->examiner($societe, $sirenCorrect, DecisionExamenSiren::Erreur);
+        $this->corriger($societe, $sirenCorrect, $sirets);
+
+        $this->assertSame($sirenCorrect, $societe->fresh()->siren);
+    }
+
+    /**
+     * Le SIREN d'un cabinet d'expertise comptable se corrige par la
+     * commande de deux opérateurs, sans SIRET à donner : son code
+     * d'activité, relu sous le nouveau SIREN, est contrôlé 69.20Z, et la
+     * vérification de son inscription à l'Ordre est remise à faire ; il
+     * n'est plus vérifié et garde son lien ; sa vérification d'avant reste
+     * au journal d'audit, avec la correction, le nouveau contrôle et la
+     * vérification à refaire, origine « éditeur ».
+     */
+    public function test_le_siren_d_un_cabinet_se_corrige_et_remet_a_faire_son_controle_69_20z_et_sa_verification_a_l_ordre(): void
     {
         $cabinet = $this->ouvrirUnCabinet();
+        $lien = $this->lierLeCabinet($cabinet, $this->ouvrirUneSociete(['nom' => 'Cliente']));
         $sirenCorrect = SocieteFactory::sirenFictif();
+        app(RepertoireSirene::class)->exercer($sirenCorrect, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        $this->prouverLaRemiseDuCourrierDExamen($cabinet, $sirenCorrect);
+        $this->examiner($cabinet, $sirenCorrect, DecisionExamenSiren::Erreur);
 
-        $this->assertThrows(fn () => $this->corriger($cabinet, $sirenCorrect, []), VerificationRefuseeException::class, CorrigerSirenAction::MESSAGE_CABINET);
+        $this->corrigerParLaCommande($cabinet, $sirenCorrect, [], 'alice', 'bruno')
+            ->expectsOutputToContain('Cabinet d\'expertise comptable : son code d\'activité et son inscription à l\'Ordre se vérifieront de nouveau sous ce SIREN ; d\'ici là, il garde ses liens mais n\'ouvre aucun client.')
+            ->expectsOutputToContain("SIREN corrigé : {$sirenCorrect} ; les documents émis gardent l'ancien.")
+            ->assertSuccessful();
 
-        $this->assertNotSame($sirenCorrect, $cabinet->fresh()->siren);
+        $corrige = $cabinet->fresh();
+        $verification = $corrige->cabinet()->sole();
+        $this->assertSame([$sirenCorrect, IdentifiantsInsee::numeroTvaPropose($sirenCorrect)], [$corrige->siren, $corrige->numero_tva]);
+        $this->assertSame(['69.20Z', 'NAFRev2', true], [$verification->code_activite, $verification->nomenclature_activite, $verification->aSonActiviteControlee()]);
+        $this->assertSame([null, null, null, null], [$verification->ordre_verifie_le, $verification->ordre_voie, $verification->ordre_demande_le, $verification->ordre_refuse_le]);
+        $this->assertFalse($corrige->estUnCabinetVerifie());
+        $this->assertSame(EtatDuLien::Actif, $lien->fresh()->etat);
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::OrdreVerifie));
+        $activite = collect($this->entreesDAudit($cabinet, ActionAuditee::ActiviteDuCabinetControlee))->last();
+        $this->assertSame(['editeur', ['code_activite' => '69.20Z', 'nomenclature' => 'NAFRev2', 'resultat' => 'concluant']], [$activite->origine, $activite->nouvelles_valeurs]);
+        [$aRefaire] = $this->entreesDAudit($cabinet, ActionAuditee::OrdreARefaire);
+        $this->assertSame(['editeur', ['motif' => CorrigerSirenAction::MOTIF_ORDRE_A_REFAIRE]], [$aRefaire->origine, $aRefaire->nouvelles_valeurs]);
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::SirenCorrige));
+        $this->assertUnSeulProprietaireActif($cabinet);
     }
 
     /**

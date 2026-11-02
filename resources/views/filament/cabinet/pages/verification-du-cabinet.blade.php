@@ -30,6 +30,8 @@
         <p>Code lu au répertoire Sirene : {{ $verification?->code_activite ?? 'aucun' }}@if ($verification?->nomenclature_activite !== null) ({{ $verification->nomenclature_activite }})@endif.</p>
         @if ($verification?->aSonActiviteControlee())
             <p>Contrôlé le {{ $paris->afficher($verification->activite_controlee_le, 'd/m/Y') }}.</p>
+        @elseif ($verification?->aUneAutreActivite())
+            <p>Ce code n'est pas 69.20Z (activités comptables) : votre cabinet ne peut pas être vérifié.</p>
         @else
             <p>À contrôler par l'éditeur, avec votre inscription à l'Ordre.</p>
         @endif

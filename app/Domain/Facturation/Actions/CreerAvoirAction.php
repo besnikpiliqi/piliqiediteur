@@ -58,9 +58,18 @@ use LogicException;
  * actif et voir chaque facture qu'il corrige (voir FacturePolicy::view() :
  * un vendeur sans « voir celles de toute l'équipe » ne corrige que les
  * siennes) ; c'est lui que l'avoir enregistre comme auteur.
+ *
+ * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
+ * la société se crée ici comme tout avoir, régularisation notée (voir
+ * FaireLAvoirDeRegularisationAction, qui en choisit les lignes). Une
+ * facture qui a sa facture rectificative ne reçoit plus d'autre avoir : un
+ * retour se fait sur la rectificative, qui en a repris les lignes (voir
+ * RegularisationDUneFacture).
  */
 class CreerAvoirAction
 {
+    public const REFUS_FACTURE_RECTIFIEE = 'La facture %s a sa facture rectificative : un retour se fait sur la rectificative.';
+
     public function __construct(
         private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
@@ -68,10 +77,11 @@ class CreerAvoirAction
 
     /**
      * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     * @param  bool  $regularisation  l'avoir de régularisation d'une facture désignée par l'examen du SIREN de la société (voir RegularisationDUneFacture)
      *
      * @throws AuthorizationException
      */
-    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
+    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null, bool $regularisation = false): Avoir
     {
         if ($lignesSelectionnees === []) {
             throw new InvalidArgumentException('Un avoir doit porter sur au moins une ligne.');
@@ -86,7 +96,7 @@ class CreerAvoirAction
             throw new InvalidArgumentException('Une même ligne de facture ne peut apparaître qu\'une fois dans un avoir.');
         }
 
-        return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif) {
+        return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $regularisation) {
             $magasin = app(TenantContext::class)->magasin();
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
             $lignesDeLAvoir = [];
@@ -113,6 +123,10 @@ class CreerAvoirAction
 
                 if ($facture->statut === StatutFacture::Brouillon) {
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
+                }
+
+                if (! $regularisation && $facture->rectificative()->exists()) {
+                    throw new LogicException(sprintf(self::REFUS_FACTURE_RECTIFIEE, $facture->numero));
                 }
 
                 $premiere ??= $facture;
@@ -153,6 +167,7 @@ class CreerAvoirAction
                 'type_client' => $premiere->type_client,
                 'franchise_en_base' => $premiere->franchise_en_base,
                 'nature_operation' => $premiere->nature_operation,
+                'regularisation' => $regularisation,
                 ...$this->calculateurLigne->totaliser($lignesDeLAvoir),
             ])->save();
 

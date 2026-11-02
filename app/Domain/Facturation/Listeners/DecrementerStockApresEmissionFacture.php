@@ -16,7 +16,9 @@ use App\Domain\Stock\Services\StockLedgerService;
  *
  * Le mouvement d'une ligne qui fait passer son produit sous zéro, une
  * vente sans stock confirmée après l'avertissement (R1), le dit dans sa
- * note.
+ * note. Une facture rectificative ne sort rien du stock : elle reprend les
+ * lignes d'une facture qui en a déjà sorti les articles (voir
+ * RegularisationDUneFacture).
  */
 class DecrementerStockApresEmissionFacture
 {
@@ -24,6 +26,10 @@ class DecrementerStockApresEmissionFacture
 
     public function handle(FactureEmise $event): void
     {
+        if ($event->facture->estUneRectificative()) {
+            return;
+        }
+
         foreach ($event->facture->lignes as $ligne) {
             $produit = $ligne->produit;
 

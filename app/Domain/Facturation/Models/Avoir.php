@@ -44,6 +44,13 @@ use Illuminate\Support\ItemNotFoundException;
  * son type, son nom, son adresse et ses identifiants, tels que ces
  * documents les ont figés (voir FigeLeClient), et l'émetteur qu'il
  * imprime pour toujours (voir FigeSonEmetteur).
+ *
+ * L'avoir de régularisation d'une facture que désigne l'examen du SIREN de
+ * la société par l'éditeur, après sa correction (voir
+ * estUneRegularisation() et FaireLAvoirDeRegularisationAction), crédite
+ * toute cette facture, sans retour en stock, imprime l'émetteur qu'elle a
+ * figé, et son crédit lui est réservé, puis à sa facture rectificative
+ * (voir ImputationDuCredit).
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
@@ -90,18 +97,20 @@ class Avoir extends Model implements DocumentEnvoyable
     ];
 
     /**
-     * La vente en France tant qu'aucune nature n'est reprise, comme en
-     * base.
+     * La vente en France tant qu'aucune nature n'est reprise, et un avoir
+     * qui n'est pas une régularisation, comme en base.
      *
      * @var array<string, mixed>
      */
     protected $attributes = [
         'nature_operation' => 'vente_france',
+        'regularisation' => false,
     ];
 
     protected $casts = [
         'statut' => StatutAvoir::class,
         'franchise_en_base' => 'boolean',
+        'regularisation' => 'boolean',
         'nature_operation' => NatureOperation::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -231,6 +240,48 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
+     * La mention que l'avoir de régularisation a signée à son émission
+     * (voir MentionsFiscales::regularisation()) et que son PDF imprime,
+     * avec le SIREN correct de la société ; null pour un autre avoir, comme
+     * tant qu'il est un brouillon.
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function mentionDeRegularisation(): ?string
+    {
+        return $this->numero === null ? null : $this->contexteSigne()['regularisation'];
+    }
+
+    /**
+     * Est-ce l'avoir de régularisation d'une facture que l'examen du SIREN
+     * de la société a désignée (voir FaireLAvoirDeRegularisationAction) ?
+     * Il ne rend rien au stock (voir RestaurerStockApresEmissionAvoir) et
+     * son crédit ne règle que cette facture, puis sa facture rectificative
+     * (voir ImputationDuCredit) : jamais un crédit disponible du client
+     * (voir Client::creditsDAvoirEnCentimes()).
+     */
+    public function estUneRegularisation(): bool
+    {
+        return $this->regularisation === true;
+    }
+
+    /**
+     * La facture que régularise cet avoir de régularisation, la seule que
+     * corrigent ses lignes, une par ligne de la facture ; aucune pour un
+     * autre avoir.
+     */
+    public function factureRegularisee(): ?Facture
+    {
+        if (! $this->estUneRegularisation()) {
+            return null;
+        }
+
+        return Facture::query()
+            ->whereIn('id', LigneFacture::query()->whereIn('id', $this->lignes()->select('ligne_facture_id'))->select('facture_id'))
+            ->first();
+    }
+
+    /**
      * Un avoir sur des tickets de caisse : la clôture du jour de son
      * émission le déduit (voir scopeEnAttenteDeCloture()), la caisse ne
      * l'émet plus une fois cette journée clôturée (voir
@@ -312,6 +363,9 @@ class Avoir extends Model implements DocumentEnvoyable
      * seule la présentation de son numéro impute sur une vente à la caisse,
      * quel qu'en soit le client, ou sur un ticket du client comptoir resté
      * dû (voir EmettreFactureAction et EncaisserEnPlusieursModesAction).
+     * Celui d'un avoir de régularisation est réservé à la facture qu'il
+     * régularise, puis à sa facture rectificative (voir
+     * estUneRegularisation()).
      */
     public function creditEnCentimes(): int
     {

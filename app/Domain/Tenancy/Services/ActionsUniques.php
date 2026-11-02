@@ -17,9 +17,11 @@ use LogicException;
 /**
  * Le jeton unique des demandes (R3) : une émission, une vente à la caisse,
  * une émission de devis, un paiement, un encaissement en plusieurs modes,
- * une contre-passation, un avoir, un envoi, une fermeture de caisse, une
- * clôture du jour et une validation d'achat, d'avoir fournisseur ou
- * d'inventaire d'ouverture portent chacune un jeton, que l'écran crée à l'ouverture du formulaire ou de la
+ * une contre-passation, un avoir, l'avoir de régularisation et la facture
+ * rectificative d'une facture après la correction du SIREN de la société,
+ * un envoi, une fermeture de caisse, une clôture du jour et une validation
+ * d'achat, d'avoir fournisseur ou d'inventaire d'ouverture portent chacune
+ * un jeton, que l'écran crée à l'ouverture du formulaire ou de la
  * fenêtre (le panier de la caisse a le sien, voir PanierDeCaisse) et garde
  * jusqu'à son succès.
  * Une demande répétée après une réponse perdue renvoie le résultat déjà
@@ -30,8 +32,9 @@ use LogicException;
  * Seule l'action la plus externe consomme le jeton : celles qu'elle
  * appelle (l'émission et les paiements d'une vente à la caisse, les
  * paiements d'un encaissement en plusieurs modes, l'émission d'un avoir
- * enregistré, celle d'un devis envoyé, la clôture de chaque journée)
- * reçoivent un jeton nul. Une action sans jeton s'exécute
+ * enregistré ou de régularisation, celle d'une facture rectificative,
+ * celle d'un devis envoyé, la clôture de chaque journée) reçoivent un
+ * jeton nul. Une action sans jeton s'exécute
  * simplement : les gestes du système et des tests n'en portent pas.
  *
  * Le jeton se cherche dans la transaction de l'action, juste après son
@@ -66,6 +69,10 @@ class ActionsUniques
     public const CONTRE_PASSER_PAIEMENT = 'paiement.contre_passer';
 
     public const ENREGISTRER_AVOIR = 'avoir.enregistrer';
+
+    public const FAIRE_L_AVOIR_DE_REGULARISATION = 'avoir.regulariser';
+
+    public const EMETTRE_LA_FACTURE_RECTIFICATIVE = 'facture.rectifier';
 
     public const ENVOYER_DOCUMENT = 'document.envoyer';
 

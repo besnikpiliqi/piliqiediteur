@@ -246,7 +246,10 @@ class Client extends Model
      * créditeur : il est partagé par toutes les ventes anonymes du magasin,
      * et le crédit d'un avoir fait au comptoir n'appartient qu'à qui en
      * présente le numéro, son bon d'avoir (voir ApercuDuReglement), jamais
-     * à la vente comptoir suivante.
+     * à la vente comptoir suivante. Le crédit d'un avoir de régularisation
+     * n'en fait jamais partie : il est réservé à la facture qu'il
+     * régularise, puis à sa facture rectificative (voir
+     * Avoir::estUneRegularisation()).
      */
     public function soldeCrediteurEnCentimes(): int
     {
@@ -278,6 +281,7 @@ class Client extends Model
 
         $avoirs = Avoir::query()
             ->where('statut', StatutAvoir::Emise)
+            ->where('regularisation', false)
             ->whereIn('client_id', $identifies->map(fn (Client $client): mixed => $client->getKey())->all())
             ->with('allocations')
             ->get();
@@ -292,7 +296,8 @@ class Client extends Model
     /**
      * Les clients qui ont un crédit d'avoir disponible (voir
      * soldeCrediteurEnCentimes()), jamais le client comptoir : ceux qui ont
-     * un avoir émis dont le total TTC dépasse ce qu'il a imputé. La
+     * un avoir émis, qui n'est pas une régularisation, dont le total TTC
+     * dépasse ce qu'il a imputé. La
      * comparaison se fait dans la requête du tableau, avoir par avoir, sans
      * rien lire à part, sur des centimes entiers : chaque montant y est
      * arrondi au centime et converti en entier avant d'être additionné,
@@ -310,6 +315,7 @@ class Client extends Model
         $query->whereNull($query->qualifyColumn('est_comptoir'))
             ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs
                 ->where($avoirs->qualifyColumn('statut'), StatutAvoir::Emise)
+                ->where($avoirs->qualifyColumn('regularisation'), false)
                 ->where(
                     new Expression($enCentimes($avoirs->qualifyColumn('total_ttc'))),
                     '>',

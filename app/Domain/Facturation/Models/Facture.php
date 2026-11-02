@@ -70,6 +70,12 @@ use LogicException;
  * suit sans la changer s'enregistre à côté, hors de son contenu signé :
  * les preuves de son exonération (voir preuvesOperation()) et, pour un
  * ticket, le n° du bordereau de détaxe (voir bordereauDetaxe()).
+ *
+ * Après la correction du SIREN de la société par l'éditeur, une facture
+ * que désigne son examen se régularise (voir RegularisationDUneFacture) :
+ * un avoir de régularisation la crédite en entier, et une facture
+ * rectificative (voir factureRectifiee()) en reprend les lignes sous
+ * l'identité corrigée de la société.
  */
 class Facture extends Model implements DocumentEnvoyable
 {
@@ -224,10 +230,45 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * La fiche du client, telle qu'elle est le jour de l'émission : celle
      * dont le type est contrôlé à l'émission (voir EmettreFactureAction).
+     * Une facture rectificative, elle, reprend la copie que la facture
+     * qu'elle rectifie a figée : elle ne corrige que l'identité du vendeur.
      */
     protected function clientAFiger(): CopieClient
     {
-        return CopieClient::depuisClient($this->client);
+        return $this->estUneRectificative()
+            ? $this->factureRectifiee()->firstOrFail()->copieClient()
+            : CopieClient::depuisClient($this->client);
+    }
+
+    /**
+     * La facture du même magasin que rectifie cette facture rectificative,
+     * émise après la correction du SIREN de la société par l'éditeur (voir
+     * EmettreLaFactureRectificativeAction) ; aucune pour toute autre
+     * facture.
+     */
+    public function factureRectifiee(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'facture_rectifiee_id');
+    }
+
+    /**
+     * La facture rectificative de cette facture, quand elle en a une : au
+     * plus une (index unique).
+     */
+    public function rectificative(): HasOne
+    {
+        return $this->hasOne(self::class, 'facture_rectifiee_id');
+    }
+
+    /**
+     * Est-ce la facture rectificative d'une facture que l'examen du SIREN
+     * de la société a désignée ? Elle reprend les lignes de cette facture
+     * (voir RegularisationDUneFacture::lignesDeLaRectificative()), sans
+     * sortie de stock (voir DecrementerStockApresEmissionFacture).
+     */
+    public function estUneRectificative(): bool
+    {
+        return $this->facture_rectifiee_id !== null;
     }
 
     /**

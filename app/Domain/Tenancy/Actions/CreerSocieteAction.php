@@ -195,18 +195,14 @@ class CreerSocieteAction
      */
     private function noterLActiviteDuCabinet(Societe $cabinet, User $proprietaire, UniteSirene $unite): void
     {
-        $concluant = ControleSirene::exerceLesActivitesComptables($unite) === true;
-
-        tap((new Cabinet)->forceFill([
-            'code_activite' => $unite->activitePrincipale,
-            'nomenclature_activite' => $unite->nomenclatureActivite,
-            'activite_controlee_le' => $concluant ? now() : null,
-        ]))->save();
+        $verification = new Cabinet;
+        $resultat = $verification->noterSonActivite($unite);
+        $verification->save();
 
         $this->journalAudit->inscrire(ActionAuditee::ActiviteDuCabinetControlee, $proprietaire, null, null, [
             'code_activite' => $unite->activitePrincipale,
             'nomenclature' => $unite->nomenclatureActivite,
-            'resultat' => $concluant ? 'concluant' : 'a_controler',
+            'resultat' => $resultat,
         ], $cabinet);
     }
 }

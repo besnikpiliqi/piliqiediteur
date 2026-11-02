@@ -3,7 +3,7 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
-use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -102,15 +102,11 @@ class AccepterLaTransmission extends SimplePage
 
         $compte = $this->compte()->refresh();
 
-        if ($compte->estDUnCabinet()) {
-            Notification::make()->title('Vous êtes désormais le propriétaire du cabinet.')->success()->send();
-            $this->redirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $compte->societe));
-
-            return;
-        }
-
-        Notification::make()->title('Vous êtes désormais le propriétaire de la société.')->success()->send();
-        $this->redirect(TableauDeBord::getUrl(panel: 'societe', tenant: $compte->societe));
+        Notification::make()
+            ->title($compte->estDUnCabinet() ? 'Vous êtes désormais le propriétaire du cabinet.' : 'Vous êtes désormais le propriétaire de la société.')
+            ->success()
+            ->send();
+        $this->redirect(EspaceDeLaSociete::accueil($compte->societe));
     }
 
     /**

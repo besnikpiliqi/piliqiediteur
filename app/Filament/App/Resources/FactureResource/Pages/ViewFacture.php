@@ -2,11 +2,16 @@
 
 namespace App\Filament\App\Resources\FactureResource\Pages;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
+use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
+use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\TypePreuve;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -30,7 +35,12 @@ use Filament\Resources\Pages\ViewRecord;
  * d'un seul geste, en un ou plusieurs modes, comme sur la liste (voir
  * FactureResource::encaisser()). Son retour passe par « Avoir », qui ouvre
  * la recherche par numéro de « Nouvel avoir » sur ce document (voir
- * faireUnAvoir()).
+ * faireUnAvoir()). Après la correction du SIREN de la société par
+ * l'éditeur, une facture que désigne son examen se régularise ici, en deux
+ * gestes faits dans l'ordre que l'on veut (voir RegularisationDUneFacture)
+ * : « Faire l'avoir de régularisation », pour qui peut faire un avoir dans
+ * ce magasin, et « Émettre la facture rectificative », pour qui peut créer
+ * et émettre une facture dans ce magasin, jamais le propriétaire.
  */
 class ViewFacture extends ViewRecord
 {
@@ -46,9 +56,66 @@ class ViewFacture extends ViewRecord
             FactureResource::envoyerParEmail(Actions\Action::make('envoyer_par_email')),
             FactureResource::relancer(Actions\Action::make('relancer')),
             $this->faireUnAvoir(),
+            $this->faireLAvoirDeRegularisation(),
+            $this->emettreLaFactureRectificative(),
             $this->ajouterUnePreuve(),
             $this->noterLeBordereauDeDetaxe(),
         ];
+    }
+
+    /**
+     * « Faire l'avoir de régularisation » d'une facture que désigne
+     * l'examen du SIREN de la société, tant qu'il n'est pas émis (voir
+     * FaireLAvoirDeRegularisationAction), pour qui peut faire un avoir dans
+     * ce magasin. La fenêtre de confirmation porte le jeton de la demande
+     * (R3) ; l'avoir émis s'ouvre ensuite.
+     */
+    private function faireLAvoirDeRegularisation(): Actions\Action
+    {
+        return Actions\Action::make('faireLAvoirDeRegularisation')
+            ->label('Faire l\'avoir de régularisation')
+            ->icon('heroicon-o-receipt-refund')
+            ->color('warning')
+            ->requiresConfirmation()
+            ->modalHeading('Faire l\'avoir de régularisation')
+            ->modalDescription('L\'avoir crédite toute cette facture, sous l\'identité qu\'elle a signée et avec la mention de la correction du SIREN, sans rien rendre au stock. Son crédit règle ce qui en reste dû, puis sa facture rectificative, et rien d\'autre.')
+            ->form([FactureResource::champDuJeton()])
+            ->visible(fn (Facture $record): bool => (auth()->user()?->can('create', Avoir::class) ?? false) && app(RegularisationDUneFacture::class)->refusDeLAvoir($record) === null)
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle(auth()->user(), $record, $data['jeton']);
+
+                Notification::make()->title("Avoir de régularisation {$avoir->numero} émis.")->success()->send();
+                $this->redirect(AvoirResource::getUrl('view', ['record' => $avoir]));
+            }));
+    }
+
+    /**
+     * « Émettre la facture rectificative » d'une facture que désigne
+     * l'examen du SIREN de la société, tant qu'elle n'est pas émise (voir
+     * EmettreLaFactureRectificativeAction), pour qui peut créer et émettre
+     * une facture dans ce magasin, jamais le propriétaire ni un compte d'un
+     * cabinet lié. La fenêtre de confirmation porte le jeton de la demande
+     * (R3) ; la facture rectificative s'ouvre ensuite.
+     */
+    private function emettreLaFactureRectificative(): Actions\Action
+    {
+        return Actions\Action::make('emettreLaFactureRectificative')
+            ->label('Émettre la facture rectificative')
+            ->icon('heroicon-o-document-duplicate')
+            ->color('warning')
+            ->requiresConfirmation()
+            ->modalHeading('Émettre la facture rectificative')
+            ->modalDescription('La facture rectificative reprend les lignes de cette facture, que personne ne modifie, sous l\'identité actuelle de la société, avec la mention de la facture qu\'elle rectifie, sans sortie de stock. Un numéro définitif lui est attribué.')
+            ->form([FactureResource::champDuJeton()])
+            ->visible(fn (Facture $record): bool => (auth()->user()?->can('create', Facture::class) ?? false)
+                && auth()->user()->can(PermissionRegistry::FACTURE_EMETTRE)
+                && app(RegularisationDUneFacture::class)->refusDeLaRectificative($record) === null)
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(auth()->user(), $record, $data['jeton']);
+
+                Notification::make()->title("Facture rectificative {$rectificative->numero} émise.")->success()->send();
+                $this->redirect(FactureResource::getUrl('view', ['record' => $rectificative]));
+            }));
     }
 
     /**

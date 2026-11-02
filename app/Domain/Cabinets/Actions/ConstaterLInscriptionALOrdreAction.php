@@ -5,6 +5,7 @@ namespace App\Domain\Cabinets\Actions;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
+use App\Domain\Cabinets\Services\AvisAuxClientsDuCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -23,11 +24,15 @@ use LogicException;
  * constatée avant levée (le cabinet est de nouveau inscrit au tableau) ;
  * avec $activiteControlee, le code d'activité d'un cabinet classé dans une
  * autre nomenclature que la NAF rév. 2, ou sans code au répertoire Sirene,
- * est aussi contrôlé. Chaque constat s'inscrit au journal d'audit du
- * cabinet, origine « éditeur », sous le verrou de sa ligne de
- * vérification ; son propriétaire est prévenu. Une société qui n'est pas
- * un cabinet, ou dont l'inscription est close, est refusée sans rien
- * écrire.
+ * est aussi contrôlé ; une autre activité en NAF rév. 2 (lue après la
+ * correction de son SIREN, voir Cabinet::aUneAutreActivite()) ne se
+ * contrôle pas, et le constat est alors refusé sans rien écrire. Chaque
+ * constat s'inscrit au journal d'audit du cabinet, origine « éditeur »,
+ * sous le verrou de sa ligne de vérification ; son propriétaire est
+ * prévenu, et, quand le cabinet devient vérifié, le propriétaire de chacun
+ * de ses clients liés, dont l'accès revient (voir AvisAuxClientsDuCabinet).
+ * Une société qui n'est pas un cabinet, ou dont l'inscription est close,
+ * est refusée sans rien écrire.
  */
 class ConstaterLInscriptionALOrdreAction
 {
@@ -35,9 +40,12 @@ class ConstaterLInscriptionALOrdreAction
 
     public const MESSAGE_INSCRIPTION_CLOSE = 'L\'inscription de ce cabinet est close.';
 
+    public const MESSAGE_AUTRE_ACTIVITE = 'Le répertoire Sirene donne à ce cabinet une autre activité que 69.20Z (activités comptables) : elle ne se contrôle pas, et rien n\'est constaté.';
+
     public function __construct(
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
+        private readonly AvisAuxClientsDuCabinet $avisAuxClients,
     ) {}
 
     /**
@@ -53,8 +61,14 @@ class ConstaterLInscriptionALOrdreAction
             throw new LogicException('Donnez le n° d\'inscription au tableau (30 caractères au plus) et le conseil régional de l\'Ordre (100 caractères au plus).');
         }
 
-        $this->operateur->pendantLeSysteme(fn () => app(TenantContext::class)->runAsSociete($cabinet, fn () => DB::transaction(function () use ($cabinet, $editeur, $numero, $conseil, $activiteControlee): void {
+        $devenuVerifie = $this->operateur->pendantLeSysteme(fn (): bool => app(TenantContext::class)->runAsSociete($cabinet, fn (): bool => DB::transaction(function () use ($cabinet, $editeur, $numero, $conseil, $activiteControlee): bool {
             $verification = $cabinet->cabinet()->lockForUpdate()->firstOrFail();
+            $etaitVerifie = $cabinet->fresh()->estUnCabinetVerifie();
+
+            if ($activiteControlee && $verification->aUneAutreActivite()) {
+                throw new LogicException(self::MESSAGE_AUTRE_ACTIVITE);
+            }
+
             $activiteAControler = $activiteControlee && ! $verification->aSonActiviteControlee();
 
             $verification->forceFill([
@@ -82,6 +96,8 @@ class ConstaterLInscriptionALOrdreAction
                     'resultat' => 'controle_par_l_editeur',
                 ], $cabinet, $editeur);
             }
+
+            return ! $etaitVerifie && $cabinet->fresh()->estUnCabinetVerifie();
         })));
 
         $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(
@@ -92,6 +108,10 @@ class ConstaterLInscriptionALOrdreAction
             'Voir la vérification',
             AvisDuCabinet::SUCCES,
         ));
+
+        if ($devenuVerifie) {
+            $this->avisAuxClients->accesRetabli($cabinet->fresh());
+        }
     }
 
     /**

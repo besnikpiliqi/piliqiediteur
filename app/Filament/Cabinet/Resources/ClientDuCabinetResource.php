@@ -48,8 +48,6 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
 
     protected static bool $isGloballySearchable = false;
 
-    protected static ?string $recordRouteKeyName = 'uuid';
-
     protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
     protected static ?string $navigationLabel = 'Clients';
@@ -82,6 +80,12 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             : LienCabinet::query()->withoutGlobalScopes()->whereRaw('1 = 0');
     }
 
+    /**
+     * La fiche d'un client se lit par l'uuid de son lien, la clé de son
+     * adresse (voir LienCabinet::getRouteKeyName()), parmi les seuls liens
+     * que le cabinet ouvre au compte : un identifiant numérique, ou l'uuid
+     * d'un lien d'un autre cabinet ou d'un client non confié, donne 404.
+     */
     public static function resolveRecordRouteBinding(int|string $key): ?Model
     {
         return static::getEloquentQuery()->parUuid((string) $key)->first();

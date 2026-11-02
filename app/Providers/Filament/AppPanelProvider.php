@@ -9,8 +9,7 @@ use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
-use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
-use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\EspaceDeLaSociete;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\JournaliserOuvertureDeSession;
@@ -108,12 +107,12 @@ class AppPanelProvider extends PanelProvider
                 MenuItem::make()
                     ->label('Administration de la société')
                     ->icon('heroicon-o-building-office-2')
-                    ->url(fn (): string => TableauDeBord::getUrl(panel: 'societe', tenant: auth()->user()->societe))
+                    ->url(fn (): string => EspaceDeLaSociete::accueil(auth()->user()->societe))
                     ->visible(fn (): bool => auth()->user()?->peutAdministrer() ?? false),
                 MenuItem::make()
                     ->label('Espace du cabinet')
                     ->icon('heroicon-o-briefcase')
-                    ->url(fn (): string => TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: auth()->user()->societe))
+                    ->url(fn (): string => EspaceDeLaSociete::accueil(auth()->user()->societe))
                     ->visible(fn (): bool => auth()->user()?->ouvreLEspaceDuCabinet() ?? false),
             ])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')

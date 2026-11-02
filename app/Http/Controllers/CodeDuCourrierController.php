@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\MotifCode;
-use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Http\RedirectResponse;
@@ -24,12 +24,13 @@ use Illuminate\Validation\ValidationException;
  *   (voir SaisirCodeDeConfirmationAction::handle(), qui limite les saisies
  *   et valide la société) ; la personne qui a inscrit la société redonne
  *   les siens ; une autre personne choisit les siens et devient
- *   propriétaire. Le bon code connecte le propriétaire et le mène au
- *   tableau de bord de sa société ; une autre personne y lit que le lien
- *   de l'adresse qu'elle a choisie vient de partir, ou, quand il n'a pas
- *   pu partir (l'adresse ne l'attend plus), qu'il se redemande depuis son
- *   profil, et qu'elle se connecte d'ici là avec son identifiant, qui lui
- *   est montré.
+ *   propriétaire. Le bon code connecte le propriétaire et le mène à
+ *   l'accueil de l'espace de sa société, celui de son cabinet pour un
+ *   cabinet d'expertise comptable (voir EspaceDeLaSociete) ; une autre
+ *   personne y lit que le lien de l'adresse qu'elle a choisie vient de
+ *   partir, ou, quand il n'a pas pu partir (l'adresse ne l'attend plus),
+ *   qu'il se redemande depuis son profil, et qu'elle se connecte d'ici là
+ *   avec son identifiant, qui lui est montré.
  * - Le courrier d'une procédure de l'éditeur (/code/{objet},
  *   /code/{objet}/{siren}) : on y saisit le SIREN et le code (voir
  *   SaisirCodeDeConfirmationAction::saisirUnCodeDeProcedure()) ; le bon
@@ -95,7 +96,7 @@ class CodeDuCourrierController
                 ->send();
         }
 
-        return redirect()->to(TableauDeBord::getUrl(panel: 'societe', tenant: $proprietaire->societe))
+        return redirect()->to(EspaceDeLaSociete::accueil($proprietaire->societe))
             ->header('Referrer-Policy', 'no-referrer');
     }
 

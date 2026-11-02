@@ -15,7 +15,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.4",
+        "version_module": "1.5",
         "cle_id": "…",
         "signature_precedente": null,
         "gt": {
@@ -61,6 +61,7 @@
                 "consultation_vies_id": null,
                 "cree_par": "…",
                 "devis_id": null,
+                "facture_rectifiee_id": null,
                 "devise": "EUR",
                 "date_echeance": "2026-11-24",
                 "conditions_paiement": null,
@@ -170,7 +171,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.4",
+        "version_module": "1.5",
         "cle_id": "…",
         "signature_precedente": null,
         "document": {
@@ -229,7 +230,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.4",
+        "version_module": "1.5",
         "cle_id": "…",
         "signature_precedente": "…",
         "gt": {
@@ -275,6 +276,7 @@
                 "consultation_vies_id": "…",
                 "cree_par": "…",
                 "devis_id": null,
+                "facture_rectifiee_id": null,
                 "devise": "EUR",
                 "date_echeance": "2026-11-24",
                 "conditions_paiement": null,
@@ -383,7 +385,7 @@
             "id": "…",
             "nom": "Responsable de test"
         },
-        "version_module": "1.4",
+        "version_module": "1.5",
         "cle_id": "…",
         "signature_precedente": "…",
         "gt": {
@@ -417,6 +419,7 @@
                 },
                 "franchise_en_base": false,
                 "nature_operation": "vente_france",
+                "regularisation": false,
                 "cree_par": "…",
                 "devise": "EUR",
                 "motif": "Retour",
@@ -508,7 +511,8 @@
                     "Catégorie de l'opération : Livraison de biens"
                 ],
                 "imputations": [],
-                "bon_d_avoir": null
+                "bon_d_avoir": null,
+                "regularisation": null
             }
         }
     }

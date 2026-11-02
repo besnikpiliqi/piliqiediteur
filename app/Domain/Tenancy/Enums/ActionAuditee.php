@@ -33,6 +33,7 @@ enum ActionAuditee: string implements HasLabel
     case OrdreVerifie = 'ordre_verifie';
     case OrdreRefuse = 'ordre_refuse';
     case OrdreRetire = 'ordre_retire';
+    case OrdreARefaire = 'ordre_a_refaire';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
     case SiretChange = 'siret_change';
@@ -85,6 +86,8 @@ enum ActionAuditee: string implements HasLabel
     case VenteSansStock = 'vente_sans_stock';
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
+    case AvoirDeRegularisationEmis = 'avoir_de_regularisation_emis';
+    case FactureRectificativeEmise = 'facture_rectificative_emise';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -116,6 +119,7 @@ enum ActionAuditee: string implements HasLabel
             self::OrdreVerifie => 'Inscription à l\'Ordre vérifiée',
             self::OrdreRefuse => 'Inscription à l\'Ordre refusée',
             self::OrdreRetire => 'Radiation de l\'Ordre constatée par l\'éditeur',
+            self::OrdreARefaire => 'Inscription à l\'Ordre à vérifier de nouveau',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
             self::SiretChange => 'SIRET du magasin changé',
@@ -168,6 +172,8 @@ enum ActionAuditee: string implements HasLabel
             self::VenteSansStock => 'Vente au-delà du stock',
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
+            self::AvoirDeRegularisationEmis => 'Avoir de régularisation émis après la correction du SIREN',
+            self::FactureRectificativeEmise => 'Facture rectificative émise après la correction du SIREN',
         };
     }
 
@@ -176,7 +182,8 @@ enum ActionAuditee: string implements HasLabel
         return match ($this) {
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose,
-            self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse, self::OrdreRetire => CategorieAudit::Verification,
+            self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse, self::OrdreRetire,
+            self::OrdreARefaire => CategorieAudit::Verification,
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::CollaborateurCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
@@ -239,7 +246,9 @@ enum ActionAuditee: string implements HasLabel
             // Le code d'activité d'un cabinet lu au répertoire Sirene, sa
             // nomenclature, et le résultat : « concluant » (69.20Z en NAF
             // rév. 2), « a_controler » (code absent ou d'une autre
-            // nomenclature, contrôlé ensuite par l'éditeur) ou
+            // nomenclature, contrôlé ensuite par l'éditeur),
+            // « autre_activite » (un autre code en NAF rév. 2, lu après la
+            // correction de son SIREN, qui ne se contrôle pas) ou
             // « controle_par_l_editeur » (voir Cabinet).
             self::ActiviteDuCabinetControlee => ['code_activite', 'nomenclature', 'resultat'],
             // Le n° d'inscription au tableau de l'Ordre et le conseil
@@ -247,9 +256,11 @@ enum ActionAuditee: string implements HasLabel
             // VoieDeVerificationOrdre), ou le motif d'un refus.
             self::OrdreDemande => ['numero_ordre', 'conseil_regional'],
             self::OrdreVerifie => ['voie', 'numero_ordre', 'conseil_regional'],
-            // Le motif d'un refus, ou de la radiation constatée par
-            // l'éditeur (voir RetirerLInscriptionALOrdreAction).
-            self::OrdreRefuse, self::OrdreRetire => ['motif'],
+            // Le motif d'un refus, de la radiation constatée par l'éditeur
+            // (voir RetirerLInscriptionALOrdreAction), ou de la vérification
+            // remise à faire par la correction du SIREN (voir
+            // CorrigerSirenAction).
+            self::OrdreRefuse, self::OrdreRetire, self::OrdreARefaire => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'territoire', 'etablissement_verifie'],
             self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'territoire', 'etablissement_verifie'],
             // Pour une cession, l'indication d'établissement principal
@@ -339,6 +350,13 @@ enum ActionAuditee: string implements HasLabel
             // unitaire HT et si la validation a créé le produit (voir
             // ValiderInventaireOuvertureAction).
             self::InventaireOuvertureValide => ['inventaire', 'valeur_ht', 'lignes'],
+            // Le numéro de l'avoir de régularisation, celui de la facture
+            // qu'il régularise, le SIREN correct de la société et son total
+            // TTC, en centimes ; pour une facture rectificative, son numéro,
+            // celui de la facture qu'elle rectifie et son total TTC (voir
+            // RegularisationDUneFacture).
+            self::AvoirDeRegularisationEmis => ['avoir', 'facture', 'siren_correct', 'total_ttc'],
+            self::FactureRectificativeEmise => ['facture', 'facture_rectifiee', 'total_ttc'],
         };
     }
 }

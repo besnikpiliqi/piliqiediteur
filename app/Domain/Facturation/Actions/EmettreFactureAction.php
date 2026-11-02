@@ -96,6 +96,15 @@ use LogicException;
  * facture déjà émise, sans second numéro. Une vente à la caisse l'appelle
  * sans jeton : la vente porte le sien.
  *
+ * Une facture rectificative, après la correction du SIREN de la société
+ * (voir EmettreLaFactureRectificativeAction, qui l'appelle sans jeton),
+ * reproduit la facture qu'elle rectifie : ni le type de son client, ni la
+ * franchise de TVA, ni sa nature d'opération ne se recontrôlent, et elle
+ * garde la vérification VIES de cette facture et la copie de son client
+ * (voir Facture::clientAFiger()) ; elle ne sort rien du stock et n'en
+ * contrôle aucun. Elle s'émet sous l'identité actuelle de la société, qui
+ * doit être complète.
+ *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
@@ -226,9 +235,13 @@ class EmettreFactureAction
             throw new LogicException('Impossible d\'émettre une facture sans lignes.');
         }
 
+        $rectificative = $facture->estUneRectificative();
         $this->reprendreLeBrouillonDuProprietaire($facture, $compte);
-        ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
-        ContexteDeVente::refuserSiLeRegimeAChange($facture);
+
+        if (! $rectificative) {
+            ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
+            ContexteDeVente::refuserSiLeRegimeAChange($facture);
+        }
 
         if ($facture->estPourUnProfessionnel()) {
             $this->refuserUneFactureProfessionnelleIncomplete($facture);
@@ -240,8 +253,8 @@ class EmettreFactureAction
             ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
         }
 
-        $manques = $this->stock->verifier($compte, $facture, $confirmation);
-        $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->jour());
+        $manques = $rectificative ? [] : $this->stock->verifier($compte, $facture, $confirmation);
+        $consultationVies = $rectificative ? $facture->factureRectifiee()->firstOrFail()->consultationVies : $this->controleNatureOperation->verifier($facture, $instant->jour());
         $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->annee());
 
         $facture->figerLeClient();
@@ -335,7 +348,8 @@ class EmettreFactureAction
      * Une facture à un professionnel imprime l'identité légale complète de
      * la société et du magasin et, pour un client établi en France, son SIREN (B12) : la
      * fiche du client, dont le type vient d'être contrôlé, est celle que
-     * la facture copie à son émission.
+     * la facture copie à son émission. Une facture rectificative copie le
+     * client de la facture qu'elle rectifie, qui avait son SIREN.
      *
      * @throws LogicException
      */
@@ -343,7 +357,7 @@ class EmettreFactureAction
     {
         $facture->magasin->verifierSonIdentiteLegale();
 
-        if ($facture->client->estEtabliEnFrance() && blank($facture->client->siren)) {
+        if (! $facture->estUneRectificative() && $facture->client->estEtabliEnFrance() && blank($facture->client->siren)) {
             throw new LogicException('Renseignez le SIREN de ce client avant d\'émettre sa facture.');
         }
     }

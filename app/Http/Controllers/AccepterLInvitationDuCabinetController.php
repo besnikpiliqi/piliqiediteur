@@ -13,7 +13,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
-use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\EspaceDeLaSociete;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -35,8 +35,9 @@ use LogicException;
  *   AvertissementsDuCodeDActivite::pourUneInvitation()), et la case du
  *   choix définitif ; à part, le bouton qui refuse l'invitation ;
  * - accepter (POST) crée et valide la société (voir
- *   AccepterLInvitationAction), connecte son propriétaire et le mène au
- *   tableau de bord de sa société ; une erreur revient au formulaire, avec
+ *   AccepterLInvitationAction), connecte son propriétaire et le mène à
+ *   l'accueil de l'espace de sa société (voir EspaceDeLaSociete), jamais un
+ *   cabinet ; une erreur revient au formulaire, avec
  *   le type déjà choisi ;
  * - refuser (POST) refuse l'invitation (voir RefuserLInvitationAction).
  * Une invitation absente, close ou périmée donne une page neutre ; une
@@ -80,7 +81,7 @@ class AccepterLInvitationDuCabinetController
         $requete->session()->regenerate();
         $suivi->noterLaConnexion($proprietaire);
 
-        return redirect()->to(TableauDeBord::getUrl(panel: 'societe', tenant: Societe::query()->findOrFail($proprietaire->societe_id)))
+        return redirect()->to(EspaceDeLaSociete::accueil(Societe::query()->findOrFail($proprietaire->societe_id)))
             ->header('Referrer-Policy', 'no-referrer');
     }
 

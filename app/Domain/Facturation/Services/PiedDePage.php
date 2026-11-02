@@ -16,9 +16,11 @@ use InvalidArgumentException;
  * une facture ou un devis, les mentions entre professionnels d'une facture
  * à un professionnel (pénalités, indemnité forfaitaire, escompte), les
  * mentions fiscales du document (catégorie de l'opération, exonération,
- * franchise ou option pour les débits, voir MentionsFiscales) et la
- * mention du bon d'avoir d'un avoir fait au client comptoir. Le magasin qui vend reste en tête
- * (voir Emetteur::lignesDeLEtablissement()).
+ * franchise ou option pour les débits, voir MentionsFiscales), la mention
+ * du bon d'avoir d'un avoir fait au client comptoir et celle de la
+ * régularisation d'un avoir de régularisation, après la correction du
+ * SIREN de la société. Le magasin qui vend reste en tête (voir
+ * Emetteur::lignesDeLEtablissement()).
  *
  * Le pied d'une page ne recouvre jamais ses lignes : la marge du bas de la
  * page lui réserve sa hauteur (voir hauteurEnMillimetres()), comptée
@@ -78,6 +80,7 @@ final readonly class PiedDePage
                 ...($document instanceof Facture && $document->estPourUnProfessionnel() ? array_values($emetteur->mentionsEntreProfessionnels) : []),
                 ...app(MentionsFiscales::class)->pour($document, $emetteur),
                 $document instanceof Avoir ? $document->mentionDuBonDAvoir() : null,
+                $document instanceof Avoir ? $document->mentionDeRegularisation() : null,
             ], filled(...))),
         );
     }

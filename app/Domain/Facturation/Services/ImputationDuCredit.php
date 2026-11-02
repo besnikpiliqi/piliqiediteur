@@ -29,7 +29,12 @@ use Illuminate\Support\Collection;
  *    comptoir, que partagent toutes les ventes anonymes du magasin : le
  *    crédit d'un avoir fait au comptoir n'appartient qu'à qui en présente
  *    le numéro, son bon d'avoir, et ne s'impute d'office que sur les
- *    tickets qu'il corrige.
+ *    tickets qu'il corrige. L'avoir de régularisation d'une facture, après
+ *    la correction du SIREN de la société, ne règle, avant les autres, que
+ *    la facture rectificative de cette facture, déjà émise et encore due :
+ *    ce qui lui reste de crédit lui est réservé (voir
+ *    RegularisationDUneFacture), et cette imputation n'est jamais un
+ *    encaissement.
  *
  * Chaque facture reçoit au plus une imputation de chaque avoir, son
  * montant des deux étapes réunies, en centimes. Les factures et les avoirs
@@ -119,7 +124,20 @@ class ImputationDuCredit
             }
         }
 
-        if (! $client->estComptoir() && array_sum($credits) > 0) {
+        [$regularisations, $autres] = $avoirs->partition(fn (Avoir $avoir): bool => $avoir->estUneRegularisation());
+
+        foreach ($regularisations as $avoir) {
+            $rectificative = $avoir->factureRegularisee()?->rectificative()
+                ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
+                ->lockForUpdate()
+                ->first();
+
+            if ($rectificative !== null) {
+                $imputer($avoir, $factures[$rectificative->getKey()] ??= $rectificative, PHP_INT_MAX);
+            }
+        }
+
+        if (! $client->estComptoir() && $autres->sum(fn (Avoir $avoir): int => $credits[$avoir->getKey()]) > 0) {
             $facturesDues = Facture::query()
                 ->where('client_id', $client->getKey())
                 ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
@@ -128,7 +146,7 @@ class ImputationDuCredit
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($avoirs as $avoir) {
+            foreach ($autres as $avoir) {
                 foreach ($facturesDues as $facture) {
                     $imputer($avoir, $factures[$facture->getKey()] ??= $facture, PHP_INT_MAX);
                 }

@@ -403,9 +403,10 @@ class VerificateurIntegriteTest extends TestCase
 
     /**
      * L'assurance professionnelle de la société entre dans l'émetteur
-     * signé à l'émission, à la version 1.4 du module fiscal : la facture se
-     * vérifie sans anomalie, et une assurance réécrite dans son contenu
-     * signé ne se vérifie plus avec sa signature.
+     * signé à l'émission, depuis la version 1.4 du module fiscal (la version
+     * en vigueur, 1.5, signe en plus la régularisation après une correction
+     * de SIREN) : la facture se vérifie sans anomalie, et une assurance
+     * réécrite dans son contenu signé ne se vérifie plus avec sa signature.
      */
     public function test_l_assurance_signee_dans_l_emetteur_se_verifie_et_sa_reecriture_est_detectee(): void
     {
@@ -420,7 +421,7 @@ class VerificateurIntegriteTest extends TestCase
         $vente = $this->enregistrementDe($facture, ChaineFiscale::Vente);
         $contenu = json_decode($vente->contenu, true, flags: JSON_THROW_ON_ERROR);
 
-        $this->assertSame('1.4', $contenu['version_module']);
+        $this->assertSame('1.5', $contenu['version_module']);
         $this->assertSame(['assureur' => 'Mutuelle du Littoral', 'adresse' => '4 rue Paradis, 13001 Marseille', 'contrat' => 'RC-2026-118', 'couverture' => 'France métropolitaine'], $contenu['donnees']['contexte']['emetteur']['assurance']);
         $this->assertSame([], $this->anomalies($this->verifier()));
 

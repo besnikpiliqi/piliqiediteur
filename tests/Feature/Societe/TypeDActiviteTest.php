@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\Cabinet\Pages\IdentiteDuCabinet;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\VerificationSociete;
@@ -383,9 +384,10 @@ class TypeDActiviteTest extends TestCase
      * ne modifie de réglages fiscaux ; les
      * actions le refusent avec leur motif, sans rien écrire, et l'espace
      * d'administration d'une société, où ces écrans se trouvent, lui reste
-     * fermé ; il crée ses collaborateurs. Le propriétaire d'une société qui
-     * a des magasins, lui, crée son équipe et règle sa fiscalité, jamais un
-     * collaborateur.
+     * fermé : leurs adresses sous le uuid du cabinet le mènent à l'espace
+     * du cabinet ; il crée ses collaborateurs. Le propriétaire d'une
+     * société qui a des magasins, lui, crée son équipe et règle sa
+     * fiscalité, jamais un collaborateur.
      */
     public function test_un_cabinet_ne_configure_que_son_identite_et_ses_collaborateurs_ni_equipe_de_magasin_ni_reglages_fiscaux(): void
     {
@@ -429,8 +431,8 @@ class TypeDActiviteTest extends TestCase
 
         $this->dansLEspaceDuCabinet($cabinet->fresh(), $proprietaire);
         $this->get(IdentiteDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk();
-        $this->get(ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $cabinet))->assertForbidden();
-        $this->get(MembreResource::getUrl('index', panel: 'societe', tenant: $cabinet))->assertForbidden();
+        $this->get(ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $cabinet))->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet));
+        $this->get(MembreResource::getUrl('index', panel: 'societe', tenant: $cabinet))->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet));
     }
 
     /**

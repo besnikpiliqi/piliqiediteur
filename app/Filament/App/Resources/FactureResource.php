@@ -220,6 +220,18 @@ class FactureResource extends Resource
                     ->label('Vérification VIES retenue')
                     ->state(fn (Facture $record): ?string => $record->consultationVies?->reference())
                     ->visible(fn (Facture $record): bool => $record->consultation_vies_id !== null),
+                // La régularisation après la correction du SIREN de la
+                // société (voir RegularisationDUneFacture) : la facture que
+                // rectifie une facture rectificative, et la rectificative
+                // d'une facture régularisée.
+                TextEntry::make('facture_rectifiee')
+                    ->label('Rectifie la facture')
+                    ->state(fn (Facture $record): ?string => $record->factureRectifiee?->numero)
+                    ->visible(fn (Facture $record): bool => $record->estUneRectificative()),
+                TextEntry::make('rectificative')
+                    ->label('Facture rectificative')
+                    ->state(fn (Facture $record): ?string => $record->rectificative?->numero)
+                    ->visible(fn (Facture $record): bool => $record->rectificative !== null),
             ])->columns(3),
 
             self::livraisonSection(),
@@ -364,7 +376,7 @@ class FactureResource extends Resource
                             // directement ici, pas seulement sur la page
                             // dédiée de l'avoir.
                             RepeatableEntry::make('lignes')
-                                ->label('Produits retournés')
+                                ->label(fn (Avoir $record): string => $record->estUneRegularisation() ? 'Lignes régularisées, sans retour en stock' : 'Produits retournés')
                                 ->columnSpanFull()
                                 ->state(fn (Avoir $record) => $record->lignes)
                                 ->schema([
@@ -660,8 +672,10 @@ class FactureResource extends Resource
             // somme que la base ferait sur une colonne décimale), sans une
             // requête par facture. La fiche, qui montre la date, le mode et
             // la référence de chaque paiement, lit ses imputations en
-            // entier.
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue']))
+            // entier. La facture rectificative de chacune, après une
+            // correction du SIREN de la société, dit si l'action « Avoir »
+            // s'y propose (voir AvoirResource::peutCrediter()).
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id']))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),

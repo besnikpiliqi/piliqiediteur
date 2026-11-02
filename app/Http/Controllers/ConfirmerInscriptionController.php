@@ -6,8 +6,7 @@ use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
-use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
-use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\EspaceDeLaSociete;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -51,10 +50,10 @@ use Illuminate\Validation\ValidationException;
  * lien valable et dit pourquoi. La société naît avec le type confirmé,
  * définitif dès cet instant. Créée sans magasin,
  * la société attend le code de son courrier ; son propriétaire, dont le
- * lien suivi a confirmé l'adresse, est connecté et arrive dans l'espace de
- * sa société, sur la liste de ses premières étapes (voir TableauDeBord),
- * ou, pour un cabinet d'expertise comptable, dans l'espace du cabinet,
- * sur la liste des siennes (voir TableauDeBordDuCabinet).
+ * lien suivi a confirmé l'adresse, est connecté et arrive à l'accueil de
+ * l'espace de sa société, sur la liste de ses premières étapes, ou, pour
+ * un cabinet d'expertise comptable, à celui de l'espace du cabinet, sur la
+ * liste des siennes (voir EspaceDeLaSociete).
  */
 class ConfirmerInscriptionController
 {
@@ -128,7 +127,7 @@ class ConfirmerInscriptionController
         Auth::login($societe->proprietaire);
         request()->session()->regenerate();
 
-        return redirect()->to($societe->estUnCabinet() ? TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $societe) : TableauDeBord::getUrl(panel: 'societe', tenant: $societe))
+        return redirect()->to(EspaceDeLaSociete::accueil($societe))
             ->header('Referrer-Policy', 'no-referrer');
     }
 

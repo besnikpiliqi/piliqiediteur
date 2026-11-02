@@ -3,13 +3,18 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Cabinets\Services\AvisAuxClientsDuCabinet;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\EntreeAudit;
@@ -24,6 +29,7 @@ use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\Sirene\EtablissementSirene;
+use App\Integrations\Sirene\UniteSirene;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use LogicException;
@@ -41,13 +47,32 @@ use Throwable;
  * SIRET : un établissement actif, rattaché au nouveau SIREN, du même
  * territoire, qu'aucun magasin ne réserve ; un magasin fermé pour
  * cessation ou cédé garde le sien, comme ses documents gardent l'ancien
- * SIREN (sa réouverture recontrôlerait son établissement). Le SIREN d'un
- * cabinet d'expertise comptable ne se corrige pas ainsi : son code
- * d'activité et son inscription à l'Ordre ont été vérifiés sous ce SIREN.
+ * SIREN (sa réouverture recontrôlerait son établissement).
+ *
+ * Un cabinet d'expertise comptable, qui n'a aucun magasin, se corrige
+ * aussi : son code d'activité et son inscription à l'Ordre, vérifiés sous
+ * l'ancien SIREN, se vérifient de nouveau sous le nouveau. Dans la même
+ * transaction, sous le verrou de sa ligne de vérification, son code
+ * d'activité se relit au répertoire Sirene comme à l'inscription
+ * (contrôlé s'il est 69.20Z en NAF rév. 2 ; absent ou d'une autre
+ * nomenclature, à contrôler par l'éditeur ; un autre code ne se contrôle
+ * pas, voir Cabinet::noterSonActivite()) et la vérification de son
+ * inscription à l'Ordre est remise à faire (la vérification faite, une
+ * demande en attente ou un refus effacés ; leur trace reste au journal
+ * d'audit ; une radiation constatée reste) : il n'est plus vérifié, ses
+ * liens restent, mais lui et ses collaborateurs n'ouvrent plus aucun
+ * client, dès leur requête suivante, jusqu'à sa nouvelle vérification
+ * (voir Societe::estUnCabinetVerifie(), VerifierLOrdreAction et
+ * ConstaterLInscriptionALOrdreAction). Ensuite, s'il était vérifié, le
+ * propriétaire de chacun de ses clients liés est prévenu que l'accès de
+ * son cabinet est suspendu (voir AvisAuxClientsDuCabinet).
  *
  * Les contrôles du répertoire se font avant toute écriture ; puis, sous
  * les verrous des registres de tous ses magasins réels, de sa ligne, puis
- * de chaque magasin qui change de SIRET, et seulement si aucun de ces
+ * de chaque magasin qui change de SIRET, seulement si aucun de ses
+ * magasins réels n'a émis de facture à un professionnel depuis l'instant
+ * de l'examen (sa liste désigne alors toutes celles que l'ancien SIREN a
+ * signées, les seules qui se régularisent ensuite), et si aucun de ces
  * magasins ne porte le code d'un magasin d'une autre inscription qui a
  * déjà numéroté des documents sous le nouveau SIREN (une société révoquée
  * qui l'avait, voir CodeMagasin::aServiSousCeSiren()), dont il répéterait
@@ -67,18 +92,17 @@ use Throwable;
  * répertoire s'inscrivent au registre des vérifications, et la correction
  * au journal d'audit, avec l'intervention de l'éditeur. Si les magasins
  * ont changé depuis les contrôles, rien n'est corrigé. Aucun document émis
- * ne change : chacun garde l'ancien SIREN qu'il a signé. Ensuite, le
- * propriétaire est prévenu, sans la justification de l'éditeur. Une
- * nouvelle attestation par magasin (étape 3) et la connexion à la
- * plateforme agréée (étape 2) suivront.
+ * ne change : chacun garde l'ancien SIREN qu'il a signé ; les factures que
+ * le dernier examen désigne se régularisent ensuite dans leur magasin (voir
+ * RegularisationDUneFacture). Ensuite, le propriétaire est prévenu, sans
+ * la justification de l'éditeur. Une nouvelle attestation par magasin
+ * (étape 3) et la connexion à la plateforme agréée (étape 2) suivront.
  */
 class CorrigerSirenAction
 {
     public const MESSAGE_DEUX_OPERATEURS = 'La correction d\'un SIREN exige deux opérateurs distincts de l\'éditeur.';
 
     public const MESSAGE_SANS_EXAMEN = 'Aucun examen n\'a conclu à une erreur pour ce SIREN : examinez d\'abord le SIREN de la société (editeur:societe:examiner-siren --decision=erreur).';
-
-    public const MESSAGE_CABINET = 'Le SIREN d\'un cabinet d\'expertise comptable ne se corrige pas par cette procédure : son code d\'activité et son inscription à l\'Ordre ont été vérifiés sous ce SIREN.';
 
     public const MESSAGE_SIREN_PRIS = 'Ce SIREN ne peut pas être pris : il est celui d\'une autre inscription.';
 
@@ -96,12 +120,21 @@ class CorrigerSirenAction
 
     public const MESSAGE_CODE_DEJA_EMIS = 'Le magasin %s ne peut pas numéroter sous ce SIREN : une autre inscription de ce SIREN a déjà émis des documents sous son code, et ses numéros se répéteraient. Rien n\'est corrigé.';
 
+    public const MESSAGE_FACTURES_DEPUIS_L_EXAMEN = 'Des factures ont été émises depuis l\'examen du SIREN : examinez-le de nouveau (editeur:societe:examiner-siren --decision=erreur), pour que sa liste les désigne. Rien n\'est corrigé.';
+
+    /**
+     * Le motif, au journal d'audit d'un cabinet, de la vérification de son
+     * inscription à l'Ordre remise à faire par la correction de son SIREN.
+     */
+    public const MOTIF_ORDRE_A_REFAIRE = 'Le SIREN du cabinet a été corrigé par l\'éditeur : la vérification de son inscription à l\'Ordre faite sous l\'ancien SIREN ne vaut plus.';
+
     public function __construct(
         private readonly ControleSirene $controleSirene,
         private readonly SiretsDesMagasins $siretsDesMagasins,
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
+        private readonly AvisAuxClientsDuCabinet $avisAuxClients,
     ) {}
 
     /**
@@ -129,14 +162,9 @@ class CorrigerSirenAction
         $nouveauSiren = (string) preg_replace('/\s+/', '', $nouveauSiren);
         $numeroTva = $numeroTva === null ? null : NumeroTva::normaliser($numeroTva);
 
-        $corrigee = app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $nouveauSiren, $siretsParCode, $numeroTva, $assujettiUnique, $editeur): Societe {
+        [$corrigee, $cabinetQuiEtaitVerifie] = app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $nouveauSiren, $siretsParCode, $numeroTva, $assujettiUnique, $editeur): array {
             ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($societe);
-
-            if ($societe->estUnCabinet()) {
-                throw new VerificationRefuseeException(self::MESSAGE_CABINET);
-            }
-
-            $this->exigerUnExamenConcluantAUneErreur($nouveauSiren);
+            $examen = $this->exigerUnExamenConcluantAUneErreur($nouveauSiren);
             $unite = $this->controleSirene->unite($nouveauSiren);
 
             if ($unite['resultat'] !== ResultatVerification::Concluante) {
@@ -150,7 +178,7 @@ class CorrigerSirenAction
             $magasins = $societe->magasinsReels()->orderBy('id')->get();
             $etablissements = $this->etablissementsDesMagasins(self::quiChangentDeSiret($magasins), $siretsParCode, $nouveauSiren);
 
-            return $this->operateur->pendantLeSysteme(fn (): Societe => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $nouveauSiren, $numeroTva, $assujettiUnique, $editeur, $magasins, $etablissements, $unite): Societe {
+            return $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $nouveauSiren, $numeroTva, $assujettiUnique, $editeur, $magasins, $etablissements, $unite, $examen): array {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($verrouillee);
                 $relus = $verrouillee->magasinsReels()->orderBy('id')->get();
@@ -158,6 +186,8 @@ class CorrigerSirenAction
                 if ($relus->modelKeys() !== $magasins->modelKeys() || self::quiChangentDeSiret($relus)->modelKeys() !== array_keys($etablissements)) {
                     throw new VerificationRefuseeException(self::MESSAGE_MAGASINS_CHANGES);
                 }
+
+                self::exigerAucuneFactureDepuisLExamen($relus, $examen);
 
                 foreach (self::quiChangentDeSiret($relus) as $magasin) {
                     if (CodeMagasin::aServiSousCeSiren($verrouillee, (string) $magasin->code, $nouveauSiren)) {
@@ -176,6 +206,7 @@ class CorrigerSirenAction
                 }
 
                 $this->controleSirene->noterUnite($verrouillee, $unite, editeur: $editeur);
+                $cabinetQuiEtaitVerifie = $verrouillee->estUnCabinet() && $this->remettreAFaireLaVerificationDuCabinet($verrouillee, $unite['unite'], $editeur);
                 $anciensSirets = [];
                 $nouveauxSirets = [];
 
@@ -201,13 +232,49 @@ class CorrigerSirenAction
                     ['siren' => $nouveauSiren, 'numero_tva' => $nouveauNumeroTva, 'sirets' => $nouveauxSirets],
                     $verrouillee, $editeur);
 
-                return $verrouillee;
+                return [$verrouillee, $cabinetQuiEtaitVerifie];
             }));
         });
 
         $this->prevenirLeProprietaire($corrigee);
 
+        if ($cabinetQuiEtaitVerifie) {
+            $this->avisAuxClients->accesSuspendu($corrigee);
+        }
+
         return $corrigee;
+    }
+
+    /**
+     * Sous le verrou de la ligne de vérification du cabinet, prise après
+     * celle de sa société : son code d'activité relu sous le nouveau SIREN
+     * et la vérification de son inscription à l'Ordre remise à faire, l'un
+     * et l'autre au journal d'audit, origine « éditeur ». Rend s'il était
+     * vérifié avant (voir Societe::estUnCabinetVerifie()), relu sous ce
+     * verrou.
+     */
+    private function remettreAFaireLaVerificationDuCabinet(Societe $cabinet, UniteSirene $unite, InterventionDeLEditeur $editeur): bool
+    {
+        $verification = $cabinet->cabinet()->lockForUpdate()->firstOrFail();
+        $etaitVerifie = $cabinet->statut === StatutSociete::Active && $verification->aSonActiviteControlee() && $verification->estVerifieALOrdre();
+
+        $resultat = $verification->noterSonActivite($unite);
+        $verification->forceFill([
+            'ordre_demande_le' => null,
+            'ordre_verifie_le' => null,
+            'ordre_voie' => null,
+            'ordre_refuse_le' => null,
+            'ordre_motif_refus' => null,
+        ])->save();
+
+        $this->journalAudit->inscrire(ActionAuditee::ActiviteDuCabinetControlee, null, null, null, [
+            'code_activite' => $unite->activitePrincipale,
+            'nomenclature' => $unite->nomenclatureActivite,
+            'resultat' => $resultat,
+        ], $cabinet, $editeur);
+        $this->journalAudit->inscrire(ActionAuditee::OrdreARefaire, null, null, null, ['motif' => self::MOTIF_ORDRE_A_REFAIRE], $cabinet, $editeur);
+
+        return $etaitVerifie;
     }
 
     /**
@@ -248,7 +315,7 @@ class CorrigerSirenAction
      *
      * @throws VerificationRefuseeException
      */
-    private function exigerUnExamenConcluantAUneErreur(string $nouveauSiren): void
+    private function exigerUnExamenConcluantAUneErreur(string $nouveauSiren): EntreeAudit
     {
         $examen = EntreeAudit::query()->where('action', ActionAuditee::SirenExamine->value)->orderByDesc('id')->first();
 
@@ -256,6 +323,36 @@ class CorrigerSirenAction
             || ($examen->nouvelles_valeurs['decision'] ?? null) !== DecisionExamenSiren::Erreur->value
             || ($examen->nouvelles_valeurs['siren_correct'] ?? null) !== $nouveauSiren) {
             throw new VerificationRefuseeException(self::MESSAGE_SANS_EXAMEN);
+        }
+
+        return $examen;
+    }
+
+    /**
+     * Aucune facture à un professionnel n'a été émise par l'un de ces
+     * magasins depuis l'instant de l'examen : la liste de l'examen désigne
+     * ainsi toutes les factures que l'ancien SIREN a signées, les seules qui
+     * se régularisent ensuite (voir RegularisationDUneFacture). Lu sous les
+     * verrous de leurs registres, que toute émission prend.
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     *
+     * @throws VerificationRefuseeException
+     */
+    private static function exigerAucuneFactureDepuisLExamen(Collection $magasins, EntreeAudit $examen): void
+    {
+        $jusquAu = Instant::depuisLaBase((string) $examen->nouvelles_valeurs['documents_emis_jusqu_au']);
+
+        foreach ($magasins as $magasin) {
+            $emise = app(TenantContext::class)->runAs($magasin, fn (): bool => Facture::query()
+                ->whereNotNull('numero')
+                ->where('type_client', TypeClient::Professionnel->value)
+                ->where('date_emission', '>', $jusquAu)
+                ->exists());
+
+            if ($emise) {
+                throw new VerificationRefuseeException(self::MESSAGE_FACTURES_DEPUIS_L_EXAMEN);
+            }
         }
     }
 
@@ -309,12 +406,19 @@ class CorrigerSirenAction
     private function prevenirLeProprietaire(Societe $societe): void
     {
         try {
-            app(TenantContext::class)->runAsSociete($societe, fn () => $societe->proprietaire()->first()?->notify(new AvisDeVerification(
-                $societe,
-                'Le SIREN de votre société est corrigé',
-                "L'éditeur a corrigé le SIREN de votre société, désormais {$societe->siren}, ainsi que le SIRET de chacun de vos magasins ouverts ou fermés temporairement. Vos documents déjà émis gardent l'ancien SIREN, tels qu'ils ont été signés. Vérifiez l'immatriculation et le n° de TVA de votre société dans son identité.",
-                AvisDeVerification::ATTENTION,
-            )));
+            app(TenantContext::class)->runAsSociete($societe, fn () => $societe->proprietaire()->first()?->notify($societe->estUnCabinet()
+                ? new AvisDeVerification(
+                    $societe,
+                    'Le SIREN de votre cabinet est corrigé',
+                    "L'éditeur a corrigé le SIREN de votre cabinet, désormais {$societe->siren}. Son code d'activité et son inscription au tableau de l'Ordre se vérifient de nouveau sous ce SIREN : d'ici là, votre cabinet garde ses liens, mais n'ouvre plus aucun client et n'en invite ni n'en lie aucun. Faites vérifier son inscription à l'Ordre depuis la page de sa vérification, et vérifiez son immatriculation et son n° de TVA dans son identité.",
+                    AvisDeVerification::ATTENTION,
+                )
+                : new AvisDeVerification(
+                    $societe,
+                    'Le SIREN de votre société est corrigé',
+                    "L'éditeur a corrigé le SIREN de votre société, désormais {$societe->siren}, ainsi que le SIRET de chacun de vos magasins ouverts ou fermés temporairement. Vos documents déjà émis gardent l'ancien SIREN, tels qu'ils ont été signés. Vérifiez l'immatriculation et le n° de TVA de votre société dans son identité.",
+                    AvisDeVerification::ATTENTION,
+                )));
         } catch (Throwable $erreur) {
             report($erreur);
         }

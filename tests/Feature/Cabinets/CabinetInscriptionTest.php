@@ -161,7 +161,8 @@ class CabinetInscriptionTest extends TestCase
      * Après la confirmation de son inscription, le propriétaire d'un
      * cabinet arrive dans l'espace du cabinet, sur sa liste d'étapes ; à
      * chaque connexion, le panneau des magasins l'y mène ; l'espace
-     * d'administration d'une société lui reste fermé.
+     * d'administration d'une société lui reste fermé : son adresse sous le
+     * uuid du cabinet l'y ramène aussi.
      */
     public function test_le_proprietaire_d_un_cabinet_arrive_dans_l_espace_du_cabinet_et_jamais_dans_l_espace_societe(): void
     {
@@ -194,8 +195,35 @@ class CabinetInscriptionTest extends TestCase
         $this->get(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))
             ->assertOk()
             ->assertSeeText([TableauDeBordDuCabinet::ETAPE_CODE_DU_COURRIER, TableauDeBordDuCabinet::ETAPE_ORDRE, 'Propriétaire du cabinet']);
-        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $cabinet))->assertForbidden();
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $cabinet))->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet));
         $this->get(route('filament.app.tenant'))->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet));
+    }
+
+    /**
+     * Après la saisie du code de son courrier sur la page du code, le
+     * propriétaire d'un cabinet arrive au tableau de bord de l'espace du
+     * cabinet, jamais à l'espace d'administration d'une société ; une autre
+     * personne que celle inscrite, devenue propriétaire, y lit l'avis de son
+     * adresse de connexion à confirmer, avec son identifiant.
+     */
+    public function test_apres_la_saisie_du_code_le_proprietaire_d_un_cabinet_arrive_dans_l_espace_du_cabinet_avec_l_avis_de_son_adresse(): void
+    {
+        Mail::fake();
+        app(RepertoireSirene::class)->exercer(FauxRepertoireSirene::SIREN_CABINET, ControleSirene::CODE_ACTIVITES_COMPTABLES);
+        $cabinet = $this->inscrireUneSociete(FauxRepertoireSirene::SIREN_CABINET, 'inscrit@example.test', TypeDActivite::Cabinet);
+        $code = $this->codeDuCourrier($cabinet);
+        app(TenantContext::class)->clear();
+
+        $reponse = $this->post(route('code.saisir'), ['siren' => $cabinet->siren, 'code' => $code, 'email' => self::ADRESSE, 'password' => self::MOT_DE_PASSE_CHOISI, 'password_confirmation' => self::MOT_DE_PASSE_CHOISI]);
+
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $reponse->assertRedirect(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertHeader('Referrer-Policy', 'no-referrer');
+        $this->assertAuthenticatedAs($proprietaire);
+        $avis = collect(session('filament.notifications'))->sole();
+        $this->assertSame('Confirmez votre adresse de connexion', $avis['title']);
+        $this->assertStringContainsString(self::ADRESSE, $avis['body']);
+        $this->assertStringContainsString((string) $proprietaire->identifiantDeConnexion(), $avis['body']);
+        $this->get(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertOk();
     }
 
     /**

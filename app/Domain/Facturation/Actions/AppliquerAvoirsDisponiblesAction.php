@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,10 +30,21 @@ use Illuminate\Support\Facades\DB;
  * Jamais pour le client comptoir : le crédit d'un avoir fait au comptoir
  * n'appartient qu'à qui en présente le numéro, son bon d'avoir (voir
  * EmettreFactureAction), jamais à la vente comptoir suivante.
+ *
+ * Le crédit de l'avoir de régularisation d'une facture, après la
+ * correction du SIREN de la société, n'est pas un crédit disponible : il
+ * est réservé à cette facture, puis à sa facture rectificative (voir
+ * RegularisationDUneFacture). À l'émission de cette rectificative, ce qui
+ * lui en reste la règle d'abord, avant tout autre crédit du client ; il ne
+ * règle jamais une autre facture. Cette imputation n'est jamais un
+ * encaissement.
  */
 class AppliquerAvoirsDisponiblesAction
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly RegularisationDUneFacture $regularisation,
+    ) {}
 
     public function handle(Facture $facture): void
     {
@@ -46,13 +58,15 @@ class AppliquerAvoirsDisponiblesAction
                 return;
             }
 
-            $avoirs = Avoir::query()
+            $reserve = $facture->estUneRectificative() ? $this->regularisation->avoirDeRegularisation($facture->factureRectifiee()->firstOrFail(), verrouille: true) : null;
+            $avoirs = collect([$reserve])->filter()->concat(Avoir::query()
                 ->where('client_id', $facture->client_id)
                 ->where('statut', StatutAvoir::Emise)
+                ->where('regularisation', false)
                 ->orderBy('date_emission')
                 ->orderBy('id')
                 ->lockForUpdate()
-                ->get();
+                ->get());
             $impute = 0;
 
             foreach ($avoirs as $avoir) {

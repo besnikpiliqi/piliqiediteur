@@ -37,6 +37,8 @@ use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
+use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Resources\MagasinResource;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
@@ -44,6 +46,7 @@ use Filament\Pages\Dashboard;
 use Filament\Pages\Page;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionMethod;
@@ -142,6 +145,67 @@ class PanneauCabinetTest extends TestCase
         $this->actingAs($compte);
         $this->get(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $magasin->societe))->assertForbidden();
         $this->get(TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet))->assertForbidden();
+    }
+
+    /**
+     * L'adresse de l'espace d'administration de son propre cabinet
+     * (/societe/{uuid} et ses pages), comme son accueil sans société
+     * (/societe), mène le propriétaire du cabinet et un collaborateur au
+     * tableau de bord de l'espace du cabinet, au lieu d'une page 403.
+     */
+    #[DataProvider('comptesDuCabinet')]
+    public function test_l_adresse_de_l_espace_societe_de_son_cabinet_mene_au_tableau_de_bord_du_cabinet(string $qui): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $compte = $qui === 'proprietaire' ? $this->proprietaireDuCabinet($cabinet) : $this->collaborateur($cabinet);
+        $accueil = TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet);
+        $this->actingAs($compte);
+
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $cabinet))->assertRedirect($accueil);
+        $this->get(MagasinResource::getUrl('index', panel: 'societe', tenant: $cabinet))->assertRedirect($accueil);
+        $this->get(route('filament.societe.tenant'))->assertRedirect($accueil);
+        $this->get($accueil)->assertOk();
+    }
+
+    /**
+     * L'adresse de l'espace d'administration d'une autre société reste
+     * refusée à un compte d'un cabinet, client lié et confié compris, de la
+     * même façon que pour une société qui n'existe pas : rien ne s'en
+     * apprend.
+     */
+    #[DataProvider('comptesDuCabinet')]
+    public function test_l_espace_societe_d_une_autre_societe_reste_refuse_a_un_compte_de_cabinet_sans_rien_reveler(string $qui): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        $this->lierLeCabinet($cabinet, $magasin);
+        $compte = $qui === 'proprietaire' ? $this->proprietaireDuCabinet($cabinet) : $this->confier($this->collaborateur($cabinet), [$magasin]);
+        $this->actingAs($compte);
+
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
+        $this->get('/societe/'.Str::uuid())->assertForbidden();
+    }
+
+    /**
+     * Le propriétaire d'une autre société ne trouve aucun espace
+     * d'administration sous le uuid d'un cabinet, comme avant.
+     */
+    public function test_le_proprietaire_d_une_autre_societe_ne_trouve_pas_l_espace_societe_sous_le_uuid_d_un_cabinet(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique']);
+
+        $reponse = $this->actingAs($this->proprietaireDe($magasin))->get(TableauDeBord::getUrl(panel: 'societe', tenant: $cabinet));
+
+        $reponse->assertNotFound();
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function comptesDuCabinet(): array
+    {
+        return ['propriétaire du cabinet' => ['proprietaire'], 'collaborateur' => ['collaborateur']];
     }
 
     /**

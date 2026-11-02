@@ -19,8 +19,11 @@ use Illuminate\Support\Facades\DB;
  * facture du client absorbe à son émission (voir
  * AppliquerAvoirsDisponiblesAction), ou que la contre-passation d'un
  * paiement impute sur ce qu'elle rouvre (voir ContrePasserPaiementAction) ;
- * celui d'un avoir fait au client comptoir est son bon d'avoir. Un avoir
- * n'est jamais remboursé (B5).
+ * celui d'un avoir fait au client comptoir est son bon d'avoir. L'avoir de
+ * régularisation d'une facture, après la correction du SIREN de la
+ * société, ne règle ensuite que la facture rectificative de cette facture,
+ * déjà émise, et garde pour elle ce qui lui reste (voir ImputationDuCredit).
+ * Un avoir n'est jamais remboursé (B5).
  *
  * Chaque facture reçoit au plus une imputation de l'avoir, puis son statut
  * suit ce qui en reste dû : une facture en retard le reste tant qu'il en

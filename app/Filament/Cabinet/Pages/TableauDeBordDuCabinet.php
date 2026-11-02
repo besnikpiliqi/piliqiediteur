@@ -117,9 +117,11 @@ class TableauDeBordDuCabinet extends Dashboard
             [
                 'titre' => self::ETAPE_ACTIVITE,
                 'faite' => $verification?->aSonActiviteControlee() ?? false,
-                'etat' => ($verification?->aSonActiviteControlee() ?? false)
-                    ? 'Contrôlé : '.($verification->code_activite ?? 'code donné à l\'éditeur').'.'
-                    : 'Le répertoire Sirene ne donne pas votre code dans la nomenclature attendue : l\'éditeur le contrôle avec votre inscription à l\'Ordre.',
+                'etat' => match (true) {
+                    $verification?->aSonActiviteControlee() ?? false => 'Contrôlé : '.($verification->code_activite ?? 'code donné à l\'éditeur').'.',
+                    $verification?->aUneAutreActivite() ?? false => "Le répertoire Sirene donne à votre cabinet le code {$verification->code_activite}, qui n'est pas 69.20Z (activités comptables) : il ne peut pas être vérifié.",
+                    default => 'Le répertoire Sirene ne donne pas votre code dans la nomenclature attendue : l\'éditeur le contrôle avec votre inscription à l\'Ordre.',
+                },
                 'url' => $page,
             ],
             [

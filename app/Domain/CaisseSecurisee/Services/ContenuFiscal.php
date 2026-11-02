@@ -38,7 +38,10 @@ use Illuminate\Support\Collection;
  *   franchise de TVA (voir ContexteDeVente), nature d'opération (voir
  *   NatureOperation) et, pour une facture, livraison et vérification VIES
  *   retenue, auteur, devise, échéance, conditions, notes ou motif, lignes,
- *   ventilation par taux et totaux.
+ *   ventilation par taux et totaux ; la facture que rectifie une facture
+ *   rectificative, et si un avoir est l'avoir de régularisation d'une
+ *   facture, après la correction du SIREN de la société (voir
+ *   RegularisationDUneFacture).
  *   Un avoir s'y écrit en négatif (quantités et montants), cite le numéro
  *   et la date d'émission de chaque ticket ou facture qu'il corrige, et
  *   chacune de ses lignes y référence la ligne et le numéro du document
@@ -48,7 +51,11 @@ use Illuminate\Support\Collection;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
  *   l'émetteur, tels que la société et le magasin sont ce jour-là (voir
  *   Emetteur : identité légale, siège, forme et capital compris), que le
- *   document imprime ensuite pour toujours (voir FigeSonEmetteur), la
+ *   document imprime ensuite pour toujours (voir FigeSonEmetteur) ; celui
+ *   de l'avoir de régularisation d'une facture, après la correction du
+ *   SIREN de la société, est celui que cette facture a signé (l'ancien
+ *   SIREN), avec la mention de la régularisation (voir
+ *   MentionsFiscales::regularisation()) ; la
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
  *   MentionsFiscales), pour une facture la vérification VIES qu'elle
  *   retient (n° vérifié, résultat, n° de consultation, instant), et ce
@@ -185,6 +192,7 @@ class ContenuFiscal
             'consultation_vies_id' => $this->identifiant($facture->consultation_vies_id),
             'cree_par' => $this->identifiant($facture->cree_par),
             'devis_id' => $this->identifiant($facture->devis_id),
+            'facture_rectifiee_id' => $this->identifiant($facture->facture_rectifiee_id),
             'devise' => $facture->devise,
             'date_echeance' => $facture->date_echeance,
             'conditions_paiement' => $facture->conditions_paiement,
@@ -247,6 +255,7 @@ class ContenuFiscal
             'client' => $this->clientFige($avoir),
             'franchise_en_base' => $avoir->franchise_en_base,
             'nature_operation' => $avoir->nature_operation->value,
+            'regularisation' => $avoir->estUneRegularisation(),
             'cree_par' => $this->identifiant($avoir->cree_par),
             'devise' => $avoir->devise,
             'motif' => $avoir->motif,
@@ -267,7 +276,7 @@ class ContenuFiscal
     private function contexteDeLAvoir(Avoir $avoir): array
     {
         $avoir->load(['lignes', 'magasin', 'allocations.facture']);
-        $emetteur = Emetteur::duMagasin($avoir->magasin);
+        $emetteur = $avoir->estUneRegularisation() ? $avoir->factureRegularisee()->emetteur() : Emetteur::duMagasin($avoir->magasin);
 
         return [
             'emetteur' => $emetteur->enTableau(),
@@ -282,6 +291,7 @@ class ContenuFiscal
                 ->values()
                 ->all(),
             'bon_d_avoir' => $this->mentions->bonDAvoir($avoir),
+            'regularisation' => $this->mentions->regularisation($avoir),
         ];
     }
 

@@ -74,9 +74,11 @@ class AccesDesCabinets
     }
 
     /**
-     * Pour le seul propriétaire d'un cabinet qui n'est plus vérifié, ses
-     * liens actifs, avec la dénomination et le SIREN de chaque client
-     * (relation client), pour y mettre fin ; rien d'autre du client.
+     * Les liens actifs de ce cabinet, avec la dénomination et le SIREN de
+     * chaque client (relation client), rien d'autre du client : pour le
+     * seul propriétaire d'un cabinet qui n'est plus vérifié, pour y mettre
+     * fin ; pour prévenir le propriétaire de chaque client que l'accès du
+     * cabinet s'arrête ou revient (voir AvisAuxClientsDuCabinet).
      *
      * @return Collection<int, LienCabinet>
      */

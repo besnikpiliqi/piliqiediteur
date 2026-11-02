@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 12:07 UTC par pilotage-sync.sh : « Après le lot A7b ».
+Mis à jour le 02/11/2026 à 15:44 UTC par pilotage-sync.sh : « A7b poussé ; SL repris après limite et redémarrages ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,15 @@ e70f18e Affiche les prix unitaires au centime et complète la note de calcul (lo
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Providers/Filament/AppPanelProvider.php
+ M app/Providers/Filament/CabinetPanelProvider.php
+ M app/Providers/Filament/SocietePanelProvider.php
+ M bootstrap/app.php
+?? app/Http/Responses/ReponseAUnePageExpiree.php
+?? resources/views/errors/
+?? resources/views/filament/requete-refusee.blade.php
+?? tests/Feature/Filament/FenetresDesSelecteursTest.php
+?? tests/Feature/Filament/RequetesRefuseesTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -51,4 +60,5 @@ A7b:correction
 A7b:poussee
 A7b:fiche
 A7b:notes
+SL:implementation
 ```

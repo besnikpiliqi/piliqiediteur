@@ -101,3 +101,10 @@ navigateur/diag-419-rapport.md
 navigateur/constats-editeur.md
 courriels/diag-courriel-rapport.md
 paiements/demande-devis-en-ligne.md
+calculs/a-verifier-apres.md
+calculs/normes.md
+calculs/resultats.md
+calculs/impact.md
+calculs/synthese.md
+calculs/tva-deductible-et-ca3.md
+paiements/diag-reglements-rapport.md

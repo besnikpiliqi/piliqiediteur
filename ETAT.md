@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 15:44 UTC par pilotage-sync.sh : « A7b poussé ; SL repris après limite et redémarrages ».
+Mis à jour le 02/11/2026 à 15:45 UTC par pilotage-sync.sh : « Analyses des centimes et de la TVA déductible publiées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

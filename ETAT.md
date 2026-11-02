@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 01:51 UTC par pilotage-sync.sh : « Constat C1 de l'éditeur (message répété à la caisse) pour NAV-2 ».
+Mis à jour le 02/11/2026 à 01:54 UTC par pilotage-sync.sh : « Constat C2 (numéros de documents cliquables) pour NAV-2 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -83,6 +83,7 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
  M tests/Feature/Cabinets/PanneauCabinetTest.php
  M tests/Feature/CaisseSecurisee/EmissionSigneeTest.php
+ M tests/Feature/CaisseSecurisee/VerificateurIntegriteTest.php
  M tests/Feature/Editeur/SirenErroneTest.php
  M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
  M tests/Feature/Societe/PanneauSocieteTest.php
@@ -96,7 +97,6 @@ fa83824 Relecture du lot T3 de l’heure locale des magasins
  M tests/Fixtures/contenu-signe/second-passage.json
  M tests/TestCase.php
 ?? app/Domain/Cabinets/Services/AvisAuxClientsDuCabinet.php
-?? app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
 ```
 
 ## Dernière course de la chaîne

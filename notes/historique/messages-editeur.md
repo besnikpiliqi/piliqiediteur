@@ -228,3 +228,9 @@ la ici affiche 2 fois "Il reste 20,00 € à répartir.
 
 Il reste 20,00 € à répartir." donc une fois quand on choisi l'avoit mais si je clique sur encaisser alors il affiche encore une le meme message. donc il faut affiche une seul fois meme si cliquer sur encaisser
 
+## 43. 2026-11-02 01:54 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+et la il faut que les factures sur Crédit appliqué soit cliquable pour aller vois la facture ou ticket  comme les avoir
+

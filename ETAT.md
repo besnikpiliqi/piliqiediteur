@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 09:52 UTC par pilotage-sync.sh : « Lot DV : cahier des charges complété (stock, transformation en facture) ».
+Mis à jour le 02/11/2026 à 10:01 UTC par pilotage-sync.sh : « Devis : propositions 1 à 5 acceptées par l'éditeur (lot DV) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

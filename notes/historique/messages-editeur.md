@@ -276,3 +276,7 @@ j'ai une question par rapport aux devis! quand le devis ce cree avec les produit
 
 je choisi le a) mais une chose doit etre faite car ca n'existe pas encore. le devis accepter n'a pas l'option de le transformer en facture! et de plus de ca peut etre sera mieux d'ajouter sur la facture transformer que cette vient à partir du devis accepet numero de devis. et quand le devis se transform alors le devis reste toujours donc ne se supprime pas. c'est quoi tes idees
 
+## 51. 2026-11-02 10:00 UTC
+
+j'accepte tes proposition de 1 à 5
+

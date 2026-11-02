@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 17:39 UTC par pilotage-sync.sh : « Après le lot SL ».
+Mis à jour le 02/11/2026 à 18:01 UTC par pilotage-sync.sh : « SL poussé ; NAV-1 en cours ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,13 @@ ad19e0b Range les autorisations par famille et retire les articles aux société
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M composer.json
+ M composer.lock
+?? node_modules/
+?? package-lock.json
+?? package.json
+?? tests/Browser/
+?? tests/Pest.php
 ```
 
 ## Dernière course de la chaîne
@@ -58,4 +65,5 @@ SL:correction
 SL:poussee
 SL:fiche
 SL:notes
+NAV-1:implementation
 ```

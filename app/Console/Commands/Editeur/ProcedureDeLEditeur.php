@@ -1,0 +1,158 @@
+<?php
+
+namespace App\Console\Commands\Editeur;
+
+use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Domain\Tenancy\Services\RegistreDesOperateurs;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use Illuminate\Console\Command;
+use LogicException;
+
+/**
+ * Le cadre commun des procédures exceptionnelles de l'éditeur (php
+ * artisan list editeur), chacune sur une société désignée par son
+ * identifiant ou son uuid :
+ * - elle exige sa justification (--justification, au moins vingt
+ *   caractères) et la référence de sa pièce (--piece) ;
+ * - elle affiche son résumé, puis fait retaper la valeur attendue (le
+ *   SIREN de la société, ou ce que la procédure désigne d'autre, voir
+ *   valeurAConfirmer()) : --confirmer=<valeur> la donne d'avance ; sans
+ *   elle, la commande la demande, et la refuse en mode non interactif ;
+ * - l'opérateur saisit son nom et son secret personnel dans un champ
+ *   masqué, jamais en option de la ligne de commande, pour ne pas le
+ *   laisser dans l'historique : la procédure ne se lance donc que dans un
+ *   terminal interactif (voir RegistreDesOperateurs) ; une procédure grave
+ *   (la révocation d'une société, la libération d'un SIRET saisi par
+ *   erreur, la correction d'un SIREN, l'annulation d'une cession, voir
+ *   operateursExiges()) en exige deux, distincts, chacun authentifié par
+ *   son propre secret ;
+ * - elle s'inscrit, origine « éditeur », avec sa justification, sa pièce,
+ *   ses opérateurs, l'utilisateur système et l'hôte (voir
+ *   InterventionDeLEditeur), et ne réécrit jamais un document émis.
+ * Un refus n'écrit rien.
+ */
+abstract class ProcedureDeLEditeur extends Command
+{
+    public const MESSAGE_MAGASIN_INTROUVABLE = 'Ce magasin n\'existe pas dans cette société : donnez son code.';
+
+    public const MESSAGE_MEME_OPERATEUR = 'Cette procédure exige deux opérateurs distincts : rien n\'est fait.';
+
+    public const OPTIONS_COMMUNES = '{--justification= : Pourquoi l\'éditeur intervient, en vingt caractères au moins} {--piece= : La référence de la pièce qui fonde l\'intervention} {--confirmer= : La valeur attendue, retapée d\'avance (le SIREN de la société, ou ce que la procédure désigne d\'autre)}';
+
+    /**
+     * Combien d'opérateurs distincts la procédure exige : un, sauf pour une
+     * procédure grave, qui en exige deux.
+     */
+    protected function operateursExiges(): int
+    {
+        return 1;
+    }
+
+    /**
+     * Les lignes du résumé affiché avant la confirmation.
+     *
+     * @return list<string>
+     */
+    abstract protected function resume(Societe $societe): array;
+
+    /**
+     * Ce que l'opérateur retape pour confirmer, avec son nom : le SIREN de
+     * la société, sauf pour une procédure qui vise d'abord autre chose (le
+     * SIREN ou le SIRET à qui part un courrier, par exemple).
+     *
+     * @return array{0: string, 1: string} le nom de la valeur, la valeur
+     */
+    protected function valeurAConfirmer(Societe $societe): array
+    {
+        return ['le SIREN', (string) $societe->siren];
+    }
+
+    /**
+     * Fait la procédure, une fois tout confirmé ; le message de réussite
+     * qu'elle rend s'affiche.
+     *
+     * @throws LogicException
+     */
+    abstract protected function executer(Societe $societe, InterventionDeLEditeur $editeur): string;
+
+    public function handle(RegistreDesOperateurs $operateurs): int
+    {
+        $societe = Societe::trouverParIdentifiantOuUuid((string) $this->argument('societe'));
+
+        if ($societe === null) {
+            $this->error('Société inconnue : donnez son identifiant ou son uuid.');
+
+            return self::FAILURE;
+        }
+
+        $justification = trim((string) $this->option('justification'));
+        $piece = trim((string) $this->option('piece'));
+
+        if (mb_strlen($justification) < InterventionDeLEditeur::LONGUEUR_MINIMALE_DE_LA_JUSTIFICATION || $piece === '') {
+            $this->error('Une procédure de l\'éditeur exige sa justification (--justification, '.InterventionDeLEditeur::LONGUEUR_MINIMALE_DE_LA_JUSTIFICATION.' caractères au moins) et la référence de sa pièce (--piece).');
+
+            return self::FAILURE;
+        }
+
+        foreach ([$this->getDescription(), "Société n° {$societe->getKey()} — {$societe->getFilamentName()} — SIREN {$societe->siren}", ...$this->resume($societe)] as $ligne) {
+            $this->line($ligne);
+        }
+
+        [$nom, $attendu] = $this->valeurAConfirmer($societe);
+        $saisie = $this->option('confirmer') ?? ($this->input->isInteractive() ? $this->ask("Retapez {$nom} {$attendu} pour confirmer") : null);
+
+        if (! is_string($saisie) || ! hash_equals($attendu, trim($saisie))) {
+            $this->error('Confirmation absente ou différente : rien n\'est fait.');
+
+            return self::FAILURE;
+        }
+
+        if (! $this->input->isInteractive()) {
+            $this->error('Une procédure de l\'éditeur ne se lance que dans un terminal interactif : l\'opérateur y saisit son secret dans un champ masqué.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            $authentifies = [];
+
+            for ($rang = 1; $rang <= $this->operateursExiges(); $rang++) {
+                $suffixe = $this->operateursExiges() === 1 ? '' : ($rang === 1 ? ' (premier)' : ' (second)');
+                $operateur = $operateurs->authentifier($this->ask("Nom de l'opérateur{$suffixe}"), $this->secret("Secret de l'opérateur{$suffixe}"));
+
+                if (in_array($operateur, $authentifies, true)) {
+                    throw new VerificationRefuseeException(self::MESSAGE_MEME_OPERATEUR);
+                }
+
+                $authentifies[] = $operateur;
+            }
+
+            $this->info($this->executer($societe, new InterventionDeLEditeur($justification, $piece, $authentifies)));
+        } catch (VerificationRefuseeException|LogicException $refus) {
+            $this->error($refus->getMessage());
+
+            return self::FAILURE;
+        }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Le magasin de ce code dans la société, pour une procédure qui porte
+     * sur l'un de ses magasins, le code se lisant comme il s'enregistre
+     * (voir CodeMagasin::normaliser()) ; null s'il n'y en a aucun. La table
+     * des magasins n'a pas de scope global : le filtre par société est
+     * explicite, et le code d'un magasin d'une autre société ne désigne
+     * rien.
+     */
+    protected static function magasinDeLaSociete(Societe $societe, string $code): ?Magasin
+    {
+        return Magasin::query()
+            ->where('societe_id', $societe->getKey())
+            ->where('code', CodeMagasin::normaliser($code))
+            ->first();
+    }
+}

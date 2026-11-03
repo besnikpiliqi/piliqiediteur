@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Filament\App\Resources\FactureResource\Pages;
+
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ModifierFactureAction;
+use App\Filament\App\Resources\DevisResource;
+use App\Filament\App\Resources\FactureResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RecoitLeClientChoisi;
+use App\Filament\Concerns\RecoitLesProduitsChoisis;
+use App\Filament\Concerns\RevientALaListe;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Accessible uniquement pour un brouillon (voir FacturePolicy::update() et
+ * FactureResource::table()) : lignes comprises, pour éviter de devoir tout
+ * ressaisir en cas d'erreur de saisie. La suppression complète reste aussi
+ * disponible ici (cascade DB sur les lignes, voir la migration
+ * lignes_facture) sans avoir besoin de les retirer une à une d'abord.
+ */
+class EditFacture extends EditRecord
+{
+    use GereLesExceptionsMetier, RecoitLeClientChoisi, RecoitLesProduitsChoisis, RevientALaListe;
+
+    protected static string $resource = FactureResource::class;
+
+    /**
+     * Supprimer le brouillon inscrit l'abandon de la vente au journal des
+     * événements (voir FactureResource::actionSupprimer()) : un refus se
+     * lit en notification, et le brouillon reste.
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            FactureResource::actionSupprimer(Actions\DeleteAction::make()),
+        ];
+    }
+
+    /**
+     * Les lignes du document et sa nature, tels que son formulaire les
+     * rouvre (voir AjouteDesLignesDeVente::lignesARouvrir() et
+     * ChoisitLaNatureDeLOperation::natureARouvrir()), et, pour qui n'est pas
+     * autorisé à fixer les prix, au prix du catalogue quand l'enregistrement
+     * ne les reprendrait plus telles quelles (voir
+     * AjouteDesLignesDeVente::lignesAuxPrixPermis()).
+     */
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $donnees = FactureResource::natureARouvrir($this->record, [...$data, 'lignes' => DevisResource::lignesARouvrir($this->record)]);
+
+        return [...$donnees, 'lignes' => DevisResource::lignesAuxPrixPermis($donnees['lignes'], $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record)];
+    }
+
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        // Limité au magasin par MagasinScope ; withTrashed() garde le client
+        // déjà rattaché s'il a été archivé depuis (voir
+        // AppServiceProvider::limiterLesChoixAuMagasin()).
+        $client = Client::withTrashed()->findOrFail($data['client_id']);
+
+        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle(auth()->user(), $record, $client, $data['lignes'], [
+            'conditions_paiement' => $data['conditions_paiement'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            ...FactureResource::attributsDeLaNature($data),
+        ]));
+    }
+}

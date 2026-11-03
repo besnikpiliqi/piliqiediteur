@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 00:11 UTC par pilotage-sync.sh : « Après le lot NAV-1 ».
+Mis à jour le 03/11/2026 à 00:11 UTC par pilotage-sync.sh : « NAV-1 poussé, TR lancé ; C4 : aucune page ne joint un site tiers (Q-TIERS oui) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -65,4 +65,5 @@ NAV-1:correction
 NAV-1:poussee
 NAV-1:fiche
 NAV-1:notes
+TR:implementation
 ```

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 01:40 UTC par pilotage-sync.sh : « Fiche : lot EX ».
+Mis à jour le 03/11/2026 à 01:51 UTC par pilotage-sync.sh : « Lot EX : F1 = b, F2 = oui ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Authorization/ControleDesDroits.php
  M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
 MM app/Domain/Facturation/Actions/EmettreFactureAction.php
  M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
@@ -47,6 +48,7 @@ MM app/Domain/Facturation/Actions/EmettreFactureAction.php
  M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
  M app/Domain/Facturation/Mail/DocumentMail.php
  M app/Domain/Facturation/Models/Paiement.php
+ M app/Domain/Facturation/Notifications/EnvoiDocumentEchoue.php
 M  app/Domain/Facturation/Services/ApercuDuReglement.php
  M app/Domain/Facturation/Services/PiedDePage.php
 M  app/Domain/Facturation/Services/ReglementComptant.php
@@ -64,14 +66,17 @@ A  resources/views/documents/pdf/tableau-des-reglements.blade.php
 M  resources/views/documents/pdf/totaux.blade.php
 M  resources/views/factures/pdf.blade.php
 A  tests/Browser/Parcours/EmettreEtEncaisserTest.php
+ M tests/Browser/Support/Balayeur.php
 M  tests/Browser/Support/Navigation.php
 M  tests/Browser/Support/surveillance.js
-M  tests/Browser/inventaire-des-actions.php
+MM tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Facturation/ContrePasserPaiementActionTest.php
 A  tests/Feature/Facturation/EmettreEtEncaisserConcurrenceTest.php
 A  tests/Feature/Facturation/EmettreEtEncaisserTest.php
 M  tests/Feature/Facturation/FacturePdfGeneratorTest.php
 M  tests/Feature/Facturation/FacturePolicyTest.php
 M  tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
 ?? app/Domain/Facturation/Enums/NatureRecuPaiement.php
 ?? app/Domain/Facturation/Models/LigneRecuPaiement.php
 ?? app/Domain/Facturation/Models/RecuPaiement.php
@@ -81,6 +86,8 @@ M  tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
 ?? database/migrations/2026_10_04_100000_create_recus_paiement_table.php
 ?? database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
 ?? resources/views/recus/
+?? tests/Browser/Parcours/RecuDePaiementTest.php
+?? tests/Feature/Facturation/RecusDePaiementTest.php
 ```
 
 ## Dernière course de la chaîne

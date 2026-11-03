@@ -454,3 +454,7 @@ pour les comptable ( meme pour la societe dont le proprietaire,administrateur, r
 
 e1=tout ( mais les vrais factures d'achat ici n'existe pas encore mais je t'avais dit que pour la creation des factures d'achats quand on ajoute les produits il faut avoir aussi pour telecharge la vrai facture d'achat pour que cette creation de cette facture soit aussi lie avec la vrai facture,donc chaque creation doit avoir sa vrai facture en piece jointe, donc il faut obligatoirment telecharger la facture. Mais ces vrais factures d'achats on parle uniquement quand ces facture s'enregistre "Saisie manuelle" et pas par api qui recupere de facon automatique et pareille pour les avoir des fournisseurs. et de donner une option pour selecter par ex uniquement "Saisie manuelle" quand le comptable veux telecharger ces factures, car peut etre elle a besoin que ce genre de facture à recupere ). Le E2 les deux option il faut afficher donc, elle veut en zip (les pdf) ou en CSV ca depend se qu'elle veut. E3= oui c'est le proprietaire qui doit donner leur autorisation pour chacun. E4= comme j'ai dit au E1 c'est la meme logique. E5= chaque magasin pour tout le monde et le reste comme tu as dit. E6= comme tu veut
 
+## 70. 2026-11-03 01:51 UTC
+
+F1= b),F2=oui
+

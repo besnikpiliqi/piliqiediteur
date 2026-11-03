@@ -458,3 +458,7 @@ e1=tout ( mais les vrais factures d'achat ici n'existe pas encore mais je t'avai
 
 F1= b),F2=oui
 
+## 71. 2026-11-03 01:53 UTC
+
+fini ce que t'as à finir car la session va terminer. donc si tu veut arret et sauvegarde tout pour que tu continue quand je te dis recommence mais comme d'habitude tu le fait tout pret pour que l'autre compte(session) commnce le travail ou tu t'arret et qu'il fasse identique comme si c'etais toi
+

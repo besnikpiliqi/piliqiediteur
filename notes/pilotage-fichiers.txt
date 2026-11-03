@@ -113,3 +113,6 @@ navigateur/question-ressources-tierces.md
 qualite/question-mises-a-jour.md
 export/demande-export-documents.md
 export/decision-ex.md
+reprises/PASSATION-2026-11-03.md
+reprises/lot-TR-travail-non-commite.patch
+reprises/args-course-passation-2026-11-03.json

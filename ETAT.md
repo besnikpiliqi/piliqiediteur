@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 01:51 UTC par pilotage-sync.sh : « Lot EX : F1 = b, F2 = oui ».
+Mis à jour le 03/11/2026 à 01:55 UTC par pilotage-sync.sh : « Passation du 03/11 : travail non commité du lot TR sauvé, course neuve préparée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Domain/Authorization/ControleDesDroits.php
  M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
 MM app/Domain/Facturation/Actions/EmettreFactureAction.php

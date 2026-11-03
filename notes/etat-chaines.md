@@ -161,3 +161,5 @@
 - 02/11 22:25 UTC — directive D52 (gestes à faire sur le PC de l'éditeur toujours dits) : POSTE_EDITEUR ajouté aux complements des lots non commencés (TR, QA, NAV-2…21), invites des lots déjà faits inchangées (reprise intacte) ; sauvegarde serie8-lots.avant-poste.js ; fiche § 2 et liste des lots (TR) mises à jour.
 
 - 03/11 00:06 UTC — NAV-1 poussé (1d3278a, après 9053757 et 523e74f), arbre propre ; pendant NAV-1:fiche, course arrêtée (TaskStop) puis reprise par resumeFromRunId wf_f59a9064-d8d avec ouverts = A7b, SL, NAV-1, TR, QA, NAV-2…NAV-5, ML, DV, EC2, S9-L, S9-A, 21 (tâche ww0gt84pl) : cache tenu jusqu'à NAV-1:poussee, NAV-1:fiche relancée, puis TR (effort Max).
+
+- 03/11 01:11 UTC — redémarrage du conteneur (même conteneur, notes intactes) : course coupée pendant TR:implementation (30 fichiers modifiés, instantané temporaire 4a86af8 dans le worktree nouvelle-session/suites-tr, fait par l'agent pour ses suites). Installation au code 0, course reprise par resumeFromRunId wf_f59a9064-d8d (tâche wa3gef5d9), mêmes ouverts. Demande de l'éditeur : téléchargement des documents par période (export/demande-export-documents.md, questions E1 à E6).

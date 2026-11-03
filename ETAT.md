@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 00:54 UTC par pilotage-sync.sh : « Constat C5 : rangée choisie illisible en mode sombre ».
+Mis à jour le 03/11/2026 à 01:14 UTC par pilotage-sync.sh : « Demande d'export des documents par période ; reprise après redémarrage ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,28 +37,36 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Services/ApercuDuReglement.php
- M app/Domain/Facturation/Services/ReglementComptant.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
- M app/Filament/Concerns/SaisitUnReglementEnParts.php
- M app/Policies/FacturePolicy.php
- M resources/views/documents/pdf/reglements.blade.php
- M resources/views/documents/pdf/styles.blade.php
- M resources/views/documents/pdf/totaux.blade.php
- M resources/views/factures/pdf.blade.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/Support/surveillance.js
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/FacturePdfGeneratorTest.php
- M tests/Feature/Facturation/FacturePolicyTest.php
- M tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
-?? app/Domain/Facturation/Services/TableauDesReglements.php
-?? resources/views/documents/pdf/reference.blade.php
-?? tests/Browser/Parcours/EmettreEtEncaisserTest.php
-?? tests/Feature/Facturation/EmettreEtEncaisserConcurrenceTest.php
-?? tests/Feature/Facturation/EmettreEtEncaisserTest.php
+M  app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Enums/TypeDocument.php
+ M app/Domain/Facturation/Models/Paiement.php
+M  app/Domain/Facturation/Services/ApercuDuReglement.php
+M  app/Domain/Facturation/Services/ReglementComptant.php
+A  app/Domain/Facturation/Services/TableauDesReglements.php
+M  app/Filament/App/Resources/FactureResource.php
+M  app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+M  app/Filament/Concerns/SaisitUnReglementEnParts.php
+M  app/Policies/FacturePolicy.php
+ M database/migrations/2026_10_04_100001_create_paiements_table.php
+A  resources/views/documents/pdf/reference.blade.php
+M  resources/views/documents/pdf/reglements.blade.php
+M  resources/views/documents/pdf/styles.blade.php
+M  resources/views/documents/pdf/totaux.blade.php
+M  resources/views/factures/pdf.blade.php
+A  tests/Browser/Parcours/EmettreEtEncaisserTest.php
+M  tests/Browser/Support/Navigation.php
+M  tests/Browser/Support/surveillance.js
+M  tests/Browser/inventaire-des-actions.php
+A  tests/Feature/Facturation/EmettreEtEncaisserConcurrenceTest.php
+A  tests/Feature/Facturation/EmettreEtEncaisserTest.php
+M  tests/Feature/Facturation/FacturePdfGeneratorTest.php
+M  tests/Feature/Facturation/FacturePolicyTest.php
+M  tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
+?? app/Domain/Facturation/Enums/NatureRecuPaiement.php
+?? app/Domain/Facturation/Models/LigneRecuPaiement.php
+?? app/Domain/Facturation/Models/RecuPaiement.php
+?? database/migrations/2026_10_04_100000_create_recus_paiement_table.php
+?? database/migrations/2026_10_14_100006_create_lignes_recu_paiement_table.php
 ```
 
 ## Dernière course de la chaîne

@@ -446,3 +446,7 @@ oui
 
 quand c'est un produit selecté il affiche tres blanc brillant que je l'aime pas. je pense sera mieux de juste changer la couleur belle et le texte soit visible car la on vois presque rien
 
+## 68. 2026-11-03 01:10 UTC
+
+pour les comptable ( meme pour la societe dont le proprietaire,administrateur, responsable ou tout ca doit etre donne les autorisation qui peut faire tout ca ) il faut laisser choisir quelle jour pour telechargers les facture pour les dates choisi. donc il faut avoir un calandrier qui choisi et telecharger tout les factures selecter et ou laisser l'option de tout selecter avec le button. donc ce qu'elle a besoin de telecharger dont les factures d'achat, de ventes, les avoirs des clients de magasin (si besoin, c'est toi qui doit me dire), les avoirs des fournisseurs etc
+

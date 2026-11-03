@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 01:39 UTC par pilotage-sync.sh : « Lot EX : pièce du fournisseur et téléchargement par période ; F1, F2 posées ».
+Mis à jour le 03/11/2026 à 01:40 UTC par pilotage-sync.sh : « Fiche : lot EX ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

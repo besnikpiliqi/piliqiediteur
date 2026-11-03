@@ -440,3 +440,9 @@ et alors toujoure vont rester ces versions? doonc jamais rester à jours
 
 oui
 
+## 67. 2026-11-03 00:53 UTC
+
+[2 capture(s) d'écran jointe(s)]
+
+quand c'est un produit selecté il affiche tres blanc brillant que je l'aime pas. je pense sera mieux de juste changer la couleur belle et le texte soit visible car la on vois presque rien
+

@@ -59,3 +59,16 @@ Question Q-TIERS (`navigateur/question-ressources-tierces.md`, constat 9 de la r
 - les tests en navigateur ne tolèrent plus aucun site tiers : la liste des ressources tolérées de l'outillage du lot NAV-1 est vidée, et toute requête vers un autre site que l'application fait échouer la vérification ; un test vérifie, panneau par panneau et sur les pages publiques, qu'aucune page ne charge une ressource d'un autre site (balises, styles, polices, images, scripts) ;
 - aucune donnée personnelle (nom, initiales, adresse IP) ne part vers un tiers depuis une page de PILIQI ;
 - À faire sur le PC de l'éditeur : à dire dans « laisses » (a priori rien d'autre que git pull).
+
+## C5 — Fenêtre « Ajouter des produits » : la rangée d'un produit choisi devient blanc brillant, texte presque invisible (03/11/2026 vers 00 h 55 UTC, deux captures, mode sombre ; lot NAV-2)
+
+Constat de l'éditeur : « quand c'est un produit sélectionné il affiche très blanc brillant que je l'aime pas. je pense sera mieux de juste changer la couleur belle et le texte soit visible car là on voit presque rien ». Captures : page « Créer une facture » d'un magasin, fenêtre « Ajouter des produits », produit PRD-000001 choisi (« × 1 ») ; sur la seconde, la rangée du produit choisi a un fond presque blanc et son texte clair (référence, nom, stock, prix, bénéfice) ne se lit plus.
+
+Piste (à vérifier en navigateur, ne pas croire) : `app/Filament/App/Livewire/SelecteurDeProduits.php`, `recordClasses` : `'bg-gray-100 dark:bg-white/5 font-semibold'` pour une rangée choisie. Le dépôt n'a aucun thème compilé (`CLAUDE.md` : aucun outil Node tant qu'aucun thème d'écran personnalisé n'existe) : une classe Tailwind absente de la feuille précompilée de Filament n'existe pas, et l'ordre ou l'absence des variantes `dark:` peut laisser le fond clair sous un texte clair (au survol ou après le choix).
+
+À faire (couleur : choix de Claude) :
+- la rangée choisie prend une teinte légère de la couleur principale du panneau (celle des boutons), avec un texte bien lisible : en mode clair, fond clair teinté et texte foncé ; en mode sombre, fond sombre teinté et texte clair ; même rendu au survol ; l'icône de coche et « × quantité » restent visibles ;
+- sans outil Node : seulement des classes présentes dans la feuille de Filament, ou une petite feuille CSS écrite à la main, enregistrée par Filament (`FilamentAsset`), qui lit les variables de couleur du panneau ;
+- le même style pour toute rangée « choisie » des fenêtres de sélection (produits, clients, services, retours cherchés par numéro, et toute autre liste où l'on coche des rangées), en clair et en sombre ;
+- test en navigateur, en mode clair et en mode sombre : choisir un produit, puis survoler sa rangée ; le contraste entre le texte et le fond de la rangée (couleurs calculées par le navigateur) atteint au moins 4,5 pour 1 (niveau AA des règles d'accessibilité WCAG) ; même test pour la fenêtre des clients ;
+- À faire sur le PC de l'éditeur : à dire dans « laisses » (a priori `php artisan filament:assets` si une feuille CSS est ajoutée, puis rien d'autre que git pull).

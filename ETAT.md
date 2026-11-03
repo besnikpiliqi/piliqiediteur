@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 01:14 UTC par pilotage-sync.sh : « Demande d'export des documents par période ; reprise après redémarrage ».
+Mis à jour le 03/11/2026 à 01:39 UTC par pilotage-sync.sh : « Lot EX : pièce du fournisseur et téléchargement par période ; F1, F2 posées ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,20 +37,30 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
-M  app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
+MM app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
+ M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Contracts/DocumentEnvoyable.php
  M app/Domain/Facturation/Enums/TypeDocument.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
  M app/Domain/Facturation/Models/Paiement.php
 M  app/Domain/Facturation/Services/ApercuDuReglement.php
+ M app/Domain/Facturation/Services/PiedDePage.php
 M  app/Domain/Facturation/Services/ReglementComptant.php
-A  app/Domain/Facturation/Services/TableauDesReglements.php
-M  app/Filament/App/Resources/FactureResource.php
+AM app/Domain/Facturation/Services/TableauDesReglements.php
+MM app/Filament/App/Resources/FactureResource.php
 M  app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
 M  app/Filament/Concerns/SaisitUnReglementEnParts.php
 M  app/Policies/FacturePolicy.php
+ M app/Providers/AppServiceProvider.php
  M database/migrations/2026_10_04_100001_create_paiements_table.php
-A  resources/views/documents/pdf/reference.blade.php
-M  resources/views/documents/pdf/reglements.blade.php
-M  resources/views/documents/pdf/styles.blade.php
+ M database/migrations/2026_10_13_100002_create_envois_documents_table.php
+MM resources/views/documents/pdf/reglements.blade.php
+MM resources/views/documents/pdf/styles.blade.php
+A  resources/views/documents/pdf/tableau-des-reglements.blade.php
 M  resources/views/documents/pdf/totaux.blade.php
 M  resources/views/factures/pdf.blade.php
 A  tests/Browser/Parcours/EmettreEtEncaisserTest.php
@@ -65,8 +75,12 @@ M  tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
 ?? app/Domain/Facturation/Enums/NatureRecuPaiement.php
 ?? app/Domain/Facturation/Models/LigneRecuPaiement.php
 ?? app/Domain/Facturation/Models/RecuPaiement.php
+?? app/Domain/Facturation/Services/RecuPaiementPdfGenerator.php
+?? app/Domain/Facturation/Services/RecusDePaiement.php
+?? app/Policies/RecuPaiementPolicy.php
 ?? database/migrations/2026_10_04_100000_create_recus_paiement_table.php
-?? database/migrations/2026_10_14_100006_create_lignes_recu_paiement_table.php
+?? database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
+?? resources/views/recus/
 ```
 
 ## Dernière course de la chaîne

@@ -112,3 +112,4 @@ tr/decision-tr.md
 navigateur/question-ressources-tierces.md
 qualite/question-mises-a-jour.md
 export/demande-export-documents.md
+export/decision-ex.md

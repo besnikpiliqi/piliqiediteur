@@ -316,3 +316,47 @@ T1 =oui,T2= oui,t3=oui, r1=oui,r2=oui, les C=non
 
 sil y a qqch à faire moi à la main comme .env alors tu me dit toujours
 
+## 59. 2026-11-02 23:52 UTC
+
+<!-- attach -->
+
+> npm install et npx playwright install chromium.
+
+
+
+si je les installes alors il reste toujour sur le dossier de logiciel et quand je deploi sur production alors ils seront toujours ou commme ca marche avec ces
+
+## 60. 2026-11-02 23:57 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> npm install
+
+npm ERR! code ENOENT
+
+npm ERR! syscall open
+
+npm ERR! path C:\xampp\htdocs\piliqiediteur-v2/package.json
+
+npm ERR! errno -4058
+
+npm ERR! enoent ENOENT: no such file or directory, open 'C:\xampp\htdocs\piliqiediteur-v2\package.json'
+
+npm ERR! enoent This is related to npm not being able to find a file.
+
+npm ERR! enoent 
+
+
+
+npm ERR! A complete log of this run can be found in:
+
+npm ERR!     C:\Users\PC DELL\AppData\Local\npm-cache\_logs\[jeton retiré].log
+
+## 61. 2026-11-03 00:10 UTC
+
+<!-- attach -->
+
+> Je propose d’héberger la police chez PILIQI et de dessiner les initiales sur notre propre serveur. Plus aucune page n’enverrait rien à un site tiers. Il n’y a rien à installer : ni Node, ni paquet. Oui (recommandé) / non, garder les sites tiers ?
+
+
+
+oui recommandé
+

@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 02/11/2026 à 23:49 UTC par pilotage-sync.sh : « D52 : gestes à faire sur le PC de l'éditeur ; lot TR dans la fiche ».
+Mis à jour le 03/11/2026 à 00:11 UTC par pilotage-sync.sh : « Après le lot NAV-1 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `92fd524`. Commits locaux pas encore poussés :
+Tête poussée : `1d3278a`. Commits locaux pas encore poussés :
 
 ```
-523e74f Balaye chaque panneau rôle par rôle et ajoute les premiers parcours en navigateur (lot NAV-1 2/2)
-9053757 Outille les tests en navigateur avec Pest 4 et Playwright (lot NAV-1 1/2)
 ```
 
 Derniers commits poussés :
 
 ```
+1d3278a Relecture du lot NAV-1 des tests en navigateur
+523e74f Balaye chaque panneau rôle par rôle et ajoute les premiers parcours en navigateur (lot NAV-1 2/2)
+9053757 Outille les tests en navigateur avec Pest 4 et Playwright (lot NAV-1 1/2)
 92fd524 Relecture du lot SL de l’erreur 419 des fenêtres de recherche
 b06c922 Corrige l'erreur 419 des fenêtres de recherche de clients et de produits (lot SL)
 f9b669c Relecture du lot A7b des suites du lot A7
@@ -31,35 +32,11 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 9671a29 Donne au cabinet ses collaborateurs et transmet sa propriété à l'un d'eux (lot EC 2/4)
 976e827 Vérifie les cabinets d'expertise comptable et leur ouvre leur espace (lot EC 1/4)
 9ce20c3 Relecture du lot TA des types d’activité
-e2d790a Imprime l'assurance professionnelle facultative de la société (lot TA 3/3)
-ad19e0b Range les autorisations par famille et retire les articles aux sociétés de services (lot TA 2/3)
-7832bb0 Fait choisir à l'inscription un type d'activité définitif (lot TA 1/3)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureResource.php
- M tests/Browser/AidesCommunesTest.php
- M tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php
- M tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php
- M tests/Browser/InventaireDesActionsTest.php
- M tests/Browser/Parcours/InscriptionDUneSocieteTest.php
- M tests/Browser/Parcours/VentesDeBoutEnBoutTest.php
- M tests/Browser/Support/ActionsDeLInterface.php
- M tests/Browser/Support/Balayeur.php
- M tests/Browser/Support/CouvertureDuBalayage.php
- M tests/Browser/Support/JournalDesReponses.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/Support/NoyauDUneRequeteNeuve.php
- M tests/Browser/Support/surveillance.js
- M tests/Browser/TestCaseDuNavigateur.php
- M tests/Browser/inventaire-des-actions.php
-?? tests/Browser/AvoirsFournisseurTest.php
-?? tests/Browser/Parcours/JournalDesEvenementsTest.php
-?? tests/Browser/Support/DemonstrationDeTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -85,4 +62,7 @@ NAV-1:implementation
 NAV-1:relecture1
 NAV-1:relecture2
 NAV-1:correction
+NAV-1:poussee
+NAV-1:fiche
+NAV-1:notes
 ```

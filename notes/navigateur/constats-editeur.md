@@ -47,3 +47,15 @@ Questions posées à l'éditeur (02/11 vers 11 h 55 UTC) : (1) un geste « Émet
 - la variante tient sur une page A4 portrait avec un, deux et cinq règlements, une référence longue et un crédit d'avoir, sans chevaucher le pied fixé en bas, en HTML compatible dompdf (tableaux) ;
 - tout défaut que le diagnostic confirme (par exemple des règlements reçus à l'émission absents du contexte signé) se corrige avec un test du domaine qui le reproduit ;
 - test en navigateur : une vente à la caisse en espèces et par carte puis une facture réglée à l'émission en plusieurs modes, PDF téléchargés, chaque mode et son montant lus dans le PDF, à gauche du Total TTC.
+
+
+## C4 — Aucune page ne joint un site tiers (03/11/2026 vers 00 h 15 UTC ; lot NAV-2, pour les trois panneaux et les pages publiques)
+
+Question Q-TIERS (`navigateur/question-ressources-tierces.md`, constat 9 de la relecture du lot NAV-1) ; réponse de l'éditeur : « oui recommandé ».
+
+À faire :
+- la police Inter est servie par PILIQI : fichiers de la police (licence SIL Open Font License, à citer dans le README) dans `public/`, fournisseur de police local de Filament dans chaque panneau, sans outil Node ni paquet ajouté ; plus aucune requête vers fonts.bunny.net ;
+- les initiales du compte sont dessinées par le serveur : fournisseur d'avatar local de Filament (image SVG produite par PILIQI, sans donnée envoyée à un tiers, couleurs lisibles en clair et en sombre) dans chaque panneau ; plus aucune requête vers ui-avatars.com ;
+- les tests en navigateur ne tolèrent plus aucun site tiers : la liste des ressources tolérées de l'outillage du lot NAV-1 est vidée, et toute requête vers un autre site que l'application fait échouer la vérification ; un test vérifie, panneau par panneau et sur les pages publiques, qu'aucune page ne charge une ressource d'un autre site (balises, styles, polices, images, scripts) ;
+- aucune donnée personnelle (nom, initiales, adresse IP) ne part vers un tiers depuis une page de PILIQI ;
+- À faire sur le PC de l'éditeur : à dire dans « laisses » (a priori rien d'autre que git pull).

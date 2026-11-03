@@ -159,3 +159,5 @@
 - 02/11 22:15 UTC — réponses de l'éditeur (T1-T3, R1-R2 oui ; C non) : lot TR écrit (tr/decision-tr.md) et inséré dans serie8-lots.js avant QA, sensible (effort max) ; sauvegarde serie8-lots.avant-TR.js. La course en cours ne le connaît pas : arrêt et relance par resumeFromRunId wf_f59a9064-d8d à la frontière NAV-1 → QA (pendant la fiche ou les notes de NAV-1, arbre propre), ouverts dans reprises/args-course-wf_f59a9064-d8d.json (TR compris).
 
 - 02/11 22:25 UTC — directive D52 (gestes à faire sur le PC de l'éditeur toujours dits) : POSTE_EDITEUR ajouté aux complements des lots non commencés (TR, QA, NAV-2…21), invites des lots déjà faits inchangées (reprise intacte) ; sauvegarde serie8-lots.avant-poste.js ; fiche § 2 et liste des lots (TR) mises à jour.
+
+- 03/11 00:06 UTC — NAV-1 poussé (1d3278a, après 9053757 et 523e74f), arbre propre ; pendant NAV-1:fiche, course arrêtée (TaskStop) puis reprise par resumeFromRunId wf_f59a9064-d8d avec ouverts = A7b, SL, NAV-1, TR, QA, NAV-2…NAV-5, ML, DV, EC2, S9-L, S9-A, 21 (tâche ww0gt84pl) : cache tenu jusqu'à NAV-1:poussee, NAV-1:fiche relancée, puis TR (effort Max).

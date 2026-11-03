@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 01:55 UTC par pilotage-sync.sh : « Passation du 03/11 : travail non commité du lot TR sauvé, course neuve préparée ».
+Mis à jour le 03/11/2026 à 02:30 UTC par pilotage-sync.sh : « Constat C6 : tests en navigateur sous Windows ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

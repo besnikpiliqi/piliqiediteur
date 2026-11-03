@@ -820,3 +820,95 @@ FAIL  Tests\Browser\AidesCommunesTest
 
   Duration: 76.93s
 
+## 87. 2026-11-03 02:40 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan test tests/Browser/AidesCommunesTest.php --headed
+
+   FAIL  Tests\Browser\AidesCommunesTest
+  ⨯ le responsable se connecte par son identifiant et arrive au tableau de bord de son magasin                                       16.29s  
+  ⨯ le propriétaire se connecte par son adresse de connexion                                                                         21.01s  
+  ✓ un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu                                   45.92s  
+  ✓ une erreur du serveur fait échouer la vérification                                                                                0.78s  
+  ✓ un refus attendu par le test ne fait pas échouer la vérification                                                                  0.76s  
+  ✓ une erreur JavaScript fait échouer la vérification                                                                                0.67s  
+  ✓ un message d’erreur de la console fait échouer la vérification                                                                    0.64s  
+  ✓ une requête vers un autre site est refusée par le navigateur et fait échouer la vérification                                      2.71s  
+  ✓ un témoin posé pour longtemps reste dans le navigateur même daté depuis une horloge du serveur bien antérieure à l’heure réelle,… 1.05s  
+  ⨯ un fichier envoyé par un formulaire arrive au serveur avec les autres champs                                                      0.79s  
+  ⨯ le propriétaire dont les courriers ne sont pas parvenus dépose une pièce par le champ de fichier de Filament                     19.43s  
+  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Browser\AidesCommunesTest > le responsable se connecte par son identifiant et arrive au tableau de bord de son magasin      
+  Timeout 15000ms exceeded.
+
+  at tests\Browser\Support\Navigation.php:97
+     93▕      * secondes tant qu'il n'est pas fini).
+     94▕      */
+     95▕     public function aller(string $chemin): self
+     96▕     {
+  ➜  97▕         $this->page()->goto(ComputeUrl::from($chemin));
+     98▕ 
+     99▕         return $this->attendre()->verifier();
+    100▕     }
+    101▕
+
+  1   tests\Browser\Support\Navigation.php:78
+  2   tests\Browser\TestCaseDuNavigateur.php:100
+
+  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Browser\AidesCommunesTest > le propriétaire se connecte par son adresse de connexion                 AssertionFailedError   
+  Au bout de 15 s, la page ne revient pas au repos (page http://127.0.0.1:49681/app/fa40d8b2-3feb-48d2-b506-7c3efa4567ec).
+
+  at tests\Browser\Support\Navigation.php:127
+    123▕         $fin = microtime(true) + self::DELAI;
+    124▕ 
+    125▕         while ($this->evaluerPendantUneNavigation('async () => { try { return window.__piliqi !== undefined && await window.__piliqi.auRepos('.self::REPOS_EN_MS.'); } catch (e) { return false; } }') !== true) {
+    126▕             if (microtime(true) > $fin) {
+  ➜ 127▕                 Assert::fail('Au bout de '.self::DELAI.' s, la page ne revient pas au repos (page '.$this->page()->url().').');
+    128▕             }
+    129▕ 
+    130▕             Execution::instance()->wait(0.05);
+    131▕         }
+
+  1   tests\Browser\Support\Navigation.php:127
+  2   tests\Browser\Support\Navigation.php:263
+
+  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Browser\AidesCommunesTest > un fichier envoyé par un formulaire arrive au serveur avec les autres…   AssertionFailedError   
+  Le choix du fichier facture.txt a échoué sur http://127.0.0.1:49681/essai-envoi : Paths provided to localPaths must be absolute and fully resolved.
+
+  at tests\Browser\Support\Navigation.php:260
+    256▕         try {
+    257▕             $geste();
+    258▕         } catch (ExpectationFailedException $exception) {
+    259▕             $this->page()->screenshot(true, 'echec-'.substr(md5($this->page()->url().$description), 0, 12));
+  ➜ 260▕             Assert::fail(ucfirst($description).' a échoué sur '.$this->page()->url().' : '.$exception->getMessage());
+    261▕         }
+    262▕ 
+    263▕         return $this->attendre()->verifier();
+    264▕     }
+
+  1   tests\Browser\Support\Navigation.php:260
+  2   tests\Browser\Support\Navigation.php:311
+
+  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Browser\AidesCommunesTest > le propriétaire dont les courriers ne sont pas parvenus dépose une piè…  AssertionFailedError   
+  Le choix du fichier cni.pdf a échoué sur http://127.0.0.1:49681/societe/251dc9dd-d14e-4860-b182-d7acf4481ab1/verification-societe : Paths provided to localPaths must be absolute and fully resolved.
+
+  at tests\Browser\Support\Navigation.php:260
+    256▕         try {
+    257▕             $geste();
+    258▕         } catch (ExpectationFailedException $exception) {
+    259▕             $this->page()->screenshot(true, 'echec-'.substr(md5($this->page()->url().$description), 0, 12));
+  ➜ 260▕             Assert::fail(ucfirst($description).' a échoué sur '.$this->page()->url().' : '.$exception->getMessage());
+    261▕         }
+    262▕ 
+    263▕         return $this->attendre()->verifier();
+    264▕     }
+
+  1   tests\Browser\Support\Navigation.php:260
+  2   tests\Browser\Support\Navigation.php:311
+
+
+  Tests:    4 failed, 7 passed (32 assertions)
+  Duration: 110.72s
+

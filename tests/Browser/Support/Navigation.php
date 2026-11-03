@@ -16,11 +16,11 @@ use PHPUnit\Framework\ExpectationFailedException;
  * Un onglet d'un navigateur neuf (sans témoin ni session), piloté comme une
  * personne le ferait : il ouvre une adresse, clique sur un bouton par son
  * libellé, remplit un champ par son étiquette, ouvre et ferme une fenêtre.
- * Après chaque geste, il attend que la page soit au repos (plus aucune
- * requête en cours, Livewire comprise, depuis un instant) puis vérifie
- * qu'aucune erreur JavaScript ni de console n'est apparue et qu'aucune
- * réponse du serveur n'a été un refus ou une erreur (4xx ou 5xx) que le
- * test n'attendait pas (voir JournalDesReponses).
+ * Après chaque geste, il attend que la page soit au repos (voir attendre())
+ * puis vérifie qu'aucune erreur JavaScript ni de console n'est apparue,
+ * qu'elle n'a rien demandé à un autre site et qu'aucune réponse du serveur
+ * n'a été un refus ou une erreur (4xx ou 5xx) que le test n'attendait pas
+ * (voir JournalDesReponses).
  *
  * Aucune attente n'endort le processus : le serveur de l'application tourne
  * dans le processus du test et ne répond au navigateur que pendant que le
@@ -34,10 +34,23 @@ final class Navigation
     public const DELAI = 15;
 
     /**
-     * Le temps sans aucune requête au bout duquel la page est au repos, en
-     * millisecondes : il couvre l'anti-rebond des champs de Livewire.
+     * Le temps sans aucune activité au bout duquel la page est au repos, en
+     * millisecondes, compté par une minuterie de la page (voir
+     * surveillance.js) : il couvre le regroupement des appels de Livewire
+     * et l'anti-rebond de ses champs (150 ms) ; un geste qui n'appelle le
+     * serveur qu'après un délai plus long passe par
+     * gesteQuiAppelleLeServeur().
      */
     private const REPOS_EN_MS = 300;
+
+    /**
+     * Le serveur mandataire de chaque requête vers un autre site : une
+     * adresse où rien n'écoute, si bien que le navigateur des tests refuse
+     * aussitôt toute requête qui sortirait de l'application ; il joint
+     * l'application directement, sans passer par lui (127.0.0.1,
+     * localhost).
+     */
+    private const MANDATAIRE_SANS_ISSUE = 'http://127.0.0.1:9';
 
     /**
      * Le sélecteur de la fenêtre de Filament ouverte au premier plan.
@@ -51,12 +64,14 @@ final class Navigation
 
     /**
      * Un onglet d'un navigateur neuf, en français et à l'heure de Paris,
-     * surveillé dès le premier script de chaque page (voir
-     * surveillance.js), ouvert sur cette adresse de l'application.
+     * qui ne joint aucun autre site que l'application (voir
+     * MANDATAIRE_SANS_ISSUE), surveillé dès le premier script de chaque
+     * page (voir surveillance.js), ouvert sur cette adresse de
+     * l'application.
      */
     public static function ouvrir(string $chemin, JournalDesReponses $journal): self
     {
-        $onglet = visit('/robots.txt')->withLocale('fr-FR')->withTimezone(Calendrier::deParis()->fuseau());
+        $onglet = visit('/robots.txt', ['proxy' => ['server' => self::MANDATAIRE_SANS_ISSUE, 'bypass' => '127.0.0.1,localhost']])->withLocale('fr-FR')->withTimezone(Calendrier::deParis()->fuseau());
         $onglet->page()->context()->addInitScript((string) file_get_contents(__DIR__.'/surveillance.js'));
         $navigation = new self($onglet, $journal);
 
@@ -69,14 +84,6 @@ final class Navigation
     public function page(): Page
     {
         return $this->onglet->page();
-    }
-
-    /**
-     * La page de Pest, avec ses assertions (assertSee, assertPathIs...).
-     */
-    public function pest(): PendingAwaitablePage
-    {
-        return $this->onglet;
     }
 
     /**
@@ -101,20 +108,27 @@ final class Navigation
     }
 
     /**
-     * Attend que la page soit chargée et au repos : aucune requête en cours,
-     * ni aucune depuis REPOS_EN_MS, et chaque composant visible que
-     * Filament charge à part (x-load : la liste à recherche d'un champ)
-     * démarré, pour qu'il ne lance pas sa requête après le repos. Playwright
-     * attend ensuite de lui-même qu'un élément soit immobile (fenêtre
-     * ouverte) avant de cliquer dessus.
+     * Attend que la page soit au repos (voir window.__piliqi.auRepos dans
+     * surveillance.js) : chargée, ne quittant pas la page, sans requête en
+     * cours, chaque composant visible que Filament charge à part démarré,
+     * et rien de cela n'ayant changé pendant REPOS_EN_MS, compté par une
+     * minuterie de la page posée après le geste. Une page qui en quitte une
+     * autre (un lien, un formulaire, une redirection de Livewire) n'est au
+     * repos qu'une fois la nouvelle chargée. Playwright attend ensuite de
+     * lui-même qu'un élément soit immobile (fenêtre ouverte) avant de
+     * cliquer dessus.
      */
     public function attendre(): self
     {
-        $this->attendreQue(
-            'document.readyState === "complete" && window.__piliqi !== undefined && window.__piliqi.enCours === 0 && performance.now() - window.__piliqi.derniereActivite > '.self::REPOS_EN_MS
-                .' && [...document.querySelectorAll("[x-load]")].every((composant) => composant.offsetParent === null || composant._x_dataStack !== undefined)',
-            'la page ne revient pas au repos',
-        );
+        $fin = microtime(true) + self::DELAI;
+
+        while ($this->evaluerPendantUneNavigation('async () => { try { return window.__piliqi !== undefined && await window.__piliqi.auRepos('.self::REPOS_EN_MS.'); } catch (e) { return false; } }') !== true) {
+            if (microtime(true) > $fin) {
+                Assert::fail('Au bout de '.self::DELAI.' s, la page ne revient pas au repos (page '.$this->page()->url().').');
+            }
+
+            Execution::instance()->wait(0.05);
+        }
 
         return $this;
     }
@@ -184,9 +198,24 @@ final class Navigation
     }
 
     /**
-     * Fait ce geste, qui appelle le serveur après un délai (la recherche
-     * d'un tableau attend que la frappe s'arrête), attend que la requête
-     * parte, puis que la page revienne au repos, et la vérifie.
+     * Les fichiers que la page a téléchargés depuis l'appel précédent, lus
+     * dans le navigateur (voir surveillance.js) : nom, type, taille et
+     * premiers caractères.
+     *
+     * @return list<array{nom: string, type: string, taille: int, debut: string}>
+     */
+    public function telechargements(): array
+    {
+        $fichiers = $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.telechargements.splice(0) : []');
+
+        return is_array($fichiers) ? array_values($fichiers) : [];
+    }
+
+    /**
+     * Fait ce geste, qui appelle le serveur après un délai plus long que
+     * REPOS_EN_MS (la recherche d'un tableau attend que la frappe s'arrête
+     * 500 ms), attend que la requête parte, puis que la page revienne au
+     * repos, et la vérifie.
      */
     public function gesteQuiAppelleLeServeur(Closure $geste, string $description): self
     {
@@ -218,16 +247,12 @@ final class Navigation
 
     /**
      * Fait ce geste dans la page, puis attend qu'elle revienne au repos et
-     * la vérifie. Le repos se compte depuis le geste : une requête que le
-     * geste ne lance qu'un instant après (Livewire regroupe ses appels)
-     * n'est pas manquée. Un geste impossible (un élément introuvable,
-     * caché ou couvert) échoue en le nommant, et la page s'enregistre en
-     * image dans tests/Browser/Screenshots, que la CI garde.
+     * la vérifie (voir attendre()). Un geste impossible (un élément
+     * introuvable, caché ou couvert) échoue en le nommant, et la page
+     * s'enregistre en image dans tests/Browser/Screenshots, que la CI garde.
      */
     public function geste(Closure $geste, string $description = 'le geste'): self
     {
-        $this->page()->evaluate('() => { if (window.__piliqi) { window.__piliqi.derniereActivite = performance.now(); } }');
-
         try {
             $geste();
         } catch (ExpectationFailedException $exception) {
@@ -268,11 +293,22 @@ final class Navigation
 
     /**
      * Choisit cette option, par son libellé ou sa valeur, dans la liste
-     * déroulante native de cette étiquette.
+     * déroulante native de cette étiquette, dans la fenêtre ouverte s'il y
+     * en a une.
      */
-    public function choisir(string $etiquette, string $option, ?string $dans = null): self
+    public function choisir(string $etiquette, string $option): self
     {
-        return $this->geste(fn () => $this->champDansLaPortee($etiquette, $dans)->selectOption($option), 'le choix dans « '.$etiquette.' »');
+        return $this->geste(fn () => $this->champDansLaPortee($etiquette, null)->selectOption($option), 'le choix dans « '.$etiquette.' »');
+    }
+
+    /**
+     * Donne ce fichier au champ de fichier de la fenêtre ouverte, ou de la
+     * page, comme une personne qui le choisit sur son poste, puis attend que
+     * son envoi soit fini.
+     */
+    public function envoyerLeFichier(string $chemin): self
+    {
+        return $this->geste(fn () => $this->element($this->portee().' input[type=file]')->setInputFiles($chemin), 'le choix du fichier '.basename($chemin));
     }
 
     /**
@@ -349,21 +385,39 @@ final class Navigation
     }
 
     /**
-     * Coche la case de cette étiquette.
-     */
-    public function cocher(string $etiquette, ?string $dans = null): self
-    {
-        return $this->geste(fn () => $this->champDansLaPortee($etiquette, $dans)->check());
-    }
-
-    /**
-     * Ce texte se lit dans la page.
+     * Ce texte se lit dans la page, au plus tard au bout du délai d'un
+     * geste : le résultat visible d'un geste (un avis, un statut changé)
+     * qu'un test attend avant de lire la base.
      */
     public function voir(string $texte): self
     {
-        $this->onglet->assertSee($texte);
+        $fin = microtime(true) + self::DELAI;
 
-        return $this;
+        while (true) {
+            try {
+                $this->onglet->assertSee($texte);
+
+                return $this;
+            } catch (ExpectationFailedException $absent) {
+                if (microtime(true) > $fin) {
+                    throw $absent;
+                }
+            }
+
+            Execution::instance()->wait(0.05);
+        }
+    }
+
+    /**
+     * Attend que la page affichée soit celle d'une adresse dont le chemin
+     * répond à cette expression régulière (une fiche ouverte après sa
+     * création), puis qu'elle soit au repos, et la vérifie.
+     */
+    public function attendreLaPage(string $motif): self
+    {
+        return $this->attendreQue('new RegExp('.self::texte($motif).').test(location.pathname)', 'aucune page ne répond à '.$motif)
+            ->attendre()
+            ->verifier();
     }
 
     /**

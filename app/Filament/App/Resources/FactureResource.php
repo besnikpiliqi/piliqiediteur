@@ -837,7 +837,8 @@ class FactureResource extends Resource
      * du client comptoir accepte en plus des bons d'avoir (Q6). Les parts
      * ne dépassent jamais ce qui reste dû : un trop-perçu ne devient pas un
      * crédit, seul un acompte reste permis. La fenêtre porte le jeton de la
-     * demande (R3).
+     * demande (R3). La facture se relit ensuite : la fiche montre aussitôt
+     * son nouveau statut.
      *
      * @template TAction of MountableAction
      *
@@ -869,14 +870,17 @@ class FactureResource extends Resource
                     ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
             ])
             ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
-            ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(
-                auth()->user(),
-                $record,
-                self::partsPayees($data['parts'] ?? []),
-                self::bonsDesParts($data['parts'] ?? []),
-                $data['recu_le'],
-                $data['jeton'],
-            )));
+            ->action(function (Facture $record, array $data): void {
+                static::executerSansCasser(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(
+                    auth()->user(),
+                    $record,
+                    self::partsPayees($data['parts'] ?? []),
+                    self::bonsDesParts($data['parts'] ?? []),
+                    $data['recu_le'],
+                    $data['jeton'],
+                ));
+                $record->refresh();
+            });
     }
 
     /**

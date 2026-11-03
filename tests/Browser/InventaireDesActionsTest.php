@@ -84,6 +84,10 @@ test('la lecture du code trouve chaque action par son nom, son alias ou la class
                     Forms\Components\TextInput::make('nom')->required(),
                     Forms\Components\Repeater::make('lignes'),
                     Tables\Actions\Action::make('pdf')->url('/pdf'),
+                    Infolists\Components\TextEntry::make('avoir.numero')->url('/avoirs/1'),
+                    Infolists\Components\TextEntry::make('total_ttc')->money('EUR'),
+                    Notifications\Actions\Action::make('voir')->url('/factures'),
+                    Hash::make(self::normaliser('code')),
                 ];
             }
         }
@@ -97,5 +101,39 @@ test('la lecture du code trouve chaque action par son nom, son alias ou la class
         'champ:client_id',
         'repeteur:lignes',
         'action:pdf',
-    ])->and(ActionsDeLInterface::declarees($code, seulementLesLiens: true))->toBe(['action:edit', 'action:pdf']);
+        'lien:avoir.numero',
+        'action:voir',
+    ]);
+});
+
+test('la lecture d’une vue trouve chaque clic, envoi, saisie, changement, formulaire et lien', function () {
+    $vue = <<<'BLADE'
+        <form wire:submit="encaisser">
+            <x-filament::input type="search" wire:model.live.debounce.500ms="recherche" />
+            <x-filament::input type="date" wire:model="jour" />
+            <input wire:change="changerLaQuantite(1, $event.target.value)" />
+            <x-filament::button wire:click="ajouterLaSelection">Ajouter</x-filament::button>
+            <button type="button" x-on:click="$wire.voirPlus()">Voir plus</button>
+            <x-filament::button type="submit">Encaisser</x-filament::button>
+        </form>
+        <form method="post" action="{{ filament()->getLogoutUrl() }}">
+            <x-filament::link tag="button" type="submit">Me déconnecter</x-filament::link>
+        </form>
+        <a href="{{ $this->adresseDeLaPageDuCode() }}" class="underline">la page
+            du code</a>
+        <x-filament::link :href="$ligne['url']">{{ $facture->numero }}</x-filament::link>
+        <x-filament::button tag="a" :href="$magasin['url']">Ouvrir le magasin</x-filament::button>
+        BLADE;
+
+    expect(ActionsDeLInterface::declareesDansLaVue($vue))->toBe([
+        'clic:ajouterLaSelection',
+        'clic:voirPlus',
+        'envoi:encaisser',
+        'saisie:recherche',
+        'changement:changerLaQuantite',
+        'formulaire:{{ filament()->getLogoutUrl() }}',
+        'lien:la page du code',
+        'lien:{{ $facture->numero }}',
+        'lien:Ouvrir le magasin',
+    ]);
 });

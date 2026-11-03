@@ -1,23 +1,23 @@
 <?php
 
-use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use Database\Factories\SocieteFactory;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mailer\SentMessage;
 
 /*
  * L'inscription d'une société de bout en bout, comme son propriétaire la
- * fait dans le navigateur : la page d'inscription, le lien reçu par
- * e-mail, la page du lien, le code du courrier recommandé (le prestataire
+ * fait dans le navigateur : la page d'inscription, le lien lu dans
+ * l'e-mail tel qu'il part (le transport « array » des tests garde chaque
+ * message envoyé), la page du lien, le code du courrier recommandé (le prestataire
  * factice l'imprime dans le PDF du courrier), la première connexion par
  * son adresse, puis la création de son premier magasin dans l'espace de la
  * société.
  */
 
 test('une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin', function () {
-    Mail::fake();
     $siren = SocieteFactory::sirenFictif();
     $adresse = 'jeanne.dupont@example.test';
 
@@ -29,9 +29,14 @@ test('une société s’inscrit, confirme son lien, saisit le code de son courri
         ->remplir('Confirmer le mot de passe', self::MOT_DE_PASSE_CHOISI)
         ->cliquerSur('S\'inscrire')
         ->voir(InscriptionSociete::MESSAGE_NEUTRE);
-    $lien = Mail::sent(DemandeInscriptionMail::class)->sole()->lien;
+    $email = Mail::mailer('array')->getSymfonyTransport()->messages()->sole(fn (SentMessage $message): bool => $message->getOriginalMessage()->getTo()[0]->getAddress() === $adresse);
+    preg_match('#href="(https?://[^"]+/inscription/[^"]+)"#', (string) $email->getOriginalMessage()->getHtmlBody(), $lien);
 
-    $onglet->aller((string) parse_url($lien, PHP_URL_PATH))
+    expect($lien)->toHaveKey(1);
+
+    $adresseDuLien = html_entity_decode($lien[1]);
+
+    $onglet->aller(substr($adresseDuLien, (int) strpos($adresseDuLien, '/inscription/')))
         ->geste(fn () => $onglet->element('input[name="choix_definitif"]')->check())
         ->cliquerSur('Confirmer l\'inscription');
     $societe = Societe::query()->where('siren', $siren)->sole();

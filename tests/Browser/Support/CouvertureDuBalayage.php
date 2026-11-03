@@ -2,26 +2,28 @@
 
 namespace Tests\Browser\Support;
 
+use Filament\Pages\Page as PageDeFilament;
 use Filament\Resources\Pages\Page as PageDeRessource;
 use ReflectionClass;
 
 use function Livewire\on;
 
 /**
- * Ce que le balayage d'un test a ouvert, noté côté serveur, dans les termes
- * de l'inventaire des actions (voir ActionsDeLInterface) : chaque page,
- * widget ou composant rendu (Livewire « dehydrate »), chaque action montée
- * (mountAction, mountTableAction, mountTableBulkAction,
+ * Ce que le balayage d'un test a ouvert, dans les termes de l'inventaire
+ * des actions (voir ActionsDeLInterface) : noté côté serveur, chaque page,
+ * widget ou composant rendu (Livewire « dehydrate »), une page que sert une
+ * classe de Filament (le tableau de bord du magasin) comprise, chaque
+ * action montée (mountAction, mountTableAction, mountTableBulkAction,
  * mountFormComponentAction, mountInfolistAction), chaque filtre, onglet de
- * liste ou recherche d'un tableau changés (Livewire « update »), et chaque
- * onglet de formulaire cliqué, que seul le navigateur connaît. Chaque
- * action se range dans le fichier qui la déclare : la classe du composant,
- * ses parents et ses traits, puis la ressource d'une page de ressource et
- * ses traits. Une action qui est un lien (voir ActionsDeLInterface::liens())
- * ne se monte pas : le balayage la suit comme tout lien de la page, et elle
- * compte comme ouverte quand la page de sa ressource qu'elle ouvre (create,
- * edit, view) a été rendue, ou, pour un autre lien, quand la page qui la
- * déclare l'a été.
+ * liste ou recherche d'un tableau changés (Livewire « update ») ; noté par
+ * le balayage, que seul le navigateur connaît, chaque onglet de formulaire
+ * cliqué, chaque entrée du menu du compte ouverte, et chaque action qui
+ * est un lien, qui ne se monte pas : elle compte quand le balayage l'a vue
+ * sur une page et a ouvert la page de son adresse (voir Balayeur). Chaque
+ * élément se range dans le fichier qui le déclare : la classe du
+ * composant, ses parents et ses traits, puis la ressource d'une page de
+ * ressource et ses traits, puis les classes de l'interface que son fichier
+ * importe ; à défaut, le seul fichier qui le déclare.
  */
 final class CouvertureDuBalayage
 {
@@ -43,7 +45,11 @@ final class CouvertureDuBalayage
     private array $composants = [];
 
     /**
-     * @var list<array{classe: class-string, element: string}>
+     * Les éléments ouverts, chacun avec la classe du composant qui le montre,
+     * ou sans classe quand un seul fichier peut le déclarer (une entrée du
+     * menu du compte, une page que sert une classe de Filament).
+     *
+     * @var list<array{classe: class-string|null, element: string}>
      */
     private array $ouverts = [];
 
@@ -103,6 +109,25 @@ final class CouvertureDuBalayage
     }
 
     /**
+     * Note une action qui est un lien, vue sur la page de ce composant et
+     * dont la page a été ouverte.
+     *
+     * @param  class-string  $classe
+     */
+    public function noterUnLienSuivi(string $classe, string $element): void
+    {
+        $this->ouverts[] = ['classe' => $classe, 'element' => $element];
+    }
+
+    /**
+     * Note une entrée du menu du compte ouverte, par son libellé.
+     */
+    public function noterUneEntreeDuMenu(string $libelle): void
+    {
+        $this->ouverts[] = ['classe' => null, 'element' => 'menu:'.$libelle];
+    }
+
+    /**
      * Ce qui a été ouvert, par fichier de l'inventaire ; et ce qui a été
      * ouvert sans qu'aucun fichier ne le déclare (une action que la lecture
      * du code n'a pas trouvée).
@@ -113,8 +138,17 @@ final class CouvertureDuBalayage
     {
         $couverts = [];
         $inconnus = [];
+        $ouverts = $this->ouverts;
 
         foreach (array_keys($this->composants) as $classe) {
+            if (! str_starts_with($classe, 'App\\')) {
+                if (is_subclass_of($classe, PageDeFilament::class)) {
+                    $ouverts[] = ['classe' => null, 'element' => 'page:'.class_basename($classe)];
+                }
+
+                continue;
+            }
+
             foreach (['page', 'widget', 'composant'] as $element) {
                 $fichier = self::fichier($classe);
 
@@ -124,25 +158,11 @@ final class CouvertureDuBalayage
             }
         }
 
-        $liens = ActionsDeLInterface::liens();
-
-        foreach (array_keys($this->composants) as $classe) {
-            foreach ($this->candidats($classe, avecLesImports: false) as $candidat) {
-                $fichier = self::fichier($candidat);
-
-                foreach ($liens[$fichier] ?? [] as $lien) {
-                    if ($this->lienSuivi($classe, $lien)) {
-                        $couverts[$fichier][] = $lien;
-                    }
-                }
-            }
-        }
-
-        foreach ($this->ouverts as $ouvert) {
+        foreach ($ouverts as $ouvert) {
             $fichier = $this->fichierQuiDeclare($ouvert['classe'], $ouvert['element']);
 
             if ($fichier === null) {
-                $inconnus[] = $ouvert['element'].' ('.$ouvert['classe'].')';
+                $inconnus[] = $ouvert['element'].' ('.($ouvert['classe'] ?? 'sans composant').')';
 
                 continue;
             }
@@ -161,15 +181,15 @@ final class CouvertureDuBalayage
     /**
      * Le fichier qui déclare cet élément pour ce composant : la classe, ses
      * parents et leurs traits, puis la ressource de sa page et ses traits ;
-     * à défaut, le seul fichier de l'application qui le déclare (une action
-     * qu'une autre ressource construit pour la page, comme la loupe des
-     * clients) ; null s'il n'y en a aucun ou plusieurs.
+     * à défaut, ou sans composant, le seul fichier de l'application qui le
+     * déclare (une action qu'une autre ressource construit pour la page,
+     * comme la loupe des clients) ; null s'il n'y en a aucun ou plusieurs.
      *
-     * @param  class-string  $classe
+     * @param  class-string|null  $classe
      */
-    private function fichierQuiDeclare(string $classe, string $element): ?string
+    private function fichierQuiDeclare(?string $classe, string $element): ?string
     {
-        foreach ($this->candidats($classe) as $candidat) {
+        foreach ($classe === null ? [] : $this->candidats($classe) as $candidat) {
             $fichier = self::fichier($candidat);
 
             if (in_array($element, $this->declarees()[$fichier] ?? [], true)) {
@@ -185,25 +205,19 @@ final class CouvertureDuBalayage
     /**
      * Les classes qui peuvent déclarer une action de ce composant, dans
      * l'ordre où les chercher : la classe, ses parents et leurs traits ; la
-     * ressource d'une page de ressource ; puis, avec les imports, les
-     * classes de l'interface que son fichier importe (la caisse reprend les
-     * lignes de vente des devis), avec leurs parents et leurs traits. Les
-     * liens d'une page ne se cherchent que sans les imports : un lien d'une
-     * classe importée ne s'affiche pas sur la page.
+     * ressource d'une page de ressource ; puis les classes de l'interface
+     * que son fichier importe (la caisse reprend les lignes de vente des
+     * devis), avec leurs parents et leurs traits.
      *
      * @param  class-string  $classe
      * @return list<class-string>
      */
-    private function candidats(string $classe, bool $avecLesImports = true): array
+    private function candidats(string $classe): array
     {
         $candidats = self::classesDeclarantes($classe);
 
         if (is_subclass_of($classe, PageDeRessource::class)) {
             $candidats = [...$candidats, ...self::classesDeclarantes($classe::getResource())];
-        }
-
-        if (! $avecLesImports) {
-            return array_values(array_unique($candidats));
         }
 
         preg_match_all('/^use\s+(App\\\\Filament\\\\[\w\\\\]+);/m', (string) file_get_contents((string) (new ReflectionClass($classe))->getFileName()), $imports);
@@ -215,26 +229,6 @@ final class CouvertureDuBalayage
         }
 
         return array_values(array_unique($candidats));
-    }
-
-    /**
-     * Ce lien, déclaré pour la page de ce composant, a-t-il mené à une page
-     * rendue : la page create, edit ou view de la ressource pour les
-     * actions de ce nom, sinon la page qui le déclare.
-     *
-     * @param  class-string  $composant
-     */
-    private function lienSuivi(string $composant, string $lien): bool
-    {
-        $page = substr($lien, strlen('action:'));
-
-        if (! in_array($page, ['create', 'edit', 'view'], true) || ! is_subclass_of($composant, PageDeRessource::class)) {
-            return true;
-        }
-
-        $cible = $composant::getResource()::getPages()[$page] ?? null;
-
-        return $cible !== null && isset($this->composants[$cible->getPage()]);
     }
 
     /**

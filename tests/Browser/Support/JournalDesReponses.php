@@ -105,16 +105,6 @@ final class JournalDesReponses
     }
 
     /**
-     * Toutes les réponses notées, dans l'ordre.
-     *
-     * @return list<array{requete: string, statut: int}>
-     */
-    public function reponses(): array
-    {
-        return $this->reponses;
-    }
-
-    /**
      * @param  array{requete: string, statut: int}  $reponse
      */
     private function etaitAttendue(array $reponse): bool

@@ -2,6 +2,7 @@
 
 namespace Tests\Browser\Support;
 
+use Filament\Pages\Page;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route as Routes;
@@ -15,13 +16,14 @@ use ReflectionClass;
  * fichier qui la déclare (chemin depuis la racine du dépôt) :
  * - « page » : chaque page d'un panneau (ressources, pages propres, pages
  *   de connexion, d'inscription, de profil...), d'après les routes de
- *   Filament ;
+ *   Filament ; « page:Classe » : une page qu'une classe de Filament sert
+ *   (le tableau de bord d'un magasin), dans le fournisseur de son panneau ;
  * - « widget » et « composant » : chaque widget et chaque composant
  *   Livewire monté par une vue (app/Filament) ;
  * - « action:nom » : chaque action de Filament (d'en-tête, de ligne,
- *   groupée, de formulaire, de fiche), par le nom qu'elle reçoit à sa
- *   création (Action::make('nom')), ou celui de sa classe (« edit » pour
- *   EditAction) ;
+ *   groupée, de formulaire, de fiche, d'un avis), par le nom qu'elle reçoit
+ *   à sa création (Action::make('nom')), ou celui de sa classe (« edit »
+ *   pour EditAction), partout dans app/ (les avis des domaines compris) ;
  * - « filtre:nom » et « onglet:nom » : chaque filtre d'un tableau et chaque
  *   onglet d'une liste ou d'un formulaire ;
  * - « champ:nom » : chaque champ d'un formulaire qui déclenche un calcul ou
@@ -30,9 +32,19 @@ use ReflectionClass;
  *   « repeteur:nom » : chaque liste de lignes, avec ses boutons d'ajout et
  *   de retrait ;
  * - « recherche » : la recherche d'un tableau qui a une colonne cherchable ;
+ * - « lien:nom » : chaque entrée de fiche ou colonne de tableau qui est un
+ *   lien (url()) ;
  * - « menu:libellé » : chaque entrée ajoutée au menu du compte ;
- * - « clic:méthode » : chaque bouton d'une vue qui appelle une méthode de son
- *   composant (wire:click) ;
+ * - dans les vues (hors resources/views/vendor) : « clic:méthode », chaque
+ *   bouton qui appelle une méthode de son composant (wire:click, ou un clic
+ *   qui appelle $wire) ; « envoi:méthode », chaque formulaire que son
+ *   composant reçoit (wire:submit) ; « saisie:propriété », chaque champ qui
+ *   envoie sa saisie au serveur (wire:model.live, .blur, .change, .lazy) ;
+ *   « changement:méthode », chaque champ qui appelle une méthode quand il
+ *   change (wire:change) ; « formulaire:adresse », chaque formulaire envoyé
+ *   par le navigateur (method="post"), par l'expression de son adresse ;
+ *   « lien:texte », chaque lien (<a href>, x-filament::link, ou
+ *   x-filament::button tag="a"), par son texte tel qu'écrit ;
  * - « page publique:adresse » et « formulaire:adresse » : chaque page et
  *   chaque formulaire publics, hors panneaux (routes/web.php).
  */
@@ -77,47 +89,22 @@ final class ActionsDeLInterface
     private const ROUTES_HORS_INTERFACE = ['rappels.recommande'];
 
     /**
-     * Les actions qui sont des liens, par fichier : une action créée par
-     * CreateAction, EditAction ou ViewAction, que Filament rend comme un
-     * lien vers la page de la ressource quand elle en a une, ou dont la
-     * chaîne appelle url(). Le balayage les ouvre en suivant les liens de
-     * la page, sans monter d'action (voir CouvertureDuBalayage).
-     *
-     * @return array<string, list<string>>
-     */
-    public static function liens(): array
-    {
-        $liens = [];
-
-        foreach (File::allFiles(app_path('Filament')) as $fichier) {
-            if ($fichier->getExtension() === 'php') {
-                self::ajouter($liens, $fichier->getPathname(), self::declarees($fichier->getContents(), seulementLesLiens: true));
-            }
-        }
-
-        return $liens;
-    }
-
-    /**
      * @return array<string, list<string>>
      */
     public static function lire(): array
     {
         $actions = [];
 
-        foreach (File::allFiles(app_path('Filament')) as $fichier) {
+        foreach (File::allFiles(app_path()) as $fichier) {
             if ($fichier->getExtension() === 'php') {
                 self::ajouter($actions, $fichier->getPathname(), self::declarees($fichier->getContents()));
             }
         }
 
-        foreach (File::allFiles(app_path('Providers/Filament')) as $fichier) {
-            self::ajouter($actions, $fichier->getPathname(), self::declarees($fichier->getContents()));
-        }
-
         foreach (File::allFiles(resource_path('views')) as $vue) {
-            preg_match_all('/wire:click(?:\.[a-z]+)*="([A-Za-z_][A-Za-z0-9_]*)/', $vue->getContents(), $clics);
-            self::ajouter($actions, $vue->getPathname(), array_map(fn (string $methode): string => 'clic:'.$methode, $clics[1]));
+            if (! str_starts_with($vue->getPathname(), resource_path('views/vendor'))) {
+                self::ajouter($actions, $vue->getPathname(), self::declareesDansLaVue($vue->getContents()));
+            }
         }
 
         foreach (Routes::getRoutes()->getRoutes() as $route) {
@@ -135,30 +122,61 @@ final class ActionsDeLInterface
     }
 
     /**
+     * Les éléments que cette vue Blade déclare.
+     *
+     * @return list<string>
+     */
+    public static function declareesDansLaVue(string $vue): array
+    {
+        $attributs = '((?:[^>"\']|"[^"]*"|\'[^\']*\')*)';
+        $texte = fn (string $contenu): string => trim((string) preg_replace('/\s+/', ' ', strip_tags($contenu)));
+        $elements = [];
+
+        foreach ([
+            'clic' => '/(?:wire:click(?:\.[a-z]+)*="|(?:x-on:click|@click)(?:\.[a-z]+)*="[^"]*\$wire\.)([A-Za-z_]\w*)/',
+            'envoi' => '/wire:submit(?:\.[a-z]+)*="([A-Za-z_]\w*)/',
+            'saisie' => '/wire:model\.(?:live|blur|change|lazy)(?:\.[a-z0-9]+)*="([A-Za-z_][\w.]*)/',
+            'changement' => '/wire:change(?:\.[a-z]+)*="([A-Za-z_]\w*)/',
+        ] as $genre => $motif) {
+            preg_match_all($motif, $vue, $trouves);
+            array_push($elements, ...array_map(fn (string $nom): string => $genre.':'.$nom, $trouves[1]));
+        }
+
+        preg_match_all('/<form\b'.$attributs.'>/i', $vue, $formulaires);
+
+        foreach ($formulaires[1] as $attributsDuFormulaire) {
+            if (preg_match('/\bmethod="post"/i', $attributsDuFormulaire) === 1 && preg_match('/\baction="([^"]*)"/i', $attributsDuFormulaire, $adresse) === 1) {
+                $elements[] = 'formulaire:'.$adresse[1];
+            }
+        }
+
+        preg_match_all('/<a\b'.$attributs.'>(.*?)<\/a>|<x-filament::link\b'.$attributs.'>(.*?)<\/x-filament::link>|<x-filament::button\b'.$attributs.'>(.*?)<\/x-filament::button>/s', $vue, $liens, PREG_SET_ORDER);
+
+        foreach ($liens as $lien) {
+            $estUnLien = match (true) {
+                ($lien[1] ?? '') !== '' || ($lien[2] ?? '') !== '' => preg_match('/\bhref=/', $lien[1]) === 1,
+                ($lien[3] ?? '') !== '' || ($lien[4] ?? '') !== '' => preg_match('/\btag="(?!a")/', $lien[3]) !== 1,
+                default => preg_match('/\btag="a"/', $lien[5] ?? '') === 1,
+            };
+
+            if ($estUnLien) {
+                $elements[] = 'lien:'.$texte($lien[2] ?? '').$texte($lien[4] ?? '').$texte($lien[6] ?? '');
+            }
+        }
+
+        return $elements;
+    }
+
+    /**
      * Les éléments que ce code PHP déclare.
      *
      * @return list<string>
      */
-    public static function declarees(string $code, bool $seulementLesLiens = false): array
+    public static function declarees(string $code): array
     {
         $jetons = array_values(array_filter(PhpToken::tokenize($code), fn (PhpToken $jeton): bool => ! $jeton->isIgnorable()));
         $alias = self::alias($code);
         $elements = [];
-
-        if ($seulementLesLiens) {
-            foreach ($jetons as $indice => $jeton) {
-                if ($jeton->is(T_DOUBLE_COLON) && ($jetons[$indice + 1] ?? null)?->text === 'make' && ($jetons[$indice + 2] ?? null)?->text === '(') {
-                    $classe = $alias[self::nomCourt($jetons[$indice - 1]->text)] ?? self::nomCourt($jetons[$indice - 1]->text);
-                    $chaine = self::chaine($jetons, $indice + 2);
-
-                    if (str_ends_with($classe, 'Action') && ! str_ends_with($classe, 'ActionGroup') && (in_array($classe, ['CreateAction', 'EditAction', 'ViewAction'], true) || in_array('url', $chaine, true))) {
-                        $elements[] = self::element($classe, self::nomEcrit($jetons, $indice + 3, $code), $chaine, $jeton->line);
-                    }
-                }
-            }
-
-            return array_values(array_filter($elements));
-        }
 
         $parent = preg_match('/^(?:final\s+|abstract\s+)?class\s+\w+\s+extends\s+([\w\\\\]+)/m', $code, $extends) === 1 ? ($alias[self::nomCourt($extends[1])] ?? self::nomCourt($extends[1])) : null;
 
@@ -195,7 +213,7 @@ final class ActionsDeLInterface
     /**
      * Le nom écrit en premier argument de make(), à cet indice : une chaîne,
      * ou une constante de la classe du fichier (self::NOM, static::NOM) ;
-     * null sans nom écrit.
+     * null sans nom écrit (ni l'appel d'une méthode).
      *
      * @param  list<PhpToken>  $jetons
      */
@@ -207,7 +225,7 @@ final class ActionsDeLInterface
             return stripcslashes(substr($jeton->text, 1, -1));
         }
 
-        if ($jeton !== null && in_array($jeton->text, ['self', 'static'], true) && ($jetons[$indice + 1] ?? null)?->is(T_DOUBLE_COLON) && ($jetons[$indice + 2] ?? null)?->is(T_STRING)) {
+        if ($jeton !== null && in_array($jeton->text, ['self', 'static'], true) && ($jetons[$indice + 1] ?? null)?->is(T_DOUBLE_COLON) && ($jetons[$indice + 2] ?? null)?->is(T_STRING) && ($jetons[$indice + 3] ?? null)?->text !== '(') {
             preg_match('/^namespace\s+([^;]+);/m', $code, $espace);
             preg_match('/^(?:final\s+|abstract\s+)?(?:class|trait)\s+(\w+)/m', $code, $classe);
 
@@ -249,6 +267,10 @@ final class ActionsDeLInterface
 
         if (in_array($classe, self::CHAMPS, true) && $nom !== null && array_intersect($chaine, self::DECLENCHEURS) !== []) {
             return 'champ:'.$nom;
+        }
+
+        if ((str_ends_with($classe, 'Entry') || str_ends_with($classe, 'Column')) && $nom !== null && in_array('url', $chaine, true)) {
+            return 'lien:'.$nom;
         }
 
         if ($classe === 'MenuItem') {
@@ -301,8 +323,9 @@ final class ActionsDeLInterface
 
     /**
      * Ajoute la page ou le formulaire de cette route à l'inventaire : une
-     * page d'un panneau dans le fichier de son composant, une page ou un
-     * formulaire publics (un contrôleur de l'application) dans
+     * page d'un panneau dans le fichier de son composant, ou, servie par une
+     * classe de Filament, dans le fournisseur de son panneau ; une page ou
+     * un formulaire publics (un contrôleur de l'application) dans
      * routes/web.php ; la redirection de la racine vers le panneau n'est
      * pas une page.
      *
@@ -317,10 +340,12 @@ final class ActionsDeLInterface
         }
 
         if (str_starts_with($nom, 'filament.') && in_array('GET', $route->methods(), true)) {
-            $classe = $route->getControllerClass();
+            $classe = (string) $route->getControllerClass();
 
-            if ($classe !== null && str_starts_with($classe, 'App\\')) {
+            if (str_starts_with($classe, 'App\\')) {
                 self::ajouter($actions, (string) (new ReflectionClass($classe))->getFileName(), ['page']);
+            } elseif (is_subclass_of($classe, Page::class)) {
+                self::ajouter($actions, self::fournisseurDuPanneau(explode('.', $nom)[1]), ['page:'.class_basename($classe)]);
             }
 
             return;
@@ -330,6 +355,21 @@ final class ActionsDeLInterface
             $genre = in_array('GET', $route->methods(), true) ? 'page publique:' : 'formulaire:';
             self::ajouter($actions, base_path('routes/web.php'), [$genre.'/'.ltrim($route->uri(), '/')]);
         }
+    }
+
+    /**
+     * Le fichier du fournisseur du panneau de cet identifiant
+     * (app/Providers/Filament).
+     */
+    private static function fournisseurDuPanneau(string $panneau): string
+    {
+        foreach (File::files(app_path('Providers/Filament')) as $fichier) {
+            if (str_contains($fichier->getContents(), "->id('{$panneau}')")) {
+                return $fichier->getPathname();
+            }
+        }
+
+        throw new LogicException("Aucun fournisseur de app/Providers/Filament ne déclare le panneau {$panneau}.");
     }
 
     /**

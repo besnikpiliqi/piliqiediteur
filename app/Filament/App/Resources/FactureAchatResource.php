@@ -372,6 +372,16 @@ class FactureAchatResource extends Resource
     }
 
     /**
+     * La fenêtre de l'avoir fournisseur. Depuis le menu, la liste des
+     * factures d'achat retournables se lit une fois, quand la fenêtre se
+     * construit, et non par une fonction : avec des options données par une
+     * fonction, la liste à recherche de Filament relit ses options au
+     * serveur quand son état change, et, la fenêtre ouverte puis fermée une
+     * seconde fois, celle de la première ouverture, retirée de la page mais
+     * toujours à l'écoute, le faisait sans composant Livewire et levait une
+     * erreur dans le navigateur (« Cannot read properties of undefined »).
+     * La recherche, elle, interroge toujours le serveur.
+     *
      * @return list<Component>
      */
     private static function formulaireDeLAvoirFournisseur(?Model $record): array
@@ -383,7 +393,7 @@ class FactureAchatResource extends Resource
             Select::make('facture_achat_id')
                 ->label('Facture d\'achat')
                 ->helperText('Une facture d\'achat validée du magasin dont des produits restent à retourner : encore en stock, et pas déjà retournés.')
-                ->options(fn (): array => self::facturesAchatRetournables())
+                ->options($factureAchat === null ? self::facturesAchatRetournables() : [])
                 ->searchable()
                 ->getSearchResultsUsing(fn (string $search): array => self::facturesAchatRetournables($search))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => ($facture = self::factureAchatRetournable($value)) === null ? null : self::libelleDeLaFactureAchat($facture))

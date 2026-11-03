@@ -34,6 +34,7 @@ use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Support\Facades\Event;
 use Tests\Browser\Support\Balayeur;
 use Tests\Browser\Support\CouvertureDuBalayage;
+use Tests\Browser\Support\DemonstrationDeTest;
 use Tests\Browser\Support\Inventaire;
 use Tests\Browser\Support\JournalDesReponses;
 use Tests\Browser\Support\Navigation;
@@ -49,9 +50,9 @@ use Tests\TestCase;
  *
  * Chaque test part d'un instant figé, écrit avec son fuseau (voir
  * instantDuTest()), que le serveur partage ; la session vit en base, comme en
- * production, et son témoin dure le temps du navigateur, pour que le
- * navigateur, à l'heure réelle, ne la jette pas comme expirée ; chaque
- * requête part de l'état d'un processus neuf (voir NoyauDUneRequeteNeuve) ;
+ * production ; chaque requête part de l'état d'un processus neuf, et chaque
+ * témoin dure le temps du navigateur, pour que le navigateur, à l'heure
+ * réelle, ne le jette pas comme échu (voir NoyauDUneRequeteNeuve) ;
  * chaque réponse du serveur s'inscrit au journal du test (voir
  * JournalDesReponses), qui fait échouer tout refus ou toute erreur que le
  * test n'attendait pas, au plus tard à la fin du test.
@@ -74,7 +75,7 @@ abstract class TestCaseDuNavigateur extends TestCase
         parent::setUp();
 
         $this->travelTo(self::instantDuTest());
-        config(['session.driver' => 'database', 'session.expire_on_close' => true]);
+        config(['session.driver' => 'database']);
         $this->app->extend(Kernel::class, fn (Kernel $noyau): Kernel => $noyau instanceof NoyauDUneRequeteNeuve ? $noyau : new NoyauDUneRequeteNeuve($noyau));
         $this->journal = new JournalDesReponses;
         Event::listen(RequestHandled::class, $this->journal->noter(...));
@@ -286,29 +287,30 @@ abstract class TestCaseDuNavigateur extends TestCase
     /**
      * Le magasin de démonstration d'une société inscrite qui attend le code
      * de son courrier, ouvert par son propriétaire (voir
-     * OuvrirLaDemonstrationAction), et un vendeur d'entraînement qu'il y
-     * crée, avec les autorisations du modèle du vendeur, son mot de passe
-     * choisi : le magasin et le compte. Aucun magasin n'est le magasin actif
-     * ensuite.
-     *
-     * @return array{0: Magasin, 1: User}
+     * OuvrirLaDemonstrationAction), et les comptes d'entraînement qu'il y
+     * crée, avec les autorisations du modèle de leur rôle : un responsable
+     * et un vendeur, chacun son mot de passe choisi (voir
+     * DemonstrationDeTest). Aucun magasin n'est le magasin actif ensuite.
      */
-    protected function demonstrationAvecUnCompteDEntrainement(): array
+    protected function demonstration(): DemonstrationDeTest
     {
         $this->travelTo(self::aParis('2026-03-09 08:00:00'));
         $societe = $this->inscrireUneSociete();
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
-        $vendeur = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle(
-            $societe->proprietaire,
-            $demonstration,
-            ['name' => 'Valentin d\'essai'],
-            RoleMagasin::Vendeur,
-            RoleMagasin::Vendeur->permissionsParDefaut($societe->type_activite),
+        $proprietaire = $societe->proprietaire;
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
+        [$responsable, $vendeur] = app(TenantContext::class)->runAs($demonstration, fn (): array => array_map(
+            fn (array $compte): User => $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle(
+                $proprietaire,
+                $demonstration,
+                ['name' => $compte[0]],
+                $compte[1],
+                $compte[1]->permissionsParDefaut($societe->type_activite),
+            )),
+            [['Rémi d\'essai', RoleMagasin::Responsable], ['Valentin d\'essai', RoleMagasin::Vendeur]],
         ));
-        $this->choisirSonMotDePasse($vendeur);
         $this->travelTo(self::instantDuTest());
         app(TenantContext::class)->clear();
 
-        return [$demonstration->fresh(), $vendeur->refresh()];
+        return new DemonstrationDeTest($societe->fresh(), $demonstration->fresh(), $proprietaire->refresh(), $responsable, $vendeur);
     }
 }

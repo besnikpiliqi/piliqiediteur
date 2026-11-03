@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 02:40 UTC par pilotage-sync.sh : « C6 : délais des tests en navigateur sous Windows ».
+Mis à jour le 03/11/2026 à 09:47 UTC par pilotage-sync.sh : « C6 : PostgreSQL sous Windows ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

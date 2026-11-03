@@ -360,3 +360,83 @@ npm ERR!     C:\Users\PC DELL\AppData\Local\npm-cache\_logs\[jeton retiré].log
 
 oui recommandé
 
+## 62. 2026-11-03 00:12 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> git pull
+
+>> composer install
+
+remote: Enumerating objects: 144, done.                                                                                                      
+
+remote: Counting objects: 100% (144/144), done.                                                                                              
+
+remote: Compressing objects: 100% (41/41), done.                                                                                             
+
+remote: Total 111 (delta 70), reused 109 (delta 68), pack-reused 0 (from 0)                                                                  
+
+Receiving objects: 100% (111/111), 104.44 KiB | 5.80 MiB/s, done.
+
+Resolving deltas: 100% (70/70), completed with 28 local objects.
+
+From https://github.com/besnikpiliqi/piliqiediteur
+
+   92fd524..1d3278a  claude/saas-invoice-editor-architecture-q6eizh -> origin/claude/saas-invoice-editor-architecture-q6eizh
+
+   acbc7ce..d9759b1  claude/pilotage-reprise -> origin/claude/pilotage-reprise
+
+error: The following untracked working tree files would be overwritten by merge:
+
+        package-lock.json
+
+Please move or remove them before you merge.
+
+Aborting
+
+Updating 92fd524..1d3278a
+
+## 63. 2026-11-03 00:13 UTC
+
+Your lock file does not contain a compatible set of packages. Please run composer update.
+
+
+
+  Problem 1
+
+    - pestphp/pest-plugin-browser is locked to version v4.3.1 and an update of this package was not requested.
+
+    - pestphp/pest-plugin-browser v4.3.1 requires ext-sockets * -> it is missing from your system. Install or enable PHP's sockets extension.
+
+
+
+To enable extensions, verify that they are enabled in your .ini files:
+
+    - C:\xampp\php\php.ini
+
+You can also run `php --ini` in a terminal to see which files are used by PHP in CLI mode.
+
+Alternatively, you can run Composer with `--ignore-platform-req=ext-sockets` to temporarily ignore these required extensions.
+
+## 64. 2026-11-03 00:17 UTC
+
+<!-- attach -->
+
+> Ne lancez pas composer update : cette commande changerait les versions des paquets fixées pour tout le projet.
+
+
+
+pourquoi c'est risqué? pourquoi des packet fixé!
+
+## 65. 2026-11-03 00:21 UTC
+
+et alors toujoure vont rester ces versions? doonc jamais rester à jours
+
+## 66. 2026-11-03 00:34 UTC
+
+<!-- attach -->
+
+> Q-MAJ : cette façon de faire vous convient-elle ? Oui (recommandé) / non.
+
+
+
+oui
+

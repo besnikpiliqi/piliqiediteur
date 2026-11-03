@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 00:11 UTC par pilotage-sync.sh : « NAV-1 poussé, TR lancé ; C4 : aucune page ne joint un site tiers (Q-TIERS oui) ».
+Mis à jour le 03/11/2026 à 00:35 UTC par pilotage-sync.sh : « D53 : mise à jour des paquets (Q-MAJ oui) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,13 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M resources/views/documents/pdf/reglements.blade.php
+ M resources/views/documents/pdf/styles.blade.php
+ M resources/views/documents/pdf/totaux.blade.php
+ M resources/views/factures/pdf.blade.php
+ M tests/Feature/Facturation/FacturePdfGeneratorTest.php
+?? app/Domain/Facturation/Services/TableauDesReglements.php
+?? resources/views/documents/pdf/reference.blade.php
 ```
 
 ## Dernière course de la chaîne

@@ -21,7 +21,8 @@ use Illuminate\Database\Eloquent\Builder;
  * (voir FactureAchatResource::creerUnAvoirFournisseur()). Ceux reçus par
  * la plateforme agréée ou par l'API viendront aussi ici. Émis, il ne se
  * modifie ni ne se supprime jamais (voir AvoirFournisseurPolicy) : aucune
- * page de modification, seulement sa fiche.
+ * page de modification, seulement sa fiche, où la note d'avoir du
+ * fournisseur s'ajoute en pièce (voir JointLesPiecesDuFournisseur).
  */
 class AvoirFournisseurResource extends Resource
 {
@@ -37,9 +38,13 @@ class AvoirFournisseurResource extends Resource
 
     protected static ?string $pluralModelLabel = 'avoirs fournisseur';
 
+    /**
+     * Chaque avoir avec sa facture d'achat, son fournisseur et le nombre de
+     * ses pièces du fournisseur, lus par la même requête que la liste.
+     */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['factureAchat.fournisseur']);
+        return parent::getEloquentQuery()->with(['factureAchat.fournisseur'])->withCount('pieces');
     }
 
     /**
@@ -65,6 +70,8 @@ class AvoirFournisseurResource extends Resource
                 TextEntry::make('motif')->label('Motif')->placeholder('—')->columnSpanFull(),
             ])->columns(3),
 
+            FactureAchatResource::sectionDesPieces(),
+
             InfolistSection::make('Produits retournés')->schema([
                 FactureResource::lignesEntry($infolist->getRecord()),
             ]),
@@ -88,6 +95,7 @@ class AvoirFournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—')->rechercheSansAccents()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 FactureAchatResource::colonneTvaAVerifier(),
+                FactureAchatResource::colonnePiece(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
@@ -96,6 +104,7 @@ class AvoirFournisseurResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('source')->options(SourceAvoirFournisseur::class),
                 FactureAchatResource::filtreTvaAVerifier(),
+                FactureAchatResource::filtrePieceManquante(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

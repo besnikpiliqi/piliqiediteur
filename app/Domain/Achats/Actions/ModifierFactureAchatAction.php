@@ -8,6 +8,8 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Achats\Services\PieceDeposee;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
@@ -93,6 +95,13 @@ use LogicException;
  * totaux, voir FactureAchat::valeursAuditees()) : la TVA d'une facture
  * peut-être déjà déclarée ne se réécrit jamais sans trace (art. 271, II-3
  * du CGI).
+ *
+ * Une facture saisie à la main garde la date de la facture du fournisseur,
+ * qui ne s'efface pas (voir FactureAchat::verifierLaDateDeLaSaisie()). Les
+ * pièces du fournisseur déposées dans le formulaire s'ajoutent à celles
+ * déjà jointes, en brouillon comme après la validation, et lèvent la marque
+ * « pièce du fournisseur manquante » (voir PiecesDuFournisseur) ; une pièce
+ * se retire depuis la fiche, seulement d'un brouillon.
  */
 class ModifierFactureAchatAction
 {
@@ -103,6 +112,7 @@ class ModifierFactureAchatAction
         private readonly OperateurCourant $operateur,
         private readonly TvaDuFournisseur $tva,
         private readonly JournalAudit $journalAudit,
+        private readonly PiecesDuFournisseur $pieces,
     ) {}
 
     /**
@@ -115,11 +125,12 @@ class ModifierFactureAchatAction
      * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la facture du fournisseur au niveau du document ; aucun, les propositions de PILIQI
+     * @param  list<PieceDeposee>  $pieces  les pièces du fournisseur ajoutées à la saisie (voir PiecesDuFournisseur)
      *
      * @throws AuthorizationException
      * @throws ConfirmationDesEcartsRequiseException
      */
-    public function handle(User $auteur, FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = [], ?MontantsDuFournisseur $montants = null): FactureAchat
+    public function handle(User $auteur, FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = [], ?MontantsDuFournisseur $montants = null, array $pieces = []): FactureAchat
     {
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
@@ -127,7 +138,7 @@ class ModifierFactureAchatAction
 
         $montants ??= MontantsDuFournisseur::aucun();
 
-        return DB::transaction(function () use ($auteur, $factureAchat, $fournisseur, $lignes, $attributs, $montants) {
+        return DB::transaction(function () use ($auteur, $factureAchat, $fournisseur, $lignes, $attributs, $montants, $pieces) {
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
             $magasin = app(TenantContext::class)->magasin();
             Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
@@ -176,8 +187,9 @@ class ModifierFactureAchatAction
                 : [];
             $avant = $estValidee ? Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES) : [];
 
-            return $this->operateur->pendant($compte, function () use ($compte, $factureAchat, $fournisseur, $lignes, $attributs, $montants, $estValidee, $produitsAvant, $avant): FactureAchat {
-                $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
+            return $this->operateur->pendant($compte, function () use ($compte, $factureAchat, $fournisseur, $lignes, $attributs, $montants, $pieces, $estValidee, $produitsAvant, $avant): FactureAchat {
+                $factureAchat->fill([...$attributs, 'fournisseur_id' => $fournisseur->getKey()])->verifierLaDateDeLaSaisie();
+                $factureAchat->save();
 
                 $document = $this->constructeurLignes->enregistrer($compte, $factureAchat, $lignes, $montants);
 
@@ -190,6 +202,8 @@ class ModifierFactureAchatAction
                 if ($estValidee) {
                     $this->journalAudit->inscrireLesChangements(ActionAuditee::FactureAchatModifiee, $compte, $factureAchat->magasin, $avant, Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES), $factureAchat);
                 }
+
+                $this->pieces->joindre($compte, $factureAchat, $pieces);
 
                 return $factureAchat->fresh('lignes');
             });

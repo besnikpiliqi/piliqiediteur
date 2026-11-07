@@ -106,7 +106,7 @@ class PorteDeValidationTest extends TestCase
             'produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2],
             'quantite' => 3,
             'prix_unitaire_ht' => 0.47,
-        ]]));
+        ]], ['date_facture' => '2026-01-15']));
         $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), $client, [['service_id' => $service->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1]]);
 
         $this->assertSame(3, Produit::query()->sole()->stock_quantite);

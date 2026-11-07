@@ -125,7 +125,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
             app(TenantContext::class)->set($magasin);
             app(CreerFactureAchatAction::class)->handle(User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(), Fournisseur::query()->findOrFail($fournisseurId), [
                 ['produit_id' => $produitId, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-            ]);
+            ], ['date_facture' => '2026-01-15']);
         };
         $concurrente = null;
         $this->concurrencerDesQueLeRegistreEstVerrouille($creer, $concurrente);
@@ -222,7 +222,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(StockLedgerService::class)->ajuster($produit, 10, 'Inventaire d\'ouverture');
         $factureAchat = app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $magasinId = $magasin->id;
         $factureAchatId = $factureAchat->id;
         $valider = static function () use ($magasinId, $factureAchatId): void {
@@ -259,7 +259,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $factureAchat = app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $magasinId = $magasin->id;
         $factureAchatId = $factureAchat->id;
         $fournisseurId = $fournisseur->id;

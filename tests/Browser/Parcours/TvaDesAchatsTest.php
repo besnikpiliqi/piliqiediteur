@@ -40,6 +40,7 @@ function factureDeMilleBougies(Navigation $onglet, Magasin $magasin, ?string $ht
 {
     $onglet->aller('/app/'.$magasin->uuid.'/facture-achats/create')
         ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
+        ->remplir('Date de la facture du fournisseur', '2026-03-09')
         ->cliquerSur('Ajouter un produit')
         ->choisirDansLaListe('Produit', 'Bougie parfumée')
         ->remplir('Quantité reçue', '1000')
@@ -100,7 +101,7 @@ function factureDeQuatreDiffuseurs(Magasin $magasin, User $responsable): Facture
 
         return app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
             ['produit_id' => $diffuseur->id, 'quantite' => 4, 'prix_unitaire_ht' => '12.50'],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
     });
 }
 
@@ -212,7 +213,7 @@ test('la marque « TVA à vérifier » et son filtre se voient de chaque rôle q
     $societe = $this->societeComplete();
     $marquee = app(TenantContext::class)->runAs($societe->magasin, fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($societe->responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
         ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 2, 'prix_unitaire_ht' => '5.00'],
-    ], [], MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '20', 'montant_tva' => '2.50']], 'confirmation' => true])));
+    ], ['date_facture' => '2026-01-15'], MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '20', 'montant_tva' => '2.50']], 'confirmation' => true])));
     $liste = '/app/'.$societe->magasin->uuid.'/facture-achats';
     $type = $societe->societe->type_activite;
     $achats = [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER];

@@ -294,7 +294,7 @@ class ActionsHorsEcranTest extends TestCase
             'relancer une facture' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(EnvoyerDocumentAction::class)->relancer($auteur, $ticket, 'client@exemple.fr')),
             'ajouter une preuve' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(AjouterPreuveOperationAction::class)->handle($auteur, $ticket, TypePreuve::Mrn, 'MRN-1234')),
             'noter un bordereau de détaxe' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(NoterBordereauDetaxeAction::class)->handle($auteur, $ticket, 'BD-1234')),
-            'saisir une facture d\'achat' => $this->avec([Fournisseur::factory()->create(), $this->lignesDAchat()], fn (array $achat, User $auteur) => app(CreerFactureAchatAction::class)->handle($auteur, ...$achat)),
+            'saisir une facture d\'achat' => $this->avec([Fournisseur::factory()->create(), $this->lignesDAchat(), ['date_facture' => '2026-01-15']], fn (array $achat, User $auteur) => app(CreerFactureAchatAction::class)->handle($auteur, ...$achat)),
             'modifier une facture d\'achat' => $this->avec([$this->factureAchat($proprietaire), $this->lignesDAchat(5)], fn (array $modification, User $auteur) => app(ModifierFactureAchatAction::class)->handle($auteur, $modification[0], $modification[0]->fournisseur, $modification[1])),
             'valider une facture d\'achat' => $this->avec($this->factureAchat($proprietaire), fn (FactureAchat $factureAchat, User $auteur) => app(ValiderFactureAchatAction::class)->handle($auteur, $factureAchat)),
             'créer un avoir fournisseur' => $this->avec(app(ValiderFactureAchatAction::class)->handle($proprietaire, $this->factureAchat($proprietaire)), fn (FactureAchat $factureAchat, User $auteur) => app(CreerAvoirFournisseurAction::class)->handle($auteur, $factureAchat, [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]])),
@@ -438,6 +438,6 @@ class ActionsHorsEcranTest extends TestCase
 
     private function factureAchat(User $auteur): FactureAchat
     {
-        return app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), $this->lignesDAchat());
+        return app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), $this->lignesDAchat(), ['date_facture' => '2026-01-15']);
     }
 }

@@ -6,6 +6,8 @@ use App\Domain\Achats\Exceptions\ConfirmationDesEcartsRequiseException;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Achats\Services\PieceDeposee;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -27,8 +29,10 @@ use LogicException;
  * La demande porte un jeton (R3, voir ActionsUniques), cherché sous les
  * premiers verrous de l'émission : la ligne de la société (voir
  * Societe::verrouillerAvantSonJournalDAudit()), celle du magasin, sous un
- * verrou partagé, puis celle de son auteur ; sans jeton, la ligne de la
- * société se verrouille aussi en tête, avant la création de l'avoir. Répétée après une réponse perdue,
+ * verrou partagé, puis celle de son auteur ; avec ou sans jeton, ces trois
+ * lignes se verrouillent aussi en tête de la transaction, avant la
+ * création de l'avoir et le dépôt de ses pièces, qui s'inscrivent au
+ * journal d'audit avant l'émission. Répétée après une réponse perdue,
  * elle rend l'avoir fournisseur déjà émis, sans second avoir ni seconde
  * sortie de stock. La création et l'émission qu'elle compose n'en
  * consomment aucun.
@@ -37,6 +41,14 @@ use LogicException;
  * d'un taux, le total TTC saisi pour contrôle) et la confirmation des
  * écarts au-delà de la tolérance passent à la création, puis à l'émission
  * (voir MontantsDuFournisseur et TvaDuFournisseur).
+ *
+ * La note d'avoir du fournisseur, en PDF ou en photo, se joint au
+ * brouillon avant son émission (voir PiecesDuFournisseur) ; sans elle,
+ * l'avoir s'émet quand même, marqué « pièce du fournisseur manquante »
+ * (décision de l'éditeur du 03/11/2026, F1 = b, voir
+ * EmettreAvoirFournisseurAction). Le jeton retient le nom et l'empreinte
+ * de chaque pièce : une demande répétée avec d'autres fichiers est
+ * refusée, et la même ne joint rien une seconde fois.
  */
 class EnregistrerAvoirFournisseurAction
 {
@@ -44,6 +56,7 @@ class EnregistrerAvoirFournisseurAction
         private readonly CreerAvoirFournisseurAction $creerAvoirFournisseur,
         private readonly EmettreAvoirFournisseurAction $emettreAvoirFournisseur,
         private readonly ActionsUniques $actionsUniques,
+        private readonly PiecesDuFournisseur $pieces,
     ) {}
 
     /**
@@ -51,12 +64,13 @@ class EnregistrerAvoirFournisseurAction
      * @param  string|null  $numeroFournisseur  le n° de l'avoir chez le fournisseur, facultatif
      * @param  string|null  $jeton  le jeton de la demande (R3)
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la note d'avoir du fournisseur au niveau du document, et la confirmation des écarts
+     * @param  list<PieceDeposee>  $pieces  la note d'avoir du fournisseur, jointe à la saisie
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ConfirmationDesEcartsRequiseException
      */
-    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null, ?string $numeroFournisseur = null, ?string $jeton = null, ?MontantsDuFournisseur $montants = null): AvoirFournisseur
+    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null, ?string $numeroFournisseur = null, ?string $jeton = null, ?MontantsDuFournisseur $montants = null, array $pieces = []): AvoirFournisseur
     {
         $montants ??= MontantsDuFournisseur::aucun();
         $magasin = app(TenantContext::class)->magasin();
@@ -65,12 +79,14 @@ class EnregistrerAvoirFournisseurAction
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
             ActionsUniques::verrouDe($auteur)();
         };
-        $parametres = ['facture_achat_id' => $factureAchat->getKey(), 'lignes' => array_values($lignesSelectionnees), 'motif' => $motif, 'numero_fournisseur' => $numeroFournisseur, 'montants' => $montants->enTableau()];
+        $parametres = ['facture_achat_id' => $factureAchat->getKey(), 'lignes' => array_values($lignesSelectionnees), 'motif' => $motif, 'numero_fournisseur' => $numeroFournisseur, 'montants' => $montants->enTableau(), 'pieces' => PieceDeposee::signatures($pieces)];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR_FOURNISSEUR, $auteur, $parametres, $verrou, fn (): AvoirFournisseur => DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants, $magasin): AvoirFournisseur {
-            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR_FOURNISSEUR, $auteur, $parametres, $verrou, fn (): AvoirFournisseur => DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants, $pieces, $verrou): AvoirFournisseur {
+            $verrou();
+            $brouillon = $this->creerAvoirFournisseur->handle($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants);
+            $this->pieces->joindre($auteur, $brouillon, $pieces);
 
-            return $this->emettreAvoirFournisseur->handle($auteur, $this->creerAvoirFournisseur->handle($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants), $montants->confirmation);
+            return $this->emettreAvoirFournisseur->handle($auteur, $brouillon, $montants->confirmation);
         }));
     }
 }

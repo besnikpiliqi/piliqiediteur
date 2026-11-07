@@ -90,6 +90,10 @@ enum ActionAuditee: string implements HasLabel
     case TvaAVerifierPosee = 'tva_a_verifier_posee';
     case TvaAVerifierLevee = 'tva_a_verifier_levee';
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
+    case PieceDuFournisseurJointe = 'piece_du_fournisseur_jointe';
+    case PieceDuFournisseurRetiree = 'piece_du_fournisseur_retiree';
+    case PieceDuFournisseurManquantePosee = 'piece_du_fournisseur_manquante_posee';
+    case PieceDuFournisseurManquanteLevee = 'piece_du_fournisseur_manquante_levee';
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
     case AvoirDeRegularisationEmis = 'avoir_de_regularisation_emis';
     case FactureRectificativeEmise = 'facture_rectificative_emise';
@@ -181,6 +185,10 @@ enum ActionAuditee: string implements HasLabel
             self::TvaAVerifierPosee => 'Marque « TVA à vérifier » posée',
             self::TvaAVerifierLevee => 'Marque « TVA à vérifier » levée',
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
+            self::PieceDuFournisseurJointe => 'Pièce du fournisseur jointe',
+            self::PieceDuFournisseurRetiree => 'Pièce du fournisseur retirée',
+            self::PieceDuFournisseurManquantePosee => 'Marque « pièce du fournisseur manquante » posée',
+            self::PieceDuFournisseurManquanteLevee => 'Marque « pièce du fournisseur manquante » levée',
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
             self::AvoirDeRegularisationEmis => 'Avoir de régularisation émis après la correction du SIREN',
             self::FactureRectificativeEmise => 'Facture rectificative émise après la correction du SIREN',
@@ -373,6 +381,13 @@ enum ActionAuditee: string implements HasLabel
             // marque « TVA à vérifier » et, pour chaque ligne, la référence
             // et la quantité retournées (voir EmettreAvoirFournisseurAction).
             self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'],
+            // Le document du fournisseur (sa nature, notre numéro, son n°
+            // chez le fournisseur), le nom d'origine du fichier et son
+            // empreinte SHA-256, jamais son contenu (voir
+            // PiecesDuFournisseur) ; la marque « pièce du fournisseur
+            // manquante », le seul document.
+            self::PieceDuFournisseurJointe, self::PieceDuFournisseurRetiree => ['document', 'nom_origine', 'empreinte'],
+            self::PieceDuFournisseurManquantePosee, self::PieceDuFournisseurManquanteLevee => ['document'],
             // Le numéro de l'inventaire d'ouverture, la valeur hors taxe du
             // stock qu'il fait entrer et, pour chaque ligne, la référence du
             // produit, la quantité inventoriée, si elle est entrée en stock

@@ -310,7 +310,7 @@ class NuitDeParisTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 10],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $avoirFournisseur = app(EnregistrerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]], 'Retour', 'AV-0001');
         $client = Client::factory()->professionnel()->create();
         $ticket = $this->vendre(12);

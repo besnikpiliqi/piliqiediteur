@@ -92,7 +92,7 @@ class EcranOuvertAvantLaFermetureTest extends TestCase
      */
     public static function boutons(): array
     {
-        $brouillonDAchat = static fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]);
+        $brouillonDAchat = static fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15']);
         $brouillonDeFacture = static fn (): Facture => app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20])->id, 'quantite' => 1]]);
         $devis = static fn (): Devis => app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20])->id, 'quantite' => 1]]);
         $archive = static fn (Model $fiche): Model => tap($fiche, fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(self::auteur(), $fiche));

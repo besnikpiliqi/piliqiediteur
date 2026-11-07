@@ -35,7 +35,7 @@ class NomPourLHistoriqueTest extends TestCase
         $this->lierLeCabinet($cabinet, $magasin, [...PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::FACTURE_ACHAT_CREER]);
         $collaborateur = $this->confier($this->collaborateur($cabinet), [$magasin]);
         $this->dansLeMagasin($magasin, $collaborateur);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 10]]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']);
 
         app(TenantContext::class)->runAsSociete($cabinet, fn (): bool => $cabinet->forceFill(['raison_sociale' => 'NOUVEAU NOM DU CABINET'])->save());
         $collaborateur->forceFill(['name' => 'Paul Renommé'])->save();
@@ -70,7 +70,7 @@ class NomPourLHistoriqueTest extends TestCase
         $this->assertStringStartsWith('Paul LLL', $nom);
         $this->assertStringContainsString(' (cabinet CABINET DDD', $nom);
         $this->dansLeMagasin($magasin, $collaborateur);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle($collaborateur, app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 10]]));
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($collaborateur, app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']));
         $this->assertSame($nom, $factureAchat->fresh()->cree_par_nom);
         app(MettreFinAuLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), LienCabinet::query()->withoutGlobalScopes()->sole());
         $this->assertLessThanOrEqual(255, mb_strlen((string) app(TenantContext::class)->runAsSociete($magasin->societe, fn () => EntreeAudit::query()->where('action', ActionAuditee::LienTermine->value)->value('auteur_libelle'))));

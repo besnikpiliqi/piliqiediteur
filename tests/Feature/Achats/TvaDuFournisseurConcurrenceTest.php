@@ -38,7 +38,7 @@ class TvaDuFournisseurConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $produit = Produit::factory()->create(['reference' => 'COQUE-16', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [self::ligne($produit->id)]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [self::ligne($produit->id)], ['date_facture' => '2026-01-15']);
         $magasinId = $magasin->id;
         $factureId = $brouillon->id;
         $produitId = $produit->id;

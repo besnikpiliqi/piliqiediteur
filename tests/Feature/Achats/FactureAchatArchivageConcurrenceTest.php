@@ -47,7 +47,7 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $fournisseur, $produit] = $this->leMagasinSonFournisseurEtSonProduit();
-        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15']);
         $magasinId = $magasin->id;
         $produitId = $produit->id;
         $archivage = null;
@@ -93,7 +93,7 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $fournisseur, $produit] = $this->leMagasinSonFournisseurEtSonProduit();
-        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15']);
         $rattache = $fournisseur;
 
         if ($geste === 'corriger') {
@@ -150,7 +150,7 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $fournisseur, $produit] = $this->leMagasinSonFournisseurEtSonProduit();
         $coque = Produit::factory()->create(['nom' => 'Coque', 'taux_tva' => 20, 'suivi_stock' => true]);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']]));
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15']));
         $magasinId = $magasin->id;
         $produitId = $produit->id;
         $archivage = null;

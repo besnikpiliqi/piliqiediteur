@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -15,7 +16,9 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Accessible tant que la facture d'achat reste modifiable (voir
  * FactureAchat::estModifiable() et FactureAchatPolicy::update()), lignes
- * comprises.
+ * comprises. Les pièces du fournisseur déposées s'ajoutent à celles déjà
+ * jointes (voir ModifierFactureAchatAction) ; leurs fichiers s'effacent du
+ * dossier temporaire des envois une fois la facture enregistrée.
  */
 class EditFactureAchat extends EditRecord
 {
@@ -48,11 +51,14 @@ class EditFactureAchat extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $fournisseur = Fournisseur::withTrashed()->findOrFail($data['fournisseur_id']);
 
-        return static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(auth()->user(), $record, $fournisseur, array_values($data['lignes']), [
+        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(auth()->user(), $record, $fournisseur, array_values($data['lignes']), [
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
             'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,
             'notes' => $data['notes'] ?? null,
-        ], FactureAchatResource::montantsDuFournisseur($data)));
+        ], FactureAchatResource::montantsDuFournisseur($data), PieceDeposee::lire($data['pieces'] ?? [])));
+        PieceDeposee::effacerLesEnvois($data['pieces'] ?? []);
+
+        return $factureAchat;
     }
 }

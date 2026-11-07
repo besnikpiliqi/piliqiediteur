@@ -61,7 +61,7 @@ class FournisseurProduitResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                 'origine' => 'nouveau',
                 'reference' => 'REF-001',

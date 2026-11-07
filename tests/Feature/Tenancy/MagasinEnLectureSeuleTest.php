@@ -266,7 +266,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $produit = Produit::factory()->create(['suivi_stock' => true]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->passerEn($magasin, $situation);
 
         $this->assertThrows(fn () => app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat), LogicException::class, $this->refus($motif));
@@ -283,7 +283,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $produit = Produit::factory()->create(['suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]]);
         $this->passerEn($magasin, $situation);
 

@@ -50,7 +50,7 @@ use App\Models\User;
  * autorisations que le client accorde à son cabinet (refus net pour toute
  * autre), et, pour une question de policy, seulement les gestes de
  * GESTES_D_UN_CABINET : les consultations et les écritures des achats et
- * du stock, jamais un geste sur l'équipe, le magasin ou la société, ni la
+ * du stock (pièces du fournisseur comprises), jamais un geste sur l'équipe, le magasin ou la société, ni la
  * vente, l'envoi, la clôture ou l'encaissement.
  *
  * Une autorisation de société (voir AutorisationsSociete) ne vaut que dans
@@ -130,6 +130,8 @@ final class ControleDesDroits
         'delete' => [FactureAchat::class, Fournisseur::class, InventaireOuverture::class],
         'deleteAny' => [FactureAchat::class, Fournisseur::class, InventaireOuverture::class],
         'restore' => [Fournisseur::class],
+        'joindreUnePiece' => [FactureAchat::class, AvoirFournisseur::class],
+        'retirerUnePiece' => [FactureAchat::class],
     ];
 
     /**

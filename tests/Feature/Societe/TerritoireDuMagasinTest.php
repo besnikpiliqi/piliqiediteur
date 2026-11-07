@@ -692,7 +692,7 @@ class TerritoireDuMagasinTest extends TestCase
 
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 10],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
     }
 
     private function validerUnInventaireDOuverture(): void

@@ -38,6 +38,8 @@ class FactureAchat extends Model
 
     public const REFUS_INTROUVABLE = 'Cette facture d\'achat n\'existe pas, ou plus, dans ce magasin.';
 
+    public const REFUS_SANS_DATE = 'Indiquez la date de la facture du fournisseur : une facture d\'achat saisie à la main ne s\'enregistre pas sans elle.';
+
     /**
      * @return array<string, string>
      */
@@ -54,8 +56,9 @@ class FactureAchat extends Model
     protected $table = 'factures_achat';
 
     // numero, rang_validation, statut, date_validation, totaux,
-    // tva_a_verifier : jamais en mass assignment, uniquement via
-    // ConstructeurLigneAchat, TvaDuFournisseur et ValiderFactureAchatAction.
+    // tva_a_verifier, piece_manquante : jamais en mass assignment,
+    // uniquement via ConstructeurLigneAchat, TvaDuFournisseur,
+    // ValiderFactureAchatAction et PiecesDuFournisseur.
     protected $fillable = [
         'fournisseur_id',
         'numero_fournisseur',
@@ -86,6 +89,7 @@ class FactureAchat extends Model
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',
             'tva_a_verifier' => 'boolean',
+            'piece_manquante' => 'boolean',
             'escompte_pourcentage' => 'decimal:2',
         ];
     }
@@ -163,6 +167,33 @@ class FactureAchat extends Model
     public function avoirsFournisseur(): HasMany
     {
         return $this->hasMany(AvoirFournisseur::class);
+    }
+
+    /**
+     * Les pièces du fournisseur jointes (voir PiecesDuFournisseur), de la
+     * première déposée à la dernière.
+     *
+     * @return HasMany<PieceDuFournisseur, $this>
+     */
+    public function pieces(): HasMany
+    {
+        return $this->hasMany(PieceDuFournisseur::class)->orderBy('id');
+    }
+
+    /**
+     * Une facture saisie à la main porte la date de la facture du
+     * fournisseur (lot EX) : le téléchargement des documents par période et
+     * l'expert-comptable classent un achat par elle. Une facture reçue par
+     * l'API peut ne pas l'avoir ; elle se classe alors au jour de sa
+     * validation.
+     *
+     * @throws LogicException
+     */
+    public function verifierLaDateDeLaSaisie(): void
+    {
+        if (($this->source ?? SourceFactureAchat::Manuelle) === SourceFactureAchat::Manuelle && $this->date_facture === null) {
+            throw new LogicException(self::REFUS_SANS_DATE);
+        }
     }
 
     /**

@@ -160,7 +160,7 @@ class FicheProduitPendantUneFactureAchatConcurrenceTest extends TestCase
     private function factureDAchatQuiAchete(Produit $produit, array $corrections = []): Testable
     {
         return Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['produit_id' => $produit->id])
             ->setFormComponentActionData([...$corrections, 'quantite' => 4])

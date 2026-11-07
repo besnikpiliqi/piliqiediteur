@@ -10,6 +10,7 @@ use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\EspaceDeLaSociete;
+use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\JournaliserOuvertureDeSession;
@@ -32,6 +33,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -88,6 +90,13 @@ class AppPanelProvider extends PanelProvider
             ->passwordReset(DemandeDeLien::class, PageDuLien::class)
             ->authenticatedRoutes(function (): void {
                 ChoisirSonMotDePasse::registerRoutes();
+            })
+            // Le téléchargement d'une pièce du fournisseur, dans le magasin
+            // de l'adresse, pour qui peut voir son document (voir
+            // TelechargerUnePieceDuFournisseurController).
+            ->authenticatedTenantRoutes(function (): void {
+                Route::get('/pieces-du-fournisseur/{piece}', TelechargerUnePieceDuFournisseurController::class)
+                    ->name('pieces-du-fournisseur.telecharger');
             })
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')

@@ -284,7 +284,7 @@ class MarquerFacturesEnRetardConcurrenceTest extends TestCase
             'fermer' => [],
             'rouvrir' => tap([], fn () => self::fermer($magasin->id)),
             'emettre' => ['id' => app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]])->id],
-            'validerUnAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]])->id],
+            'validerUnAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15'])->id],
         };
     }
 

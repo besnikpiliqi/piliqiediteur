@@ -211,7 +211,7 @@ class TvaDesAvoirsFournisseurTest extends TestCase
 
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => '20.00'],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
     }
 
     /**

@@ -12,7 +12,9 @@ use Filament\Resources\Pages\ViewRecord;
  * « Retourner ce produit » sur chacune de ses lignes retournables (voir
  * FactureAchatResource::creerUnAvoirFournisseur()) ; sous chaque ligne, en
  * orange, ce qui en a déjà été retourné (voir
- * FactureAchatResource::retoursDeLaLigne()).
+ * FactureAchatResource::retoursDeLaLigne()). Les pièces du fournisseur
+ * s'y ajoutent, et, sur un brouillon, s'y retirent ou s'y remplacent (voir
+ * JointLesPiecesDuFournisseur).
  */
 class ViewFactureAchat extends ViewRecord
 {
@@ -22,6 +24,9 @@ class ViewFactureAchat extends ViewRecord
     {
         return [
             FactureAchatResource::creerUnAvoirFournisseur(Actions\Action::make('creer_avoir_fournisseur')),
+            FactureAchatResource::ajouterDesPieces(),
+            FactureAchatResource::remplacerUnePiece(),
+            FactureAchatResource::retirerUnePiece(),
         ];
     }
 }

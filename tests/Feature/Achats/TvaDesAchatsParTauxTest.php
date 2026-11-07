@@ -46,7 +46,7 @@ class TvaDesAchatsParTauxTest extends TestCase
         $lignes = $produits->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => '10.01'])->all();
         $lignes[] = ['produit_id' => $livre->id, 'quantite' => 3, 'prix_unitaire_ht' => '10.01', 'remise_pourcentage' => 10];
 
-        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), $lignes, $attributs));
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), $lignes, ['date_facture' => '2026-01-15', ...$attributs]));
     }
 
     /**

@@ -55,7 +55,7 @@ class FactureAchatConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'reference' => 'COQUE', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $magasinId = $magasin->id;
         $factureAchatId = $factureAchat->id;
         $valider = static function () use ($magasinId, $factureAchatId): void {

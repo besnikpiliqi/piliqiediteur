@@ -48,11 +48,20 @@ return new class extends Migration
             // « TVA à vérifier », comme sur la facture d'achat (voir
             // TvaDuFournisseur).
             $table->boolean('tva_a_verifier')->default(false);
+            // « Pièce du fournisseur manquante », comme sur la facture
+            // d'achat : un avoir saisi à la main sans la note d'avoir du
+            // fournisseur jointe (voir PiecesDuFournisseur::marquer()).
+            $table->boolean('piece_manquante')->default(false);
             $table->timestamps();
 
             $table->unique(['magasin_id', 'numero']);
+            // La clé que référencent les pièces du fournisseur avec leur
+            // magasin (voir la migration create_pieces_fournisseur_table).
+            $table->unique(['magasin_id', 'id']);
             $table->index(['magasin_id', 'facture_achat_id']);
             $table->index(['magasin_id', 'tva_a_verifier']);
+            $table->index(['magasin_id', 'piece_manquante']);
+            $table->index(['magasin_id', 'statut', 'date_emission']);
         });
 
         // Seule une société qui a des articles reçoit un avoir fournisseur

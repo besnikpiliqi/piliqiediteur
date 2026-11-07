@@ -28,6 +28,16 @@ class AvoirFournisseurPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::AVOIR_FOURNISSEUR_CREER);
     }
 
+    /**
+     * Joindre une pièce du fournisseur à un avoir émis (voir
+     * JoindreDesPiecesAction) : qui le voit et crée les avoirs fournisseur.
+     * Une pièce jointe à un avoir émis ne se retire jamais.
+     */
+    public function joindreUnePiece(User $user, AvoirFournisseur $avoirFournisseur): bool
+    {
+        return $this->view($user, $avoirFournisseur) && $user->can(PermissionRegistry::AVOIR_FOURNISSEUR_CREER);
+    }
+
     public function update(User $user, AvoirFournisseur $avoirFournisseur): bool
     {
         return false;

@@ -49,7 +49,7 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => 20],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
     }
@@ -109,11 +109,11 @@ class AvoirFournisseurActionsTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 9],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $this->assertSame('9.0000', $produit->fresh()->cmup_ht);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 12, 'prix_unitaire_ht' => '12.50', 'remise_pourcentage' => 10],
-        ], ['escompte_pourcentage' => 2]));
+        ], ['date_facture' => '2026-01-15', 'escompte_pourcentage' => 2]));
         $this->assertSame('10.2150', $produit->fresh()->cmup_ht);
 
         $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
@@ -173,7 +173,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $produit = Produit::factory()->create(['suivi_stock' => false]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $this->expectException(LogicException::class);
         app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
@@ -289,7 +289,7 @@ class AvoirFournisseurActionsTest extends TestCase
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
     }
 
     public function test_impossible_de_retourner_plus_que_la_quantite_recue(): void
@@ -371,7 +371,7 @@ class AvoirFournisseurActionsTest extends TestCase
 
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'remise_pourcentage' => $remisePourcentage],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
     }
 
     /**

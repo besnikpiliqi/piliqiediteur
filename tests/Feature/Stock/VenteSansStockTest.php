@@ -151,7 +151,7 @@ class VenteSansStockTest extends TestCase
 
         app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [
             ['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00', 'taux_tva' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         $this->assertSame(3, $cable->fresh()->stock_quantite);
         Livewire::test(ListProduits::class)

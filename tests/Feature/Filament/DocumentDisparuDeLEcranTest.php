@@ -257,7 +257,7 @@ class DocumentDisparuDeLEcranTest extends TestCase
     {
         $brouillon = app(CreerFactureAchatAction::class)->handle($this->responsable, Fournisseur::factory()->create(), [
             ['produit_id' => $this->produit()->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         return [$brouillon, FactureAchatResource::class, fn () => app(SupprimerFactureAchatAction::class)->handle($this->responsable, FactureAchat::query()->findOrFail($brouillon->getKey())), FactureAchat::REFUS_INTROUVABLE];
     }

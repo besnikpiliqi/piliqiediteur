@@ -323,7 +323,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
 
         return match ($geste) {
             'creerUneFactureDAchat' => ['fournisseur' => Fournisseur::factory()->create()->id, 'produit' => $produit->id],
-            'supprimerUnBrouillonDAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]])->id],
+            'supprimerUnBrouillonDAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15'])->id],
             'supprimerUnBrouillonDeFacture', 'modifierUnBrouillonDeFacture' => ['id' => app(CreerFactureAction::class)->handle($auteur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]])->id, 'produit' => $produit->id],
             'creerUneFacture', 'creerUnDevis' => ['client' => Client::factory()->create()->id, 'produit' => $produit->id],
             'supprimerUnDevis', 'numeroterUnDevis', 'envoyerUnDevis' => ['id' => $devis()->id],
@@ -339,8 +339,8 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
             'retirerUnArticleDuPanier', 'abandonnerLaVente' => tap(['jeton' => '9f1c2d7a-6b1e-4c3f-8d2a-1e5b7c9d0a11', 'produit' => $produit->id], fn (array $panier) => app(PanierDeCaisse::class)->enregistrer($auteur, $panier['jeton'], null, self::lignesDuPanier($produit->id, 2))),
             'saisirUnInventaire' => [],
             'modifierUnInventaire', 'supprimerUnInventaire' => ['id' => app(CreerInventaireOuvertureAction::class)->handle($auteur, [$carnet])->id],
-            'validerUneFactureDAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]])->id],
-            'corrigerUneFactureDAchat' => ['id' => app(ValiderFactureAchatAction::class)->handle($auteur, app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]))->id, 'produit' => $produit->id],
+            'validerUneFactureDAchat' => ['id' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15'])->id],
+            'corrigerUneFactureDAchat' => ['id' => app(ValiderFactureAchatAction::class)->handle($auteur, app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15']))->id, 'produit' => $produit->id],
             'modifierUneFicheProduit', 'modifierLeTauxDUneFicheProduit' => ['id' => $produit->id],
             'modifierUnClient' => ['id' => Client::factory()->create(['nom' => 'Martin'])->id],
             'modifierUnFournisseur' => ['id' => Fournisseur::factory()->create(['nom' => 'Grossiste'])->id],
@@ -364,7 +364,7 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
         $carnet = ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 12, 'cout_unitaire_ht' => '2.00'];
 
         match ($geste) {
-            'creerUneFactureDAchat' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::query()->findOrFail($parametres['fournisseur']), [['produit_id' => $parametres['produit'], 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]]),
+            'creerUneFactureDAchat' => app(CreerFactureAchatAction::class)->handle($auteur, Fournisseur::query()->findOrFail($parametres['fournisseur']), [['produit_id' => $parametres['produit'], 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15']),
             'supprimerUnBrouillonDAchat' => app(SupprimerFactureAchatAction::class)->handle($auteur, FactureAchat::query()->findOrFail($parametres['id'])),
             'supprimerUnBrouillonDeFacture' => app(SupprimerFactureAction::class)->handle($auteur, Facture::query()->findOrFail($parametres['id'])),
             'modifierUnBrouillonDeFacture' => app(ModifierFactureAction::class)->handle($auteur, $brouillon = Facture::query()->findOrFail($parametres['id']), $brouillon->client, [['produit_id' => $parametres['produit'], 'quantite' => 1]]),

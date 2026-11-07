@@ -420,7 +420,7 @@ class TvaDuFournisseurTest extends TestCase
      */
     private function creer(array $lignes, ?MontantsDuFournisseur $montants = null, array $attributs = []): FactureAchat
     {
-        return app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), $lignes, $attributs, $montants);
+        return app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), $lignes, ['date_facture' => '2026-01-15', ...$attributs], $montants);
     }
 
     /**

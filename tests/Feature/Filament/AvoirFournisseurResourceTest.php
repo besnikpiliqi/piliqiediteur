@@ -47,6 +47,7 @@ class AvoirFournisseurResourceTest extends TestCase
     {
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [
                 ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => $quantite, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
             ],
@@ -143,7 +144,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18', 'taux_tva' => 20, 'suivi_stock' => false]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => '33.65', 'taux_tva' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Écran fêlé'));
@@ -183,7 +184,7 @@ class AvoirFournisseurResourceTest extends TestCase
         return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(
             self::auteur(),
             $fournisseur ?? Fournisseur::factory()->create(),
-            array_map(fn (array $ligne): array => ['produit_id' => $ligne[0]->id, 'quantite' => $ligne[1], 'prix_unitaire_ht' => $ligne[2]], $lignes),
+            array_map(fn (array $ligne): array => ['produit_id' => $ligne[0]->id, 'quantite' => $ligne[1], 'prix_unitaire_ht' => $ligne[2]], $lignes), ['date_facture' => '2026-01-15'],
         ));
     }
 
@@ -295,7 +296,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'taux_tva' => 20, 'suivi_stock' => true]);
         $ecran = Produit::factory()->create(['nom' => 'Écran', 'taux_tva' => 20, 'suivi_stock' => true]);
         $retournable = $this->recevoir([[$cable, 5, '12.00']]);
-        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => '12.00']]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => '12.00']], ['date_facture' => '2026-01-15']);
         $retourneeEnEntier = $this->recevoir([[$chargeur, 3, '7.00']]);
         $this->retourner($retourneeEnEntier, 0, 3);
         $vendue = $this->recevoir([[$ecran, 2, '30.00']]);

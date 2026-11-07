@@ -25,11 +25,12 @@ use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
  *   toutes sociétés confondues, par identifiant croissant (chaque pièce
  *   effacée sortant du filtre, un parcours par pages en sauterait), puis
  *   chacune s'efface dans sa société ;
- * - les fichiers envoyés au formulaire de dépôt, restés en clair dans le
- *   dossier temporaire des envois depuis plus d'une heure sans avoir été
- *   déposés (fenêtre fermée, envoi abandonné) : le dépôt, accepté ou
- *   refusé, efface le sien aussitôt (voir VerificationSociete), et c'est
- *   le seul formulaire d'envoi de fichiers de l'application ;
+ * - les fichiers envoyés à un formulaire de l'application, restés en clair
+ *   dans le dossier temporaire des envois depuis plus d'une heure sans
+ *   avoir été déposés (fenêtre fermée, envoi abandonné) : le dépôt d'une
+ *   pièce de vérification, accepté ou refusé, efface le sien aussitôt (voir
+ *   VerificationSociete), et une pièce du fournisseur le sien une fois
+ *   jointe, ou sa fenêtre fermée (voir PieceDeposee::effacerLesEnvois()) ;
  * - les dossiers où l'éditeur lit les pièces déchiffrées (voir
  *   editeur:societe:pieces), restés depuis plus d'une heure quand la
  *   commande n'a pas pu les effacer.

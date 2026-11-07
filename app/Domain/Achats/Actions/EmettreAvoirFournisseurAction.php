@@ -13,6 +13,7 @@ use App\Domain\Achats\Models\TauxAvoirFournisseur;
 use App\Domain\Achats\Services\ChiffrageDUnAvoirFournisseur;
 use App\Domain\Achats\Services\EcartsDUnTaux;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
@@ -75,7 +76,10 @@ use LogicException;
  * la facture d'achat qu'il crédite, le n° de l'avoir du fournisseur, ses
  * totaux, la TVA de chaque taux, sa marque et, pour chaque ligne, la
  * référence et la quantité retournées ; ni le fournisseur ni le motif, qui
- * restent sur l'avoir.
+ * restent sur l'avoir. Un avoir saisi à la main émis sans la note d'avoir
+ * du fournisseur jointe est marqué « pièce du fournisseur manquante »
+ * (décision de l'éditeur du 03/11/2026, F1 = b, voir PiecesDuFournisseur),
+ * jusqu'à ce qu'une pièce lui soit ajoutée depuis sa fiche.
  */
 class EmettreAvoirFournisseurAction
 {
@@ -89,6 +93,7 @@ class EmettreAvoirFournisseurAction
         private readonly JournalAudit $journalAudit,
         private readonly ChiffrageDUnAvoirFournisseur $chiffrage,
         private readonly TvaDuFournisseur $tva,
+        private readonly PiecesDuFournisseur $pieces,
     ) {}
 
     /**
@@ -165,6 +170,8 @@ class EmettreAvoirFournisseurAction
                 'quantite' => $ligne->quantite,
             ])->values()->all(),
         ], $avoirFournisseur);
+
+        $this->pieces->marquer($compte, $avoirFournisseur);
 
         return $avoirFournisseur;
     }

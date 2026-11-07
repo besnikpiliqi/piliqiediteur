@@ -54,6 +54,27 @@ class FactureAchatPolicy extends MagasinPolicy
     }
 
     /**
+     * Joindre une pièce du fournisseur (voir JoindreDesPiecesAction) : qui
+     * voit la facture d'achat et saisit les factures d'achat, en brouillon
+     * comme après la validation, qu'elle soit saisie à la main ou reçue par
+     * l'API ; une pièce ajoutée ne change aucun montant.
+     */
+    public function joindreUnePiece(User $user, FactureAchat $factureAchat): bool
+    {
+        return $this->view($user, $factureAchat) && $user->can(PermissionRegistry::FACTURE_ACHAT_CREER);
+    }
+
+    /**
+     * Retirer ou remplacer une pièce du fournisseur (voir
+     * RetirerUnePieceAction) : seulement d'un brouillon ; jointe à une
+     * facture validée, elle se conserve comme elle.
+     */
+    public function retirerUnePiece(User $user, FactureAchat $factureAchat): bool
+    {
+        return $factureAchat->statut === StatutFactureAchat::Brouillon && $this->joindreUnePiece($user, $factureAchat);
+    }
+
+    /**
      * Même logique que FacturePolicy::delete() : un brouillon n'a aucune
      * existence légale, il peut être supprimé librement. Dès la
      * validation, sa suppression est refusée sans exception et sans

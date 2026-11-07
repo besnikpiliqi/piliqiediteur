@@ -31,6 +31,12 @@ return new class extends Migration
             // rapprochement, distincte de notre numérotation interne.
             $table->string('numero_fournisseur', 60)->nullable();
             $table->string('statut', 20)->default('brouillon');
+            // La date de la facture du fournisseur, obligatoire pour une
+            // saisie à la main (voir CreerFactureAchatAction) : le
+            // téléchargement des documents par période classe un achat
+            // par elle ; celle d'un achat reçu par l'API peut manquer, il
+            // se classe alors au jour de sa validation (voir
+            // DocumentsDeLaPeriode).
             $table->date('date_facture')->nullable();
             // L'instant de la validation, en UTC (cast Instant).
             $table->dateTime('date_validation')->nullable();
@@ -55,6 +61,13 @@ return new class extends Migration
             // compris ; elle se lève quand la facture est corrigée dans la
             // tolérance.
             $table->boolean('tva_a_verifier')->default(false);
+            // « Pièce du fournisseur manquante » : une facture saisie à la
+            // main sans la pièce du fournisseur jointe (décision de
+            // l'éditeur du 03/11/2026, F1 = b) ; elle s'enregistre et se
+            // valide quand même, et la marque se lève à l'ajout de la
+            // première pièce (voir PiecesDuFournisseur::marquer()). Jamais
+            // sur une facture reçue par l'API.
+            $table->boolean('piece_manquante')->default(false);
             // Réduction accordée par le fournisseur pour un paiement rapide :
             // elle baisse le coût d'achat des produits (voir
             // LigneAchat::coutUnitaireHt()), pas les totaux de la facture.
@@ -63,8 +76,14 @@ return new class extends Migration
 
             $table->unique(['magasin_id', 'numero']);
             $table->unique(['magasin_id', 'rang_validation']);
+            // La clé que référencent les pièces du fournisseur avec leur
+            // magasin (voir la migration create_pieces_fournisseur_table) :
+            // une pièce ne se joint qu'à une facture de son magasin.
+            $table->unique(['magasin_id', 'id']);
             $table->index(['magasin_id', 'fournisseur_id']);
             $table->index(['magasin_id', 'tva_a_verifier']);
+            $table->index(['magasin_id', 'piece_manquante']);
+            $table->index(['magasin_id', 'statut', 'date_facture']);
         });
 
         // Seule une société qui a des articles achète des marchandises

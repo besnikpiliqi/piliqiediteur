@@ -45,9 +45,10 @@ class AvoirFournisseur extends Model
 
     protected $table = 'avoirs_fournisseur';
 
-    // numero, statut, date_emission, totaux, tva_a_verifier : jamais en
-    // mass assignment, uniquement via CreerAvoirFournisseurAction,
-    // EmettreAvoirFournisseurAction et TvaDuFournisseur.
+    // numero, statut, date_emission, totaux, tva_a_verifier,
+    // piece_manquante : jamais en mass assignment, uniquement via
+    // CreerAvoirFournisseurAction, EmettreAvoirFournisseurAction,
+    // TvaDuFournisseur et PiecesDuFournisseur.
     protected $fillable = [
         'facture_achat_id',
         'numero_fournisseur',
@@ -71,6 +72,7 @@ class AvoirFournisseur extends Model
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',
             'tva_a_verifier' => 'boolean',
+            'piece_manquante' => 'boolean',
         ];
     }
 
@@ -90,6 +92,17 @@ class AvoirFournisseur extends Model
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneAvoirFournisseur::class)->orderBy('ordre')->orderBy('id');
+    }
+
+    /**
+     * Les pièces du fournisseur jointes, la note d'avoir du fournisseur
+     * (voir PiecesDuFournisseur), de la première déposée à la dernière.
+     *
+     * @return HasMany<PieceDuFournisseur, $this>
+     */
+    public function pieces(): HasMany
+    {
+        return $this->hasMany(PieceDuFournisseur::class)->orderBy('id');
     }
 
     /**

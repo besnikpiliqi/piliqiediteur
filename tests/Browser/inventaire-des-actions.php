@@ -1765,6 +1765,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
     ],
+    'app/Filament/App/Widgets/PiecesDuFournisseurManquantesApercu.php' => [
+        'widget' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
+        ]],
+    ],
     'app/Filament/App/Widgets/StockNegatifApercu.php' => [
         'widget' => ['lot' => 'NAV-3', 'tests' => []],
     ],
@@ -2020,6 +2025,20 @@ return [
     'app/Filament/Concerns/GereLesComptes.php' => [
         'champ:mode' => ['lot' => 'NAV-3', 'tests' => []],
         'champ:name' => ['lot' => 'NAV-3', 'tests' => []],
+    ],
+    'app/Filament/Concerns/JointLesPiecesDuFournisseur.php' => [
+        'action:ajouter_des_pieces' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
+        ]],
+        'action:remplacer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
+        ]],
+        'action:retirer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
+        ]],
+        'filtre:piece_manquante' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
+        ]],
     ],
     'app/Filament/Concerns/MontreLeCompteCree.php' => [
         'action:compteCree' => ['lot' => 'NAV-3', 'tests' => []],
@@ -2282,6 +2301,13 @@ return [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
+        ]],
+    ],
+    'app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php' => [
+        'page' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche, cabinet lié compris ; seul qui saisit les achats en ajoute',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable joint la note d’avoir du fournisseur dans la fenêtre de l’avoir',
         ]],
     ],
     'app/Providers/Filament/AppPanelProvider.php' => [

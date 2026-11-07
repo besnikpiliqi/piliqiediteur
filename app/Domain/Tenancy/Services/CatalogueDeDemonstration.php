@@ -48,7 +48,7 @@ class CatalogueDeDemonstration
         $taux = $demonstration->tauxTvaParDefaut();
 
         if ($demonstration->societe->aDesArticles()) {
-            $this->remplirLesArticles($auteur, $taux);
+            $this->remplirLesArticles($auteur, $taux, $demonstration->calendrier()->aujourdhui());
         }
 
         $services = $demonstration->societe->aDesArticles()
@@ -65,9 +65,11 @@ class CatalogueDeDemonstration
 
     /**
      * Les articles d'une société qui en a : un fournisseur et une facture
-     * d'achat validée qui crée trois produits et leur stock.
+     * d'achat validée, datée du jour du magasin, qui crée trois produits et
+     * leur stock ; fictive, elle n'a pas de pièce du fournisseur, et en
+     * porte la marque, comme une vraie saisie sans sa pièce.
      */
-    private function remplirLesArticles(User $auteur, float $taux): void
+    private function remplirLesArticles(User $auteur, float $taux, string $aujourdhui): void
     {
         $fournisseur = Fournisseur::query()->create(['nom' => 'Grossiste de démonstration', 'pays' => 'FR']);
 
@@ -75,6 +77,6 @@ class CatalogueDeDemonstration
             ['produit' => ['nom' => 'Carnet A5', 'reference' => 'DEMO-CARNET', 'prix_vente_ttc' => '4.90', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 5], 'quantite' => 20, 'prix_unitaire_ht' => '1.50'],
             ['produit' => ['nom' => 'Stylo bille bleu', 'reference' => 'DEMO-STYLO', 'prix_vente_ttc' => '1.20', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 10], 'quantite' => 50, 'prix_unitaire_ht' => '0.30'],
             ['produit' => ['nom' => 'Tasse en céramique', 'reference' => 'DEMO-TASSE', 'prix_vente_ttc' => '9.90', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 10, 'prix_unitaire_ht' => '3.20'],
-        ]));
+        ], ['date_facture' => $aujourdhui, 'numero_fournisseur' => 'DEMO-1']));
     }
 }

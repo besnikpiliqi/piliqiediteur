@@ -146,7 +146,7 @@ class LecteurDesDroitsTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $acheteur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
         $produit = Produit::factory()->create(['suivi_stock' => true]);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($acheteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($acheteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]], ['date_facture' => '2026-01-15']);
         $compteDeLEcran = User::query()->findOrFail($acheteur->id);
         $this->assertTrue($compteDeLEcran->can('valider', $factureAchat));
 
@@ -226,7 +226,7 @@ class LecteurDesDroitsTest extends TestCase
             'avoir fournisseur' => [
                 static function (self $test, Magasin $magasin, User $membre): Closure {
                     $produit = Produit::factory()->create(['suivi_stock' => true]);
-                    $factureAchat = app(ValiderFactureAchatAction::class)->handle($membre, app(CreerFactureAchatAction::class)->handle($membre, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]]));
+                    $factureAchat = app(ValiderFactureAchatAction::class)->handle($membre, app(CreerFactureAchatAction::class)->handle($membre, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]], ['date_facture' => '2026-01-15']));
                     $avoir = app(CreerAvoirFournisseurAction::class)->handle($membre, $factureAchat, [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]]);
 
                     return fn () => app(EmettreAvoirFournisseurAction::class)->handle($membre, $avoir);

@@ -161,7 +161,7 @@ class CabinetsConcurrenceTest extends TestCase
         $proprietaireId = (int) $this->proprietaireDe($magasin)->getKey();
         $lienId = (int) $lien->getKey();
         app(TenantContext::class)->set($magasin);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 10]]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']);
         $concurrente = null;
         $this->concurrencerDesQueLaLigneEstVerrouillee('users', 'for no key update', static function () use ($proprietaireId, $lienId): void {
             app(MettreFinAuLienAction::class)->handle(User::query()->findOrFail($proprietaireId), LienCabinet::query()->withoutGlobalScopes()->findOrFail($lienId));
@@ -246,7 +246,7 @@ class CabinetsConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         [$cabinet, $magasin, , $collaborateur] = $this->clientConfie(null, [PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_CREATE]);
         app(TenantContext::class)->set($magasin);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 10]]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']);
         $collaborateurId = (int) $collaborateur->getKey();
         $magasinId = (int) $magasin->getKey();
         $factureId = (int) $factureAchat->getKey();

@@ -61,10 +61,10 @@ class OrigineDesProduitsTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $refuse = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Autre câble', 'reference' => 'cbl-usbc', 'prix_vente_ttc' => 12, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 3],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->assertSame(0, Produit::query()->count());
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $brouillon);

@@ -277,11 +277,11 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
         $carnet = ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10];
 
         return match ($geste) {
-            'validerUneFactureDAchat' => app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [[...$carnet, 'prix_unitaire_ht' => '2.00']])->id,
+            'validerUneFactureDAchat' => app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [[...$carnet, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15'])->id,
             'validerUnInventaire' => app(CreerInventaireOuvertureAction::class)->handle($proprietaire, [[...$carnet, 'cout_unitaire_ht' => '2.00']])->id,
             'corrigerUneFactureDAchat' => app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [
                 ['produit_id' => Produit::factory()->create(['nom' => 'Coque rouge', 'taux_tva' => 20])->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-            ]))->id,
+            ], ['date_facture' => '2026-01-15']))->id,
             'modifierUneFicheProduit', 'modifierLeTauxDUneFicheProduit' => Produit::factory()->create(['nom' => 'Coque rouge', 'taux_tva' => 20])->id,
             'modifierUnClient' => Client::factory()->create(['nom' => 'Martin'])->id,
             'modifierUnFournisseur' => Fournisseur::factory()->create(['nom' => 'Grossiste'])->id,

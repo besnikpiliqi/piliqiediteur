@@ -46,6 +46,6 @@ class FactureAchatPolicyTest extends TestCase
     {
         return app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
     }
 }

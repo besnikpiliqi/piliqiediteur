@@ -262,12 +262,12 @@ abstract class TestCaseDuNavigateur extends TestCase
             app(CreerInventaireOuvertureAction::class)->handle($responsable, [
                 ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
             ]);
+            app(CreerFactureAchatAction::class)->handle($responsable, $fournisseur, [['produit_id' => $savon->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]], ['date_facture' => '2026-01-15']);
             $achat = app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, $fournisseur, [
                 ['produit_id' => $bougie->id, 'quantite' => 20, 'prix_unitaire_ht' => 5],
                 ['produit_id' => $savon->id, 'quantite' => 30, 'prix_unitaire_ht' => 2],
-            ]));
+            ], ['date_facture' => '2026-01-15']));
             app(EnregistrerAvoirFournisseurAction::class)->handle($responsable, $achat, [['ligne_achat_id' => $achat->lignes->first()->id, 'quantite' => 1]], 'Bougie cassée', 'AV-NORD-1');
-            app(CreerFactureAchatAction::class)->handle($responsable, $fournisseur, [['produit_id' => $savon->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
             $this->travelTo(self::aParis('2026-03-09 15:00:00'));
             self::vendreAuComptant($vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $bougie->id, 'quantite' => 1]]);
             $this->travelTo(self::instantDuTest());

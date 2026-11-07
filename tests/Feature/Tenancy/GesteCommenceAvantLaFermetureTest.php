@@ -178,7 +178,7 @@ class GesteCommenceAvantLaFermetureTest extends TestCase
         return [
             fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
                 ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-            ]),
+            ], ['date_facture' => '2026-01-15']),
             fn () => $this->assertSame(0, FactureAchat::query()->count()),
         ];
     }
@@ -190,7 +190,7 @@ class GesteCommenceAvantLaFermetureTest extends TestCase
     {
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $this->produit()->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         return [
             fn () => app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $brouillon),

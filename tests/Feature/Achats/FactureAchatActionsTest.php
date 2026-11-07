@@ -57,7 +57,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $this->assertSame(StatutFactureAchat::Brouillon, $factureAchat->statut);
         $this->assertNull($factureAchat->numero);
@@ -81,7 +81,7 @@ class FactureAchatActionsTest extends TestCase
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 8.33],
             ['produit_id' => $jamaisAchete->id, 'quantite' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         [$ligneSaisie, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
 
@@ -95,7 +95,7 @@ class FactureAchatActionsTest extends TestCase
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
     }
 
     /**
@@ -112,7 +112,7 @@ class FactureAchatActionsTest extends TestCase
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $coque->id, 'quantite' => 10, 'prix_unitaire_ht' => '1.18'],
             ['produit_id' => $ecran->id, 'quantite' => 5, 'prix_unitaire_ht' => '33.65'],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         [$coques, $ecrans] = $factureAchat->lignes->sortBy('ordre')->values()->all();
 
@@ -128,7 +128,7 @@ class FactureAchatActionsTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
     }
 
     /**
@@ -138,7 +138,7 @@ class FactureAchatActionsTest extends TestCase
      */
     public function test_un_brouillon_ne_cree_aucun_produit(): void
     {
-        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [$this->ligneDuCableUsbC()]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [$this->ligneDuCableUsbC()], ['date_facture' => '2026-01-15']);
 
         $this->assertSame(0, Produit::withTrashed()->count());
         $ligne = $factureAchat->lignes->sole();
@@ -159,7 +159,7 @@ class FactureAchatActionsTest extends TestCase
     public function test_la_validation_cree_le_nouveau_produit_chez_le_fournisseur_de_la_facture(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [$this->ligneDuCableUsbC()]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [$this->ligneDuCableUsbC()], ['date_facture' => '2026-01-15']);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
@@ -178,7 +178,7 @@ class FactureAchatActionsTest extends TestCase
     {
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $factureAchat->delete();
 
@@ -197,7 +197,7 @@ class FactureAchatActionsTest extends TestCase
     {
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $copie = FactureAchat::query()->findOrFail($factureAchat->id);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
@@ -221,7 +221,7 @@ class FactureAchatActionsTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $copie = FactureAchat::query()->findOrFail($factureAchat->id);
 
         app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
@@ -247,7 +247,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10, 'remise_pourcentage' => 50],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->assertSame('42.00', $factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc']);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
@@ -267,7 +267,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Câble', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => '2.35', 'remise_pourcentage' => 15],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->assertSame('14.40', $factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc']);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
@@ -284,7 +284,7 @@ class FactureAchatActionsTest extends TestCase
     {
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $this->assertThrows(
             fn () => app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat),
@@ -306,7 +306,7 @@ class FactureAchatActionsTest extends TestCase
     {
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Câble', 'reference' => 'CBL-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $produitDeLEntreTemps = Produit::factory()->create(['reference' => 'cbl-1']);
 
         $this->assertThrows(
@@ -330,7 +330,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertThrows(
             fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
                 ['produit' => ['nom' => 'Câble', 'reference' => 'cbl-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
-            ]),
+            ], ['date_facture' => '2026-01-15']),
             InvalidArgumentException::class,
             'La référence « cbl-1 » est déjà celle d\'un autre produit.',
         );
@@ -344,7 +344,7 @@ class FactureAchatActionsTest extends TestCase
             fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
                 ['produit' => ['nom' => 'Câble noir', 'reference' => 'CBL-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
                 ['produit' => ['nom' => 'Câble blanc', 'reference' => 'cbl-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
-            ]),
+            ], ['date_facture' => '2026-01-15']),
             InvalidArgumentException::class,
             'Deux nouveaux produits de cette facture d\'achat ont la même référence « cbl-1 ».',
         );
@@ -369,7 +369,7 @@ class FactureAchatActionsTest extends TestCase
         ];
 
         $this->assertThrows(
-            fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), $nouveauProduitDAbord ? $lignes : array_reverse($lignes)),
+            fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), $nouveauProduitDAbord ? $lignes : array_reverse($lignes), ['date_facture' => '2026-01-15']),
             InvalidArgumentException::class,
             'La référence « X-1 » est déjà celle d\'un autre produit.',
         );
@@ -398,10 +398,10 @@ class FactureAchatActionsTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $premierBrouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $secondBrouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Câble', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $secondBrouillon);
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $premierBrouillon);
@@ -420,7 +420,7 @@ class FactureAchatActionsTest extends TestCase
             app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
                 ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
                 ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 0, 'prix_unitaire_ht' => 2],
-            ]);
+            ], ['date_facture' => '2026-01-15']);
             $this->fail('Une quantité nulle doit être refusée.');
         } catch (InvalidArgumentException) {
             $this->assertSame(0, Produit::query()->count());
@@ -439,7 +439,7 @@ class FactureAchatActionsTest extends TestCase
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran OLED', 'reference' => null, 'prix_vente_ttc' => 120], 'quantite' => 1, 'prix_unitaire_ht' => 40],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $produit->refresh();
         $this->assertSame(['Écran OLED', 'ECR-1', '120.00'], [$produit->nom, $produit->reference, $produit->prix_vente_ttc]);
@@ -459,7 +459,7 @@ class FactureAchatActionsTest extends TestCase
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'produit' => ['nom' => 'Ecran', 'prix_vente_ttc' => 110], 'quantite' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->assertSame('110.00', $produit->fresh()->prix_vente_ttc);
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
@@ -471,7 +471,7 @@ class FactureAchatActionsTest extends TestCase
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran renommé'], 'quantite' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
     }
 
     /**
@@ -487,7 +487,7 @@ class FactureAchatActionsTest extends TestCase
         try {
             app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
                 ['produit_id' => $produit->id, 'produit' => ['prix_vente_ttc' => '1.00'], 'quantite' => 1, 'prix_unitaire_ht' => 40],
-            ]);
+            ], ['date_facture' => '2026-01-15']);
             $this->fail('La fiche du produit ne doit pas être corrigée sans le droit de la modifier.');
         } catch (LogicException $exception) {
             $this->assertSame('Vous ne pouvez pas modifier la fiche du produit « Écran iPhone 13 » : seule la ligne se modifie ici.', $exception->getMessage());
@@ -508,7 +508,7 @@ class FactureAchatActionsTest extends TestCase
         try {
             app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
                 ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
-            ]);
+            ], ['date_facture' => '2026-01-15']);
             $this->fail('Aucun produit ne doit être créé sans le droit d\'en créer.');
         } catch (LogicException $exception) {
             $this->assertSame('Vous ne pouvez pas créer de produit : « Câble USB-C » ne peut être saisi que par une personne autorisée à créer des produits.', $exception->getMessage());
@@ -597,7 +597,7 @@ class FactureAchatActionsTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $brouillon = app(CreerFactureAchatAction::class)->handle($this->proprietaireDe($magasin), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $membre = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_VIEW]);
 
         $this->assertThrows(
@@ -623,7 +623,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 0]);
         $brouillon = app(CreerFactureAchatAction::class)->handle($this->proprietaireDe($magasin), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $membre = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_VIEW]);
 
         app(ValiderFactureAchatAction::class)->handle($membre, $brouillon);
@@ -642,7 +642,7 @@ class FactureAchatActionsTest extends TestCase
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => '2.5'],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
     }
 
     public function test_valider_une_facture_dachat_lui_attribue_un_numero_et_incremente_le_stock(): void
@@ -652,7 +652,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
         $this->assertSame(StatutFactureAchat::Validee, $factureAchat->statut);
@@ -673,13 +673,13 @@ class FactureAchatActionsTest extends TestCase
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 7],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $this->assertSame('6.0000', $produit->fresh()->cmup_ht);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 7.6],
             ['produit_id' => $produit->id, 'quantite' => 15, 'prix_unitaire_ht' => 7.6],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         $this->assertSame(['6.8000', 40], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
     }
@@ -699,7 +699,7 @@ class FactureAchatActionsTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $venduAvantDEtreRecu->id, 'quantite' => 4, 'prix_unitaire_ht' => 8],
             ['produit_id' => $sansSuiviDeStock->id, 'quantite' => 3, 'prix_unitaire_ht' => 9],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         $this->assertSame(['8.0000', 2], [$venduAvantDEtreRecu->fresh()->cmup_ht, $venduAvantDEtreRecu->fresh()->stock_quantite]);
         $this->assertSame('9.0000', $sansSuiviDeStock->fresh()->cmup_ht);
@@ -717,7 +717,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->assertSame($ancienFournisseur->id, $produit->fresh()->fournisseur_id, 'Un brouillon ne change rien au produit.');
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
@@ -735,7 +735,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 100, 'remise_pourcentage' => 10],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
@@ -752,7 +752,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => '1.18', 'remise_pourcentage' => 15],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
@@ -771,7 +771,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 100, 'remise_pourcentage' => 10],
-        ], ['escompte_pourcentage' => 2]);
+        ], ['date_facture' => '2026-01-15', 'escompte_pourcentage' => 2]);
 
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
@@ -789,7 +789,7 @@ class FactureAchatActionsTest extends TestCase
         try {
             app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
                 ['produit_id' => $produit->id, 'quantite' => 1],
-            ], ['escompte_pourcentage' => 120]);
+            ], ['date_facture' => '2026-01-15', 'escompte_pourcentage' => 120]);
         } finally {
             $this->assertSame(0, FactureAchat::query()->count());
         }
@@ -802,7 +802,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
         $this->expectException(LogicException::class);
@@ -817,7 +817,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produitInitial->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $factureAchat = app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
             ['produit_id' => $nouveauProduit->id, 'quantite' => 2],
@@ -842,7 +842,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
         $this->assertSame(SourceFactureAchat::Manuelle, $factureAchat->source);
@@ -872,7 +872,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 5],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 9);
 
         $factureAchat = app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
@@ -898,10 +898,10 @@ class FactureAchatActionsTest extends TestCase
         $autre = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $sansSuivi->id, 'quantite' => 1, 'prix_unitaire_ht' => 4],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $sansSuivi->id, 'quantite' => 1, 'prix_unitaire_ht' => 9],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $this->assertSame('9.0000', $sansSuivi->fresh()->cmup_ht);
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
@@ -922,10 +922,10 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 3, 'taux_tva' => 20]);
         $ancienne = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $ancienne, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5.5],
@@ -940,7 +940,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
@@ -995,7 +995,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
@@ -1066,8 +1066,8 @@ class FactureAchatActionsTest extends TestCase
     {
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
-        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
-        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]], ['date_facture' => '2026-01-15']);
+        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]], ['date_facture' => '2026-01-15']);
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f2);
         $this->travelTo(self::aParis('2026-10-09 10:01:00'));
@@ -1096,8 +1096,8 @@ class FactureAchatActionsTest extends TestCase
         $chezA = Fournisseur::factory()->create();
         $chezB = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
-        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezB, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
-        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezA, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezB, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]], ['date_facture' => '2026-01-15']);
+        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezA, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]], ['date_facture' => '2026-01-15']);
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $f2 = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f2);
         $f1 = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f1);
@@ -1125,8 +1125,8 @@ class FactureAchatActionsTest extends TestCase
         $chezA = Fournisseur::factory()->create();
         $chezB = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
-        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezB, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
-        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezA, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezB, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]], ['date_facture' => '2026-01-15']);
+        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezA, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]], ['date_facture' => '2026-01-15']);
         $this->travelTo(self::enUtc('2026-10-25 00:59:30'));
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f2);
         $this->travelTo(self::enUtc('2026-10-25 01:00:30'));
@@ -1465,7 +1465,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $produit->delete();
 
         $this->assertThrows(
@@ -1492,7 +1492,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $fournisseur->delete();
 
         $this->assertThrows(
@@ -1525,7 +1525,7 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20]);
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $fournisseur->delete();
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $brouillon, $fournisseur, [
@@ -1659,7 +1659,7 @@ class FactureAchatActionsTest extends TestCase
         $autre = Produit::factory()->create(['taux_tva' => 20]);
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $produit->delete();
 
         $this->assertThrows(
@@ -1694,7 +1694,7 @@ class FactureAchatActionsTest extends TestCase
         $requetes = $this->requetesDe(fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $corrige->id, 'produit' => ['prix_vente_ttc' => 12], 'quantite' => 1, 'prix_unitaire_ht' => 5],
             ['produit_id' => $livre->id, 'produit' => ['taux_tva' => '5.5'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         $verrouDuRegistre = $this->rangDeLaPremiere($requetes, '"tetes_registre_fiscal"');
         $this->assertLessThan($this->rangDeLaPremiere($requetes, 'insert into "factures_achat"'), $verrouDuRegistre);
@@ -1714,7 +1714,7 @@ class FactureAchatActionsTest extends TestCase
         $livre = Produit::factory()->create(['taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $livre->id, 'quantite' => 1, 'prix_unitaire_ht' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $requetes = $this->requetesDe(fn () => app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
             ['produit_id' => $livre->id, 'produit' => ['taux_tva' => '5.5'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
@@ -1738,7 +1738,7 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $livre->id, 'produit' => ['prix_vente_ttc' => 12, 'taux_tva' => '20'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         $this->assertModelExists($factureAchat);
         $this->assertSame('12.00', $livre->fresh()->prix_vente_ttc);
@@ -1753,7 +1753,7 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertThrows(fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $livre->id, 'produit' => ['prix_vente_ttc' => 12, 'taux_tva' => '5.5'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
-        ]), ModuleFiscalNonConfigureException::class);
+        ], ['date_facture' => '2026-01-15']), ModuleFiscalNonConfigureException::class);
 
         $this->assertSame(['10.00', '20.00'], [$livre->fresh()->prix_vente_ttc, $livre->fresh()->taux_tva]);
         $this->assertSame(0, FactureAchat::query()->count());
@@ -1822,7 +1822,7 @@ class FactureAchatActionsTest extends TestCase
      */
     private function recevoir(Fournisseur $fournisseur, array $lignes): FactureAchat
     {
-        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, $lignes));
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, $lignes, ['date_facture' => '2026-01-15']));
     }
 
     /**
@@ -1843,7 +1843,7 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $existant->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
             ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
         ];
-        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, $lignes);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, $lignes, ['date_facture' => '2026-01-15']);
         $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [
             PermissionRegistry::FACTURE_ACHAT_VIEW,
             PermissionRegistry::FACTURE_ACHAT_CREER,

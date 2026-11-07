@@ -131,12 +131,12 @@ class TvaDesAchatsResourceTest extends TestCase
         $vis = Produit::factory()->create(['nom' => 'Vis M3', 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $vis->id, 'quantite' => 1, 'prix_unitaire_ht' => '0.1234567'])
             ->assertHasFormComponentActionErrors(['prix_unitaire_ht' => SaisieDecimale::REFUS_PRIX_D_ACHAT_TROP_PRECIS]);
 
         $page = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $vis->id, 'quantite' => 1000, 'prix_unitaire_ht' => '0.1234', 'montant_ht' => '123.41'])
             ->assertHasNoFormComponentActionErrors()
             ->assertSee('1000 x 0,1234 € HT = 123,40 € HT ; HT de la facture : 123,41 €')
@@ -291,7 +291,7 @@ class TvaDesAchatsResourceTest extends TestCase
         $coque = Produit::factory()->create(['nom' => 'Coque', 'taux_tva' => 20]);
 
         return Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $coque->id, 'quantite' => 2, 'prix_unitaire_ht' => '10.00']);
     }
 
@@ -305,7 +305,7 @@ class TvaDesAchatsResourceTest extends TestCase
 
         return app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $coque->id, 'quantite' => 2, 'prix_unitaire_ht' => '10.00'],
-        ], [], MontantsDuFournisseur::depuisLaSaisie(['taux' => $tva === null ? [] : [['taux_tva' => '20', 'montant_tva' => $tva]], 'confirmation' => $confirmation]));
+        ], ['date_facture' => '2026-01-15'], MontantsDuFournisseur::depuisLaSaisie(['taux' => $tva === null ? [] : [['taux_tva' => '20', 'montant_tva' => $tva]], 'confirmation' => $confirmation]));
     }
 
     private function connecterLeProprietaire(): Magasin

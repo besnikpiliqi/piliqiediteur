@@ -72,7 +72,7 @@ class ParametresDuMagasinConcurrenceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Coque rouge', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $documentId = $geste === 'emettre'
             ? app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]])->id
-            : app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']])->id;
+            : app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15'])->id;
         $magasinId = $magasin->id;
         $parametresLus = FicheLue::de($magasin->fresh())->valeurs();
         $regler = static function () use ($magasinId, $parametresLus): void {

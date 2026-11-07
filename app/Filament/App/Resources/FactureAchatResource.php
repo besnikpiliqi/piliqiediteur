@@ -17,6 +17,7 @@ use App\Domain\Achats\Models\TauxAvoirFournisseur;
 use App\Domain\Achats\Models\TauxFactureAchat;
 use App\Domain\Achats\Services\ChiffrageDUnAvoirFournisseur;
 use App\Domain\Achats\Services\EcartsDUnTaux;
+use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Facturation\Rules\MontantAuCentime;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -27,6 +28,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\JointLesPiecesDuFournisseur;
 use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
@@ -65,14 +67,15 @@ use InvalidArgumentException;
 /**
  * Enregistre les factures reçues des fournisseurs (réception de
  * marchandise). Pas de PDF généré ici, contrairement aux documents de
- * vente : le PDF légal est celui du fournisseur, cette Resource ne sert
- * qu'à tracer la réception, le stock et la traçabilité pour un éventuel
- * avoir fournisseur (retour).
+ * vente : le document légal est celui du fournisseur, joint en pièce (voir
+ * JointLesPiecesDuFournisseur) ; cette Resource trace la réception, le
+ * stock et la traçabilité pour un éventuel avoir fournisseur (retour).
  */
 class FactureAchatResource extends Resource
 {
     use AjouteDesLignesDAchat, PrendLeCalendrierDuMagasin;
     use GereLesExceptionsMetier;
+    use JointLesPiecesDuFournisseur;
     use PorteUnJeton;
     use SaisitUneQuantiteRetournee;
     use SupprimeEnMasseLigneParLigne;
@@ -124,7 +127,10 @@ class FactureAchatResource extends Resource
                     ->label('N° de facture du fournisseur')
                     ->helperText('Le numéro propre au fournisseur, pour le rapprochement -- distinct de notre numéro interne.')
                     ->maxLength(60),
-                DatePicker::make('date_facture')->label('Date de la facture'),
+                DatePicker::make('date_facture')
+                    ->label('Date de la facture du fournisseur')
+                    ->helperText('Celle qu\'écrit la facture du fournisseur : le téléchargement des documents par période classe l\'achat par elle.')
+                    ->required(),
                 TextInput::make('escompte_pourcentage')
                     ->label('Escompte obtenu')
                     ->numeric()
@@ -134,6 +140,7 @@ class FactureAchatResource extends Resource
                     ->default(0)
                     ->helperText('Réduction du fournisseur pour un paiement rapide : elle baisse le coût d\'achat des produits, pas le total de la facture.'),
                 Textarea::make('notes')->columnSpanFull(),
+                self::champDesPieces('Pièces du fournisseur', 'La vraie facture du fournisseur, en PDF ou en photo (JPEG, PNG) : dix fichiers au plus, de 10 Mo au plus chacun. Sans elle, la facture s\'enregistre et se valide, marquée « pièce du fournisseur manquante » jusqu\'à ce qu\'elle soit jointe.'),
             ])->columns(2),
 
             FormSection::make('Produits reçus')->schema([
@@ -154,7 +161,7 @@ class FactureAchatResource extends Resource
                 TextEntry::make('source')->badge(),
                 TextEntry::make('fournisseur.nom')->label('Fournisseur'),
                 TextEntry::make('numero_fournisseur')->label('N° facture fournisseur')->placeholder('—'),
-                TextEntry::make('date_facture')->label('Date facture')->jour()->placeholder('—'),
+                TextEntry::make('date_facture')->label('Date de la facture du fournisseur')->jour()->placeholder('—'),
                 TextEntry::make('date_validation')->label('Validée le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('cree_par_nom')->label('Créée par'),
                 TextEntry::make('escompte_pourcentage')
@@ -163,6 +170,8 @@ class FactureAchatResource extends Resource
                     ->suffix(' %')
                     ->visible(fn (FactureAchat $record) => (float) $record->escompte_pourcentage > 0),
             ])->columns(3),
+
+            self::sectionDesPieces(),
 
             InfolistSection::make('Lignes')->schema([
                 FactureResource::lignesEntry($infolist->getRecord()),
@@ -208,10 +217,19 @@ class FactureAchatResource extends Resource
         ]);
     }
 
+    /**
+     * Chaque facture avec le nombre de ses pièces du fournisseur, lu par la
+     * même requête que la liste (voir colonnePiece()).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->withCount('pieces');
+    }
+
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('id', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('fournisseur.nom')->label('Fournisseur')->rechercheSansAccents(),
@@ -220,12 +238,14 @@ class FactureAchatResource extends Resource
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 self::colonneTvaAVerifier(),
+                self::colonnePiece(),
                 Tables\Columns\TextColumn::make('date_facture')->label('Date facture')->jour(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFactureAchat::class),
                 Tables\Filters\SelectFilter::make('source')->options(SourceFactureAchat::class),
                 self::filtreTvaAVerifier(),
+                self::filtrePieceManquante(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -405,7 +425,13 @@ class FactureAchatResource extends Resource
             ->modalSubmitActionLabel('Émettre l\'avoir fournisseur')
             ->form(fn (?Model $record): array => self::formulaireDeLAvoirFournisseur($record))
             ->visible(fn (?Model $record): bool => self::peutCreerUnAvoirFournisseur($record))
-            ->action(fn (?Model $record, array $data) => static::executerSansCasser(fn () => self::enregistrerLAvoirFournisseur($record, $data)));
+            ->action(function (?Model $record, array $data): void {
+                try {
+                    static::executerSansCasser(fn () => self::enregistrerLAvoirFournisseur($record, $data));
+                } finally {
+                    PieceDeposee::effacerLesEnvois($data['pieces'] ?? []);
+                }
+            });
     }
 
     /**
@@ -580,6 +606,7 @@ class FactureAchatResource extends Resource
                 ->live(onBlur: true)
                 ->helperText(fn (?string $state): ?Htmlable => blank($state) ? ClientResource::enEvidence(self::AVERTISSEMENT_SANS_NUMERO_FOURNISSEUR) : null),
             Textarea::make('motif')->label('Motif du retour')->required(),
+            self::champDesPieces('Note d\'avoir du fournisseur', 'La vraie note d\'avoir du fournisseur, en PDF ou en photo (JPEG, PNG) : dix fichiers au plus, de 10 Mo au plus chacun. Sans elle, l\'avoir s\'émet, marqué « pièce du fournisseur manquante » jusqu\'à ce qu\'elle soit jointe depuis sa fiche.'),
         ];
     }
 
@@ -732,6 +759,7 @@ class FactureAchatResource extends Resource
             $data['numero_fournisseur'] ?? null,
             $data['jeton'],
             self::montantsDuFournisseur($data),
+            PieceDeposee::lire($data['pieces'] ?? []),
         );
         $avis = Notification::make()->title("Avoir fournisseur {$avoir->numero} émis.");
 

@@ -225,7 +225,7 @@ class DroitsConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $acheteur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
         $produit = Produit::factory()->create(['suivi_stock' => true]);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($acheteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($acheteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]], ['date_facture' => '2026-01-15']);
         [$acheteurId, $magasinId, $factureAchatId] = [$acheteur->id, $magasin->id, $factureAchat->id];
         $concurrente = null;
         $this->concurrencerDesQueLesComptesSontVerrouilles(static function () use ($acheteurId, $magasinId, $factureAchatId): void {

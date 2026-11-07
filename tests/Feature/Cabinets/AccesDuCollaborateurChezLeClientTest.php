@@ -157,7 +157,7 @@ class AccesDuCollaborateurChezLeClientTest extends TestCase
 
         $factureAchat = app(ValiderFactureAchatAction::class)->handle($collaborateur, app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         $this->assertSame([$collaborateur->id, "Paul Lefèvre (cabinet {$cabinet->raison_sociale})"], [(int) $factureAchat->cree_par, $factureAchat->cree_par_nom]);
         $this->assertSame(StatutFactureAchat::Validee, $factureAchat->fresh()->statut);

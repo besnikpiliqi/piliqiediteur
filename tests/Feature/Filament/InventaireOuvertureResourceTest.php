@@ -279,7 +279,7 @@ class InventaireOuvertureResourceTest extends TestCase
     {
         $this->magasinDuProprietaire();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20]);
-        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]]));
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]], ['date_facture' => '2026-01-15']));
         $page = $this->creationAvecUneLigne(['produit_id' => $cable->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']);
         $cle = array_key_first($page->get('data.lignes'));
 

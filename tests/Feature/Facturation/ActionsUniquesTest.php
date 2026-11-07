@@ -267,7 +267,7 @@ class ActionsUniquesTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $cable = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true]);
-        $achat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00', 'taux_tva' => 20]]);
+        $achat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '4.00', 'taux_tva' => 20]], ['date_facture' => '2026-01-15']);
         $jeton = (string) Str::uuid();
 
         $premiere = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $achat, $jeton);

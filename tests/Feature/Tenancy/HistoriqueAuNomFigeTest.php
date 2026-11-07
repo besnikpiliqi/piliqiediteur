@@ -75,6 +75,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'taux_factures_achat' => ['ecart_confirme_par' => 'ecart_confirme_par_nom'],
         'avoirs_fournisseur' => ['cree_par' => 'cree_par_nom'],
         'taux_avoirs_fournisseur' => ['ecart_confirme_par' => 'ecart_confirme_par_nom'],
+        'pieces_fournisseur' => ['ajoutee_par' => 'ajoutee_par_nom'],
         'inventaires_ouverture' => ['cree_par' => 'cree_par_nom', 'valide_par' => 'valide_par_nom'],
         'mouvements_stock' => ['cree_par' => 'cree_par_nom'],
         'envois_documents' => ['envoye_par' => 'envoye_par_nom'],

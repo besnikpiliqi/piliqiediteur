@@ -62,6 +62,7 @@ class FactureAchatResourceTest extends TestCase
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
         ])->call('create');
 
@@ -101,6 +102,7 @@ class FactureAchatResourceTest extends TestCase
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
         ])->call('create');
         $factureAchat = FactureAchat::query()->where('fournisseur_id', $fournisseur->id)->latest('id')->firstOrFail();
@@ -127,7 +129,7 @@ class FactureAchatResourceTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
 
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->fillForm(['fournisseur_id' => $fournisseur->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                 'origine' => 'nouveau',
                 'reference' => 'CBL-USBC',
@@ -171,7 +173,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                 'origine' => 'nouveau',
                 'nom' => 'Coque Iphone 16',
@@ -199,7 +201,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                 'origine' => 'nouveau',
                 'nom' => 'Câble USB-C',
@@ -222,7 +224,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                 'origine' => 'nouveau',
                 'nom' => 'Coque Iphone 16',
@@ -250,6 +252,7 @@ class FactureAchatResourceTest extends TestCase
 
         $facture = Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => Fournisseur::factory()->create()->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [
                 ['produit_id' => $coque->id, 'quantite' => 3, 'prix_unitaire_ht' => '10.01', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ['produit_id' => $ecran->id, 'quantite' => 999999999999, 'prix_unitaire_ht' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
@@ -274,6 +277,7 @@ class FactureAchatResourceTest extends TestCase
 
         $facture = Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => Fournisseur::factory()->create()->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [
                 ['produit_id' => $coque->id, 'quantite' => 3, 'prix_unitaire_ht' => '10.01', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ['produit_id' => $livre->id, 'quantite' => 1, 'prix_unitaire_ht' => '10.00', 'taux_tva' => '5.5', 'remise_pourcentage' => 0],
@@ -292,7 +296,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'cmup_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->fillForm(['fournisseur_id' => $fournisseur->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['produit_id' => $produit->id])
             ->assertFormComponentActionDataSet(['nom' => 'Coque iPhone 15', 'prix_unitaire_ht' => '2.10', 'prix_vente_ttc' => '15.00', 'taux_tva' => '20'])
@@ -319,7 +323,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
 
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'prix_unitaire_ht' => '0.47'])
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => '12.56'])
@@ -346,7 +350,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Coque', 'prix_unitaire_ht' => '10'])
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => '54.00'])
@@ -366,7 +370,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
 
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'taux_tva' => ''])
             ->setFormComponentActionData(['prix_unitaire_ht' => '2'])
@@ -395,7 +399,7 @@ class FactureAchatResourceTest extends TestCase
         ]);
         $produit = Produit::factory()->create(['cmup_ht' => 100, 'prix_vente_ttc' => 200, 'taux_tva' => 20]);
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id]);
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15']);
 
         $component
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
@@ -428,7 +432,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['produit_id' => $produit->id])
             ->assertFormComponentActionDataSet(['prix_unitaire_ht' => '2.10', 'prix_vente_ttc' => '15.00'])
@@ -449,7 +453,7 @@ class FactureAchatResourceTest extends TestCase
             'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 5.0]], null, false),
         ]);
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Coque', 'prix_unitaire_ht' => '2'])
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => '8.40'])
@@ -474,7 +478,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'prix_unitaire_ht' => '0.47'])
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => null]);
@@ -492,7 +496,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'cmup_ht' => 40, 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
 
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->fillForm(['fournisseur_id' => $fournisseur->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $produit->id, 'quantite' => 2]);
 
         $cle = array_key_first($component->get('data.lignes'));
@@ -523,7 +527,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->call('create')
             ->assertHasFormErrors(['lignes' => 'required']);
 
@@ -569,6 +573,7 @@ class FactureAchatResourceTest extends TestCase
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
                 'fournisseur_id' => $archive->id,
+                'date_facture' => '2026-01-15',
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
@@ -591,7 +596,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $fournisseur->delete();
 
         Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
@@ -618,7 +623,7 @@ class FactureAchatResourceTest extends TestCase
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->fillForm(['fournisseur_id' => $fournisseur->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['produit_id' => $produit->id])
             ->assertFormFieldIsDisabled('nom', 'mountedFormComponentActionForm0')
@@ -638,7 +643,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'cmup_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20, 'seuil_alerte' => 3]);
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->fillForm(['fournisseur_id' => $fournisseur->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $produit->id, 'quantite' => 4])
             ->assertHasNoFormComponentActionErrors()
             ->call('create')
@@ -661,6 +666,7 @@ class FactureAchatResourceTest extends TestCase
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
                 'fournisseur_id' => Fournisseur::factory()->create()->id,
+                'date_facture' => '2026-01-15',
                 'lignes' => [
                     ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran iPhone 13', 'prix_vente_ttc' => '1.00'], 'quantite' => 1, 'prix_unitaire_ht' => '40.00', 'remise_pourcentage' => 0, 'taux_tva' => '20'],
                 ],
@@ -685,6 +691,7 @@ class FactureAchatResourceTest extends TestCase
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
                 'fournisseur_id' => $fournisseur->id,
+                'date_facture' => '2026-01-15',
                 'numero_fournisseur' => 'INV-2026-42',
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
@@ -712,6 +719,7 @@ class FactureAchatResourceTest extends TestCase
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
                 'fournisseur_id' => Fournisseur::factory()->create()->id,
+                'date_facture' => '2026-01-15',
                 'lignes' => [
                     ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => '1e400', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
@@ -734,6 +742,7 @@ class FactureAchatResourceTest extends TestCase
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
                 'fournisseur_id' => $fournisseur->id,
+                'date_facture' => '2026-01-15',
                 'escompte_pourcentage' => 2,
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
@@ -757,6 +766,7 @@ class FactureAchatResourceTest extends TestCase
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [
                 ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
             ],
@@ -784,7 +794,7 @@ class FactureAchatResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20]]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($proprietaire, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20]], ['date_facture' => '2026-01-15']);
         $ecran = Livewire::test(ListFacturesAchat::class)->mountTableAction('valider', $factureAchat);
         $supprimeEntreTemps = false;
         DB::listen(function (QueryExecuted $requete) use (&$supprimeEntreTemps, $factureAchat, $proprietaire): void {
@@ -813,6 +823,7 @@ class FactureAchatResourceTest extends TestCase
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [
                 ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
             ],
@@ -856,6 +867,7 @@ class FactureAchatResourceTest extends TestCase
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
+            'date_facture' => '2026-01-15',
             'lignes' => [
                 ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
             ],
@@ -904,7 +916,7 @@ class FactureAchatResourceTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->fillForm(['fournisseur_id' => $fournisseur->id, 'date_facture' => '2026-01-15'])
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                 'origine' => 'nouveau',
                 'reference' => 'ECR-IP17-PRO',
@@ -945,7 +957,7 @@ class FactureAchatResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 3, 'prix_unitaire_ht' => '0.47'],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
 
         Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
             ->assertSee('Câble USB-C')
@@ -982,7 +994,7 @@ class FactureAchatResourceTest extends TestCase
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $existant->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
             ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [
             PermissionRegistry::FACTURE_ACHAT_VIEW,
             PermissionRegistry::FACTURE_ACHAT_CREER,
@@ -1027,7 +1039,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 5],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]));
         Filament::setTenant($magasin);
 
@@ -1051,10 +1063,10 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
-            ->fillForm(['fournisseur_id' => $fournisseurDUnAutreMagasin->id])
+            ->fillForm(['fournisseur_id' => $fournisseurDUnAutreMagasin->id, 'date_facture' => '2026-01-15'])
             ->call('save')
             ->assertHasFormErrors(['fournisseur_id' => 'exists']);
 
@@ -1073,7 +1085,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
             ->assertActionHidden(DeleteAction::class);
@@ -1093,7 +1105,7 @@ class FactureAchatResourceTest extends TestCase
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
         $component = Livewire::test(ListFacturesAchat::class)->mountTableAction('avoir_fournisseur', $factureAchat);
         $lignes = $component->get('mountedTableActionsData.0.lignes');
@@ -1124,7 +1136,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $produit->delete();
 
         Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
@@ -1146,7 +1158,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
         $fournisseur->delete();
 
         Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
@@ -1167,7 +1179,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-1', 'taux_tva' => 20]);
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $produit->delete();
         $component = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
         $cle = array_key_first($component->get('data.lignes'));
@@ -1217,7 +1229,7 @@ class FactureAchatResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
-        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 4, 'prix_unitaire_ht' => '2.10']]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 4, 'prix_unitaire_ht' => '2.10']], ['date_facture' => '2026-01-15']);
         $page = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
 
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['prix_vente_ttc' => '18'])->call('save')->assertHasNoFormErrors();
@@ -1309,7 +1321,7 @@ class FactureAchatResourceTest extends TestCase
     private function factureDAchatQuiAchete(Produit $produit, array $corrections = []): Testable
     {
         return Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])
             ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
             ->setFormComponentActionData(['produit_id' => $produit->id])
             ->setFormComponentActionData([...$corrections, 'quantite' => 4])

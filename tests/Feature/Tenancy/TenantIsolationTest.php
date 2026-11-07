@@ -6,6 +6,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Achats\Models\PieceDuFournisseur;
 use App\Domain\Achats\Models\TauxAvoirFournisseur;
 use App\Domain\Achats\Models\TauxFactureAchat;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
@@ -150,8 +151,8 @@ class TenantIsolationTest extends TestCase
      * son document, et le jeton d'une demande traitée, que par
      * ActionsUniques. ActionTraitee, Avoir, AvoirAllocation,
      * BordereauDetaxe, ConsultationVies, EnregistrementFiscal,
-     * LigneRecuPaiement, Paiement, PaiementAllocation, PreuveOperation,
-     * RecuPaiement, TauxAvoirFournisseur, TauxFactureAchat,
+     * LigneRecuPaiement, Paiement, PaiementAllocation, PieceDuFournisseur,
+     * PreuveOperation, RecuPaiement, TauxAvoirFournisseur, TauxFactureAchat,
      * TeteRegistreFiscal et TraceEvenement sont aussi dans modelesCrees(),
      * écrits directement par ces tests (voir creerEnregistrement()).
      *
@@ -174,6 +175,7 @@ class TenantIsolationTest extends TestCase
         MouvementStock::class,
         Paiement::class,
         PaiementAllocation::class,
+        PieceDuFournisseur::class,
         PosteReconnu::class,
         PreuveOperation::class,
         RecuPaiement::class,
@@ -224,7 +226,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, RecuPaiement::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -600,6 +602,14 @@ class TenantIsolationTest extends TestCase
                 'montant_tva' => '2.00',
                 'montant_tva_calcule' => '2.00',
                 'ordre' => 0,
+            ],
+            PieceDuFournisseur::class => [
+                'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
+                'nom_origine' => 'facture-fournisseur.pdf',
+                'type_mime' => 'application/pdf',
+                'taille' => 1024,
+                'empreinte' => str_repeat('a', 64),
+                'chemin' => 'magasin-0/'.Str::random(32).'.pdf',
             ],
             TauxFactureAchat::class => [
                 'facture_achat_id' => FactureAchat::factory()->create()->getKey(),

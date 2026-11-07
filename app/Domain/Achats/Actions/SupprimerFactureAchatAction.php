@@ -4,9 +4,11 @@ namespace App\Domain\Achats\Actions;
 
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -32,12 +34,20 @@ use LogicException;
  * réception en stock, ses nouveaux produits et un trou dans ses numéros.
  * L'auteur relu doit pouvoir supprimer la facture d'achat relue ; la
  * suppression se fait à son nom (voir OperateurCourant).
+ *
+ * Les pièces du fournisseur jointes au brouillon se retirent avec lui,
+ * chacune inscrite au journal d'audit (voir
+ * PiecesDuFournisseur::retirerToutes()) : la ligne de la société se
+ * verrouille donc en tête, comme avant toute inscription au journal (voir
+ * Societe::verrouillerAvantSonJournalDAudit()), et les fichiers s'effacent
+ * une fois la transaction validée.
  */
 class SupprimerFactureAchatAction
 {
     public function __construct(
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly PiecesDuFournisseur $pieces,
     ) {}
 
     /**
@@ -48,6 +58,7 @@ class SupprimerFactureAchatAction
     {
         DB::transaction(function () use ($auteur, $factureAchat): void {
             $magasin = app(TenantContext::class)->magasin();
+            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'deleteAny', $magasin, FactureAchat::class);
 
@@ -60,7 +71,10 @@ class SupprimerFactureAchatAction
 
             $this->lecteur->exiger($compte, 'delete', $magasin, $factureAchat);
 
-            $this->operateur->pendant($compte, fn (): ?bool => $factureAchat->delete());
+            $this->operateur->pendant($compte, function () use ($compte, $factureAchat): void {
+                $this->pieces->retirerToutes($compte, $factureAchat);
+                $factureAchat->delete();
+            });
         });
     }
 }

@@ -433,7 +433,7 @@ class InventaireOuvertureTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20]);
         $tasse = Produit::factory()->create(['nom' => 'Tasse', 'taux_tva' => 20]);
-        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]]));
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $cable->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]], ['date_facture' => '2026-01-15']));
 
         $this->assertThrows(
             fn () => $this->saisir([['produit_id' => $cable->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]),
@@ -442,7 +442,7 @@ class InventaireOuvertureTest extends TestCase
         );
 
         $brouillon = $this->saisir([self::ligneDUnNouveauCarnet(), ['produit_id' => $tasse->id, 'quantite' => 3, 'cout_unitaire_ht' => '2.00']]);
-        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $tasse->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]));
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $tasse->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]], ['date_facture' => '2026-01-15']));
 
         $this->assertThrows(
             fn () => $this->valider($brouillon),
@@ -545,7 +545,7 @@ class InventaireOuvertureTest extends TestCase
         $this->valider($this->saisir([self::ligneDUnNouveauCarnet()]));
         $carnet = Produit::query()->sole();
         $fournisseur = Fournisseur::factory()->create();
-        $achat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]]));
+        $achat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]], ['date_facture' => '2026-01-15']));
         $this->assertSame('3.0000', $carnet->fresh()->cmup_ht);
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $achat, $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 10, 'prix_unitaire_ht' => 6]]);

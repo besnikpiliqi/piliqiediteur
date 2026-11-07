@@ -50,6 +50,20 @@ return [
             'report' => false,
         ],
 
+        // Les pièces du fournisseur jointes aux factures d'achat et aux
+        // avoirs fournisseur (voir PiecesDuFournisseur) : un dossier par
+        // magasin, des noms tirés par l'application, jamais servies que
+        // par leur adresse de téléchargement autorisée ; conservées comme
+        // les documents.
+        'pieces_fournisseur' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/pieces-fournisseur'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

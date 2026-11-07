@@ -75,7 +75,7 @@ class ProduitResourceTest extends TestCase
 
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Ecran Iphone 18 Pro', 'prix_vente_ttc' => 40, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 25],
-        ]));
+        ], ['date_facture' => '2026-01-15']));
 
         $produit = Produit::query()->where('nom', 'Ecran Iphone 18 Pro')->firstOrFail();
 
@@ -219,7 +219,7 @@ class ProduitResourceTest extends TestCase
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste du Sud']);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
         $cable = Produit::query()->sole();
 
@@ -269,7 +269,7 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create(['nom' => 'Ecran']);
-        app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_facture' => '2026-01-15']);
 
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->assertFormFieldIsEnabled('nom')
@@ -787,7 +787,7 @@ class ProduitResourceTest extends TestCase
 
         app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'produit' => ['prix_vente_ttc' => '18'], 'quantite' => 1, 'prix_unitaire_ht' => '5.00'],
-        ]);
+        ], ['date_facture' => '2026-01-15']);
         $page->fillForm(['nom' => 'Coque iPhone 15 Pro'])->call('save')->assertHasNoFormErrors();
 
         $produit->refresh();

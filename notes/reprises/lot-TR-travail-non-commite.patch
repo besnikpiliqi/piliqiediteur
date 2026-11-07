@@ -242,6 +242,20 @@ index eb1b81a..d04981c 100644
      }
  
      /**
+diff --git a/app/Filament/App/Resources/FactureResource.php b/app/Filament/App/Resources/FactureResource.php
+index b2e0898..33840c3 100644
+--- a/app/Filament/App/Resources/FactureResource.php
++++ b/app/Filament/App/Resources/FactureResource.php
+@@ -1050,7 +1050,8 @@ public static function emettre(MountableAction $action): MountableAction
+      * son crédit d'avoir, qui s'imputera d'office à l'émission et se montre
+      * en lecture ; jamais un bon d'avoir (Q6). Les parts ne dépassent jamais
+      * ce qui restera dû, un paiement partiel laisse le reste dû avec
+-     * l'échéance de la facture, et un règlement sans aucun montant revient à
++     * l'échéance de la facture, et un montant à zéro n'est pas un
++     * règlement : sans aucun montant, ou à zéro, le geste revient à
+      * « Émettre ». Seulement pour qui peut émettre ce document et enregistrer
+      * un encaissement dans ce magasin (voir FacturePolicy::emettreEtEncaisser()).
+      * Une vente au-delà du stock garde la fenêtre ouverte comme « Émettre ».
 diff --git a/app/Filament/Concerns/AjouteDesLignesDAchat.php b/app/Filament/Concerns/AjouteDesLignesDAchat.php
 index 2534d16..2e4d1e8 100644
 --- a/app/Filament/Concerns/AjouteDesLignesDAchat.php
@@ -319,6 +333,443 @@ index 2534d16..2e4d1e8 100644
                      ...array_map(
                          fn (Field $champ): Field => (match ($champ->getName()) {
                              'prix_vente_ttc' => $champ->helperText(fn (Get $get): ?string => self::detailDuPrixDeVente($get)),
+diff --git a/app/Filament/Concerns/SaisitUnReglementEnParts.php b/app/Filament/Concerns/SaisitUnReglementEnParts.php
+index e1acbc0..5530454 100644
+--- a/app/Filament/Concerns/SaisitUnReglementEnParts.php
++++ b/app/Filament/Concerns/SaisitUnReglementEnParts.php
+@@ -49,7 +49,8 @@
+  * couvrir seul tout ce qui reste dû (voir EncaisserEnPlusieursModesAction) ;
+  * à l'émission d'un brouillon (« Émettre et encaisser »), elles ne
+  * dépassent jamais ce que le crédit du client laissera dû, sans bon
+- * d'avoir, et un règlement sans aucun montant revient à « Émettre ».
++ * d'avoir, une part à zéro ne règle rien, comme une part vide, et un
++ * règlement sans aucun montant, ou à zéro, revient à « Émettre ».
+  * L'écran le dit pendant la saisie (« Il reste 10,00 € à répartir. ») et
+  * refuse un règlement qui ne tombe pas juste ; l'enregistrement le
+  * revérifie sous le verrou du registre.
+@@ -61,6 +62,12 @@ trait SaisitUnReglementEnParts
+      */
+     public const PART_AVOIR = 'avoir';
+ 
++    /**
++     * Le refus d'un montant négatif à l'émission d'un brouillon, où un
++     * montant à zéro ne règle rien.
++     */
++    public const MONTANT_NEGATIF = 'Le montant d\'une part ne peut pas être négatif.';
++
+     /**
+      * L'aide d'un bon d'avoir présenté pour un document déjà émis (voir
+      * EncaisserEnPlusieursModesAction).
+@@ -111,7 +118,9 @@ public static function composantsDuReglement(Closure $apercu, Closure $modePrefe
+ 
+     /**
+      * Les parts payées du règlement saisi, sans les parts « Avoir » ni
+-     * celles restées sans montant (rien ne restait à y payer).
++     * celles restées sans montant (rien ne restait à y payer) ou à zéro,
++     * qui ne règlent rien : l'écran n'accepte un montant à zéro qu'à
++     * l'émission d'un brouillon, que le geste émet alors sans l'encaisser.
+      *
+      * @param  mixed  $parts  l'état du répétiteur
+      * @return list<PartDeReglement>
+@@ -130,6 +139,10 @@ public static function partsPayees(mixed $parts): array
+             $mode = self::modeDeLaPart($part['mode'] ?? null);
+             $montant = self::montantEnCentimes($part['montant'] ?? null);
+ 
++            if ($montant === 0) {
++                continue;
++            }
++
+             if ($mode === null || $montant === null) {
+                 throw new LogicException(PartDeReglement::MONTANT_NON_POSITIF);
+             }
+@@ -261,9 +274,11 @@ private static function schemaDUnePart(Closure $apercu, Closure $modePrefere, bo
+                 ->numeric()
+                 ->prefix('€')
+                 ->visible(fn (Get $get): bool => ! $estAvoir($get))
+-                ->minValue(0.01)
++                // À l'émission d'un brouillon, un montant à zéro ne règle
++                // rien, comme un montant vide (voir partsPayees()).
++                ->minValue(fn (?Model $record): float => self::estUnBrouillon($record) ? 0.0 : 0.01)
+                 ->maxValue(Caisse::MONTANT_MAXIMUM)
+-                ->validationMessages(['min' => PartDeReglement::MONTANT_NON_POSITIF])
++                ->validationMessages(['min' => fn (?Model $record): string => self::estUnBrouillon($record) ? self::MONTANT_NEGATIF : PartDeReglement::MONTANT_NON_POSITIF])
+                 ->rule(fn (): Closure => function (string $attribute, mixed $montant, Closure $echec): void {
+                     if (filled($montant) && self::montantEnCentimes($montant) === null) {
+                         $echec('Saisissez un montant en euros, avec au plus deux décimales.');
+diff --git a/tests/Browser/InventaireDesActionsTest.php b/tests/Browser/InventaireDesActionsTest.php
+index cc1d720..265ad41 100644
+--- a/tests/Browser/InventaireDesActionsTest.php
++++ b/tests/Browser/InventaireDesActionsTest.php
+@@ -82,6 +82,7 @@ public function actions(): array
+                     Tables\Actions\ActionGroup::make([]),
+                     Forms\Components\Select::make('client_id')->searchable(),
+                     Forms\Components\TextInput::make('nom')->required(),
++                    Forms\Components\TextInput::make('montant')->saisieEnDirect(),
+                     Forms\Components\Repeater::make('lignes'),
+                     Tables\Actions\Action::make('pdf')->url('/pdf'),
+                     Infolists\Components\TextEntry::make('avoir.numero')->url('/avoirs/1'),
+@@ -99,6 +100,7 @@ public function actions(): array
+         'action:edit',
+         'filtre:a_encaisser',
+         'champ:client_id',
++        'champ:montant',
+         'repeteur:lignes',
+         'action:pdf',
+         'lien:avoir.numero',
+diff --git a/tests/Browser/Parcours/EmettreEtEncaisserTest.php b/tests/Browser/Parcours/EmettreEtEncaisserTest.php
+index 5c6eb7c..3290473 100644
+--- a/tests/Browser/Parcours/EmettreEtEncaisserTest.php
++++ b/tests/Browser/Parcours/EmettreEtEncaisserTest.php
+@@ -86,6 +86,27 @@ function paiementsDeLaFacture(Magasin $magasin, Facture $facture): array
+         ->and($texte('Restant dû à l\'émission')['y'])->toBeGreaterThan($totalTtc['y'] - 30);
+ });
+ 
++/*
++ * Un montant à zéro n'est pas un règlement (R1) : la part préremplie
++ * ramenée à zéro, « Émettre et encaisser » émet le brouillon sans
++ * l'encaisser, comme « Émettre ».
++ */
++test('le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser', function () {
++    $societe = $this->societeComplete();
++    $facture = brouillonDe($societe->magasin, $societe->responsable, 'Hôtel des Pins');
++    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id);
++
++    $onglet->cliquerSur('Émettre et encaisser')
++        ->remplirLaLigne('parts', 0, 'montant', '0')
++        ->soumettre('Émettre et encaisser')
++        ->voir('Émise');
++
++    $facture = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => $facture->fresh());
++    expect($facture->statut)->toBe(StatutFacture::Emise)
++        ->and($facture->numero)->toStartWith('FAC-PORT-2026-')
++        ->and(paiementsDeLaFacture($societe->magasin, $facture))->toBe([]);
++});
++
+ test('l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser', function () {
+     $societe = $this->societeComplete();
+     $facture = brouillonDe($societe->magasin, $societe->responsable, 'Hôtel des Pins');
+diff --git a/tests/Browser/Parcours/RecuDePaiementTest.php b/tests/Browser/Parcours/RecuDePaiementTest.php
+index fa09ffc..eea9502 100644
+--- a/tests/Browser/Parcours/RecuDePaiementTest.php
++++ b/tests/Browser/Parcours/RecuDePaiementTest.php
+@@ -1,11 +1,20 @@
+ <?php
+ 
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
++use App\Domain\Facturation\Enums\ModePaiement;
+ use App\Domain\Facturation\Enums\StatutEnvoi;
+ use App\Domain\Facturation\Models\EnvoiDocument;
+ use App\Domain\Facturation\Models\Facture;
+ use App\Domain\Facturation\Models\RecuPaiement;
++use App\Domain\Tenancy\Enums\RoleMagasin;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
+ use Tests\Browser\Support\Navigation;
+ 
+ /*
+@@ -14,8 +23,10 @@
+  * virement de 20,00 € (voir TestCaseDuNavigateur::remplirLeMagasin()), qui
+  * a son reçu, RP-PORT-2026-000001. Sur la fiche de la facture, « Reçu
+  * (PDF) » le télécharge, « Envoyer le reçu » l'envoie au client ; seul qui
+- * voit ce paiement voit le premier, seul qui peut envoyer la facture le
+- * second, jamais le cabinet lié.
++ * voit ce paiement voit le premier (« Paiements : voir », et, sans « voir
++ * celles de toute l'équipe », seulement pour un encaissement qu'il a fait
++ * lui-même), seul qui peut aussi envoyer la facture le second, jamais le
++ * cabinet lié.
+  */
+ 
+ /**
+@@ -27,6 +38,25 @@ function factureRegleeApresSonEmission(TenantContext $contexte, Magasin $magasin
+     return $contexte->runAs($magasin, fn (): Facture => Facture::query()->whereNotNull('numero')->whereHas('allocationsPaiement')->whereDoesntHave('allocationsPaiement.paiement', fn ($paiement) => $paiement->whereNull('recu_paiement_id'))->sole());
+ }
+ 
++/**
++ * Une facture d'une bougie à l'Hôtel des Pins, faite et émise par cette
++ * vendeuse, puis réglée en partie par un virement de 5,00 € que le
++ * responsable enregistre : son reçu est celui d'un encaissement qu'elle n'a
++ * pas fait.
++ */
++function factureEncaisseeParUnAutre(Magasin $magasin, User $vendeuse, User $responsable): Facture
++{
++    return app(TenantContext::class)->runAs($magasin, function () use ($vendeuse, $responsable): Facture {
++        $client = Client::query()->where('nom', 'Hôtel des Pins')->sole();
++        $facture = app(EmettreFactureAction::class)->handle($vendeuse, app(CreerFactureAction::class)->handle($vendeuse, $client, [
++            ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 1],
++        ]));
++        app(EnregistrerPaiementAction::class)->handle($responsable, $client, ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '5.00', 'recu_le' => '2026-03-10'], [['facture_id' => $facture->id, 'montant' => '5.00']]);
++
++        return $facture;
++    });
++}
++
+ test('le responsable télécharge le reçu du virement reçu après l’émission et l’envoie au client', function () {
+     $societe = $this->societeComplete();
+     $facture = factureRegleeApresSonEmission(app(TenantContext::class), $societe->magasin);
+@@ -55,17 +85,30 @@ function factureRegleeApresSonEmission(TenantContext $contexte, Magasin $magasin
+ test('« Reçu (PDF) » ne se montre qu’à qui voit le paiement, « Envoyer le reçu » qu’à qui envoie la facture, jamais au cabinet lié', function () {
+     $societe = $this->societeComplete();
+     $facture = factureRegleeApresSonEmission(app(TenantContext::class), $societe->magasin);
++    $modele = fn (RoleMagasin $role): array => $role->permissionsParDefaut($societe->societe->type_activite);
++    [$vendeurSansLesPaiements, $vendeuse, $observateurSansLesPaiements, $observateurAvecLesPaiements] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [
++        $this->membre($societe->magasin, RoleMagasin::Vendeur, [...array_values(array_diff($modele(RoleMagasin::Vendeur), [PermissionRegistry::PAIEMENT_VIEW, PermissionRegistry::PAIEMENT_CREER])), PermissionRegistry::FACTURE_VIEW_TOUTES], ['name' => 'Valentin Sanspaiement']),
++        $this->membre($societe->magasin, RoleMagasin::Vendeur, $modele(RoleMagasin::Vendeur), ['name' => 'Vanessa Leroy']),
++        $this->membre($societe->magasin, RoleMagasin::Observateur, [...$modele(RoleMagasin::Observateur), PermissionRegistry::FACTURE_VIEW_TOUTES], ['name' => 'Odile Regard']),
++        $this->membre($societe->magasin, RoleMagasin::Observateur, [...$modele(RoleMagasin::Observateur), PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::PAIEMENT_VIEW], ['name' => 'Oscar Paiement']),
++    ]);
++    $deLaVendeuse = factureEncaisseeParUnAutre($societe->magasin, $vendeuse, $societe->responsable);
+     $comptes = [
+-        'le propriétaire' => [$societe->proprietaire, 'app', true, true],
+-        'l’administrateur sans la vente' => [$societe->administrateur, 'app', true, true],
+-        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', true, true],
+-        'le responsable' => [$societe->responsable, 'app', true, true],
+-        'le vendeur qui a encaissé' => [$societe->vendeur, 'app', true, true],
+-        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', true, false],
++        'le propriétaire' => [$societe->proprietaire, 'app', $facture, true, true],
++        'l’administrateur sans la vente' => [$societe->administrateur, 'app', $facture, true, true],
++        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', $facture, true, true],
++        'le responsable' => [$societe->responsable, 'app', $facture, true, true],
++        'le vendeur qui a encaissé' => [$societe->vendeur, 'app', $facture, true, true],
++        'la vendeuse, sur sa facture encaissée par le responsable' => [$vendeuse, 'app', $deLaVendeuse, false, false],
++        'le vendeur qui voit toutes les factures, sans « Paiements : voir »' => [$vendeurSansLesPaiements, 'app', $facture, false, false],
++        'l’observateur qui voit toutes les factures, sans « Paiements : voir »' => [$observateurSansLesPaiements, 'app', $facture, false, false],
++        'l’observateur qui voit toutes les factures et les paiements' => [$observateurAvecLesPaiements, 'app', $facture, true, false],
++        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', $facture, true, false],
+     ];
+ 
+-    foreach ($comptes as $qui => [$compte, $panneau, $telecharge, $envoie]) {
+-        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id)->voir('Paiements reçus');
++    foreach ($comptes as $qui => [$compte, $panneau, $document, $telecharge, $envoie]) {
++        $recu = app(TenantContext::class)->runAs($societe->magasin, fn (): string => $document->allocationsPaiement()->sole()->paiement->recuPaiement->numero);
++        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$document->id)->voir('Paiements reçus')->voir($recu);
+         $boutons = fn (string $libelle): int => $onglet->element('.fi-in-repeatable-item >> '.Navigation::bouton($libelle))->count();
+ 
+         expect([$qui, $boutons('Reçu (PDF)'), $boutons('Envoyer le reçu')])->toBe([$qui, $telecharge ? 1 : 0, $envoie ? 1 : 0]);
+diff --git a/tests/Browser/Parcours/TvaDesAchatsTest.php b/tests/Browser/Parcours/TvaDesAchatsTest.php
+index 46a77c3..c3489ec 100644
+--- a/tests/Browser/Parcours/TvaDesAchatsTest.php
++++ b/tests/Browser/Parcours/TvaDesAchatsTest.php
+@@ -5,8 +5,10 @@
+ use App\Domain\Achats\Models\AvoirFournisseur;
+ use App\Domain\Achats\Models\FactureAchat;
+ use App\Domain\Achats\Services\MontantsDuFournisseur;
++use App\Domain\Authorization\PermissionRegistry;
+ use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Contacts\Models\Fournisseur;
++use App\Domain\Tenancy\Enums\RoleMagasin;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Models\User;
+@@ -177,19 +179,58 @@ function factureDeQuatreDiffuseurs(Magasin $magasin, User $responsable): Facture
+     expect($onglet->element('.fi-ta-row')->count())->toBe(1);
+ });
+ 
++/*
++ * Le responsable tape le HT de la note d'avoir touche par touche, aussitôt
++ * après la quantité, pendant que le serveur répond encore à celle-ci : le
++ * champ n'est jamais réécrit sous ses doigts (saisie protégée), la TVA que
++ * PILIQI propose suit ce HT (6,20 € pour 31,00 €), et l'avoir garde l'un et
++ * l'autre, que le total TTC de contrôle de la note confirme.
++ */
++test('le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit', function () {
++    $societe = $this->societeComplete();
++    $factureAchat = factureDeQuatreDiffuseurs($societe->magasin, $societe->responsable);
++    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey());
++
++    $onglet->cliquerSur('Créer un avoir fournisseur')
++        ->saisirSansAttendre([[['lignes', 0, 'quantite'], '2'], [['lignes', 0, 'montant_ht'], '31.00', 120]])
++        ->voir('Base HT 31,00 € · proposition de PILIQI : 6,20 €. Laissez vide pour la garder.')
++        ->voir('« Diffuseur » : le HT saisi (31,00 €) s\'écarte de 6,00 € de la quantité × le PU HT, remise déduite (25,00 €).');
++    expect($onglet->element(Navigation::FENETRE.' [id*=".lignes."][id$=".montant_ht"]')->inputValue())->toBe('31.00');
++
++    cocher($onglet, CONFIRMER_LA_NOTE_D_AVOIR)
++        ->remplir('Total TTC de la note d\'avoir (contrôle)', '37.20')
++        ->remplir('N° de l\'avoir du fournisseur', 'AV-NORD-3')
++        ->remplir('Motif du retour', 'Diffuseurs fêlés')
++        ->soumettre('Émettre l\'avoir fournisseur')
++        ->voir('émis.');
++
++    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): AvoirFournisseur => AvoirFournisseur::query()->where('numero_fournisseur', 'AV-NORD-3')->sole());
++    expect([$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc, $avoir->tva_a_verifier])->toBe(['31.00', '6.20', '37.20', true]);
++});
++
+ test('la marque « TVA à vérifier » et son filtre se voient de chaque rôle qui voit les achats, cabinet lié compris ; seul qui crée les factures d’achat en saisit la TVA', function () {
+     $societe = $this->societeComplete();
+     $marquee = app(TenantContext::class)->runAs($societe->magasin, fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($societe->responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
+         ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 2, 'prix_unitaire_ht' => '5.00'],
+     ], [], MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '20', 'montant_tva' => '2.50']], 'confirmation' => true])));
+     $liste = '/app/'.$societe->magasin->uuid.'/facture-achats';
++    $type = $societe->societe->type_activite;
++    $achats = [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER];
++    [$vendeurAuxAchats, $observateurQuiCree, $administrateurSansLesAchats] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [
++        $this->membre($societe->magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut($type), PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER], ['name' => 'Valérie Achats']),
++        $this->membre($societe->magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut($type), PermissionRegistry::FACTURE_ACHAT_CREER], ['name' => 'Odile Saisie']),
++        $this->administrateur($societe->magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur($type), $achats))),
++    ]);
+     $comptes = [
+         'le propriétaire' => [$societe->proprietaire, 'app', true, true],
+         'l’administrateur sans la vente' => [$societe->administrateur, 'app', true, true],
+         'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', true, true],
++        'l’administrateur sans les achats' => [$administrateurSansLesAchats, 'app', false, false],
+         'le responsable' => [$societe->responsable, 'app', true, true],
+         'le vendeur' => [$societe->vendeur, 'app', false, false],
++        'le vendeur à qui les factures d’achat sont cochées' => [$vendeurAuxAchats, 'app', true, true],
+         'l’observateur' => [$societe->observateur, 'app', true, false],
++        'l’observateur à qui la saisie des factures d’achat est cochée' => [$observateurQuiCree, 'app', true, true],
+         'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', true, false],
+     ];
+ 
+diff --git a/tests/Browser/Support/ActionsDeLInterface.php b/tests/Browser/Support/ActionsDeLInterface.php
+index 99e5e06..fbf830c 100644
+--- a/tests/Browser/Support/ActionsDeLInterface.php
++++ b/tests/Browser/Support/ActionsDeLInterface.php
+@@ -27,7 +27,8 @@
+  * - « filtre:nom » et « onglet:nom » : chaque filtre d'un tableau et chaque
+  *   onglet d'une liste ou d'un formulaire ;
+  * - « champ:nom » : chaque champ d'un formulaire qui déclenche un calcul ou
+- *   une recherche (live(), reactive(), afterStateUpdated(), searchable()...),
++ *   une recherche (live(), saisieEnDirect(), reactive(), afterStateUpdated(),
++ *   searchable()...),
+  *   ou qui ouvre une fenêtre de création (createOptionForm()) ;
+  *   « repeteur:nom » : chaque liste de lignes, avec ses boutons d'ajout et
+  *   de retrait ;
+@@ -78,9 +79,10 @@ final class ActionsDeLInterface
+ 
+     /**
+      * Les appels qui font d'un champ un déclencheur de calcul ou de
+-     * recherche.
++     * recherche ; saisieEnDirect() est live(), le champ restant tel que
++     * tapé pendant la frappe (voir AppServiceProvider).
+      */
+-    private const DECLENCHEURS = ['live', 'reactive', 'lazy', 'afterStateUpdated', 'searchable', 'getSearchResultsUsing', 'createOptionForm', 'editOptionForm', 'createOptionUsing'];
++    private const DECLENCHEURS = ['live', 'saisieEnDirect', 'reactive', 'lazy', 'afterStateUpdated', 'searchable', 'getSearchResultsUsing', 'createOptionForm', 'editOptionForm', 'createOptionUsing'];
+ 
+     /**
+      * Les routes qui ne sont pas des pages de l'interface : les rappels
+diff --git a/tests/Browser/Support/Navigation.php b/tests/Browser/Support/Navigation.php
+index 9013fda..958db9a 100644
+--- a/tests/Browser/Support/Navigation.php
++++ b/tests/Browser/Support/Navigation.php
+@@ -332,6 +332,35 @@ public function choisirDansLaLigne(string $liste, int $rang, string $champ, stri
+         return $this->geste(fn () => $this->champDeLaLigne($liste, $rang, $champ)->selectOption($option), "le choix dans {$champ} de la ligne {$rang} de {$liste}");
+     }
+ 
++    /**
++     * Saisit ces valeurs d'un seul geste, sans attendre la page entre deux
++     * champs, comme une personne qui passe au champ suivant pendant que le
++     * serveur répond encore au précédent : chaque saisie désigne un champ de
++     * la fenêtre ouverte ou de la page par son étiquette, ou par [liste,
++     * rang, champ] dans une liste de lignes (voir remplirLaLigne()), et
++     * remplace ce qu'il contient par sa valeur, collée d'un coup ou, avec un
++     * délai, tapée touche par touche, ce délai en millisecondes entre deux
++     * touches. La page n'est attendue qu'à la fin.
++     *
++     * @param  list<array{0: string|array{0: string, 1: int, 2: string}, 1: string, 2?: int}>  $saisies
++     */
++    public function saisirSansAttendre(array $saisies): self
++    {
++        return $this->geste(function () use ($saisies): void {
++            foreach ($saisies as $saisie) {
++                [$champ, $valeur] = $saisie;
++                $element = is_array($champ) ? $this->champDeLaLigne(...$champ) : $this->champDansLaPortee($champ, null);
++
++                if (isset($saisie[2])) {
++                    $element->selectText();
++                    $element->type($valeur, ['delay' => $saisie[2]]);
++                } else {
++                    $element->fill($valeur);
++                }
++            }
++        }, 'la saisie de '.count($saisies).' champs sans attendre la page');
++    }
++
+     private function champDeLaLigne(string $liste, int $rang, string $champ): Locator
+     {
+         return $this->element($this->portee().' [id*='.self::texte('.'.$liste.'.').'][id$='.self::texte('.'.$champ).'] >> nth='.$rang);
+diff --git a/tests/Browser/inventaire-des-actions.php b/tests/Browser/inventaire-des-actions.php
+index 7ae17fe..f1c384a 100644
+--- a/tests/Browser/inventaire-des-actions.php
++++ b/tests/Browser/inventaire-des-actions.php
+@@ -992,12 +992,16 @@
+         ]],
+         'champ:fournisseur_id' => ['lot' => 'NAV-3', 'tests' => []],
+         'champ:montant_ht' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
+             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+         ]],
+         'champ:montant_tva' => ['lot' => 'NAV-3', 'tests' => [
+             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+         ]],
+         'champ:numero_fournisseur' => ['lot' => 'NAV-3', 'tests' => []],
++        'champ:total_ttc_controle' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
++        ]],
+         'filtre:source' => ['lot' => 'NAV-3', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1095,7 +1099,10 @@
+         ]],
+     ],
+     'app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php' => [
+-        'action:creer_avoir_fournisseur' => ['lot' => 'NAV-3', 'tests' => []],
++        'action:creer_avoir_fournisseur' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
++            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
++        ]],
+         'page' => ['lot' => 'NAV-3', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1272,6 +1279,7 @@
+             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser',
+         ]],
+         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
++            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
+             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du Total TTC',
+         ]],
+         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
+@@ -1454,6 +1462,7 @@
+         ]],
+         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => []],
+         'champ:facture_id' => ['lot' => 'NAV-2', 'tests' => []],
++        'champ:montant' => ['lot' => 'NAV-2', 'tests' => []],
+         'filtre:mode_paiement' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1551,6 +1560,8 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+         ]],
+         'champ:suivi_stock' => ['lot' => 'NAV-3', 'tests' => []],
++        'champ:prix_vente_ttc' => ['lot' => 'NAV-3', 'tests' => []],
++        'champ:taux_tva' => ['lot' => 'NAV-3', 'tests' => []],
+         'filtre:fournisseur_id' => ['lot' => 'NAV-3', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -1964,6 +1975,8 @@
+         'champ:produit_id' => ['lot' => 'NAV-2', 'tests' => []],
+         'champ:quantite' => ['lot' => 'NAV-2', 'tests' => []],
+         'champ:recherche' => ['lot' => 'NAV-2', 'tests' => []],
++        'champ:remise_pourcentage' => ['lot' => 'NAV-2', 'tests' => []],
++        'champ:taux_tva' => ['lot' => 'NAV-2', 'tests' => []],
+         'repeteur:lignes' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+@@ -2018,8 +2031,10 @@
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+         ]],
+         'champ:montant' => ['lot' => 'NAV-2', 'tests' => [
++            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
+             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+         ]],
++        'champ:montant_recu' => ['lot' => 'NAV-2', 'tests' => []],
+         'repeteur:parts' => ['lot' => 'NAV-2', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
+             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
 diff --git a/tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php b/tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
 index 8aee449..74f01ba 100644
 --- a/tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
@@ -388,11 +839,99 @@ index 8aee449..74f01ba 100644
      }
  
      /**
+diff --git a/tests/Feature/Facturation/EmettreEtEncaisserTest.php b/tests/Feature/Facturation/EmettreEtEncaisserTest.php
+index dc13c74..afb376d 100644
+--- a/tests/Feature/Facturation/EmettreEtEncaisserTest.php
++++ b/tests/Feature/Facturation/EmettreEtEncaisserTest.php
+@@ -25,6 +25,7 @@
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\ActionsUniques;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Filament\App\Resources\FactureResource;
+ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+ use App\Models\User;
+@@ -397,6 +398,51 @@ public function test_la_fiche_d_un_brouillon_l_emet_et_l_encaisse_en_partie(): v
+         $this->assertSame([StatutFacture::PartiellementPayee, 75.0], [$brouillon->fresh()->statut, $brouillon->fresh()->montantRestant()]);
+     }
+ 
++    /**
++     * Un montant à zéro n'est pas un règlement (R1) : depuis la fiche comme
++     * depuis la liste, la part préremplie ramenée à zéro émet le brouillon
++     * sans l'encaisser, comme « Émettre » ; un montant négatif est refusé.
++     * « Encaisser » une facture déjà émise refuse toujours une part à zéro.
++     */
++    public function test_un_montant_a_zero_emet_le_brouillon_sans_l_encaisser(): void
++    {
++        $magasin = $this->magasin();
++        $responsable = self::responsableDeTest($magasin);
++        $client = Client::factory()->professionnel()->create();
++        $depuisLaFiche = $this->brouillon($client, 100, auteur: $responsable);
++        $depuisLaListe = $this->brouillon($client, 30, auteur: $responsable);
++        $this->actingAs($responsable);
++        Filament::setTenant($magasin);
++
++        $fiche = Livewire::test(ViewFacture::class, ['record' => $depuisLaFiche->getRouteKey()])->mountAction('emettre_et_encaisser');
++        $part = (string) array_key_first($fiche->get('mountedActionsData.0.parts'));
++        $fiche->set("mountedActionsData.0.parts.{$part}.montant", '-1')
++            ->callMountedAction()
++            ->assertHasActionErrors(["parts.{$part}.montant" => 'min'])
++            ->assertSee(FactureResource::MONTANT_NEGATIF);
++        $this->assertSame(StatutFacture::Brouillon, $depuisLaFiche->fresh()->statut);
++
++        $fiche->set("mountedActionsData.0.parts.{$part}.montant", '0')
++            ->callMountedAction()
++            ->assertHasNoActionErrors()
++            ->assertSee('Émise');
++        $this->assertSame([StatutFacture::Emise, 100.0, []], [$depuisLaFiche->fresh()->statut, $depuisLaFiche->fresh()->montantRestant(), self::paiementsDe($depuisLaFiche->fresh())]);
++
++        $liste = Livewire::test(ListFactures::class)->mountTableAction('emettre_et_encaisser', $depuisLaListe);
++        $part = (string) array_key_first($liste->get('mountedTableActionsData.0.parts'));
++        $liste->set("mountedTableActionsData.0.parts.{$part}.montant", '0.00')
++            ->callMountedTableAction()
++            ->assertHasNoTableActionErrors();
++        $this->assertSame([StatutFacture::Emise, 30.0, []], [$depuisLaListe->fresh()->statut, $depuisLaListe->fresh()->montantRestant(), self::paiementsDe($depuisLaListe->fresh())]);
++
++        $encaisser = Livewire::test(ViewFacture::class, ['record' => $depuisLaListe->getRouteKey()])->mountAction('encaisser');
++        $part = (string) array_key_first($encaisser->get('mountedActionsData.0.parts'));
++        $encaisser->set("mountedActionsData.0.parts.{$part}.montant", '0')
++            ->callMountedAction()
++            ->assertHasActionErrors(["parts.{$part}.montant" => 'min']);
++        $this->assertSame([], self::paiementsDe($depuisLaListe->fresh()));
++    }
++
+     /**
+      * L'action n'apparaît qu'à qui peut émettre et encaisser, jamais au
+      * propriétaire ni à un compte du cabinet lié, ni sur un document déjà
 diff --git a/tests/Feature/Filament/TvaDesAchatsResourceTest.php b/tests/Feature/Filament/TvaDesAchatsResourceTest.php
-index 32934be..0674e39 100644
+index 32934be..75aa0c1 100644
 --- a/tests/Feature/Filament/TvaDesAchatsResourceTest.php
 +++ b/tests/Feature/Filament/TvaDesAchatsResourceTest.php
-@@ -210,6 +210,32 @@ public function test_l_avoir_fournisseur_recopie_sa_note_d_avoir_et_confirme_ses
+@@ -176,7 +176,9 @@ public function test_la_modification_rouvre_la_tva_saisie_sans_redemander_un_eca
+      * L'avoir fournisseur recopie sa note d'avoir : le HT de chaque ligne,
+      * la TVA de chaque taux ; au-delà de la tolérance, la case de
+      * confirmation est exigée, et l'avoir émis porte la marque, que sa
+-     * liste filtre et sa fiche montre.
++     * liste filtre et sa fiche montre. La rangée de la TVA d'un taux garde
++     * sa clé quand une ligne change : une réponse qui la changerait
++     * remplacerait son champ dans la page, peut-être en pleine frappe.
+      */
+     public function test_l_avoir_fournisseur_recopie_sa_note_d_avoir_et_confirme_ses_ecarts(): void
+     {
+@@ -186,10 +188,9 @@ public function test_l_avoir_fournisseur_recopie_sa_note_d_avoir_et_confirme_ses
+         $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+             ->mountAction('creer_avoir_fournisseur');
+         $ligne = array_key_first($page->get('mountedActionsData.0.lignes'));
+-        $page->set("mountedActionsData.0.lignes.{$ligne}.quantite", 1);
+-        // Les rangées de TVA suivent les lignes : leur clé se relit après
+-        // le changement de la quantité.
+         $taux = array_key_first($page->get('mountedActionsData.0.taux'));
++        $page->set("mountedActionsData.0.lignes.{$ligne}.quantite", 1);
++        $this->assertSame([$taux], array_keys($page->get('mountedActionsData.0.taux')));
+         $page->set("mountedActionsData.0.taux.{$taux}.montant_tva", '2.50')
+             ->setActionData(['motif' => 'Coque fêlée', 'numero_fournisseur' => 'AV-12'])
+             ->callMountedAction()
+@@ -210,6 +211,63 @@ public function test_l_avoir_fournisseur_recopie_sa_note_d_avoir_et_confirme_ses
              ->assertSee('Calcul depuis les lignes : 2,00 €');
      }
  
@@ -422,14 +961,45 @@ index 32934be..0674e39 100644
 +        $this->assertSame(['2.00', '0.40', '2.40', true], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc, $avoir->tva_a_verifier]);
 +    }
 +
++    /**
++     * Les montants que la personne recopie de la facture ou de la note
++     * d'avoir du fournisseur (la TVA de chaque taux, le total TTC de
++     * contrôle, le HT d'une ligne d'achat, la quantité et le HT d'une ligne
++     * retournée) se calculent en direct sans jamais être réécrits par le
++     * serveur pendant la frappe (modificateur « unintrusive », voir
++     * saisieEnDirect()) : une réponse arrivée en pleine frappe effaçait le
++     * HT de la note d'avoir tapé aussitôt après la quantité.
++     */
++    public function test_les_montants_recopies_du_fournisseur_ne_sont_jamais_reecrits_pendant_la_frappe(): void
++    {
++        $this->connecterLeProprietaire();
++        $protege = fn (string $chemin): string => '/wire:model\.live\.unintrusive="'.$chemin.'"/';
++
++        $facture = $this->factureDeDeuxCoques()->html();
++        $this->assertMatchesRegularExpression($protege('data\.taux\.[^"]+\.montant_tva'), $facture);
++        $this->assertMatchesRegularExpression($protege('data\.total_ttc_controle'), $facture);
++
++        $ligne = Livewire::test(CreateFactureAchat::class)
++            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
++            ->setFormComponentActionData(['produit_id' => Produit::factory()->create(['nom' => 'Coque', 'taux_tva' => 20])->id])
++            ->html();
++        $this->assertMatchesRegularExpression($protege('mountedFormComponentActionsData\.0\.montant_ht'), $ligne);
++
++        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->facture(null));
++        $fenetre = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->mountAction('creer_avoir_fournisseur')->html();
++        foreach (['lignes\.[^"]+\.quantite', 'lignes\.[^"]+\.montant_ht', 'taux\.[^"]+\.montant_tva', 'total_ttc_controle'] as $champ) {
++            $this->assertMatchesRegularExpression($protege('mountedActionsData\.0\.'.$champ), $fenetre);
++        }
++    }
++
      /**
       * Le coût d'un inventaire d'ouverture se saisit, comme un prix d'achat,
       * avec six décimales au plus.
 diff --git a/tests/Unit/CalculateurLigneTest.php b/tests/Unit/CalculateurLigneTest.php
-index 8aa1c6e..386b1f9 100644
+index 8aa1c6e..caacf15 100644
 --- a/tests/Unit/CalculateurLigneTest.php
 +++ b/tests/Unit/CalculateurLigneTest.php
-@@ -528,6 +528,56 @@ public function test_des_retours_dachat_un_par_un_ne_creditent_jamais_de_tva_neg
+@@ -528,6 +528,58 @@ public function test_des_retours_dachat_un_par_un_ne_creditent_jamais_de_tva_neg
          $this->assertSame([130, 26, 156], [array_sum(array_column($retours, 0)), array_sum(array_column($retours, 1)), array_sum(array_column($retours, 2))]);
      }
  
@@ -457,11 +1027,13 @@ index 8aa1c6e..386b1f9 100644
 +     * 40,00 € + 8,00 €, écrits 5,00 € HT, proposent 1,00 € de TVA, écrits
 +     * 45,00 €, 9,00 € ; un article de plus, écrit 20,00 €, part du HT déjà
 +     * retenu (25,00 € au cumul : 5,00 € de TVA, moins 1,00 € déjà rendu).
-+     * Cette TVA ne dépasse jamais celle de la ligne, ni le HT du retour
-+     * quand un retour précédent a rendu peu de TVA. Un HT écrit égal à la
-+     * proposition la garde : la dernière de trois lignes de 10,01 € HT, qui
-+     * a reçu 2,01 € de TVA, la rend tout entière avec 10,01 € écrits, et
-+     * 2,00 € avec 10,00 €. Un HT écrit négatif est refusé.
++     * Cette TVA ne dépasse jamais celle de la ligne (150,00 € écrits en
++     * proposent 20,00 €), ni le HT du retour quand un retour précédent a
++     * rendu peu de TVA (2,00 € écrits après 59,00 € rendus sans TVA en
++     * proposent 2,00 €). Un HT écrit égal à la proposition la garde : la
++     * dernière de trois lignes de 10,01 € HT, qui a reçu 2,01 € de TVA, la
++     * rend tout entière avec 10,01 € écrits, et 2,00 € avec 10,00 €. Un HT
++     * écrit négatif est refusé.
 +     */
 +    public function test_le_ht_qu_ecrit_la_note_d_avoir_fait_la_tva_proposee_d_un_retour_au_fournisseur(): void
 +    {

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 13:38 UTC par pilotage-sync.sh : « Point du 07/11 13 h 37 : TR en correction, travail resauvé ».
+Mis à jour le 07/11/2026 à 14:37 UTC par pilotage-sync.sh : « 07/11 14 h 37 : course coupée par la limite d'usage, reprise de TR:correction ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,8 +43,18 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Filament/App/Resources/FactureAchatResource.php
+ M app/Filament/App/Resources/FactureResource.php
  M app/Filament/Concerns/AjouteDesLignesDAchat.php
+ M app/Filament/Concerns/SaisitUnReglementEnParts.php
+ M tests/Browser/InventaireDesActionsTest.php
+ M tests/Browser/Parcours/EmettreEtEncaisserTest.php
+ M tests/Browser/Parcours/RecuDePaiementTest.php
+ M tests/Browser/Parcours/TvaDesAchatsTest.php
+ M tests/Browser/Support/ActionsDeLInterface.php
+ M tests/Browser/Support/Navigation.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+ M tests/Feature/Facturation/EmettreEtEncaisserTest.php
  M tests/Feature/Filament/TvaDesAchatsResourceTest.php
  M tests/Unit/CalculateurLigneTest.php
 ```

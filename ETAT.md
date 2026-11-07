@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 15:54 UTC par pilotage-sync.sh : « 07/11 15 h 41 : course reprise après un second redémarrage ».
+Mis à jour le 07/11/2026 à 16:56 UTC par pilotage-sync.sh : « Après le lot TR ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `1d3278a`. Commits locaux pas encore poussés :
+Tête poussée : `074eaee`. Commits locaux pas encore poussés :
 
 ```
-d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
-0afc14c Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux
 ```
 
 Derniers commits poussés :
 
 ```
+074eaee Relecture du lot TR de la série 8
+d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
+0afc14c Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux
 1d3278a Relecture du lot NAV-1 des tests en navigateur
 523e74f Balaye chaque panneau rôle par rôle et ajoute les premiers parcours en navigateur (lot NAV-1 2/2)
 9053757 Outille les tests en navigateur avec Pest 4 et Playwright (lot NAV-1 1/2)
@@ -31,32 +32,11 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 01fe217 Relecture du lot EC de l’espace des cabinets
 93ea590 Retire les experts-comptables de la société et réécrit CLAUDE.md (lot EC 4/4)
 94ada86 Lie les cabinets à leurs clients : invitations, demandes, autorisations, accès (lot EC 3/4)
-9671a29 Donne au cabinet ses collaborateurs et transmet sa propriété à l'un d'eux (lot EC 2/4)
-976e827 Vérifie les cabinets d'expertise comptable et leur ouvre leur espace (lot EC 1/4)
-9ce20c3 Relecture du lot TA des types d’activité
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Achats/Models/LigneAchat.php
- M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M app/Filament/Concerns/SaisitUnReglementEnParts.php
- M tests/Browser/InventaireDesActionsTest.php
- M tests/Browser/Parcours/EmettreEtEncaisserTest.php
- M tests/Browser/Parcours/RecuDePaiementTest.php
- M tests/Browser/Parcours/TvaDesAchatsTest.php
- M tests/Browser/Support/ActionsDeLInterface.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
- M tests/Feature/Facturation/EmettreEtEncaisserTest.php
- M tests/Feature/Filament/TvaDesAchatsResourceTest.php
- M tests/Unit/CalculateurLigneTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -64,9 +44,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-A7b:implementation
-A7b:relecture1
-A7b:relecture2
 A7b:correction
 A7b:poussee
 A7b:fiche
@@ -89,4 +66,7 @@ TR:implementation
 TR:relecture1
 TR:relecture2
 TR:correction
+TR:poussee
+TR:fiche
+TR:notes
 ```

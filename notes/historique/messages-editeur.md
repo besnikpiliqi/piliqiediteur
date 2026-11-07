@@ -1254,3 +1254,21 @@ dit moi pourquoi t as installe phpstan ?
 
 ecoute je retire ce que j'ai dit pour ca. donc tu peux installer ce que tu veux donc ce que tu pense que c'est bon pour le logiciel alors installe tout ce que juge utile pour securise le logiciel et rendre perfromant et sans faille et sans  erreurs.  donc tu est libre d installler tout ce que tu vois utile pour le logiciel
 
+## 103. 2026-11-07 23:19 UTC
+
+<!-- attach -->
+
+> Le lot EX
+
+
+
+qu est ce  qu il a fait quelle travail
+
+## 104. 2026-11-07 23:34 UTC
+
+Un PDF peut contenir du JavaScript, des actions automatiques ou des fichiers joints, comme le XML d’une Factur-X. Rien de cela n’est contrôlé.  alors il faut controlle les fichier car peuvent pirate le logiciel ou le sit e ou lle system
+
+## 105. 2026-11-07 23:40 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/071d6136-PILIQI_corrections_2026-11-06_2.zip" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/c6a5368a-rapport_cabinets_complet.zip" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/5816c635-PILIQI_AUDIT_PG17_20261106_092642.zip" il faut que tu lise tout ces que te donne. c'est tres important pour logiciel
+

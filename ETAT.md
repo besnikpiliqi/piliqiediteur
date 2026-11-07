@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 22:41 UTC par pilotage-sync.sh : « CI verte du lot EX (c7b1ec3, courses 208 et 209) ».
+Mis à jour le 07/11/2026 à 23:51 UTC par pilotage-sync.sh : « Chaîne arrêtée à 23 h 40 (QA coupé) : travail QA sauvé et mis de côté ; mise à jour de sécurité Symfony en cours ; lecture des audits de l'éditeur lancée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,66 +37,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Models/FactureAchat.php
- M app/Domain/Achats/Models/LigneAchat.php
- M app/Domain/Achats/Models/LigneAvoirFournisseur.php
- M app/Domain/Achats/Models/TauxAvoirFournisseur.php
- M app/Domain/Achats/Models/TauxFactureAchat.php
- M app/Domain/CaisseSecurisee/Concerns/HorodateSonEmission.php
- M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
- M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
- M app/Domain/Facturation/Concerns/FigeLeClient.php
- M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
- M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/Avoir.php
- M app/Domain/Facturation/Models/AvoirAllocation.php
- M app/Domain/Facturation/Models/BordereauDetaxe.php
- M app/Domain/Facturation/Models/ClotureCaisse.php
- M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
- M app/Domain/Facturation/Models/Devis.php
- M app/Domain/Facturation/Models/EnvoiDocument.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Models/LigneAvoir.php
- M app/Domain/Facturation/Models/LigneDevis.php
- M app/Domain/Facturation/Models/LigneFacture.php
- M app/Domain/Facturation/Models/LigneRecuPaiement.php
- M app/Domain/Facturation/Models/Paiement.php
- M app/Domain/Facturation/Models/PaiementAllocation.php
- M app/Domain/Facturation/Models/PreuveOperation.php
- M app/Domain/Facturation/Models/RecuPaiement.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/DocumentChiffre.php
- M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
- M app/Domain/Stock/Models/InventaireOuverture.php
- M app/Domain/Stock/Models/LigneInventaireOuverture.php
- M app/Domain/Stock/Models/MouvementStock.php
- M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
- M app/Domain/Tenancy/Concerns/BelongsToSociete.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Domain/Tenancy/Models/MandatPdp.php
- M app/Filament/App/Livewire/SelecteurDeClients.php
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Pages/Auth/Connexion.php
- M app/Filament/App/Pages/Caisse.php
- M app/Filament/App/Pages/CoordonneesMagasin.php
- M app/Filament/App/Pages/ParametresFactures.php
- M app/Filament/App/Pages/ParametresPrixDeVente.php
- M app/Filament/App/Pages/ParametresRelances.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/ClientResource.php
- M app/Filament/App/Resources/ClientResource/Pages/ViewClient.php
- M app/Filament/App/Resources/ClotureCaisseResource.php
- M app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
- M app/Filament/App/Resources/EnregistrementFiscalResource.php
- M app/Filament/App/Resources/EquipeDuMagasinResource.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
- M app/Filament/App/Resources/FactureResource.php
+ M composer.lock
 ```
 
 ## Dernière course de la chaîne

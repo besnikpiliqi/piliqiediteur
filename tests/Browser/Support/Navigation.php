@@ -332,6 +332,35 @@ final class Navigation
         return $this->geste(fn () => $this->champDeLaLigne($liste, $rang, $champ)->selectOption($option), "le choix dans {$champ} de la ligne {$rang} de {$liste}");
     }
 
+    /**
+     * Saisit ces valeurs d'un seul geste, sans attendre la page entre deux
+     * champs, comme une personne qui passe au champ suivant pendant que le
+     * serveur répond encore au précédent : chaque saisie désigne un champ de
+     * la fenêtre ouverte ou de la page par son étiquette, ou par [liste,
+     * rang, champ] dans une liste de lignes (voir remplirLaLigne()), et
+     * remplace ce qu'il contient par sa valeur, collée d'un coup ou, avec un
+     * délai, tapée touche par touche, ce délai en millisecondes entre deux
+     * touches. La page n'est attendue qu'à la fin.
+     *
+     * @param  list<array{0: string|array{0: string, 1: int, 2: string}, 1: string, 2?: int}>  $saisies
+     */
+    public function saisirSansAttendre(array $saisies): self
+    {
+        return $this->geste(function () use ($saisies): void {
+            foreach ($saisies as $saisie) {
+                [$champ, $valeur] = $saisie;
+                $element = is_array($champ) ? $this->champDeLaLigne(...$champ) : $this->champDansLaPortee($champ, null);
+
+                if (isset($saisie[2])) {
+                    $element->selectText();
+                    $element->type($valeur, ['delay' => $saisie[2]]);
+                } else {
+                    $element->fill($valeur);
+                }
+            }
+        }, 'la saisie de '.count($saisies).' champs sans attendre la page');
+    }
+
     private function champDeLaLigne(string $liste, int $rang, string $champ): Locator
     {
         return $this->element($this->portee().' [id*='.self::texte('.'.$liste.'.').'][id$='.self::texte('.'.$champ).'] >> nth='.$rang);

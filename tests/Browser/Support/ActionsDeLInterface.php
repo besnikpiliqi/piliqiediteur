@@ -27,8 +27,9 @@ use ReflectionClass;
  * - « filtre:nom » et « onglet:nom » : chaque filtre d'un tableau et chaque
  *   onglet d'une liste ou d'un formulaire ;
  * - « champ:nom » : chaque champ d'un formulaire qui déclenche un calcul ou
- *   une recherche (live(), reactive(), afterStateUpdated(), searchable()...),
- *   ou qui ouvre une fenêtre de création (createOptionForm()) ;
+ *   une recherche (live(), saisieEnDirect(), reactive(), afterStateUpdated(),
+ *   searchable()...), ou qui ouvre une fenêtre de création
+ *   (createOptionForm()) ;
  *   « repeteur:nom » : chaque liste de lignes, avec ses boutons d'ajout et
  *   de retrait ;
  * - « recherche » : la recherche d'un tableau qui a une colonne cherchable ;
@@ -78,9 +79,10 @@ final class ActionsDeLInterface
 
     /**
      * Les appels qui font d'un champ un déclencheur de calcul ou de
-     * recherche.
+     * recherche ; saisieEnDirect() est live(), le champ restant tel que
+     * tapé pendant la frappe (voir AppServiceProvider).
      */
-    private const DECLENCHEURS = ['live', 'reactive', 'lazy', 'afterStateUpdated', 'searchable', 'getSearchResultsUsing', 'createOptionForm', 'editOptionForm', 'createOptionUsing'];
+    private const DECLENCHEURS = ['live', 'saisieEnDirect', 'reactive', 'lazy', 'afterStateUpdated', 'searchable', 'getSearchResultsUsing', 'createOptionForm', 'editOptionForm', 'createOptionUsing'];
 
     /**
      * Les routes qui ne sont pas des pages de l'interface : les rappels

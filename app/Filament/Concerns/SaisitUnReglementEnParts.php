@@ -49,7 +49,8 @@ use LogicException;
  * couvrir seul tout ce qui reste dû (voir EncaisserEnPlusieursModesAction) ;
  * à l'émission d'un brouillon (« Émettre et encaisser »), elles ne
  * dépassent jamais ce que le crédit du client laissera dû, sans bon
- * d'avoir, et un règlement sans aucun montant revient à « Émettre ».
+ * d'avoir, une part à zéro ne règle rien, comme une part vide, et un
+ * règlement sans aucun montant, ou à zéro, revient à « Émettre ».
  * L'écran le dit pendant la saisie (« Il reste 10,00 € à répartir. ») et
  * refuse un règlement qui ne tombe pas juste ; l'enregistrement le
  * revérifie sous le verrou du registre.
@@ -60,6 +61,12 @@ trait SaisitUnReglementEnParts
      * La valeur du choix « Avoir » d'une part.
      */
     public const PART_AVOIR = 'avoir';
+
+    /**
+     * Le refus d'un montant négatif à l'émission d'un brouillon, où un
+     * montant à zéro ne règle rien.
+     */
+    public const MONTANT_NEGATIF = 'Le montant d\'une part ne peut pas être négatif.';
 
     /**
      * L'aide d'un bon d'avoir présenté pour un document déjà émis (voir
@@ -111,7 +118,9 @@ trait SaisitUnReglementEnParts
 
     /**
      * Les parts payées du règlement saisi, sans les parts « Avoir » ni
-     * celles restées sans montant (rien ne restait à y payer).
+     * celles restées sans montant (rien ne restait à y payer) ou à zéro,
+     * qui ne règlent rien : l'écran n'accepte un montant à zéro qu'à
+     * l'émission d'un brouillon, que le geste émet alors sans l'encaisser.
      *
      * @param  mixed  $parts  l'état du répétiteur
      * @return list<PartDeReglement>
@@ -129,6 +138,10 @@ trait SaisitUnReglementEnParts
 
             $mode = self::modeDeLaPart($part['mode'] ?? null);
             $montant = self::montantEnCentimes($part['montant'] ?? null);
+
+            if ($montant === 0) {
+                continue;
+            }
 
             if ($mode === null || $montant === null) {
                 throw new LogicException(PartDeReglement::MONTANT_NON_POSITIF);
@@ -261,9 +274,11 @@ trait SaisitUnReglementEnParts
                 ->numeric()
                 ->prefix('€')
                 ->visible(fn (Get $get): bool => ! $estAvoir($get))
-                ->minValue(0.01)
+                // À l'émission d'un brouillon, un montant à zéro ne règle
+                // rien, comme un montant vide (voir partsPayees()).
+                ->minValue(fn (?Model $record): float => self::estUnBrouillon($record) ? 0.0 : 0.01)
                 ->maxValue(Caisse::MONTANT_MAXIMUM)
-                ->validationMessages(['min' => PartDeReglement::MONTANT_NON_POSITIF])
+                ->validationMessages(['min' => fn (?Model $record): string => self::estUnBrouillon($record) ? self::MONTANT_NEGATIF : PartDeReglement::MONTANT_NON_POSITIF])
                 ->rule(fn (): Closure => function (string $attribute, mixed $montant, Closure $echec): void {
                     if (filled($montant) && self::montantEnCentimes($montant) === null) {
                         $echec('Saisissez un montant en euros, avec au plus deux décimales.');

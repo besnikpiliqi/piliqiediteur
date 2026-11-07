@@ -142,12 +142,15 @@ class LigneAchat extends Model
      * été retourné jusqu'ici et la TVA de ce HT, sans dépasser ceux de la
      * ligne, moins ce que les avoirs fournisseur déjà émis ont crédité (voir
      * CalculateurLigne::retourDAchat()). Le dernier retour propose ce qui
-     * reste de la ligne achetée ; la note d'avoir du fournisseur, qui prime,
-     * peut en écrire d'autres (voir EmettreAvoirFournisseurAction).
+     * reste de la ligne achetée. Le HT qu'écrit la note d'avoir du
+     * fournisseur pour ce retour, qui prime, remplace la proposition, que
+     * montant_ht_calcule garde, et la TVA proposée suit ce HT (voir
+     * ChiffrageDUnAvoirFournisseur).
      *
-     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int}
+     * @param  int|null  $htEcrit  le HT qu'écrit la note d'avoir pour ce retour, en centimes
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_ht_calcule: int}
      */
-    public function montantsDuRetour(int $quantite): array
+    public function montantsDuRetour(int $quantite, ?int $htEcrit = null): array
     {
         $calculateur = app(CalculateurLigne::class);
         $avoirsEmis = $this->lignesAvoirFournisseur()
@@ -169,6 +172,7 @@ class LigneAchat extends Model
                 'montant_ht' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
                 'montant_tva' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),
             ],
+            $htEcrit,
         );
     }
 

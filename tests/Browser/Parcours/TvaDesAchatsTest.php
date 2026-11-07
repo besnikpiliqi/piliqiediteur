@@ -5,8 +5,10 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -177,19 +179,60 @@ test('le responsable crée un avoir fournisseur depuis la fiche d’une facture 
     expect($onglet->element('.fi-ta-row')->count())->toBe(1);
 });
 
+/*
+ * Le responsable tape le HT de la note d'avoir touche par touche, aussitôt
+ * après la quantité, pendant que le serveur répond encore à celle-ci : le
+ * champ n'est jamais réécrit sous ses doigts (saisie protégée), la TVA que
+ * PILIQI propose suit ce HT (6,20 € pour 31,00 €), et l'avoir garde l'un et
+ * l'autre, que le total TTC de contrôle de la note confirme.
+ */
+test('le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit', function () {
+    $societe = $this->societeComplete();
+    $factureAchat = factureDeQuatreDiffuseurs($societe->magasin, $societe->responsable);
+    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey());
+
+    $onglet->cliquerSur('Créer un avoir fournisseur')
+        ->saisirSansAttendre([[['lignes', 0, 'quantite'], '2'], [['lignes', 0, 'montant_ht'], '31.00', 120]])
+        ->voir('Base HT 31,00 € · proposition de PILIQI : 6,20 €. Laissez vide pour la garder.')
+        ->voir('« Diffuseur » : le HT saisi (31,00 €) s\'écarte de 6,00 € de la quantité × le PU HT, remise déduite (25,00 €).');
+    expect($onglet->element(Navigation::FENETRE.' [id*=".lignes."][id$=".montant_ht"]')->inputValue())->toBe('31.00');
+
+    cocher($onglet, CONFIRMER_LA_NOTE_D_AVOIR)
+        ->remplir('Total TTC de la note d\'avoir (contrôle)', '37.20')
+        ->remplir('N° de l\'avoir du fournisseur', 'AV-NORD-3')
+        ->remplir('Motif du retour', 'Diffuseurs fêlés')
+        ->soumettre('Émettre l\'avoir fournisseur')
+        ->voir('émis.');
+
+    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): AvoirFournisseur => AvoirFournisseur::query()->where('numero_fournisseur', 'AV-NORD-3')->sole());
+    expect([$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc, $avoir->tva_a_verifier])->toBe(['31.00', '6.20', '37.20', true]);
+});
+
 test('la marque « TVA à vérifier » et son filtre se voient de chaque rôle qui voit les achats, cabinet lié compris ; seul qui crée les factures d’achat en saisit la TVA', function () {
     $societe = $this->societeComplete();
     $marquee = app(TenantContext::class)->runAs($societe->magasin, fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($societe->responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
         ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 2, 'prix_unitaire_ht' => '5.00'],
     ], [], MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '20', 'montant_tva' => '2.50']], 'confirmation' => true])));
     $liste = '/app/'.$societe->magasin->uuid.'/facture-achats';
+    $type = $societe->societe->type_activite;
+    $achats = [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER];
+    [$vendeurAuxAchats, $observateurQuiCree, $observateurSansLesAchats, $administrateurSansLesAchats] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [
+        $this->membre($societe->magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut($type), PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER], ['name' => 'Valérie Achats']),
+        $this->membre($societe->magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut($type), PermissionRegistry::FACTURE_ACHAT_CREER], ['name' => 'Odile Saisie']),
+        $this->membre($societe->magasin, RoleMagasin::Observateur, array_values(array_diff(RoleMagasin::Observateur->permissionsParDefaut($type), [PermissionRegistry::FACTURE_ACHAT_VIEW])), ['name' => 'Oscar Sansachats']),
+        $this->administrateur($societe->magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur($type), $achats))),
+    ]);
     $comptes = [
         'le propriétaire' => [$societe->proprietaire, 'app', true, true],
         'l’administrateur sans la vente' => [$societe->administrateur, 'app', true, true],
         'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', true, true],
+        'l’administrateur sans les achats' => [$administrateurSansLesAchats, 'app', false, false],
         'le responsable' => [$societe->responsable, 'app', true, true],
         'le vendeur' => [$societe->vendeur, 'app', false, false],
+        'le vendeur à qui les factures d’achat sont cochées' => [$vendeurAuxAchats, 'app', true, true],
         'l’observateur' => [$societe->observateur, 'app', true, false],
+        'l’observateur à qui la saisie des factures d’achat est cochée' => [$observateurQuiCree, 'app', true, true],
+        'l’observateur sans « Factures d’achat : voir »' => [$observateurSansLesAchats, 'app', false, false],
         'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', true, false],
     ];
 

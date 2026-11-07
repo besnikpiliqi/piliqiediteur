@@ -529,6 +529,58 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * L'exemple du commentaire de classe (point 4) : la TVA qu'écrit le
+     * fournisseur pour trois lignes de 10,01 € HT à 20 % (6,00 € au lieu
+     * des 6,01 € proposés) se répartit au prorata de leur HT, par cumul :
+     * l'écart de -1 centime vaut -0,33, -0,67 puis -1 centime au cumul,
+     * arrondis à 0, -1 puis -1, et seule la deuxième ligne perd un centime
+     * (2,00 € + 1,99 € + 2,01 €). La TVA proposée du taux reste pour la
+     * preuve.
+     */
+    public function test_la_tva_ecrite_par_le_fournisseur_se_repartit_par_cumul_au_prorata_du_ht(): void
+    {
+        $achat = $this->calculateur()->chiffrerUnAchat([self::ligneDAchat(1001), self::ligneDAchat(1001), self::ligneDAchat(1001)], [2000 => 600]);
+
+        $this->assertSame([[1001, 200, 1201], [1001, 199, 1200], [1001, 201, 1202]], self::triplets($achat['lignes']));
+        $this->assertSame([3003, 600, 3603, 601], [...self::triplet($achat['taux'][2000]), $achat['taux'][2000]['montant_tva_calcule']]);
+    }
+
+    /**
+     * Le HT qu'écrit la note d'avoir du fournisseur remplace la proposition
+     * d'un retour, gardée à côté, et la TVA proposée suit ce HT : 2 des 5
+     * articles d'une ligne de 100,00 € HT et 20,00 € de TVA, proposés
+     * 40,00 € + 8,00 €, écrits 5,00 € HT, proposent 1,00 € de TVA, écrits
+     * 45,00 €, 9,00 € ; un article de plus, écrit 20,00 €, part du HT déjà
+     * retenu (25,00 € au cumul : 5,00 € de TVA, moins 1,00 € déjà rendu).
+     * Cette TVA ne dépasse jamais celle de la ligne (150,00 € écrits en
+     * proposent 20,00 €), ni le HT du retour quand un retour précédent a
+     * rendu peu de TVA (2,00 € écrits après 59,00 € rendus sans TVA en
+     * proposent 2,00 €). Un HT écrit égal à la proposition la garde : la
+     * dernière de trois lignes de 10,01 € HT, qui a reçu 2,01 € de TVA, la
+     * rend tout entière avec 10,01 € écrits, et 2,00 € avec 10,00 €. Un HT
+     * écrit négatif est refusé.
+     */
+    public function test_le_ht_qu_ecrit_la_note_d_avoir_fait_la_tva_proposee_d_un_retour_au_fournisseur(): void
+    {
+        $calculateur = $this->calculateur();
+        $cables = [...self::ligneDAchat(2000, 5), 'montant_ht' => 10000, 'montant_tva' => 2000];
+        $rienRendu = ['montant_ht' => 0, 'montant_tva' => 0];
+
+        $this->assertSame(['montant_ht' => 4000, 'montant_tva' => 800, 'montant_ttc' => 4800, 'montant_ht_calcule' => 4000], $calculateur->retourDAchat($cables, 2, $rienRendu));
+        $this->assertSame(['montant_ht' => 500, 'montant_tva' => 100, 'montant_ttc' => 600, 'montant_ht_calcule' => 4000], $calculateur->retourDAchat($cables, 2, $rienRendu, 500));
+        $this->assertSame(['montant_ht' => 4500, 'montant_tva' => 900, 'montant_ttc' => 5400, 'montant_ht_calcule' => 4000], $calculateur->retourDAchat($cables, 2, $rienRendu, 4500));
+        $this->assertSame([2000, 400, 2400], self::triplet($calculateur->retourDAchat($cables, 3, ['montant_ht' => 500, 'montant_tva' => 100], 2000)));
+        $this->assertSame([15000, 2000, 17000], self::triplet($calculateur->retourDAchat($cables, 2, $rienRendu, 15000)));
+        $this->assertSame([200, 200, 400], self::triplet($calculateur->retourDAchat($cables, 3, ['montant_ht' => 5900, 'montant_tva' => 0], 200)));
+
+        $derniere = [...self::ligneDAchat(1001), 'montant_ht' => 1001, 'montant_tva' => 201];
+        $this->assertSame([1001, 201, 1202], self::triplet($calculateur->retourDAchat($derniere, 1, $rienRendu, 1001)));
+        $this->assertSame([1000, 200, 1200], self::triplet($calculateur->retourDAchat($derniere, 1, $rienRendu, 1000)));
+
+        $this->assertThrows(fn () => $calculateur->retourDAchat($cables, 2, $rienRendu, -100), InvalidArgumentException::class, CalculateurLigne::REFUS_HT_NEGATIF);
+    }
+
+    /**
      * Le calcul n'accepte que des entiers : un nombre à virgule flottante,
      * même rond, est refusé plutôt que tronqué en silence.
      */

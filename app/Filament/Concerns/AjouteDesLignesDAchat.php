@@ -127,7 +127,7 @@ trait AjouteDesLignesDAchat
                         ->rule(new MontantAuCentime)
                         ->placeholder(fn (Get $get): string => self::tvaProposee($get))
                         ->helperText(fn (Get $get): string => self::detailDeLaTva($get))
-                        ->live(onBlur: true),
+                        ->saisieEnDirect(),
                 ])
                 ->addable(false)
                 ->deletable(false)
@@ -143,7 +143,7 @@ trait AjouteDesLignesDAchat
                 ->minValue(0)
                 ->suffix('€')
                 ->rule(new MontantAuCentime)
-                ->live(onBlur: true),
+                ->saisieEnDirect(),
             Checkbox::make('confirmer_les_ecarts')
                 ->label('Je confirme ces montants : ce sont ceux de la facture du fournisseur. La facture sera marquée « TVA à vérifier ».')
                 ->helperText(fn (Get $get, ?Model $record): HtmlString => new HtmlString(implode('<br>', array_map(e(...), self::avertissementsDesEcarts($get, $record)))))
@@ -184,17 +184,38 @@ trait AjouteDesLignesDAchat
 
     /**
      * Les rangées de la TVA suivent les taux des lignes, dans l'ordre où ils
-     * apparaissent : une TVA déjà saisie pour un taux qui reste se garde.
+     * apparaissent (voir rangeesDeLaTva()).
      */
     private static function synchroniserLesTaux(Get $get, Set $set): void
     {
-        $saisies = collect($get('taux') ?? [])
-            ->filter(fn (mixed $taux): bool => is_array($taux) && filled($taux['taux_tva'] ?? null))
-            ->mapWithKeys(fn (array $taux): array => [self::cleDuTaux($taux['taux_tva']) => $taux['montant_tva'] ?? null]);
+        $set('taux', self::rangeesDeLaTva(array_keys(app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [])->parTaux), $get('taux')));
+    }
 
-        $set('taux', collect(array_keys(app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [])->parTaux))
-            ->mapWithKeys(fn (string $taux): array => [self::cleDuTaux($taux) => ['taux_tva' => $taux, 'montant_tva' => $saisies->get(self::cleDuTaux($taux))]])
-            ->all());
+    /**
+     * Une rangée de TVA pour chacun de ces taux, dans leur ordre : celle
+     * d'un taux qui reste garde sa clé et la TVA qui y est saisie. Une
+     * réponse qui changerait sa clé remplacerait dans la page le champ de
+     * sa TVA, peut-être en pleine frappe, et réécrirait ce que la personne
+     * tape ailleurs dans le formulaire (voir saisieEnDirect() dans
+     * AppServiceProvider).
+     *
+     * @param  iterable<mixed>  $taux  écrits comme leur colonne (« 20.00 »)
+     * @param  mixed  $rangees  les rangées actuelles
+     * @return array<string, array{taux_tva: mixed, montant_tva: mixed}>
+     */
+    private static function rangeesDeLaTva(iterable $taux, mixed $rangees): array
+    {
+        $existantes = collect(is_array($rangees) ? $rangees : [])
+            ->filter(fn (mixed $rangee): bool => is_array($rangee) && filled($rangee['taux_tva'] ?? null))
+            ->mapWithKeys(fn (array $rangee, int|string $cle): array => [self::cleDuTaux($rangee['taux_tva']) => ['cle' => (string) $cle, 'montant_tva' => $rangee['montant_tva'] ?? null]]);
+        $nouvelles = [];
+
+        foreach ($taux as $unTaux) {
+            $existante = $existantes->get(self::cleDuTaux($unTaux));
+            $nouvelles[$existante['cle'] ?? self::cleDuTaux($unTaux)] = ['taux_tva' => $unTaux, 'montant_tva' => $existante['montant_tva'] ?? null];
+        }
+
+        return $nouvelles;
     }
 
     /**
@@ -601,7 +622,7 @@ trait AjouteDesLignesDAchat
                         ->rule(new MontantAuCentime)
                         ->placeholder(fn (Get $get): string => self::htProposeEnTexte($get) ?? '')
                         ->helperText(fn (Get $get): string => self::detailDuHtDeLaLigne($get))
-                        ->live(onBlur: true),
+                        ->saisieEnDirect(),
                     ...array_map(
                         fn (Field $champ): Field => (match ($champ->getName()) {
                             'prix_vente_ttc' => $champ->helperText(fn (Get $get): ?string => self::detailDuPrixDeVente($get)),

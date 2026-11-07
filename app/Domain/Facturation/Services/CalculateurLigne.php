@@ -38,16 +38,19 @@ use InvalidArgumentException;
  *    HT a six décimales au plus ; le HT proposé de chaque ligne est
  *    quantité x PU HT, remise déduite, arrondi une fois, et la TVA
  *    proposée de chaque taux est le total HT du taux x taux, arrondie une
- *    fois et répartie sur ses lignes par cumul, dans leur ordre : 3 x
- *    10,01 € HT à 20 % font 30,03 € HT + 6,01 € de TVA (6,006 arrondi une
- *    fois), répartis 2,00 + 2,00 + 2,01. Un HT de ligne ou une TVA de
- *    taux écrits par le fournisseur remplacent ces propositions ; l'écart
- *    entre la TVA retenue et la proposée se répartit sur les lignes du
- *    taux au prorata de leur HT (6,00 € de TVA du fournisseur sur les
- *    mêmes lignes : 2,00 + 2,00 + 2,00). Un retour au fournisseur
- *    (retourDAchat()) propose la TVA du HT des articles retournés
- *    jusqu'ici, sans dépasser celle de la ligne, moins les retours
- *    précédents.
+ *    fois et répartie sur ses lignes par cumul, dans leur ordre : 3
+ *    lignes de 10,01 € HT à 20 % font 30,03 € HT + 6,01 € de TVA (6,006
+ *    arrondi une fois), répartis 2,00 + 2,00 + 2,01. Un HT de ligne ou une
+ *    TVA de taux écrits par le fournisseur remplacent ces propositions ;
+ *    l'écart entre la TVA retenue et la proposée se répartit sur les
+ *    lignes du taux au prorata de leur HT, par cumul : avec 6,00 € de TVA
+ *    du fournisseur sur les mêmes lignes, l'écart de -1 centime vaut, au
+ *    cumul des HT, -0,33, -0,67 puis -1 centime, arrondis à 0, -1 puis -1 :
+ *    seule la deuxième ligne perd un centime, soit 2,00 + 1,99 + 2,01. Un
+ *    retour au fournisseur (retourDAchat()) propose la TVA du HT des
+ *    articles retournés jusqu'ici, sans dépasser celle de la ligne, moins
+ *    les retours précédents ; quand la note d'avoir du fournisseur écrit
+ *    un autre HT, la TVA proposée suit ce HT.
  * 5. Le PU HT qu'une ligne de vente enregistre est son PU TTC ÷ (1 +
  *    taux), au millionième d'euro (prixUnitaireHtExact()) : 1 000
  *    articles à 1,00 € TTC à 20 % ont un PU HT de 0,833333 €, et 1 000 x
@@ -279,14 +282,28 @@ class CalculateurLigne
      * Rien n'est jamais négatif : la note d'avoir du fournisseur, qui
      * prime, a pu rendre plus que la proposition d'un retour précédent.
      *
+     * Quand la note d'avoir écrit pour ce retour un autre HT que celui
+     * proposé (montant_ht_calcule, gardé pour l'y comparer), il le remplace,
+     * et la TVA proposée suit ce HT, comme celle d'une facture d'achat suit
+     * sa base (voir chiffrerUnAchat()) : la TVA de tout le HT retenu des
+     * retours de la ligne, ce HT compris, jamais plus grande que celle de
+     * la ligne, moins ce que les retours précédents ont rendu, et jamais
+     * plus grande que le HT de ce retour, qu'aucune note d'avoir valable ne
+     * dépasse. 2 articles d'une ligne de 5 x 20,00 € HT à 20 %, proposés
+     * 40,00 € + 8,00 €, dont la note écrit 5,00 € HT, proposent 1,00 € de
+     * TVA ; écrit 45,00 €, 9,00 €. Un HT écrit égal à la proposition la
+     * garde, TVA comprise : le retour de toute la ligne rend encore
+     * exactement ce qu'il en reste.
+     *
      * @param  array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int, montant_ht: int, montant_tva: int}  $ligne  la ligne achetée, telle qu'enregistrée : PU HT en millionièmes d'euro, montants en centimes, taux et remise en centièmes de point
      * @param  int  $quantiteRetournee  tous les articles retournés jusqu'ici, ce retour compris
      * @param  array{montant_ht: int, montant_tva: int}  $dejaRendu  ce que les retours précédents de la ligne ont rendu
-     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int}
+     * @param  int|null  $htEcrit  le HT qu'écrit la note d'avoir du fournisseur pour ce retour, en centimes ; aucun, la proposition
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_ht_calcule: int}
      *
      * @throws InvalidArgumentException
      */
-    public function retourDAchat(array $ligne, int $quantiteRetournee, array $dejaRendu): array
+    public function retourDAchat(array $ligne, int $quantiteRetournee, array $dejaRendu, ?int $htEcrit = null): array
     {
         $taux = $this->taux($ligne, 'taux_tva');
         $quantite = $this->quantiteRendue($ligne, $quantiteRetournee);
@@ -300,10 +317,17 @@ class CalculateurLigne
             $retour = $this->moins($ht, min($tvaDeLaLigne, $this->tvaDuHt($ht, $taux)), $dejaRendu);
         }
 
-        $ht = max(0, $retour['montant_ht']);
+        $htPropose = max(0, $retour['montant_ht']);
+        $ht = $htPropose;
         $tva = max(0, $retour['montant_tva']);
 
-        return ['montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ttc' => $ht + $tva];
+        if ($htEcrit !== null && $htEcrit !== $htPropose) {
+            $ht = $this->htEcrit(['montant_ht' => $htEcrit]);
+            $htCumule = $this->borne($this->entier($dejaRendu, 'montant_ht') + $ht);
+            $tva = min($ht, max(0, min($tvaDeLaLigne, $this->tvaDuHt($htCumule, $taux)) - $this->entier($dejaRendu, 'montant_tva')));
+        }
+
+        return ['montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ttc' => $ht + $tva, 'montant_ht_calcule' => $htPropose];
     }
 
     /**

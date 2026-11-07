@@ -525,7 +525,7 @@ class FactureAchatResource extends Resource
                         ->dehydrated(false),
                     self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => self::ligneAchat($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
                         ->rule(self::regleStockDuProduitRetourne())
-                        ->live(onBlur: true),
+                        ->saisieEnDirect(),
                     TextInput::make('montant_ht')
                         ->label('HT sur la note d\'avoir')
                         ->numeric()
@@ -533,7 +533,7 @@ class FactureAchatResource extends Resource
                         ->prefix('€')
                         ->rule(new MontantAuCentime)
                         ->helperText(fn (Get $get, TextInput $component): string => self::propositionDuRetour($get, $component))
-                        ->live(onBlur: true),
+                        ->saisieEnDirect(),
                 ])
                 ->columns(4)
                 ->addable(false)
@@ -553,7 +553,7 @@ class FactureAchatResource extends Resource
                         ->suffix('€')
                         ->rule(new MontantAuCentime)
                         ->helperText(fn (Get $get): string => self::propositionDeLaTvaDuRetour($get))
-                        ->live(onBlur: true),
+                        ->saisieEnDirect(),
                 ])
                 ->addable(false)
                 ->deletable(false)
@@ -566,7 +566,8 @@ class FactureAchatResource extends Resource
                 ->numeric()
                 ->minValue(0)
                 ->suffix('€')
-                ->rule(new MontantAuCentime),
+                ->rule(new MontantAuCentime)
+                ->saisieEnDirect(),
             Checkbox::make('confirmer_les_ecarts')
                 ->label('Je confirme ces montants : ce sont ceux de la note d\'avoir du fournisseur. L\'avoir sera marqué « TVA à vérifier ».')
                 ->helperText(fn (Get $get): HtmlString => new HtmlString(implode('<br>', array_map(e(...), self::avertissementsDuRetour($get)))))
@@ -639,30 +640,25 @@ class FactureAchatResource extends Resource
 
     /**
      * Les rangées de TVA de la fenêtre de l'avoir : une par taux des lignes
-     * retournées, dans l'ordre où il apparaît ; une TVA déjà saisie pour un
-     * taux qui reste se garde.
+     * retournées, dans l'ordre où il apparaît (voir rangeesDeLaTva()).
      *
      * @param  array<array-key, mixed>  $lignes
      * @param  array<array-key, mixed>  $tauxSaisis
-     * @return array<string, array{taux_tva: string, montant_tva: mixed}>
+     * @return array<string, array{taux_tva: mixed, montant_tva: mixed}>
      */
     private static function tauxDesRetours(array $lignes, array $tauxSaisis): array
     {
-        $saisies = collect($tauxSaisis)
-            ->filter(fn (mixed $taux): bool => is_array($taux) && filled($taux['taux_tva'] ?? null))
-            ->mapWithKeys(fn (array $taux): array => [self::cleDuTaux($taux['taux_tva']) => $taux['montant_tva'] ?? null]);
         $taux = [];
 
         foreach ($lignes as $ligne) {
             $ligneAchat = is_array($ligne) ? self::ligneAchat($ligne['ligne_achat_id'] ?? null) : null;
 
             if ($ligneAchat !== null) {
-                $cle = self::cleDuTaux($ligneAchat->taux_tva);
-                $taux[$cle] = ['taux_tva' => $ligneAchat->taux_tva, 'montant_tva' => $saisies->get($cle)];
+                $taux[] = $ligneAchat->taux_tva;
             }
         }
 
-        return $taux;
+        return self::rangeesDeLaTva($taux, $tauxSaisis);
     }
 
     /**

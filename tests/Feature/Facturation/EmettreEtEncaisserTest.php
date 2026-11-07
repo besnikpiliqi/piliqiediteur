@@ -25,6 +25,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
@@ -395,6 +396,51 @@ class EmettreEtEncaisserTest extends TestCase
             ->assertSee('Partiellement payée');
 
         $this->assertSame([StatutFacture::PartiellementPayee, 75.0], [$brouillon->fresh()->statut, $brouillon->fresh()->montantRestant()]);
+    }
+
+    /**
+     * Un montant à zéro n'est pas un règlement (R1) : depuis la fiche comme
+     * depuis la liste, la part préremplie ramenée à zéro émet le brouillon
+     * sans l'encaisser, comme « Émettre » ; un montant négatif est refusé.
+     * « Encaisser » une facture déjà émise refuse toujours une part à zéro.
+     */
+    public function test_un_montant_a_zero_emet_le_brouillon_sans_l_encaisser(): void
+    {
+        $magasin = $this->magasin();
+        $responsable = self::responsableDeTest($magasin);
+        $client = Client::factory()->professionnel()->create();
+        $depuisLaFiche = $this->brouillon($client, 100, auteur: $responsable);
+        $depuisLaListe = $this->brouillon($client, 30, auteur: $responsable);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $depuisLaFiche->getRouteKey()])->mountAction('emettre_et_encaisser');
+        $part = (string) array_key_first($fiche->get('mountedActionsData.0.parts'));
+        $fiche->set("mountedActionsData.0.parts.{$part}.montant", '-1')
+            ->callMountedAction()
+            ->assertHasActionErrors(["parts.{$part}.montant" => 'min'])
+            ->assertSee(FactureResource::MONTANT_NEGATIF);
+        $this->assertSame(StatutFacture::Brouillon, $depuisLaFiche->fresh()->statut);
+
+        $fiche->set("mountedActionsData.0.parts.{$part}.montant", '0')
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertSee('Émise');
+        $this->assertSame([StatutFacture::Emise, 100.0, []], [$depuisLaFiche->fresh()->statut, $depuisLaFiche->fresh()->montantRestant(), self::paiementsDe($depuisLaFiche->fresh())]);
+
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('emettre_et_encaisser', $depuisLaListe);
+        $part = (string) array_key_first($liste->get('mountedTableActionsData.0.parts'));
+        $liste->set("mountedTableActionsData.0.parts.{$part}.montant", '0.00')
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+        $this->assertSame([StatutFacture::Emise, 30.0, []], [$depuisLaListe->fresh()->statut, $depuisLaListe->fresh()->montantRestant(), self::paiementsDe($depuisLaListe->fresh())]);
+
+        $encaisser = Livewire::test(ViewFacture::class, ['record' => $depuisLaListe->getRouteKey()])->mountAction('encaisser');
+        $part = (string) array_key_first($encaisser->get('mountedActionsData.0.parts'));
+        $encaisser->set("mountedActionsData.0.parts.{$part}.montant", '0')
+            ->callMountedAction()
+            ->assertHasActionErrors(["parts.{$part}.montant" => 'min']);
+        $this->assertSame([], self::paiementsDe($depuisLaListe->fresh()));
     }
 
     /**

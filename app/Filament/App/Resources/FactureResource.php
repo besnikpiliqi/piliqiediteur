@@ -1050,7 +1050,8 @@ class FactureResource extends Resource
      * son crédit d'avoir, qui s'imputera d'office à l'émission et se montre
      * en lecture ; jamais un bon d'avoir (Q6). Les parts ne dépassent jamais
      * ce qui restera dû, un paiement partiel laisse le reste dû avec
-     * l'échéance de la facture, et un règlement sans aucun montant revient à
+     * l'échéance de la facture, et un montant à zéro n'est pas un
+     * règlement : sans aucun montant, ou à zéro, le geste revient à
      * « Émettre ». Seulement pour qui peut émettre ce document et enregistrer
      * un encaissement dans ce magasin (voir FacturePolicy::emettreEtEncaisser()).
      * Une vente au-delà du stock garde la fenêtre ouverte comme « Émettre ».

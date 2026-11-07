@@ -992,12 +992,16 @@ return [
         ]],
         'champ:fournisseur_id' => ['lot' => 'NAV-3', 'tests' => []],
         'champ:montant_ht' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
         ]],
         'champ:montant_tva' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
         ]],
         'champ:numero_fournisseur' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:total_ttc_controle' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
+        ]],
         'filtre:source' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1095,7 +1099,10 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php' => [
-        'action:creer_avoir_fournisseur' => ['lot' => 'NAV-3', 'tests' => []],
+        'action:creer_avoir_fournisseur' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le HT de la note d’avoir tapé aussitôt après la quantité reste tel quel, et la TVA proposée le suit',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+        ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1272,6 +1279,7 @@ return [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser',
         ]],
         'action:emettre_et_encaisser' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable émet et encaisse une facture en espèces et par carte depuis sa fiche, et son PDF imprime chaque règlement à gauche du Total TTC',
         ]],
         'action:emettreLaFactureRectificative' => ['lot' => 'NAV-2', 'tests' => []],
@@ -1454,6 +1462,7 @@ return [
         ]],
         'champ:client_id' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:facture_id' => ['lot' => 'NAV-2', 'tests' => []],
+        'champ:montant' => ['lot' => 'NAV-2', 'tests' => []],
         'filtre:mode_paiement' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1551,6 +1560,8 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'champ:suivi_stock' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:prix_vente_ttc' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:taux_tva' => ['lot' => 'NAV-3', 'tests' => []],
         'filtre:fournisseur_id' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1964,6 +1975,8 @@ return [
         'champ:produit_id' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:quantite' => ['lot' => 'NAV-2', 'tests' => []],
         'champ:recherche' => ['lot' => 'NAV-2', 'tests' => []],
+        'champ:remise_pourcentage' => ['lot' => 'NAV-2', 'tests' => []],
+        'champ:taux_tva' => ['lot' => 'NAV-2', 'tests' => []],
         'repeteur:lignes' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -2018,8 +2031,10 @@ return [
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'champ:montant' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
+        'champ:montant_recu' => ['lot' => 'NAV-2', 'tests' => []],
         'repeteur:parts' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',

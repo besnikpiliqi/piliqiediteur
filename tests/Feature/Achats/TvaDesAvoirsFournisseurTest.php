@@ -29,11 +29,11 @@ use Tests\TestCase;
 /**
  * Un avoir fournisseur garde les montants de la note d'avoir du
  * fournisseur, qui prime (décision de l'éditeur du 02/11/2026, T1 ;
- * BOI-TVA-DED-40-10-10 § 260, voir ChiffrageDUnAvoirFournisseur) : PILIQI
- * propose le HT et la TVA de chaque retour, la note d'avoir les remplace,
- * avec les mêmes tolérances qu'une facture d'achat, la même confirmation et
- * la même marque au-delà ; l'avoir ne rend jamais plus que la TVA restante
- * du taux sur la facture d'achat, tolérance comprise.
+ * BOI-TVA-DECLA-30-20-20-20 § 260, voir ChiffrageDUnAvoirFournisseur) :
+ * PILIQI propose le HT et la TVA de chaque retour, la note d'avoir les
+ * remplace, avec les mêmes tolérances qu'une facture d'achat, la même
+ * confirmation et la même marque au-delà ; l'avoir ne rend jamais plus que
+ * la TVA restante du taux sur la facture d'achat, tolérance comprise.
  */
 class TvaDesAvoirsFournisseurTest extends TestCase
 {
@@ -66,8 +66,9 @@ class TvaDesAvoirsFournisseurTest extends TestCase
     /**
      * Au-delà de la tolérance, rien n'est émis sans la confirmation, et le
      * refus ne laisse aucun brouillon ; confirmé, l'avoir garde le HT de
-     * la note d'avoir, est marqué « TVA à vérifier », et la confirmation,
-     * la marque et l'avoir s'inscrivent au journal d'audit.
+     * la note d'avoir et la TVA que PILIQI propose pour ce HT (9,00 € pour
+     * 45,00 €), est marqué « TVA à vérifier », et la confirmation, la
+     * marque et l'avoir s'inscrivent au journal d'audit.
      */
     public function test_un_ecart_au_dela_de_la_tolerance_se_confirme_et_marque_l_avoir(): void
     {
@@ -87,8 +88,8 @@ class TvaDesAvoirsFournisseurTest extends TestCase
 
         $avoir = $this->retourner($factureAchat, [['quantite' => 2, 'montant_ht' => '45.00']], MontantsDuFournisseur::aucun()->avecLaConfirmation(true));
 
-        $this->assertSame([['45.00', '45.00', '8.00', '53.00']], $this->montantsDesLignes($avoir));
-        $this->assertSame([['20.00', '45.00', '8.00', '8.00', null, (int) self::auteur()->id]], $this->montantsDesTaux($avoir));
+        $this->assertSame([['45.00', '45.00', '9.00', '54.00']], $this->montantsDesLignes($avoir));
+        $this->assertSame([['20.00', '45.00', '9.00', '9.00', null, (int) self::auteur()->id]], $this->montantsDesTaux($avoir));
         $this->assertTrue($avoir->tva_a_verifier);
 
         $document = ['nature' => 'avoir_fournisseur', 'numero' => $avoir->numero, 'numero_fournisseur' => 'AV-12'];
@@ -99,13 +100,38 @@ class TvaDesAvoirsFournisseurTest extends TestCase
                 'ecart' => 0,
                 'lignes' => [['ecart' => 500, 'ht_calcule' => 4000, 'ht_saisi' => 4500, 'reference' => 'CABLE-USB']],
                 'taux' => 2000,
-                'tva_calculee' => 800,
-                'tva_saisie' => 800,
+                'tva_calculee' => 900,
+                'tva_saisie' => 900,
             ]],
         ]], $this->valeursAuditees(ActionAuditee::EcartsDuFournisseurConfirmes));
         $this->assertSame([['document' => $document]], $this->valeursAuditees(ActionAuditee::TvaAVerifierPosee));
         $emis = $this->valeursAuditees(ActionAuditee::AvoirFournisseurEmis);
-        $this->assertSame([true, [['base_ht' => '45.00', 'montant_tva' => '8.00', 'montant_tva_calcule' => '8.00', 'montant_tva_saisi' => null, 'taux_tva' => '20.00']]], [$emis[0]['tva_a_verifier'], $emis[0]['taux']]);
+        $this->assertSame([true, [['base_ht' => '45.00', 'montant_tva' => '9.00', 'montant_tva_calcule' => '9.00', 'montant_tva_saisi' => null, 'taux_tva' => '20.00']]], [$emis[0]['tva_a_verifier'], $emis[0]['taux']]);
+    }
+
+    /**
+     * La TVA que PILIQI propose suit le HT qu'écrit la note d'avoir, comme
+     * celle d'une facture d'achat suit sa base, et PILIQI ne refuse jamais
+     * sa propre proposition : 2 câbles proposés 40,00 € + 8,00 €, que la
+     * note écrit 5,00 € HT, proposent 1,00 € de TVA, sans aucune TVA
+     * saisie, et l'avoir s'émet une fois l'écart du HT confirmé. Le retour
+     * suivant part de ce qui a été rendu : les 3 derniers câbles proposent
+     * ce qui reste de la ligne (95,00 € + 19,00 €).
+     */
+    public function test_la_tva_proposee_suit_le_ht_qu_ecrit_la_note_d_avoir(): void
+    {
+        $factureAchat = $this->recevoir(5);
+
+        $avoir = $this->retourner($factureAchat, [['quantite' => 2, 'montant_ht' => '5.00']], MontantsDuFournisseur::aucun()->avecLaConfirmation(true));
+
+        $this->assertSame([['5.00', '5.00', '1.00', '6.00']], $this->montantsDesLignes($avoir));
+        $this->assertSame([['20.00', '5.00', '1.00', '1.00', null, (int) self::auteur()->id]], $this->montantsDesTaux($avoir));
+        $this->assertSame(['5.00', '1.00', '6.00', true], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc, $avoir->tva_a_verifier]);
+
+        $reste = $this->retourner($factureAchat, [['quantite' => 3]]);
+
+        $this->assertSame([['95.00', null, '19.00', '114.00']], $this->montantsDesLignes($reste));
+        $this->assertSame(['95.00', '19.00', false], [$reste->total_ht, $reste->total_tva, $reste->tva_a_verifier]);
     }
 
     /**

@@ -86,6 +86,27 @@ test('le responsable émet et encaisse une facture en espèces et par carte depu
         ->and($texte('Restant dû à l\'émission')['y'])->toBeGreaterThan($totalTtc['y'] - 30);
 });
 
+/*
+ * Un montant à zéro n'est pas un règlement (R1) : la part préremplie
+ * ramenée à zéro, « Émettre et encaisser » émet le brouillon sans
+ * l'encaisser, comme « Émettre ».
+ */
+test('le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser', function () {
+    $societe = $this->societeComplete();
+    $facture = brouillonDe($societe->magasin, $societe->responsable, 'Hôtel des Pins');
+    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id);
+
+    $onglet->cliquerSur('Émettre et encaisser')
+        ->remplirLaLigne('parts', 0, 'montant', '0')
+        ->soumettre('Émettre et encaisser')
+        ->voir('Émise');
+
+    $facture = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => $facture->fresh());
+    expect($facture->statut)->toBe(StatutFacture::Emise)
+        ->and($facture->numero)->toStartWith('FAC-PORT-2026-')
+        ->and(paiementsDeLaFacture($societe->magasin, $facture))->toBe([]);
+});
+
 test('l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser', function () {
     $societe = $this->societeComplete();
     $facture = brouillonDe($societe->magasin, $societe->responsable, 'Hôtel des Pins');

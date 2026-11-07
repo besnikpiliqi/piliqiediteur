@@ -176,7 +176,9 @@ class TvaDesAchatsResourceTest extends TestCase
      * L'avoir fournisseur recopie sa note d'avoir : le HT de chaque ligne,
      * la TVA de chaque taux ; au-delà de la tolérance, la case de
      * confirmation est exigée, et l'avoir émis porte la marque, que sa
-     * liste filtre et sa fiche montre.
+     * liste filtre et sa fiche montre. La rangée de la TVA d'un taux garde
+     * sa clé quand une ligne change : une réponse qui la changerait
+     * remplacerait son champ dans la page, peut-être en pleine frappe.
      */
     public function test_l_avoir_fournisseur_recopie_sa_note_d_avoir_et_confirme_ses_ecarts(): void
     {
@@ -186,10 +188,9 @@ class TvaDesAchatsResourceTest extends TestCase
         $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
             ->mountAction('creer_avoir_fournisseur');
         $ligne = array_key_first($page->get('mountedActionsData.0.lignes'));
-        $page->set("mountedActionsData.0.lignes.{$ligne}.quantite", 1);
-        // Les rangées de TVA suivent les lignes : leur clé se relit après
-        // le changement de la quantité.
         $taux = array_key_first($page->get('mountedActionsData.0.taux'));
+        $page->set("mountedActionsData.0.lignes.{$ligne}.quantite", 1);
+        $this->assertSame([$taux], array_keys($page->get('mountedActionsData.0.taux')));
         $page->set("mountedActionsData.0.taux.{$taux}.montant_tva", '2.50')
             ->setActionData(['motif' => 'Coque fêlée', 'numero_fournisseur' => 'AV-12'])
             ->callMountedAction()
@@ -208,6 +209,63 @@ class TvaDesAchatsResourceTest extends TestCase
         Livewire::test(ViewAvoirFournisseur::class, ['record' => $avoir->getRouteKey()])
             ->assertSee(FactureAchatResource::TVA_A_VERIFIER)
             ->assertSee('Calcul depuis les lignes : 2,00 €');
+    }
+
+    /**
+     * La TVA que la fenêtre de l'avoir propose suit le HT qu'écrit sa note
+     * d'avoir : 2 coques proposées 20,00 € HT, écrites 2,00 €, font
+     * paraître la proposition de 0,40 € et la case qui confirme l'écart du
+     * HT ; confirmé, l'avoir s'émet avec 2,00 € HT et 0,40 € de TVA, sans
+     * aucune TVA saisie, marqué « TVA à vérifier ».
+     */
+    public function test_la_tva_proposee_par_la_fenetre_de_l_avoir_suit_le_ht_de_sa_note_d_avoir(): void
+    {
+        $this->connecterLeProprietaire();
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->facture(null));
+
+        $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->mountAction('creer_avoir_fournisseur');
+        $ligne = array_key_first($page->get('mountedActionsData.0.lignes'));
+        $page->set("mountedActionsData.0.lignes.{$ligne}.montant_ht", '2.00')
+            ->assertSee('Base HT 2,00 € · proposition de PILIQI : 0,40 €. Laissez vide pour la garder.')
+            ->assertSee('« Coque » : le HT saisi (2,00 €) s&#039;écarte de 18,00 € de la quantité × le PU HT, remise déduite (20,00 €).', false)
+            ->setActionData(['motif' => 'Coque fêlée', 'numero_fournisseur' => 'AV-13', 'confirmer_les_ecarts' => true])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $avoir = AvoirFournisseur::query()->sole();
+        $this->assertSame(['2.00', '0.40', '2.40', true], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc, $avoir->tva_a_verifier]);
+    }
+
+    /**
+     * Les montants que la personne recopie de la facture ou de la note
+     * d'avoir du fournisseur (la TVA de chaque taux, le total TTC de
+     * contrôle, le HT d'une ligne d'achat, la quantité et le HT d'une ligne
+     * retournée) se calculent en direct sans jamais être réécrits par le
+     * serveur pendant la frappe (modificateur « unintrusive », voir
+     * saisieEnDirect()) : une réponse arrivée en pleine frappe effaçait le
+     * HT de la note d'avoir tapé aussitôt après la quantité.
+     */
+    public function test_les_montants_recopies_du_fournisseur_ne_sont_jamais_reecrits_pendant_la_frappe(): void
+    {
+        $this->connecterLeProprietaire();
+        $protege = fn (string $chemin): string => '/wire:model\.live\.unintrusive="'.$chemin.'"/';
+
+        $facture = $this->factureDeDeuxCoques()->html();
+        $this->assertMatchesRegularExpression($protege('data\.taux\.[^"]+\.montant_tva'), $facture);
+        $this->assertMatchesRegularExpression($protege('data\.total_ttc_controle'), $facture);
+
+        $ligne = Livewire::test(CreateFactureAchat::class)
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => Produit::factory()->create(['nom' => 'Coque', 'taux_tva' => 20])->id])
+            ->html();
+        $this->assertMatchesRegularExpression($protege('mountedFormComponentActionsData\.0\.montant_ht'), $ligne);
+
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->facture(null));
+        $fenetre = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->mountAction('creer_avoir_fournisseur')->html();
+        foreach (['lignes\.[^"]+\.quantite', 'lignes\.[^"]+\.montant_ht', 'taux\.[^"]+\.montant_tva', 'total_ttc_controle'] as $champ) {
+            $this->assertMatchesRegularExpression($protege('mountedActionsData\.0\.'.$champ), $fenetre);
+        }
     }
 
     /**

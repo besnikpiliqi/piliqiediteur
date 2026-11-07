@@ -14,11 +14,12 @@ use InvalidArgumentException;
  * donne la règle des retours (pour tous les articles de la ligne d'achat
  * retournés jusqu'ici, la TVA de leur HT, moins ce que les retours
  * précédents ont rendu, voir LigneAchat::montantsDuRetour()) ; le HT que la
- * note d'avoir écrit pour une ligne remplace sa proposition. Pour chaque
- * taux, la TVA proposée est la somme de celles de ses lignes, et celle que
- * la note d'avoir écrit la remplace, l'écart se répartissant sur les lignes
- * du taux comme sur une facture d'achat (voir
- * CalculateurLigne::repartirUneTvaRetenue()).
+ * note d'avoir écrit pour une ligne remplace sa proposition, et la TVA
+ * proposée de la ligne suit alors ce HT, comme la TVA proposée d'une
+ * facture d'achat suit sa base. Pour chaque taux, la TVA proposée est la
+ * somme de celles de ses lignes, et celle que la note d'avoir écrit la
+ * remplace, l'écart se répartissant sur les lignes du taux comme sur une
+ * facture d'achat (voir CalculateurLigne::repartirUneTvaRetenue()).
  *
  * Le chiffrage d'un brouillon est provisoire : l'émission le refait, sur
  * les retours déjà émis, en gardant ce que la note d'avoir écrit (voir
@@ -50,21 +51,19 @@ class ChiffrageDUnAvoirFournisseur
 
         foreach ($retours as $cle => $retour) {
             $ligneAchat = $retour['ligne_achat'];
-            $propose = $ligneAchat->montantsDuRetour($retour['quantite']);
-            $ht = $retour['montant_ht_saisi'] === null ? $propose['montant_ht'] : $this->calculateur->enCentiemes($retour['montant_ht_saisi']);
-
-            if ($ht < 0) {
-                throw new InvalidArgumentException(CalculateurLigne::REFUS_HT_NEGATIF);
-            }
+            $montants = $ligneAchat->montantsDuRetour(
+                $retour['quantite'],
+                $retour['montant_ht_saisi'] === null ? null : $this->calculateur->enCentiemes($retour['montant_ht_saisi']),
+            );
 
             $lignes[$cle] = [
                 'taux' => $this->calculateur->enCentiemes($ligneAchat->taux_tva),
                 'taux_tva' => $ligneAchat->taux_tva,
                 'description' => $ligneAchat->description,
                 'reference' => $ligneAchat->reference,
-                'montant_ht' => $ht,
-                'montant_ht_calcule' => $propose['montant_ht'],
-                'montant_tva' => $propose['montant_tva'],
+                'montant_ht' => $montants['montant_ht'],
+                'montant_ht_calcule' => $montants['montant_ht_calcule'],
+                'montant_tva' => $montants['montant_tva'],
             ];
         }
 

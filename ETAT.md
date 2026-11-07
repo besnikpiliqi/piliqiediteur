@@ -1,19 +1,20 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 22:00 UTC par pilotage-sync.sh : « Point de suivi du 07/11 22 h 00 UTC : sauvegarde du lot EX (2 commits locaux et corrections de relecture) ».
+Mis à jour le 07/11/2026 à 22:13 UTC par pilotage-sync.sh : « Après le lot EX ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `074eaee`. Commits locaux pas encore poussés :
+Tête poussée : `c7b1ec3`. Commits locaux pas encore poussés :
 
 ```
-938db39 Ajoute le téléchargement des documents par période (lot EX 2/2)
-3c83ee0 Joint la pièce du fournisseur aux achats saisis à la main (lot EX 1/2)
 ```
 
 Derniers commits poussés :
 
 ```
+c7b1ec3 Relecture du lot EX de la série 8
+938db39 Ajoute le téléchargement des documents par période (lot EX 2/2)
+3c83ee0 Joint la pièce du fournisseur aux achats saisis à la main (lot EX 1/2)
 074eaee Relecture du lot TR de la série 8
 d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 0afc14c Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux
@@ -31,47 +32,11 @@ f9b669c Relecture du lot A7b des suites du lot A7
 d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 5745e7a Relecture du lot L1 de l'architecture société
 8b15aec Outille le développement local et fixe le fuseau UTC de la base (lot L1)
-01fe217 Relecture du lot EC de l’espace des cabinets
-93ea590 Retire les experts-comptables de la société et réécrit CLAUDE.md (lot EC 4/4)
-94ada86 Lie les cabinets à leurs clients : invitations, demandes, autorisations, accès (lot EC 3/4)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M README.md
- M app/Console/Commands/EffacerTelechargementsDeDocuments.php
- M app/Domain/Achats/Services/PieceDeposee.php
- M app/Domain/Facturation/Services/DocumentTrouve.php
- M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
- M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
- M app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
- M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
- M app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
- M app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
- M app/Filament/App/Pages/TelechargerLesDocuments.php
- M app/Filament/Cabinet/Pages/TelechargerLesDocuments.php
- M app/Filament/Concerns/TelechargeLesDocumentsParPeriode.php
- M app/Filament/Societe/Pages/TelechargerLesDocuments.php
- M app/Http/Controllers/TelechargerLesDocumentsController.php
- M config/queue.php
- M database/migrations/2026_10_03_100003_create_factures_table.php
- M database/migrations/2026_10_04_100001_create_paiements_table.php
- M database/migrations/2026_10_05_100001_create_avoirs_table.php
- M database/migrations/2026_10_12_100001_create_avoir_allocations_table.php
- M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
- M phpunit.xml
- M resources/views/filament/telecharger-les-documents.blade.php
- M tests/Browser/Parcours/TelechargerLesDocumentsTest.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/TelechargementDesDocumentsConcurrenceTest.php
- M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
- M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
- M tests/Feature/Filament/TelechargerLesDocumentsTest.php
- M tests/Feature/Tenancy/NotificationsDeLaSocieteTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -79,9 +44,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SL:implementation
-SL:relecture1
-SL:relecture2
 SL:correction
 SL:poussee
 SL:fiche
@@ -104,4 +66,7 @@ EX:implementation
 EX:relecture1
 EX:relecture2
 EX:correction
+EX:poussee
+EX:fiche
+EX:notes
 ```

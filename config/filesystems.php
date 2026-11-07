@@ -64,6 +64,20 @@ return [
             'report' => false,
         ],
 
+        // Les fichiers préparés par le téléchargement des documents par
+        // période (voir PreparerLeTelechargementDesDocumentsJob) : un ZIP
+        // ou un CSV par demande, servi seulement au compte qui l'a
+        // demandé, effacé sept jours après (voir
+        // app:effacer-telechargements-de-documents).
+        'telechargements' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/telechargements'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

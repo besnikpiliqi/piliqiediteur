@@ -259,7 +259,7 @@ class ResponsablesTest extends TestCase
 
         $vendeur->refresh();
         $this->assertTrue($vendeur->estResponsableDe($magasin));
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $vendeur->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER])), $vendeur->autorisationsDans($magasin));
         $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
         $this->assertSame([(int) $administrateur->id, ['role' => 'vendeur', 'autorisations' => [PermissionRegistry::FACTURE_VIEW]]], [(int) $affectation->nomme_par, $affectation->avant_la_nomination]);
     }
@@ -463,7 +463,7 @@ class ResponsablesTest extends TestCase
         $dernier = collect($this->modificationsDesDroits($magasin))->last();
         $this->assertSame(['id' => $vendeur->id, 'nom' => 'Paul'], $dernier['membre']);
         $this->assertSame(['vendeur', 'responsable'], [$dernier['avant']['role_magasin'], $dernier['apres']['role_magasin']]);
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $dernier['apres']['permissions']);
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER])), $dernier['apres']['permissions']);
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::ResponsableNomme));
     }
 

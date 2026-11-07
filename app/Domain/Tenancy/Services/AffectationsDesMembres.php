@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -14,68 +15,84 @@ use LogicException;
  * compte, changer son rôle ou ses cases, le réintégrer), lue, contrôlée et
  * écrite une seule fois. Un compte de membre n'a qu'une affectation, dans
  * le magasin de son identifiant (voir GardesDesDroits) :
- * - un responsable n'a aucune case ; un vendeur ou un observateur reçoit
- *   les cases demandées, ou le modèle de son rôle, jamais au-delà de ce que
- *   l'auteur peut cocher dans ce magasin (voir PorteeDesDroits) ;
+ * - un responsable n'a de case que celles que seul le propriétaire coche
+ *   (voir PermissionRegistry::cocheesParLeProprietaire()) ; un vendeur ou
+ *   un observateur reçoit les cases demandées, ou le modèle de son rôle,
+ *   jamais au-delà de ce que l'auteur peut cocher dans ce magasin (voir
+ *   PorteeDesDroits) ;
+ * - une case que seul le propriétaire coche ne change que par lui : quand
+ *   un autre auteur change les cases ou le rôle d'un membre, elle reste
+ *   telle quelle ;
  * - un responsable nommé par un administrateur garde la trace de sa
  *   nomination, que le propriétaire, prévenu, ou cet administrateur peut
  *   annuler (voir AnnulerUneNominationAction).
  */
 final class AffectationsDesMembres
 {
-    public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a aucune case : il a toutes les autorisations de son magasin.';
+    public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a de case que celles que seul le propriétaire coche : il a sans case toutes les autres autorisations de son magasin.';
 
     public function __construct(private readonly PorteeDesDroits $portee) {}
 
     /**
-     * Le rôle demandé, et ses cases : aucune pour un responsable, celles
-     * demandées (ou null, le modèle du rôle) pour un vendeur ou un
-     * observateur.
+     * Le rôle demandé, et ses cases : celles demandées, ou null, le modèle
+     * du rôle (aucune case pour un responsable, voir
+     * RoleMagasin::permissionsParDefaut()).
      *
      * @param  list<string>|null  $autorisations
      * @return array{role: RoleMagasin, autorisations: list<string>|null}
      *
-     * @throws LogicException quand le rôle est inconnu ou qu'un responsable porte des cases
+     * @throws LogicException quand le rôle est inconnu
      */
     public function lire(RoleMagasin|string $role, ?array $autorisations): array
     {
         $role = $role instanceof RoleMagasin ? $role : (RoleMagasin::tryFrom($role) ?? throw new LogicException('Rôle de magasin inconnu.'));
 
-        if (! $role->aDesCases() && $autorisations !== null && $autorisations !== []) {
-            throw new LogicException(self::MESSAGE_RESPONSABLE_SANS_CASE);
-        }
-
-        return ['role' => $role, 'autorisations' => $role->aDesCases() ? $autorisations : null];
+        return ['role' => $role, 'autorisations' => $autorisations];
     }
 
     /**
-     * Les cases de l'affectation, contrôlées : aucune pour un responsable ;
-     * celles demandées, ou le modèle du rôle dans le type d'activité de la
-     * société du magasin (voir RoleMagasin::permissionsParDefaut()), pour
-     * un vendeur ou un observateur, que l'auteur peut toutes cocher dans ce
-     * magasin.
+     * Les cases de l'affectation, contrôlées : celles demandées, ou le
+     * modèle du rôle dans le type d'activité de la société du magasin
+     * (voir RoleMagasin::permissionsParDefaut()), que l'auteur peut toutes
+     * cocher dans ce magasin ; pour un responsable, seulement celles que
+     * seul le propriétaire coche. Quand l'auteur n'est pas le propriétaire,
+     * les cases que seul le propriétaire coche restent celles de
+     * l'affectation actuelle du membre, s'il en a une : il ne les coche ni
+     * ne les décoche jamais.
      *
      * @param  array{role: RoleMagasin, autorisations: list<string>|null}  $demandee
      * @return list<string>
      *
      * @throws LogicException
      */
-    public function cases(User $auteur, Magasin $magasin, array $demandee): array
+    public function cases(User $auteur, Magasin $magasin, array $demandee, ?Affectation $actuelle = null): array
     {
-        if (! $demandee['role']->aDesCases()) {
-            return [];
+        $type = $magasin->societe->type_activite;
+        $reservees = PermissionRegistry::cocheesParLeProprietaire($type);
+        $demandees = $demandee['autorisations'] ?? $demandee['role']->permissionsParDefaut($type);
+
+        if (! $demandee['role']->aDesCases() && array_diff($demandees, $reservees) !== []) {
+            throw new LogicException(self::MESSAGE_RESPONSABLE_SANS_CASE);
         }
 
-        return $this->portee->verifierCochables($auteur, $magasin, $demandee['autorisations'] ?? $demandee['role']->permissionsParDefaut($magasin->societe->type_activite));
+        if ($auteur->estProprietaire()) {
+            return $this->portee->verifierCochables($auteur, $magasin, $demandees);
+        }
+
+        $gardees = array_values(array_intersect($actuelle?->autorisations() ?? [], $reservees));
+        $cases = array_values(array_unique([...$this->portee->verifierCochables($auteur, $magasin, array_values(array_diff($demandees, $gardees))), ...$gardees]));
+        sort($cases);
+
+        return $cases;
     }
 
     /**
-     * Écrit l'affectation de ce compte à ce magasin, ou la change. Un
-     * responsable que nomme un administrateur garde la trace de sa
-     * nomination (son auteur, et le rôle et les cases d'avant pour une
+     * Écrit l'affectation de ce compte à ce magasin, ou la change, avec ces
+     * cases. Un responsable que nomme un administrateur garde la trace de
+     * sa nomination (son auteur, et le rôle et les cases d'avant pour une
      * promotion) ; toute autre écriture l'efface. Les cases d'une
      * affectation qui devient celle d'un responsable s'effacent avant son
-     * nouveau rôle (voir GardesDesDroits).
+     * nouveau rôle (voir GardesDesDroits), puis il reçoit les siennes.
      *
      * @param  list<string>  $autorisations
      */
@@ -104,10 +121,7 @@ final class AffectationsDesMembres
         }
 
         $affectation->save();
-
-        if ($role->aDesCases()) {
-            $affectation->cocher($autorisations);
-        }
+        $affectation->cocher($autorisations);
 
         return $affectation;
     }

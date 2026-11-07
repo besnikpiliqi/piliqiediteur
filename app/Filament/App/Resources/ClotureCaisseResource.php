@@ -266,38 +266,23 @@ class ClotureCaisseResource extends Resource
     }
 
     /**
-     * Les lignes de la rubrique « Ventes et avoirs » : chaque rubrique du
-     * récapitulatif avec son nombre et ses montants, puis le détail de
-     * chacun de ses taux ; le net des ventes aux particuliers après leurs
-     * avoirs, que gardent les totaux de la clôture.
+     * Les lignes de la rubrique « Ventes et avoirs » telles que la clôture
+     * les a écrites (voir ClotureCaisse::rubriques()), leurs montants en
+     * euros.
      *
      * @return list<array{rubrique: string, nombre: int|null, ht: string, tva: string, ttc: string}>
      */
     private static function rubriques(ClotureCaisse $cloture): array
     {
         $calculateur = app(CalculateurLigne::class);
-        $ligne = fn (string $rubrique, ?int $nombre, int $ht, int $tva, int $ttc): array => [
-            'rubrique' => $rubrique,
-            'nombre' => $nombre,
-            'ht' => $calculateur->enEuros($ht),
-            'tva' => $calculateur->enEuros($tva),
-            'ttc' => $calculateur->enEuros($ttc),
-        ];
-        $rubrique = fn (string $cle, string $libelle): array => [
-            $ligne($libelle, $cloture->recapitulatif[$cle]['nombre'], $cloture->recapitulatif[$cle]['ht'], $cloture->recapitulatif[$cle]['tva'], $cloture->recapitulatif[$cle]['ttc']),
-            ...array_map(
-                fn (array $taux): array => $ligne('dont TVA à '.self::taux($taux['taux']), null, $taux['ht'], $taux['tva'], $taux['ttc']),
-                $cloture->recapitulatif[$cle]['par_taux'],
-            ),
-        ];
 
-        return [
-            ...$rubrique('ventes_particuliers', 'Ventes aux particuliers (tickets)'),
-            ...$rubrique('avoirs_particuliers', 'Avoirs sur des tickets'),
-            $ligne('Net des ventes aux particuliers (base de l\'e-reporting)', null, $calculateur->enCentiemes($cloture->total_ht), $calculateur->enCentiemes($cloture->total_tva), $calculateur->enCentiemes($cloture->total_ttc)),
-            ...$rubrique('factures_professionnels', 'Factures aux professionnels (pour information)'),
-            ...$rubrique('avoirs_professionnels', 'Avoirs aux professionnels (pour information)'),
-        ];
+        return array_map(fn (array $rubrique): array => [
+            'rubrique' => $rubrique['rubrique'],
+            'nombre' => $rubrique['nombre'],
+            'ht' => $calculateur->enEuros($rubrique['ht']),
+            'tva' => $calculateur->enEuros($rubrique['tva']),
+            'ttc' => $calculateur->enEuros($rubrique['ttc']),
+        ], $cloture->rubriques());
     }
 
     /**
@@ -314,15 +299,6 @@ class ClotureCaisseResource extends Resource
             'contre_passations' => $mode['contre_passations'],
             'montant' => app(CalculateurLigne::class)->enEuros($mode['montant']),
         ], $cloture->recapitulatif['encaissements']);
-    }
-
-    /**
-     * Un taux en centièmes de point tel qu'il s'écrit : 2000 donne
-     * « 20 % », 550 « 5,5 % ».
-     */
-    public static function taux(int $centiemes): string
-    {
-        return rtrim(rtrim(sprintf('%d,%02d', intdiv($centiemes, 100), $centiemes % 100), '0'), ',').' %';
     }
 
     public static function table(Table $table): Table

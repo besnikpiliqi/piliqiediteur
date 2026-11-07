@@ -58,6 +58,8 @@ class CabinetComptable extends Page implements HasForms
 {
     use GereLesExceptionsMetier, InteractsWithForms;
 
+    public const AIDE_TELECHARGEMENTS = 'Jamais accordé par défaut : vous seul le cochez. Votre cabinet n\'y reçoit que les documents que ses autres autorisations lui laissent voir.';
+
     public const TEXTE_JAMAIS = 'Jamais la vente, l\'encaissement, la caisse, les comptes ni les réglages de la société.';
 
     protected static ?string $navigationIcon = 'heroicon-o-briefcase';
@@ -99,6 +101,7 @@ class CabinetComptable extends Page implements HasForms
         $this->form->fill([
             'consultations' => array_values(array_intersect($accordees, PermissionRegistry::parDefautDuCabinet($type))),
             'achats' => array_values(array_intersect($accordees, PermissionRegistry::ajoutablesAuCabinet($type))),
+            'telechargements' => array_values(array_intersect($accordees, PermissionRegistry::cocheesParLeProprietaire($type))),
         ]);
     }
 
@@ -111,7 +114,7 @@ class CabinetComptable extends Page implements HasForms
     {
         $etat = $this->form->getState();
 
-        return array_values(array_unique([...($etat['consultations'] ?? []), ...($etat['achats'] ?? [])]));
+        return array_values(array_unique([...($etat['consultations'] ?? []), ...($etat['achats'] ?? []), ...($etat['telechargements'] ?? [])]));
     }
 
     public function societe(): Societe
@@ -142,6 +145,11 @@ class CabinetComptable extends Page implements HasForms
                     ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::ajoutablesAuCabinet($type))))
                     ->columns(2)
                     ->hidden(fn (): bool => $this->lienActif() === null || PermissionRegistry::ajoutablesAuCabinet($type) === []),
+                CheckboxList::make('telechargements')
+                    ->label('Téléchargement des documents par période')
+                    ->helperText(self::AIDE_TELECHARGEMENTS)
+                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type))))
+                    ->hidden(fn (): bool => $this->lienActif() === null),
                 Placeholder::make('jamais')->hiddenLabel()->content(self::TEXTE_JAMAIS)->hidden(fn (): bool => $this->lienActif() === null),
             ])
             ->statePath('data');

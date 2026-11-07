@@ -3,6 +3,7 @@
 use App\Console\Commands\CloreInscriptionsSansCode;
 use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\EffacerPiecesVerification;
+use App\Console\Commands\EffacerTelechargementsDeDocuments;
 use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\ExpirerInvitationsDesCabinets;
 use App\Console\Commands\FermerDemonstrationsInactives;
@@ -132,6 +133,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // invitation refusée après 7 jours (voir PurgerInvitationsDesCabinets).
         $schedule->command(ExpirerInvitationsDesCabinets::class)->hourlyAt(45);
         $schedule->command(PurgerInvitationsDesCabinets::class)->hourlyAt(50);
+        // Chaque heure, hors de 2 h à 3 h : les téléchargements des
+        // documents par période dont le lien a expiré, sept jours après
+        // leur demande, s'effacent avec leur fichier (voir
+        // EffacerTelechargementsDeDocuments).
+        $schedule->command(EffacerTelechargementsDeDocuments::class)->hourlyAt(55)->unlessBetween('02:00', '03:00');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -94,6 +94,7 @@ enum ActionAuditee: string implements HasLabel
     case PieceDuFournisseurRetiree = 'piece_du_fournisseur_retiree';
     case PieceDuFournisseurManquantePosee = 'piece_du_fournisseur_manquante_posee';
     case PieceDuFournisseurManquanteLevee = 'piece_du_fournisseur_manquante_levee';
+    case DocumentsTelecharges = 'documents_telecharges';
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
     case AvoirDeRegularisationEmis = 'avoir_de_regularisation_emis';
     case FactureRectificativeEmise = 'facture_rectificative_emise';
@@ -189,6 +190,7 @@ enum ActionAuditee: string implements HasLabel
             self::PieceDuFournisseurRetiree => 'Pièce du fournisseur retirée',
             self::PieceDuFournisseurManquantePosee => 'Marque « pièce du fournisseur manquante » posée',
             self::PieceDuFournisseurManquanteLevee => 'Marque « pièce du fournisseur manquante » levée',
+            self::DocumentsTelecharges => 'Documents téléchargés par période',
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
             self::AvoirDeRegularisationEmis => 'Avoir de régularisation émis après la correction du SIREN',
             self::FactureRectificativeEmise => 'Facture rectificative émise après la correction du SIREN',
@@ -388,6 +390,12 @@ enum ActionAuditee: string implements HasLabel
             // manquante », le seul document.
             self::PieceDuFournisseurJointe, self::PieceDuFournisseurRetiree => ['document', 'nom_origine', 'empreinte'],
             self::PieceDuFournisseurManquantePosee, self::PieceDuFournisseurManquanteLevee => ['document'],
+            // Le téléchargement des documents par période qu'un compte a
+            // préparé (voir PreparerLeTelechargementDesDocumentsJob) : les
+            // codes des magasins dont il a reçu des documents, la période,
+            // les types et l'origine des achats demandés, le nombre de
+            // documents et le format ; jamais un document ni un tiers.
+            self::DocumentsTelecharges => ['magasins', 'du', 'au', 'types', 'origine', 'nombre_documents', 'format'],
             // Le numéro de l'inventaire d'ouverture, la valeur hors taxe du
             // stock qu'il fait entrer et, pour chaque ligne, la référence du
             // produit, la quantité inventoriée, si elle est entrée en stock

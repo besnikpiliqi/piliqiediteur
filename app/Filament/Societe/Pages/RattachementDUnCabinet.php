@@ -135,7 +135,7 @@ class RattachementDUnCabinet extends Page
         return Action::make('accepterEnAjustant')
             ->label('Accepter en ajustant les autorisations')
             ->visible(fn (): bool => $this->demande() !== null)
-            ->fillForm(['consultations' => PermissionRegistry::parDefautDuCabinet($type), 'achats' => []])
+            ->fillForm(['consultations' => PermissionRegistry::parDefautDuCabinet($type), 'achats' => [], 'telechargements' => []])
             ->form([
                 CheckboxList::make('consultations')
                     ->label('Consulter')
@@ -146,10 +146,14 @@ class RattachementDUnCabinet extends Page
                     ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::ajoutablesAuCabinet($type))))
                     ->columns(2)
                     ->hidden(PermissionRegistry::ajoutablesAuCabinet($type) === []),
+                CheckboxList::make('telechargements')
+                    ->label('Téléchargement des documents par période')
+                    ->helperText(CabinetComptable::AIDE_TELECHARGEMENTS)
+                    ->options(array_intersect_key($libelles, array_flip(PermissionRegistry::cocheesParLeProprietaire($type)))),
                 Placeholder::make('jamais')->hiddenLabel()->content(CabinetComptable::TEXTE_JAMAIS),
                 Placeholder::make('vide')->hiddenLabel()->content('Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre aucun document, aucune fiche ni aucun téléchargement.'),
             ])
-            ->action(fn (array $data) => $this->accepter(array_values(array_unique([...($data['consultations'] ?? []), ...($data['achats'] ?? [])]))));
+            ->action(fn (array $data) => $this->accepter(array_values(array_unique([...($data['consultations'] ?? []), ...($data['achats'] ?? []), ...($data['telechargements'] ?? [])]))));
     }
 
     public function refuserAction(): Action

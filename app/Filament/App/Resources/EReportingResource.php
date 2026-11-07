@@ -152,7 +152,7 @@ class EReportingResource extends Resource
                     ->hiddenLabel()
                     ->state(fn (ClotureCaisse $record): array => array_map(fn (array $encaissement): array => [
                         'date' => self::date($encaissement['date']),
-                        'taux' => ClotureCaisseResource::taux($encaissement['taux']),
+                        'taux' => ClotureCaisse::tauxEnTexte($encaissement['taux']),
                         'montant' => app(CalculateurLigne::class)->enEuros($encaissement['montant']),
                     ], self::apercu($record)->encaissementsDeServices))
                     ->schema([
@@ -262,14 +262,14 @@ class EReportingResource extends Resource
             ...array_map(fn (array $transaction): string => sprintf(
                 '%s, %s : %s%s',
                 $transaction['categorie']->getLabel(),
-                ClotureCaisseResource::taux($transaction['taux']),
+                ClotureCaisse::tauxEnTexte($transaction['taux']),
                 self::montants($transaction['ht'], $transaction['tva']),
                 $transaction['motif'] === null ? '' : " ({$transaction['motif']})",
             ), $apercu->transactions),
             ...array_map(fn (array $encaissement): string => sprintf(
                 'Prestations de services encaissées le %s à %s : %s (à confirmer)',
                 self::date($encaissement['date']),
-                ClotureCaisseResource::taux($encaissement['taux']),
+                ClotureCaisse::tauxEnTexte($encaissement['taux']),
                 $calculateur->enEuros($encaissement['montant']),
             ), $apercu->encaissementsDeServices),
             ...array_map(fn (array $encaissement): string => sprintf(
@@ -294,7 +294,7 @@ class EReportingResource extends Resource
         return array_map(fn (array $transaction): array => [
             'date' => self::date($apercu->journee),
             'categorie' => $transaction['categorie']->getLabel(),
-            'taux' => ClotureCaisseResource::taux($transaction['taux']),
+            'taux' => ClotureCaisse::tauxEnTexte($transaction['taux']),
             'ht' => $calculateur->enEuros($transaction['ht']),
             'tva' => $calculateur->enEuros($transaction['tva']),
             'remarque' => $transaction['motif'] === null ? null : trim("{$transaction['motif']}. {$transaction['remarque']}"),

@@ -60,7 +60,8 @@ class AutorisationsSelonLeTypeTest extends TestCase
         $communes = array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::articles()));
 
         $this->assertEqualsCanonicalizing(self::ARTICLES, PermissionRegistry::articles());
-        $this->assertSame([47, 18, 29], [count(PermissionRegistry::toutes()), count(PermissionRegistry::articles()), count($communes)]);
+        $this->assertSame([48, 18, 30], [count(PermissionRegistry::toutes()), count(PermissionRegistry::articles()), count($communes)]);
+        $this->assertContains(PermissionRegistry::DOCUMENTS_TELECHARGER, $communes);
         $this->assertSame([], array_values(array_diff(PermissionRegistry::articles(), PermissionRegistry::toutes())));
         $this->assertContains(PermissionRegistry::SERVICE_VIEW, $communes);
         $this->assertContains(PermissionRegistry::SERVICE_CREATE, $communes);
@@ -99,7 +100,7 @@ class AutorisationsSelonLeTypeTest extends TestCase
             $this->assertFalse($compte->fresh()->can(PermissionRegistry::PRODUIT_VIEW), $role);
         }
         $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), self::ARTICLES, PermissionRegistry::deVente())), $comptes['propriétaire']->autorisationsDans($magasin));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), self::ARTICLES)), $comptes['responsable']->fresh()->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), self::ARTICLES, [PermissionRegistry::DOCUMENTS_TELECHARGER])), $comptes['responsable']->fresh()->autorisationsDans($magasin));
     }
 
     /**
@@ -124,6 +125,7 @@ class AutorisationsSelonLeTypeTest extends TestCase
         $options = [
             ...EquipeDuMagasinResource::champsAutorisations()[0]->getOptions(),
             ...EquipeDuMagasinResource::champsAutorisations()[1]->getOptions(),
+            ...EquipeDuMagasinResource::champsAutorisations()[2]->getOptions(),
         ];
         $this->assertEqualsCanonicalizing($duType, array_keys($options));
 
@@ -269,7 +271,9 @@ class AutorisationsSelonLeTypeTest extends TestCase
     /**
      * Le commerce garde toutes les autorisations d'aujourd'hui : toutes
      * existent dans ses magasins, le propriétaire les a toutes sauf celles
-     * de la vente, un responsable toutes, et les modèles gardent celles des
+     * de la vente, un responsable toutes sauf le téléchargement des
+     * documents par période, que seul le propriétaire lui coche (décision
+     * de l'éditeur du 03/11/2026, E3), et les modèles gardent celles des
      * articles.
      */
     public function test_le_commerce_garde_toutes_les_autorisations_d_aujourd_hui(): void
@@ -280,10 +284,10 @@ class AutorisationsSelonLeTypeTest extends TestCase
 
         $this->assertSame(PermissionRegistry::toutes(), PermissionRegistry::pourLeType(TypeDActivite::Commerce));
         $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), PermissionRegistry::deVente())), $this->proprietaireDe($magasin)->autorisationsDans($magasin));
-        $this->assertSame($toutes, $this->responsable($magasin)->autorisationsDans($magasin));
+        $this->assertSame(array_values(array_diff($toutes, [PermissionRegistry::DOCUMENTS_TELECHARGER])), $this->responsable($magasin)->autorisationsDans($magasin));
         $this->assertContains(PermissionRegistry::PRODUIT_VIEW, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
         $this->assertContains(PermissionRegistry::FACTURE_JUSTIFIER, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
-        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::PARAMETRES_GERER], PermissionRegistry::deVente())), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::DOCUMENTS_TELECHARGER], PermissionRegistry::deVente())), PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce));
     }
 
     /**

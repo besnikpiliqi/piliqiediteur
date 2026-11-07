@@ -305,9 +305,10 @@ class MembreResource extends RessourceDuPanneauSociete
 
     /**
      * Le rôle d'un membre dans son magasin et ses cases, précochées par son
-     * rôle, celles de la vente à part (voir CocheLesAutorisationsDeMagasin) ;
-     * aucune pour un responsable, qui a toutes les autorisations du
-     * magasin.
+     * rôle, celles de la vente à part, puis celle que le propriétaire seul
+     * coche (voir CocheLesAutorisationsDeMagasin) ; pour un responsable,
+     * qui a toutes les autres autorisations du magasin, seulement cette
+     * dernière.
      *
      * @return list<Component>
      */
@@ -339,7 +340,8 @@ class MembreResource extends RessourceDuPanneauSociete
 
     /**
      * Le rôle saisi et ses cases, comme les reçoivent les actions de
-     * l'équipe : aucune case pour un responsable.
+     * l'équipe : pour un responsable, seulement celle que le propriétaire
+     * seul coche.
      *
      * @param  array<string, mixed>  $data
      * @return array{role: string, autorisations: list<string>}
@@ -348,7 +350,7 @@ class MembreResource extends RessourceDuPanneauSociete
     {
         $role = $data['role'] instanceof RoleMagasin ? $data['role']->value : (string) $data['role'];
 
-        return ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? [] : static::autorisationsSaisies($data, 'autorisations')];
+        return ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? array_values($data['autorisations_proprietaire'] ?? []) : static::autorisationsSaisies($data, 'autorisations')];
     }
 
     /**

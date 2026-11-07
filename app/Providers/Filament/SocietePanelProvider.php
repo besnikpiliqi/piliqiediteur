@@ -8,6 +8,7 @@ use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Societe\Pages\AccepterLaTransmission;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\MenerUnCabinetASonEspace;
@@ -26,6 +27,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -65,6 +67,11 @@ class SocietePanelProvider extends PanelProvider
             ->authenticatedRoutes(function (): void {
                 ChoisirSonMotDePasse::registerRoutes();
                 AccepterLaTransmission::registerRoutes();
+                // Le lien d'un téléchargement des documents par période, pour
+                // le seul compte qui l'a demandé (voir
+                // TelechargerLesDocumentsController).
+                Route::get('/telechargements/{telechargement}', TelechargerLesDocumentsController::class)
+                    ->name('telechargements-de-documents.telecharger');
             })
             ->tenant(Societe::class, slugAttribute: 'uuid')
             ->tenantMenu(false)

@@ -73,6 +73,7 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::FACTURE_ACHAT_VIEW,
             PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
             PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
+            PermissionRegistry::DOCUMENTS_TELECHARGER,
         ];
         $refusees = [
             PermissionRegistry::CLIENT_CREATE,
@@ -401,7 +402,9 @@ class ControleDesDroitsTest extends TestCase
 
     /**
      * Un responsable a toutes les autorisations de son magasin, sans case,
-     * et aucune dans un autre magasin de la société.
+     * sauf le téléchargement des documents par période, que seul le
+     * propriétaire lui coche (décision de l'éditeur du 03/11/2026, E3), et
+     * aucune dans un autre magasin de la société.
      */
     public function test_un_responsable_a_toutes_les_autorisations_de_son_magasin_et_aucune_ailleurs(): void
     {
@@ -413,7 +416,7 @@ class ControleDesDroitsTest extends TestCase
 
         app(TenantContext::class)->set($magasin);
         foreach (PermissionRegistry::toutes() as $permission) {
-            $this->assertTrue($responsable->can($permission), "{$permission} dans son magasin");
+            $this->assertSame($permission !== PermissionRegistry::DOCUMENTS_TELECHARGER, $responsable->can($permission), "{$permission} dans son magasin");
         }
 
         app(TenantContext::class)->set($autre);

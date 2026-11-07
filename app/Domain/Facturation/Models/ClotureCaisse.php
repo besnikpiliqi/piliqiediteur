@@ -11,6 +11,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
@@ -99,6 +100,77 @@ class ClotureCaisse extends Model
     public function totalEncaisseEnCentimes(): int
     {
         return (int) array_sum(array_column($this->recapitulatif['encaissements'], 'montant'));
+    }
+
+    /**
+     * Les lignes de la rubrique « Ventes et avoirs », lues dans le
+     * récapitulatif tel qu'il a été écrit à la clôture, en centimes :
+     * chaque rubrique avec son nombre et ses montants, puis le détail de
+     * chacun de ses taux ; le net des ventes aux particuliers après leurs
+     * avoirs, que gardent les totaux de la clôture (la fiche de la clôture
+     * et son ticket Z les montrent, voir ClotureCaisseResource et
+     * ClotureCaissePdfGenerator).
+     *
+     * @return list<array{rubrique: string, nombre: int|null, ht: int, tva: int, ttc: int, detail: bool}>
+     */
+    public function rubriques(): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $ligne = fn (string $rubrique, ?int $nombre, int $ht, int $tva, int $ttc, bool $detail = false): array => [
+            'rubrique' => $rubrique,
+            'nombre' => $nombre,
+            'ht' => $ht,
+            'tva' => $tva,
+            'ttc' => $ttc,
+            'detail' => $detail,
+        ];
+        $rubrique = fn (string $cle, string $libelle): array => [
+            $ligne($libelle, $this->recapitulatif[$cle]['nombre'], $this->recapitulatif[$cle]['ht'], $this->recapitulatif[$cle]['tva'], $this->recapitulatif[$cle]['ttc']),
+            ...array_map(
+                fn (array $taux): array => $ligne('dont TVA à '.self::tauxEnTexte($taux['taux']), null, $taux['ht'], $taux['tva'], $taux['ttc'], true),
+                $this->recapitulatif[$cle]['par_taux'],
+            ),
+        ];
+
+        return [
+            ...$rubrique('ventes_particuliers', 'Ventes aux particuliers (tickets)'),
+            ...$rubrique('avoirs_particuliers', 'Avoirs sur des tickets'),
+            $ligne('Net des ventes aux particuliers (base de l\'e-reporting)', null, $calculateur->enCentiemes($this->total_ht), $calculateur->enCentiemes($this->total_tva), $calculateur->enCentiemes($this->total_ttc)),
+            ...$rubrique('factures_professionnels', 'Factures aux professionnels (pour information)'),
+            ...$rubrique('avoirs_professionnels', 'Avoirs aux professionnels (pour information)'),
+        ];
+    }
+
+    /**
+     * Le net des ventes aux particuliers taux par taux : les ventes de
+     * chaque taux et leurs avoirs (écrits en négatif), additionnés en
+     * centimes tels que le récapitulatif les a écrits, du taux le plus fort
+     * au plus faible ; un taux dont le net est nul en tout reste (ses
+     * ventes et ses avoirs se compensent).
+     *
+     * @return list<array{taux: int, ht: int, tva: int, ttc: int}>
+     */
+    public function netParTaux(): array
+    {
+        $nets = [];
+
+        foreach ([...$this->recapitulatif['ventes_particuliers']['par_taux'], ...$this->recapitulatif['avoirs_particuliers']['par_taux']] as $taux) {
+            $net = $nets[$taux['taux']] ?? ['taux' => $taux['taux'], 'ht' => 0, 'tva' => 0, 'ttc' => 0];
+            $nets[$taux['taux']] = ['taux' => $taux['taux'], 'ht' => $net['ht'] + $taux['ht'], 'tva' => $net['tva'] + $taux['tva'], 'ttc' => $net['ttc'] + $taux['ttc']];
+        }
+
+        krsort($nets);
+
+        return array_values($nets);
+    }
+
+    /**
+     * Un taux en centièmes de point tel qu'il s'écrit : 2000 donne
+     * « 20 % », 550 « 5,5 % ».
+     */
+    public static function tauxEnTexte(int $centiemes): string
+    {
+        return rtrim(rtrim(sprintf('%d,%02d', intdiv($centiemes, 100), $centiemes % 100), '0'), ',').' %';
     }
 
     /**

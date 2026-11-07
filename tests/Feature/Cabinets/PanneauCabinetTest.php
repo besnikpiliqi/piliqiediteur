@@ -15,6 +15,7 @@ use App\Filament\App\Pages\CoordonneesMagasin;
 use App\Filament\App\Pages\ParametresFactures;
 use App\Filament\App\Pages\ParametresPrixDeVente;
 use App\Filament\App\Pages\ParametresRelances;
+use App\Filament\App\Pages\TelechargerLesDocuments;
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
@@ -34,6 +35,7 @@ use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\Cabinet\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDuCabinet;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
@@ -73,6 +75,11 @@ class PanneauCabinetTest extends TestCase
         $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
         $suspendu = $this->proprietaireDuCabinet($autreCabinet);
         $suspendu->forceFill(['statut' => StatutCompte::Suspendu])->save();
+        // Un client qui accorde au cabinet le téléchargement des documents
+        // par période, jamais accordé par défaut (décision de l'éditeur du
+        // 03/11/2026, F2 = oui) : la page « Télécharger les documents » ne
+        // s'ouvre qu'avec lui.
+        $this->lierLeCabinet($cabinet, $this->ouvrirUneSociete(['nom' => 'Client qui accorde le téléchargement']), [...PermissionRegistry::parDefautDuCabinet(TypeDActivite::Commerce), PermissionRegistry::DOCUMENTS_TELECHARGER]);
         $panneau = Filament::getPanel('cabinet');
         $pages = $panneau->getPages();
 
@@ -210,7 +217,9 @@ class PanneauCabinetTest extends TestCase
 
     /**
      * Un collaborateur ouvre chaque page de l'espace de son cabinet, sauf
-     * « Invitations et demandes » (403), sans les gestes du propriétaire :
+     * « Invitations et demandes » (403) et « Télécharger les documents »,
+     * que ce client ne lui accorde pas (jamais par défaut : décision de
+     * l'éditeur du 03/11/2026, F2 = oui), sans les gestes du propriétaire :
      * ni créer un collaborateur, ni confier, ni mettre fin au lien, ni
      * vérifier l'Ordre ni modifier l'identité.
      */
@@ -222,7 +231,7 @@ class PanneauCabinetTest extends TestCase
         $collaborateur = $this->confier($this->collaborateur($cabinet), [$magasin]);
 
         foreach (Filament::getPanel('cabinet')->getPages() as $page) {
-            $this->assertSame($page !== InvitationsEtDemandes::class, $this->ouvre($page, $collaborateur, $cabinet), $page);
+            $this->assertSame(! in_array($page, [InvitationsEtDemandes::class, TelechargerLesDocumentsDuCabinet::class], true), $this->ouvre($page, $collaborateur, $cabinet), $page);
         }
 
         $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
@@ -272,6 +281,7 @@ class PanneauCabinetTest extends TestCase
             ParametresFactures::class => false,
             ParametresPrixDeVente::class => false,
             ParametresRelances::class => false,
+            TelechargerLesDocuments::class => true,
             Dashboard::class => true,
         ];
         $cabinet = $this->ouvrirUnCabinet();

@@ -100,7 +100,7 @@ Chaque ligne doit finir par 0. Sous PostgreSQL, ajoutez les variables de la comm
 
 `caisse:verifier` vérifie l'intégrité de la caisse sécurisée de chaque magasin (chaînes signées, documents, numérotation), l'inscrit au journal des événements et échoue au moindre défaut ; le planificateur la lance chaque nuit à 3 h, complète une fois par mois pour chaque magasin.
 
-En développement, trois commandes tournent côte à côte : le serveur du panneau, la file d'attente (e-mails, courriers et transmissions à la plateforme) et le planificateur (clôture automatique de minuit et caisses personnelles, factures en retard, vérification de la caisse sécurisée, relances, revérifications Sirene, suivi des courriers recommandés, clôture des inscriptions sans code, démonstrations inactives, effacement des traces, des pièces, des jetons et des demandes d'inscription expirés, journal d'audit expiré).
+En développement, trois commandes tournent côte à côte : le serveur du panneau, la file d'attente (e-mails, courriers, transmissions à la plateforme et préparation des téléchargements de documents par période) et le planificateur (clôture automatique de minuit et caisses personnelles, factures en retard, vérification de la caisse sécurisée, relances, revérifications Sirene, suivi des courriers recommandés, clôture des inscriptions sans code, démonstrations inactives, effacement des traces, des pièces, des jetons, des demandes d'inscription et des téléchargements de documents expirés, journal d'audit expiré).
 
 ```sh
 php artisan serve

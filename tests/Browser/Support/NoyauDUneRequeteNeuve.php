@@ -38,6 +38,11 @@ use Symfony\Component\HttpFoundation\Response;
  *   Livewire le fait pour un champ de fichier) se lit en champs et en
  *   fichiers, comme PHP le ferait : le serveur du module ne lit que les
  *   formulaires urlencoded et ne transmet aucun fichier ;
+ * - une réponse envoyée en flux (un fichier téléchargé : une pièce du
+ *   fournisseur, l'archive ou le récapitulatif d'un téléchargement par
+ *   période) se lit en entier, octet pour octet : le serveur du module la
+ *   rogne de ses espaces et de ses octets nuls de fin, ce qui abîme un
+ *   fichier binaire (une archive ZIP peut finir par des octets nuls) ;
  * - chaque témoin que la réponse pose pour une durée (la session, un poste
  *   reconnu, « se souvenir de moi ») dure le temps du navigateur : son
  *   échéance se compte depuis l'instant figé du test, alors que le
@@ -94,7 +99,7 @@ final class NoyauDUneRequeteNeuve implements Kernel
         $application->make('cookie')->flushQueuedCookies();
         $this->lireLeFormulaireMultipart($request);
 
-        $reponse = $this->noyau->handle($request);
+        $reponse = $this->enEntier($this->noyau->handle($request));
 
         foreach ($reponse->headers->getCookies() as $temoin) {
             if ($temoin->getExpiresTime() > Date::now()->getTimestamp()) {
@@ -103,6 +108,27 @@ final class NoyauDUneRequeteNeuve implements Kernel
         }
 
         return $reponse;
+    }
+
+    /**
+     * La réponse, son contenu lu en entier quand elle l'envoie en flux,
+     * avec son statut et ses en-têtes.
+     */
+    private function enEntier(Response $reponse): Response
+    {
+        if ($reponse->getContent() !== false) {
+            return $reponse;
+        }
+
+        ob_start();
+
+        try {
+            $reponse->sendContent();
+        } finally {
+            $contenu = (string) ob_get_clean();
+        }
+
+        return new Response($contenu, $reponse->getStatusCode(), $reponse->headers->all());
     }
 
     /**

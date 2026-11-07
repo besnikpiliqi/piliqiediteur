@@ -45,6 +45,7 @@ class PlanificateurTest extends TestCase
         ['app:relancer-factures-impayees', '0 * * * *'],
         ['app:expirer-invitations-cabinets', '45 * * * *'],
         ['app:purger-invitations-cabinets', '50 * * * *'],
+        ['app:effacer-telechargements-de-documents', '55 * * * *'],
     ];
 
     /**

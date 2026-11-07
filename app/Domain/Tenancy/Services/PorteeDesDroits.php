@@ -389,19 +389,27 @@ final class PorteeDesDroits
     }
 
     /**
-     * Les autorisations qu'il peut cocher pour un vendeur ou un observateur
-     * dans ce magasin, parmi celles du type d'activité de sa société (voir
+     * Les autorisations qu'il peut cocher pour un membre dans ce magasin,
+     * parmi celles du type d'activité de sa société (voir
      * PermissionRegistry::pourLeType()) : toutes pour le propriétaire,
      * celles de la vente comprises, qu'il ne fait jamais lui-même mais
-     * coche pour qui il veut, et pour un responsable de ce magasin, qui les
-     * a toutes ; aucune sinon (les cases d'un administrateur se cochent par
-     * le propriétaire, dans les actions des administrateurs).
+     * coche pour qui il veut ; pour un responsable de ce magasin, toutes
+     * sauf celles que seul le propriétaire coche (voir
+     * PermissionRegistry::cocheesParLeProprietaire()) ; aucune sinon (les
+     * cases d'un administrateur se cochent par le propriétaire, dans les
+     * actions des administrateurs).
      *
      * @return list<string>
      */
     public function autorisationsCochables(User $auteur, Magasin $magasin): array
     {
-        return $this->gereLEquipeDe($auteur, $magasin) ? PermissionRegistry::pourLeType($magasin->societe->type_activite) : [];
+        $type = $magasin->societe->type_activite;
+
+        return match (true) {
+            ! $this->gereLEquipeDe($auteur, $magasin) => [],
+            $auteur->estProprietaire() => PermissionRegistry::pourLeType($type),
+            default => array_values(array_diff(PermissionRegistry::pourLeType($type), PermissionRegistry::cocheesParLeProprietaire($type))),
+        };
     }
 
     /**

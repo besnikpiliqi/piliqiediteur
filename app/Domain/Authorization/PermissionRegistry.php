@@ -39,7 +39,10 @@ use InvalidArgumentException;
  * toutes les autres ; le référentiel en base porte la famille de chacune.
  * Dans un magasin, les autorisations de tout compte, les modèles qui les
  * précochent et les cases proposées se croisent avec celles du type
- * d'activité de sa société. Les autorisations de la société elle-même
+ * d'activité de sa société. Le téléchargement des documents par période
+ * (voir cocheesParLeProprietaire()) fait exception : le propriétaire
+ * l'a toujours, tout autre compte seulement si le propriétaire le lui
+ * coche, responsable compris, et un client le coche pour son cabinet lié. Les autorisations de la société elle-même
  * (gérer ses magasins, nommer ses responsables, ses paramètres) sont à
  * part (voir AutorisationsSociete).
  */
@@ -254,6 +257,16 @@ final class PermissionRegistry
     public const CAISSE_SECURISEE_CONSULTER = 'caisse_securisee.consulter';
 
     /**
+     * Télécharger les documents par période (décision de l'éditeur du
+     * 03/11/2026, lot EX ; voir DocumentsDeLaPeriode) : la page
+     * « Télécharger les documents » du magasin, et ce magasin dans celles
+     * de l'espace de la société et de l'espace du cabinet. Seul le
+     * propriétaire la coche (voir cocheesParLeProprietaire()) ; elle ne
+     * donne que les documents que les autres autorisations laissent voir.
+     */
+    public const DOCUMENTS_TELECHARGER = 'documents.telecharger';
+
+    /**
      * La famille des articles (voir articles()) et la famille commune, telles
      * que le référentiel en base les porte.
      */
@@ -281,6 +294,7 @@ final class PermissionRegistry
             self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
             self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
             self::CAISSE_SECURISEE_CONSULTER,
+            self::DOCUMENTS_TELECHARGER,
         ];
     }
 
@@ -294,7 +308,8 @@ final class PermissionRegistry
      * magasin en lecture seule (voir permisesEnLectureSeule()). Une
      * nouvelle autorisation de consultation s'ajoute ici ; oubliée, elle
      * manque au cabinet lié et est refusée en lecture seule, ce qui reste
-     * sûr.
+     * sûr. Le téléchargement des documents par période n'en est pas : il ne
+     * s'accorde jamais par défaut (voir cocheesParLeProprietaire()).
      *
      * @return list<string>
      */
@@ -318,8 +333,9 @@ final class PermissionRegistry
 
     /**
      * Les autorisations qui restent permises quand le magasin est suspendu
-     * ou fermé (voir ControleDesDroits) : tout consulter, et clôturer la
-     * journée, car les clôtures continuent jusqu'au bout. L'équipe reste
+     * ou fermé (voir ControleDesDroits) : tout consulter et télécharger,
+     * documents par période compris, et clôturer la journée, car les
+     * clôtures continuent jusqu'au bout. L'équipe reste
      * gérable, par le propriétaire et les responsables (voir
      * ControleDesDroits), et dans l'administration de la société (voir
      * AutorisationsSociete::permisesEnLectureSeule()).
@@ -328,7 +344,7 @@ final class PermissionRegistry
      */
     public static function permisesEnLectureSeule(): array
     {
-        return [...self::consultations(), self::CLOTURE_CAISSE_GERER];
+        return [...self::consultations(), self::DOCUMENTS_TELECHARGER, self::CLOTURE_CAISSE_GERER];
     }
 
     /**
@@ -379,6 +395,7 @@ final class PermissionRegistry
             self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
             self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
             self::CAISSE_SECURISEE_CONSULTER,
+            self::DOCUMENTS_TELECHARGER,
         ];
     }
 
@@ -446,18 +463,39 @@ final class PermissionRegistry
     }
 
     /**
+     * Les autorisations que seul le propriétaire coche, compte par compte,
+     * dans un magasin d'une société de ce type : le téléchargement des
+     * documents par période (décision de l'éditeur du 03/11/2026, E3). Le
+     * propriétaire l'a toujours ; aucun modèle ne la précoche, pas même
+     * celui de l'administrateur ; un responsable, qui a sans case toutes
+     * les autres autorisations de son magasin, ne l'a que cochée par le
+     * propriétaire, et ne la coche jamais pour un vendeur ou un
+     * observateur, dont la case cochée par le propriétaire reste telle
+     * quelle quand le responsable change ses autres cases (voir
+     * AffectationsDesMembres::cases()) ; le cabinet lié ne l'a que cochée
+     * par le propriétaire du client, jamais par défaut (voir duCabinet()).
+     *
+     * @return list<string>
+     */
+    public static function cocheesParLeProprietaire(TypeDActivite $type): array
+    {
+        return array_values(array_intersect([self::DOCUMENTS_TELECHARGER], self::pourLeType($type)));
+    }
+
+    /**
      * Le modèle des autorisations de magasin d'un nouvel administrateur,
      * que le propriétaire décoche à son gré (voir
      * CreerAdministrateurAction) : toutes celles du type de la société
-     * (voir pourLeType()), sauf les paramètres du magasin et les
-     * autorisations de vente (voir deVente()), que le propriétaire coche
-     * pour qui il veut.
+     * (voir pourLeType()), sauf les paramètres du magasin, les
+     * autorisations de vente (voir deVente()) et celles que le
+     * propriétaire coche toujours lui-même (voir
+     * cocheesParLeProprietaire()), qu'il coche pour qui il veut.
      *
      * @return list<string>
      */
     public static function modeleDeLAdministrateur(TypeDActivite $type): array
     {
-        return array_values(array_diff(self::pourLeType($type), [self::PARAMETRES_GERER], self::deVente()));
+        return array_values(array_diff(self::pourLeType($type), [self::PARAMETRES_GERER], self::deVente(), self::cocheesParLeProprietaire($type)));
     }
 
     /**
@@ -502,16 +540,17 @@ final class PermissionRegistry
 
     /**
      * Toutes les autorisations qu'un client de ce type peut accorder à son
-     * cabinet lié (voir parDefautDuCabinet() et ajoutablesAuCabinet()),
-     * dans l'ordre alphabétique ; aucune pour un cabinet, qui n'est jamais
-     * client. La liste d'un client qui a des articles est celle que la
+     * cabinet lié (voir parDefautDuCabinet() et ajoutablesAuCabinet()), et
+     * le téléchargement des documents par période, qu'il ne lui accorde
+     * jamais par défaut (voir cocheesParLeProprietaire()), dans l'ordre
+     * alphabétique ; aucune pour un cabinet, qui n'est jamais client. La liste d'un client qui a des articles est celle que la
      * base écrit en toutes lettres (voir GardesDesCabinets).
      *
      * @return list<string>
      */
     public static function duCabinet(TypeDActivite $typeDuClient): array
     {
-        $autorisations = array_values(array_unique([...self::parDefautDuCabinet($typeDuClient), ...self::ajoutablesAuCabinet($typeDuClient)]));
+        $autorisations = array_values(array_unique([...self::parDefautDuCabinet($typeDuClient), ...self::ajoutablesAuCabinet($typeDuClient), ...self::cocheesParLeProprietaire($typeDuClient)]));
         sort($autorisations);
 
         return $autorisations;
@@ -675,6 +714,7 @@ final class PermissionRegistry
             self::AVOIR_FOURNISSEUR_VIEW => 'Avoirs fournisseur : voir',
             self::AVOIR_FOURNISSEUR_CREER => 'Avoirs fournisseur : créer',
             self::CAISSE_SECURISEE_CONSULTER => 'Caisse sécurisée : consulter le registre et exporter le journal des événements',
+            self::DOCUMENTS_TELECHARGER => 'Documents : télécharger les documents par période (ZIP ou CSV)',
         ];
     }
 }

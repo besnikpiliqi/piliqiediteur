@@ -4,16 +4,24 @@ namespace Tests\Feature\Tenancy;
 
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\FormatDuTelechargement;
+use App\Domain\Facturation\Enums\OrigineDesAchats;
+use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+use App\Domain\Facturation\Services\ArchiveDesDocuments;
 use App\Domain\Stock\Notifications\StockNegatif;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
+use App\Domain\Tenancy\Enums\StatutDuTelechargement;
+use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
+use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Notifications\ResponsableNommeParUnAdministrateur;
 use App\Domain\Tenancy\Notifications\StockDuMagasinCede;
+use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\File;
@@ -54,6 +62,19 @@ class NotificationsDeLaSocieteTest extends TestCase
             StockSousLeSeuilDAlerte::class => new StockSousLeSeuilDAlerte(Produit::factory()->create()),
             StockNegatif::class => new StockNegatif(Produit::factory()->create(), 'T-MABOUT-2026-000001'),
             StockDuMagasinCede::class => new StockDuMagasinCede($magasin, '28.75', []),
+            AvisDuTelechargementDesDocuments::class => new AvisDuTelechargementDesDocuments(app(TenantContext::class)->runAsSociete($societe, fn (): TelechargementDeDocuments => tap((new TelechargementDeDocuments)->forceFill([
+                'demande_par' => $proprietaire->id,
+                'magasins' => [$magasin->id],
+                'du' => '2026-03-01',
+                'au' => '2026-03-31',
+                'types' => [TypeDeDocumentTelechargeable::Ventes->value],
+                'origine' => OrigineDesAchats::Toutes,
+                'format' => FormatDuTelechargement::Csv,
+                'selection' => [],
+                'statut' => StatutDuTelechargement::Echec,
+                'motif_echec' => ArchiveDesDocuments::AUCUN_DOCUMENT,
+                'expire_le' => now()->addHour(),
+            ]))->save())),
         ];
 
         $this->assertEqualsCanonicalizing(array_keys($notifications), $this->notificationsEnBase());
@@ -62,7 +83,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             $donnee = $proprietaire->notifications()->where('type', $classe)->sole()->data;
             $this->assertSame((int) $societe->id, (int) $donnee['societe_id'], $classe);
         }
-        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockNegatif::class, StockDuMagasinCede::class] as $classe) {
+        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockNegatif::class, StockDuMagasinCede::class, AvisDuTelechargementDesDocuments::class] as $classe) {
             $this->assertSame((int) $magasin->id, (int) $proprietaire->notifications()->where('type', $classe)->sole()->data['magasin_id'], $classe);
         }
     }

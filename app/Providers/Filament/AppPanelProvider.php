@@ -10,6 +10,7 @@ use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\EspaceDeLaSociete;
+use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
@@ -90,6 +91,11 @@ class AppPanelProvider extends PanelProvider
             ->passwordReset(DemandeDeLien::class, PageDuLien::class)
             ->authenticatedRoutes(function (): void {
                 ChoisirSonMotDePasse::registerRoutes();
+                // Le lien d'un téléchargement des documents par période, pour
+                // le seul compte qui l'a demandé (voir
+                // TelechargerLesDocumentsController).
+                Route::get('/telechargements/{telechargement}', TelechargerLesDocumentsController::class)
+                    ->name('telechargements-de-documents.telecharger');
             })
             // Le téléchargement d'une pièce du fournisseur, dans le magasin
             // de l'adresse, pour qui peut voir son document (voir

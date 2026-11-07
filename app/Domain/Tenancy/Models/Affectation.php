@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,9 +16,10 @@ use LogicException;
  * L'affectation d'un compte de la société à un de ses magasins, ou à tous
  * (magasin_id nul : tous les magasins, présents et futurs) :
  * - celle d'un membre a un rôle de magasin (voir RoleMagasin) : un
- *   responsable n'a aucune case, car il a toutes les autorisations de son
- *   magasin ; un vendeur ou un observateur a les cases cochées pour lui
- *   (voir cocher()) ;
+ *   responsable n'a de case que celles que seul le propriétaire coche
+ *   (voir PermissionRegistry::cocheesParLeProprietaire()), car il a sans
+ *   case toutes les autres autorisations de son magasin ; un vendeur ou un
+ *   observateur a les cases cochées pour lui (voir cocher()) ;
  * - celle d'un administrateur n'a pas de rôle : elle délimite sa portée et
  *   porte les cases que le propriétaire lui a cochées.
  * Les droits d'un compte dans un magasin se lisent par
@@ -122,20 +124,21 @@ class Affectation extends Model
      * sa société, est refusée avant que rien ne soit effacé (voir
      * PermissionRegistry::verifierConnues()), puis par la clé étrangère du
      * référentiel et la garde des articles (voir GardesDesTypesDActivite) ;
-     * une affectation de responsable n'a aucune case. Ce que l'auteur a le
-     * droit de cocher se contrôle avant, par l'action (voir
-     * PorteeDesDroits::verifierCochables()).
+     * une affectation de responsable n'a de case que celles que seul le
+     * propriétaire coche. Ce que l'auteur a le droit de cocher se contrôle
+     * avant, par l'action (voir AffectationsDesMembres::cases()).
      *
      * @param  array<array-key, mixed>  $autorisations
      *
-     * @throws LogicException quand l'affectation est celle d'un responsable
+     * @throws LogicException quand l'affectation d'un responsable recevrait une autre case
      */
     public function cocher(array $autorisations): void
     {
-        $connues = PermissionRegistry::verifierConnues($autorisations, Societe::query()->findOrFail($this->societe_id)->type_activite);
+        $type = Societe::query()->findOrFail($this->societe_id)->type_activite;
+        $connues = PermissionRegistry::verifierConnues($autorisations, $type);
 
-        if ($this->estDeResponsable()) {
-            throw new LogicException('Un responsable n\'a aucune case : il a toutes les autorisations de son magasin.');
+        if ($this->estDeResponsable() && array_diff($connues, PermissionRegistry::cocheesParLeProprietaire($type)) !== []) {
+            throw new LogicException(AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE);
         }
 
         DB::table('autorisations_affectations')->where('affectation_id', $this->getKey())->delete();
@@ -147,7 +150,7 @@ class Affectation extends Model
 
     /**
      * Efface toutes ses cases : avant qu'elle devienne celle d'un
-     * responsable, qui n'en a aucune.
+     * responsable, qui n'a que celles que seul le propriétaire coche.
      */
     public function effacerLesCases(): void
     {

@@ -513,7 +513,9 @@ class AutorisationsDesMembresTest extends TestCase
     /**
      * Le propriétaire peut cocher chaque autorisation pour un membre,
      * paramètres du magasin compris, sous son libellé, celles de la vente,
-     * qu'il n'exerce pas lui-même, dans leur groupe à part.
+     * qu'il n'exerce pas lui-même, dans leur groupe à part, et le
+     * téléchargement des documents par période dans le groupe qu'il est
+     * seul à voir (décision de l'éditeur du 03/11/2026, E3).
      */
     public function test_le_proprietaire_peut_cocher_chaque_autorisation_sous_son_libelle(): void
     {
@@ -535,8 +537,14 @@ class AutorisationsDesMembresTest extends TestCase
                 return collect($vente->getOptions())->keys()->sort()->values()->all() === collect(PermissionRegistry::deVente())->sort()->values()->all()
                     && $vente->getOptions()[PermissionRegistry::FACTURE_EMETTRE] === PermissionRegistry::libelles()[PermissionRegistry::FACTURE_EMETTRE];
             })
+            ->assertFormFieldExists('autorisations_proprietaire', 'mountedActionForm', function (CheckboxList $reservees) use (&$proposees): bool {
+                $proposees = array_merge($proposees, array_keys($reservees->getOptions()));
+
+                return $reservees->getOptions() === [PermissionRegistry::DOCUMENTS_TELECHARGER => PermissionRegistry::libelles()[PermissionRegistry::DOCUMENTS_TELECHARGER]];
+            })
             ->assertFormFieldIsEnabled('autorisations', 'mountedActionForm')
-            ->assertFormFieldIsEnabled('autorisations_vente', 'mountedActionForm');
+            ->assertFormFieldIsEnabled('autorisations_vente', 'mountedActionForm')
+            ->assertFormFieldIsVisible('autorisations_proprietaire', 'mountedActionForm');
 
         $this->assertCount(count(PermissionRegistry::toutes()), $proposees);
         $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $proposees);

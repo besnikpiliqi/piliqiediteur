@@ -771,8 +771,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * - un administrateur : les cases de son affectation à ce magasin, ou
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
-     * - un membre : toutes pour un responsable de ce magasin, les cases de
-     *   son affectation pour un vendeur ou un observateur.
+     * - un membre : pour un responsable de ce magasin, toutes sauf celles
+     *   que seul le propriétaire coche (voir
+     *   PermissionRegistry::cocheesParLeProprietaire()), plus celles-ci
+     *   quand le propriétaire les lui a cochées ; les cases de son
+     *   affectation pour un vendeur ou un observateur.
      *
      * @return list<string>|null
      */
@@ -793,7 +796,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return match (true) {
             $affectation === null => null,
             $affectation->role !== RoleMagasin::Responsable => self::trieesDans($affectation->autorisations(), $duType),
-            default => self::trieesDans($duType, $duType),
+            default => self::trieesDans([
+                ...array_diff($duType, PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite)),
+                ...$affectation->autorisations(),
+            ], $duType),
         };
     }
 

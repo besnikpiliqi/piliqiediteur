@@ -8,8 +8,10 @@ use Filament\Support\Contracts\HasLabel;
 /**
  * Le rôle d'un membre dans un magasin (voir Affectation::$role) :
  * - responsable : il a toutes les autorisations de son magasin, sans
- *   aucune case (voir User::autorisationsDans()), et jamais celles de la
- *   société ; nommé par le propriétaire, ou par un administrateur autorisé
+ *   case (voir User::autorisationsDans()), sauf celles que seul le
+ *   propriétaire lui coche (voir
+ *   PermissionRegistry::cocheesParLeProprietaire()), et jamais celles de
+ *   la société ; nommé par le propriétaire, ou par un administrateur autorisé
  *   à nommer les responsables dans un magasin de sa portée ;
  * - vendeur, observateur : le rôle n'est qu'un modèle qui précoche des
  *   autorisations (voir permissionsParDefaut()), celles qui existent dans

@@ -33,6 +33,7 @@ use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Pages\TelechargerLesDocuments;
 use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -104,6 +105,11 @@ class PanneauSocieteTest extends TestCase
         $pages = $panneau->getPages();
         $pagesDesParametres = [IdentiteSociete::class, ParametresFiscauxSociete::class];
         $pagesDuProprietaire = [CabinetComptable::class, RattachementDUnCabinet::class];
+        // « Télécharger les documents » : le propriétaire l'a d'office, un
+        // administrateur seulement si le propriétaire la lui coche, ce que
+        // le modèle de l'administrateur ne fait jamais (décision de
+        // l'éditeur du 03/11/2026, E3).
+        $pagesDesCasesDuProprietaire = [TelechargerLesDocuments::class];
 
         $this->assertNotEmpty($pages);
         $this->assertInstanceOf(SocietePolicy::class, Gate::getPolicyFor(Societe::class));
@@ -114,8 +120,8 @@ class PanneauSocieteTest extends TestCase
             $this->assertSame(
                 [
                     'proprietaire' => true,
-                    'administrateur' => ! in_array($page, [...$pagesDesParametres, ...$pagesDuProprietaire], true),
-                    'administrateur_des_parametres' => ! in_array($page, $pagesDuProprietaire, true),
+                    'administrateur' => ! in_array($page, [...$pagesDesParametres, ...$pagesDuProprietaire, ...$pagesDesCasesDuProprietaire], true),
+                    'administrateur_des_parametres' => ! in_array($page, [...$pagesDuProprietaire, ...$pagesDesCasesDuProprietaire], true),
                     'responsable' => false,
                     'vendeur' => false,
                     'collaborateur_du_cabinet_lie' => false,

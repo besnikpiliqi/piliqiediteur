@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use Closure;
 use Filament\Facades\Filament;
@@ -11,21 +12,27 @@ use Filament\Forms\Components\CheckboxList;
 /**
  * Les cases d'un compte dans un magasin, celles du type d'activité de la
  * société du panneau seulement (voir PermissionRegistry::pourLeType() ; la
- * société de l'espace d'administration, ou celle du magasin), en deux
+ * société de l'espace d'administration, ou celle du magasin), en trois
  * groupes : celles qui ne sont pas des ventes (voir
  * PermissionRegistry::horsVente()), puis, à part, celles de la vente (voir
  * PermissionRegistry::deVente()), que le propriétaire coche pour qui il
- * veut sans les exercer lui-même. Le
- * formulaire garde chaque groupe sous son nom ($nom, puis $nom_vente) ;
- * l'action reçoit leur réunion (voir autorisationsSaisies()), et refuse
- * elle-même ce que l'auteur ne peut pas cocher.
+ * veut sans les exercer lui-même, et celles que seul le propriétaire coche
+ * (voir PermissionRegistry::cocheesParLeProprietaire()), montrées à lui
+ * seul, pour tout rôle, responsable compris, jamais précochées. Le
+ * formulaire garde chaque groupe sous son nom ($nom, $nom_vente, puis
+ * $nom_proprietaire) ; l'action reçoit leur réunion (voir
+ * autorisationsSaisies()), et refuse elle-même ce que l'auteur ne peut pas
+ * cocher ; un groupe qu'il ne voit pas n'est pas envoyé, et l'action garde
+ * alors les cases que seul le propriétaire coche (voir
+ * AffectationsDesMembres::cases()).
  */
 trait CocheLesAutorisationsDeMagasin
 {
     /**
-     * Les deux groupes de cases, chacun sous son libellé, masqués ensemble
-     * quand $masque est vrai ; la fenêtre qui les montre les remplit (voir
-     * autorisationsAAfficher()).
+     * Les trois groupes de cases, chacun sous son libellé, les deux
+     * premiers masqués ensemble quand $masque est vrai (pour un
+     * responsable), le troisième montré au propriétaire seul ; la fenêtre
+     * qui les montre les remplit (voir autorisationsAAfficher()).
      *
      * @return list<CheckboxList>
      */
@@ -35,7 +42,7 @@ trait CocheLesAutorisationsDeMagasin
             CheckboxList::make($nom)
                 ->label($libelle)
                 ->helperText($aide)
-                ->options(fn (): array => self::libellesDe(PermissionRegistry::horsVente()))
+                ->options(fn (): array => self::libellesDe(array_diff(PermissionRegistry::horsVente(), self::cocheesParLeProprietaire())))
                 ->columns(2)
                 ->bulkToggleable()
                 ->hidden($masque ?? false)
@@ -47,22 +54,29 @@ trait CocheLesAutorisationsDeMagasin
                 ->columns(2)
                 ->hidden($masque ?? false)
                 ->columnSpanFull(),
+            CheckboxList::make("{$nom}_proprietaire")
+                ->label('Réservée au propriétaire')
+                ->helperText('Vous seul la cochez, compte par compte : elle n\'est jamais précochée, pas même pour un responsable ; ce compte ne télécharge que les documents qu\'il peut voir.')
+                ->options(fn (): array => self::libellesDe(self::cocheesParLeProprietaire()))
+                ->columns(2)
+                ->visible(fn (): bool => auth()->user()?->estProprietaire() ?? false)
+                ->columnSpanFull(),
         ];
     }
 
     /**
-     * Les cases cochées dans les deux groupes, réunies, sans doublon.
+     * Les cases cochées dans les trois groupes, réunies, sans doublon.
      *
      * @param  array<string, mixed>  $data
      * @return list<string>
      */
     public static function autorisationsSaisies(array $data, string $nom): array
     {
-        return array_values(array_unique([...array_values($data[$nom] ?? []), ...array_values($data["{$nom}_vente"] ?? [])]));
+        return array_values(array_unique([...array_values($data[$nom] ?? []), ...array_values($data["{$nom}_vente"] ?? []), ...array_values($data["{$nom}_proprietaire"] ?? [])]));
     }
 
     /**
-     * Ces cases réparties entre les deux groupes, pour remplir le
+     * Ces cases réparties entre les trois groupes, pour remplir le
      * formulaire.
      *
      * @param  list<string>  $autorisations
@@ -71,8 +85,9 @@ trait CocheLesAutorisationsDeMagasin
     public static function autorisationsAAfficher(array $autorisations, string $nom): array
     {
         return [
-            $nom => array_values(array_intersect($autorisations, PermissionRegistry::horsVente())),
+            $nom => array_values(array_intersect($autorisations, array_diff(PermissionRegistry::horsVente(), self::cocheesParLeProprietaire()))),
             "{$nom}_vente" => array_values(array_intersect($autorisations, PermissionRegistry::deVente())),
+            "{$nom}_proprietaire" => array_values(array_intersect($autorisations, self::cocheesParLeProprietaire())),
         ];
     }
 
@@ -80,14 +95,29 @@ trait CocheLesAutorisationsDeMagasin
      * Les libellés de celles de ces autorisations qui existent dans le type
      * d'activité de la société du panneau, dans l'ordre du registre.
      *
-     * @param  list<string>  $autorisations
+     * @param  array<array-key, string>  $autorisations
      * @return array<string, string>
      */
     private static function libellesDe(array $autorisations): array
     {
-        $tenant = Filament::getTenant();
-        $type = $tenant instanceof Societe ? $tenant->type_activite : $tenant->societe->type_activite;
+        return array_intersect_key(PermissionRegistry::libelles(), array_flip(array_intersect($autorisations, PermissionRegistry::pourLeType(self::typeDuPanneau()))));
+    }
 
-        return array_intersect_key(PermissionRegistry::libelles(), array_flip(array_intersect($autorisations, PermissionRegistry::pourLeType($type))));
+    /**
+     * Celles que seul le propriétaire coche dans le type d'activité de la
+     * société du panneau.
+     *
+     * @return list<string>
+     */
+    private static function cocheesParLeProprietaire(): array
+    {
+        return PermissionRegistry::cocheesParLeProprietaire(self::typeDuPanneau());
+    }
+
+    private static function typeDuPanneau(): TypeDActivite
+    {
+        $tenant = Filament::getTenant();
+
+        return $tenant instanceof Societe ? $tenant->type_activite : $tenant->societe->type_activite;
     }
 }

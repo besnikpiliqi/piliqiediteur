@@ -53,6 +53,9 @@ return [
     'app/Domain/Tenancy/Notifications/AvisDeVerification.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => []],
     ],
+    'app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php' => [
+        'action:telecharger' => ['lot' => 'NAV-3', 'tests' => []],
+    ],
     'app/Domain/Tenancy/Notifications/ResponsableNommeParUnAdministrateur.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => []],
     ],
@@ -219,6 +222,12 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'repeteur:delais' => ['lot' => 'NAV-3', 'tests' => []],
+    ],
+    'app/Filament/App/Pages/TelechargerLesDocuments.php' => [
+        'page' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › la page ne s’offre qu’au propriétaire et à qui il coche l’autorisation, ni au cabinet lié sans l’accord du client',
+        ]],
     ],
     'app/Filament/App/Resources/AvoirFournisseurResource.php' => [
         'action:view' => ['lot' => 'NAV-3', 'tests' => [
@@ -1800,6 +1809,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
         ]],
     ],
+    'app/Filament/Cabinet/Pages/TelechargerLesDocuments.php' => [
+        'page' => ['lot' => 'NAV-5', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+        ]],
+    ],
     'app/Filament/Cabinet/Pages/VerificationDuCabinet.php' => [
         'action:verifierLOrdre' => ['lot' => 'NAV-5', 'tests' => []],
         'page' => ['lot' => 'NAV-5', 'tests' => [
@@ -2131,6 +2145,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
         ]],
     ],
+    'app/Filament/Societe/Pages/TelechargerLesDocuments.php' => [
+        'page' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+        ]],
+    ],
     'app/Filament/Societe/Pages/VerificationSociete.php' => [
         'action:demanderUnNouveauCourrier' => ['lot' => 'NAV-4', 'tests' => []],
         'action:deposerUnePiece' => ['lot' => 'NAV-4', 'tests' => [
@@ -2303,6 +2322,13 @@ return [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
         ]],
     ],
+    'app/Http/Controllers/TelechargerLesDocumentsController.php' => [
+        'page' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+        ]],
+    ],
     'app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php' => [
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche, cabinet lié compris ; seul qui saisit les achats en ajoute',
@@ -2431,6 +2457,43 @@ return [
         'lien:{{ $etape[\'titre\'] }}' => ['lot' => 'NAV-4', 'tests' => []],
         'lien:{{ $totaux[\'nombre\'] }}' => ['lot' => 'NAV-4', 'tests' => []],
     ],
+    'resources/views/filament/telecharger-les-documents.blade.php' => [
+        'clic:pagePrecedente' => ['lot' => 'NAV-3', 'tests' => []],
+        'clic:pageSuivante' => ['lot' => 'NAV-3', 'tests' => []],
+        'clic:raccourci' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+        ]],
+        'clic:telecharger' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+        ]],
+        'clic:toutDeselectionner' => ['lot' => 'NAV-3', 'tests' => []],
+        'clic:toutSelectionner' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+        ]],
+        'lien:télécharger' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+        ]],
+        'saisie:au' => ['lot' => 'NAV-3', 'tests' => []],
+        'saisie:client' => ['lot' => 'NAV-5', 'tests' => []],
+        'saisie:du' => ['lot' => 'NAV-3', 'tests' => []],
+        'saisie:format' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le propriétaire choisit le trimestre, coche tout et télécharge le ZIP des documents du magasin',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › le collaborateur du cabinet lié télécharge les documents de son client quand le client le lui coche',
+        ]],
+        'saisie:magasinsCoches' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/TelechargerLesDocumentsTest.php › dans l’espace de la société, le propriétaire télécharge le récapitulatif CSV des magasins cochés',
+        ]],
+        'saisie:origine' => ['lot' => 'NAV-3', 'tests' => []],
+        'saisie:selection' => ['lot' => 'NAV-3', 'tests' => []],
+        'saisie:types' => ['lot' => 'NAV-3', 'tests' => []],
+    ],
     'resources/views/inscription/confirmer.blade.php' => [
         'formulaire:{{ $action }}' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/InscriptionDUneSocieteTest.php › une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin',
@@ -2439,6 +2502,9 @@ return [
     'resources/views/profil/adresse.blade.php' => [
         'formulaire:{{ $action }}' => ['lot' => 'NAV-4', 'tests' => []],
         'lien:Me connecter' => ['lot' => 'NAV-4', 'tests' => []],
+    ],
+    'resources/views/telechargements/indisponible.blade.php' => [
+        'lien:Revenir à l\'accueil' => ['lot' => 'NAV-3', 'tests' => []],
     ],
     'routes/web.php' => [
         'formulaire:/code' => ['lot' => 'NAV-4', 'tests' => [

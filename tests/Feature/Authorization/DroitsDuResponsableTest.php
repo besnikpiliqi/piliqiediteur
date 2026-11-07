@@ -42,7 +42,9 @@ class DroitsDuResponsableTest extends TestCase
 
     /**
      * Les paramètres du magasin, la clôture de la journée, la fermeture de
-     * la caisse d'un vendeur, les achats et le stock : tout, sans case.
+     * la caisse d'un vendeur, les achats et le stock : tout, sans case,
+     * sauf le téléchargement des documents par période, que seul le
+     * propriétaire lui coche (décision de l'éditeur du 03/11/2026, E3).
      */
     public function test_un_responsable_a_tous_les_droits_de_son_magasin_sans_case(): void
     {
@@ -51,7 +53,7 @@ class DroitsDuResponsableTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         app(TenantContext::class)->set($magasin);
 
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $responsable->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER])), $responsable->autorisationsDans($magasin));
         foreach ([PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::RELANCES_REGLER, PermissionRegistry::PRIX_VENTE_REGLER, PermissionRegistry::CLOTURE_CAISSE_GERER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_AJUSTER_STOCK, PermissionRegistry::AVOIR_CREER, PermissionRegistry::PAIEMENT_CONTRE_PASSER] as $autorisation) {
             $this->assertTrue($responsable->can($autorisation), $autorisation);
         }
@@ -138,7 +140,7 @@ class DroitsDuResponsableTest extends TestCase
         $second = $this->responsable($magasin);
 
         $this->assertEqualsCanonicalizing($premier->autorisationsDans($magasin), $second->autorisationsDans($magasin));
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $second->autorisationsDans($magasin));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER])), $second->autorisationsDans($magasin));
     }
 
     /**
@@ -155,7 +157,7 @@ class DroitsDuResponsableTest extends TestCase
         foreach ($comptes as [$sonMagasin, $responsable]) {
             /** @var Magasin $sonMagasin */
             /** @var User $responsable */
-            $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $responsable->autorisationsDans($sonMagasin), $sonMagasin->nom);
+            $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::toutes(), [PermissionRegistry::DOCUMENTS_TELECHARGER])), $responsable->autorisationsDans($sonMagasin), $sonMagasin->nom);
             $this->assertTrue($responsable->estResponsableDe($sonMagasin));
 
             foreach ([$magasin, $autre, $troisieme] as $ailleurs) {

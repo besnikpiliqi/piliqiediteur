@@ -39,6 +39,7 @@ use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Models\VerificationSociete;
@@ -98,6 +99,7 @@ class IsolationDesSocietesTest extends TestCase
         InvitationCabinet::class,
         LienCabinet::class,
         PieceVerification::class,
+        TelechargementDeDocuments::class,
         TraceAudit::class,
         TransmissionPropriete::class,
         VerificationSociete::class,

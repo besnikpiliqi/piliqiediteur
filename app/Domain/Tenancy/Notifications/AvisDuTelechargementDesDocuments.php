@@ -13,8 +13,10 @@ use Illuminate\Notifications\Notification;
  * Dans la cloche de la personne qui l'a demandé : son téléchargement des
  * documents par période est prêt, avec son lien, valable jusqu'à la date
  * dite, ou n'a pas pu être préparé, avec le motif (voir
- * PreparerLeTelechargementDesDocumentsJob). Elle porte la société de son
- * destinataire (`societe_id`) et, pour un compte d'un cabinet, le client
+ * PreparerLeTelechargementDesDocumentsJob). Elle porte son téléchargement
+ * (`telechargement_id`), pour s'effacer avec lui, son lien expiré (voir
+ * EffacerTelechargementsDeDocuments), la société de son destinataire
+ * (`societe_id`) et, pour un compte d'un cabinet, le client
  * dont il lit les documents (`client_id`), pour s'effacer de sa cloche
  * quand ce client ne lui est plus ouvert (voir
  * User::effacerLesAvisDesClients()) ; d'un seul magasin, ce magasin
@@ -48,9 +50,13 @@ class AvisDuTelechargementDesDocuments extends Notification
                 ->icon('heroicon-o-arrow-down-tray')
                 ->success()
                 ->actions([
+                    // Un lien de téléchargement (attribut download), comme
+                    // celui de la page : le navigateur enregistre le
+                    // fichier sans quitter la page ouverte.
                     Action::make('telecharger')
                         ->label('Télécharger')
                         ->url($telechargement->lien())
+                        ->extraAttributes(['download' => $telechargement->nomDuFichier()])
                         ->markAsRead(),
                 ])
             : NotificationFilament::make()
@@ -62,6 +68,7 @@ class AvisDuTelechargementDesDocuments extends Notification
 
         return [
             ...$notification->getDatabaseMessage(),
+            'telechargement_id' => (int) $telechargement->getKey(),
             'societe_id' => (int) $notifiable->societe_id,
             ...((int) $telechargement->societe_id === (int) $notifiable->societe_id ? [] : ['client_id' => (int) $telechargement->societe_id]),
             ...(count($magasins) === 1 ? ['magasin_id' => (int) $magasins[0]] : []),

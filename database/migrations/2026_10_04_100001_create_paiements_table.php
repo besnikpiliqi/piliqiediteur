@@ -56,6 +56,10 @@ return new class extends Migration
             $table->index(['magasin_id', 'client_id']);
             $table->index(['magasin_id', 'recu_le']);
             $table->index(['magasin_id', 'recu_paiement_id']);
+            // Les encaissements d'une période, dans l'ordre de leur
+            // enregistrement (relevé des encaissements du téléchargement
+            // par période, voir DocumentsDeLaPeriode::paiementsVisibles()).
+            $table->index(['magasin_id', 'created_at']);
         });
 
         DeclencheursDeProtection::ajoutSeul('paiements');

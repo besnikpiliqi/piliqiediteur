@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use InvalidArgumentException;
 
 /**
@@ -24,7 +25,12 @@ use InvalidArgumentException;
  * le dernier, le mois de la société. Les clôtures d'exercice et leurs
  * rattrapages de l'étape 3 suivront ces dates.
  *
- * Lecture de la société donnée et de ses changements, filtrés par elle.
+ * Lecture de la société donnée et de ses changements, filtrés
+ * explicitement par elle, quelle que soit la société active : l'espace d'un
+ * cabinet lit ainsi les exercices de chacun de ses clients liés (réglages
+ * fiscaux communs, voir la puce « Produit » de CLAUDE.md), sans que la
+ * portée de la société du cabinet (SocieteScope) ne cache leurs
+ * changements.
  */
 class ExercicesDeLaSociete
 {
@@ -114,7 +120,7 @@ class ExercicesDeLaSociete
      */
     private function exerciceDuJour(Societe $societe, string $jour): array
     {
-        $changements = ChangementFinExercice::query()->where('societe_id', $societe->getKey())->orderBy('id')->get()->values();
+        $changements = ChangementFinExercice::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $societe->getKey())->orderBy('id')->get()->values();
         $rang = $changements->filter(fn (ChangementFinExercice $changement): bool => $changement->debut_exercice_en_cours <= $jour)->keys()->last();
 
         if ($rang === null) {

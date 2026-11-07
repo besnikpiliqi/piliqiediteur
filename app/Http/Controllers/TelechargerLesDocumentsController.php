@@ -6,6 +6,7 @@ use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -23,11 +24,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * il lit les documents (un compte d'un cabinet les demande pour un
  * client) ; il se sert pendant sept jours après sa demande, une fois prêt,
  * et seulement si ce compte télécharge encore les documents de chacun de
- * ses magasins (voir DocumentsDeLaPeriode::peutTelechargerDans()) : une
- * autorisation retirée, un lien avec un cabinet terminé, un compte
- * suspendu le ferment aussitôt. Une page en français dit pourquoi le
- * fichier n'est pas servi. Le fichier part en pièce jointe, et le
- * navigateur ne le garde pas en cache.
+ * ses magasins (voir DocumentsDeLaPeriode::peutTelechargerDans()) et voit
+ * encore chacun des documents que le fichier contient, type par type et
+ * document par document (voir DocumentsDeLaPeriode::nombreEncoreVisibles()) :
+ * une autorisation retirée (le téléchargement, ou la consultation d'un
+ * type, ou celle des documents de toute l'équipe), un lien avec un cabinet
+ * terminé ou une autorisation que le client lui retire, un compte suspendu
+ * le ferment aussitôt. Une page en français dit pourquoi le fichier n'est
+ * pas servi. Le fichier part en pièce jointe, et le navigateur ne le garde
+ * pas en cache.
  */
 class TelechargerLesDocumentsController
 {
@@ -39,7 +44,7 @@ class TelechargerLesDocumentsController
 
     public const EXPIRE = 'Ce lien a expiré : il valait sept jours après la demande. Demandez de nouveau les documents depuis la page « Télécharger les documents ».';
 
-    public const SANS_DROIT = 'Vous ne téléchargez plus les documents de ces magasins : le fichier ne vous est plus servi.';
+    public const SANS_DROIT = 'Vous ne téléchargez plus les documents de ces magasins, ou vous ne voyez plus certains des documents de ce fichier : il ne vous est plus servi.';
 
     public function __invoke(Request $requete, DocumentsDeLaPeriode $documents, string $telechargement): Response|StreamedResponse
     {
@@ -58,9 +63,14 @@ class TelechargerLesDocumentsController
             return $trouve->statut === StatutDuTelechargement::Echec ? $this->indisponible(self::ECHEC, 404) : $this->indisponible(self::EN_PREPARATION, 404);
         }
 
-        $magasins = Magasin::query()->where('societe_id', $trouve->societe_id)->whereIn('id', $trouve->magasins)->get();
+        $societe = Societe::query()->findOrFail($trouve->societe_id);
+        $magasins = Magasin::query()->where('societe_id', $societe->getKey())->whereIn('id', $trouve->magasins)->get()
+            ->each(fn (Magasin $magasin): Magasin => $magasin->setRelation('societe', $societe));
 
-        if (! $compte->peutAgir() || $magasins->count() !== count($trouve->magasins) || $magasins->contains(fn (Magasin $magasin): bool => ! $documents->peutTelechargerDans($compte, $magasin))) {
+        if (! $compte->peutAgir()
+            || $magasins->count() !== count($trouve->magasins)
+            || $magasins->contains(fn (Magasin $magasin): bool => ! $documents->peutTelechargerDans($compte, $magasin))
+            || $documents->nombreEncoreVisibles($compte, $magasins, $trouve->selection ?? []) !== $trouve->nombre_documents) {
             return $this->indisponible(self::SANS_DROIT, 403);
         }
 

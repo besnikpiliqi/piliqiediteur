@@ -14,11 +14,13 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
-use DateTimeInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 
 /**
@@ -28,21 +30,30 @@ use Illuminate\Support\Collection;
  * virgule décimale, jours JJ/MM/AAAA), une ligne par document et par taux
  * de TVA : son type, son magasin, son numéro, son jour, son tiers (nom et
  * identifiant tels que le document les a figés ; pour un achat, son
- * fournisseur), l'origine d'un achat, la base HT, le taux, la TVA et le TTC
- * de chaque taux, puis, sur la première ligne d'une vente, ce qui en était
- * payé et ce qui en restait dû à la fin du dernier jour de la période,
- * dans le calendrier de son magasin. Une clôture du jour donne le net de
+ * fournisseur), l'origine d'un achat et sa marque « pièce du fournisseur
+ * manquante » (décision de l'éditeur du 03/11/2026, F1 = b), la base HT, le
+ * taux, la TVA et le TTC de chaque taux, puis, sur la première ligne d'une
+ * vente, ce qui en était payé et ce qui en restait dû à la fin du dernier
+ * jour de la période, dans le calendrier de son magasin. Une clôture du jour donne le net de
  * chaque taux de ses ventes aux particuliers ; un relevé des encaissements
  * une ligne par mode, avec son mode, et une ligne pour le crédit d'avoir
  * utilisé ; un texte qui commencerait comme une formule est désamorcé
  * (voir texte()). Les montants sont ceux qu'enregistre chaque document,
  * additionnés en centimes par taux, jamais recalculés ni additionnés par la
  * base. Chaque document se relit dans son magasin, comme magasin actif
- * (voir DocumentsDeLaPeriode::dansLeMagasin()).
+ * (voir DocumentsDeLaPeriode::dansLeMagasin()), les documents d'un magasin
+ * lus ensemble, type par type, avec leurs lignes et leurs règlements : le
+ * nombre de requêtes ne dépend pas du nombre de documents.
  */
 final class RecapitulatifDesDocuments
 {
-    public const COLONNES = ['Type', 'Magasin', 'Numéro', 'Date', 'Tiers', 'Identifiant du tiers', 'Origine', 'Mode de paiement', 'Taux de TVA', 'Base HT', 'TVA', 'TTC', 'Payé à la fin de la période', 'Restant dû à la fin de la période'];
+    public const COLONNES = ['Type', 'Magasin', 'Numéro', 'Date', 'Tiers', 'Identifiant du tiers', 'Origine', 'Pièce du fournisseur', 'Mode de paiement', 'Taux de TVA', 'Base HT', 'TVA', 'TTC', 'Payé à la fin de la période', 'Restant dû à la fin de la période'];
+
+    /**
+     * Ce que la colonne « Pièce du fournisseur » dit d'un achat saisi à la
+     * main sans sa pièce.
+     */
+    public const PIECE_MANQUANTE = 'Manquante';
 
     public function __construct(
         private readonly CalculateurLigne $calculateur,
@@ -59,13 +70,17 @@ final class RecapitulatifDesDocuments
         $flux = fopen('php://temp', 'r+');
         fwrite($flux, "\xEF\xBB\xBF");
         fputcsv($flux, self::COLONNES, ';', '"', '', "\r\n");
+        $parMagasin = collect($documents)->groupBy(fn (DocumentTrouve $document): int => $document->magasinId);
+        $magasins = Magasin::query()->with('societe')->whereKey($parMagasin->keys()->all())->get()->keyBy(fn (Magasin $magasin): int => (int) $magasin->getKey());
 
-        foreach (collect($documents)->groupBy(fn (DocumentTrouve $document): int => $document->magasinId) as $magasinId => $duMagasin) {
-            $magasin = Magasin::query()->findOrFail($magasinId);
+        foreach ($parMagasin as $magasinId => $duMagasin) {
+            $magasin = $magasins->get($magasinId) ?? throw (new ModelNotFoundException)->setModel(Magasin::class, [$magasinId]);
 
             $this->documents->dansLeMagasin($magasin, function () use ($compte, $magasin, $duMagasin, $du, $au, $flux): void {
+                $lus = $this->lire($compte, $magasin, $duMagasin, $du, $au);
+
                 foreach ($duMagasin as $document) {
-                    foreach ($this->lignes($compte, $magasin, $document, $du, $au) as $ligne) {
+                    foreach ($this->lignes($document, $lus) as $ligne) {
                         fputcsv($flux, $ligne, ';', '"', '', "\r\n");
                     }
                 }
@@ -80,20 +95,66 @@ final class RecapitulatifDesDocuments
     }
 
     /**
+     * Les documents de ce magasin actif, lus ensemble type par type : les
+     * ventes avec leurs lignes et ce qui en était payé à la fin de la
+     * période, les avoirs avec leurs lignes, les achats et les avoirs
+     * fournisseur avec leurs taux et leur fournisseur, les clôtures, et,
+     * pour les relevés, les paiements que la personne voit et le crédit
+     * d'avoir utilisé de toute la période, par mois.
+     *
+     * @param  Collection<int, DocumentTrouve>  $documents
+     * @return array{ventes: Collection<int, Facture>, paye: array<int, int>, avoirs: Collection<int, Avoir>, achats: Collection<int, FactureAchat>, avoirsFournisseur: Collection<int, AvoirFournisseur>, clotures: Collection<int, ClotureCaisse>, paiements: Collection<string, Collection<int, Paiement>>, credits: array<string, int>}
+     */
+    private function lire(User $compte, Magasin $magasin, Collection $documents, string $du, string $au): array
+    {
+        $identifiants = fn (TypeDeDocumentTelechargeable $type): array => $documents->filter(fn (DocumentTrouve $document): bool => $document->type === $type)
+            ->map(fn (DocumentTrouve $document): int => (int) $document->identifiant)
+            ->values()
+            ->all();
+        $lireLes = fn (TypeDeDocumentTelechargeable $type, Builder $requete): Collection => ($ids = $identifiants($type)) === [] ? collect() : $requete->whereKey($ids)->get()->keyBy(fn (Model $modele): int => (int) $modele->getKey());
+        $calendrier = $magasin->calendrier();
+        [$debut] = $calendrier->bornesDuJour($du);
+        [, $fin] = $calendrier->bornesDuJour($au);
+        $ventes = $lireLes(TypeDeDocumentTelechargeable::Ventes, Facture::query()->with('lignes'));
+        $releves = $documents->contains(fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::Encaissements);
+        $parMois = fn (mixed $instant): string => substr($calendrier->jourDe($instant), 0, 7);
+
+        return [
+            'ventes' => $ventes,
+            'paye' => $this->payes($ventes->keys()->all(), $fin),
+            'avoirs' => $lireLes(TypeDeDocumentTelechargeable::AvoirsClients, Avoir::query()->with('lignes')),
+            'achats' => $lireLes(TypeDeDocumentTelechargeable::FacturesAchat, FactureAchat::query()->with(['taux', 'fournisseur'])),
+            'avoirsFournisseur' => $lireLes(TypeDeDocumentTelechargeable::AvoirsFournisseur, AvoirFournisseur::query()->with(['taux', 'factureAchat.fournisseur'])),
+            'clotures' => $lireLes(TypeDeDocumentTelechargeable::Clotures, ClotureCaisse::query()),
+            'paiements' => $releves ? $this->documents->paiementsVisibles($compte, $calendrier, $du, $au)->get(['id', 'mode_paiement', 'montant', 'created_at'])->groupBy(fn (Paiement $paiement): string => $parMois($paiement->created_at)) : collect(),
+            'credits' => $releves ? AvoirAllocation::query()
+                ->where('created_at', '>=', $debut)
+                ->where('created_at', '<', $fin)
+                ->whereIn('facture_id', Facture::query()->visiblesPar($compte)->select('id'))
+                ->get(['montant_alloue', 'created_at'])
+                ->groupBy(fn (AvoirAllocation $allocation): string => $parMois($allocation->created_at))
+                ->map(fn (Collection $allocations): int => (int) $allocations->sum(fn (AvoirAllocation $allocation): int => $this->calculateur->enCentiemes($allocation->montant_alloue)))
+                ->all() : [],
+        ];
+    }
+
+    /**
      * Les lignes d'un document.
      *
+     * @param  array{ventes: Collection<int, Facture>, paye: array<int, int>, avoirs: Collection<int, Avoir>, achats: Collection<int, FactureAchat>, avoirsFournisseur: Collection<int, AvoirFournisseur>, clotures: Collection<int, ClotureCaisse>, paiements: Collection<string, Collection<int, Paiement>>, credits: array<string, int>}  $lus
      * @return list<list<string>>
      */
-    private function lignes(User $compte, Magasin $magasin, DocumentTrouve $document, string $du, string $au): array
+    private function lignes(DocumentTrouve $document, array $lus): array
     {
-        $ligne = fn (array $taux, ?string $tiers = null, ?string $identifiant = null, ?string $mode = null, ?array $reglement = null): array => [
+        $ligne = fn (array $taux, ?string $identifiant = null, ?string $mode = null, ?array $reglement = null): array => [
             $document->type->libelleDUnDocument(),
             self::texte($document->magasin),
             self::texte($document->numero),
             Calendrier::afficherJour($document->jour, 'd/m/Y'),
-            self::texte($tiers ?? $document->tiers ?? ''),
+            self::texte($document->tiers ?? ''),
             self::texte($identifiant ?? ''),
             $document->origine ?? '',
+            $document->pieceManquante ? self::PIECE_MANQUANTE : '',
             $mode ?? '',
             $taux['taux'] ?? '',
             isset($taux['ht']) ? self::montant($taux['ht']) : '',
@@ -105,8 +166,8 @@ final class RecapitulatifDesDocuments
 
         switch ($document->type) {
             case TypeDeDocumentTelechargeable::Ventes:
-                $facture = Facture::query()->with('lignes')->findOrFail($document->identifiant);
-                $paye = $this->payeA($facture, $magasin->calendrier()->bornesDuJour($au)[1]);
+                $facture = self::lu($lus['ventes'], $document);
+                $paye = $lus['paye'][(int) $facture->getKey()] ?? 0;
 
                 return $this->parTaux($facture->lignes)->values()->map(fn (array $taux, int $rang): array => $ligne(
                     $taux,
@@ -114,14 +175,12 @@ final class RecapitulatifDesDocuments
                     reglement: $rang === 0 ? [$paye, $this->calculateur->enCentiemes($facture->total_ttc) - $paye] : null,
                 ))->all();
             case TypeDeDocumentTelechargeable::AvoirsClients:
-                $avoir = Avoir::query()->with('lignes')->findOrFail($document->identifiant);
+                $avoir = self::lu($lus['avoirs'], $document);
 
                 return $this->parTaux($avoir->lignes)->values()->map(fn (array $taux): array => $ligne($taux, identifiant: self::identifiantDuClient($avoir)))->all();
             case TypeDeDocumentTelechargeable::FacturesAchat:
             case TypeDeDocumentTelechargeable::AvoirsFournisseur:
-                $achat = $document->type === TypeDeDocumentTelechargeable::FacturesAchat
-                    ? FactureAchat::query()->with(['taux', 'fournisseur'])->findOrFail($document->identifiant)
-                    : AvoirFournisseur::query()->with(['taux', 'factureAchat.fournisseur'])->findOrFail($document->identifiant);
+                $achat = $document->type === TypeDeDocumentTelechargeable::FacturesAchat ? self::lu($lus['achats'], $document) : self::lu($lus['avoirsFournisseur'], $document);
                 $fournisseur = $achat instanceof FactureAchat ? $achat->fournisseur : $achat->factureAchat->fournisseur;
 
                 return $achat->taux->map(fn (TauxFactureAchat|TauxAvoirFournisseur $taux): array => $ligne([
@@ -131,14 +190,13 @@ final class RecapitulatifDesDocuments
                     'ttc' => $this->calculateur->enCentiemes($taux->base_ht) + $this->calculateur->enCentiemes($taux->montant_tva),
                 ], identifiant: self::identifiantDuFournisseur($fournisseur)))->values()->all();
             case TypeDeDocumentTelechargeable::Clotures:
-                $cloture = ClotureCaisse::query()->findOrFail($document->identifiant);
-                $nets = $cloture->netParTaux();
+                $nets = self::lu($lus['clotures'], $document)->netParTaux();
 
                 return $nets === []
                     ? [$ligne(['ht' => 0, 'tva' => 0, 'ttc' => 0])]
                     : array_map(fn (array $taux): array => $ligne([...$taux, 'taux' => self::taux($taux['taux'] / 100)]), $nets);
             case TypeDeDocumentTelechargeable::Encaissements:
-                return $this->lignesDuReleve($compte, $magasin, $document, $du, $au, $ligne);
+                return $this->lignesDuReleve($lus['paiements']->get($document->identifiant, collect()), $lus['credits'][$document->identifiant] ?? 0, $ligne);
         }
     }
 
@@ -146,30 +204,19 @@ final class RecapitulatifDesDocuments
      * Une ligne par mode qui a des paiements, puis le crédit d'avoir
      * utilisé, s'il y en a.
      *
-     * @param  callable(array<string, mixed>, ?string=, ?string=, ?string=, ?array<int, int>=): list<string>  $ligne
+     * @param  Collection<int, Paiement>  $paiements  les paiements du mois que la personne voit
+     * @param  callable(array<string, mixed>, ?string=, ?string=, ?array<int, int>=): list<string>  $ligne
      * @return list<list<string>>
      */
-    private function lignesDuReleve(User $compte, Magasin $magasin, DocumentTrouve $document, string $du, string $au, callable $ligne): array
+    private function lignesDuReleve(Collection $paiements, int $credit, callable $ligne): array
     {
-        $calendrier = $magasin->calendrier();
-        $premier = max($du, $document->identifiant.'-01');
-        $dernier = min($au, DocumentsDeLaPeriode::dernierJourDuMois($document->identifiant));
-        $paiements = $this->documents->paiementsVisibles($compte, $calendrier, $premier, $dernier)->get(['id', 'mode_paiement', 'montant']);
-        [$debut] = $calendrier->bornesDuJour($premier);
-        [, $fin] = $calendrier->bornesDuJour($dernier);
-        $credit = (int) AvoirAllocation::query()
-            ->where('created_at', '>=', $debut)
-            ->where('created_at', '<', $fin)
-            ->whereIn('facture_id', Facture::query()->visiblesPar($compte)->select('id'))
-            ->pluck('montant_alloue')
-            ->sum(fn (mixed $montant): int => $this->calculateur->enCentiemes($montant));
         $lignes = [];
 
         foreach ([...ModePaiement::aLaCaisse(), ModePaiement::Prelevement] as $mode) {
-            $duMode = $paiements->filter(fn ($paiement): bool => $paiement->mode_paiement === $mode);
+            $duMode = $paiements->filter(fn (Paiement $paiement): bool => $paiement->mode_paiement === $mode);
 
             if ($duMode->isNotEmpty()) {
-                $lignes[] = $ligne(['ttc' => (int) $duMode->sum(fn ($paiement): int => $this->calculateur->enCentiemes($paiement->montant))], mode: $mode->getLabel());
+                $lignes[] = $ligne(['ttc' => (int) $duMode->sum(fn (Paiement $paiement): int => $this->calculateur->enCentiemes($paiement->montant))], mode: $mode->getLabel());
             }
         }
 
@@ -201,14 +248,41 @@ final class RecapitulatifDesDocuments
     }
 
     /**
-     * Ce que la facture avait reçu avant cet instant : ses paiements et le
-     * crédit d'avoir imputé, contre-passations déduites, en centimes.
+     * Ce que chacune de ces factures avait reçu avant cet instant : ses
+     * paiements et le crédit d'avoir imputé, contre-passations déduites, en
+     * centimes, par facture.
+     *
+     * @param  list<int>  $factures
+     * @return array<int, int>
      */
-    private function payeA(Facture $facture, DateTimeInterface $instant): int
+    private function payes(array $factures, mixed $instant): array
     {
-        return (int) PaiementAllocation::query()->where('facture_id', $facture->getKey())->where('created_at', '<', $instant)->pluck('montant_alloue')
-            ->concat(AvoirAllocation::query()->where('facture_id', $facture->getKey())->where('created_at', '<', $instant)->pluck('montant_alloue'))
-            ->sum(fn (mixed $montant): int => $this->calculateur->enCentiemes($montant));
+        if ($factures === []) {
+            return [];
+        }
+
+        $payes = [];
+        $montants = PaiementAllocation::query()->whereIn('facture_id', $factures)->where('created_at', '<', $instant)->get(['facture_id', 'montant_alloue'])
+            ->concat(AvoirAllocation::query()->whereIn('facture_id', $factures)->where('created_at', '<', $instant)->get(['facture_id', 'montant_alloue']));
+
+        foreach ($montants as $allocation) {
+            $payes[(int) $allocation->facture_id] = ($payes[(int) $allocation->facture_id] ?? 0) + $this->calculateur->enCentiemes($allocation->montant_alloue);
+        }
+
+        return $payes;
+    }
+
+    /**
+     * Le document lu que désigne ce document trouvé.
+     *
+     * @template TModele of Model
+     *
+     * @param  Collection<int, TModele>  $lus
+     * @return TModele
+     */
+    private static function lu(Collection $lus, DocumentTrouve $document): Model
+    {
+        return $lus->get((int) $document->identifiant) ?? throw (new ModelNotFoundException)->setModel($document->type->modele(), [$document->identifiant]);
     }
 
     private static function identifiantDuClient(Facture|Avoir $document): string

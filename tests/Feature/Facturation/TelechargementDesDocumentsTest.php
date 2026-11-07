@@ -52,7 +52,9 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use LogicException;
 use Tests\TestCase;
@@ -179,6 +181,7 @@ class TelechargementDesDocumentsTest extends TestCase
 
         app(ModifierMembreAction::class)->handle($proprietaire, $this->responsable, RoleMagasin::Responsable, [PermissionRegistry::DOCUMENTS_TELECHARGER]);
         $vendeur = $this->autoriser($this->vendeur);
+        $documents = app(DocumentsDeLaPeriode::class);
         $this->assertTrue($documents->peutTelechargerDans($this->responsable->refresh(), $this->magasin));
         $this->assertTrue($documents->peutTelechargerDans($vendeur, $this->magasin));
 
@@ -191,7 +194,7 @@ class TelechargementDesDocumentsTest extends TestCase
             AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE,
         );
         app(ModifierMembreAction::class)->handle($proprietaire, $this->responsable, RoleMagasin::Responsable, []);
-        $this->assertFalse($documents->peutTelechargerDans($this->responsable->refresh(), $this->magasin));
+        $this->assertFalse(app(DocumentsDeLaPeriode::class)->peutTelechargerDans($this->responsable->refresh(), $this->magasin));
     }
 
     public function test_un_magasin_en_lecture_seule_se_telecharge_et_une_societe_non_validee_n_a_aucun_document_reel(): void
@@ -221,15 +224,17 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $this->assertSame(implode(';', RecapitulatifDesDocuments::COLONNES), $lignes[0]);
         $facture = $this->documents['facture'];
-        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;20;30,00;6,00;36,00;20,00;22,33", $lignes);
-        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;5,5;6,00;0,33;6,33;;", $lignes);
+        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;;20;30,00;6,00;36,00;20,00;22,33", $lignes);
+        $this->assertContains("Vente;Boutique du Port (PORT);{$facture->numero};09/03/2026;Hôtel des Pins;{$facture->client_siret};;;;5,5;6,00;0,33;6,33;;", $lignes);
         $achat = $this->documents['achatAvecPiece'];
-        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;20;100,00;20,00;120,00;;", $lignes);
-        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;5,5;30,00;1,65;31,65;;", $lignes);
+        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;;20;100,00;20,00;120,00;;", $lignes);
+        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$achat->numero};02/03/2026;Grossiste du Nord;;Saisie manuelle;;;5,5;30,00;1,65;31,65;;", $lignes);
+        $sansPiece = $this->documents['achatSansPiece'];
+        $this->assertContains("Facture d'achat;Boutique du Port (PORT);{$sansPiece->numero};05/03/2026;Grossiste du Nord;;Saisie manuelle;Manquante;;20;25,00;5,00;30,00;;", $lignes);
         $cloture = $this->documents['cloture']->numero;
-        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$cloture};09/03/2026;;;;;20;0,00;0,00;0,00;;", $lignes);
-        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;Espèces;;;;18,00;;', $lignes);
-        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;Virement;;;;20,00;;', $lignes);
+        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$cloture};09/03/2026;;;;;;20;0,00;0,00;0,00;;", $lignes);
+        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Espèces;;;;18,00;;', $lignes);
+        $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;', $lignes);
     }
 
     public function test_un_nom_qui_commence_comme_une_formule_s_ecrit_desamorce_dans_le_csv(): void
@@ -299,6 +304,7 @@ class TelechargementDesDocumentsTest extends TestCase
             'magasins' => ['PORT'],
             'nombre_documents' => 9,
             'origine' => 'toutes',
+            'piece_manquante_seulement' => false,
             'types' => ['ventes', 'avoirs', 'achats', 'avoirs-fournisseur', 'clotures', 'encaissements'],
         ]], array_map(fn ($entree): array => $entree->nouvelles_valeurs, $this->entreesDAudit($this->magasin->societe, ActionAuditee::DocumentsTelecharges)));
     }
@@ -378,6 +384,128 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertSame([$telechargement->id], TelechargementDeDocuments::recentsDe($proprietaire, $this->magasin->societe)->pluck('id')->all());
     }
 
+    public function test_la_seule_marque_piece_manquante_ne_garde_que_les_achats_saisis_sans_leur_piece(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $trouves = app(DocumentsDeLaPeriode::class)->trouver($proprietaire, [$this->magasin], '2026-03-01', '2026-03-31', [TypeDeDocumentTelechargeable::Ventes, TypeDeDocumentTelechargeable::FacturesAchat, TypeDeDocumentTelechargeable::AvoirsFournisseur], OrigineDesAchats::Toutes, true);
+
+        $this->assertSame([
+            ['ventes', $this->documents['ticket']->numero, false],
+            ['ventes', $this->documents['facture']->numero, false],
+            ['achats', $this->documents['achatSansPiece']->numero, true],
+            ['avoirs-fournisseur', $this->documents['avoirFournisseur']->numero, true],
+        ], array_map(fn (DocumentTrouve $document): array => [$document->type->value, $document->numero, $document->pieceManquante], $trouves));
+        $this->assertSame(
+            [false, true, false],
+            array_values(array_map(fn (DocumentTrouve $document): bool => $document->pieceManquante, array_filter($this->trouver($proprietaire), fn (DocumentTrouve $document): bool => $document->type === TypeDeDocumentTelechargeable::FacturesAchat))),
+        );
+    }
+
+    public function test_la_demande_retient_la_seule_marque_piece_manquante_et_l_inscrit_au_journal_d_audit(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+
+        $telechargement = app(DemanderLeTelechargementDesDocumentsAction::class)->handle(
+            $proprietaire,
+            $this->magasin->societe,
+            [$this->magasin],
+            '2026-03-01',
+            '2026-03-31',
+            [TypeDeDocumentTelechargeable::FacturesAchat, TypeDeDocumentTelechargeable::AvoirsFournisseur],
+            OrigineDesAchats::Toutes,
+            FormatDuTelechargement::Csv,
+            array_map(fn (DocumentTrouve $document): string => $document->cle(), $this->trouver($proprietaire)),
+            true,
+        )->refresh();
+
+        $this->assertSame([true, StatutDuTelechargement::Pret, 2], [$telechargement->piece_manquante_seulement, $telechargement->statut, $telechargement->nombre_documents]);
+        $this->assertSame(['achats:'.$this->magasin->id.':'.$this->documents['achatSansPiece']->id, 'avoirs-fournisseur:'.$this->magasin->id.':'.$this->documents['avoirFournisseur']->id], $telechargement->selection);
+        $this->assertSame([true], array_map(fn ($entree): bool => $entree->nouvelles_valeurs['piece_manquante_seulement'], $this->entreesDAudit($this->magasin->societe, ActionAuditee::DocumentsTelecharges)));
+        $lignes = explode("\r\n", rtrim(substr((string) Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->get($telechargement->chemin), 3), "\r\n"));
+        $this->assertSame(['Manquante'], array_values(array_unique(array_map(fn (string $ligne): string => str_getcsv($ligne, ';', '"', '')[7], array_slice($lignes, 1)))));
+    }
+
+    public function test_le_fichier_ne_compte_que_les_documents_que_le_compte_voit_encore(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        app(ModifierMembreAction::class)->handle($proprietaire, $this->vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::PAIEMENT_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $vendeur = $this->vendeur->refresh();
+        $cles = array_map(fn (DocumentTrouve $document): string => $document->cle(), $this->trouver($vendeur));
+
+        $this->assertSame([
+            'ventes:'.$this->magasin->id.':'.$this->documents['ticket']->id,
+            'ventes:'.$this->magasin->id.':'.$this->documents['facture']->id,
+            'encaissements:'.$this->magasin->id.':2026-03:'.DocumentTrouve::RELEVE_DE_L_EQUIPE,
+        ], $cles);
+        $this->assertSame(3, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($vendeur, [$this->magasin], [...$cles, 'ventes:'.$this->magasin->id.':pas-un-nombre', 'inconnu:1:1']));
+
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PAIEMENT_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->assertSame(1, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($vendeur->refresh(), [$this->magasin], $cles));
+        $this->assertSame(
+            ['ventes:'.$this->magasin->id.':'.$this->documents['ticket']->id, 'encaissements:'.$this->magasin->id.':2026-03:'.DocumentTrouve::RELEVE_DE_LA_PERSONNE],
+            array_map(fn (DocumentTrouve $document): string => $document->cle(), $this->trouver($vendeur)),
+        );
+
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->assertSame(0, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($vendeur->refresh(), [$this->magasin], ['encaissements:'.$this->magasin->id.':2026-03:'.DocumentTrouve::RELEVE_DE_LA_PERSONNE]));
+        $this->assertSame(1, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($proprietaire, [$this->magasin], ['encaissements:'.$this->magasin->id.':2026-03:'.DocumentTrouve::RELEVE_DE_L_EQUIPE]));
+    }
+
+    public function test_le_recapitulatif_lit_les_documents_d_un_magasin_ensemble_quel_que_soit_leur_nombre(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $requetes = function () use ($proprietaire): int {
+            $documents = $this->trouver($proprietaire);
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            app(RecapitulatifDesDocuments::class)->ecrire($proprietaire, $documents, '2026-03-01', '2026-03-31');
+            $nombre = count(DB::getQueryLog());
+            DB::disableQueryLog();
+
+            return $nombre;
+        };
+        $avant = $requetes();
+
+        app(TenantContext::class)->runAs($this->magasin, function (): void {
+            $carnet = Produit::factory()->create(['nom' => 'Carnet', 'reference' => 'CARNET', 'prix_vente_ttc' => 3, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+            foreach (range(1, 12) as $rang) {
+                self::vendreAuComptant($this->vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $carnet->id, 'quantite' => 1]], $rang % 2 === 0 ? ModePaiement::Especes : ModePaiement::CarteBancaire);
+            }
+        });
+
+        $this->assertSame($avant, $requetes());
+        $this->assertLessThanOrEqual(20, $avant, 'Le magasin et sa société, puis, type par type, ses documents avec leurs lignes, leurs taux, leurs tiers et leurs règlements.');
+    }
+
+    public function test_la_preparation_passe_par_sa_file_dont_le_delai_de_reprise_depasse_sa_duree(): void
+    {
+        Queue::fake();
+        $proprietaire = $this->proprietaireDe($this->magasin);
+
+        app(DemanderLeTelechargementDesDocumentsAction::class)->handle($proprietaire, $this->magasin->societe, [$this->magasin], '2026-03-01', '2026-03-31', [TypeDeDocumentTelechargeable::Ventes], OrigineDesAchats::Toutes, FormatDuTelechargement::Csv, ['ventes:'.$this->magasin->id.':'.$this->documents['ticket']->id]);
+
+        Queue::assertPushed(PreparerLeTelechargementDesDocumentsJob::class, fn (PreparerLeTelechargementDesDocumentsJob $travail): bool => $travail->connection === PreparerLeTelechargementDesDocumentsJob::CONNEXION);
+        $connexion = config('queue.connections.'.PreparerLeTelechargementDesDocumentsJob::CONNEXION);
+        $this->assertSame('telechargements', $connexion['queue']);
+        $this->assertGreaterThan((new PreparerLeTelechargementDesDocumentsJob(1))->timeout, $connexion['retry_after']);
+        $this->assertNotSame(config('queue.connections.database.queue'), $connexion['queue']);
+    }
+
+    public function test_l_effacement_d_un_telechargement_expire_emporte_l_avis_qui_portait_son_lien(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $expire = $this->demander($proprietaire, FormatDuTelechargement::Csv);
+        $this->travelTo(self::aParis('2026-03-12 10:00:00'));
+        $recent = $this->demander($proprietaire, FormatDuTelechargement::Csv);
+        $this->assertSame([$expire->id, $recent->id], $proprietaire->notifications()->get()->map(fn ($avis): int => $avis->data['telechargement_id'])->sort()->values()->all());
+
+        $this->travelTo(self::aParis('2026-03-17 11:00:00'));
+        $this->artisan(EffacerTelechargementsDeDocuments::class)->assertSuccessful();
+
+        $this->assertSame([$recent->id], $proprietaire->notifications()->get()->map(fn ($avis): int => $avis->data['telechargement_id'])->all());
+    }
+
     public function test_le_cabinet_lie_ne_telecharge_que_si_le_client_le_lui_coche(): void
     {
         $collaborateur = $this->collaborateurDuCabinetLie($this->magasin);
@@ -388,7 +516,7 @@ class TelechargementDesDocumentsTest extends TestCase
 
         $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->magasin->societe_id)->where('etat', EtatDuLien::Actif->value)->sole();
         app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($this->magasin), $lien, [...PermissionRegistry::parDefautDuCabinet($this->magasin->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
-        $this->assertTrue($documents->peutTelechargerDans($collaborateur->refresh(), $this->magasin));
+        $this->assertTrue(app(DocumentsDeLaPeriode::class)->peutTelechargerDans($collaborateur->refresh(), $this->magasin));
         $this->assertSame(9, count($this->trouver($collaborateur)));
     }
 

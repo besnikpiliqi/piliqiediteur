@@ -134,6 +134,9 @@ return new class extends Migration
             $table->index(['magasin_id', 'client_id']);
             $table->index(['magasin_id', 'cloture_caisse_id']);
             $table->index(['magasin_id', 'type_client', 'date_emission']);
+            // Les ventes d'une période, tous clients (téléchargement par
+            // période, voir DocumentsDeLaPeriode).
+            $table->index(['magasin_id', 'date_emission']);
         });
 
         GardesDeLaVente::poser('factures');

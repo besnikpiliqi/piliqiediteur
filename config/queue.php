@@ -44,6 +44,25 @@ return [
             'after_commit' => false,
         ],
 
+        // La préparation des téléchargements des documents par période (voir
+        // PreparerLeTelechargementDesDocumentsJob), qui dure jusqu'à une
+        // demi-heure : sa propre file « telechargements », dans la table des
+        // travaux, dont le délai de reprise d'un travail réservé (retry_after)
+        // dépasse la durée maximale d'une préparation ($timeout du travail,
+        // 1 800 s), pour qu'aucun travailleur ne la reprenne pendant qu'un
+        // autre la prépare encore. Son travailleur se lance à part, avec un
+        // délai qui couvre cette durée : php artisan queue:listen
+        // telechargements --timeout=1800 (README). Les tests la rendent
+        // synchrone (TELECHARGEMENTS_QUEUE_DRIVER=sync, phpunit.xml).
+        'telechargements' => [
+            'driver' => env('TELECHARGEMENTS_QUEUE_DRIVER', 'database'),
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'telechargements',
+            'retry_after' => 1900,
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

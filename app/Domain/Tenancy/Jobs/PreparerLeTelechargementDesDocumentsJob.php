@@ -39,12 +39,23 @@ use Throwable;
  * ArchiveDesDocuments) ou leur récapitulatif CSV (voir
  * RecapitulatifDesDocuments) sur le disque privé « telechargements »,
  * rangé par société, sous un nom tiré au hasard, puis, dans une seule
- * transaction, marque la demande prête et inscrit le téléchargement au
+ * transaction, marque la demande prête, avec les clés des documents que le
+ * fichier contient (que son lien relit, voir
+ * TelechargerLesDocumentsController), et inscrit le téléchargement au
  * journal d'audit de cette société (auteur, magasins, période, types,
- * origine, nombre de documents, format), y compris pour un compte d'un
- * cabinet lié ; la personne en est prévenue dans sa cloche (voir
+ * origine, seule marque « pièce du fournisseur manquante », nombre de
+ * documents, format), y compris pour un compte d'un cabinet lié ; la
+ * personne en est prévenue dans sa cloche (voir
  * AvisDuTelechargementDesDocuments). Un fichier dont l'écriture ou la
  * transaction échoue s'efface.
+ *
+ * Une préparation dure jusqu'à une demi-heure (un PDF par document, un
+ * exercice entier d'un commerce) : elle passe par sa propre connexion de
+ * file d'attente, « telechargements » (voir config/queue.php), dont le
+ * délai de reprise d'un travail réservé dépasse cette durée, et son propre
+ * travailleur, lancé avec un délai qui la couvre (README) ; ainsi aucun
+ * travailleur ne la reprend pendant qu'un autre la prépare encore, et elle
+ * n'arrête jamais le travailleur des e-mails et des courriers.
  *
  * Aucun document encore accessible, ou un compte qui n'agit plus : la
  * demande échoue, sans nouvelle tentative, la personne sachant pourquoi ;
@@ -71,11 +82,21 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     public array $backoff = [60];
 
     /**
-     * Une archive de nombreux documents se prépare en plusieurs minutes.
+     * Sa connexion de file d'attente (voir config/queue.php), dont le délai
+     * de reprise dépasse $timeout.
+     */
+    public const CONNEXION = 'telechargements';
+
+    /**
+     * Une archive de nombreux documents se prépare en plusieurs minutes :
+     * une demi-heure au plus.
      */
     public int $timeout = 1800;
 
-    public function __construct(public readonly int $telechargementId) {}
+    public function __construct(public readonly int $telechargementId)
+    {
+        $this->onConnection(self::CONNEXION);
+    }
 
     public function uniqueId(): string
     {
@@ -106,8 +127,9 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 ->orderBy('est_demonstration')
                 ->orderBy('nom')
                 ->orderBy('id')
-                ->get();
-            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->selection ?? []);
+                ->get()
+                ->each(fn (Magasin $magasin): Magasin => $magasin->setRelation('societe', $societe));
+            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->selection ?? [], $telechargement->piece_manquante_seulement);
 
             if ($choisis === []) {
                 $this->echouer($telechargement, ArchiveDesDocuments::AUCUN_DOCUMENT);
@@ -129,9 +151,9 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     }
 
     /**
-     * Dans une seule transaction : la demande prête, avec son fichier, et
-     * son entrée au journal d'audit de la société ; la personne en est
-     * prévenue. Une demande qui n'est plus en préparation garde son état,
+     * Dans une seule transaction : la demande prête, avec son fichier et
+     * les clés des documents qu'il contient, et son entrée au journal
+     * d'audit de la société ; la personne en est prévenue. Une demande qui n'est plus en préparation garde son état,
      * et le fichier écrit s'efface.
      *
      * @param  list<DocumentTrouve>  $choisis
@@ -151,6 +173,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
 
             $relu->forceFill([
                 'statut' => StatutDuTelechargement::Pret,
+                'selection' => array_map(fn (DocumentTrouve $document): string => $document->cle(), $choisis),
                 'chemin' => $chemin,
                 'taille' => Storage::disk(self::DISQUE)->size($chemin),
                 'nombre_documents' => count($choisis),
@@ -166,6 +189,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 'au' => (string) $relu->au,
                 'types' => array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $relu->typesDemandes()),
                 'origine' => $relu->origine->value,
+                'piece_manquante_seulement' => $relu->piece_manquante_seulement,
                 'nombre_documents' => count($choisis),
                 'format' => $relu->format->value,
             ], $relu);

@@ -2,6 +2,11 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Services\PieceDeposee;
+use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
@@ -9,9 +14,11 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\ChangerFinExerciceAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
@@ -20,14 +27,17 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\TelechargerLesDocuments;
 use App\Filament\Cabinet\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDuCabinet;
 use App\Filament\Societe\Pages\TelechargerLesDocuments as TelechargerLesDocumentsDeLaSociete;
 use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -51,6 +61,7 @@ class TelechargerLesDocumentsTest extends TestCase
         parent::setUp();
 
         Storage::fake(PreparerLeTelechargementDesDocumentsJob::DISQUE);
+        Storage::fake(PiecesDuFournisseur::DISQUE);
         $this->travelTo(self::aParis('2026-03-10 10:00:00'));
         $this->magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port', 'code' => 'PORT']);
     }
@@ -89,6 +100,95 @@ class TelechargerLesDocumentsTest extends TestCase
         ] as $raccourci => [$du, $au]) {
             $page->call('raccourci', $raccourci)->assertSet('du', $du)->assertSet('au', $au);
         }
+    }
+
+    public function test_dans_l_espace_du_cabinet_les_raccourcis_suivent_l_exercice_du_client_et_ses_changements_legaux(): void
+    {
+        config(['editeur.operateurs' => ['alice' => password_hash('secret-d-alice', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1])]]);
+        $collaborateur = $this->collaborateurDuCabinetLie($this->magasin);
+        $this->accorderAuCabinet();
+        $cabinet = Societe::query()->findOrFail($collaborateur->societe_id);
+        $juin = $this->ouvrirUneSociete(['nom' => 'Boutique de Juin']);
+        $juin->societe->forceFill(['mois_fin_exercice' => 6])->save();
+        $this->lierLeCabinet($cabinet, $juin, [...PermissionRegistry::parDefautDuCabinet($juin->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->confier($collaborateur, [$this->magasin, $juin]);
+        app(ChangerFinExerciceAction::class)->handle($this->magasin->societe->fresh(), 6, '2026-06-30', '2026-03-05', 'Claire Martin, Cabinet Martin et associés', new InterventionDeLEditeur('Procès-verbal de l\'assemblée générale reçu', 'PV-AGE-2026-03-05', ['alice']));
+        $this->dansLEspaceDuCabinet($cabinet, $collaborateur->refresh());
+
+        $page = Livewire::test(TelechargerLesDocumentsDuCabinet::class)->set('client', $juin->societe->uuid);
+        $page->call('raccourci', 'exercice')->assertSet('du', '2025-07-01')->assertSet('au', '2026-06-30');
+        $page->call('raccourci', 'exercice_precedent')->assertSet('du', '2024-07-01')->assertSet('au', '2025-06-30');
+
+        $page->set('client', $this->magasin->societe->uuid);
+        $page->call('raccourci', 'exercice')->assertSet('du', '2026-01-01')->assertSet('au', '2026-06-30');
+        $page->call('raccourci', 'exercice_precedent')->assertSet('du', '2025-01-01')->assertSet('au', '2025-12-31');
+    }
+
+    public function test_la_seule_marque_piece_manquante_choisit_les_achats_et_passe_a_la_demande(): void
+    {
+        $fournisseur = app(TenantContext::class)->runAs($this->magasin, fn (): Fournisseur => Fournisseur::factory()->create(['nom' => 'Grossiste du Nord']));
+        $sansPiece = $this->acheter($fournisseur, []);
+        $avecPiece = $this->acheter($fournisseur, [new PieceDeposee('facture.pdf', "%PDF-1.4\nfacture\n%%EOF")]);
+        $this->dansLeMagasin($this->magasin, $this->proprietaireDe($this->magasin));
+
+        $page = Livewire::test(TelechargerLesDocuments::class)
+            ->set('types', [TypeDeDocumentTelechargeable::FacturesAchat->value])
+            ->assertSeeText(['Seulement ceux dont la pièce du fournisseur manque', $sansPiece->numero, $avecPiece->numero, 'Pièce du fournisseur manquante'])
+            ->set('pieceManquanteSeulement', true)
+            ->assertSeeText(['Documents trouvés : 1', $sansPiece->numero])
+            ->assertDontSeeText($avecPiece->numero)
+            ->set('format', FormatDuTelechargement::Csv->value)
+            ->call('toutSelectionner')
+            ->call('telecharger')
+            ->assertNotified('Votre fichier est en préparation.');
+
+        $telechargement = TelechargementDeDocuments::query()->withoutGlobalScopes()->sole();
+        $this->assertSame([true, 1, ['achats:'.$this->magasin->id.':'.$sansPiece->id]], [$telechargement->piece_manquante_seulement, $telechargement->nombre_documents, $telechargement->selection]);
+        $page->set('pieceManquanteSeulement', false)->assertSeeText('Documents trouvés : 2');
+    }
+
+    public function test_un_clic_dans_l_espace_de_la_societe_ne_lit_chaque_magasin_qu_une_fois(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $requetes = [];
+
+        foreach ([2, 3, 4] as $nombre) {
+            while ($this->magasin->societe->magasins()->count() < $nombre) {
+                $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.$nombre, 'code' => 'B'.$nombre]);
+            }
+
+            $this->dansLEspaceDeLaSociete($this->magasin->societe, $proprietaire);
+            $requetes[$nombre] = $this->requetesDuClic(Livewire::test(TelechargerLesDocumentsDeLaSociete::class));
+        }
+
+        $this->assertSame($requetes[3] - $requetes[2], $requetes[4] - $requetes[3]);
+        $this->assertLessThanOrEqual(count(TypeDeDocumentTelechargeable::cases()), $requetes[4] - $requetes[3], 'Un magasin de plus : une lecture par type, rien d\'autre.');
+        $this->assertLessThanOrEqual(12 + 2 * count(TypeDeDocumentTelechargeable::cases()), $requetes[2]);
+    }
+
+    public function test_un_clic_dans_l_espace_du_cabinet_ne_relit_pas_les_autres_clients(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->magasin);
+        $this->accorderAuCabinet();
+        $cabinet = Societe::query()->findOrFail($collaborateur->societe_id);
+        $clients = [$this->magasin];
+        $requetes = [];
+
+        foreach ([1, 2, 3] as $nombre) {
+            while (count($clients) < $nombre) {
+                $client = $this->ouvrirUneSociete(['nom' => 'Client '.count($clients)]);
+                $this->lierLeCabinet($cabinet, $client, [...PermissionRegistry::parDefautDuCabinet($client->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER]);
+                $clients[] = $client;
+            }
+
+            $this->confier($collaborateur, $clients);
+            $this->dansLEspaceDuCabinet($cabinet, $collaborateur->refresh());
+            $requetes[$nombre] = $this->requetesDuClic(Livewire::test(TelechargerLesDocumentsDuCabinet::class)->set('client', $this->magasin->societe->uuid));
+        }
+
+        $this->assertSame($requetes[2] - $requetes[1], $requetes[3] - $requetes[2]);
+        $this->assertLessThanOrEqual(6, $requetes[3] - $requetes[2], 'Un client de plus : seulement la question du téléchargement dans son magasin.');
+        $this->assertLessThanOrEqual(80, $requetes[1]);
     }
 
     public function test_tout_selectionner_prend_tous_les_documents_trouves_au_dela_de_la_page_affichee(): void
@@ -203,6 +303,37 @@ class TelechargerLesDocumentsTest extends TestCase
         $this->telechargerEnTantQue($proprietaire, $this->telechargementDe($proprietaire)->lien())->assertStatus(410)->assertSeeText(TelechargerLesDocumentsController::EXPIRE);
     }
 
+    public function test_le_lien_est_refuse_a_qui_ne_voit_plus_les_documents_du_fichier(): void
+    {
+        $vendeur = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $telechargement = $this->telechargementPret($vendeur);
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $this->telechargerEnTantQue($vendeur, $telechargement->lien())->assertOk();
+
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->telechargerEnTantQue($vendeur->refresh(), $telechargement->lien())->assertForbidden()->assertSeeText(TelechargerLesDocumentsController::SANS_DROIT);
+
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->telechargerEnTantQue($vendeur->refresh(), $telechargement->lien())->assertForbidden()->assertSeeText(TelechargerLesDocumentsController::SANS_DROIT);
+
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->telechargerEnTantQue($vendeur->refresh(), $telechargement->lien())->assertOk();
+    }
+
+    public function test_le_lien_d_un_compte_du_cabinet_se_ferme_quand_le_client_lui_retire_une_consultation(): void
+    {
+        $collaborateur = $this->collaborateurDuCabinetLie($this->magasin);
+        $lien = $this->accorderAuCabinet();
+        $telechargement = $this->telechargementPret($collaborateur->refresh());
+        $this->telechargerEnTantQue($collaborateur, $telechargement->lien())->assertOk();
+
+        app(ReglerLesAutorisationsDuCabinetAction::class)->handle($this->proprietaireDe($this->magasin), $lien, [
+            ...array_values(array_diff(PermissionRegistry::parDefautDuCabinet($this->magasin->societe->type_activite), [PermissionRegistry::FACTURE_VIEW])),
+            PermissionRegistry::DOCUMENTS_TELECHARGER,
+        ]);
+        $this->telechargerEnTantQue($collaborateur->refresh(), $telechargement->lien())->assertForbidden()->assertSeeText(TelechargerLesDocumentsController::SANS_DROIT);
+    }
+
     public function test_le_lien_d_un_compte_du_cabinet_se_ferme_avec_le_lien_du_client(): void
     {
         $collaborateur = $this->collaborateurDuCabinetLie($this->magasin);
@@ -214,6 +345,38 @@ class TelechargerLesDocumentsTest extends TestCase
 
         app(MettreFinAuLienAction::class)->handle($this->proprietaireDe($this->magasin), $lien);
         $this->telechargerEnTantQue($collaborateur->refresh(), $telechargement->lien())->assertForbidden();
+    }
+
+    /**
+     * Le nombre de requêtes d'un clic sur un raccourci de la page, sa
+     * réponse comprise.
+     */
+    private function requetesDuClic(Testable $page): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $page->call('raccourci', 'mois_dernier');
+        $nombre = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $nombre;
+    }
+
+    /**
+     * Une facture d'achat du magasin saisie à la main le 2 mars, avec ces
+     * pièces du fournisseur, validée.
+     *
+     * @param  list<PieceDeposee>  $pieces
+     */
+    private function acheter(Fournisseur $fournisseur, array $pieces): FactureAchat
+    {
+        $responsable = $this->responsable($this->magasin);
+
+        return app(TenantContext::class)->runAs($this->magasin, function () use ($fournisseur, $pieces, $responsable): FactureAchat {
+            $carnet = Produit::query()->where('reference', 'CARNET')->first() ?? Produit::factory()->create(['nom' => 'Carnet', 'reference' => 'CARNET', 'prix_vente_ttc' => 3, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+            return app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, $fournisseur, [['produit_id' => $carnet->id, 'quantite' => 2, 'prix_unitaire_ht' => 1]], ['date_facture' => '2026-03-02'], null, $pieces));
+        });
     }
 
     /**

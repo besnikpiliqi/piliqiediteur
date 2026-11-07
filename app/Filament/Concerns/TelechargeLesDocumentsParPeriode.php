@@ -26,9 +26,11 @@ use LogicException;
  * 03/11/2026, lot EX), dans un magasin, dans l'espace de la société et dans
  * l'espace du cabinet : une période « du … au … » et ses raccourcis, les
  * cases des types de documents que la personne peut voir, l'origine des
- * achats, et, hors d'un magasin, les cases des magasins proposés ; la liste
- * des documents trouvés (voir DocumentsDeLaPeriode::trouver()), par pages,
- * une case par document, « Tout sélectionner » (tous les documents
+ * achats et la case « pièce du fournisseur manquante seulement » (décision
+ * de l'éditeur du 03/11/2026, F1 = b), et, hors d'un magasin, les cases des
+ * magasins proposés ; la liste des documents trouvés (voir
+ * DocumentsDeLaPeriode::trouver()), par pages, un achat sans sa pièce
+ * marqué, une case par document, « Tout sélectionner » (tous les documents
  * trouvés, pas seulement la page affichée) et « Tout désélectionner », le
  * nombre et le total TTC de la sélection ; puis le format et
  * « Télécharger », qui confie la demande à la file d'attente (voir
@@ -41,6 +43,11 @@ use LogicException;
  * (voir magasinsProposes()), les types avec ceux que la personne voit,
  * la sélection avec les documents trouvés ; aucune méthode publique ne
  * rend un document ni ne reçoit un identifiant.
+ *
+ * Les magasins proposés, les types proposés, les droits de la personne
+ * dans chaque magasin et les documents trouvés se lisent une fois par
+ * requête (propriétés privées, que Livewire ne garde pas d'une requête à
+ * l'autre) : un clic ne repose jamais deux fois la même question.
  */
 trait TelechargeLesDocumentsParPeriode
 {
@@ -65,6 +72,12 @@ trait TelechargeLesDocumentsParPeriode
      * L'origine des achats (voir OrigineDesAchats).
      */
     public string $origine = 'toutes';
+
+    /**
+     * Seulement les factures d'achat et les avoirs fournisseur saisis sans
+     * la pièce du fournisseur (décision de l'éditeur du 03/11/2026, F1 = b).
+     */
+    public bool $pieceManquanteSeulement = false;
 
     /**
      * Les magasins cochés, par identifiant, parmi ceux que la page propose.
@@ -99,12 +112,32 @@ trait TelechargeLesDocumentsParPeriode
     private ?array $trouves = null;
 
     /**
+     * Les magasins proposés, lus une fois par requête.
+     *
+     * @var Collection<int, Magasin>|null
+     */
+    private ?Collection $magasinsLus = null;
+
+    /**
+     * Les types proposés, lus une fois par requête.
+     *
+     * @var list<TypeDeDocumentTelechargeable>|null
+     */
+    private ?array $typesLus = null;
+
+    /**
+     * Les documents de la période et les droits de la personne dans chaque
+     * magasin, lus une fois par requête (voir DocumentsDeLaPeriode).
+     */
+    private ?DocumentsDeLaPeriode $documentsDeLaPeriode = null;
+
+    /**
      * Les magasins où la personne télécharge les documents, que la page
-     * propose.
+     * propose, lus en base.
      *
      * @return Collection<int, Magasin>
      */
-    abstract protected function magasinsProposes(): Collection;
+    abstract protected function chercherLesMagasins(): Collection;
 
     /**
      * La société dont la page lit les documents.
@@ -217,7 +250,7 @@ trait TelechargeLesDocumentsParPeriode
      */
     public function updated(string $propriete): void
     {
-        if (in_array(explode('.', $propriete)[0], ['du', 'au', 'types', 'origine', 'magasinsCoches'], true)) {
+        if (in_array(explode('.', $propriete)[0], ['du', 'au', 'types', 'origine', 'pieceManquanteSeulement', 'magasinsCoches'], true)) {
             $this->pageDeLaListe = 1;
         }
     }
@@ -252,6 +285,7 @@ trait TelechargeLesDocumentsParPeriode
                     array_map(fn (DocumentTrouve $document): string => $document->cle(), $this->documentsTrouves()),
                     fn (string $cle): bool => isset($cochees[$cle]),
                 )),
+                $this->pieceManquanteSeulement,
             );
         } catch (AuthorizationException|InvalidArgumentException|LogicException $refus) {
             Notification::make()->title($refus->getMessage())->danger()->send();
@@ -303,8 +337,19 @@ trait TelechargeLesDocumentsParPeriode
     }
 
     /**
+     * Les magasins où la personne télécharge les documents, que la page
+     * propose, lus une fois par requête.
+     *
+     * @return Collection<int, Magasin>
+     */
+    protected function magasinsProposes(): Collection
+    {
+        return $this->magasinsLus ??= $this->chercherLesMagasins();
+    }
+
+    /**
      * Les types que la personne voit dans au moins un magasin proposé, dans
-     * l'ordre de l'énumération.
+     * l'ordre de l'énumération, lus une fois par requête.
      *
      * @return list<TypeDeDocumentTelechargeable>
      */
@@ -316,10 +361,32 @@ trait TelechargeLesDocumentsParPeriode
             return [];
         }
 
-        $documents = app(DocumentsDeLaPeriode::class);
-        $vus = $this->magasinsProposes()->flatMap(fn (Magasin $magasin): array => $documents->typesVisibles($compte, $magasin))->unique(fn (TypeDeDocumentTelechargeable $type): string => $type->value);
+        return $this->typesLus ??= (function () use ($compte): array {
+            $vus = $this->magasinsProposes()->flatMap(fn (Magasin $magasin): array => $this->documentsDeLaPeriode()->typesVisibles($compte, $magasin))->unique(fn (TypeDeDocumentTelechargeable $type): string => $type->value);
 
-        return array_values(array_filter(TypeDeDocumentTelechargeable::cases(), fn (TypeDeDocumentTelechargeable $type): bool => $vus->contains($type)));
+            return array_values(array_filter(TypeDeDocumentTelechargeable::cases(), fn (TypeDeDocumentTelechargeable $type): bool => $vus->contains($type)));
+        })();
+    }
+
+    /**
+     * Oublie les magasins et les types proposés lus pendant cette requête :
+     * ce qui les choisit vient de changer (le client de l'espace du
+     * cabinet).
+     */
+    protected function oublierLesMagasinsProposes(): void
+    {
+        $this->magasinsLus = null;
+        $this->typesLus = null;
+        $this->trouves = null;
+    }
+
+    /**
+     * L'instance qui lit les documents et les droits de la personne
+     * pendant cette requête.
+     */
+    protected function documentsDeLaPeriode(): DocumentsDeLaPeriode
+    {
+        return $this->documentsDeLaPeriode ??= app(DocumentsDeLaPeriode::class);
     }
 
     /**
@@ -377,13 +444,13 @@ trait TelechargeLesDocumentsParPeriode
         $magasins = $this->magasinsChoisis();
         $types = $this->typesChoisis();
         $origine = $this->origineChoisie();
-        $cle = json_encode([$this->du, $this->au, $magasins->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all(), array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types), $origine->value]);
+        $cle = json_encode([$this->du, $this->au, $magasins->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all(), array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types), $origine->value, $this->pieceManquanteSeulement]);
 
         if ($this->trouves !== null && $this->trouves['cle'] === $cle) {
             return $this->trouves['documents'];
         }
 
-        $documents = ! $compte instanceof User || ! $this->periodeValide() || $types === [] ? [] : app(DocumentsDeLaPeriode::class)->trouver($compte, $magasins, $this->du, $this->au, $types, $origine);
+        $documents = ! $compte instanceof User || ! $this->periodeValide() || $types === [] ? [] : $this->documentsDeLaPeriode()->trouver($compte, $magasins, $this->du, $this->au, $types, $origine, $this->pieceManquanteSeulement);
         $this->trouves = ['cle' => (string) $cle, 'documents' => $documents];
 
         return $documents;

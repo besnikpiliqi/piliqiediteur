@@ -53,12 +53,12 @@ class TelechargerLesDocuments extends Page
         $this->preparerLaPage();
     }
 
-    protected function magasinsProposes(): Collection
+    protected function chercherLesMagasins(): Collection
     {
         $compte = auth()->user();
         $magasin = Filament::getTenant();
 
-        return $compte instanceof User && $magasin instanceof Magasin ? app(DocumentsDeLaPeriode::class)->magasinsDuMagasin($compte, $magasin) : collect();
+        return $compte instanceof User && $magasin instanceof Magasin ? $this->documentsDeLaPeriode()->magasinsDuMagasin($compte, $magasin) : collect();
     }
 
     protected function societeDesDocuments(): ?Societe

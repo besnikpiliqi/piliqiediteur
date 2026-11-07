@@ -8,9 +8,10 @@ use Illuminate\Support\Facades\Schema;
  * Les téléchargements des documents par période (décision de l'éditeur du
  * 03/11/2026, lot EX ; voir TelechargementDeDocuments) : chaque demande,
  * dans la société dont elle lit les documents, avec ce qui a été demandé
- * (magasins, période, types, origine des achats, format, documents
- * choisis), son état dans la file d'attente et, une fois prêt, son fichier
- * sur le disque privé « telechargements ». Le lien vaut sept jours, pour le
+ * (magasins, période, types, origine des achats et seule marque « pièce du
+ * fournisseur manquante », format, documents choisis, puis ceux que le
+ * fichier contient), son état dans la file d'attente et, une fois prêt, son
+ * fichier sur le disque privé « telechargements ». Le lien vaut sept jours, pour le
  * seul compte qui l'a demandé ; la demande et son fichier s'effacent
  * ensuite (voir app:effacer-telechargements-de-documents) ; le journal
  * d'audit de la société en garde la trace.
@@ -32,12 +33,17 @@ return new class extends Migration
             $table->foreignId('demande_par')->constrained('users')->restrictOnDelete();
             $table->string('demande_par_nom');
             // Les magasins, les types, les clés des documents choisis (voir
-            // DocumentTrouve::cle()), en JSON.
+            // DocumentTrouve::cle()), puis, une fois le fichier prêt, celles
+            // des documents qu'il contient, en JSON.
             $table->json('magasins');
             $table->date('du');
             $table->date('au');
             $table->json('types');
             $table->string('origine', 20);
+            // Seulement les achats et les avoirs fournisseur saisis sans la
+            // pièce du fournisseur (décision de l'éditeur du 03/11/2026,
+            // F1 = b).
+            $table->boolean('piece_manquante_seulement');
             $table->string('format', 10);
             $table->json('selection');
             $table->string('statut', 20);

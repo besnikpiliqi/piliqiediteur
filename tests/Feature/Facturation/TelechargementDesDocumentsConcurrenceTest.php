@@ -85,6 +85,7 @@ class TelechargementDesDocumentsConcurrenceTest extends TestCase
                     'au' => '2026-03-31',
                     'types' => [TypeDeDocumentTelechargeable::Ventes->value],
                     'origine' => OrigineDesAchats::Toutes,
+                    'piece_manquante_seulement' => false,
                     'format' => FormatDuTelechargement::Csv,
                     'selection' => [],
                     'statut' => StatutDuTelechargement::Echec,

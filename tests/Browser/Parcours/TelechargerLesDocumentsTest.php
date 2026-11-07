@@ -1,19 +1,27 @@
 <?php
 
+use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\OrigineDesAchats;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
+use App\Domain\Facturation\Services\DocumentTrouve;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -180,4 +188,172 @@ test('la page ne s’offre qu’au propriétaire et à qui il coche l’autorisa
     expect($onglet->element($lienDuMenu)->count())->toBe(0);
     $onglet->aller('/app/'.$societe->magasin->uuid);
     expect($onglet->element($lienDuMenu)->count())->toBe(0);
+});
+
+/**
+ * Le propriétaire coche à ce compte de membre « télécharger les documents
+ * par période », en plus des autorisations qu'il a déjà dans le magasin
+ * (un responsable n'a que celle-là, ses autres droits étant sans case).
+ */
+function cocherLeTelechargement(User $proprietaire, Magasin $magasin, User $compte, RoleMagasin $role): User
+{
+    $autorisations = $role === RoleMagasin::Responsable ? [] : app(TenantContext::class)->runAs($magasin, fn (): array => $compte->affectationDeMembre()->autorisations());
+    app(ModifierMembreAction::class)->handle($proprietaire, $compte, $role, [...$autorisations, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+    app(TenantContext::class)->clear();
+
+    return $compte->refresh();
+}
+
+/**
+ * Les numéros des documents d'un récapitulatif CSV reçu, chacun une fois.
+ *
+ * @return list<string>
+ */
+function numerosDuRecapitulatif(array $fichier): array
+{
+    $lignes = array_map(fn (string $ligne): array => str_getcsv($ligne, ';', '"', ''), explode("\r\n", rtrim(substr(base64_decode($fichier['contenu']), 3), "\r\n")));
+
+    return array_values(array_unique(array_column(array_slice($lignes, 1), 2)));
+}
+
+/**
+ * Les numéros des documents de mars de ce magasin que ce compte voit.
+ *
+ * @return list<string>
+ */
+function numerosVus(User $compte, Magasin $magasin): array
+{
+    return array_values(array_unique(array_map(
+        fn (DocumentTrouve $document): string => $document->numero,
+        app(DocumentsDeLaPeriode::class)->trouver($compte, [$magasin], '2026-03-01', '2026-03-31', TypeDeDocumentTelechargeable::cases(), OrigineDesAchats::Toutes),
+    )));
+}
+
+test('le propriétaire saisit la période au calendrier, choisit les types, l’origine et la seule marque « pièce manquante », coche un document puis désélectionne tout', function () {
+    $societe = $this->societeComplete();
+    $tous = TypeDeDocumentTelechargeable::cases();
+    $sansLesVentes = array_values(array_filter($tous, fn (TypeDeDocumentTelechargeable $type): bool => $type !== TypeDeDocumentTelechargeable::Ventes));
+    $trouves = fn (string $du, string $au, array $types, OrigineDesAchats $origine = OrigineDesAchats::Toutes, bool $sansPiece = false): string => 'Documents trouvés : '.count(app(DocumentsDeLaPeriode::class)->trouver($societe->proprietaire, [$societe->magasin], $du, $au, $types, $origine, $sansPiece));
+    $avoirFournisseur = app(TenantContext::class)->runAs($societe->magasin, fn (): string => AvoirFournisseur::query()->sole()->numero);
+
+    $onglet = $this->seConnecter($societe->proprietaire)
+        ->aller('/app/'.$societe->magasin->uuid.'/telecharger-les-documents')
+        ->remplir('Au', '2026-01-31')
+        ->voir('Choisissez une période : son premier jour, puis son dernier, au plus tard le même.')
+        ->remplir('Du', '2026-01-01')
+        ->voir($trouves('2026-01-01', '2026-01-31', $tous))
+        ->nePasVoir('Choisissez une période')
+        ->remplir('Au', '2026-03-31')
+        ->voir($trouves('2026-01-01', '2026-03-31', $tous))
+        ->cliquer('label:has-text("Ventes (factures et tickets)") input[type=checkbox]')
+        ->voir($trouves('2026-01-01', '2026-03-31', $sansLesVentes))
+        ->cliquer('label:has-text("Saisie manuelle") input[type=radio]')
+        ->voir($trouves('2026-01-01', '2026-03-31', $sansLesVentes, OrigineDesAchats::SaisieManuelle))
+        ->cliquer('label:has-text("Seulement ceux dont la pièce du fournisseur manque") input[type=checkbox]')
+        ->voir($trouves('2026-01-01', '2026-03-31', $sansLesVentes, OrigineDesAchats::SaisieManuelle, true))
+        ->voir('Pièce du fournisseur manquante')
+        ->cliquer('input[aria-label="Choisir '.$avoirFournisseur.'"]')
+        ->voir('Sélection : 1 document,')
+        ->cliquerSur('Tout désélectionner')
+        ->voir('Sélection : 0 document,');
+
+    expect($onglet->element('input[aria-label="Choisir '.$avoirFournisseur.'"]')->isChecked())->toBeFalse();
+});
+
+test('la liste de plus de cinquante documents se parcourt page par page, et « Tout sélectionner » les prend tous', function () {
+    $societe = $this->societeComplete();
+    app(TenantContext::class)->runAs($societe->magasin, function () use ($societe): void {
+        $carnet = Produit::factory()->create(['nom' => 'Carnet', 'reference' => 'CARNET', 'prix_vente_ttc' => 3, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        foreach (range(1, 50) as $rang) {
+            $this->vendreAuComptant($societe->vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $carnet->id, 'quantite' => 1]]);
+        }
+    });
+    app(TenantContext::class)->clear();
+    $nombre = count(app(DocumentsDeLaPeriode::class)->trouver($societe->proprietaire, [$societe->magasin], '2026-03-01', '2026-03-31', TypeDeDocumentTelechargeable::cases(), OrigineDesAchats::Toutes));
+
+    $this->seConnecter($societe->proprietaire)
+        ->aller('/app/'.$societe->magasin->uuid.'/telecharger-les-documents')
+        ->voir('Page 1 sur 2')
+        ->cliquerSur('Page suivante')
+        ->voir('Page 2 sur 2')
+        ->cliquerSur('Tout sélectionner')
+        ->voir('Sélection : '.$nombre.' documents')
+        ->cliquerSur('Page précédente')
+        ->voir('Page 1 sur 2')
+        ->voir('Sélection : '.$nombre.' documents');
+});
+
+test('le collaborateur du cabinet choisit le client dont il télécharge les documents', function () {
+    $societe = $this->societeComplete();
+    $parDefaut = [...PermissionRegistry::parDefautDuCabinet($societe->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER];
+    $lien = LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->id)->where('etat', EtatDuLien::Actif->value)->sole();
+    app(ReglerLesAutorisationsDuCabinetAction::class)->handle($societe->proprietaire, $lien, $parDefaut);
+    $atelier = $this->ouvrirUneSociete(['nom' => 'Atelier du Marché', 'code' => 'MARCHE']);
+    $this->lierLeCabinet($societe->cabinet, $atelier, $parDefaut);
+    $this->confier($societe->collaborateur, [$societe->magasin, $atelier]);
+    app(TenantContext::class)->clear();
+    $client = $atelier->societe()->firstOrFail();
+
+    $this->seConnecter($societe->collaborateur, panneau: 'cabinet')
+        ->cliquerSurLeLien('Télécharger les documents')
+        ->attendreLaPage('/telecharger-les-documents$')
+        ->choisir('Client', $client->raison_sociale.' ('.$client->siren.')')
+        ->voir('Atelier du Marché (MARCHE)')
+        ->nePasVoir('Boutique du Port (PORT)')
+        ->choisir('Client', $societe->societe->raison_sociale.' ('.$societe->societe->siren.')')
+        ->voir('Boutique du Port (PORT)')
+        ->nePasVoir('Atelier du Marché (MARCHE)');
+});
+
+test('le bouton « Télécharger » de la notification fait télécharger le fichier, et un lien expiré mène à une page qui ramène à l’accueil', function () {
+    $societe = $this->societeComplete();
+    $onglet = $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->magasin->uuid.'/telecharger-les-documents');
+    preparerEtTelecharger($onglet, 'Récapitulatif (CSV)');
+
+    $onglet->cliquer('.fi-topbar-database-notifications-btn')
+        ->voir('Vos documents du 01/03/2026 au 31/03/2026 sont prêts')
+        ->geste(fn () => $onglet->page()->evaluate('() => document.querySelector('.Navigation::texte(Navigation::FENETRE.' .fi-no-notification a[download]').').click()'), 'le bouton « Télécharger » de la notification');
+    $fichiers = $onglet->telechargements();
+    expect($fichiers)->toHaveCount(1)
+        ->and($fichiers[0]['nom'])->toBe('documents-2026-03-01-au-2026-03-31.csv')
+        ->and(numerosDuRecapitulatif($fichiers[0]))->toBe(numerosVus($societe->proprietaire, $societe->magasin));
+
+    $telechargement = TelechargementDeDocuments::query()->withoutGlobalScopes()->sole();
+    $telechargement->forceFill(['expire_le' => now()->subMinute()])->save();
+    $this->tolerer(410, '/telechargements/');
+    $onglet->aller($telechargement->lien())
+        ->voir(TelechargerLesDocumentsController::EXPIRE)
+        ->cliquerSurLeLien('Revenir à l\'accueil')
+        ->attendreLaPage('^/app/[0-9a-f-]{36}$');
+});
+
+test('chaque rôle à qui le propriétaire coche la case télécharge les documents qu’il voit, dans le magasin et dans l’espace de la société', function () {
+    $societe = $this->societeComplete();
+    $comptes = [
+        'le responsable' => cocherLeTelechargement($societe->proprietaire, $societe->magasin, $societe->responsable, RoleMagasin::Responsable),
+        'le vendeur' => cocherLeTelechargement($societe->proprietaire, $societe->magasin, $societe->vendeur, RoleMagasin::Vendeur),
+        'l’observateur' => cocherLeTelechargement($societe->proprietaire, $societe->magasin, $societe->observateur, RoleMagasin::Observateur),
+    ];
+    app(ModifierAdministrateurAction::class)->modifier($societe->proprietaire, $societe->administrateur, null, [...PermissionRegistry::modeleDeLAdministrateur($societe->societe->type_activite), PermissionRegistry::DOCUMENTS_TELECHARGER], AutorisationsSociete::toutes());
+    app(TenantContext::class)->clear();
+    $comptes['l’administrateur'] = $societe->administrateur->refresh();
+
+    foreach ($comptes as $qui => $compte) {
+        $onglet = $this->seConnecter($compte)
+            ->aller('/app/'.$societe->magasin->uuid)
+            ->cliquerSurLeLien('Télécharger les documents')
+            ->attendreLaPage('/telecharger-les-documents$');
+        $fichier = preparerEtTelecharger($onglet, 'Récapitulatif (CSV)');
+
+        expect([$qui, numerosDuRecapitulatif($fichier)])->toBe([$qui, numerosVus($compte, $societe->magasin)]);
+        $onglet->seDeconnecter();
+    }
+
+    $onglet = $this->seConnecter($societe->administrateur, panneau: 'societe')
+        ->aller('/societe/'.$societe->societe->uuid.'/telecharger-les-documents')
+        ->voir('Boutique de la Gare (GARE)')
+        ->cliquer('label:has-text("Boutique de la Gare (GARE)") input[type=checkbox]');
+    $fichier = preparerEtTelecharger($onglet, 'Récapitulatif (CSV)');
+    expect(numerosDuRecapitulatif($fichier))->toBe(numerosVus($societe->administrateur, $societe->magasin));
 });

@@ -22,16 +22,16 @@
 <x-filament-panels::page>
     @if ($clients !== null)
         <x-filament::section>
-            <label class="flex flex-wrap items-center gap-3">
-                <span class="text-sm font-medium">Client</span>
+            <div class="flex flex-wrap items-center gap-3">
+                <label for="client-des-documents" class="text-sm font-medium">Client</label>
                 <x-filament::input.wrapper>
-                    <x-filament::input.select wire:model.live="client">
+                    <x-filament::input.select id="client-des-documents" wire:model.live="client">
                         @foreach ($clients as $uuid => $nom)
                             <option value="{{ $uuid }}">{{ $nom }}</option>
                         @endforeach
                     </x-filament::input.select>
                 </x-filament::input.wrapper>
-            </label>
+            </div>
         </x-filament::section>
     @endif
 
@@ -86,6 +86,10 @@
                         </label>
                     @endforeach
                 </div>
+                <label class="mt-2 flex items-center gap-2">
+                    <x-filament::input.checkbox wire:model.live="pieceManquanteSeulement" />
+                    <span class="text-sm">Seulement ceux dont la pièce du fournisseur manque</span>
+                </label>
             </fieldset>
         @endif
 
@@ -134,7 +138,12 @@
                             <td class="py-1 pe-3">
                                 <x-filament::input.checkbox wire:model.live="selection" value="{{ $document->cle() }}" aria-label="Choisir {{ $document->numero }}" />
                             </td>
-                            <td class="py-1 pe-3">{{ $document->type->libelleDUnDocument() }}{{ $document->origine === null ? '' : ' ('.$document->origine.')' }}</td>
+                            <td class="py-1 pe-3">
+                                {{ $document->type->libelleDUnDocument() }}{{ $document->origine === null ? '' : ' ('.$document->origine.')' }}
+                                @if ($document->pieceManquante)
+                                    <x-filament::badge color="warning" class="mt-1 w-fit">Pièce du fournisseur manquante</x-filament::badge>
+                                @endif
+                            </td>
                             <td class="py-1 pe-3">{{ $document->magasin }}</td>
                             <td class="py-1 pe-3">{{ $document->numero }}</td>
                             <td class="py-1 pe-3">{{ \App\Domain\Calendrier\Calendrier::afficherJour($document->jour, 'd/m/Y') }}</td>

@@ -8,13 +8,16 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 /**
  * Un fichier déposé pour devenir une pièce du fournisseur (voir
  * PiecesDuFournisseur::joindre()) : le nom que lui donnait la personne et
- * son contenu, lus une fois, avant tout contrôle.
+ * son contenu, lus une fois, avant tout contrôle, et, pour un fichier
+ * envoyé par un écran, l'identifiant de cet envoi (le nom, tiré au hasard
+ * par Livewire, de son fichier dans le dossier temporaire des envois).
  */
 final readonly class PieceDeposee
 {
     public function __construct(
         public string $nom,
         public string $contenu,
+        public ?string $envoi = null,
     ) {}
 
     /**
@@ -31,7 +34,7 @@ final readonly class PieceDeposee
     public static function lire(mixed $fichiers): array
     {
         return array_map(
-            fn (UploadedFile $fichier): self => new self($fichier->getClientOriginalName(), (string) $fichier->get()),
+            fn (UploadedFile $fichier): self => new self($fichier->getClientOriginalName(), (string) $fichier->get(), $fichier instanceof TemporaryUploadedFile ? $fichier->getFilename() : null),
             self::envois($fichiers),
         );
     }
@@ -51,15 +54,22 @@ final readonly class PieceDeposee
     }
 
     /**
-     * Le nom et l'empreinte de chaque pièce, sans leur contenu : ce que le
-     * jeton d'une demande répétée compare (voir ActionsUniques).
+     * Ce qui désigne chaque pièce, sans son contenu : ce que le jeton d'une
+     * demande répétée compare (voir ActionsUniques). Son nom, et
+     * l'identifiant de son envoi pour un fichier envoyé par un écran, sinon
+     * l'empreinte de son contenu : l'écran efface ses envois une fois
+     * l'avoir émis (voir effacerLesEnvois()), si bien que la même demande,
+     * renvoyée après une réponse perdue, désigne les mêmes envois, mais
+     * n'en relit plus le contenu.
      *
      * @param  list<self>  $pieces
-     * @return list<array{nom: string, empreinte: string}>
+     * @return list<array{nom: string, envoi: string}|array{nom: string, empreinte: string}>
      */
     public static function signatures(array $pieces): array
     {
-        return array_map(fn (self $piece): array => ['nom' => $piece->nom, 'empreinte' => hash('sha256', $piece->contenu)], $pieces);
+        return array_map(fn (self $piece): array => $piece->envoi === null
+            ? ['nom' => $piece->nom, 'empreinte' => hash('sha256', $piece->contenu)]
+            : ['nom' => $piece->nom, 'envoi' => $piece->envoi], $pieces);
     }
 
     /**

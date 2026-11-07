@@ -51,6 +51,7 @@ class TelechargementDeDocuments extends Model
         'au' => JourCivil::class,
         'types' => 'array',
         'origine' => OrigineDesAchats::class,
+        'piece_manquante_seulement' => 'boolean',
         'format' => FormatDuTelechargement::class,
         'selection' => 'array',
         'statut' => StatutDuTelechargement::class,

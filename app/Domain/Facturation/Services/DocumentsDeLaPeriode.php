@@ -33,33 +33,55 @@ use Illuminate\Support\Facades\Gate;
  * lié qui le lui accorde).
  *
  * Chaque magasin se lit à son tour comme magasin actif, sa société comme
- * société active (voir dansLeMagasin()) : MagasinScope reste en place, aucune requête ne
- * contourne sa portée, et chaque droit se pose à la Gate dans ce magasin
- * (voir ControleDesDroits), la lecture seule d'un magasin fermé, suspendu
- * ou d'une société résiliée laissant le téléchargement permis. Un magasin
- * n'est lu que si la personne y a l'autorisation « télécharger les
- * documents par période » (voir peutTelechargerDans()) ; un magasin réel
- * d'une société qui n'est pas validée n'a aucun document réel et n'est
- * jamais lu ; le magasin de démonstration se lit, ses documents marqués
- * comme tels.
+ * société active (voir dansLeMagasin()) : MagasinScope reste en place,
+ * aucune requête ne contourne sa portée, et chaque droit se pose à la Gate
+ * dans ce magasin (voir ControleDesDroits), la lecture seule d'un magasin
+ * fermé, suspendu ou d'une société résiliée laissant le téléchargement
+ * permis. Un magasin n'est lu que si la personne y a l'autorisation
+ * « télécharger les documents par période » (voir peutTelechargerDans()) ;
+ * un magasin réel d'une société qui n'est pas validée n'a aucun document
+ * réel et n'est jamais lu ; le magasin de démonstration se lit, ses
+ * documents marqués comme tels. Les droits d'un compte dans un magasin se
+ * lisent une fois par instance (une requête de la page, une préparation,
+ * un téléchargement, voir peutTelechargerDans() et lectureDans()), et
+ * seulement ceux qui servent : une page qui lit plusieurs magasins ne
+ * repose jamais deux fois la même question, et une instance ne revoit pas
+ * un droit changé pendant sa vie ; une action qui décide sous un verrou
+ * prend une instance neuve.
  *
  * Chacun ne reçoit que les documents qu'il peut voir, type par type, comme
- * leurs listes le font (voir typesVisibles()) : les ventes qu'il voit (les
- * siennes, ou toutes avec « voir celles de toute l'équipe », voir
- * Facture::scopeVisiblesPar()), les avoirs de même (voir
- * Avoir::scopeVisiblesPar()), les achats et les avoirs fournisseur de
- * l'équipe, les clôtures qu'il a déclenchées ou toutes (voir
- * ClotureCaissePolicy), les encaissements qu'il a enregistrés ou tous (voir
- * PaiementPolicy) ; jamais un brouillon. Les jours sont ceux du calendrier
- * de chaque magasin : le jour d'émission d'une vente, d'un avoir et d'un
- * avoir fournisseur, la date de la facture du fournisseur d'un achat (à
- * défaut, pour un achat reçu par l'API, le jour de sa validation), la
- * journée d'une clôture, le jour d'enregistrement d'un paiement. Les
- * montants sont ceux qu'enregistre chaque document, additionnés en
- * centimes pour un relevé des encaissements, jamais par la base.
+ * leurs listes le font : les ventes qu'il voit (les siennes, ou toutes avec
+ * « voir celles de toute l'équipe », comme Facture::scopeVisiblesPar()),
+ * les avoirs de même (comme Avoir::scopeVisiblesPar()), les achats et les
+ * avoirs fournisseur de l'équipe, les clôtures qu'il a déclenchées ou
+ * toutes (voir ClotureCaissePolicy), les encaissements qu'il a enregistrés
+ * ou tous (voir PaiementPolicy) ; jamais un brouillon. Les jours sont ceux
+ * du calendrier de chaque magasin : le jour d'émission d'une vente, d'un
+ * avoir et d'un avoir fournisseur, la date de la facture du fournisseur
+ * d'un achat (à défaut, pour un achat reçu par l'API, le jour de sa
+ * validation), la journée d'une clôture, le jour d'enregistrement d'un
+ * paiement. Les montants sont ceux qu'enregistre chaque document,
+ * additionnés en centimes pour un relevé des encaissements, jamais par la
+ * base.
  */
 final class DocumentsDeLaPeriode
 {
+    /**
+     * S'il télécharge dans chaque magasin, lu une fois par instance, sous la
+     * clé « compte:magasin ».
+     *
+     * @var array<string, bool>
+     */
+    private array $telecharge = [];
+
+    /**
+     * Ce qu'il voit dans chaque magasin où il télécharge, lu une fois par
+     * instance, sous la clé « compte:magasin ».
+     *
+     * @var array<string, array{types: list<TypeDeDocumentTelechargeable>, equipe: bool, cloturesDeLEquipe: bool}>
+     */
+    private array $lectures = [];
+
     public function __construct(
         private readonly TenantContext $contexte,
         private readonly CalculateurLigne $calculateur,
@@ -78,7 +100,8 @@ final class DocumentsDeLaPeriode
     /**
      * Les magasins de sa société dans sa portée (tous pour le propriétaire,
      * la sélection d'un administrateur, voir User::magasinsDeSaPortee()) où
-     * il télécharge, les magasins réels d'abord, par nom.
+     * il télécharge, les magasins réels d'abord, par nom, chacun avec cette
+     * société, qui ne se relit pas.
      *
      * @return Collection<int, Magasin>
      */
@@ -93,28 +116,34 @@ final class DocumentsDeLaPeriode
             ->orderBy('nom')
             ->orderBy('id')
             ->get()
+            ->each(fn (Magasin $magasin): Magasin => $magasin->setRelation('societe', $societe))
             ->filter(fn (Magasin $magasin): bool => $this->peutTelechargerDans($compte, $magasin))
-            ->values();
+            ->values()
+            ->toBase();
     }
 
     /**
-     * Les magasins réels de ce client lié que le cabinet ouvre au compte
-     * (son propriétaire, ou le collaborateur à qui il est confié, voir
-     * AccesDesCabinets::magasinsOuverts()) et où le client accorde au
-     * cabinet le téléchargement par période.
+     * Les magasins réels des clients liés que le cabinet ouvre au compte
+     * (son propriétaire, ou le collaborateur à qui ils sont confiés, voir
+     * AccesDesCabinets::magasinsOuverts()), où chaque client accorde au
+     * cabinet le téléchargement par période, rangés par client (l'identifiant
+     * de sa société), par dénomination puis par nom, chacun avec sa société,
+     * lue d'un coup pour tous.
      *
-     * @return Collection<int, Magasin>
+     * @return Collection<int, Collection<int, Magasin>>
      */
-    public function magasinsDuClient(User $compte, Societe $client): Collection
+    public function magasinsDesClients(User $compte): Collection
     {
         if (! $compte->estDUnCabinet()) {
             return collect();
         }
 
         return app(AccesDesCabinets::class)->magasinsOuverts($compte)
-            ->where('societe_id', $client->getKey())
+            ->load('societe')
             ->filter(fn (Magasin $magasin): bool => $this->peutTelechargerDans($compte, $magasin))
-            ->values();
+            ->toBase()
+            ->groupBy(fn (Magasin $magasin): int => (int) $magasin->societe_id)
+            ->map(fn (Collection $magasins): Collection => $magasins->values());
     }
 
     /**
@@ -124,49 +153,46 @@ final class DocumentsDeLaPeriode
      */
     public function peutTelechargerDans(User $compte, Magasin $magasin): bool
     {
-        if (! $magasin->est_demonstration && ! $magasin->societe->estValidee()) {
-            return false;
-        }
-
-        return $this->dansLeMagasin($magasin, fn (): bool => Gate::forUser($compte)->allows(PermissionRegistry::DOCUMENTS_TELECHARGER));
+        return $this->telecharge[$compte->getKey().':'.$magasin->getKey()] ??= ($magasin->est_demonstration || $magasin->societe->estValidee())
+            && $this->dansLeMagasin($magasin, fn (): bool => Gate::forUser($compte)->allows(PermissionRegistry::DOCUMENTS_TELECHARGER));
     }
 
     /**
-     * Les types de documents qu'il voit dans ce magasin, dans l'ordre de
-     * l'énumération, ceux qui existent dans le type d'activité de sa
-     * société seulement.
+     * Les types de documents qu'il voit dans ce magasin où il télécharge,
+     * dans l'ordre de l'énumération, ceux qui existent dans le type
+     * d'activité de sa société seulement ; aucun là où il ne télécharge
+     * pas.
      *
      * @return list<TypeDeDocumentTelechargeable>
      */
     public function typesVisibles(User $compte, Magasin $magasin): array
     {
-        return $this->dansLeMagasin($magasin, fn (): array => array_values(array_filter(
-            TypeDeDocumentTelechargeable::cases(),
-            fn (TypeDeDocumentTelechargeable $type): bool => $type->existeDans($magasin->societe->type_activite) && Gate::forUser($compte)->allows('viewAny', $type->modele()),
-        )));
+        return $this->lectureDans($compte, $magasin)['types'];
     }
 
     /**
      * Les documents de ces types, du jour $du au jour $au compris, dans
      * chacun de ces magasins où il télécharge, ceux qu'il peut voir
      * seulement, magasin par magasin puis type par type, chacun dans
-     * l'ordre de ses jours.
+     * l'ordre de ses jours. L'origine, et, sur demande, la seule marque
+     * « pièce du fournisseur manquante », choisissent parmi les factures
+     * d'achat et les avoirs fournisseur ; ils ne touchent pas aux autres
+     * types.
      *
      * @param  iterable<Magasin>  $magasins
      * @param  list<TypeDeDocumentTelechargeable>  $types
      * @return list<DocumentTrouve>
      */
-    public function trouver(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine): array
+    public function trouver(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, bool $pieceManquanteSeulement = false): array
     {
         $documents = [];
 
         foreach ($magasins as $magasin) {
-            if (! $this->peutTelechargerDans($compte, $magasin)) {
-                continue;
-            }
-
             $visibles = array_values(array_filter($this->typesVisibles($compte, $magasin), fn (TypeDeDocumentTelechargeable $type): bool => in_array($type, $types, true)));
-            $documents = [...$documents, ...$this->dansLeMagasin($magasin, fn (): array => $this->duMagasin($compte, $magasin, $du, $au, $visibles, $origine))];
+
+            if ($visibles !== []) {
+                $documents = [...$documents, ...$this->dansLeMagasin($magasin, fn (): array => $this->duMagasin($compte, $magasin, $du, $au, $visibles, $origine, $pieceManquanteSeulement))];
+            }
         }
 
         return $documents;
@@ -182,14 +208,58 @@ final class DocumentsDeLaPeriode
      * @param  list<string>  $cles
      * @return list<DocumentTrouve>
      */
-    public function choisis(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, array $cles): array
+    public function choisis(User $compte, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, array $cles, bool $pieceManquanteSeulement = false): array
     {
         $choisies = array_flip($cles);
 
         return array_values(array_filter(
-            $this->trouver($compte, $magasins, $du, $au, $types, $origine),
+            $this->trouver($compte, $magasins, $du, $au, $types, $origine, $pieceManquanteSeulement),
             fn (DocumentTrouve $document): bool => isset($choisies[$document->cle()]),
         ));
+    }
+
+    /**
+     * Combien des documents de ces clés (voir DocumentTrouve::cle()) il
+     * voit encore, dans ceux de ces magasins où il télécharge encore, quels
+     * que soient leur jour et les critères de la recherche qui les a
+     * trouvés : son type lui reste visible dans son magasin et le document
+     * aussi (une vente ou un avoir d'un autre vendeur, une clôture qu'un
+     * autre a déclenchée, seulement s'il voit encore ceux de toute
+     * l'équipe ; le relevé des encaissements de toute l'équipe, seulement
+     * s'il voit encore ceux de toute l'équipe). Le lien d'un fichier
+     * préparé ne le sert que s'il les voit tous (voir
+     * TelechargerLesDocumentsController).
+     *
+     * @param  iterable<Magasin>  $magasins
+     * @param  list<string>  $cles
+     */
+    public function nombreEncoreVisibles(User $compte, iterable $magasins, array $cles): int
+    {
+        $parMagasin = [];
+
+        foreach ($cles as $cle) {
+            $parties = explode(':', $cle);
+
+            if (count($parties) >= 3 && ctype_digit($parties[1]) && ($type = TypeDeDocumentTelechargeable::tryFrom($parties[0])) !== null) {
+                $parMagasin[(int) $parties[1]][$type->value][] = ['identifiant' => $parties[2], 'portee' => $parties[3] ?? null];
+            }
+        }
+
+        $nombre = 0;
+
+        foreach ($magasins as $magasin) {
+            $lecture = $this->lectureDans($compte, $magasin);
+
+            foreach ($parMagasin[(int) $magasin->getKey()] ?? [] as $type => $designes) {
+                $type = TypeDeDocumentTelechargeable::from($type);
+
+                if (in_array($type, $lecture['types'], true)) {
+                    $nombre += $this->dansLeMagasin($magasin, fn (): int => $this->nombreVisiblesDuType($compte, $type, $designes, $lecture));
+                }
+            }
+        }
+
+        return $nombre;
     }
 
     /**
@@ -219,9 +289,18 @@ final class DocumentsDeLaPeriode
         return Paiement::query()
             ->where('created_at', '>=', $debut)
             ->where('created_at', '<', $fin)
-            ->when(! Gate::forUser($compte)->allows(PermissionRegistry::FACTURE_VIEW_TOUTES), fn (Builder $paiements): Builder => $paiements->where('cree_par', $compte->getKey()))
+            ->when(! $this->releveDeLEquipe($compte), fn (Builder $paiements): Builder => $paiements->where('cree_par', $compte->getKey()))
             ->orderBy('created_at')
             ->orderBy('id');
+    }
+
+    /**
+     * Voit-il, dans le magasin actif, les encaissements de toute l'équipe,
+     * et non les siens seulement ?
+     */
+    public function releveDeLEquipe(User $compte): bool
+    {
+        return Gate::forUser($compte)->allows(PermissionRegistry::FACTURE_VIEW_TOUTES);
     }
 
     /**
@@ -233,59 +312,112 @@ final class DocumentsDeLaPeriode
     }
 
     /**
+     * Ce qu'il voit dans ce magasin où il télécharge, lu une fois, à la
+     * Gate, dans ce magasin : les types qu'il y voit, et s'il voit les
+     * ventes, les avoirs et les encaissements de toute l'équipe, puis les
+     * clôtures de toute l'équipe ; rien là où il ne télécharge pas.
+     *
+     * @return array{types: list<TypeDeDocumentTelechargeable>, equipe: bool, cloturesDeLEquipe: bool}
+     */
+    private function lectureDans(User $compte, Magasin $magasin): array
+    {
+        if (! $this->peutTelechargerDans($compte, $magasin)) {
+            return ['types' => [], 'equipe' => false, 'cloturesDeLEquipe' => false];
+        }
+
+        return $this->lectures[$compte->getKey().':'.$magasin->getKey()] ??= $this->dansLeMagasin($magasin, function () use ($compte, $magasin): array {
+            $gate = Gate::forUser($compte);
+
+            return [
+                'types' => array_values(array_filter(
+                    TypeDeDocumentTelechargeable::cases(),
+                    fn (TypeDeDocumentTelechargeable $type): bool => $type->existeDans($magasin->societe->type_activite) && $gate->allows('viewAny', $type->modele()),
+                )),
+                'equipe' => $this->releveDeLEquipe($compte),
+                'cloturesDeLEquipe' => $gate->allows(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES),
+            ];
+        });
+    }
+
+    /**
+     * Combien de ces documents d'un type qu'il voit dans le magasin actif
+     * il voit encore.
+     *
+     * @param  list<array{identifiant: string, portee: string|null}>  $designes
+     * @param  array{types: list<TypeDeDocumentTelechargeable>, equipe: bool, cloturesDeLEquipe: bool}  $droits
+     */
+    private function nombreVisiblesDuType(User $compte, TypeDeDocumentTelechargeable $type, array $designes, array $droits): int
+    {
+        if ($type === TypeDeDocumentTelechargeable::Encaissements) {
+            return count(array_filter($designes, fn (array $releve): bool => preg_match('/^\d{4}-\d{2}$/', $releve['identifiant']) === 1
+                && ($releve['portee'] === DocumentTrouve::RELEVE_DE_LA_PERSONNE || ($releve['portee'] === DocumentTrouve::RELEVE_DE_L_EQUIPE && $droits['equipe']))));
+        }
+
+        $identifiants = array_values(array_unique(array_map(intval(...), array_filter(array_column($designes, 'identifiant'), ctype_digit(...)))));
+        $siens = fn (Builder $documents, bool $deLEquipe): Builder => $documents->when(! $deLEquipe, fn (Builder $leurs): Builder => $leurs->where('cree_par', $compte->getKey()));
+
+        return match ($type) {
+            TypeDeDocumentTelechargeable::Ventes => $siens(Facture::query()->emises(), $droits['equipe'])->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::AvoirsClients => $siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'])->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::FacturesAchat => FactureAchat::query()->where('statut', StatutFactureAchat::Validee)->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::AvoirsFournisseur => AvoirFournisseur::query()->where('statut', StatutAvoirFournisseur::Emise)->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::Clotures => $siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'])->whereKey($identifiants)->count(),
+        };
+    }
+
+    /**
      * @param  list<TypeDeDocumentTelechargeable>  $types
      * @return list<DocumentTrouve>
      */
-    private function duMagasin(User $compte, Magasin $magasin, string $du, string $au, array $types, OrigineDesAchats $origine): array
+    private function duMagasin(User $compte, Magasin $magasin, string $du, string $au, array $types, OrigineDesAchats $origine, bool $pieceManquanteSeulement): array
     {
+        $droits = $this->lectureDans($compte, $magasin);
         $calendrier = $magasin->calendrier();
         [$debut] = $calendrier->bornesDuJour($du);
         [, $fin] = $calendrier->bornesDuJour($au);
         $nom = "{$magasin->nom} ({$magasin->code})";
+        $siens = fn (Builder $documents, bool $deLEquipe): Builder => $documents->when(! $deLEquipe, fn (Builder $leurs): Builder => $leurs->where('cree_par', $compte->getKey()));
+        $achats = fn (Builder $achats): Builder => $achats->whereIn('source', $origine->sources())->when($pieceManquanteSeulement, fn (Builder $sansPiece): Builder => $sansPiece->where('piece_manquante', true));
         $documents = [];
-        $document = fn (TypeDeDocumentTelechargeable $type, string|int $identifiant, ?string $numero, string $jour, ?string $tiers, mixed $ttc, ?string $origine = null): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $identifiant, (string) $numero, $jour, $tiers, is_int($ttc) ? $ttc : $this->calculateur->enCentiemes($ttc), $origine);
 
         foreach ($types as $type) {
             $documents = [...$documents, ...match ($type) {
-                TypeDeDocumentTelechargeable::Ventes => Facture::query()->emises()->visiblesPar($compte)
+                TypeDeDocumentTelechargeable::Ventes => $siens(Facture::query()->emises(), $droits['equipe'])
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('id')
                     ->get(['id', 'numero', 'date_emission', 'client_nom', 'total_ttc'])
-                    ->map(fn (Facture $facture): DocumentTrouve => $document($type, $facture->id, $facture->numero, $calendrier->jourDe($facture->date_emission), $facture->client_nom, $facture->total_ttc))
+                    ->map(fn (Facture $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $calendrier->jourDe($facture->date_emission), $facture->client_nom, $this->calculateur->enCentiemes($facture->total_ttc)))
                     ->all(),
-                TypeDeDocumentTelechargeable::AvoirsClients => Avoir::query()->where('statut', StatutAvoir::Emise)->visiblesPar($compte)
+                TypeDeDocumentTelechargeable::AvoirsClients => $siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'])
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('id')
                     ->get(['id', 'numero', 'date_emission', 'client_nom', 'total_ttc'])
-                    ->map(fn (Avoir $avoir): DocumentTrouve => $document($type, $avoir->id, $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->client_nom, $avoir->total_ttc))
+                    ->map(fn (Avoir $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->client_nom, $this->calculateur->enCentiemes($avoir->total_ttc)))
                     ->all(),
-                TypeDeDocumentTelechargeable::FacturesAchat => FactureAchat::query()->with('fournisseur')
+                TypeDeDocumentTelechargeable::FacturesAchat => $achats(FactureAchat::query()->with('fournisseur'))
                     ->where('statut', StatutFactureAchat::Validee)
-                    ->whereIn('source', $origine->sources())
                     ->where(fn (Builder $factures): Builder => $factures->whereBetween('date_facture', [$du, $au])
                         ->orWhere(fn (Builder $sansDate): Builder => $sansDate->whereNull('date_facture')->where('date_validation', '>=', $debut)->where('date_validation', '<', $fin)))
                     ->orderBy('rang_validation')
                     ->get()
-                    ->map(fn (FactureAchat $facture): DocumentTrouve => $document($type, $facture->id, $facture->numero, $facture->date_facture ?? $calendrier->jourDe($facture->date_validation), $facture->fournisseur->nom, $facture->total_ttc, $facture->source->getLabel()))
+                    ->map(fn (FactureAchat $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $facture->date_facture ?? $calendrier->jourDe($facture->date_validation), $facture->fournisseur->nom, $this->calculateur->enCentiemes($facture->total_ttc), $facture->source->getLabel(), (bool) $facture->piece_manquante))
                     ->sortBy(fn (DocumentTrouve $trouve): string => $trouve->jour)
                     ->values()
                     ->all(),
-                TypeDeDocumentTelechargeable::AvoirsFournisseur => AvoirFournisseur::query()->with('factureAchat.fournisseur')
+                TypeDeDocumentTelechargeable::AvoirsFournisseur => $achats(AvoirFournisseur::query()->with('factureAchat.fournisseur'))
                     ->where('statut', StatutAvoirFournisseur::Emise)
-                    ->whereIn('source', $origine->sources())
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('numero')
                     ->get()
-                    ->map(fn (AvoirFournisseur $avoir): DocumentTrouve => $document($type, $avoir->id, $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->factureAchat->fournisseur->nom, $avoir->total_ttc, $avoir->source->getLabel()))
+                    ->map(fn (AvoirFournisseur $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->factureAchat->fournisseur->nom, $this->calculateur->enCentiemes($avoir->total_ttc), $avoir->source->getLabel(), (bool) $avoir->piece_manquante))
                     ->all(),
-                TypeDeDocumentTelechargeable::Clotures => ClotureCaisse::query()
+                TypeDeDocumentTelechargeable::Clotures => $siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'])
                     ->whereBetween('date_cloture', [$du, $au])
-                    ->when(! Gate::forUser($compte)->allows(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES), fn (Builder $clotures): Builder => $clotures->where('cree_par', $compte->getKey()))
                     ->orderBy('date_cloture')
                     ->get(['id', 'numero', 'date_cloture', 'total_ttc'])
-                    ->map(fn (ClotureCaisse $cloture): DocumentTrouve => $document($type, $cloture->id, $cloture->numero, $cloture->date_cloture, null, $cloture->total_ttc))
+                    ->map(fn (ClotureCaisse $cloture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $cloture->id, (string) $cloture->numero, $cloture->date_cloture, null, $this->calculateur->enCentiemes($cloture->total_ttc)))
                     ->all(),
-                TypeDeDocumentTelechargeable::Encaissements => $this->relevesDesEncaissements($compte, $calendrier, $du, $au, $document),
+                TypeDeDocumentTelechargeable::Encaissements => $this->relevesDesEncaissements($compte, $magasin, $nom, $calendrier, $du, $au, $droits['equipe']),
             }];
         }
 
@@ -296,23 +428,25 @@ final class DocumentsDeLaPeriode
      * Un relevé des encaissements par mois qui a des paiements que la
      * personne voit dans la période : son jour est le dernier de ce mois
      * dans la période, son TTC le total encaissé, contre-passations
-     * déduites.
+     * déduites ; il dit s'il réunit ceux de toute l'équipe.
      *
-     * @param  callable(TypeDeDocumentTelechargeable, string|int, ?string, string, ?string, mixed, ?string=): DocumentTrouve  $document
      * @return list<DocumentTrouve>
      */
-    private function relevesDesEncaissements(User $compte, Calendrier $calendrier, string $du, string $au, callable $document): array
+    private function relevesDesEncaissements(User $compte, Magasin $magasin, string $nom, Calendrier $calendrier, string $du, string $au, bool $deLEquipe): array
     {
         return $this->paiementsVisibles($compte, $calendrier, $du, $au)
             ->get(['id', 'montant', 'created_at'])
             ->groupBy(fn (Paiement $paiement): string => substr($calendrier->jourDe($paiement->created_at), 0, 7))
-            ->map(fn (Collection $paiements, string $mois): DocumentTrouve => $document(
+            ->map(fn (Collection $paiements, string $mois): DocumentTrouve => new DocumentTrouve(
                 TypeDeDocumentTelechargeable::Encaissements,
+                $magasin->getKey(),
+                $nom,
                 $mois,
                 'Encaissements '.$mois,
                 min($au, self::dernierJourDuMois($mois)),
                 null,
                 (int) $paiements->sum(fn (Paiement $paiement): int => $this->calculateur->enCentiemes($paiement->montant)),
+                porteeDuReleve: $deLEquipe ? DocumentTrouve::RELEVE_DE_L_EQUIPE : DocumentTrouve::RELEVE_DE_LA_PERSONNE,
             ))
             ->values()
             ->all();

@@ -393,9 +393,11 @@ enum ActionAuditee: string implements HasLabel
             // Le téléchargement des documents par période qu'un compte a
             // préparé (voir PreparerLeTelechargementDesDocumentsJob) : les
             // codes des magasins dont il a reçu des documents, la période,
-            // les types et l'origine des achats demandés, le nombre de
-            // documents et le format ; jamais un document ni un tiers.
-            self::DocumentsTelecharges => ['magasins', 'du', 'au', 'types', 'origine', 'nombre_documents', 'format'],
+            // les types, l'origine des achats demandés et s'ils n'étaient
+            // demandés que marqués « pièce du fournisseur manquante », le
+            // nombre de documents et le format ; jamais un document ni un
+            // tiers.
+            self::DocumentsTelecharges => ['magasins', 'du', 'au', 'types', 'origine', 'piece_manquante_seulement', 'nombre_documents', 'format'],
             // Le numéro de l'inventaire d'ouverture, la valeur hors taxe du
             // stock qu'il fait entrer et, pour chaque ligne, la référence du
             // produit, la quantité inventoriée, si elle est entrée en stock

@@ -2,10 +2,9 @@
 
 namespace App\Filament\Cabinet\Pages;
 
-use App\Domain\Cabinets\Models\LienCabinet;
-use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Filament\Concerns\TelechargeLesDocumentsParPeriode;
 use App\Models\User;
@@ -17,12 +16,15 @@ use Illuminate\Support\Collection;
  * l'éditeur du 03/11/2026, lot EX, F2 = oui ; voir
  * TelechargeLesDocumentsParPeriode) : pour un client lié que le cabinet
  * ouvre au compte (son propriétaire : tous ses clients ; un collaborateur :
- * ceux qui lui sont confiés, voir AccesDesCabinets::liensOuverts()), les
+ * ceux qui lui sont confiés, voir AccesDesCabinets::magasinsOuverts()), les
  * documents de ses magasins réels où le client accorde au cabinet le
  * téléchargement par période, jamais par défaut (voir
- * DocumentsDeLaPeriode::magasinsDuClient()) ; seuls les documents que ses
+ * DocumentsDeLaPeriode::magasinsDesClients()) ; seuls les documents que ses
  * autres autorisations accordées lui laissent voir. Le client se choisit
- * en tête de la page ; un client qui ne s'y trouve pas ne se lit pas.
+ * en tête de la page ; un client qui ne s'y trouve pas ne se lit pas. Ses
+ * raccourcis d'exercice suivent le mois de fin d'exercice de ce client et
+ * ses changements légaux (voir ExercicesDeLaSociete), sa société étant lue
+ * entière avec ses magasins.
  */
 class TelechargerLesDocuments extends Page
 {
@@ -45,17 +47,24 @@ class TelechargerLesDocuments extends Page
      */
     public string $client = '';
 
+    /**
+     * Les magasins proposés de chaque client, par identifiant de sa
+     * société, lus une fois par requête.
+     *
+     * @var Collection<int, Collection<int, Magasin>>|null
+     */
+    private ?Collection $magasinsParClient = null;
+
     public static function canAccess(): bool
     {
         $compte = auth()->user();
 
-        return $compte instanceof User && self::clientsProposes($compte)->isNotEmpty();
+        return $compte instanceof User && app(DocumentsDeLaPeriode::class)->magasinsDesClients($compte)->isNotEmpty();
     }
 
     public function mount(): void
     {
-        $compte = auth()->user();
-        $this->client = $compte instanceof User ? (string) self::clientsProposes($compte)->first()?->uuid : '';
+        $this->client = (string) $this->clientsProposes()->first()?->uuid;
         $this->preparerLaPage();
     }
 
@@ -66,6 +75,7 @@ class TelechargerLesDocuments extends Page
     public function updatedClient(): void
     {
         $this->selection = [];
+        $this->oublierLesMagasinsProposes();
         $this->preparerLaPage();
     }
 
@@ -75,32 +85,34 @@ class TelechargerLesDocuments extends Page
      *
      * @return Collection<int, Societe>
      */
-    private static function clientsProposes(User $compte): Collection
+    private function clientsProposes(): Collection
     {
-        $documents = app(DocumentsDeLaPeriode::class);
-
-        return app(AccesDesCabinets::class)->liensOuverts($compte)
-            ->with(['client' => fn ($client) => $client->select(['id', 'uuid', 'raison_sociale', 'siren'])])
-            ->get()
-            ->map(fn (LienCabinet $lien): Societe => $lien->client)
-            ->filter(fn (Societe $client): bool => $documents->magasinsDuClient($compte, $client)->isNotEmpty())
+        return $this->magasinsParClient()
+            ->map(fn (Collection $magasins): Societe => $magasins->first()->societe)
             ->sortBy(fn (Societe $client): string => mb_strtolower($client->raison_sociale ?? ''))
             ->values();
     }
 
-    protected function magasinsProposes(): Collection
+    /**
+     * @return Collection<int, Collection<int, Magasin>>
+     */
+    private function magasinsParClient(): Collection
     {
         $compte = auth()->user();
+
+        return $this->magasinsParClient ??= $compte instanceof User ? $this->documentsDeLaPeriode()->magasinsDesClients($compte) : collect();
+    }
+
+    protected function chercherLesMagasins(): Collection
+    {
         $client = $this->societeDesDocuments();
 
-        return $compte instanceof User && $client instanceof Societe ? app(DocumentsDeLaPeriode::class)->magasinsDuClient($compte, $client) : collect();
+        return $client instanceof Societe ? $this->magasinsParClient()->get($client->getKey(), collect()) : collect();
     }
 
     protected function societeDesDocuments(): ?Societe
     {
-        $compte = auth()->user();
-
-        return $compte instanceof User ? self::clientsProposes($compte)->first(fn (Societe $client): bool => $client->uuid === $this->client) : null;
+        return $this->clientsProposes()->first(fn (Societe $client): bool => $client->uuid === $this->client);
     }
 
     protected function calendrierDesRaccourcis(): Calendrier
@@ -113,11 +125,9 @@ class TelechargerLesDocuments extends Page
      */
     protected function getViewData(): array
     {
-        $compte = auth()->user();
-
         return [
             ...$this->donneesDeLaVue(),
-            'clients' => $compte instanceof User ? self::clientsProposes($compte)->mapWithKeys(fn (Societe $client): array => [$client->uuid => "{$client->raison_sociale} ({$client->siren})"])->all() : [],
+            'clients' => $this->clientsProposes()->mapWithKeys(fn (Societe $client): array => [$client->uuid => "{$client->raison_sociale} ({$client->siren})"])->all(),
             'plusieursMagasins' => true,
         ];
     }

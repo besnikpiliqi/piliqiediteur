@@ -29,11 +29,13 @@ use LogicException;
  * PreparerLeTelechargementDesDocumentsJob).
  *
  * La demande désigne des magasins de cette société, chacun où la personne
- * télécharge (voir DocumentsDeLaPeriode::peutTelechargerDans()) parmi ceux
- * que la page propose ; une période d'un jour au moins, dans l'ordre ; au
- * moins un type ; au moins un document choisi. Les documents choisis se
- * relisent à la préparation, parmi ceux que la personne voit alors : une
- * clé qui ne désigne rien n'apporte rien.
+ * télécharge (voir DocumentsDeLaPeriode::peutTelechargerDans(), relu sous
+ * le verrou du compte) parmi ceux que la page propose ; une période d'un
+ * jour au moins, dans l'ordre ; au moins un type ; l'origine des achats et,
+ * sur demande, leur seule marque « pièce du fournisseur manquante » ; au
+ * moins un document choisi. Les documents choisis se relisent à la
+ * préparation, parmi ceux que la personne voit alors : une clé qui ne
+ * désigne rien n'apporte rien.
  *
  * Un compte demande au plus dix téléchargements par heure, toutes sociétés
  * confondues : sous le verrou de la ligne du compte, ses demandes de
@@ -58,7 +60,6 @@ class DemanderLeTelechargementDesDocumentsAction
 
     public function __construct(
         private readonly TenantContext $contexte,
-        private readonly DocumentsDeLaPeriode $documents,
     ) {}
 
     /**
@@ -70,7 +71,7 @@ class DemanderLeTelechargementDesDocumentsAction
      * @throws InvalidArgumentException
      * @throws LogicException
      */
-    public function handle(User $auteur, Societe $societe, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, FormatDuTelechargement $format, array $selection): TelechargementDeDocuments
+    public function handle(User $auteur, Societe $societe, iterable $magasins, string $du, string $au, array $types, OrigineDesAchats $origine, FormatDuTelechargement $format, array $selection, bool $pieceManquanteSeulement = false): TelechargementDeDocuments
     {
         $magasins = collect($magasins)->values();
 
@@ -92,11 +93,12 @@ class DemanderLeTelechargementDesDocumentsAction
             throw new AuthorizationException(self::REFUS_MAGASINS);
         }
 
-        $telechargement = DB::transaction(function () use ($auteur, $societe, $magasins, $du, $au, $types, $origine, $format, $selection): TelechargementDeDocuments {
+        $telechargement = DB::transaction(function () use ($auteur, $societe, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement): TelechargementDeDocuments {
             Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
             $compte = User::query()->whereKey($auteur->getKey())->lock('for no key update')->firstOrFail();
+            $documents = app(DocumentsDeLaPeriode::class);
 
-            if (! $compte->peutAgir() || $magasins->contains(fn (Magasin $magasin): bool => ! $this->documents->peutTelechargerDans($compte, $magasin))) {
+            if (! $compte->peutAgir() || $magasins->contains(fn (Magasin $magasin): bool => ! $documents->peutTelechargerDans($compte, $magasin))) {
                 throw new AuthorizationException(self::REFUS_MAGASINS);
             }
 
@@ -104,7 +106,7 @@ class DemanderLeTelechargementDesDocumentsAction
                 throw new LogicException(self::REFUS_PAR_HEURE);
             }
 
-            return $this->contexte->runAsSociete($societe, function () use ($compte, $magasins, $du, $au, $types, $origine, $format, $selection): TelechargementDeDocuments {
+            return $this->contexte->runAsSociete($societe, function () use ($compte, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement): TelechargementDeDocuments {
                 $telechargement = (new TelechargementDeDocuments)->forceFill([
                     'demande_par' => $compte->getKey(),
                     'magasins' => $magasins->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all(),
@@ -112,6 +114,7 @@ class DemanderLeTelechargementDesDocumentsAction
                     'au' => $au,
                     'types' => array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types),
                     'origine' => $origine,
+                    'piece_manquante_seulement' => $pieceManquanteSeulement,
                     'format' => $format,
                     'selection' => $selection,
                     'statut' => StatutDuTelechargement::EnPreparation,

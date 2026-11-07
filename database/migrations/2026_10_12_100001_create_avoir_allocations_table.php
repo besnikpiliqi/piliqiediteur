@@ -37,6 +37,9 @@ return new class extends Migration
             // Un paiement n'impute un avoir qu'une fois sur une facture.
             $table->unique(['avoir_id', 'facture_id', 'paiement_id']);
             $table->index(['magasin_id', 'facture_id']);
+            // Le crédit d'avoir utilisé dans une période (relevé des
+            // encaissements du téléchargement par période).
+            $table->index(['magasin_id', 'created_at']);
         });
 
         // Une émission n'impute un avoir qu'une fois sur une facture (deux

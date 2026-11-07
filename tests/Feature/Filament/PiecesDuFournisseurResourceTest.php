@@ -33,6 +33,8 @@ use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+use function Livewire\invade;
+
 /**
  * Les pièces du fournisseur à l'écran (lot EX) : le champ de dépôt et la
  * date obligatoire du formulaire d'une facture d'achat, le dépôt dans la
@@ -181,6 +183,25 @@ class PiecesDuFournisseurResourceTest extends TestCase
             ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('note-av9-p2.pdf', self::PDF.' p2')]])
             ->assertNotified('Pièce jointe.');
         $this->assertSame(2, $avoir->pieces()->count());
+    }
+
+    public function test_la_fenetre_de_l_avoir_renvoyee_avec_sa_note_apres_une_reponse_perdue_rend_l_avoir_deja_emis(): void
+    {
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($this->responsable, $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]));
+        $fiche = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->mountAction('creer_avoir_fournisseur');
+        $fiche->set('mountedActionsData.0.lignes.'.array_key_first($fiche->get('mountedActionsData.0.lignes')).'.quantite', 1)
+            ->setActionData(['numero_fournisseur' => 'AV-9', 'motif' => 'Carnet abîmé', 'pieces' => [UploadedFile::fake()->createWithContent('note-av9.jpg', self::JPEG)]]);
+        $demandeEnvoyee = invade($fiche)->lastState;
+
+        $fiche->callMountedAction()->assertHasNoActionErrors();
+        $avoir = AvoirFournisseur::query()->sole();
+        $fiche->assertNotified("Avoir fournisseur {$avoir->numero} émis.");
+
+        invade($fiche)->lastState = $demandeEnvoyee;
+        $fiche->callMountedAction()->assertHasNoActionErrors()->assertNotified("Avoir fournisseur {$avoir->numero} émis.");
+
+        $this->assertSame(1, AvoirFournisseur::query()->count());
+        $this->assertSame(['note-av9.jpg'], $avoir->pieces()->pluck('nom_origine')->all());
     }
 
     public function test_les_gestes_de_la_fiche_ne_s_offrent_qu_a_qui_saisit_les_achats(): void

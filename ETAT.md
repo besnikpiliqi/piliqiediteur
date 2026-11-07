@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 22:13 UTC par pilotage-sync.sh : « Après le lot EX ».
+Mis à jour le 07/11/2026 à 22:27 UTC par pilotage-sync.sh : « EX poussé (074eaee..c7b1ec3) ; QA en cours, son travail sauvé sans composer.lock ; correctifs du lot EX retirés ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,44 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Domain/Achats/Models/AvoirFournisseur.php
+ M app/Domain/Achats/Models/FactureAchat.php
+ M app/Domain/Achats/Models/LigneAchat.php
+ M app/Domain/Achats/Models/LigneAvoirFournisseur.php
+ M app/Domain/Achats/Models/TauxAvoirFournisseur.php
+ M app/Domain/Achats/Models/TauxFactureAchat.php
+ M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
+ M app/Domain/Catalogue/Models/Produit.php
+ M app/Domain/Contacts/Models/Client.php
+ M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
+ M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
+ M app/Domain/Facturation/Models/Avoir.php
+ M app/Domain/Facturation/Models/AvoirAllocation.php
+ M app/Domain/Facturation/Models/BordereauDetaxe.php
+ M app/Domain/Facturation/Models/ClotureCaisse.php
+ M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Models/EnvoiDocument.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Models/LigneAvoir.php
+ M app/Domain/Facturation/Models/LigneDevis.php
+ M app/Domain/Facturation/Models/LigneFacture.php
+ M app/Domain/Facturation/Models/LigneRecuPaiement.php
+ M app/Domain/Facturation/Models/Paiement.php
+ M app/Domain/Facturation/Models/PaiementAllocation.php
+ M app/Domain/Facturation/Models/PreuveOperation.php
+ M app/Domain/Facturation/Models/RecuPaiement.php
+ M app/Domain/Stock/Models/InventaireOuverture.php
+ M app/Domain/Stock/Models/LigneInventaireOuverture.php
+ M app/Domain/Stock/Models/MouvementStock.php
+ M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Domain/Tenancy/Models/MandatPdp.php
+ M app/Integrations/Pdp/Models/EvenementTransmissionPdp.php
+ M app/Integrations/Pdp/Models/TransmissionPdp.php
+ M composer.json
+ M composer.lock
+?? phpstan.neon
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +82,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SL:correction
 SL:poussee
 SL:fiche
 SL:notes
@@ -69,4 +106,5 @@ EX:correction
 EX:poussee
 EX:fiche
 EX:notes
+QA:implementation
 ```

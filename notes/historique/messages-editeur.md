@@ -1240,3 +1240,7 @@ Réessayez
 
 qu'est ce que compris le EX, donc quelle fonctions
 
+## 101. 2026-11-07 22:24 UTC
+
+dit moi pourquoi t as installe phpstan ?
+

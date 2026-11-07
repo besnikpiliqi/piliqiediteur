@@ -114,7 +114,7 @@ qualite/question-mises-a-jour.md
 export/demande-export-documents.md
 export/decision-ex.md
 reprises/PASSATION-2026-11-03.md
-reprises/lot-EX-travail-non-commite.patch
-reprises/lot-EX-commits-locaux.patch
+reprises/lot-QA-travail-non-commite.patch
+reprises/lot-QA-commits-locaux.patch
 reprises/args-course-passation-2026-11-03.json
 reprises/args-course-passation-2026-11-07.json

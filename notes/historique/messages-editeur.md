@@ -1244,3 +1244,13 @@ qu'est ce que compris le EX, donc quelle fonctions
 
 dit moi pourquoi t as installe phpstan ?
 
+## 102. 2026-11-07 22:37 UTC
+
+<!-- attach -->
+
+> Pourquoi c’est permis : la règle du projet interdit d’ajouter des paquets sans accord.
+
+
+
+ecoute je retire ce que j'ai dit pour ca. donc tu peux installer ce que tu veux donc ce que tu pense que c'est bon pour le logiciel alors installe tout ce que juge utile pour securise le logiciel et rendre perfromant et sans faille et sans  erreurs.  donc tu est libre d installler tout ce que tu vois utile pour le logiciel
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 22:27 UTC par pilotage-sync.sh : « EX poussé (074eaee..c7b1ec3) ; QA en cours, son travail sauvé sans composer.lock ; correctifs du lot EX retirés ».
+Mis à jour le 07/11/2026 à 22:40 UTC par pilotage-sync.sh : « Décision D54 de l'éditeur : paquets utiles installés sans demander ; § 9 du cahier du lot QA ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,11 +43,17 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Achats/Models/LigneAvoirFournisseur.php
  M app/Domain/Achats/Models/TauxAvoirFournisseur.php
  M app/Domain/Achats/Models/TauxFactureAchat.php
+ M app/Domain/CaisseSecurisee/Concerns/HorodateSonEmission.php
+ M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
  M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
  M app/Domain/Catalogue/Models/Produit.php
  M app/Domain/Contacts/Models/Client.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
  M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
+ M app/Domain/Facturation/Concerns/FigeLeClient.php
  M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
+ M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
  M app/Domain/Facturation/Models/Avoir.php
  M app/Domain/Facturation/Models/AvoirAllocation.php
  M app/Domain/Facturation/Models/BordereauDetaxe.php
@@ -64,17 +70,33 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Facturation/Models/PaiementAllocation.php
  M app/Domain/Facturation/Models/PreuveOperation.php
  M app/Domain/Facturation/Models/RecuPaiement.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
  M app/Domain/Stock/Models/InventaireOuverture.php
  M app/Domain/Stock/Models/LigneInventaireOuverture.php
  M app/Domain/Stock/Models/MouvementStock.php
  M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+ M app/Domain/Tenancy/Concerns/BelongsToSociete.php
  M app/Domain/Tenancy/Models/Magasin.php
  M app/Domain/Tenancy/Models/MandatPdp.php
- M app/Integrations/Pdp/Models/EvenementTransmissionPdp.php
- M app/Integrations/Pdp/Models/TransmissionPdp.php
- M composer.json
- M composer.lock
-?? phpstan.neon
+ M app/Filament/App/Livewire/SelecteurDeClients.php
+ M app/Filament/App/Livewire/SelecteurDeProduits.php
+ M app/Filament/App/Pages/Auth/Connexion.php
+ M app/Filament/App/Pages/Caisse.php
+ M app/Filament/App/Pages/CoordonneesMagasin.php
+ M app/Filament/App/Pages/ParametresFactures.php
+ M app/Filament/App/Pages/ParametresPrixDeVente.php
+ M app/Filament/App/Pages/ParametresRelances.php
+ M app/Filament/App/Resources/AvoirResource.php
+ M app/Filament/App/Resources/ClientResource.php
+ M app/Filament/App/Resources/ClientResource/Pages/ViewClient.php
+ M app/Filament/App/Resources/ClotureCaisseResource.php
+ M app/Filament/App/Resources/DevisResource/Pages/EditDevis.php
+ M app/Filament/App/Resources/EnregistrementFiscalResource.php
+ M app/Filament/App/Resources/EquipeDuMagasinResource.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/InventaireOuvertureResource/Pages/EditInventaireOuverture.php
 ```
 
 ## Dernière course de la chaîne

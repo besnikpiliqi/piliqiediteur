@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 11:36 UTC par pilotage-sync.sh : « Point du 07/11 11 h 35 : TR en cours, travail sauvé en deux correctifs ».
+Mis à jour le 07/11/2026 à 13:38 UTC par pilotage-sync.sh : « Point du 07/11 13 h 37 : TR en correction, travail resauvé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `1d3278a`. Commits locaux pas encore poussés :
 
 ```
+d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 0afc14c Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux
 ```
 
@@ -38,65 +39,14 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/CreerFactureAchatAction.php
- M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
- M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Models/FactureAchat.php
  M app/Domain/Achats/Models/LigneAchat.php
- M app/Domain/Achats/Models/LigneAvoirFournisseur.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Catalogue/Models/Produit.php
+ M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/SaisieDecimale.php
- M app/Domain/Stock/Actions/ValiderInventaireOuvertureAction.php
- M app/Domain/Stock/Models/LigneInventaireOuverture.php
- M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Models/Societe.php
- M app/Filament/App/Resources/AvoirFournisseurResource.php
  M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/InventaireOuvertureResource.php
  M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M database/migrations/2026_10_07_100001_create_factures_achat_table.php
- M database/migrations/2026_10_07_100002_create_lignes_achat_table.php
- M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
- M database/migrations/2026_10_07_100004_create_lignes_avoir_fournisseur_table.php
- M database/migrations/2026_10_07_100006_create_lignes_inventaire_ouverture_table.php
- M tests/Browser/Support/Navigation.php
- M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Achats/AvoirFournisseurActionsTest.php
- M tests/Feature/Achats/FactureAchatActionsTest.php
- M tests/Feature/Filament/AvoirFournisseurResourceTest.php
- M tests/Feature/Societe/MagasinDeDemonstrationTest.php
- M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
- M tests/Feature/Tenancy/TenantIsolationTest.php
+ M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+ M tests/Feature/Filament/TvaDesAchatsResourceTest.php
  M tests/Unit/CalculateurLigneTest.php
-?? app/Domain/Achats/Casts/
-?? app/Domain/Achats/Concerns/
-?? app/Domain/Achats/Exceptions/
-?? app/Domain/Achats/Models/TauxAvoirFournisseur.php
-?? app/Domain/Achats/Models/TauxFactureAchat.php
-?? app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
-?? app/Domain/Achats/Services/EcartsDUnTaux.php
-?? app/Domain/Achats/Services/MontantsDuFournisseur.php
-?? app/Domain/Achats/Services/TvaDuFournisseur.php
-?? app/Domain/Facturation/Rules/MontantAuCentime.php
-?? app/Domain/Facturation/Rules/PrixDAchatEcrit.php
-?? database/migrations/2026_10_07_100007_create_taux_factures_achat_table.php
-?? database/migrations/2026_10_07_100008_create_taux_avoirs_fournisseur_table.php
-?? tests/Browser/Parcours/TvaDesAchatsTest.php
-?? tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
-?? tests/Feature/Achats/TvaDuFournisseurConcurrenceTest.php
-?? tests/Feature/Achats/TvaDuFournisseurTest.php
-?? tests/Feature/Filament/TvaDesAchatsResourceTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -126,4 +76,7 @@ NAV-1:poussee
 NAV-1:fiche
 NAV-1:notes
 TR:implementation
+TR:relecture1
+TR:relecture2
+TR:correction
 ```

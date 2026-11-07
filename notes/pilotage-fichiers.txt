@@ -115,4 +115,5 @@ export/demande-export-documents.md
 export/decision-ex.md
 reprises/PASSATION-2026-11-03.md
 reprises/lot-TR-travail-non-commite.patch
+reprises/lot-TR-commits-locaux.patch
 reprises/args-course-passation-2026-11-03.json

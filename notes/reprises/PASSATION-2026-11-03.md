@@ -13,12 +13,17 @@ Message de l'éditeur (03/11 vers 01 h 55 UTC) : « fini ce que t'as à finir ca
 
 ## Reprendre (nouvelle session, ou celle-ci quand l'éditeur dit « recommence »)
 1. Mettre en place la session selon la fiche (§ 4, points 1 à 5) : branche de travail à `1d3278a`, notes copiées, chemins adaptés par le `sed` du point 4, installation vérifiée.
-2. Remettre le travail du lot TR dans l'arbre, sans commit :
+2. Remettre le travail du lot TR, d'après la sauvegarde la plus récente (section « Sauvegardes depuis la reprise du 07/11 » ci-dessous, qui remplace les valeurs du 03/11) : sur `1d3278a`, d'abord ses commits locaux, puis son travail non commité, sans commit :
+   `git -C /home/user/piliqiediteur am <scratchpad>/reprises/lot-TR-commits-locaux.patch`
    `git -C /home/user/piliqiediteur apply --binary <scratchpad>/reprises/lot-TR-travail-non-commite.patch`
-   puis vérifier `sha256sum` du correctif (valeur ci-dessus) et que `git status --short` liste 52 entrées. Dans cette même session-ci, si l'arbre a encore ces modifications (`git status --short` non vide), ne rien appliquer.
+   puis vérifier `sha256sum` des deux correctifs et le nombre d'entrées de `git status --short` (valeurs de la dernière sauvegarde). Dans cette même session-ci, si l'arbre a encore ces modifications (`git status --short` non vide), ne rien appliquer.
 3. Lancer une course neuve (un identifiant de course ne passe pas d'une session à l'autre) : Workflow avec `scriptPath` = `<scratchpad>/serie8-lots.js` et `args` = le contenu de `notes/reprises/args-course-passation-2026-11-03.json` (`ouverts` = TR, EX, QA, NAV-2, NAV-3, NAV-4, NAV-5, ML, DV, EC2, S9-L, S9-A, 21, sans `reprise`). `TR:implementation` retrouve le travail non commité (`TRAVAIL_COUPE`) et le termine. Dans cette même session-ci, `resumeFromRunId: wf_f59a9064-d8d` avec les mêmes `ouverts` que `notes/reprises/args-course-wf_f59a9064-d8d.json` marche aussi (EX y est déjà, mais la course ne le connaissait pas : le script a changé après son lancement, la reprise relance donc les agents à partir du premier qui diffère).
 4. Terminer le tour aussitôt après le lancement (un message de l'éditeur pendant un tour ouvert coupe les agents), puis `etat-chaines.md`, `pilotage-sync.sh`, et un point de suivi toutes les 2 heures (`send_later`).
 5. Après chaque lot poussé : CI, compte rendu court à l'éditeur, terminé par « À faire sur votre PC » (D52).
+
+## Sauvegardes depuis la reprise du 07/11
+La même session a repris le 07/11 à 09 h 35 UTC (course `wf_f59a9064-d8d`). Le travail en cours de TR est sauvé à chaque point de suivi, sans toucher l'index de la branche de travail (index temporaire), en deux correctifs qui s'appliquent l'un après l'autre sur `1d3278a` (vérifié dans un worktree temporaire, retiré ensuite) :
+- 07/11 11 h 35 UTC : `lot-TR-commits-locaux.patch` (1 commit local non poussé, `0afc14c`, « Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux » ; 279 446 octets ; SHA-256 `f5f1b2109f5596dd684bd66b0d91a66608069fa3b8c85b29b895054bce92fe7c`), puis `lot-TR-travail-non-commite.patch` (59 entrées de `git status --short`, TVA des achats recopiée en cours ; 361 503 octets ; SHA-256 `c7f1bf299768d4925cd1fd7342d6c335cc6f2fce5cbc024f2ccd89e5f823ec30`). Ce travail n'a pas encore été vérifié par les deux suites : l'agent qui reprend le relit contre le cahier (`TRAVAIL_COUPE`).
 
 ## Ajout après la passation (03/11 vers 03 h 35 UTC)
 L'éditeur a lancé les tests en navigateur sur son PC (Windows) : deux échecs propres à Windows, consignés en C6 de `notes/navigateur/constats-editeur.md` (chemin de fichier non absolu dans l'aide `choisir()`, course de compilation des vues Blade, installation de Playwright avec Node 26). À corriger par la session qui reprend (lot NAV-2, ou plus tôt si simple), avec le README.

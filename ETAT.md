@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 09:33 UTC par pilotage-sync.sh : « Reprise du 07/11 : course relancée (TR, puis EX) ».
+Mis à jour le 07/11/2026 à 11:36 UTC par pilotage-sync.sh : « Point du 07/11 11 h 35 : TR en cours, travail sauvé en deux correctifs ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `1d3278a`. Commits locaux pas encore poussés :
 
 ```
+0afc14c Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux
 ```
 
 Derniers commits poussés :
@@ -38,57 +39,64 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ```
  M CLAUDE.md
- M app/Domain/Authorization/ControleDesDroits.php
- M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
-MM app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Contracts/DocumentEnvoyable.php
- M app/Domain/Facturation/Enums/TypeDocument.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/Paiement.php
- M app/Domain/Facturation/Notifications/EnvoiDocumentEchoue.php
-M  app/Domain/Facturation/Services/ApercuDuReglement.php
- M app/Domain/Facturation/Services/PiedDePage.php
-M  app/Domain/Facturation/Services/ReglementComptant.php
-AM app/Domain/Facturation/Services/TableauDesReglements.php
-MM app/Filament/App/Resources/FactureResource.php
-M  app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
-M  app/Filament/Concerns/SaisitUnReglementEnParts.php
-M  app/Policies/FacturePolicy.php
- M app/Providers/AppServiceProvider.php
- M database/migrations/2026_10_04_100001_create_paiements_table.php
- M database/migrations/2026_10_13_100002_create_envois_documents_table.php
-MM resources/views/documents/pdf/reglements.blade.php
-MM resources/views/documents/pdf/styles.blade.php
-A  resources/views/documents/pdf/tableau-des-reglements.blade.php
-M  resources/views/documents/pdf/totaux.blade.php
-M  resources/views/factures/pdf.blade.php
-A  tests/Browser/Parcours/EmettreEtEncaisserTest.php
- M tests/Browser/Support/Balayeur.php
-M  tests/Browser/Support/Navigation.php
-M  tests/Browser/Support/surveillance.js
-MM tests/Browser/inventaire-des-actions.php
- M tests/Feature/Facturation/ContrePasserPaiementActionTest.php
-A  tests/Feature/Facturation/EmettreEtEncaisserConcurrenceTest.php
-A  tests/Feature/Facturation/EmettreEtEncaisserTest.php
-M  tests/Feature/Facturation/FacturePdfGeneratorTest.php
-M  tests/Feature/Facturation/FacturePolicyTest.php
-M  tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
+ M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/CreerFactureAchatAction.php
+ M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
+ M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
+ M app/Domain/Achats/Models/AvoirFournisseur.php
+ M app/Domain/Achats/Models/FactureAchat.php
+ M app/Domain/Achats/Models/LigneAchat.php
+ M app/Domain/Achats/Models/LigneAvoirFournisseur.php
+ M app/Domain/Achats/Services/ConstructeurLigneAchat.php
+ M app/Domain/Catalogue/Models/Produit.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/SaisieDecimale.php
+ M app/Domain/Stock/Actions/ValiderInventaireOuvertureAction.php
+ M app/Domain/Stock/Models/LigneInventaireOuverture.php
+ M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Models/Societe.php
+ M app/Filament/App/Resources/AvoirFournisseurResource.php
+ M app/Filament/App/Resources/FactureAchatResource.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/InventaireOuvertureResource.php
+ M app/Filament/Concerns/AjouteDesLignesDAchat.php
+ M database/migrations/2026_10_07_100001_create_factures_achat_table.php
+ M database/migrations/2026_10_07_100002_create_lignes_achat_table.php
+ M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
+ M database/migrations/2026_10_07_100004_create_lignes_avoir_fournisseur_table.php
+ M database/migrations/2026_10_07_100006_create_lignes_inventaire_ouverture_table.php
+ M tests/Browser/Support/Navigation.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Achats/AvoirFournisseurActionsTest.php
+ M tests/Feature/Achats/FactureAchatActionsTest.php
+ M tests/Feature/Filament/AvoirFournisseurResourceTest.php
+ M tests/Feature/Societe/MagasinDeDemonstrationTest.php
+ M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
  M tests/Feature/Tenancy/TenantIsolationTest.php
-?? app/Domain/Facturation/Enums/NatureRecuPaiement.php
-?? app/Domain/Facturation/Models/LigneRecuPaiement.php
-?? app/Domain/Facturation/Models/RecuPaiement.php
-?? app/Domain/Facturation/Services/RecuPaiementPdfGenerator.php
-?? app/Domain/Facturation/Services/RecusDePaiement.php
-?? app/Policies/RecuPaiementPolicy.php
-?? database/migrations/2026_10_04_100000_create_recus_paiement_table.php
-?? database/migrations/2026_10_04_100003_create_lignes_recu_paiement_table.php
-?? resources/views/recus/
-?? tests/Browser/Parcours/RecuDePaiementTest.php
-?? tests/Feature/Facturation/RecusDePaiementTest.php
+ M tests/Unit/CalculateurLigneTest.php
+?? app/Domain/Achats/Casts/
+?? app/Domain/Achats/Concerns/
+?? app/Domain/Achats/Exceptions/
+?? app/Domain/Achats/Models/TauxAvoirFournisseur.php
+?? app/Domain/Achats/Models/TauxFactureAchat.php
+?? app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
+?? app/Domain/Achats/Services/EcartsDUnTaux.php
+?? app/Domain/Achats/Services/MontantsDuFournisseur.php
+?? app/Domain/Achats/Services/TvaDuFournisseur.php
+?? app/Domain/Facturation/Rules/MontantAuCentime.php
+?? app/Domain/Facturation/Rules/PrixDAchatEcrit.php
+?? database/migrations/2026_10_07_100007_create_taux_factures_achat_table.php
+?? database/migrations/2026_10_07_100008_create_taux_avoirs_fournisseur_table.php
+?? tests/Browser/Parcours/TvaDesAchatsTest.php
+?? tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+?? tests/Feature/Achats/TvaDuFournisseurConcurrenceTest.php
+?? tests/Feature/Achats/TvaDuFournisseurTest.php
+?? tests/Feature/Filament/TvaDesAchatsResourceTest.php
 ```
 
 ## Dernière course de la chaîne

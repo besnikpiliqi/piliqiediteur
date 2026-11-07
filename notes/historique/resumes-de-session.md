@@ -527,3 +527,328 @@ Continue the conversation from where it left off without asking the user any fur
 
 The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
 
+## Résumé 3, 2026-11-07 10:31 UTC
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+<system-reminder>
+<tools-used-before-summary>Agent, Artifact, AskUserQuestion, Bash, Edit, ExitPlanMode, Grep, ListAgents, ListConnectors, Monitor, Read, ReadNotifications, SendUserFile, Skill, StructuredOutput, TaskCreate, TaskList, TaskStop, TaskUpdate, ToolSearch, WebFetch, WebSearch, Workflow, Write, mcp__claude-code-remote__delete_trigger, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__read_documentation, mcp__claude-code-remote__send_later, mcp__claude-code-remote__update_trigger, mcp__github__actions_get, mcp__github__actions_list, mcp__github__actions_run_trigger, mcp__github__get_file_contents, mcp__github__get_job_logs, mcp__github__list_branches, mcp__github__list_pull_requests, mcp__github__list_tags</tools-used-before-summary>
+</system-reminder>
+Summary:
+1. Primary Request and Intent:
+
+**Mandate and standing rules**
+- The user is the editor of PILIQI (French SaaS for invoicing and the till; repository besnikpiliqi/piliqiediteur; branch `claude/saas-invoice-editor-architecture-q6eizh`; PR #1).
+- He delegates all technical work. Finish the software autonomously, following the CLAUDE.md protocol:
+  - both test suites (SQLite and PostgreSQL) at exit code 0 before each commit;
+  - pint;
+  - two adversarial reviews;
+  - push and green CI.
+- Always write in French with « vous ».
+- Keep the handover notes up to date (branch `claude/pilotage-reprise`, notes in N) and keep the chain of lots running.
+- Ultracode is on: use the Workflow tool on substantive tasks.
+- Standing directives:
+  - Effort Max for sensitive lots (A7, A7b, TR, 21);
+  - faketime grid only at the end (D50);
+  - every action tested in a real browser, and a final audit with all tests (D51);
+  - **D52**: always tell the editor what to do manually on his PC (commands, .env variables, never secret values); end each lot report with « À faire sur votre PC »;
+  - **D53**: package updates — security fix immediately; regular update lot at each test-campaign relaunch (end of steps 2, 3, 5, 9, 13) and before production; major versions only on his decision.
+- The editor wants maximum quality, but never claim zero defects.
+
+**Decisions made in this period**
+- **DV complement (accepted 1–5):**
+  - stock option a): warn, never reserve;
+  - « Transformer en facture » on the accepted quote page, greyed out with an explanation for the owner and accounts without the right;
+  - the invoice mentions « Établie d'après le devis n° … accepté le … »;
+  - the quote stays, marked transformed and frozen, linked to its invoice;
+  - prices copied from the quote.
+- **C3 / R1 / R2:**
+  - payments received at emission printed in a block at the left of the totals band (Date / Mode / Référence / Montant), labelled « Restant dû à l'émission », on tickets and invoices alike;
+  - R1: « Émettre et encaisser » on invoices and tickets made outside the till, partial payment allowed;
+  - R2: a « Reçu de paiement » PDF for each payment and each reversal after emission.
+- **C1–C9 = non:** sales calculation unchanged (TTC method for every client), and A7b's constat 3 (rectificative rounding) is closed as status quo.
+- **T1, T2, T3 = oui:**
+  - purchase VAT copied from the supplier's invoice, with tolerances (0,02 € per line HT; 1 cent per line of the rate for VAT);
+  - beyond the tolerance: a confirmation recorded in the audit journal, and the mark « TVA à vérifier »;
+  - purchase unit price HT and opening-inventory cost kept up to 6 decimals and displayed as written;
+  - done now, in step 1.
+- **Q-TIERS = oui** (C4): Inter font served by PILIQI, initials avatar drawn by the server, no third-party request allowed by the tests.
+- **C5:** pleasant highlight for selected rows, readable in light and dark mode, contrast ≥ 4.5:1 tested in a browser.
+- **Export (lot EX):**
+  - E1 = all documents. Manually-entered purchase invoices and supplier credit notes carry the real supplier document as an attachment; API ones do not. Origin filter (« Saisie manuelle »).
+  - E2 = both formats: ZIP of PDFs, or CSV.
+  - E3 = the owner grants the permission account by account; never pre-checked, not even for a manager.
+  - E4 = same logic as E1. E5 = a page in each store for everyone, plus the company and cabinet spaces. E6 = Claude's choice: lot EX after TR.
+  - F1 = b: a purchase can be validated without its attachment, marked « pièce du fournisseur manquante » until the file is joined.
+  - F2 = oui: the linked cabinet gets the export only if the client's owner checks it.
+
+**Latest requests**
+- He asked for a full passation; then, on 07/11, « tu peux recommencer ton travaille ».
+
+2. Key Technical Concepts:
+
+**Chain**
+- Workflow script `N/serie8-lots.js` with args `ouverts` (and optional `reprise`).
+- Steps per lot: implementation, relecture1/2, correction, poussee, fiche, notes.
+- `TRAVAIL_COUPE` lets a resumed agent keep the uncommitted work of a cut attempt.
+- `resumeFromRunId` replays cached agents (keyed by prompt and options); a lot inserted after launch is unknown to the running course.
+- Edit only the prompts of lots not yet started; editing `REGLES` would invalidate the whole cache.
+- A user message during an open turn kills the workflow agents: keep turns short and end them right after launches.
+
+**Paths**
+- S = `/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad`; N = `S/nouvelle-session`.
+- Journal: `/root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/subagents/workflows/wf_f59a9064-d8d/journal.jsonl`.
+- Sync: `git -C N/pilotage-reprise pull --ff-only`, then `bash N/pilotage-sync.sh "<msg>"`. The sync regenerates ETAT.md and refuses secrets or personal e-mail addresses.
+- Install: `bash N/installation/installer-session.sh`, then `--verifier`.
+
+**Isolation and test environment**
+- BelongsToMagasin/MagasinScope and BelongsToSociete/SocieteScope.
+- PostgreSQL with C.UTF-8 collation; the CI runs both engines and PHP 8.3/8.4/8.5.
+- Pest 4 browser plugin with Playwright 1.59.1; dompdf PDFs; Filament without a custom theme (no Node build, so only classes present in Filament's precompiled CSS exist).
+
+**Editor's PC** (Windows, XAMPP, Node v26.10.0, npm 9.2.0)
+- Playwright extraction hangs on Node 26. Browsers were extracted by hand into `%LOCALAPPDATA%\ms-playwright\chromium-1217` and `[jeton retiré]`, each with an `INSTALLATION_COMPLETE` marker.
+- Docker Desktop with WSL2 installed; container `piliqi-pg`, `postgres:17` (user piliqi, db piliqi_test, `--locale=C.UTF-8`), Up.
+- Pending on his side: `extension=pdo_pgsql` and `extension=sockets` in php.ini; `php artisan view:cache` before tests.
+
+**Test numbers** (CI on 1d3278a, job « PHP 8.3, SQLite »)
+- 4,751 passed + 384 skipped = 5,135 tests; 616,075 assertions; 934.72 s with 4 parallel processes.
+- PostgreSQL job about 23 min, 5 skipped.
+- Skips on SQLite: concurrency tests (two real processes need a database server), PostgreSQL-only features, Node-dependent tests.
+
+3. Files and Code Sections:
+
+**N/serie8-lots.js** (chain script; backups `serie8-lots.avant-TR.js`, `.avant-poste.js`, `.avant-EX.js`)
+- LOTS order now: … NAV-1, **TR**, **EX**, QA, NAV-2, NAV-3, NAV-4, NAV-5, ML, DV, EC2, S9-L, S9-A, 21.
+- `const LOTS_SENSIBLES = ['A7', 'A7b', 'TR', '21']`
+- TR entry complement: `CAHIER DES CHARGES DE CE LOT : ${S}/tr/decision-tr.md … puis … ${S}/calculs/tva-deductible-et-ca3.md et ${S}/paiements/diag-reglements-rapport.md (dans chacun, la section « Vérification » corrige le texte qui la précède). Applique ses sections 3 à 6 … Le calcul des ventes ne change pas (section 2) … Ce lot traite le constat C3 …`
+- EX entry complement: `CAHIER DES CHARGES DE CE LOT : ${S}/export/decision-ex.md … Relis sa section 5 au début du lot … Applique ses sections 2 à 4 et 6 …`
+- DV complement references both sections of `paiements/demande-devis-en-ligne.md` (« Lot DV », points 1–9; « Stock d'un devis accepté… », points 1–7).
+- Inserted before `const OUVERTS`:
+  ```js
+  const POSTE_EDITEUR = `PC DE L'ÉDITEUR (directive du 02/11/2026) : dans « laisses », une entrée qui commence par « À faire sur le PC de l'éditeur : » liste chaque geste manuel … ; écris « À faire sur le PC de l'éditeur : rien » s'il n'y a rien. Tiens .env.example et la section d'installation du README à jour …`
+  const LOTS_AVEC_POSTE = ['TR', 'EX', 'QA', 'NAV-2', 'NAV-3', 'NAV-4', 'NAV-5', 'ML', 'DV', 'EC2', 'S9-L', 'S9-A', '21']
+  for (const l of LOTS) {
+    if (LOTS_AVEC_POSTE.includes(l.id)) {
+      l.complement = l.complement ? `${l.complement}\n\n${POSTE_EDITEUR}` : POSTE_EDITEUR
+    }
+  }
+  ```
+
+**Arguments of the courses**
+- `N/reprises/args-course-wf_f59a9064-d8d.json`: `{"ouverts": ["A7b","SL","NAV-1","TR","EX","QA","NAV-2","NAV-3","NAV-4","NAV-5","ML","DV","EC2","S9-L","S9-A","21"]}`
+- `N/reprises/args-course-passation-2026-11-03.json`: `{"ouverts": ["TR","EX","QA","NAV-2","NAV-3","NAV-4","NAV-5","ML","DV","EC2","S9-L","S9-A","21"]}`
+
+**N/tr/decision-tr.md** (lot TR)
+- §1: editor's answers.
+- §2: sales unchanged.
+- §3: purchase VAT (lines with 6-decimal unit price; line HT tolerance 0,02 €; rate VAT tolerance 1 cent per line; confirmation, audit and « TVA à vérifier » beyond; refusals; distribution identical to today when the VAT equals PILIQI's calculation, otherwise the difference by cumulative prorata; table per rate per document with BelongsToMagasin; credit-note ceiling = remaining VAT of the rate; opening inventory at 6 decimals; audit of purchases; API with a confirmation field or 422).
+- §4: Émettre et encaisser, reçu de paiement, payments block on the left with « Restant dû à l'émission »; rewrite the 4 tests of `FacturePdfGeneratorTest` (lines 418, 499, 830, 996 at 53ed088).
+- §5: CLAUDE.md texts. §6: tests.
+
+**N/export/decision-ex.md** (lot EX)
+- §1: answers verbatim. §2: supplier attachment for manual entries.
+  - Files: PDF/JPEG/PNG, 10 MB each, up to 10, private disk per store, SHA-256.
+  - Removable before validation, never after.
+  - Supplier invoice date (`date_facture`) mandatory for manual entries (Claude's choice).
+- §3: export by period.
+  - Types: sales, client credit notes, purchases, supplier credit notes (origin filter), Z closures, receipts statement.
+  - ZIP or CSV (UTF-8 with BOM, `;`, decimal comma).
+  - Permission « télécharger les documents par période », owner only by default, checked account by account.
+  - Store page, company space and cabinet space; calendar and shortcuts; « Tout sélectionner ».
+  - Background job with notification; link valid 7 days, reserved to its author; 10 exports per hour per account; audit entry.
+- §4: CLAUDE.md texts. §5: F1 = b and F2 = oui recorded verbatim with details. §6: tests.
+
+**Other notes files**
+- `N/export/demande-export-documents.md`: the request and the E1–E6 proposals.
+- `N/navigateur/constats-editeur.md`:
+  - C3: payments on PDFs, diagnosis, handled by TR;
+  - C4: no third-party site;
+  - C5: selected row colour;
+  - C6, points 1–5: Windows test issues — `Navigation::choisir()` paths not absolute (« Paths provided to localPaths must be absolute and fully resolved », Navigation.php:260/311); Blade compile race (rename … Accès refusé, worked around by `view:cache`); 15 s timeouts (Navigation.php:97 and 127) to make configurable (e.g. `PILIQI_NAVIGATEUR_DELAI`); Playwright install on Node 26; README section for PostgreSQL under Windows (Docker).
+- `N/navigateur/question-ressources-tierces.md`: Q-TIERS, answered oui.
+- `N/qualite/decision-qualite.md` §8 and `N/qualite/question-mises-a-jour.md`: D53 for QA, with the CLAUDE.md text.
+- `N/calculs/`: `synthese.md`, `normes.md`, `resultats.md`, `impact.md`, `tva-deductible-et-ca3.md`, `a-verifier-apres.md`, plus scripts.
+- `N/paiements/diag-reglements-rapport.md`, with captures in `N/paiements/diag-reglements/captures/`.
+- `N/historique/DIRECTIVES.md`: D52, D53 and rows for every editor message.
+- `N/reprises/PASSATION-2026-11-03.md`: state at the stop and the steps to resume.
+- `N/reprises/lot-TR-travail-non-commite.patch`: 52 files, 271,588 bytes, SHA-256 `[jeton retiré]`; applies on 1d3278a.
+- Fiche `pilotage-reprise/README.md`: sections « ▶ Reprise du 07/11/2026 » and « ▶ Passation du 03/11/2026 »; TR and EX in the list of remaining lots; D52 and D53 lines.
+- `etat-chaines.md`: chronological entries up to 07/11 09:35.
+
+**Repository code examined (read-only)**
+- `resources/views/documents/pdf/reglements.blade.php`: block « Règlements » under the totals, from `ReglementsALEmission`.
+- `app/Domain/Facturation/Services/ReglementsALEmission.php`:
+  ```php
+  public static function depuisLeContexte(?array $contexteSigne, int $totalTtc): self // reads $contexteSigne['reglements'] and ['credits_avoir']
+  ```
+- `styles.blade.php`: `table.reglements { width: 260px; margin-left: auto; margin-top: 16px; … }`
+- `app/Filament/App/Livewire/SelecteurDeProduits.php`, around line 152:
+  ```php
+  ->recordClasses(fn (Produit $produit): array => [
+      'opacity-50' => DevisResource::refusDuProduit($produit, $vendSansStock) !== null,
+      'bg-gray-100 dark:bg-white/5 font-semibold' => $this->quantiteChoisie($produit->getKey()) !== null,
+  ])
+  ```
+- Migrations: `factures_achat.source` and `avoirs_fournisseur.source` are `string(20)` with default `'manuelle'`.
+- `PermissionRegistry`: FACTURE_VIEW, FACTURE_VIEW_TOUTES, AVOIR_VIEW, PAIEMENT_VIEW, CLOTURE_CAISSE_VIEW, FACTURE_ACHAT_VIEW, AVOIR_FOURNISSEUR_VIEW, etc.
+- `DevisPolicy::convertir` requires FACTURE_CREATE.
+
+**TR work in progress (uncommitted, 52 entries)**
+- Among them: CLAUDE.md (TR text in « Documents de vente »), EmettreFactureAction, EncaisserEnPlusieursModesAction, EnregistrerPaiementAction, ContrePasserPaiementAction, TableauDesReglements, FactureResource, ViewFacture, FacturePolicy.
+- New files: RecuPaiement, LigneRecuPaiement, NatureRecuPaiement, RecuPaiementPdfGenerator, RecusDePaiement, RecuPaiementPolicy; migrations `create_recus_paiement_table` and `create_lignes_recu_paiement_table`; views `recus/` and `tableau-des-reglements.blade.php`.
+- New tests: EmettreEtEncaisserTest, EmettreEtEncaisserConcurrenceTest, RecusDePaiementTest, and browser tests EmettreEtEncaisserTest and RecuDePaiementTest.
+- Modified migrations: `paiements` and `envois_documents`.
+
+4. Errors and fixes:
+
+**Interruptions and restarts**
+- **User interruption during an open turn** killed the chain (A7b:correction) and the diagnosis workflow. Fix: removed the diagnosis worktree, relaunched both by `resumeFromRunId`; DV added to `ouverts` (prompts don't embed `ouverts`, so the cache held).
+- **5-hour usage limit, then container restarts** (12:32, 14:25, 15:43 on 02/11; 01:11 on 03/11; 09:30 on 07/11). Fix each time: reinstall, then resume the course.
+- **Relaunch without reinstalling** (once): I launched before PostgreSQL was up, then ran the installer right after.
+- **README sed for TR/EX** didn't match because the fiche agent had renumbered the list. Fix: inserted the line with Python after the `**TR**` line.
+
+**Inserting lots into a running course**
+- The running course doesn't know a lot inserted later. Fix:
+  - watch the journal (background until-loop) for the boundary labels `NAV-1:fiche`/`notes` (resp. `TR:fiche`/`notes`);
+  - TaskStop while the tree is clean;
+  - relaunch with resume and the new `ouverts`.
+
+**Editor's PC problems**
+- **Stale `package-lock.json`** (from a failed `npm install` before NAV-1 was pushed) blocked `git pull` → `Remove-Item package-lock.json`.
+- **Composer needs ext-sockets** → enable `extension=sockets` in php.ini; don't run `composer update`. I admitted forgetting to tell him under D52.
+- **Playwright extraction hangs on Node 26** → manual `Expand-Archive` of the zips downloaded to the Desktop, plus the `INSTALLATION_COMPLETE` markers; FFmpeg not needed, stop running `npx playwright install`.
+- **Browser tests on Windows**: path bug, view-compile race, 15 s timeouts → `php artisan view:cache` workaround; recorded as C6 for the next lots (code untouched, per the editor's « tu touches rien »).
+- **Docker per-user install failed** (Virtual Machine Platform disabled) → `wsl --install` and an all-users install.
+- **« failed to connect to the docker API »** → start Docker Desktop and wait for « Engine running »; then `docker info` OK and `piliqi-pg` Up.
+
+**Stop-hook feedback**
+- Repeatedly asked to commit or push. Answered each time in text that it's the chain's work in progress, never committed by me; during the passation, that it is saved as a patch in the notes branch.
+
+5. Problem Solving:
+
+**Solved**
+- Payment-mode diagnosis: verified causes and a validated layout.
+- Cents analysis: recommendation A2 rejected by the editor (C = non), so sales stay as they are.
+- Deductible VAT defect identified, and its fix decided (lot TR).
+- Export by period fully specified (lot EX).
+- Passation saved and verified, then resumed in the same session.
+- Editor's PC set up for browser tests and for PostgreSQL in Docker.
+
+**Ongoing**
+- Chain: TR in progress, then EX and the remaining lots.
+- The editor hasn't yet reported his PostgreSQL test results (pdo_pgsql still to enable).
+
+6. All user messages (excluding automated « Stop hook feedback » turns, which only asked to commit or push):
+- « j'accepte tes proposition de 1 à 5 »
+- « je vois que dans les factures et meme dans les ticketes ne marque pas les methode de paiements. et il faut place tout à gauche du ttc total. donc tu mets pour tous les regelments dans cette endroit »
+- (quoting « Une question à trancher ») « je parle si le reglement de la facture est fait en plusieurs method, dont par carte ou ecpece etc »
+- [Request interrupted by user for tool use] « pareille pour les tickets »
+- Screenshot of invoice FAC-PARIS-2026-000001 with calculators: « je suis pas content avec les calcules. ce que j'ai compris il y aura toujours des centime d ecart mais moi je veux pas »
+- « mais ce que je veux que ce soit rassuré que ne pas avoir problem avec l'etat, ou c'est important que l'etat regarde ce que t'as recolté et ce que t'as payé comme tva »
+- « T1 =oui,T2= oui,t3=oui, r1=oui,r2=oui, les C=non »
+- « sil y a qqch à faire moi à la main comme .env alors tu me dit toujours »
+- (quoting « npm install et npx playwright install chromium. ») « si je les installes alors il reste toujour sur le dossier de logiciel et quand je deploi sur production alors ils seront toujours ou commme ca marche avec ces »
+- Paste: `npm install` ENOENT package.json
+- Paste: `git pull` error, untracked `package-lock.json` would be overwritten
+- Paste: composer « requires ext-sockets … missing »
+- (quoting « Ne lancez pas composer update… ») « pourquoi c'est risqué? pourquoi des packet fixé! »
+- « et alors toujoure vont rester ces versions? doonc jamais rester à jours »
+- (quoting Q-MAJ) « oui »
+- Two screenshots of the « Ajouter des produits » modal: « quand c'est un produit selecté il affiche tres blanc brillant que je l'aime pas. je pense sera mieux de juste changer la couleur belle et le texte soit visible car la on vois presque rien »
+- (quoting the Q-TIERS proposal) « oui recommandé »
+- « pour les comptable ( meme pour la societe dont le proprietaire,administrateur, responsable ou tout ca doit etre donne les autorisation qui peut faire tout ca ) il faut laisser choisir quelle jour pour telechargers les facture pour les dates choisi. donc il faut avoir un calandrier qui choisi et telecharger tout les factures selecter et ou laisser l'option de tout selecter avec le button. donc ce qu'elle a besoin de telecharger dont les factures d'achat, de ventes, les avoirs des clients de magasin (si besoin, c'est toi qui doit me dire), les avoirs des fournisseurs etc »
+- « e1=tout ( mais les vrais factures d'achat ici n'existe pas encore mais je t'avais dit que pour la creation des factures d'achats quand on ajoute les produits il faut avoir aussi pour telecharge la vrai facture d'achat pour que cette creation de cette facture soit aussi lie avec la vrai facture,donc chaque creation doit avoir sa vrai facture en piece jointe, donc il faut obligatoirment telecharger la facture. Mais ces vrais factures d'achats on parle uniquement quand ces facture s'enregistre "Saisie manuelle" et pas par api qui recupere de facon automatique et pareille pour les avoir des fournisseurs. et de donner une option pour selecter par ex uniquement "Saisie manuelle" quand le comptable veux telecharger ces factures, car peut etre elle a besoin que ce genre de facture à recupere ). Le E2 les deux option il faut afficher donc, elle veut en zip (les pdf) ou en CSV ca depend se qu'elle veut. E3= oui c'est le proprietaire qui doit donner leur autorisation pour chacun. E4= comme j'ai dit au E1 c'est la meme logique. E5= chaque magasin pour tout le monde et le reste comme tu as dit. E6= comme tu veut »
+- « F1= b),F2=oui »
+- « fini ce que t'as à finir car la session va terminer. donc si tu veut arret et sauvegarde tout pour que tu continue quand je te dis recommence mais comme d'habitude tu le fait tout pret pour que l'autre compte(session) commnce le travail ou tu t'arret et qu'il fasse identique comme si c'etais toi »
+- « tu me dit pour ca mais tu touche rien du tout de ce que t'as fait mais juste tu me dit quoi faire: found 0 vulnerabilities npm notice … Downloading Chrome for Testing 147.0.7727.15 … 100% »
+- « il s'est arrete ici: 179.4 MiB [====================] 100% 0.0s »
+- « dans un autre terminal affiche ca mais sur l'autre reste pareile bouge pas: » (dir of ms-playwright: .links, chromium-1217, __dirlock)
+- dir of chromium-1217: only chrome-win64
+- Remove-Item error: __dirlock not found
+- « c'est pareill: » (stuck again at 100 %)
+- « 483 » (folder size)
+- « v26.10.0 »
+- « il continue encore: » DEBUG output, stuck at « extracting archive »
+- « c'est dans le bureaux j'ai telecharger et pas downloads »
+- Expand-Archive output: both INSTALLATION_COMPLETE files created
+- « apparament toujour comme tout a l heur : » (Chrome already downloaded, FFmpeg extraction stuck)
+- « j'ai fait ca php artisan test --testsuite=Browser mais je vois rien ce qu'il fait »
+- AidesCommunesTest results, first run (9 passed, 2 failed: path, 500 rename)
+- `--headed` results (7 passed, 4 failed: 2 timeouts, 2 path)
+- (quoting « Elle est longue : plus de 5 000 tests. ») « donc ca prend combien de temps car la dedans sont des assertions c est ca? ils sont combien »
+- Full-suite progress dots: « il n as pas encore fini mais ca je vois »
+- (quoting the `s` explanation) « et pourquoi sauté »
+- « comment je peux mettre postgresql dans mon environement car je crois que chez moi il y en a que sdllite et moi je veut faire des vrais testes avec un base de donnee reel »
+- Screenshot of the Docker Desktop configuration dialog
+- Screenshot « Installation failed. One prerequisite is not fulfilled » (Virtual Machine Platform)
+- « j'ai installer les docker et wsl --install »
+- docker --version OK; docker run error « failed to connect to the docker API… »
+- `docker info` output (server running)
+- `docker ps` output (piliqi-pg Up)
+- « tu peux recommencer ton travaille »
+
+**SECURITY INSTRUCTIONS (verbatim, still in force)**
+- Never ask the user to paste tokens, keys or passwords into the conversation; never write credentials in repository files. Credentials only through environment variables: SUPERPDP_URL, SUPERPDP_CLIENT_ID, SUPERPDP_CLIENT_SECRET, SUPERPDP_TRICATEL_CLIENT_ID, SUPERPDP_TRICATEL_CLIENT_SECRET, SUPERPDP_REDIRECT_URI ; INSEE_SIRENE_CLE, INPI_RNE_IDENTIFIANT, INPI_RNE_MOT_DE_PASSE, RECOMMANDE_CLE, RECOMMANDE_SECRET_RAPPEL, JOURNAL_AUDIT_CLE, JOURNAL_AUDIT_CLE_ID, JOURNAL_AUDIT_CLES_PRECEDENTES, EDITEUR_OPERATEURS, PILIQI_EDITEUR_EMAIL, CAISSE_SECURISEE_CLE_PRIVEE, CAISSE_SECURISEE_PHRASE_SECRETE, MAILTRAP_API_TOKEN, MAILTRAP_ACCOUNT_ID, MAILTRAP_INBOX_ID (on the editor's PC only: MAIL_USERNAME and MAIL_PASSWORD).
+- The classifier refused a real test run with credentials in the conversation (« Credential Leakage »); do not get around it.
+- Never send a real request to SUPER PDP, La Poste, the INPI, the INSEE or the Ordre's directory; only fake implementations or authorized test environments.
+- No PR unless asked. No model identifier in commits, code or the PR.
+- `git stash drop` and `git push origin --delete` were refused by the classifier (Git Destructive): do not force them.
+- The user once pasted a development private key: never repeat it.
+- The eBay photo contained a third party's name, address and phone: never repeat them. The editor's invoice screenshot also contained third-party data (client name, address, SIREN, store e-mail and phone): never copied into notes.
+- Commit trailer lines: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6`. PR descriptions end with « 🤖 Generated with [Claude Code](https://claude.com/claude-code) » and the session link.
+- GitHub comments end with « --- _Generated by [Claude Code](https://claude.ai/code)_ ».
+- Never commit or push the chain agents' work in progress; answer the stop hook in text. Never force a push or rewrite history.
+- Only one session at a time on the branch.
+- No personal data in the notes; `historique/retraits-locaux.txt` is never published.
+- The user's e-mail address is used only to identify them.
+- Never use AskUserQuestion while a chain runs; ask in the message text. Keep turns short.
+- D52: never put a secret value in the conversation, repository, notes or a report. I told the editor to choose his own Docker password and never send it.
+
+7. Pending Tasks:
+
+**Chain follow-up**
+- Course wf_f59a9064-d8d, resumed 07/11 09:33 UTC (task wsjgrotwk): TR (in progress, resuming the saved work) → EX → QA → NAV-2..NAV-5 (including constats C4, C5, C6) → ML → DV → EC2 → S9-L → S9-A → 21.
+- Check-in scheduled at 11:34 UTC (trig_01QwRe2uqVLvF75JRkC97Udy), then every 2 hours.
+- On restart: reinstall, resume with `N/reprises/args-course-wf_f59a9064-d8d.json`.
+
+**After each lot pushed**
+- CI, then a short report to the editor ending with « À faire sur votre PC » (D52). TR will likely need `migrate:fresh`, because it changes the paiements and envois_documents migrations and adds the recus tables.
+- Update etat-chaines and sync.
+
+**PC support**
+- If the editor reports PostgreSQL test results, classify each failure as Windows-specific or a real defect, and add it to C6.
+
+**Later**
+- TVA chain (including VAT on the margin), step 1 bis, steps 2–15.
+- Faketime grid and the final audit with all browser tests.
+
+8. Current Work:
+
+On 07/11, after « tu peux recommencer ton travaille », I checked the environment:
+- same container, rebooted (up 1 min);
+- TR's work in progress intact, with the same patch SHA-256 `e914aeca…`;
+- origin still at `1d3278a`.
+
+Then I:
+- ran the installer (exit code 0, PostgreSQL accepting connections);
+- removed the agent's temporary worktree `S/suites-tr1` (detached snapshot 5e1b5c7, « instantané temporaire des suites (lot TR, commit 1) »);
+- added an etat-chaines entry and the « Reprise du 07/11 » section to the fiche, then synced (`56b67f0`);
+- relaunched the chain: `Workflow({scriptPath: N/serie8-lots.js, resumeFromRunId: "wf_f59a9064-d8d", args: {"ouverts": ["A7b","SL","NAV-1","TR","EX","QA","NAV-2","NAV-3","NAV-4","NAV-5","ML","DV","EC2","S9-L","S9-A","21"]}})` → task wsjgrotwk;
+- scheduled the check-in for 11:34 UTC.
+
+My last message told the editor the work had resumed (TR then EX, then the other lots), that no question awaits him, and « À faire sur votre PC : rien de nouveau ». It also asked him to send his PostgreSQL test results if he ran them.
+
+Then a stop hook asked to commit the uncommitted changes, which are the chain's TR work in progress.
+
+9. Optional Next Step:
+- Answer the stop-hook feedback in text only: the uncommitted changes are lot TR's work in progress, resumed by the chain agent of course `wf_f59a9064-d8d`, which will commit and push after both suites (SQLite and PostgreSQL) reach exit code 0. Never commit it myself.
+- Then wait for the chain or the 11:34 UTC check-in, and keep following the plan:
+  - check-in prompt: « Tour court, sans fenêtre de questions : 1) PostgreSQL arrêté → bash nouvelle-session/installation/installer-session.sh … 2) lire le journal de la course ; coupée ou arrêtée → relancer (resumeFromRunId, mêmes ouverts) … 3) lot poussé : CI, compte rendu court à l'éditeur, terminé par « À faire sur votre PC » (D52 …) ; 4) un seul point de suivi programmé, dans 2 heures. »
+  - the last message to the editor: « Le travail a repris… D'abord la fin du lot TR… Ensuite le lot EX… »
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
+

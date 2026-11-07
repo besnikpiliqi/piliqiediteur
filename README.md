@@ -11,7 +11,7 @@ Le code est sur la branche de travail `claude/saas-invoice-editor-architecture-q
 
 ## ▶ Reprise du 07/11/2026 vers 09 h 35 UTC : la session d'origine a repris son travail
 
-L'éditeur a fait reprendre la même session (même conteneur, travail non commité de TR intact). Course `wf_f59a9064-d8d` reprise avec `ouverts` = A7b, SL, NAV-1, TR, EX, QA, NAV-2 à NAV-5, ML, DV, EC2, S9-L, S9-A, 21. La passation ci-dessous ne sert plus que si une autre session doit reprendre.
+L'éditeur a fait reprendre la même session (même conteneur, travail non commité de TR intact). Course `wf_f59a9064-d8d` reprise avec `ouverts` = A7b, SL, NAV-1, TR, EX, QA, NAV-2 à NAV-5, ML, DV, EC2, S9-L, S9-A, 21. La passation ci-dessous ne sert plus que si une autre session doit reprendre ; le travail en cours de TR (commits locaux et travail non commité) y est sauvé à chaque point de suivi, en deux correctifs, avec leurs empreintes (`notes/reprises/PASSATION-2026-11-03.md`, section « Sauvegardes depuis la reprise du 07/11 », point 2 de « Reprendre »).
 
 ## ▶ Passation du 03/11/2026 vers 02 h UTC : lire d'abord `notes/reprises/PASSATION-2026-11-03.md`
 

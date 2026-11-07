@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 17:56 UTC par pilotage-sync.sh : « 07/11 17 h 56 : EX en cours, travail resauvé ».
+Mis à jour le 07/11/2026 à 19:58 UTC par pilotage-sync.sh : « Point de suivi du 07/11 19 h 58 UTC : sauvegarde du lot EX (1 commit local et travail en cours) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `074eaee`. Commits locaux pas encore poussés :
 
 ```
+3c83ee0 Joint la pièce du fournisseur aux achats saisis à la main (lot EX 1/2)
 ```
 
 Derniers commits poussés :
@@ -38,65 +39,65 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ```
  M CLAUDE.md
- M app/Console/Commands/EffacerPiecesVerification.php
- M app/Domain/Achats/Actions/CreerFactureAchatAction.php
- M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Actions/SupprimerFactureAchatAction.php
- M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Models/FactureAchat.php
- M app/Domain/Authorization/ControleDesDroits.php
+ M README.md
+ M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/Facturation/Models/ClotureCaisse.php
+ M app/Domain/Tenancy/Actions/ModifierMembreAction.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Services/CatalogueDeDemonstration.php
- M app/Filament/App/Resources/AvoirFournisseurResource.php
- M app/Filament/App/Resources/AvoirFournisseurResource/Pages/ViewAvoirFournisseur.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php
- M app/Policies/AvoirFournisseurPolicy.php
- M app/Policies/FactureAchatPolicy.php
+ M app/Domain/Tenancy/Enums/RoleMagasin.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Services/AffectationsDesMembres.php
+ M app/Domain/Tenancy/Services/PorteeDesDroits.php
+ M app/Domain/Tenancy/Support/GardesDesDroits.php
+ M app/Filament/App/Resources/ClotureCaisseResource.php
+ M app/Filament/App/Resources/EReportingResource.php
+ M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
+ M app/Filament/Societe/Pages/CabinetComptable.php
+ M app/Filament/Societe/Pages/RattachementDUnCabinet.php
+ M app/Filament/Societe/Resources/MembreResource.php
+ M app/Models/User.php
  M app/Providers/Filament/AppPanelProvider.php
+ M app/Providers/Filament/CabinetPanelProvider.php
+ M app/Providers/Filament/SocietePanelProvider.php
+ M bootstrap/app.php
  M config/filesystems.php
- M database/migrations/2026_10_07_100001_create_factures_achat_table.php
- M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
- M tests/Browser/Parcours/TvaDesAchatsTest.php
- M tests/Browser/TestCaseDuNavigateur.php
+ M tests/Browser/Support/NoyauDUneRequeteNeuve.php
  M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Achats/AvoirFournisseurActionsTest.php
- M tests/Feature/Achats/FactureAchatActionsTest.php
- M tests/Feature/Achats/FactureAchatArchivageConcurrenceTest.php
- M tests/Feature/Achats/FactureAchatConcurrenceTest.php
- M tests/Feature/Achats/FicheProduitPendantUneFactureAchatConcurrenceTest.php
- M tests/Feature/Achats/TvaDesAchatsParTauxTest.php
- M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
- M tests/Feature/Achats/TvaDuFournisseurConcurrenceTest.php
- M tests/Feature/Achats/TvaDuFournisseurTest.php
- M tests/Feature/Authorization/ActionsHorsEcranTest.php
- M tests/Feature/Authorization/FactureAchatPolicyTest.php
- M tests/Feature/Authorization/LecteurDesDroitsTest.php
- M tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
- M tests/Feature/Cabinets/CabinetsConcurrenceTest.php
- M tests/Feature/Calendrier/HeureLocaleTest.php
- M tests/Feature/Calendrier/NuitDeParisTest.php
- M tests/Feature/Catalogue/FicheProduitConcurrenceTest.php
- M tests/Feature/Catalogue/OrigineDesProduitsTest.php
- M tests/Feature/Catalogue/ProduitTest.php
- M tests/Feature/Facturation/ActionsUniquesTest.php
- M tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
- M tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php
- M tests/Feature/Filament/AvoirFournisseurResourceTest.php
- M tests/Feature/Filament/DocumentDisparuDeLEcranTest.php
- M tests/Feature/Filament/EcranOuvertAvantLaFermetureTest.php
- M tests/Feature/Filament/FactureAchatResourceTest.php
- M tests/Feature/Filament/FournisseurProduitResourceTest.php
- M tests/Feature/Filament/InventaireOuvertureResourceTest.php
- M tests/Feature/Filament/ProduitResourceTest.php
- M tests/Feature/Filament/TvaDesAchatsResourceTest.php
- M tests/Feature/Societe/DroitsConcurrenceTest.php
- M tests/Feature/Societe/FermerEtRouvrirMagasinConcurrenceTest.php
- M tests/Feature/Societe/GestesPendantLaClotureOuLaValidationConcurrenceTest.php
+ M tests/Feature/Authorization/AutorisationsDesRolesTest.php
+ M tests/Feature/Authorization/AutorisationsSelonLeTypeTest.php
+ M tests/Feature/Authorization/ControleDesDroitsTest.php
+ M tests/Feature/Authorization/DroitsDuResponsableTest.php
+ M tests/Feature/Cabinets/PanneauCabinetTest.php
+ M tests/Feature/Calendrier/PlanificateurTest.php
+ M tests/Feature/Societe/AdministrateursTest.php
+ M tests/Feature/Societe/AutorisationsDesMembresTest.php
+ M tests/Feature/Societe/PanneauSocieteTest.php
+ M tests/Feature/Societe/ResponsablesTest.php
+ M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
+ M tests/Feature/Tenancy/IsolationDesSocietesTest.php
+ M tests/Feature/Tenancy/NotificationsDeLaSocieteTest.php
+?? app/Console/Commands/EffacerTelechargementsDeDocuments.php
+?? app/Domain/Achats/Services/FicheDeSaisiePdfGenerator.php
+?? app/Domain/Facturation/Enums/FormatDuTelechargement.php
+?? app/Domain/Facturation/Enums/OrigineDesAchats.php
+?? app/Domain/Facturation/Enums/TypeDeDocumentTelechargeable.php
+?? app/Domain/Facturation/Services/ArchiveDesDocuments.php
+?? app/Domain/Facturation/Services/ClotureCaissePdfGenerator.php
+?? app/Domain/Facturation/Services/DocumentTrouve.php
+?? app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
+?? app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
+?? app/Domain/Facturation/Services/ReleveDesEncaissementsPdfGenerator.php
+?? app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
+?? app/Domain/Tenancy/Enums/StatutDuTelechargement.php
+?? app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
+?? app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+?? app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
+?? app/Filament/App/Pages/TelechargerLesDocuments.php
+?? app/Filament/Cabinet/Pages/TelechargerLesDocuments.php
+?? app/Filament/Concerns/TelechargeLesDocumentsParPeriode.php
+?? app/Filament/Societe/Pages/TelechargerLesDocuments.php
+?? app/Http/Controllers/TelechargerLesDocumentsController.php
+?? database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
 ```
 
 ## Dernière course de la chaîne

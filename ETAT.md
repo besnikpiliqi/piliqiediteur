@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 19:58 UTC par pilotage-sync.sh : « Point de suivi du 07/11 19 h 58 UTC : sauvegarde du lot EX (1 commit local et travail en cours) ».
+Mis à jour le 07/11/2026 à 22:00 UTC par pilotage-sync.sh : « Point de suivi du 07/11 22 h 00 UTC : sauvegarde du lot EX (2 commits locaux et corrections de relecture) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `074eaee`. Commits locaux pas encore poussés :
 
 ```
+938db39 Ajoute le téléchargement des documents par période (lot EX 2/2)
 3c83ee0 Joint la pièce du fournisseur aux achats saisis à la main (lot EX 1/2)
 ```
 
@@ -38,66 +39,39 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
+ M .env.example
  M README.md
- M app/Domain/Authorization/PermissionRegistry.php
- M app/Domain/Facturation/Models/ClotureCaisse.php
- M app/Domain/Tenancy/Actions/ModifierMembreAction.php
+ M app/Console/Commands/EffacerTelechargementsDeDocuments.php
+ M app/Domain/Achats/Services/PieceDeposee.php
+ M app/Domain/Facturation/Services/DocumentTrouve.php
+ M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
+ M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
+ M app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
  M app/Domain/Tenancy/Enums/ActionAuditee.php
- M app/Domain/Tenancy/Enums/RoleMagasin.php
- M app/Domain/Tenancy/Models/Affectation.php
- M app/Domain/Tenancy/Services/AffectationsDesMembres.php
- M app/Domain/Tenancy/Services/PorteeDesDroits.php
- M app/Domain/Tenancy/Support/GardesDesDroits.php
- M app/Filament/App/Resources/ClotureCaisseResource.php
- M app/Filament/App/Resources/EReportingResource.php
- M app/Filament/Concerns/CocheLesAutorisationsDeMagasin.php
- M app/Filament/Societe/Pages/CabinetComptable.php
- M app/Filament/Societe/Pages/RattachementDUnCabinet.php
- M app/Filament/Societe/Resources/MembreResource.php
- M app/Models/User.php
- M app/Providers/Filament/AppPanelProvider.php
- M app/Providers/Filament/CabinetPanelProvider.php
- M app/Providers/Filament/SocietePanelProvider.php
- M bootstrap/app.php
- M config/filesystems.php
- M tests/Browser/Support/NoyauDUneRequeteNeuve.php
+ M app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
+ M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+ M app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
+ M app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
+ M app/Filament/App/Pages/TelechargerLesDocuments.php
+ M app/Filament/Cabinet/Pages/TelechargerLesDocuments.php
+ M app/Filament/Concerns/TelechargeLesDocumentsParPeriode.php
+ M app/Filament/Societe/Pages/TelechargerLesDocuments.php
+ M app/Http/Controllers/TelechargerLesDocumentsController.php
+ M config/queue.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/migrations/2026_10_04_100001_create_paiements_table.php
+ M database/migrations/2026_10_05_100001_create_avoirs_table.php
+ M database/migrations/2026_10_12_100001_create_avoir_allocations_table.php
+ M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
+ M phpunit.xml
+ M resources/views/filament/telecharger-les-documents.blade.php
+ M tests/Browser/Parcours/TelechargerLesDocumentsTest.php
  M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Authorization/AutorisationsDesRolesTest.php
- M tests/Feature/Authorization/AutorisationsSelonLeTypeTest.php
- M tests/Feature/Authorization/ControleDesDroitsTest.php
- M tests/Feature/Authorization/DroitsDuResponsableTest.php
- M tests/Feature/Cabinets/PanneauCabinetTest.php
- M tests/Feature/Calendrier/PlanificateurTest.php
- M tests/Feature/Societe/AdministrateursTest.php
- M tests/Feature/Societe/AutorisationsDesMembresTest.php
- M tests/Feature/Societe/PanneauSocieteTest.php
- M tests/Feature/Societe/ResponsablesTest.php
- M tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
- M tests/Feature/Tenancy/IsolationDesSocietesTest.php
+ M tests/Feature/Facturation/TelechargementDesDocumentsConcurrenceTest.php
+ M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
+ M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
+ M tests/Feature/Filament/TelechargerLesDocumentsTest.php
  M tests/Feature/Tenancy/NotificationsDeLaSocieteTest.php
-?? app/Console/Commands/EffacerTelechargementsDeDocuments.php
-?? app/Domain/Achats/Services/FicheDeSaisiePdfGenerator.php
-?? app/Domain/Facturation/Enums/FormatDuTelechargement.php
-?? app/Domain/Facturation/Enums/OrigineDesAchats.php
-?? app/Domain/Facturation/Enums/TypeDeDocumentTelechargeable.php
-?? app/Domain/Facturation/Services/ArchiveDesDocuments.php
-?? app/Domain/Facturation/Services/ClotureCaissePdfGenerator.php
-?? app/Domain/Facturation/Services/DocumentTrouve.php
-?? app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
-?? app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
-?? app/Domain/Facturation/Services/ReleveDesEncaissementsPdfGenerator.php
-?? app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
-?? app/Domain/Tenancy/Enums/StatutDuTelechargement.php
-?? app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
-?? app/Domain/Tenancy/Models/TelechargementDeDocuments.php
-?? app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
-?? app/Filament/App/Pages/TelechargerLesDocuments.php
-?? app/Filament/Cabinet/Pages/TelechargerLesDocuments.php
-?? app/Filament/Concerns/TelechargeLesDocumentsParPeriode.php
-?? app/Filament/Societe/Pages/TelechargerLesDocuments.php
-?? app/Http/Controllers/TelechargerLesDocumentsController.php
-?? database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
 ```
 
 ## Dernière course de la chaîne
@@ -105,9 +79,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-A7b:poussee
-A7b:fiche
-A7b:notes
 SL:implementation
 SL:relecture1
 SL:relecture2
@@ -130,4 +101,7 @@ TR:poussee
 TR:fiche
 TR:notes
 EX:implementation
+EX:relecture1
+EX:relecture2
+EX:correction
 ```

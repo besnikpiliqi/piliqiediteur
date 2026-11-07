@@ -1236,3 +1236,7 @@ tu peux recommencer ton travaille
 
 Réessayez
 
+## 100. 2026-11-07 21:39 UTC
+
+qu'est ce que compris le EX, donc quelle fonctions
+

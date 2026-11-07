@@ -238,9 +238,10 @@ class AvoirFournisseurResourceTest extends TestCase
 
     /**
      * Sur la fiche d'une facture d'achat, « Créer un avoir fournisseur »
-     * propose chaque ligne encore en stock, et « Retourner ce produit »
-     * n'apparaît que sur une ligne retournable et ne propose qu'elle : les 3
-     * chargeurs ont tous été vendus.
+     * propose chaque ligne encore en stock, sans HT de la note d'avoir
+     * saisi (la proposition de PILIQI vaut tant qu'il est vide), et
+     * « Retourner ce produit » n'apparaît que sur une ligne retournable et
+     * ne propose qu'elle : les 3 chargeurs ont tous été vendus.
      */
     public function test_un_avoir_fournisseur_se_cree_depuis_la_fiche_de_la_facture_d_achat(): void
     {
@@ -254,7 +255,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
             ->mountAction('creer_avoir_fournisseur');
         $this->assertSame(
-            [['ligne_achat_id' => $factureAchat->lignes[0]->id, 'description' => 'Câble USB-C', 'quantite' => 5], ['ligne_achat_id' => $factureAchat->lignes[2]->id, 'description' => 'Écran', 'quantite' => 2]],
+            [['ligne_achat_id' => $factureAchat->lignes[0]->id, 'description' => 'Câble USB-C', 'quantite' => 5, 'montant_ht' => null], ['ligne_achat_id' => $factureAchat->lignes[2]->id, 'description' => 'Écran', 'quantite' => 2, 'montant_ht' => null]],
             array_values($page->get('mountedActionsData.0.lignes')),
         );
         $page->unmountAction()
@@ -265,7 +266,7 @@ class AvoirFournisseurResourceTest extends TestCase
             ->assertSet('mountedInfolistActions', [])
             ->mountInfolistAction('lignes.2.retourner_ce_produitAction', 'retourner_ce_produit');
         $lignes = $page->get('mountedInfolistActionsData.0.lignes');
-        $this->assertSame([['ligne_achat_id' => $factureAchat->lignes[2]->id, 'description' => 'Écran', 'quantite' => 2]], array_values($lignes));
+        $this->assertSame([['ligne_achat_id' => $factureAchat->lignes[2]->id, 'description' => 'Écran', 'quantite' => 2, 'montant_ht' => null]], array_values($lignes));
 
         $page
             ->set('mountedInfolistActionsData.0.lignes.'.array_key_first($lignes).'.quantite', 1)

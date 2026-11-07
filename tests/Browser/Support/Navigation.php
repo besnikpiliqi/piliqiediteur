@@ -359,7 +359,9 @@ final class Navigation
     /**
      * Choisit l'option qui contient ce texte dans la liste à recherche de
      * cette étiquette (un Select de Filament qui n'est pas natif) : ouvre la
-     * liste, y tape le texte si elle a une recherche, puis clique sur
+     * liste, y tape le texte si elle a une recherche, touche par touche
+     * (Choices.js ne cherche qu'à la frappe, et une liste dont les options
+     * viennent du serveur ne les demande qu'alors), puis clique sur
      * l'option.
      */
     public function choisirDansLaListe(string $etiquette, string $option): self
@@ -378,7 +380,7 @@ final class Navigation
         $recherche = $this->element($liste.' input.choices__input--cloned');
 
         if ($recherche->count() > 0 && $recherche->isVisible()) {
-            $this->geste(fn () => $recherche->fill($option));
+            $this->geste(fn () => $recherche->type($option), 'la recherche de « '.$option.' » dans « '.$etiquette.' »');
         }
 
         return $this->geste(fn () => $this->element($liste.' .choices__list--dropdown .choices__item--choice:has-text('.self::texte($option).')')->first()->click());

@@ -13,7 +13,16 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Achats\Models\TauxAvoirFournisseur;
+use App\Domain\Achats\Models\TauxFactureAchat;
+use App\Domain\Achats\Services\ChiffrageDUnAvoirFournisseur;
+use App\Domain\Achats\Services\EcartsDUnTaux;
+use App\Domain\Achats\Services\TvaDuFournisseur;
+use App\Domain\Facturation\Rules\MontantAuCentime;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
@@ -25,6 +34,7 @@ use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -50,6 +60,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
+use InvalidArgumentException;
 
 /**
  * Enregistre les factures reçues des fournisseurs (réception de
@@ -86,6 +97,12 @@ class FactureAchatResource extends Resource
 
     private const CHOISIR_UNE_FACTURE_RETOURNABLE = 'Choisissez une facture d\'achat validée du magasin dont des produits restent à retourner.';
 
+    /**
+     * La marque d'un document dont un écart avec le fournisseur a été
+     * confirmé (voir TvaDuFournisseur).
+     */
+    public const TVA_A_VERIFIER = 'TVA à vérifier';
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -121,6 +138,7 @@ class FactureAchatResource extends Resource
 
             FormSection::make('Produits reçus')->schema([
                 ...self::lignesDAchat(),
+                ...self::tvaDeLaFacture(),
                 self::totauxDuDocument()->label('Total de la facture d\'achat (à payer au fournisseur)'),
             ]),
         ]);
@@ -132,6 +150,7 @@ class FactureAchatResource extends Resource
             InfolistSection::make('Facture d\'achat')->schema([
                 TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore validée)'),
                 TextEntry::make('statut')->badge(),
+                self::marqueTvaAVerifier(),
                 TextEntry::make('source')->badge(),
                 TextEntry::make('fournisseur.nom')->label('Fournisseur'),
                 TextEntry::make('numero_fournisseur')->label('N° facture fournisseur')->placeholder('—'),
@@ -159,7 +178,7 @@ class FactureAchatResource extends Resource
                     ->label('Total après avoirs fournisseur')
                     ->state(fn (FactureAchat $record): string => app(CalculateurLigne::class)->enEuros($record->totalTtcApresAvoirsFournisseurEnCentimes()))
                     ->visible(fn (FactureAchat $record): bool => $record->avoirsFournisseurEmis()->exists()),
-                FactureResource::ventilationTvaEntry(),
+                self::tvaParTauxEntry(),
             ])->columns(3),
 
             InfolistSection::make('Avoirs fournisseur émis')
@@ -200,11 +219,13 @@ class FactureAchatResource extends Resource
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
+                self::colonneTvaAVerifier(),
                 Tables\Columns\TextColumn::make('date_facture')->label('Date facture')->jour(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFactureAchat::class),
                 Tables\Filters\SelectFilter::make('source')->options(SourceFactureAchat::class),
+                self::filtreTvaAVerifier(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -234,6 +255,89 @@ class FactureAchatResource extends Resource
                     static::suppressionEnMasse(fn (FactureAchat $factureAchat) => app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $factureAchat)),
                 ]),
             ]);
+    }
+
+    /**
+     * La marque « TVA à vérifier » d'une facture d'achat ou d'un avoir
+     * fournisseur (voir TvaDuFournisseur), sur sa fiche : un montant saisi
+     * s'écarte au-delà de la tolérance de ce que PILIQI calcule, et l'écart
+     * a été confirmé. Visible de tous ceux qui voient les achats, cabinet
+     * lié compris, qui n'a pas accès au journal d'audit.
+     */
+    public static function marqueTvaAVerifier(): TextEntry
+    {
+        return TextEntry::make('tva_a_verifier')
+            ->label('TVA')
+            ->state(fn (FactureAchat|AvoirFournisseur $record): ?string => $record->tva_a_verifier ? self::TVA_A_VERIFIER : null)
+            ->badge()
+            ->color('warning')
+            ->helperText('Un montant saisi s\'écarte de ce que PILIQI calcule au-delà de la tolérance, et l\'écart a été confirmé : vérifiez le document du fournisseur. Une TVA facturée à tort n\'est pas déductible.')
+            ->visible(fn (FactureAchat|AvoirFournisseur $record): bool => (bool) $record->tva_a_verifier);
+    }
+
+    /**
+     * La TVA de chaque taux d'une facture d'achat ou d'un avoir fournisseur,
+     * sur sa fiche : sa base, la TVA du document du fournisseur, retenue,
+     * et, quand elle en diffère, celle que PILIQI calcule depuis les lignes
+     * (« TVA du fournisseur 6,00 € — calcul depuis les lignes : 6,01 € ») ;
+     * pour un écart confirmé, qui l'a confirmé et quand.
+     */
+    public static function tvaParTauxEntry(): RepeatableEntry
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return RepeatableEntry::make('tva_du_fournisseur')
+            ->label('TVA par taux')
+            ->state(fn (FactureAchat|AvoirFournisseur $record) => $record->taux()->get())
+            ->schema([
+                TextEntry::make('taux_tva')
+                    ->label('Taux')
+                    ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): string => str_replace('.', ',', self::pourcentageEnTexte($record->taux_tva)).' %'),
+                TextEntry::make('base_ht')
+                    ->label('Base HT')
+                    ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): string => $calculateur->enEuros($calculateur->enCentiemes($record->base_ht))),
+                TextEntry::make('montant_tva')
+                    ->label('TVA du fournisseur')
+                    ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): string => $calculateur->enEuros($calculateur->enCentiemes($record->montant_tva)))
+                    ->helperText(fn (TauxFactureAchat|TauxAvoirFournisseur $record): ?string => $record->montant_tva === $record->montant_tva_calcule
+                        ? null
+                        : 'Calcul depuis les lignes : '.$calculateur->enEuros($calculateur->enCentiemes($record->montant_tva_calcule))),
+                TextEntry::make('ecart_confirme')
+                    ->label('Écart')
+                    ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): ?string => $record->ecartConfirme()
+                        ? 'Confirmé par '.($record->ecart_confirme_par_nom ?? '—').' le '.self::calendrierDuMagasin()->afficher($record->ecart_confirme_le, 'd/m/Y')
+                        : null)
+                    ->placeholder('Dans la tolérance'),
+            ])
+            ->columns(4)
+            ->columnSpanFull();
+    }
+
+    /**
+     * La marque « TVA à vérifier » dans la liste des factures d'achat ou des
+     * avoirs fournisseur.
+     */
+    public static function colonneTvaAVerifier(): Tables\Columns\TextColumn
+    {
+        return Tables\Columns\TextColumn::make('tva_a_verifier')
+            ->label('TVA')
+            ->state(fn (FactureAchat|AvoirFournisseur $record): ?string => $record->tva_a_verifier ? self::TVA_A_VERIFIER : null)
+            ->badge()
+            ->color('warning')
+            ->placeholder('—');
+    }
+
+    /**
+     * Le filtre des documents marqués « TVA à vérifier », dans la liste des
+     * factures d'achat ou des avoirs fournisseur.
+     */
+    public static function filtreTvaAVerifier(): Tables\Filters\Filter
+    {
+        return Tables\Filters\Filter::make('tva_a_verifier')
+            ->label(self::TVA_A_VERIFIER)
+            ->toggle()
+            // Filament passe la requête par le nom du paramètre : $query.
+            ->query(fn (Builder $query): Builder => $query->where('tva_a_verifier', true));
     }
 
     /**
@@ -405,7 +509,11 @@ class FactureAchatResource extends Resource
                     'exists' => self::CHOISIR_UNE_FACTURE_RETOURNABLE,
                 ])
                 ->live()
-                ->afterStateUpdated(fn (Set $set, mixed $state) => $set('lignes', self::lignesDuRepeteur(self::lignesRetournables(self::factureAchatRetournable($state)))))
+                ->afterStateUpdated(function (Set $set, mixed $state): void {
+                    $lignes = self::lignesRetournables(self::factureAchatRetournable($state));
+                    $set('lignes', self::lignesDuRepeteur($lignes));
+                    $set('taux', self::tauxDesRetours($lignes, []));
+                })
                 ->visible($factureAchat === null),
             Repeater::make('lignes')
                 ->label('Lignes à retourner')
@@ -416,13 +524,55 @@ class FactureAchatResource extends Resource
                         ->disabled()
                         ->dehydrated(false),
                     self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => self::ligneAchat($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
-                        ->rule(self::regleStockDuProduitRetourne()),
+                        ->rule(self::regleStockDuProduitRetourne())
+                        ->live(onBlur: true),
+                    TextInput::make('montant_ht')
+                        ->label('HT sur la note d\'avoir')
+                        ->numeric()
+                        ->minValue(0)
+                        ->prefix('€')
+                        ->rule(new MontantAuCentime)
+                        ->helperText(fn (Get $get, TextInput $component): string => self::propositionDuRetour($get, $component))
+                        ->live(onBlur: true),
                 ])
-                ->columns(3)
+                ->columns(4)
                 ->addable(false)
                 ->deletable(true)
                 ->default($factureAchat === null ? [] : self::lignesRetournables($factureAchat, $record instanceof LigneAchat ? $record : null))
+                ->afterStateUpdated(fn (Get $get, Set $set) => $set('taux', self::tauxDesRetours(array_values($get('lignes') ?? []), $get('taux') ?? [])))
                 ->visible(fn (Get $get): bool => $factureAchat !== null || filled($get('facture_achat_id'))),
+            Repeater::make('taux')
+                ->label('TVA de la note d\'avoir du fournisseur')
+                ->helperText('PILIQI propose la TVA des articles retournés. Si la note d\'avoir du fournisseur en écrit une autre, saisissez la sienne : c\'est elle qui prime.')
+                ->schema([
+                    Hidden::make('taux_tva'),
+                    TextInput::make('montant_tva')
+                        ->label(fn (Get $get): string => 'TVA à '.str_replace('.', ',', self::pourcentageEnTexte($get('taux_tva'))).' % sur la note d\'avoir')
+                        ->numeric()
+                        ->minValue(0)
+                        ->suffix('€')
+                        ->rule(new MontantAuCentime)
+                        ->helperText(fn (Get $get): string => self::propositionDeLaTvaDuRetour($get))
+                        ->live(onBlur: true),
+                ])
+                ->addable(false)
+                ->deletable(false)
+                ->reorderable(false)
+                ->default($factureAchat === null ? [] : self::tauxDesRetours(self::lignesRetournables($factureAchat, $record instanceof LigneAchat ? $record : null), []))
+                ->visible(fn (Get $get): bool => filled($get('taux'))),
+            TextInput::make('total_ttc_controle')
+                ->label('Total TTC de la note d\'avoir (contrôle)')
+                ->helperText('Facultatif : le total TTC qu\'écrit la note d\'avoir du fournisseur, pour vérifier vos saisies.')
+                ->numeric()
+                ->minValue(0)
+                ->suffix('€')
+                ->rule(new MontantAuCentime),
+            Checkbox::make('confirmer_les_ecarts')
+                ->label('Je confirme ces montants : ce sont ceux de la note d\'avoir du fournisseur. L\'avoir sera marqué « TVA à vérifier ».')
+                ->helperText(fn (Get $get): HtmlString => new HtmlString(implode('<br>', array_map(e(...), self::avertissementsDuRetour($get)))))
+                ->visible(fn (Get $get): bool => self::avertissementsDuRetour($get) !== [])
+                ->accepted()
+                ->validationMessages(['accepted' => 'Confirmez les montants de la note d\'avoir, ou corrigez votre saisie.']),
             TextInput::make('numero_fournisseur')
                 ->label('N° de l\'avoir du fournisseur')
                 ->maxLength(CreerAvoirFournisseurAction::LONGUEUR_NUMERO_FOURNISSEUR)
@@ -430,6 +580,143 @@ class FactureAchatResource extends Resource
                 ->helperText(fn (?string $state): ?Htmlable => blank($state) ? ClientResource::enEvidence(self::AVERTISSEMENT_SANS_NUMERO_FOURNISSEUR) : null),
             Textarea::make('motif')->label('Motif du retour')->required(),
         ];
+    }
+
+    /**
+     * Les retours que la fenêtre de l'avoir propose, tels que leur chiffrage
+     * les reçoit (voir ChiffrageDUnAvoirFournisseur) : chaque ligne d'achat
+     * du magasin désignée, avec une quantité et un HT lisibles ; les autres
+     * ne comptent pas encore.
+     *
+     * @param  array<array-key, mixed>  $lignes
+     * @return array<array-key, array{ligne_achat: LigneAchat, quantite: int, montant_ht_saisi: string|null}>
+     */
+    private static function retoursSaisis(array $lignes): array
+    {
+        $retours = [];
+
+        foreach ($lignes as $cle => $ligne) {
+            $ligneAchat = is_array($ligne) ? self::ligneAchat($ligne['ligne_achat_id'] ?? null) : null;
+
+            try {
+                if ($ligneAchat !== null) {
+                    $retours[$cle] = [
+                        'ligne_achat' => $ligneAchat,
+                        'quantite' => QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null),
+                        'montant_ht_saisi' => filled($ligne['montant_ht'] ?? null) ? app(CalculateurLigne::class)->enDecimal(SaisieDecimale::montantAuCentime($ligne['montant_ht'])) : null,
+                    ];
+                }
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+        }
+
+        return $retours;
+    }
+
+    /**
+     * L'aperçu de l'avoir en cours de saisie : ses retours, avec la TVA que
+     * la personne a saisie pour chaque taux, chiffrés comme à l'émission
+     * (voir ChiffrageDUnAvoirFournisseur) ; une saisie de TVA qu'aucune note
+     * d'avoir ne porte laisse la proposition, que l'émission refusera avec
+     * son motif.
+     */
+    private static function apercuDuRetour(mixed $lignes, mixed $taux): DocumentChiffre
+    {
+        $retours = self::retoursSaisis(is_array($lignes) ? $lignes : []);
+        $chiffrage = app(ChiffrageDUnAvoirFournisseur::class);
+
+        try {
+            return $chiffrage->chiffrer($retours, self::tvaEcriteDuFormulaire($taux));
+        } catch (InvalidArgumentException) {
+            try {
+                return $chiffrage->chiffrer($retours, []);
+            } catch (InvalidArgumentException) {
+                return DocumentChiffre::vide();
+            }
+        }
+    }
+
+    /**
+     * Les rangées de TVA de la fenêtre de l'avoir : une par taux des lignes
+     * retournées, dans l'ordre où il apparaît ; une TVA déjà saisie pour un
+     * taux qui reste se garde.
+     *
+     * @param  array<array-key, mixed>  $lignes
+     * @param  array<array-key, mixed>  $tauxSaisis
+     * @return array<string, array{taux_tva: string, montant_tva: mixed}>
+     */
+    private static function tauxDesRetours(array $lignes, array $tauxSaisis): array
+    {
+        $saisies = collect($tauxSaisis)
+            ->filter(fn (mixed $taux): bool => is_array($taux) && filled($taux['taux_tva'] ?? null))
+            ->mapWithKeys(fn (array $taux): array => [self::cleDuTaux($taux['taux_tva']) => $taux['montant_tva'] ?? null]);
+        $taux = [];
+
+        foreach ($lignes as $ligne) {
+            $ligneAchat = is_array($ligne) ? self::ligneAchat($ligne['ligne_achat_id'] ?? null) : null;
+
+            if ($ligneAchat !== null) {
+                $cle = self::cleDuTaux($ligneAchat->taux_tva);
+                $taux[$cle] = ['taux_tva' => $ligneAchat->taux_tva, 'montant_tva' => $saisies->get($cle)];
+            }
+        }
+
+        return $taux;
+    }
+
+    /**
+     * Sous le HT d'une ligne retournée : le HT et la TVA que PILIQI propose
+     * pour ce retour, et, quand le HT de la note d'avoir s'en écarte de plus
+     * de 0,02 €, l'avertissement.
+     */
+    private static function propositionDuRetour(Get $get, TextInput $champ): string
+    {
+        $ligne = self::apercuDuRetour($get('../../lignes'), $get('../../taux'))->lignes[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? null;
+
+        if ($ligne === null) {
+            return 'Le HT qu\'écrit la note d\'avoir du fournisseur pour cette ligne, s\'il diffère de la proposition de PILIQI.';
+        }
+
+        $calculateur = app(CalculateurLigne::class);
+        $ecart = abs($calculateur->enCentiemes($ligne['montant_ht']) - $calculateur->enCentiemes($ligne['montant_ht_calcule']));
+        $proposition = 'Proposition de PILIQI : '.$calculateur->enEuros($calculateur->enCentiemes($ligne['montant_ht_calcule'])).' HT. Laissez vide pour la garder.';
+
+        return $ecart > EcartsDUnTaux::TOLERANCE_DU_HT_D_UNE_LIGNE ? $proposition.' Écart de '.$calculateur->enEuros($ecart).', au-delà de 0,02 € : il faudra le confirmer.' : $proposition;
+    }
+
+    /**
+     * Sous la TVA d'un taux de l'avoir : la TVA que PILIQI propose pour les
+     * articles retournés, et, au-delà de la tolérance, l'avertissement.
+     */
+    private static function propositionDeLaTvaDuRetour(Get $get): string
+    {
+        $document = self::apercuDuRetour($get('../../lignes'), $get('../../taux'));
+        $taux = self::tauxDeLaRangee($get);
+        $montants = $document->parTaux[$taux] ?? null;
+
+        if ($montants === null) {
+            return '';
+        }
+
+        $calculateur = app(CalculateurLigne::class);
+        $proposition = 'Base HT '.$calculateur->enEuros($calculateur->enCentiemes($montants['montant_ht'])).' · proposition de PILIQI : '.$calculateur->enEuros($calculateur->enCentiemes($montants['montant_tva_calcule'])).'. Laissez vide pour la garder.';
+        $ecart = app(TvaDuFournisseur::class)->ecarts($document)[$taux] ?? null;
+
+        return $ecart !== null && $ecart->tvaHorsTolerance() ? $proposition.' '.implode(' ', array_slice($ecart->avertissements(), -1)) : $proposition;
+    }
+
+    /**
+     * Les écarts de l'avoir au-delà de la tolérance : chaque avertissement,
+     * que la case de confirmation montre.
+     *
+     * @return list<string>
+     */
+    private static function avertissementsDuRetour(Get $get): array
+    {
+        $ecarts = app(TvaDuFournisseur::class)->ecartsAConfirmer(self::apercuDuRetour($get('lignes'), $get('taux')), null);
+
+        return array_merge(...array_map(fn (EcartsDUnTaux $ecart): array => $ecart->avertissements(), $ecarts));
     }
 
     /**
@@ -448,6 +735,7 @@ class FactureAchatResource extends Resource
             $data['motif'],
             $data['numero_fournisseur'] ?? null,
             $data['jeton'],
+            self::montantsDuFournisseur($data),
         );
         $avis = Notification::make()->title("Avoir fournisseur {$avoir->numero} émis.");
 

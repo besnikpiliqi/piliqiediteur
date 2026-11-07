@@ -9,6 +9,7 @@ use App\Domain\Catalogue\Enums\OrigineProduit;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
@@ -32,7 +33,8 @@ use LogicException;
  * produits naissent, dans l'ordre de ses lignes et dans le contexte
  * d'origine d'un inventaire d'ouverture (voir OrigineDesProduits), à leur
  * coût saisi, sans fournisseur ; chaque ligne fait entrer son stock au
- * coût saisi, sans TVA, si son produit suit son stock, un produit qui ne
+ * coût saisi (six décimales au plus), au dix-millième d'euro du coût
+ * moyen, sans TVA, si son produit suit son stock, un produit qui ne
  * le suit pas ne recevant que ce coût (voir
  * StockLedgerService::entrerALInventaireDOuverture()) ; chaque ligne
  * garde alors le suivi du stock de son produit et la valeur du stock
@@ -85,6 +87,7 @@ class ValiderInventaireOuvertureAction
         private readonly OperateurCourant $operateur,
         private readonly ActionsUniques $actionsUniques,
         private readonly JournalAudit $journalAudit,
+        private readonly CalculateurLigne $calculateur,
     ) {}
 
     /**
@@ -151,7 +154,7 @@ class ValiderInventaireOuvertureAction
         ])->save();
 
         foreach ($lignes as $ligne) {
-            $this->stock->entrerALInventaireDOuverture($ligne->produit, $ligne->quantite, (float) $ligne->cout_unitaire_ht, $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
+            $this->stock->entrerALInventaireDOuverture($ligne->produit, $ligne->quantite, $this->calculateur->arrondirAuDixMillieme((float) $ligne->cout_unitaire_ht), $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
         }
 
         $this->journalAudit->inscrire(ActionAuditee::InventaireOuvertureValide, $compte, $magasin, null, [

@@ -225,8 +225,11 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(['parametre' => 'statut_magasin', 'magasin' => ['id' => $demonstration->id, 'nom' => 'Démonstration'], 'ancienne_valeur' => 'actif', 'nouvelle_valeur' => 'ferme'], $statut);
         $this->assertNotContains('100', $this->codesDuJournal($reel));
         $this->assertNotContains('105', $this->codesDuJournal($reel));
+        // La facture d'achat fictive que valide l'ouverture (voir
+        // CatalogueDeDemonstration) s'inscrit, comme toute validation, dans
+        // la chaîne du magasin de démonstration, avant son ouverture.
         $this->assertSame(
-            [ActionAuditee::DemonstrationOuverte, ActionAuditee::DemonstrationFermee],
+            [ActionAuditee::FactureAchatValidee, ActionAuditee::DemonstrationOuverte, ActionAuditee::DemonstrationFermee],
             app(TenantContext::class)->runAsSociete($societe, fn () => EntreeAudit::query()->where('magasin_id', $demonstration->id)->orderBy('id')->pluck('action')->all()),
         );
     }

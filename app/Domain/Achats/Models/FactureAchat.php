@@ -9,7 +9,6 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -50,13 +49,13 @@ class FactureAchat extends Model
     }
 
     /** @use HasFactory<FactureAchatFactory> */
-    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
+    use BelongsToMagasin, HasFactory;
 
     protected $table = 'factures_achat';
 
-    // numero, rang_validation, statut, date_validation, totaux : jamais en
-    // mass assignment, uniquement via
-    // CreerFactureAchatAction/ValiderFactureAchatAction.
+    // numero, rang_validation, statut, date_validation, totaux,
+    // tva_a_verifier : jamais en mass assignment, uniquement via
+    // ConstructeurLigneAchat, TvaDuFournisseur et ValiderFactureAchatAction.
     protected $fillable = [
         'fournisseur_id',
         'numero_fournisseur',
@@ -86,6 +85,7 @@ class FactureAchat extends Model
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',
+            'tva_a_verifier' => 'boolean',
             'escompte_pourcentage' => 'decimal:2',
         ];
     }
@@ -151,6 +151,15 @@ class FactureAchat extends Model
         return $this->hasMany(LigneAchat::class)->orderBy('ordre')->orderBy('id');
     }
 
+    /**
+     * Sa TVA, taux par taux, telle que l'écrit la facture du fournisseur
+     * (voir TvaDuFournisseur), dans l'ordre où chaque taux apparaît.
+     */
+    public function taux(): HasMany
+    {
+        return $this->hasMany(TauxFactureAchat::class)->orderBy('ordre')->orderBy('id');
+    }
+
     public function avoirsFournisseur(): HasMany
     {
         return $this->hasMany(AvoirFournisseur::class);
@@ -212,6 +221,50 @@ class FactureAchat extends Model
         return $calculateur->enCentiemes($this->total_ttc) - $this->avoirsFournisseurEmis()
             ->get(['total_ttc'])
             ->sum(fn (AvoirFournisseur $avoir): int => $calculateur->enCentiemes($avoir->total_ttc));
+    }
+
+    /**
+     * Ce que le journal d'audit retient de la facture d'achat, à sa
+     * validation et à chaque correction d'une facture validée (voir
+     * ActionAuditee::FactureAchatValidee et FactureAchatModifiee) : notre
+     * numéro, celui du fournisseur, sa date, son escompte, ses totaux, sa
+     * marque « TVA à vérifier », la base, la TVA retenue, la TVA calculée
+     * et la TVA saisie de chaque taux, et, pour chaque ligne, sa référence,
+     * sa quantité, son PU HT, sa remise, son taux, son HT retenu, son HT
+     * saisi et sa TVA ; ni le fournisseur ni les notes, qui restent sur la
+     * facture.
+     *
+     * @return array<string, mixed>
+     */
+    public function valeursAuditees(): array
+    {
+        return [
+            'facture_achat' => $this->numero,
+            'numero_fournisseur' => $this->numero_fournisseur,
+            'date_facture' => $this->date_facture,
+            'escompte_pourcentage' => $this->escompte_pourcentage,
+            'total_ht' => $this->total_ht,
+            'total_tva' => $this->total_tva,
+            'total_ttc' => $this->total_ttc,
+            'tva_a_verifier' => (bool) $this->tva_a_verifier,
+            'taux' => $this->taux()->get()->map(fn (TauxFactureAchat $taux): array => [
+                'taux_tva' => $taux->taux_tva,
+                'base_ht' => $taux->base_ht,
+                'montant_tva' => $taux->montant_tva,
+                'montant_tva_calcule' => $taux->montant_tva_calcule,
+                'montant_tva_saisi' => $taux->montant_tva_saisi,
+            ])->values()->all(),
+            'lignes' => $this->lignes()->get()->map(fn (LigneAchat $ligne): array => [
+                'reference' => $ligne->reference,
+                'quantite' => $ligne->quantite,
+                'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
+                'remise_pourcentage' => $ligne->remise_pourcentage,
+                'taux_tva' => $ligne->taux_tva,
+                'montant_ht' => $ligne->montant_ht,
+                'montant_ht_saisi' => $ligne->montant_ht_saisi,
+                'montant_tva' => $ligne->montant_tva,
+            ])->values()->all(),
+        ];
     }
 
     /**

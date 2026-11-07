@@ -33,11 +33,13 @@ use LogicException;
  * de la casse.
  *
  * Chaque ligne porte une quantité entière d'au moins un article et un coût
- * unitaire HT au centime, jamais négatif. Elle retient si son produit suit
+ * unitaire HT tel que saisi, six décimales au plus, jamais arrondi ni
+ * négatif (décision de l'éditeur du 02/11/2026, T2, voir
+ * SaisieDecimale::enMillioniemes()). Elle retient si son produit suit
  * son stock : seule une telle ligne fait entrer son stock, et sa valeur est
- * quantité x coût, exacte en centimes ; un produit qui ne suit pas son
- * stock ne reçoit que son coût de départ, et sa ligne n'a aucune valeur de
- * stock (voir StockLedgerService::entrerALInventaireDOuverture()). La
+ * quantité x coût, arrondie une fois au centime ; un produit qui ne suit
+ * pas son stock ne reçoit que son coût de départ, et sa ligne n'a aucune
+ * valeur de stock (voir StockLedgerService::entrerALInventaireDOuverture()). La
  * valeur de l'inventaire est la somme de ses lignes : la valeur du stock
  * qu'il fait entrer. Dans un brouillon, le suivi du stock se lit sur la
  * fiche du produit à chaque enregistrement ; la validation le relit, sous
@@ -118,7 +120,7 @@ class ConstructeurLigneInventaire
                 'description' => $produit->nom,
                 'reference' => $produit->reference,
                 'quantite' => $quantite,
-                'cout_unitaire_ht' => $this->calculateur->enDecimal($cout),
+                'cout_unitaire_ht' => $this->calculateur->prixDAchatEnDecimal($cout),
                 'suivi_stock' => $suiviStock,
                 'valeur_ht' => $this->calculateur->enDecimal($valeur),
                 'ordre' => $ordre,
@@ -148,7 +150,7 @@ class ConstructeurLigneInventaire
 
         foreach ($lignes as $ligne) {
             $suiviStock = (bool) $ligne->produit->suivi_stock;
-            $valeur = $this->valeurDuStock($ligne->quantite, SaisieDecimale::enCentiemes($ligne->cout_unitaire_ht), $suiviStock);
+            $valeur = $this->valeurDuStock($ligne->quantite, SaisieDecimale::enMillioniemes($ligne->cout_unitaire_ht), $suiviStock);
 
             $ligne->update(['suivi_stock' => $suiviStock, 'valeur_ht' => $this->calculateur->enDecimal($valeur)]);
 
@@ -226,7 +228,8 @@ class ConstructeurLigneInventaire
     }
 
     /**
-     * Le coût unitaire HT saisi, en centimes, jamais négatif.
+     * Le coût unitaire HT saisi, en millionièmes d'euro, tel que saisi, six
+     * décimales au plus, jamais négatif.
      *
      * @throws InvalidArgumentException
      */
@@ -236,7 +239,7 @@ class ConstructeurLigneInventaire
             throw new InvalidArgumentException('Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.');
         }
 
-        $cout = SaisieDecimale::enCentiemes($saisie);
+        $cout = SaisieDecimale::enMillioniemes($saisie);
 
         if ($cout < 0) {
             throw new InvalidArgumentException('Le coût unitaire d\'un produit ne peut pas être négatif.');
@@ -247,16 +250,19 @@ class ConstructeurLigneInventaire
 
     /**
      * La valeur du stock qu'une ligne fait entrer, en centimes : quantité x
-     * coût unitaire, dans les limites des colonnes ; zéro pour un produit
-     * qui ne suit pas son stock, dont rien n'entre en stock.
+     * coût unitaire (en millionièmes d'euro), arrondie une fois au centime le
+     * plus proche, un demi-centime au centime supérieur, dans les limites des
+     * colonnes -- 1 000 x 0,1234 € valent 123,40 € ; zéro pour un produit qui
+     * ne suit pas son stock, dont rien n'entre en stock.
      *
      * @throws InvalidArgumentException
      */
     private function valeurDuStock(int $quantite, int $cout, bool $suiviStock): int
     {
-        $valeur = $quantite * $cout;
+        $millioniemes = $quantite * $cout;
+        $valeur = is_int($millioniemes) ? intdiv($millioniemes, 10000) + (2 * ($millioniemes % 10000) >= 10000 ? 1 : 0) : null;
 
-        if ($quantite > self::QUANTITE_MAXIMUM || ! is_int($valeur) || $valeur > self::VALEUR_MAXIMUM) {
+        if ($quantite > self::QUANTITE_MAXIMUM || $valeur === null || $valeur > self::VALEUR_MAXIMUM) {
             throw new InvalidArgumentException('Cette ligne dépasse ce que le logiciel accepte : réduisez sa quantité ou son coût.');
         }
 

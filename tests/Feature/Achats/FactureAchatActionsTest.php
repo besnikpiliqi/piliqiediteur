@@ -931,7 +931,7 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5.5],
         ]);
 
-        $this->assertSame(6.0, $produit->fresh()->dernierPrixDAchatHt());
+        $this->assertSame('6.00', $produit->fresh()->dernierPrixDAchatHt());
     }
 
     public function test_corriger_lescompte_dune_facture_dachat_validee_recalcule_le_cout_dachat(): void

@@ -43,9 +43,18 @@ return new class extends Migration
             $table->unsignedBigInteger('rang_validation')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('notes')->nullable();
+            // Sommes exactes de ses taux (voir la migration
+            // create_taux_factures_achat_table) : la base et la TVA de
+            // chaque taux, celles qu'écrit la facture du fournisseur.
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);
+            // « TVA à vérifier » : un HT de ligne ou une TVA de taux saisis
+            // au-delà de la tolérance, confirmés (voir TvaDuFournisseur),
+            // visible de tous ceux qui voient les achats, cabinet lié
+            // compris ; elle se lève quand la facture est corrigée dans la
+            // tolérance.
+            $table->boolean('tva_a_verifier')->default(false);
             // Réduction accordée par le fournisseur pour un paiement rapide :
             // elle baisse le coût d'achat des produits (voir
             // LigneAchat::coutUnitaireHt()), pas les totaux de la facture.
@@ -55,6 +64,7 @@ return new class extends Migration
             $table->unique(['magasin_id', 'numero']);
             $table->unique(['magasin_id', 'rang_validation']);
             $table->index(['magasin_id', 'fournisseur_id']);
+            $table->index(['magasin_id', 'tva_a_verifier']);
         });
 
         // Seule une société qui a des articles achète des marchandises

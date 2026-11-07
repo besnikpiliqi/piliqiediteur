@@ -26,10 +26,10 @@ return new class extends Migration
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles, au moins 1 (voir QuantiteEntiere).
             $table->unsignedInteger('quantite');
-            // Le coût unitaire hors taxe du stock existant, saisi au
-            // centime : le coût moyen de départ du produit, sans TVA ni
-            // fournisseur.
-            $table->decimal('cout_unitaire_ht', 12, 2);
+            // Le coût unitaire hors taxe du stock existant, tel que saisi,
+            // six décimales au plus, jamais arrondi (voir PrixDAchat) : le
+            // coût moyen de départ du produit, sans TVA ni fournisseur.
+            $table->decimal('cout_unitaire_ht', 18, 6);
             // Le produit suit-il son stock ? Lu sur sa fiche à chaque
             // enregistrement du brouillon, puis, définitivement, à la
             // validation, sous le verrou du produit (voir
@@ -38,8 +38,8 @@ return new class extends Migration
             // coût de départ.
             $table->boolean('suivi_stock');
             // La valeur du stock que la ligne fait entrer : quantité x coût
-            // unitaire, exacte au centime, ou zéro pour un produit qui ne
-            // suit pas son stock.
+            // unitaire, arrondie une fois au centime, ou zéro pour un
+            // produit qui ne suit pas son stock.
             $table->decimal('valeur_ht', 14, 2);
             $table->unsignedSmallInteger('ordre')->default(0);
             $table->timestamps();

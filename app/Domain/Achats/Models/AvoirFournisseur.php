@@ -6,7 +6,6 @@ use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Database\Factories\AvoirFournisseurFactory;
@@ -42,12 +41,13 @@ class AvoirFournisseur extends Model
     }
 
     /** @use HasFactory<AvoirFournisseurFactory> */
-    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
+    use BelongsToMagasin, HasFactory;
 
     protected $table = 'avoirs_fournisseur';
 
-    // numero, statut, date_emission, totaux : jamais en mass assignment,
-    // uniquement via CreerAvoirFournisseurAction/EmettreAvoirFournisseurAction.
+    // numero, statut, date_emission, totaux, tva_a_verifier : jamais en
+    // mass assignment, uniquement via CreerAvoirFournisseurAction,
+    // EmettreAvoirFournisseurAction et TvaDuFournisseur.
     protected $fillable = [
         'facture_achat_id',
         'numero_fournisseur',
@@ -70,6 +70,7 @@ class AvoirFournisseur extends Model
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',
+            'tva_a_verifier' => 'boolean',
         ];
     }
 
@@ -89,6 +90,16 @@ class AvoirFournisseur extends Model
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneAvoirFournisseur::class)->orderBy('ordre')->orderBy('id');
+    }
+
+    /**
+     * Sa TVA, taux par taux, telle que l'écrit la note d'avoir du
+     * fournisseur (voir TvaDuFournisseur), dans l'ordre où chaque taux
+     * apparaît.
+     */
+    public function taux(): HasMany
+    {
+        return $this->hasMany(TauxAvoirFournisseur::class)->orderBy('ordre')->orderBy('id');
     }
 
     /**

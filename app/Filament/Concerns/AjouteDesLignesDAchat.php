@@ -2,12 +2,20 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Models\TauxFactureAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
+use App\Domain\Achats\Services\EcartsDUnTaux;
+use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Rules\MontantAuCentime;
+use App\Domain\Facturation\Rules\PrixDAchatEcrit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
@@ -15,6 +23,7 @@ use App\Filament\App\Resources\ProduitResource;
 use Closure;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Hidden;
@@ -28,6 +37,8 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Support\Enums\MaxWidth;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 
 /**
@@ -36,6 +47,15 @@ use InvalidArgumentException;
  * facture et ce qu'il se vendra en magasin) et apparaît en lecture seule
  * dans la facture. Le bouton « Modifier » d'une ligne rouvre le même
  * formulaire.
+ *
+ * Les montants sont ceux qu'écrit la facture du fournisseur (décision de
+ * l'éditeur du 02/11/2026, T1 et T2, voir TvaDuFournisseur) : le PU HT se
+ * saisit tel qu'elle l'écrit, six décimales au plus, et s'affiche tel qu'il
+ * est enregistré ; PILIQI propose le HT de chaque ligne et la TVA de chaque
+ * taux, que la personne remplace par ceux de la facture (voir
+ * tvaDeLaFacture()) ; un total TTC se saisit pour contrôle. Un écart au-delà
+ * de la tolérance s'affiche avec son avertissement et demande la case de
+ * confirmation, qui marque la facture « TVA à vérifier ».
  *
  * Prix d'achat HT et prix de vente TTC sont deux champs distincts : le
  * prix de vente ne change jamais le prix d'achat, et seul le barème du
@@ -74,9 +94,199 @@ trait AjouteDesLignesDAchat
                 ->addable(false)
                 ->extraItemActions([self::actionModifierLaLigne()])
                 ->required()
-                ->validationMessages(['required' => 'Ajoutez au moins un produit à la facture.']),
+                ->validationMessages(['required' => 'Ajoutez au moins un produit à la facture.'])
+                // Une ligne ajoutée, modifiée ou retirée change les taux de
+                // la facture : leur TVA suit (voir tvaDeLaFacture()).
+                ->afterStateUpdated(fn (Get $get, Set $set) => self::synchroniserLesTaux($get, $set)),
             Actions::make([self::actionAjouterUnProduit()])->alignCenter(),
         ];
+    }
+
+    /**
+     * La TVA de chaque taux de la facture, telle que l'écrit la facture du
+     * fournisseur (T1), le total TTC saisi pour contrôle, et la case qui
+     * confirme les écarts au-delà de la tolérance : une rangée par taux des
+     * lignes, sa base et la TVA que PILIQI propose, que la TVA de la
+     * facture remplace quand elle en diffère.
+     *
+     * @return array<Component>
+     */
+    public static function tvaDeLaFacture(): array
+    {
+        return [
+            Repeater::make('taux')
+                ->label('TVA de la facture du fournisseur')
+                ->helperText('PILIQI propose la TVA de chaque taux, calculée sur le total HT de ses lignes. Si la facture du fournisseur en écrit une autre, saisissez la sienne : c\'est elle qui est déductible.')
+                ->schema([
+                    Hidden::make('taux_tva'),
+                    TextInput::make('montant_tva')
+                        ->label(fn (Get $get): string => 'TVA à '.str_replace('.', ',', self::pourcentageEnTexte($get('taux_tva'))).' % sur la facture')
+                        ->numeric()
+                        ->minValue(0)
+                        ->suffix('€')
+                        ->rule(new MontantAuCentime)
+                        ->placeholder(fn (Get $get): string => self::tvaProposee($get))
+                        ->helperText(fn (Get $get): string => self::detailDeLaTva($get))
+                        ->live(onBlur: true),
+                ])
+                ->addable(false)
+                ->deletable(false)
+                ->reorderable(false)
+                ->defaultItems(0)
+                ->visible(fn (Get $get): bool => filled($get('taux'))),
+            // Jamais « total_ttc » : la page de modification remplit le
+            // formulaire depuis les colonnes de la facture, dont son total.
+            TextInput::make('total_ttc_controle')
+                ->label('Total TTC de la facture (contrôle)')
+                ->helperText('Facultatif : le total TTC qu\'écrit la facture du fournisseur, pour vérifier vos saisies. Il doit valoir le total HT plus la TVA.')
+                ->numeric()
+                ->minValue(0)
+                ->suffix('€')
+                ->rule(new MontantAuCentime)
+                ->live(onBlur: true),
+            Checkbox::make('confirmer_les_ecarts')
+                ->label('Je confirme ces montants : ce sont ceux de la facture du fournisseur. La facture sera marquée « TVA à vérifier ».')
+                ->helperText(fn (Get $get, ?Model $record): HtmlString => new HtmlString(implode('<br>', array_map(e(...), self::avertissementsDesEcarts($get, $record)))))
+                ->visible(fn (Get $get, ?Model $record): bool => self::avertissementsDesEcarts($get, $record) !== [])
+                ->accepted()
+                ->validationMessages(['accepted' => 'Confirmez les montants de la facture, ou corrigez votre saisie.']),
+        ];
+    }
+
+    /**
+     * La saisie de la TVA et du contrôle telle que l'enregistrement la
+     * reçoit (voir MontantsDuFournisseur).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function montantsDuFournisseur(array $data): MontantsDuFournisseur
+    {
+        return MontantsDuFournisseur::depuisLaSaisie([
+            'taux' => $data['taux'] ?? [],
+            'total_ttc' => $data['total_ttc_controle'] ?? null,
+            'confirmation' => $data['confirmer_les_ecarts'] ?? false,
+        ]);
+    }
+
+    /**
+     * La TVA de chaque taux d'une facture enregistrée, telle que son
+     * formulaire la rouvre : celle que la personne avait saisie, sinon
+     * rien, la proposition de PILIQI.
+     *
+     * @return array<string, array{taux_tva: string, montant_tva: string|null}>
+     */
+    public static function tauxDejaEnregistres(FactureAchat $factureAchat): array
+    {
+        return $factureAchat->taux()->get()
+            ->mapWithKeys(fn (TauxFactureAchat $taux): array => [self::cleDuTaux($taux->taux_tva) => ['taux_tva' => $taux->taux_tva, 'montant_tva' => $taux->montant_tva_saisi]])
+            ->all();
+    }
+
+    /**
+     * Les rangées de la TVA suivent les taux des lignes, dans l'ordre où ils
+     * apparaissent : une TVA déjà saisie pour un taux qui reste se garde.
+     */
+    private static function synchroniserLesTaux(Get $get, Set $set): void
+    {
+        $saisies = collect($get('taux') ?? [])
+            ->filter(fn (mixed $taux): bool => is_array($taux) && filled($taux['taux_tva'] ?? null))
+            ->mapWithKeys(fn (array $taux): array => [self::cleDuTaux($taux['taux_tva']) => $taux['montant_tva'] ?? null]);
+
+        $set('taux', collect(array_keys(app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [])->parTaux))
+            ->mapWithKeys(fn (string $taux): array => [self::cleDuTaux($taux) => ['taux_tva' => $taux, 'montant_tva' => $saisies->get(self::cleDuTaux($taux))]])
+            ->all());
+    }
+
+    /**
+     * La clé d'une rangée de TVA : son taux, en centièmes de point.
+     */
+    private static function cleDuTaux(mixed $taux): string
+    {
+        try {
+            return 'taux-'.SaisieDecimale::enCentiemes($taux);
+        } catch (InvalidArgumentException) {
+            return 'taux-'.md5((string) json_encode($taux));
+        }
+    }
+
+    /**
+     * La TVA saisie de chaque taux, telle que l'aperçu la reçoit : une
+     * saisie illisible ou vide ne dit rien.
+     *
+     * @return array<int, int>
+     */
+    private static function tvaEcriteDuFormulaire(mixed $taux): array
+    {
+        $tvaParTaux = [];
+
+        foreach (is_array($taux) ? $taux : [] as $rangee) {
+            try {
+                if (is_array($rangee) && filled($rangee['taux_tva'] ?? null) && filled($rangee['montant_tva'] ?? null)) {
+                    $tvaParTaux[SaisieDecimale::enCentiemes($rangee['taux_tva'])] = SaisieDecimale::montantAuCentime($rangee['montant_tva']);
+                }
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+        }
+
+        return $tvaParTaux;
+    }
+
+    /**
+     * La TVA que PILIQI propose pour le taux de la rangée.
+     */
+    private static function tvaProposee(Get $get): string
+    {
+        $montants = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [])->parTaux[self::tauxDeLaRangee($get)] ?? null;
+
+        return $montants === null ? '' : self::montantEnTexte($montants['montant_tva_calcule']);
+    }
+
+    /**
+     * Sous la TVA d'un taux : sa base, la TVA que PILIQI propose et, quand
+     * la saisie s'en écarte au-delà de la tolérance, l'avertissement.
+     */
+    private static function detailDeLaTva(Get $get): string
+    {
+        $taux = self::tauxDeLaRangee($get);
+        $document = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [], self::tvaEcriteDuFormulaire($get('../../taux')));
+        $montants = $document->parTaux[$taux] ?? null;
+
+        if ($montants === null) {
+            return '';
+        }
+
+        $detail = 'Base HT '.self::montantEnTexte($montants['montant_ht']).' · calcul depuis les lignes : '.self::montantEnTexte($montants['montant_tva_calcule']).'. Laissez vide pour le garder.';
+        $ecart = app(TvaDuFournisseur::class)->ecarts($document)[$taux] ?? null;
+
+        return $ecart !== null && $ecart->tvaHorsTolerance() ? $detail.' '.implode(' ', array_slice($ecart->avertissements(), -1)) : $detail;
+    }
+
+    /**
+     * Le taux de la rangée de TVA, écrit comme sa colonne (« 20.00 »).
+     */
+    private static function tauxDeLaRangee(Get $get): string
+    {
+        try {
+            return app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($get('taux_tva')));
+        } catch (InvalidArgumentException) {
+            return '';
+        }
+    }
+
+    /**
+     * Les écarts au-delà de la tolérance que la saisie n'a pas déjà
+     * confirmés (voir TvaDuFournisseur::ecartsAConfirmer()) : chaque
+     * avertissement, que la case de confirmation montre.
+     *
+     * @return list<string>
+     */
+    private static function avertissementsDesEcarts(Get $get, ?Model $record): array
+    {
+        $document = app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [], self::tvaEcriteDuFormulaire($get('taux')));
+        $ecarts = app(TvaDuFournisseur::class)->ecartsAConfirmer($document, $record instanceof FactureAchat ? $record : null);
+
+        return array_merge(...array_map(fn (EcartsDUnTaux $ecart): array => $ecart->avertissements(), $ecarts));
     }
 
     /**
@@ -97,6 +307,9 @@ trait AjouteDesLignesDAchat
                 fn (string $champ): Hidden => Hidden::make("produit.{$champ}"),
                 array_diff(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT, ['prix_vente_ttc']),
             ),
+            // Le HT de la ligne qu'écrit la facture du fournisseur, quand il
+            // diffère de la proposition de PILIQI (voir formulaireDeLigne()).
+            Hidden::make('montant_ht'),
             TextInput::make('quantite')->label('Quantité')->disabled()->dehydrated(),
             TextInput::make('prix_unitaire_ht')->label('Prix d\'achat HT')->suffix('€')->disabled()->dehydrated(),
             TextInput::make('remise_pourcentage')->label('Remise')->suffix('%')->disabled()->dehydrated(),
@@ -109,9 +322,10 @@ trait AjouteDesLignesDAchat
 
     /**
      * Ce que la ligne coûte au magasin : le prix d'achat x la quantité,
-     * TVA comprise -- jamais un montant de vente. Sa TVA est sa part de
-     * celle de son taux, calculée sur le total HT des lignes de ce taux
-     * (voir ConstructeurLigneAchat::apercu()).
+     * TVA comprise -- jamais un montant de vente. Son HT est celui
+     * qu'écrit la facture du fournisseur, sinon la proposition de PILIQI ;
+     * sa TVA est sa part de celle de son taux (voir
+     * ConstructeurLigneAchat::apercu()).
      */
     private static function montantPayeAuFournisseur(): Placeholder
     {
@@ -122,10 +336,93 @@ trait AjouteDesLignesDAchat
             ->helperText(function (Get $get, Placeholder $component): string {
                 $montants = self::montantsDeLaLigneDAchat($get, $component);
 
-                return ($get('quantite') ?? 0).' x '.self::prixUnitaireEnTexte($get('prix_unitaire_ht')).' HT'
+                return ($get('quantite') ?? 0).' x '.self::prixDAchatEnTexte($get('prix_unitaire_ht')).' HT'
                     .(filled($get('remise_pourcentage')) && (float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
-                    .' = '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
+                    .' = '.self::montantEnTexte($montants['montant_ht_calcule']).' HT'
+                    .($montants['montant_ht'] !== $montants['montant_ht_calcule'] ? ' ; HT de la facture : '.self::montantEnTexte($montants['montant_ht']) : '')
+                    .' + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
             });
+    }
+
+    /**
+     * Le HT que PILIQI propose pour la ligne du formulaire : quantité x PU
+     * HT, remise déduite, arrondi une fois ; aucun tant que la saisie n'est
+     * pas valable.
+     */
+    private static function htProposeEnTexte(Get $get): ?string
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        try {
+            return $calculateur->enEuros($calculateur->htProposeDUneLigneDAchat(
+                SaisieDecimale::enMillioniemes($get('prix_unitaire_ht')),
+                QuantiteEntiere::depuisSaisie($get('quantite')),
+                filled($get('remise_pourcentage')) ? SaisieDecimale::enCentiemes($get('remise_pourcentage')) : 0,
+            ));
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * Sous le HT de la ligne : la proposition de PILIQI, et, quand le HT de
+     * la facture s'en écarte de plus de 0,02 €, l'avertissement ; la
+     * confirmation se demande avec la facture.
+     */
+    private static function detailDuHtDeLaLigne(Get $get): string
+    {
+        $propose = self::htProposeEnTexte($get);
+
+        if ($propose === null) {
+            return 'Le HT qu\'écrit la facture du fournisseur pour cette ligne, s\'il diffère de la quantité × le prix d\'achat, remise déduite.';
+        }
+
+        $detail = "Calcul de PILIQI : {$propose} (quantité × prix d'achat, remise déduite). Laissez vide pour le garder, ou saisissez celui de la facture s'il en diffère.";
+
+        try {
+            $calculateur = app(CalculateurLigne::class);
+            $ecart = abs(SaisieDecimale::montantAuCentime($get('montant_ht')) - $calculateur->htProposeDUneLigneDAchat(
+                SaisieDecimale::enMillioniemes($get('prix_unitaire_ht')),
+                QuantiteEntiere::depuisSaisie($get('quantite')),
+                filled($get('remise_pourcentage')) ? SaisieDecimale::enCentiemes($get('remise_pourcentage')) : 0,
+            ));
+        } catch (InvalidArgumentException) {
+            return $detail;
+        }
+
+        return $ecart > EcartsDUnTaux::TOLERANCE_DU_HT_D_UNE_LIGNE
+            ? $detail.' Écart de '.$calculateur->enEuros($ecart).', au-delà de 0,02 € : vérifiez la facture ; il faudra le confirmer.'
+            : $detail;
+    }
+
+    /**
+     * Un prix d'achat tel qu'il s'affiche : tel qu'il est saisi, sans zéro
+     * inutile au-delà du centime (« 0,1234 € », voir
+     * CalculateurLigne::prixDAchatAffiche()) ; « — » tant qu'il n'est pas un
+     * prix lisible.
+     */
+    private static function prixDAchatEnTexte(mixed $prix): string
+    {
+        try {
+            return app(CalculateurLigne::class)->prixDAchatAffiche(SaisieDecimale::enMillioniemes($prix));
+        } catch (InvalidArgumentException) {
+            return '—';
+        }
+    }
+
+    /**
+     * Un prix d'achat tel que le garde la ligne et que le montre le champ où
+     * il se saisit : « 0.1234 », « 12.50 » (voir
+     * CalculateurLigne::prixDAchatEnDecimal()) ; une saisie illisible reste
+     * telle quelle, que l'enregistrement refuse avec son motif.
+     */
+    private static function prixDAchatDansLeChamp(mixed $prix): mixed
+    {
+        try {
+            return app(CalculateurLigne::class)->prixDAchatEnDecimal(SaisieDecimale::enMillioniemes($prix));
+        } catch (InvalidArgumentException) {
+            return $prix;
+        }
     }
 
     /**
@@ -279,11 +576,12 @@ trait AjouteDesLignesDAchat
                         ->default(1),
                     TextInput::make('prix_unitaire_ht')
                         ->label('Prix d\'achat HT')
-                        ->helperText('Le prix unitaire payé au fournisseur, avant remise.')
+                        ->helperText('Le prix unitaire payé au fournisseur, avant remise, tel que sa facture l\'écrit : six décimales au plus.')
                         ->numeric()
                         ->minValue(0)
                         ->prefix('€')
                         ->required()
+                        ->rule(new PrixDAchatEcrit)
                         ->saisieEnDirect()
                         ->afterStateUpdated(self::appliquerLeBareme($ficheNonModifiable)),
                     TextInput::make('remise_pourcentage')
@@ -295,6 +593,15 @@ trait AjouteDesLignesDAchat
                         ->default(0)
                         ->saisieEnDirect()
                         ->afterStateUpdated(self::appliquerLeBareme($ficheNonModifiable)),
+                    TextInput::make('montant_ht')
+                        ->label('Total HT de la ligne sur la facture')
+                        ->numeric()
+                        ->minValue(0)
+                        ->prefix('€')
+                        ->rule(new MontantAuCentime)
+                        ->placeholder(fn (Get $get): string => self::htProposeEnTexte($get) ?? '')
+                        ->helperText(fn (Get $get): string => self::detailDuHtDeLaLigne($get))
+                        ->live(onBlur: true),
                     ...array_map(
                         fn (Field $champ): Field => (match ($champ->getName()) {
                             'prix_vente_ttc' => $champ->helperText(fn (Get $get): ?string => self::detailDuPrixDeVente($get)),
@@ -386,25 +693,30 @@ trait AjouteDesLignesDAchat
         return $detail.' · bénéfice '.number_format($benefice, 2, ',', ' ').' € HT par article';
     }
 
+    /**
+     * Les lignes saisies de la facture d'achat, avec la TVA que la personne
+     * a saisie pour chaque taux, calculées comme à leur enregistrement.
+     */
     protected static function documentDesLignesSaisies(Get $get): DocumentChiffre
     {
-        return app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? []);
+        return app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [], self::tvaEcriteDuFormulaire($get('taux')));
     }
 
     /**
      * La ligne du champ, lue par sa clé dans le répéteur dans l'aperçu de
-     * toutes les lignes de la facture d'achat (voir
-     * documentDesLignesSaisies()) ; aucun montant tant qu'elle n'est pas
-     * valable.
+     * toutes les lignes de la facture d'achat, avec la TVA saisie de chaque
+     * taux (voir documentDesLignesSaisies()) ; aucun montant tant qu'elle
+     * n'est pas valable.
      *
-     * @return array{montant_ht: string, montant_tva: string, montant_ttc: string}
+     * @return array{montant_ht: string, montant_ht_calcule: string, montant_tva: string, montant_ttc: string}
      */
     private static function montantsDeLaLigneDAchat(Get $get, Placeholder $champ): array
     {
-        $ligne = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [])->lignes[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
+        $ligne = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [], self::tvaEcriteDuFormulaire($get('../../taux')))->lignes[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
 
         return [
             'montant_ht' => $ligne['montant_ht'] ?? '0.00',
+            'montant_ht_calcule' => $ligne['montant_ht_calcule'] ?? '0.00',
             'montant_tva' => $ligne['montant_tva'] ?? '0.00',
             'montant_ttc' => $ligne['montant_ttc'] ?? '0.00',
         ];
@@ -413,10 +725,12 @@ trait AjouteDesLignesDAchat
     /**
      * Ce que coûte un article, remise de la ligne déduite, sans arrondi
      * (voir CalculateurLigne::coutUnitaireNet()).
+     *
+     * @throws InvalidArgumentException tant que le prix d'achat n'est pas lisible
      */
     private static function prixDAchatNet(Get $get): float
     {
-        return app(CalculateurLigne::class)->coutUnitaireNet((float) $get('prix_unitaire_ht'), (float) ($get('remise_pourcentage') ?? 0));
+        return app(CalculateurLigne::class)->coutUnitaireNet((string) $get('prix_unitaire_ht'), (float) ($get('remise_pourcentage') ?? 0));
     }
 
     /**
@@ -435,7 +749,7 @@ trait AjouteDesLignesDAchat
             $set($champ, $valeur);
         }
 
-        $set('prix_unitaire_ht', $produit === null ? null : self::prixEnTexte($produit->dernierPrixDAchatHt()));
+        $set('prix_unitaire_ht', $produit?->dernierPrixDAchatHt());
         $set('prix_vente_propose', null);
     }
 
@@ -487,10 +801,11 @@ trait AjouteDesLignesDAchat
             'fiche_lue' => $ficheLue?->valeurs(),
             'produit' => $valeursDuProduit,
             'quantite' => $data['quantite'],
-            'prix_unitaire_ht' => self::prixEnTexte((float) $data['prix_unitaire_ht']),
+            'prix_unitaire_ht' => self::prixDAchatDansLeChamp($data['prix_unitaire_ht']),
             'remise_pourcentage' => $data['remise_pourcentage'] ?? 0,
             // Le taux de la fiche s'applique aussi à cette ligne.
             'taux_tva' => $valeursDuProduit['taux_tva'],
+            'montant_ht' => filled($data['montant_ht'] ?? null) ? $data['montant_ht'] : null,
             'prix_vente_propose' => $data['prix_vente_propose'] ?? null,
         ];
     }
@@ -510,6 +825,7 @@ trait AjouteDesLignesDAchat
             'prix_unitaire_ht' => $ligne['prix_unitaire_ht'] ?? null,
             'remise_pourcentage' => $ligne['remise_pourcentage'] ?? 0,
             'taux_tva' => $ligne['taux_tva'] ?? ($ligne['produit']['taux_tva'] ?? self::pourcentageEnTexte(app(TenantContext::class)->magasin()->tauxTvaParDefaut())),
+            'montant_ht' => $ligne['montant_ht'] ?? null,
             'prix_vente_propose' => $ligne['prix_vente_propose'] ?? null,
         ];
     }
@@ -518,7 +834,9 @@ trait AjouteDesLignesDAchat
      * Une ligne déjà enregistrée, telle que la facture l'affiche à sa
      * modification : le produit tel qu'il est aujourd'hui, avec sa fiche
      * ainsi lue, ou la fiche du nouveau produit que le brouillon garde
-     * jusqu'à sa validation ; la ligne telle qu'elle a été achetée.
+     * jusqu'à sa validation ; la ligne telle qu'elle a été achetée, son PU
+     * HT tel que le fournisseur l'a écrit et le HT de la facture, s'il a
+     * été saisi.
      *
      * @return array<string, mixed>
      */
@@ -532,6 +850,7 @@ trait AjouteDesLignesDAchat
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
             'taux_tva' => self::pourcentageEnTexte($ligne->taux_tva),
+            'montant_ht' => $ligne->montant_ht_saisi,
         ];
     }
 }

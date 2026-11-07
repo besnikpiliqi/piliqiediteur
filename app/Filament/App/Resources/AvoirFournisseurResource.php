@@ -45,8 +45,10 @@ class AvoirFournisseurResource extends Resource
     /**
      * Mêmes colonnes que la facture d'achat (voir
      * FactureResource::lignesEntry()) : pour chaque article retourné, PU
-     * HT, taux, puis HT, TVA et TTC de la ligne, et le récapitulatif par
-     * taux.
+     * HT, taux, puis HT, TVA et TTC de la ligne, et la TVA de chaque taux,
+     * celle de la note d'avoir du fournisseur, avec le calcul de PILIQI
+     * quand elle en diffère, et la marque « TVA à vérifier » (voir
+     * FactureAchatResource::tvaParTauxEntry()).
      */
     public static function infolist(Infolist $infolist): Infolist
     {
@@ -54,6 +56,7 @@ class AvoirFournisseurResource extends Resource
             InfolistSection::make('Avoir fournisseur')->schema([
                 TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore émis)'),
                 TextEntry::make('statut')->badge(),
+                FactureAchatResource::marqueTvaAVerifier(),
                 TextEntry::make('source')->badge(),
                 TextEntry::make('factureAchat.numero')->label('Facture d\'achat créditée'),
                 TextEntry::make('factureAchat.fournisseur.nom')->label('Fournisseur'),
@@ -70,7 +73,7 @@ class AvoirFournisseurResource extends Resource
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
-                FactureResource::ventilationTvaEntry(),
+                FactureAchatResource::tvaParTauxEntry(),
             ])->columns(3),
         ]);
     }
@@ -84,6 +87,7 @@ class AvoirFournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('factureAchat.fournisseur.nom')->label('Fournisseur')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—')->rechercheSansAccents()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
+                FactureAchatResource::colonneTvaAVerifier(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
@@ -91,6 +95,7 @@ class AvoirFournisseurResource extends Resource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('source')->options(SourceAvoirFournisseur::class),
+                FactureAchatResource::filtreTvaAVerifier(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

@@ -26,7 +26,7 @@ class CreateFactureAchat extends CreateRecord
                 'date_facture' => $data['date_facture'] ?? null,
                 'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,
                 'notes' => $data['notes'] ?? null,
-            ]);
+            ], FactureAchatResource::montantsDuFournisseur($data));
         });
     }
 }

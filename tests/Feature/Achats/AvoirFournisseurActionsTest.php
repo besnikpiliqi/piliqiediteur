@@ -535,8 +535,9 @@ class AvoirFournisseurActionsTest extends TestCase
     /**
      * L'avoir fournisseur s'inscrit au journal d'audit à son émission, pas
      * à la création de son brouillon : son numéro, celui de la facture
-     * d'achat créditée, le n° du fournisseur, ses totaux et ce qu'il
-     * retourne, sans le fournisseur ni le motif.
+     * d'achat créditée, le n° du fournisseur, ses totaux, la TVA de chaque
+     * taux (base, TVA retenue, calculée et saisie), sa marque « TVA à
+     * vérifier » et ce qu'il retourne, sans le fournisseur ni le motif.
      */
     public function test_l_emission_d_un_avoir_fournisseur_s_inscrit_au_journal_d_audit(): void
     {
@@ -561,9 +562,11 @@ class AvoirFournisseurActionsTest extends TestCase
             'facture_achat' => $factureAchat->numero,
             'lignes' => [['quantite' => 2, 'reference' => 'CABLE-USB']],
             'numero_fournisseur' => 'AV-2026-0017',
+            'taux' => [['base_ht' => '40.00', 'montant_tva' => '8.00', 'montant_tva_calcule' => '8.00', 'montant_tva_saisi' => null, 'taux_tva' => '20.00']],
             'total_ht' => '40.00',
             'total_ttc' => '48.00',
             'total_tva' => '8.00',
+            'tva_a_verifier' => false,
         ], $entrees[0]->nouvelles_valeurs);
     }
 }

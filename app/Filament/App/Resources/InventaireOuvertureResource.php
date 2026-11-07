@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Rules\PrixDAchatEcrit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
@@ -154,10 +155,11 @@ class InventaireOuvertureResource extends Resource
                 ->default(1),
             TextInput::make('cout_unitaire_ht')
                 ->label('Coût unitaire HT')
-                ->helperText('Ce qu\'un article a coûté, hors taxe : le coût moyen de départ du produit.')
+                ->helperText('Ce qu\'un article a coûté, hors taxe, six décimales au plus : le coût moyen de départ du produit.')
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(Caisse::MONTANT_MAXIMUM)
+                ->rule(new PrixDAchatEcrit)
                 ->prefix('€')
                 ->required(),
         ];
@@ -226,7 +228,7 @@ class InventaireOuvertureResource extends Resource
                         TextEntry::make('quantite')->label('Quantité'),
                         TextEntry::make('cout_unitaire_ht')
                             ->label('Coût unitaire HT')
-                            ->formatStateUsing(fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state))),
+                            ->formatStateUsing(fn (string $state): string => $calculateur->prixDAchatAffiche($calculateur->enMillioniemes($state))),
                         TextEntry::make('valeur_ht')
                             ->label('Valeur du stock HT')
                             ->money('EUR')

@@ -6,6 +6,8 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Achats\Models\TauxAvoirFournisseur;
+use App\Domain\Achats\Models\TauxFactureAchat;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
@@ -143,13 +145,15 @@ class TenantIsolationTest extends TestCase
      * et le registre ne s'écrivent que signés, par leurs actions, la trace
      * d'un événement technique qu'avec lui, une vérification VIES, une
      * preuve d'exonération ou un bordereau de détaxe, que par la sienne, un
-     * reçu de paiement et ses lignes, qu'avec leur encaissement, et le
-     * jeton d'une demande traitée, que par ActionsUniques.
-     * ActionTraitee, Avoir, AvoirAllocation, BordereauDetaxe,
-     * ConsultationVies, EnregistrementFiscal, LigneRecuPaiement, Paiement,
-     * PaiementAllocation, PreuveOperation, RecuPaiement, TeteRegistreFiscal
-     * et TraceEvenement sont aussi dans modelesCrees(), écrits directement
-     * par ces tests (voir creerEnregistrement()).
+     * reçu de paiement et ses lignes, qu'avec leur encaissement, la TVA
+     * d'un taux d'une facture d'achat ou d'un avoir fournisseur, qu'avec
+     * son document, et le jeton d'une demande traitée, que par
+     * ActionsUniques. ActionTraitee, Avoir, AvoirAllocation,
+     * BordereauDetaxe, ConsultationVies, EnregistrementFiscal,
+     * LigneRecuPaiement, Paiement, PaiementAllocation, PreuveOperation,
+     * RecuPaiement, TauxAvoirFournisseur, TauxFactureAchat,
+     * TeteRegistreFiscal et TraceEvenement sont aussi dans modelesCrees(),
+     * écrits directement par ces tests (voir creerEnregistrement()).
      *
      * @var list<class-string<Model>>
      */
@@ -173,6 +177,8 @@ class TenantIsolationTest extends TestCase
         PosteReconnu::class,
         PreuveOperation::class,
         RecuPaiement::class,
+        TauxAvoirFournisseur::class,
+        TauxFactureAchat::class,
         TeteRegistreFiscal::class,
         TraceEvenement::class,
         TransmissionPdp::class,
@@ -218,7 +224,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, RecuPaiement::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, RecuPaiement::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -585,6 +591,22 @@ class TenantIsolationTest extends TestCase
                 'montant' => '12.00',
                 'credit' => '0.00',
                 'reste_du' => '0.00',
+                'ordre' => 0,
+            ],
+            TauxAvoirFournisseur::class => [
+                'avoir_fournisseur_id' => AvoirFournisseur::factory()->create()->getKey(),
+                'taux_tva' => '20.00',
+                'base_ht' => '10.00',
+                'montant_tva' => '2.00',
+                'montant_tva_calcule' => '2.00',
+                'ordre' => 0,
+            ],
+            TauxFactureAchat::class => [
+                'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
+                'taux_tva' => '20.00',
+                'base_ht' => '10.00',
+                'montant_tva' => '2.00',
+                'montant_tva_calcule' => '2.00',
                 'ordre' => 0,
             ],
             TeteRegistreFiscal::class => [],

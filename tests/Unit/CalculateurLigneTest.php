@@ -59,14 +59,15 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Une ligne d'achat : PU HT en centimes, taux et remise en centièmes de
-     * point.
+     * Une ligne d'achat : PU HT en centimes, que le calcul lit en
+     * millionièmes d'euro (six décimales au plus, T2), taux et remise en
+     * centièmes de point.
      *
      * @return array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int}
      */
     private static function ligneDAchat(int $prixHt, int $quantite = 1, int $taux = 2000, int $remise = 0): array
     {
-        return ['prix_unitaire_ht' => $prixHt, 'quantite' => $quantite, 'remise_pourcentage' => $remise, 'taux_tva' => $taux];
+        return ['prix_unitaire_ht' => $prixHt * 10000, 'quantite' => $quantite, 'remise_pourcentage' => $remise, 'taux_tva' => $taux];
     }
 
     /**
@@ -816,7 +817,7 @@ class CalculateurLigneTest extends TestCase
 
             foreach ($achat['lignes'] as $index => $montants) {
                 $cas = "facture n° {$i}, ligne {$index}";
-                $net = $this->netAttendu($lignes[$index]['prix_unitaire_ht'], $lignes[$index]['quantite'], $lignes[$index]['remise_pourcentage']);
+                $net = $this->netAttendu(intdiv($lignes[$index]['prix_unitaire_ht'], 10000), $lignes[$index]['quantite'], $lignes[$index]['remise_pourcentage']);
 
                 $this->assertSame($net, $montants['montant_ht'], "HT : {$cas}");
                 $this->assertSame($montants['montant_ht'] + $montants['montant_tva'], $montants['montant_ttc'], "TTC : {$cas}");
@@ -953,7 +954,7 @@ class CalculateurLigneTest extends TestCase
             $achat = $this->calculateur()->chiffrerUnAchat($lignes);
             $choisie = $hasard->getInt(0, count($lignes) - 1);
             $achetee = [...$lignes[$choisie], 'montant_ht' => $achat['lignes'][$choisie]['montant_ht'], 'montant_tva' => $achat['lignes'][$choisie]['montant_tva']];
-            $cas = sprintf('achat n° %d, PU HT %s (TVA %s %%), quantité %d, remise %s %%, TVA de la ligne %s', $i, $this->texte($achetee['prix_unitaire_ht']), $taux, $achetee['quantite'], $this->texte($achetee['remise_pourcentage']), $this->texte($achetee['montant_tva']));
+            $cas = sprintf('achat n° %d, PU HT %s (TVA %s %%), quantité %d, remise %s %%, TVA de la ligne %s', $i, $this->texte(intdiv($achetee['prix_unitaire_ht'], 10000)), $taux, $achetee['quantite'], $this->texte($achetee['remise_pourcentage']), $this->texte($achetee['montant_tva']));
             $rendu = ['montant_ht' => 0, 'montant_tva' => 0];
             $rendus = 0;
 
@@ -968,7 +969,7 @@ class CalculateurLigneTest extends TestCase
                 $rendu = ['montant_ht' => $rendu['montant_ht'] + $retour['montant_ht'], 'montant_tva' => $rendu['montant_tva'] + $retour['montant_tva']];
 
                 if ($rendus < $achetee['quantite']) {
-                    $ht = $this->netAttendu($achetee['prix_unitaire_ht'], $rendus, $achetee['remise_pourcentage']);
+                    $ht = $this->netAttendu(intdiv($achetee['prix_unitaire_ht'], 10000), $rendus, $achetee['remise_pourcentage']);
 
                     $this->assertSame([$ht, min($achetee['montant_tva'], $this->tvaAttendue($ht, $taux))], [$rendu['montant_ht'], $rendu['montant_tva']], "cumul de {$rendus} : {$cas}");
                 }

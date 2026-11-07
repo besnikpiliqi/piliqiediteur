@@ -36,6 +36,7 @@ class EditFactureAchat extends EditRecord
             ->map(fn (LigneAchat $ligne): array => FactureAchatResource::ligneDejaEnregistree($ligne))
             ->all();
         $data['escompte_pourcentage'] = FactureAchatResource::pourcentageEnTexte($this->record->escompte_pourcentage);
+        $data['taux'] = FactureAchatResource::tauxDejaEnregistres($this->record);
 
         return $data;
     }
@@ -52,6 +53,6 @@ class EditFactureAchat extends EditRecord
             'date_facture' => $data['date_facture'] ?? null,
             'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,
             'notes' => $data['notes'] ?? null,
-        ]));
+        ], FactureAchatResource::montantsDuFournisseur($data)));
     }
 }

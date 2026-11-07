@@ -562,9 +562,14 @@ class FactureResource extends Resource
      * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
      * CalculateurLigne). Le PU HT d'une vente, enregistré au millionième
      * d'euro (voir CalculateurLigne::prixUnitaireHtExact()), s'affiche
-     * arrondi au centime, comme tout prix unitaire (voir
-     * CalculateurLigne::prixUnitaireAffiche()). Un achat n'a pas de PU
-     * TTC : sa TVA est sa part de celle du total HT de son taux. La remise
+     * arrondi au centime, comme tout prix unitaire de vente (voir
+     * CalculateurLigne::prixUnitaireAffiche()) ; celui d'un achat, tel que
+     * le fournisseur l'écrit, s'affiche tel qu'il est enregistré (voir
+     * CalculateurLigne::prixDAchatAffiche()). Un achat n'a pas de PU TTC :
+     * sa TVA est sa part de celle que la facture du fournisseur écrit pour
+     * son taux (voir TvaDuFournisseur) ; le HT d'une ligne d'achat que la
+     * facture écrit autrement que le calcul depuis le PU montre ce calcul
+     * en dessous. La remise
      * n'apparaît que si une ligne du document en a une : c'est elle qui
      * explique alors que PU x quantité diffère du total. Sur tout document
      * de vente soumis à la TVA, la note de calcul dit que le HT de chaque
@@ -597,6 +602,7 @@ class FactureResource extends Resource
         $prixCatalogueSansTvaFrancaise = fn (Model $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0);
         $calculateur = app(CalculateurLigne::class);
         $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
+        $prixDAchat = fn (string $state): string => $calculateur->prixDAchatAffiche($calculateur->enMillioniemes($state));
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -611,7 +617,7 @@ class FactureResource extends Resource
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')
-                    ->formatStateUsing($prixUnitaire),
+                    ->formatStateUsing($estUnAchat ? $prixDAchat : $prixUnitaire),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
                     ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
@@ -627,7 +633,12 @@ class FactureResource extends Resource
                     ->visible($sansTvaFrancaise),
                 TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->visible($avecRemise),
-                TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('montant_ht')
+                    ->label('Total HT')
+                    ->money('EUR')
+                    ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->montant_ht_saisi !== null && $calculateur->enCentiemes($record->montant_ht_saisi) !== $record->montantHtPropose()
+                        ? 'HT de la facture du fournisseur ; calcul depuis le PU : '.$calculateur->enEuros($record->montantHtPropose())
+                        : null),
                 TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                 TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
                 Actions::make([FactureAchatResource::creerUnAvoirFournisseur(InfolistAction::make('retourner_ce_produit'))])

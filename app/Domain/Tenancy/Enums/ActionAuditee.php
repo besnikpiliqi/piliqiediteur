@@ -84,6 +84,11 @@ enum ActionAuditee: string implements HasLabel
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
     case AdresseDeConnexionRetiree = 'adresse_de_connexion_retiree';
     case VenteSansStock = 'vente_sans_stock';
+    case FactureAchatValidee = 'facture_achat_validee';
+    case FactureAchatModifiee = 'facture_achat_modifiee';
+    case EcartsDuFournisseurConfirmes = 'ecarts_du_fournisseur_confirmes';
+    case TvaAVerifierPosee = 'tva_a_verifier_posee';
+    case TvaAVerifierLevee = 'tva_a_verifier_levee';
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
     case InventaireOuvertureValide = 'inventaire_ouverture_valide';
     case AvoirDeRegularisationEmis = 'avoir_de_regularisation_emis';
@@ -170,6 +175,11 @@ enum ActionAuditee: string implements HasLabel
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
             self::AdresseDeConnexionRetiree => 'Adresse de connexion retirée à la clôture de l\'inscription',
             self::VenteSansStock => 'Vente au-delà du stock',
+            self::FactureAchatValidee => 'Facture d\'achat validée',
+            self::FactureAchatModifiee => 'Facture d\'achat validée corrigée',
+            self::EcartsDuFournisseurConfirmes => 'Écart avec le document du fournisseur confirmé',
+            self::TvaAVerifierPosee => 'Marque « TVA à vérifier » posée',
+            self::TvaAVerifierLevee => 'Marque « TVA à vérifier » levée',
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
             self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
             self::AvoirDeRegularisationEmis => 'Avoir de régularisation émis après la correction du SIREN',
@@ -337,11 +347,32 @@ enum ActionAuditee: string implements HasLabel
             // passer sous zéro, sa référence, son stock avant la vente et
             // la quantité vendue (voir EmettreFactureAction).
             self::VenteSansStock => ['vente', 'produits'],
+            // Le numéro de la facture d'achat, le n° de la facture du
+            // fournisseur, ses totaux, la base, la TVA retenue et la TVA
+            // calculée de chaque taux, sa marque « TVA à vérifier » et, pour
+            // chaque ligne, la référence, la quantité, le PU HT, le HT
+            // retenu et sa TVA ; ni le fournisseur ni les notes, qui restent
+            // sur la facture (voir ValiderFactureAchatAction). La correction
+            // d'une facture validée retient, de ces champs et de sa date et
+            // de son escompte, ceux qu'elle change, avant et après (voir
+            // ModifierFactureAchatAction) : la TVA d'une facture déjà
+            // déclarée ne se réécrit jamais sans trace (art. 271, II-3 du
+            // CGI).
+            self::FactureAchatValidee => ['facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'],
+            self::FactureAchatModifiee => ['numero_fournisseur', 'date_facture', 'escompte_pourcentage', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'],
+            // Le document du fournisseur (sa nature, notre numéro, son n°
+            // chez le fournisseur) et, pour chaque taux confirmé, la base,
+            // la TVA saisie, la TVA calculée, leur écart et chaque ligne hors
+            // tolérance (sa référence, son HT saisi, son HT calculé, leur
+            // écart), en centimes (voir TvaDuFournisseur).
+            self::EcartsDuFournisseurConfirmes => ['document', 'ecarts'],
+            self::TvaAVerifierPosee, self::TvaAVerifierLevee => ['document'],
             // Le numéro de l'avoir fournisseur, celui de la facture d'achat
-            // qu'il crédite, le n° de l'avoir du fournisseur, ses totaux et,
-            // pour chaque ligne, la référence et la quantité retournées
-            // (voir EmettreAvoirFournisseurAction).
-            self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'lignes'],
+            // qu'il crédite, le n° de l'avoir du fournisseur, ses totaux, la
+            // base, la TVA retenue et la TVA calculée de chaque taux, sa
+            // marque « TVA à vérifier » et, pour chaque ligne, la référence
+            // et la quantité retournées (voir EmettreAvoirFournisseurAction).
+            self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'],
             // Le numéro de l'inventaire d'ouverture, la valeur hors taxe du
             // stock qu'il fait entrer et, pour chaque ligne, la référence du
             // produit, la quantité inventoriée, si elle est entrée en stock

@@ -3,18 +3,25 @@
 namespace App\Domain\Achats\Actions;
 
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Exceptions\ConfirmationDesEcartsRequiseException;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
+use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -53,7 +60,9 @@ use LogicException;
  * Un magasin suspendu ou fermé ne corrige plus ses factures d'achat (voir
  * Magasin::verifierQuIlEstOuvert()) : comme à la validation (voir
  * ValiderFactureAchatAction), sa ligne se relit sous un verrou partagé,
- * après le registre et avant tout le reste, et la fermeture du magasin,
+ * après le registre et la ligne de sa société (voir
+ * Societe::verrouillerAvantSonJournalDAudit()) et avant tout le reste, et
+ * la fermeture du magasin,
  * qui verrouille le registre puis cette ligne (voir FermerMagasinAction),
  * passe donc tout entière avant ou après la correction : une correction
  * qui attendait une cession est refusée, et aucune réception corrigée
@@ -73,6 +82,17 @@ use LogicException;
  * modifier (voir LecteurDesDroits et
  * FactureAchatPolicy::update()) : le droit de valider, retiré pendant que
  * son écran restait ouvert, ne corrige plus une facture validée.
+ *
+ * Comme à la création (voir CreerFactureAchatAction), elle garde les
+ * montants qu'écrit la facture du fournisseur, et un écart nouveau au-delà
+ * de la tolérance se confirme (voir TvaDuFournisseur) ; la TVA de chaque
+ * taux se retient en dernier, après la correction de la réception. La
+ * correction d'une facture validée s'inscrit au journal d'audit de la
+ * société, dans la chaîne du magasin, avec les anciennes et les nouvelles
+ * valeurs de ce qu'elle change (lignes, bases et TVA de chaque taux,
+ * totaux, voir FactureAchat::valeursAuditees()) : la TVA d'une facture
+ * peut-être déjà déclarée ne se réécrit jamais sans trace (art. 271, II-3
+ * du CGI).
  */
 class ModifierFactureAchatAction
 {
@@ -81,23 +101,36 @@ class ModifierFactureAchatAction
         private readonly StockLedgerService $stockLedger,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly TvaDuFournisseur $tva,
+        private readonly JournalAudit $journalAudit,
     ) {}
+
+    /**
+     * Les champs que le journal d'audit retient de la correction d'une
+     * facture validée (voir ActionAuditee::FactureAchatModifiee).
+     */
+    private const CHAMPS_AUDITES = ['numero_fournisseur', 'date_facture', 'escompte_pourcentage', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'];
 
     /**
      * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
+     * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la facture du fournisseur au niveau du document ; aucun, les propositions de PILIQI
      *
      * @throws AuthorizationException
+     * @throws ConfirmationDesEcartsRequiseException
      */
-    public function handle(User $auteur, FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
+    public function handle(User $auteur, FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = [], ?MontantsDuFournisseur $montants = null): FactureAchat
     {
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
-        return DB::transaction(function () use ($auteur, $factureAchat, $fournisseur, $lignes, $attributs) {
+        $montants ??= MontantsDuFournisseur::aucun();
+
+        return DB::transaction(function () use ($auteur, $factureAchat, $fournisseur, $lignes, $attributs, $montants) {
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
             $magasin = app(TenantContext::class)->magasin();
+            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, FactureAchat::class);
 
@@ -141,14 +174,21 @@ class ModifierFactureAchatAction
             $produitsAvant = $estValidee
                 ? $factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all()
                 : [];
+            $avant = $estValidee ? Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES) : [];
 
-            return $this->operateur->pendant($compte, function () use ($compte, $factureAchat, $fournisseur, $lignes, $attributs, $estValidee, $produitsAvant): FactureAchat {
+            return $this->operateur->pendant($compte, function () use ($compte, $factureAchat, $fournisseur, $lignes, $attributs, $montants, $estValidee, $produitsAvant, $avant): FactureAchat {
                 $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
 
-                $this->constructeurLignes->enregistrer($compte, $factureAchat, $lignes);
+                $document = $this->constructeurLignes->enregistrer($compte, $factureAchat, $lignes, $montants);
 
                 if ($estValidee) {
                     $this->corrigerLaReception($factureAchat->fresh('lignes'), $produitsAvant);
+                }
+
+                $this->tva->retenir($compte, $factureAchat, $document, $montants);
+
+                if ($estValidee) {
+                    $this->journalAudit->inscrireLesChangements(ActionAuditee::FactureAchatModifiee, $compte, $factureAchat->magasin, $avant, Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES), $factureAchat);
                 }
 
                 return $factureAchat->fresh('lignes');

@@ -279,16 +279,20 @@ class Produit extends Model
     }
 
     /**
-     * Le prix unitaire HT de son dernier achat (avant remise), pour
+     * Le prix unitaire HT de son dernier achat (avant remise), tel que le
+     * fournisseur l'a écrit (six décimales au plus, voir PrixDAchat), pour
      * proposer le même sur une nouvelle facture d'achat ; à défaut, son
-     * CMUP. Le dernier achat est celui de la facture la plus récemment
-     * enregistrée : corriger une facture plus ancienne n'en fait pas le
-     * dernier achat.
+     * CMUP, au centime. Le dernier achat est celui de la facture la plus
+     * récemment enregistrée : corriger une facture plus ancienne n'en fait
+     * pas le dernier achat. Écrit comme sa colonne le relit : « 0.1234 »,
+     * « 2.10 ».
      */
-    public function dernierPrixDAchatHt(): float
+    public function dernierPrixDAchatHt(): string
     {
-        return (float) ($this->lignesAchat()->orderByDesc('facture_achat_id')->orderByDesc('ordre')->orderByDesc('id')->value('prix_unitaire_ht')
-            ?? app(CalculateurLigne::class)->arrondirAuCentime((float) $this->cmup_ht));
+        $calculateur = app(CalculateurLigne::class);
+        $dernierAchat = $this->lignesAchat()->orderByDesc('facture_achat_id')->orderByDesc('ordre')->orderByDesc('id')->first();
+
+        return $dernierAchat?->prix_unitaire_ht ?? $calculateur->enDecimal(SaisieDecimale::enCentiemes((string) ($this->cmup_ht ?? '0')));
     }
 
     /**

@@ -47,6 +47,13 @@ use LogicException;
  * seul le barème du magasin, s'il l'a activé, donne son prix de vente à un
  * nouveau produit reçu sans prix (voir BaremePrixDeVente).
  *
+ * Les montants d'une ligne sont ceux qu'écrit la facture du fournisseur
+ * (décision de l'éditeur du 02/11/2026, T1 et T2) : son PU HT, six
+ * décimales au plus, jamais arrondi en silence, et, quand elle l'écrit
+ * autrement que PILIQI ne le calcule, son HT (montant_ht_saisi) ; la TVA
+ * de chaque taux, que la facture écrit aussi, se retient avec les écarts
+ * qu'elle confirme (voir chiffrer() et TvaDuFournisseur).
+ *
  * Créer ou corriger un produit depuis une ligne suit les droits de la page
  * Produits (voir ProduitPolicy), vérifiés ici, à l'enregistrement des
  * lignes, et non seulement dans le formulaire, dont l'état se forge : la
@@ -157,11 +164,19 @@ class ConstructeurLigneAchat
 
     /**
      * Enregistre les lignes de la facture d'achat, à la place de celles
-     * qu'elle avait, calculées ensemble (voir chiffrer()), puis ses
-     * totaux, sommes exactes de ses lignes. La fiche de chaque nouveau produit
-     * est vérifiée une fois toutes les lignes enregistrées (voir
-     * verifierLesNouveauxProduits()). Une facture déjà validée crée tout
-     * de suite ses nouveaux produits (voir creerLesNouveauxProduits()).
+     * qu'elle avait, calculées ensemble avec ce qu'écrit la facture du
+     * fournisseur (voir chiffrer()) : le HT de chaque ligne (sa clé
+     * « montant_ht »), la TVA de chaque taux ; puis ses totaux, sommes
+     * exactes de ses lignes. Une base écrite qui n'est pas la somme des HT
+     * de ses lignes, ou un total TTC saisi qui ne vaut pas le total HT plus
+     * la TVA, est refusé (voir MontantsDuFournisseur::verifier()). La fiche
+     * de chaque nouveau produit est vérifiée une fois toutes les lignes
+     * enregistrées (voir verifierLesNouveauxProduits()). Une facture déjà
+     * validée crée tout de suite ses nouveaux produits (voir
+     * creerLesNouveauxProduits()).
+     *
+     * Rend le document chiffré : l'action qui l'appelle en retient la TVA
+     * de chaque taux en dernier (voir TvaDuFournisseur::retenir()).
      *
      * Le droit de créer ou de corriger un produit se demande à son auteur,
      * relu par l'action qui l'appelle (voir verifierLeDroitDEnregistrer()).
@@ -169,9 +184,12 @@ class ConstructeurLigneAchat
      * identifiant croissant (voir Produit::verrouillerPourLeStock()), après
      * la facture d'achat que l'action a verrouillée ou créée.
      *
-     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, fiche_lue?: array<string, mixed>|null, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
+     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, fiche_lue?: array<string, mixed>|null, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null, montant_ht?: float|string|null}>  $lignes
+     *
+     * @throws InvalidArgumentException
+     * @throws LogicException
      */
-    public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lignes): void
+    public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lignes, MontantsDuFournisseur $montants): DocumentChiffre
     {
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
@@ -191,8 +209,12 @@ class ConstructeurLigneAchat
             $lignesPreparees[] = $this->preparerUneLigne($auteur, $factureAchat, $donnees, $ordre);
         }
 
-        $document = $this->chiffrer($lignesPreparees);
-        $lignesEnregistrees = array_map(fn (array $ligne): LigneAchat => $factureAchat->lignes()->create($ligne), array_values($document->lignes));
+        $document = $this->chiffrer($lignesPreparees, $montants->tvaParTaux);
+        $montants->verifier($document);
+        $lignesEnregistrees = array_map(
+            fn (array $ligne): LigneAchat => $factureAchat->lignes()->create(Arr::except($ligne, ['montant_ht_calcule'])),
+            array_values($document->lignes),
+        );
 
         $this->verifierLesNouveauxProduits($auteur, $lignesEnregistrees, $fichesDejaSaisies);
 
@@ -204,6 +226,8 @@ class ConstructeurLigneAchat
         if ($factureAchat->statut === StatutFactureAchat::Validee) {
             $this->creerLesNouveauxProduits($factureAchat);
         }
+
+        return $document;
     }
 
     /**
@@ -232,7 +256,7 @@ class ConstructeurLigneAchat
             $produit = new Produit($ligne->nouveau_produit);
 
             if (blank($produit->prix_vente_ttc)) {
-                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, (float) $ligne->prix_unitaire_ht, (float) $ligne->remise_pourcentage, (float) $produit->taux_tva)
+                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $ligne->prix_unitaire_ht, (float) $ligne->remise_pourcentage, (float) $produit->taux_tva)
                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
             }
 
@@ -315,16 +339,21 @@ class ConstructeurLigneAchat
 
     /**
      * Les lignes d'achat telles qu'elles sont saisies à l'écran, calculées
-     * comme à l'enregistrement (voir chiffrer()), par clé de ligne : une
-     * ligne pas encore valable (PU HT ou quantité à saisir, taux ou remise
-     * hors de 0-100 %, prix négatif) ou dont les montants ne se calculent
-     * pas, même seule (une quantité absurde), est ignorée, et les autres
-     * se calculent ensemble, sans elle. Seules des lignes valables dont le
-     * total dépasse ce que le calcul accepte ne donnent aucun aperçu.
+     * comme à l'enregistrement (voir chiffrer()), par clé de ligne, avec la
+     * TVA écrite de chaque taux : une ligne pas encore valable (PU HT ou
+     * quantité à saisir, taux ou remise hors de 0-100 %, prix négatif ou de
+     * plus de six décimales, HT écrit illisible) ou dont les montants ne se
+     * calculent pas, même seule (une quantité absurde), est ignorée, et les
+     * autres se calculent ensemble, sans elle. Une TVA écrite qu'aucune
+     * facture ne porte (voir CalculateurLigne::chiffrerUnAchat()) laisse la
+     * proposition, que l'enregistrement refusera avec son motif ; seules des
+     * lignes valables dont le total dépasse ce que le calcul accepte ne
+     * donnent aucun aperçu.
      *
      * @param  array<array-key, mixed>  $lignesSaisies
+     * @param  array<int, int>  $tvaEcriteParTaux  voir MontantsDuFournisseur
      */
-    public function apercu(array $lignesSaisies): DocumentChiffre
+    public function apercu(array $lignesSaisies, array $tvaEcriteParTaux = []): DocumentChiffre
     {
         $lignes = [];
 
@@ -339,56 +368,68 @@ class ConstructeurLigneAchat
                     $saisie['quantite'] ?? null,
                     filled($saisie['taux_tva'] ?? null) ? $saisie['taux_tva'] : 0,
                     $saisie['remise_pourcentage'] ?? null,
+                    $saisie['montant_ht'] ?? null,
                 );
                 $this->chiffrer([$ligne]);
             } catch (InvalidArgumentException) {
                 continue;
             }
 
-            $lignes[$cle] = $ligne;
+            $lignes[$cle] = [...$ligne, 'description' => (string) ($saisie['produit']['nom'] ?? ''), 'reference' => $saisie['produit']['reference'] ?? null];
         }
 
         try {
-            return $this->chiffrer($lignes);
+            return $this->chiffrer($lignes, $tvaEcriteParTaux);
         } catch (InvalidArgumentException) {
-            return DocumentChiffre::vide();
+            try {
+                return $this->chiffrer($lignes);
+            } catch (InvalidArgumentException) {
+                return DocumentChiffre::vide();
+            }
         }
     }
 
     /**
      * Les montants des lignes d'un achat, calculés ensemble depuis leurs
-     * PU HT (voir CalculateurLigne::chiffrerUnAchat()), dans leur ordre :
-     * les lignes d'un même taux se partagent la TVA de leur total HT.
+     * PU HT et ce qu'écrit la facture du fournisseur (voir
+     * CalculateurLigne::chiffrerUnAchat()), dans leur ordre : les lignes
+     * d'un même taux se partagent la TVA de ce taux ; chaque ligne garde le
+     * HT que le calcul propose (montant_ht_calcule), et chaque taux la TVA
+     * qu'il propose (montant_tva_calcule).
      *
-     * @param  array<array-key, array<string, mixed>>  $lignes  chacune avec prix_unitaire_ht, quantite, taux_tva et remise_pourcentage écrits comme leurs colonnes
+     * @param  array<array-key, array<string, mixed>>  $lignes  chacune avec prix_unitaire_ht, quantite, taux_tva, remise_pourcentage et montant_ht_saisi écrits comme leurs colonnes
+     * @param  array<int, int>  $tvaEcriteParTaux  voir MontantsDuFournisseur
      *
      * @throws InvalidArgumentException
      */
-    private function chiffrer(array $lignes): DocumentChiffre
+    private function chiffrer(array $lignes, array $tvaEcriteParTaux = []): DocumentChiffre
     {
         return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUnAchat(array_values(array_map(
             fn (array $ligne): array => [
-                'prix_unitaire_ht' => $this->calculateur->enCentiemes($ligne['prix_unitaire_ht']),
+                'prix_unitaire_ht' => $this->calculateur->enMillioniemes($ligne['prix_unitaire_ht']),
                 'quantite' => $ligne['quantite'],
                 'remise_pourcentage' => $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
                 'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
+                'montant_ht' => $ligne['montant_ht_saisi'] === null ? null : $this->calculateur->enCentiemes($ligne['montant_ht_saisi']),
             ],
             $lignes,
-        ))), $this->calculateur);
+        )), $tvaEcriteParTaux), $this->calculateur);
     }
 
     /**
-     * Le PU HT, la quantité, le taux et la remise d'une ligne d'achat
-     * saisie, écrits comme leurs colonnes : un PU HT jamais négatif, un
-     * taux et une remise entre 0 et 100 %.
+     * Le PU HT, la quantité, le taux, la remise et le HT écrit d'une ligne
+     * d'achat saisie, écrits comme leurs colonnes : un PU HT jamais négatif,
+     * tel que le fournisseur l'écrit, six décimales au plus (voir
+     * SaisieDecimale::enMillioniemes()), un taux et une remise entre 0 et
+     * 100 %, un HT écrit au centime, ou aucun.
      *
-     * @return array{quantite: int, prix_unitaire_ht: string, taux_tva: string, remise_pourcentage: string}
+     * @return array{quantite: int, prix_unitaire_ht: string, taux_tva: string, remise_pourcentage: string, montant_ht_saisi: string|null}
      *
      * @throws InvalidArgumentException
      */
-    private function prixDeLaLigne(mixed $prixUnitaireHt, mixed $quantite, mixed $tauxTva, mixed $remise): array
+    private function prixDeLaLigne(mixed $prixUnitaireHt, mixed $quantite, mixed $tauxTva, mixed $remise, mixed $montantHt): array
     {
-        $prix = SaisieDecimale::enCentiemes($prixUnitaireHt);
+        $prix = SaisieDecimale::enMillioniemes($prixUnitaireHt);
         $taux = SaisieDecimale::enCentiemes($tauxTva);
         $remise = filled($remise) ? SaisieDecimale::enCentiemes($remise) : 0;
 
@@ -406,9 +447,10 @@ class ConstructeurLigneAchat
 
         return [
             'quantite' => QuantiteEntiere::depuisSaisie($quantite),
-            'prix_unitaire_ht' => $this->calculateur->enDecimal($prix),
+            'prix_unitaire_ht' => $this->calculateur->prixDAchatEnDecimal($prix),
             'taux_tva' => $this->calculateur->enDecimal($taux),
             'remise_pourcentage' => $this->calculateur->enDecimal($remise),
+            'montant_ht_saisi' => filled($montantHt) ? $this->calculateur->enDecimal(SaisieDecimale::montantAuCentime($montantHt)) : null,
         ];
     }
 
@@ -433,6 +475,7 @@ class ConstructeurLigneAchat
             $donnees['quantite'] ?? null,
             $donnees['taux_tva'] ?? $produit->taux_tva,
             $donnees['remise_pourcentage'] ?? null,
+            $donnees['montant_ht'] ?? null,
         );
 
         // Sans prix de vente donné, un nouveau produit prend celui du barème
@@ -441,7 +484,7 @@ class ConstructeurLigneAchat
         // (voir verifierLesNouveauxProduits()).
         if (! $produit->exists) {
             if (blank($produit->prix_vente_ttc)) {
-                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, (float) $prix['prix_unitaire_ht'], (float) $prix['remise_pourcentage'], (float) $produit->taux_tva);
+                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $prix['prix_unitaire_ht'], (float) $prix['remise_pourcentage'], (float) $produit->taux_tva);
             }
         } elseif ($produit->isDirty()) {
             $this->verifierLeDroitDEnregistrer($auteur, $produit);
@@ -463,7 +506,7 @@ class ConstructeurLigneAchat
      * prix d'achat, remise déduite (voir BaremePrixDeVente::prixDeVente()) ;
      * null sans barème actif ou au-delà de son dernier palier.
      */
-    private function prixDuBareme(Magasin $magasin, float $prixUnitaireHt, float $remise, float $tauxTva): ?float
+    private function prixDuBareme(Magasin $magasin, string $prixUnitaireHt, float $remise, float $tauxTva): ?float
     {
         return $magasin->baremePrixDeVenteActif()?->prixDeVente($this->calculateur->coutUnitaireNet($prixUnitaireHt, $remise), $tauxTva)['prix_vente_ttc'] ?? null;
     }

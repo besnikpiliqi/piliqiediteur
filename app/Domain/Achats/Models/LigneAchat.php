@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Models;
 
+use App\Domain\Achats\Casts\PrixDAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -36,6 +37,7 @@ class LigneAchat extends Model
         'prix_unitaire_ht',
         'taux_tva',
         'remise_pourcentage',
+        'montant_ht_saisi',
         'montant_ht',
         'montant_tva',
         'montant_ttc',
@@ -45,9 +47,10 @@ class LigneAchat extends Model
     protected $casts = [
         'nouveau_produit' => 'array',
         'quantite' => 'integer',
-        'prix_unitaire_ht' => 'decimal:2',
+        'prix_unitaire_ht' => PrixDAchat::class,
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
+        'montant_ht_saisi' => 'decimal:2',
         'montant_ht' => 'decimal:2',
         'montant_tva' => 'decimal:2',
         'montant_ttc' => 'decimal:2',
@@ -84,19 +87,40 @@ class LigneAchat extends Model
     }
 
     /**
-     * Ce qu'un article de cette ligne a réellement coûté : son PU HT après
-     * la remise de la ligne, puis l'escompte de la facture. Le coût d'achat
-     * d'un stock se compte après remises, rabais et escomptes (PCG art.
-     * 213-31) ; c'est à ce coût que la ligne entre en stock et compte dans
-     * le CMUP du produit (voir StockLedgerService::receptionner()).
+     * Ce qu'un article de cette ligne a réellement coûté, au dix-millième
+     * d'euro, TVA jamais comprise : son PU HT, tel que le fournisseur
+     * l'écrit, après la remise de la ligne, puis l'escompte de la facture ;
+     * quand la facture écrit le HT de la ligne (montant_ht_saisi), ce HT ÷
+     * la quantité, escompte déduit (voir
+     * CalculateurLigne::coutUnitaireDuHt()). Le coût d'achat d'un stock se
+     * compte après remises, rabais et escomptes (PCG art. 213-31) ; c'est à
+     * ce coût que la ligne entre en stock et compte dans le CMUP du produit
+     * (voir StockLedgerService::receptionner()).
      */
     public function coutUnitaireHt(): float
     {
-        return app(CalculateurLigne::class)->coutUnitaireNet(
-            (float) $this->prix_unitaire_ht,
-            (float) $this->remise_pourcentage,
-            (float) $this->factureAchat->escompte_pourcentage,
-        );
+        $calculateur = app(CalculateurLigne::class);
+        $escompte = (float) $this->factureAchat->escompte_pourcentage;
+
+        if ($this->montant_ht_saisi !== null) {
+            return $calculateur->coutUnitaireDuHt($calculateur->enCentiemes($this->montant_ht_saisi), $this->quantite, $escompte);
+        }
+
+        return $calculateur->coutUnitaireNet($this->prix_unitaire_ht, (float) $this->remise_pourcentage, $escompte);
+    }
+
+    /**
+     * Le HT que PILIQI propose pour la ligne, en centimes : quantité x PU
+     * HT, remise déduite, arrondi une fois (voir
+     * CalculateurLigne::htProposeDUneLigneDAchat()) ; celui qu'écrit la
+     * facture du fournisseur (montant_ht_saisi), quand il est saisi, le
+     * remplace.
+     */
+    public function montantHtPropose(): int
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->htProposeDUneLigneDAchat($calculateur->enMillioniemes($this->prix_unitaire_ht), $this->quantite, $calculateur->enCentiemes($this->remise_pourcentage));
     }
 
     /**
@@ -113,14 +137,15 @@ class LigneAchat extends Model
     }
 
     /**
-     * Montants d'un retour de $quantite articles de cette ligne au
-     * fournisseur, écrits comme leurs colonnes : le HT de tout ce qui en a
-     * été retourné jusqu'ici et la TVA de ce HT, sans dépasser celle de la
+     * Montants que PILIQI propose pour un retour de $quantite articles de
+     * cette ligne au fournisseur, en centimes : le HT de tout ce qui en a
+     * été retourné jusqu'ici et la TVA de ce HT, sans dépasser ceux de la
      * ligne, moins ce que les avoirs fournisseur déjà émis ont crédité (voir
-     * CalculateurLigne::retourDAchat()). Le dernier retour retombe ainsi
-     * exactement sur la ligne achetée.
+     * CalculateurLigne::retourDAchat()). Le dernier retour propose ce qui
+     * reste de la ligne achetée ; la note d'avoir du fournisseur, qui prime,
+     * peut en écrire d'autres (voir EmettreAvoirFournisseurAction).
      *
-     * @return array{montant_ht: string, montant_tva: string, montant_ttc: string}
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int}
      */
     public function montantsDuRetour(int $quantite): array
     {
@@ -130,9 +155,9 @@ class LigneAchat extends Model
             ->get(['quantite', 'montant_ht', 'montant_tva']);
         $centiemes = fn (string $colonne): int => $calculateur->enCentiemes($this->getAttribute($colonne));
 
-        return array_map($calculateur->enDecimal(...), $calculateur->retourDAchat(
+        return $calculateur->retourDAchat(
             [
-                'prix_unitaire_ht' => $centiemes('prix_unitaire_ht'),
+                'prix_unitaire_ht' => $calculateur->enMillioniemes($this->prix_unitaire_ht),
                 'quantite' => $this->quantite,
                 'remise_pourcentage' => $centiemes('remise_pourcentage'),
                 'taux_tva' => $centiemes('taux_tva'),
@@ -144,7 +169,7 @@ class LigneAchat extends Model
                 'montant_ht' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
                 'montant_tva' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),
             ],
-        ));
+        );
     }
 
     /**

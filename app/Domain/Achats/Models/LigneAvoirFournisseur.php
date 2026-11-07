@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Models;
 
+use App\Domain\Achats\Casts\PrixDAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ class LigneAvoirFournisseur extends Model
         'prix_unitaire_ht',
         'taux_tva',
         'remise_pourcentage',
+        'montant_ht_saisi',
         'montant_ht',
         'montant_tva',
         'montant_ttc',
@@ -31,9 +33,10 @@ class LigneAvoirFournisseur extends Model
 
     protected $casts = [
         'quantite' => 'integer',
-        'prix_unitaire_ht' => 'decimal:2',
+        'prix_unitaire_ht' => PrixDAchat::class,
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
+        'montant_ht_saisi' => 'decimal:2',
         'montant_ht' => 'decimal:2',
         'montant_tva' => 'decimal:2',
         'montant_ttc' => 'decimal:2',

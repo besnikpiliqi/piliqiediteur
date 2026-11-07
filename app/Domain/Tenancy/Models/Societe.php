@@ -192,6 +192,25 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * Verrouille la ligne de cette société comme le fait toute entrée de
+     * son journal d'audit, par sa clé étrangère (« for key share ») : un
+     * geste de magasin qui s'inscrit au journal d'audit sans verrouiller le
+     * registre de son magasin (un achat, un avoir fournisseur) le prend en
+     * tête de sa transaction, dans l'ordre des verrous de l'application
+     * (voir RegistreFiscal) : la société, puis la ligne de son magasin,
+     * puis son auteur. Sans lui, son entrée la verrouillerait en dernier,
+     * après le compte de son auteur, et un geste du propriétaire
+     * s'interbloquerait avec la saisie du code du courrier, qui verrouille
+     * la société pour la modifier, puis la ligne du propriétaire (voir
+     * SaisirCodeDeConfirmationAction). Ce verrou n'attend que qui modifie
+     * la société sous « for update », jamais un autre geste de magasin.
+     */
+    public static function verrouillerAvantSonJournalDAudit(int|string $societeId): void
+    {
+        self::query()->whereKey($societeId)->lock('for key share')->firstOrFail();
+    }
+
+    /**
      * La société d'un identifiant ou d'un uuid tapé par l'éditeur (voir
      * ProcedureDeLEditeur), null si elle n'existe pas. Un texte qui n'est
      * ni l'un ni l'autre ne désigne aucune société : la colonne uuid, typée

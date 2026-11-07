@@ -991,6 +991,12 @@ return [
             'tests/Browser/AvoirsFournisseurTest.php › le responsable ouvre et ferme deux fois la fenêtre « Créer un avoir fournisseur » sans erreur',
         ]],
         'champ:fournisseur_id' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:montant_ht' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+        ]],
+        'champ:montant_tva' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+        ]],
         'champ:numero_fournisseur' => ['lot' => 'NAV-3', 'tests' => []],
         'filtre:source' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1026,6 +1032,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
+        'filtre:tva_a_verifier' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › la marque « TVA à vérifier » et son filtre se voient de chaque rôle qui voit les achats, cabinet lié compris ; seul qui crée les factures d’achat en saisit la TVA',
+        ]],
         'repeteur:lignes' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1033,6 +1044,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+        ]],
+        'repeteur:taux' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable crée un avoir fournisseur depuis la fiche d’une facture d’achat avec le HT et la TVA de la note d’avoir, et confirme leur écart',
         ]],
     ],
     'app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php' => [
@@ -1896,11 +1910,34 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
+        'champ:montant_ht' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+        ]],
+        'champ:montant_tva' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
+        ]],
         'champ:origine' => ['lot' => 'NAV-3', 'tests' => []],
-        'champ:prix_unitaire_ht' => ['lot' => 'NAV-3', 'tests' => []],
-        'champ:produit_id' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:prix_unitaire_ht' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
+        ]],
+        'champ:produit_id' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
+        ]],
         'champ:remise_pourcentage' => ['lot' => 'NAV-3', 'tests' => []],
-        'repeteur:lignes' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:total_ttc_controle' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+        ]],
+        'repeteur:lignes' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
+        ]],
+        'repeteur:taux' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable saisit une facture d’achat au PU à six décimales, avec le HT et la TVA du fournisseur dans la tolérance',
+            'tests/Browser/Parcours/TvaDesAchatsTest.php › le responsable confirme une TVA du fournisseur au-delà de la tolérance, puis retrouve la facture marquée par le filtre et sur sa fiche',
+        ]],
     ],
     'app/Filament/Concerns/AjouteDesLignesDeVente.php' => [
         'action:ajouterUnProduit' => ['lot' => 'NAV-2', 'tests' => [

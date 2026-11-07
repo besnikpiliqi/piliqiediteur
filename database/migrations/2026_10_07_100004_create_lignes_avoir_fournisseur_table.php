@@ -26,12 +26,19 @@ return new class extends Migration
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).
             $table->unsignedInteger('quantite');
-            // Un achat part du PU HT du fournisseur, sans PU TTC : la TVA de
-            // chaque taux se calcule sur le total HT de ses lignes, puis se
-            // répartit entre elles (voir CalculateurLigne::chiffrerUnAchat()).
-            $table->decimal('prix_unitaire_ht', 12, 2);
+            // Celui de la ligne d'achat retournée, six décimales au plus
+            // (voir PrixDAchat).
+            $table->decimal('prix_unitaire_ht', 18, 6);
             $table->decimal('taux_tva', 5, 2);
             $table->decimal('remise_pourcentage', 5, 2)->default(0);
+            // Le HT de la ligne tel que l'écrit la note d'avoir du
+            // fournisseur, quand la personne l'a saisi ; vide, celui que
+            // PILIQI propose pour ce retour (voir LigneAchat::montantsDuRetour()).
+            // Gardé du brouillon à l'émission, qui arrête les montants.
+            $table->decimal('montant_ht_saisi', 12, 2)->nullable();
+            // Le HT retenu (le saisi, sinon le proposé), et la part de la
+            // TVA retenue de son taux (voir la migration
+            // create_taux_avoirs_fournisseur_table).
             $table->decimal('montant_ht', 12, 2);
             $table->decimal('montant_tva', 12, 2);
             $table->decimal('montant_ttc', 12, 2);

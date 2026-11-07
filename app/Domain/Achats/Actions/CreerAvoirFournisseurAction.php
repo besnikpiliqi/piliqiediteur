@@ -5,12 +5,17 @@ namespace App\Domain\Achats\Actions;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Services\ChiffrageDUnAvoirFournisseur;
+use App\Domain\Achats\Services\MontantsDuFournisseur;
+use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -35,6 +40,14 @@ use LogicException;
  * rapprochera l'avoir que le fournisseur enverra par la plateforme de
  * facturation électronique de celui saisi ici.
  *
+ * Il garde aussi ce qu'écrit la note d'avoir du fournisseur, qui prime
+ * (décision de l'éditeur du 02/11/2026, T1) : le HT d'une ligne (sa clé
+ * « montant_ht ») et la TVA d'un taux (voir MontantsDuFournisseur), que
+ * son émission retient ; ses montants sont provisoires jusqu'à l'émission,
+ * qui les arrête (voir ChiffrageDUnAvoirFournisseur et
+ * EmettreAvoirFournisseurAction). Un total TTC saisi pour contrôle qui ne
+ * vaut pas son total HT plus sa TVA est refusé.
+ *
  * Son auteur, relu en base (voir LecteurDesDroits), doit pouvoir créer un
  * avoir fournisseur et voir la facture d'achat qu'il crédite (voir
  * FactureAchatPolicy::view()), comme un avoir client les factures qu'il
@@ -45,8 +58,10 @@ use LogicException;
 class CreerAvoirFournisseurAction
 {
     public function __construct(
-        private readonly CalculateurLigne $calculateurLigne,
+        private readonly CalculateurLigne $calculateur,
         private readonly LecteurDesDroits $lecteur,
+        private readonly ChiffrageDUnAvoirFournisseur $chiffrage,
+        private readonly TvaDuFournisseur $tva,
     ) {}
 
     /**
@@ -56,16 +71,18 @@ class CreerAvoirFournisseurAction
     public const LONGUEUR_NUMERO_FOURNISSEUR = 60;
 
     /**
-     * @param  list<array{ligne_achat_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     * @param  list<array{ligne_achat_id: int|string, quantite: int|string, montant_ht?: float|string|null}>  $lignesSelectionnees
      * @param  string|null  $numeroFournisseur  le n° de l'avoir chez le fournisseur, facultatif
+     * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la note d'avoir du fournisseur au niveau du document ; aucun, les propositions de PILIQI
      *
      * @throws AuthorizationException
      */
-    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null, ?string $numeroFournisseur = null): AvoirFournisseur
+    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null, ?string $numeroFournisseur = null, ?MontantsDuFournisseur $montants = null): AvoirFournisseur
     {
         $numeroFournisseur = self::numeroFournisseur($numeroFournisseur);
+        $montants ??= MontantsDuFournisseur::aucun();
 
-        return DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur) {
+        return DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants) {
             $magasin = app(TenantContext::class)->magasin();
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, AvoirFournisseur::class);
             $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
@@ -94,7 +111,7 @@ class CreerAvoirFournisseurAction
             ]))->forceFill(['cree_par' => $compte->getKey()]);
             $avoir->save();
 
-            $lignesConstruites = [];
+            $retours = [];
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
                 $ligneAchat = $factureAchat->lignes->firstWhere('id', (int) $selection['ligne_achat_id']);
@@ -110,26 +127,36 @@ class CreerAvoirFournisseurAction
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");
                 }
 
-                $montants = $ligneAchat->montantsDuRetour($quantite);
+                $retours[$index] = [
+                    'ligne_achat' => $ligneAchat,
+                    'quantite' => $quantite,
+                    'montant_ht_saisi' => filled($selection['montant_ht'] ?? null) ? $this->calculateur->enDecimal(SaisieDecimale::montantAuCentime($selection['montant_ht'])) : null,
+                ];
+            }
 
+            $chiffre = $this->chiffrage->chiffrer($retours, $montants->tvaParTaux);
+            $montants->verifier($chiffre);
+
+            foreach ($retours as $index => $retour) {
+                $ligneAchat = $retour['ligne_achat'];
                 $avoir->lignes()->create([
                     'ligne_achat_id' => $ligneAchat->id,
                     'produit_id' => $ligneAchat->produit_id,
                     'description' => $ligneAchat->description,
                     'reference' => $ligneAchat->reference,
-                    'quantite' => $quantite,
+                    'quantite' => $retour['quantite'],
                     'prix_unitaire_ht' => $ligneAchat->prix_unitaire_ht,
                     'taux_tva' => $ligneAchat->taux_tva,
                     'remise_pourcentage' => $ligneAchat->remise_pourcentage,
+                    'montant_ht_saisi' => $retour['montant_ht_saisi'],
                     'ordre' => $index,
-                    ...$montants,
+                    ...Arr::only($chiffre->lignes[$index], ['montant_ht', 'montant_tva', 'montant_ttc']),
                 ]);
-
-                $lignesConstruites[] = $montants;
             }
 
             $avoir->verifierQueLeStockSuffit();
-            $avoir->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+            $avoir->forceFill($chiffre->totaux)->save();
+            $this->tva->proposer($avoir, $chiffre, $montants);
 
             return $avoir->fresh('lignes');
         });

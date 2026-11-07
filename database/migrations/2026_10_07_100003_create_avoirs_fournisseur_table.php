@@ -39,13 +39,20 @@ return new class extends Migration
             $table->dateTime('date_emission')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('motif')->nullable();
+            // Sommes exactes de ses taux (voir la migration
+            // create_taux_avoirs_fournisseur_table) : la base et la TVA de
+            // chaque taux, celles qu'écrit la note d'avoir du fournisseur.
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);
+            // « TVA à vérifier », comme sur la facture d'achat (voir
+            // TvaDuFournisseur).
+            $table->boolean('tva_a_verifier')->default(false);
             $table->timestamps();
 
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'facture_achat_id']);
+            $table->index(['magasin_id', 'tva_a_verifier']);
         });
 
         // Seule une société qui a des articles reçoit un avoir fournisseur

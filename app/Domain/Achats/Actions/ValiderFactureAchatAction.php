@@ -11,12 +11,16 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use LogicException;
@@ -47,7 +51,12 @@ use LogicException;
  * sans consommer ni numéro de facture d'achat ni référence de produit. Un
  * magasin suspendu ou fermé ne valide plus d'achat (voir
  * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit sous un verrou
- * partagé, premier verrou de la transaction, et la fermeture du magasin,
+ * partagé, juste après celle de sa société, que la validation verrouille
+ * en tête comme son entrée au journal d'audit le ferait (voir
+ * Societe::verrouillerAvantSonJournalDAudit()) : la saisie du code du
+ * courrier, qui verrouille la société puis la ligne du propriétaire, et
+ * une validation par le propriétaire passent l'une après l'autre ; et la
+ * fermeture du magasin,
  * qui la verrouille (voir FermerMagasinAction), passe donc tout entière
  * avant ou après la validation ; une cession ne laisse aucune réception
  * entrer dans le stock qu'elle a sorti.
@@ -71,6 +80,14 @@ use LogicException;
  * ActionsUniques), cherché sous le verrou de la ligne de son auteur :
  * répétée après une réponse perdue, elle rend la facture d'achat déjà
  * validée, sans faire entrer le stock une seconde fois.
+ *
+ * La facture validée s'inscrit au journal d'audit de la société, dans la
+ * chaîne du magasin, en dernier verrou (voir JournalAudit) : son numéro,
+ * celui du fournisseur, ses totaux, la base et la TVA de chaque taux, sa
+ * marque « TVA à vérifier » et ses lignes (voir
+ * FactureAchat::valeursAuditees()). Ses montants sont ceux que sa saisie a
+ * retenus, écarts confirmés compris (voir TvaDuFournisseur) : la validation
+ * ne les recalcule pas.
  */
 class ValiderFactureAchatAction
 {
@@ -82,6 +99,7 @@ class ValiderFactureAchatAction
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
         private readonly ActionsUniques $actionsUniques,
+        private readonly JournalAudit $journalAudit,
     ) {}
 
     /**
@@ -94,11 +112,13 @@ class ValiderFactureAchatAction
     {
         $magasin = app(TenantContext::class)->magasin();
         $verrou = function () use ($magasin, $auteur): void {
+            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
             ActionsUniques::verrouDe($auteur)();
         };
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_FACTURE_ACHAT, $auteur, ['facture_achat_id' => $factureAchat->getKey()], $verrou, fn (): FactureAchat => DB::transaction(function () use ($auteur, $factureAchat, $magasin) {
+            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'valider', $magasin, $factureAchat);
 
@@ -151,6 +171,8 @@ class ValiderFactureAchatAction
         // FactureAchatValidee ; chaque ligne y arrive avec son produit,
         // nouveau compris.
         FactureAchatValidee::dispatch($factureAchat->load('lignes'));
+
+        $this->journalAudit->inscrire(ActionAuditee::FactureAchatValidee, $compte, $factureAchat->magasin, null, Arr::only($factureAchat->valeursAuditees(), ActionAuditee::FactureAchatValidee->champsAudites()), $factureAchat);
 
         return $factureAchat;
     }

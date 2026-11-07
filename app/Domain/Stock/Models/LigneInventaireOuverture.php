@@ -2,6 +2,7 @@
 
 namespace App\Domain\Stock\Models;
 
+use App\Domain\Achats\Casts\PrixDAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -43,7 +44,7 @@ class LigneInventaireOuverture extends Model
     protected $casts = [
         'nouveau_produit' => 'array',
         'quantite' => 'integer',
-        'cout_unitaire_ht' => 'decimal:2',
+        'cout_unitaire_ht' => PrixDAchat::class,
         'suivi_stock' => 'boolean',
         'valeur_ht' => 'decimal:2',
     ];

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 22:40 UTC par pilotage-sync.sh : « Décision D54 de l'éditeur : paquets utiles installés sans demander ; § 9 du cahier du lot QA ».
+Mis à jour le 07/11/2026 à 22:41 UTC par pilotage-sync.sh : « CI verte du lot EX (c7b1ec3, courses 208 et 209) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -71,6 +71,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Facturation/Models/PreuveOperation.php
  M app/Domain/Facturation/Models/RecuPaiement.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/DocumentChiffre.php
  M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
  M app/Domain/Stock/Models/InventaireOuverture.php
  M app/Domain/Stock/Models/LigneInventaireOuverture.php
@@ -96,7 +97,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Filament/App/Resources/EquipeDuMagasinResource.php
  M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
  M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/InventaireOuvertureResource/Pages/EditInventaireOuverture.php
 ```
 
 ## Dernière course de la chaîne

@@ -6,11 +6,13 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Facturation\Enums\NatureRecuPaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\RecusDePaiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -53,6 +55,11 @@ use LogicException;
  * réception : répétée après une réponse perdue, elle rend la facture sans
  * second paiement ; le même jeton avec d'autres parts est refusé. Les
  * paiements qu'elle compose n'en consomment aucun.
+ *
+ * L'encaissement a un seul reçu de paiement pour toutes ses parts et les
+ * bons qu'il impute (R2, voir RecusDePaiement) : ouvert avant la première
+ * part, que chacune désigne, et clos une fois tout imputé, avec ce qui
+ * reste dû du document.
  */
 class EncaisserEnPlusieursModesAction
 {
@@ -64,6 +71,7 @@ class EncaisserEnPlusieursModesAction
         private readonly LecteurDesDroits $lecteur,
         private readonly ActionsUniques $actionsUniques,
         private readonly CalculateurLigne $calculateur,
+        private readonly RecusDePaiement $recus,
     ) {}
 
     /**
@@ -100,6 +108,7 @@ class EncaisserEnPlusieursModesAction
             $this->lecteur->exiger($compte, 'encaisser', $magasin, $facture);
             $bons = $this->bonsDAvoirUtilisables($facture, $bonsDAvoir);
             $this->refuserDesPartsEnTrop($facture, $parts, $bons);
+            $recu = $this->recus->ouvrir($compte, $magasin, NatureRecuPaiement::Encaissement, $facture->client, $recuLe);
 
             foreach ($parts as $rang => $part) {
                 $montant = $this->calculateur->enDecimal($part->montant);
@@ -111,8 +120,11 @@ class EncaisserEnPlusieursModesAction
                     [['facture_id' => $facture->getKey(), 'montant' => $montant]],
                     null,
                     $rang === 0 ? $bons : [],
+                    $recu,
                 );
             }
+
+            $this->recus->clore($recu);
 
             return $facture->fresh();
         }));

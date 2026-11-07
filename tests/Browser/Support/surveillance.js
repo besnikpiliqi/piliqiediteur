@@ -16,9 +16,9 @@
 //   suivi, un formulaire envoyé, une redirection) le note ;
 // - chaque téléchargement que le script de la page déclenche (un lien
 //   « download » qu'il clique, comme Livewire pour le fichier que rend une
-//   action) est lu : son nom, son type, sa taille et ses premiers
-//   caractères s'inscrivent dans window.__piliqi.telechargements (voir
-//   Navigation::telechargements()) ;
+//   action) est lu : son nom, son type, sa taille, ses premiers
+//   caractères et tout son contenu, en base64, s'inscrivent dans
+//   window.__piliqi.telechargements (voir Navigation::telechargements()) ;
 // - window.__piliqi.auRepos(ms) dit si la page est au repos (voir
 //   Navigation::attendre()) : chargée, ne quittant pas la page, sans
 //   requête ni lecture de téléchargement en cours, chaque composant visible
@@ -135,6 +135,13 @@
         return envoyerOriginal.apply(this, corps);
     };
 
+    const enBase64 = (fichier) => new Promise((resolve, reject) => {
+        const lecteur = new FileReader();
+        lecteur.onload = () => resolve(String(lecteur.result).split(',')[1] ?? '');
+        lecteur.onerror = () => reject(lecteur.error);
+        lecteur.readAsDataURL(fichier);
+    });
+
     const cliquerOriginal = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function () {
         if (this.hasAttribute('download')) {
@@ -142,7 +149,7 @@
             etat.lectures++;
             fetchOriginal(this.href)
                 .then((reponse) => reponse.blob())
-                .then(async (fichier) => etat.telechargements.push({ nom, type: fichier.type, taille: fichier.size, debut: await fichier.slice(0, 16).text() }))
+                .then(async (fichier) => etat.telechargements.push({ nom, type: fichier.type, taille: fichier.size, debut: await fichier.slice(0, 16).text(), contenu: await enBase64(fichier) }))
                 .catch((erreur) => noter('téléchargement illisible', nom + ' : ' + texte(erreur)))
                 .finally(() => etat.lectures--);
         }

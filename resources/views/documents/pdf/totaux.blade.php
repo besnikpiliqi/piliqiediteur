@@ -7,8 +7,18 @@
     pour lui. Puis les totaux du document, précédés d'un signe moins sur un
     avoir.
 
+    Les totaux s'impriment sur une bande d'une seule rangée de tableau, que
+    dompdf ne coupe jamais entre deux pages : le tableau des totaux à
+    droite, toujours à la même place, et, à sa gauche, ce qui a réglé un
+    ticket ou une facture à son émission (voir documents/pdf/reglements,
+    constat C3), quand on le donne ; la case de gauche d'un avoir, d'un
+    devis ou d'un document sans règlement reste vide.
+
     @param \App\Domain\Facturation\Models\Facture|\App\Domain\Facturation\Models\Avoir|\App\Domain\Facturation\Models\Devis $document
     @param string $signe
+    @param \App\Domain\Facturation\Services\ReglementsALEmission|null $reglements ce qui a réglé un ticket ou une facture à son émission
+    @param \Carbon\CarbonInterface|null $dateEmission avec $reglements, la date d'émission du document
+    @param \App\Domain\Calendrier\Calendrier|null $calendrier avec $reglements, celui du magasin du document
 --}}
 @php
     $signe ??= '';
@@ -45,17 +55,28 @@
     </tbody>
 </table>
 
-<table class="totaux">
+<table class="bande-des-totaux">
     <tr>
-        <td class="libelle">Total HT</td>
-        <td class="montant">{{ $signe }}{{ number_format((float) $document->total_ht, 2, ',', ' ') }} €</td>
-    </tr>
-    <tr>
-        <td class="libelle">Total TVA</td>
-        <td class="montant">{{ $signe }}{{ number_format((float) $document->total_tva, 2, ',', ' ') }} €</td>
-    </tr>
-    <tr class="total-ttc">
-        <td class="libelle">Total TTC</td>
-        <td class="montant">{{ $signe }}{{ number_format((float) $document->total_ttc, 2, ',', ' ') }} €</td>
+        <td class="bande-gauche">
+            @isset($reglements)
+                @include('documents.pdf.reglements', ['reglements' => $reglements, 'dateEmission' => $dateEmission, 'calendrier' => $calendrier])
+            @endisset
+        </td>
+        <td class="bande-droite">
+            <table class="totaux">
+                <tr>
+                    <td class="libelle">Total HT</td>
+                    <td class="montant">{{ $signe }}{{ number_format((float) $document->total_ht, 2, ',', ' ') }} €</td>
+                </tr>
+                <tr>
+                    <td class="libelle">Total TVA</td>
+                    <td class="montant">{{ $signe }}{{ number_format((float) $document->total_tva, 2, ',', ' ') }} €</td>
+                </tr>
+                <tr class="total-ttc">
+                    <td class="libelle">Total TTC</td>
+                    <td class="montant">{{ $signe }}{{ number_format((float) $document->total_ttc, 2, ',', ' ') }} €</td>
+                </tr>
+            </table>
+        </td>
     </tr>
 </table>

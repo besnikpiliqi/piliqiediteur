@@ -5,9 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Historique des envois par e-mail d'un devis, d'une facture ou d'un avoir
- * (voir EnvoyerDocumentAction) : chaque envoi et chaque relance d'une
- * facture impayée y laisse une ligne, qu'il ait abouti ou non.
+ * Historique des envois par e-mail d'un devis, d'une facture, d'un avoir
+ * ou d'un reçu de paiement (voir EnvoyerDocumentAction) : chaque envoi et
+ * chaque relance d'une facture impayée y laisse une ligne, qu'il ait
+ * abouti ou non.
  */
 return new class extends Migration
 {
@@ -16,7 +17,7 @@ return new class extends Migration
         Schema::create('envois_documents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            // Polymorphique : facture, devis ou avoir.
+            // Polymorphique : facture, devis, avoir ou reçu de paiement.
             $table->morphs('document');
             $table->string('destinataire', 254);
             $table->string('objet');

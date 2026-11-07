@@ -22,6 +22,10 @@ use Illuminate\Support\Facades\Schema;
  * Le propriétaire, qui ne vend jamais, n'enregistre aucun paiement : la
  * base refuse un paiement à son nom, mais pas sa contre-passation, l'exact
  * opposé d'un paiement saisi par erreur (voir GardesDeLaVente).
+ *
+ * Un paiement reçu après l'émission de ce qu'il règle, et une
+ * contre-passation, désignent leur reçu de paiement (R2, voir la migration
+ * create_recus_paiement_table).
  */
 return new class extends Migration
 {
@@ -42,10 +46,16 @@ return new class extends Migration
             // son compte.
             $table->string('cree_par_nom')->nullable();
             $table->foreignId('contre_passe_paiement_id')->nullable()->unique()->constrained('paiements')->restrictOnDelete();
+            // Le reçu de paiement de l'encaissement fait après l'émission
+            // dont il est une part, ou de la contre-passation (voir
+            // RecusDePaiement) ; aucun pour un paiement reçu à l'émission,
+            // que le document imprime lui-même.
+            $table->foreignId('recu_paiement_id')->nullable()->constrained('recus_paiement')->restrictOnDelete();
             $table->timestamps();
 
             $table->index(['magasin_id', 'client_id']);
             $table->index(['magasin_id', 'recu_le']);
+            $table->index(['magasin_id', 'recu_paiement_id']);
         });
 
         DeclencheursDeProtection::ajoutSeul('paiements');

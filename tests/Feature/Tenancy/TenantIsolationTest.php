@@ -26,6 +26,7 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Enums\NatureRecuPaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
@@ -39,10 +40,12 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
@@ -139,13 +142,14 @@ class TenantIsolationTest extends TestCase
      * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
      * et le registre ne s'écrivent que signés, par leurs actions, la trace
      * d'un événement technique qu'avec lui, une vérification VIES, une
-     * preuve d'exonération ou un bordereau de détaxe, que par la sienne, et
-     * le jeton d'une demande traitée, que par ActionsUniques.
+     * preuve d'exonération ou un bordereau de détaxe, que par la sienne, un
+     * reçu de paiement et ses lignes, qu'avec leur encaissement, et le
+     * jeton d'une demande traitée, que par ActionsUniques.
      * ActionTraitee, Avoir, AvoirAllocation, BordereauDetaxe,
-     * ConsultationVies, EnregistrementFiscal, Paiement, PaiementAllocation,
-     * PreuveOperation, TeteRegistreFiscal et TraceEvenement sont aussi dans
-     * modelesCrees(), écrits directement par ces tests (voir
-     * creerEnregistrement()).
+     * ConsultationVies, EnregistrementFiscal, LigneRecuPaiement, Paiement,
+     * PaiementAllocation, PreuveOperation, RecuPaiement, TeteRegistreFiscal
+     * et TraceEvenement sont aussi dans modelesCrees(), écrits directement
+     * par ces tests (voir creerEnregistrement()).
      *
      * @var list<class-string<Model>>
      */
@@ -162,11 +166,13 @@ class TenantIsolationTest extends TestCase
         LigneDevis::class,
         LigneFacture::class,
         LigneInventaireOuverture::class,
+        LigneRecuPaiement::class,
         MouvementStock::class,
         Paiement::class,
         PaiementAllocation::class,
         PosteReconnu::class,
         PreuveOperation::class,
+        RecuPaiement::class,
         TeteRegistreFiscal::class,
         TraceEvenement::class,
         TransmissionPdp::class,
@@ -212,7 +218,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, RecuPaiement::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -502,7 +508,7 @@ class TenantIsolationTest extends TestCase
     /**
      * Un enregistrement du magasin actif d'un modèle sans fabrique, écrit
      * directement, sans l'action qui l'écrit d'ordinaire : un avoir
-     * brouillon, un paiement ou une imputation non signés, une
+     * brouillon, un paiement, une imputation ou un reçu non signés, une
      * vérification VIES sans appel à VIES, une preuve d'exonération ou un
      * bordereau de détaxe sur un brouillon, une ligne du registre fiscal
      * sans l'événement d'initialisation du magasin, une ligne de verrou.
@@ -565,6 +571,21 @@ class TenantIsolationTest extends TestCase
                 'facture_id' => Facture::factory()->create()->getKey(),
                 'type' => TypePreuve::Mrn,
                 'reference' => '26FR000000123456E1',
+            ],
+            RecuPaiement::class => [
+                'client_id' => Client::factory()->create()->getKey(),
+                'numero' => 'RP-TEST-2026-'.Str::upper(Str::random(6)),
+                'nature' => NatureRecuPaiement::Encaissement,
+                'recu_le' => '2026-10-09',
+                'emetteur' => ['nom' => 'Boutique de test'],
+            ],
+            LigneRecuPaiement::class => [
+                'recu_paiement_id' => self::creerEnregistrement(RecuPaiement::class)->getKey(),
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'montant' => '12.00',
+                'credit' => '0.00',
+                'reste_du' => '0.00',
+                'ordre' => 0,
             ],
             TeteRegistreFiscal::class => [],
             TraceEvenement::class => [

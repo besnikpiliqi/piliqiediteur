@@ -199,10 +199,10 @@ final class Navigation
 
     /**
      * Les fichiers que la page a téléchargés depuis l'appel précédent, lus
-     * dans le navigateur (voir surveillance.js) : nom, type, taille et
-     * premiers caractères.
+     * dans le navigateur (voir surveillance.js) : nom, type, taille,
+     * premiers caractères et tout le contenu, en base64.
      *
-     * @return list<array{nom: string, type: string, taille: int, debut: string}>
+     * @return list<array{nom: string, type: string, taille: int, debut: string, contenu: string}>
      */
     public function telechargements(): array
     {

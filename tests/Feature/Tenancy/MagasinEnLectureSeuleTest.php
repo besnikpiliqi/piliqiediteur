@@ -38,6 +38,8 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -202,6 +204,26 @@ class MagasinEnLectureSeuleTest extends TestCase
         $brouillon->refresh();
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->statut, $brouillon->numero]);
         $this->assertSame(0, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente)->count());
+    }
+
+    /**
+     * « Émettre et encaisser » (R1) n'émet ni n'encaisse rien dans un
+     * magasin en lecture seule, et la fiche du brouillon ne le propose
+     * plus.
+     */
+    #[DataProvider('situationsEnLectureSeule')]
+    public function test_un_brouillon_ne_s_emet_ni_ne_s_encaisse_plus(string $situation, string $motif): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $this->passerEn($magasin, $situation);
+
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, ReglementComptant::horsDeLaCaisse([new PartDeReglement(ModePaiement::CarteBancaire, 1200)])), LogicException::class, $this->refus($motif));
+
+        $this->assertSame([StatutFacture::Brouillon, null, 0], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, Paiement::query()->count()]);
+        Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->assertActionHidden('emettre')
+            ->assertActionHidden('emettre_et_encaisser');
     }
 
     #[DataProvider('situationsEnLectureSeule')]

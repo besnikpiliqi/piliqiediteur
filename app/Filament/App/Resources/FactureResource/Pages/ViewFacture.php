@@ -24,7 +24,10 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
 /**
- * La fiche d'une facture ou d'un ticket. Ce qui suit la vente sans la
+ * La fiche d'une facture ou d'un ticket. Un brouillon s'y émet, par
+ * « Émettre » ou par « Émettre et encaisser », qui enregistre aussi son
+ * règlement, en tout ou en partie (R1, voir FactureResource::emettre() et
+ * FactureResource::emettreEtEncaisser()). Ce qui suit la vente sans la
  * changer s'y enregistre, à qui est autorisé à noter les preuves
  * d'exonération et les bordereaux de détaxe (facture.justifier, voir
  * FacturePolicy::justifier()), le propriétaire compris, qui ne vend
@@ -51,6 +54,8 @@ class ViewFacture extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            FactureResource::emettre(Actions\Action::make('emettre')),
+            FactureResource::emettreEtEncaisser(Actions\Action::make('emettre_et_encaisser')),
             FactureResource::encaisser(Actions\Action::make('encaisser')),
             FactureResource::telechargerLePdf(Actions\Action::make('telecharger_pdf')),
             FactureResource::envoyerParEmail(Actions\Action::make('envoyer_par_email')),

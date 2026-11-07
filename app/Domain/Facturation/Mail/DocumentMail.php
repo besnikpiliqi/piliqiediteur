@@ -10,6 +10,9 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneRecuPaiement;
+use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\Emetteur;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
@@ -18,8 +21,8 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
 /**
- * L'e-mail qui porte un devis, une facture ou un avoir à son client, PDF
- * en pièce jointe (voir EnvoyerDocumentJob). Il part de l'adresse du
+ * L'e-mail qui porte un devis, une facture, un avoir ou un reçu de
+ * paiement à son client, PDF en pièce jointe (voir EnvoyerDocumentJob). Il part de l'adresse du
  * logiciel, au nom du magasin, et les réponses vont au magasin.
  *
  * Il présente le vendeur que son PDF imprime (voir
@@ -111,6 +114,11 @@ class DocumentMail extends Mailable
 
         /** @var DocumentEnvoyable $document */
         $document = $this->envoi->document;
+
+        if ($document instanceof RecuPaiement) {
+            return $this->introductionDuRecu($document);
+        }
+
         $montant = number_format((float) $document->total_ttc, 2, ',', ' ').' € TTC';
 
         return match (true) {
@@ -122,6 +130,22 @@ class DocumentMail extends Mailable
                 .($document->date_validite ? ', valable jusqu\'au '.Calendrier::afficherJour($document->date_validite, 'd/m/Y').'.' : '.'),
             $document instanceof Avoir => "Veuillez trouver ci-joint notre avoir {$document->numero} d'un montant de {$montant}.",
         };
+    }
+
+    /**
+     * Ce que dit un reçu de paiement : le montant reçu, ou annulé par une
+     * contre-passation, et les documents qu'il règle ; un reçu n'est pas
+     * une facture.
+     */
+    private function introductionDuRecu(RecuPaiement $recu): string
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $montant = $calculateur->enEuros(abs($recu->totalEnCentimes()));
+        $documents = $recu->lignes->map(fn (LigneRecuPaiement $ligne): string => "{$ligne->facture->libelleDocument()} {$ligne->facture->numero}")->implode(', ');
+
+        return $recu->totalEnCentimes() < 0
+            ? "Veuillez trouver ci-joint notre reçu {$recu->numero} de la contre-passation d'un paiement de {$montant} ({$documents}). Ce reçu n'est pas une facture."
+            : "Veuillez trouver ci-joint notre reçu {$recu->numero} pour votre paiement de {$montant} ({$documents}). Ce reçu n'est pas une facture.";
     }
 
     /**

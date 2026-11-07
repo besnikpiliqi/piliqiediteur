@@ -117,8 +117,9 @@ use LogicException;
  *     le magasin, relu sous un verrou partagé, doit pouvoir vendre ;
  *  2. l'auteur est relu sous le verrou de sa ligne (voir
  *     LecteurDesDroits::exigerSousVerrou()) : il doit pouvoir émettre
- *     cette facture, et, pour une vente au comptoir réglée à l'émission,
- *     enregistrer un paiement ; une autorisation retirée pendant que son
+ *     cette facture, et, pour une vente réglée à l'émission (à la caisse
+ *     ou par « Émettre et encaisser »), enregistrer un paiement et
+ *     encaisser cette facture ; une autorisation retirée pendant que son
  *     écran restait ouvert est vue. Il n'encaisse que dans un magasin à la
  *     fois : sa caisse personnelle d'un autre magasin de la société doit
  *     être fermée (voir VerificateurCaissesPersonnelles). Le registre signe
@@ -149,13 +150,17 @@ use LogicException;
  *     que le crédit du client ou un bon a changé depuis l'écran, rien
  *     n'est enregistré et le refus dit ce qui reste à répartir, ou de
  *     combien les parts dépassent (« Le total à payer a changé (crédit
- *     d'avoir du client) : 20,00 € à répartir. »). Chaque part
- *     devient un paiement de son mode (voir EnregistrerPaiementAction,
- *     signé dans la chaîne des encaissements). Une facture dont il ne
- *     reste rien à payer, parce que ce crédit ou ces bons la couvrent ou
- *     qu'elle ne coûte rien (remise de 100 %), passe « payée » sans
- *     encaissement : elle n'attend aucun règlement et ne sera jamais en
- *     retard (G1) ;
+ *     d'avoir du client) : 20,00 € à répartir. »). Le règlement de
+ *     « Émettre et encaisser », pour une facture ou un ticket fait hors de
+ *     la caisse (R1, voir ReglementComptant::horsDeLaCaisse()), n'a pas de
+ *     bon d'avoir et ses parts ne dépassent jamais ce qui reste dû : un
+ *     paiement partiel est permis, le reste restant dû avec l'échéance de
+ *     la facture. Chaque part devient un paiement de son mode (voir
+ *     EnregistrerPaiementAction, signé dans la chaîne des encaissements),
+ *     reçu le jour de l'émission. Une facture dont il ne reste rien à
+ *     payer, parce que ce crédit ou ces bons la couvrent ou qu'elle ne
+ *     coûte rien (remise de 100 %), passe « payée » sans encaissement :
+ *     elle n'attend aucun règlement et ne sera jamais en retard (G1) ;
  *  6. le document, tel qu'il est alors en base, est signé dans la chaîne
  *     des ventes (voir ContenuFiscal) : client figé, paiements de chaque
  *     part, crédit et bons d'avoir compris ;
@@ -167,6 +172,8 @@ use LogicException;
 class EmettreFactureAction
 {
     public const TOTAL_A_PAYER_CHANGE = 'Le total à payer a changé (crédit d\'avoir du client) : %s à répartir.';
+
+    public const REFUS_DEJA_EMISE = 'Ce document est déjà émis, sous le n° %s : il ne s\'émet qu\'une fois.';
 
     public const TOTAL_A_PAYER_CHANGE_PARTS_EN_TROP = 'Le total à payer a changé (crédit d\'avoir du client) : les parts le dépassent de %s.';
 
@@ -187,7 +194,7 @@ class EmettreFactureAction
     ) {}
 
     /**
-     * @param  ReglementComptant|null  $reglement  le règlement d'une vente à la caisse, encaissé à l'émission
+     * @param  ReglementComptant|null  $reglement  le règlement encaissé à l'émission : d'une vente à la caisse, ou de « Émettre et encaisser »
      * @param  ConfirmationVenteSansStock|null  $confirmation  l'avertissement d'une vente sans stock, confirmé (R1)
      * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      *
@@ -201,6 +208,12 @@ class EmettreFactureAction
     public function handle(User $auteur, Facture $facture, ?ReglementComptant $reglement = null, ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
     {
         $magasin = app(TenantContext::class)->magasin();
+
+        // « Émettre et encaisser » sans aucune part payée n'est pas un
+        // règlement : le geste revient à « Émettre » (R1).
+        if ($reglement !== null && ! $reglement->aLaCaisse && $reglement->parts === []) {
+            $reglement = null;
+        }
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, $auteur, [
             'facture_id' => $facture->getKey(),
@@ -232,8 +245,12 @@ class EmettreFactureAction
         $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->first()
             ?? throw new LogicException(Facture::REFUS_INTROUVABLE);
 
-        if (! $facture->statut->peutTransitionnerVers(StatutFacture::Emise)) {
-            throw new LogicException("Impossible d'émettre une facture au statut [{$facture->statut->value}].");
+        // Seul un brouillon s'émet : une facture payée peut repasser
+        // « émise » quand un paiement est contre-passé, mais elle ne
+        // s'émet plus jamais (deux « Émettre et encaisser » du même
+        // brouillon, par exemple, voir REFUS_DEJA_EMISE).
+        if ($facture->statut !== StatutFacture::Brouillon) {
+            throw new LogicException(sprintf(self::REFUS_DEJA_EMISE, $facture->numero));
         }
 
         if ($facture->lignes()->doesntExist()) {
@@ -369,10 +386,13 @@ class EmettreFactureAction
     }
 
     /**
-     * Une vente à la caisse est soldée dès son émission : les bons d'avoir
-     * présentés s'imputent sur ce que le crédit du client laisse dû, puis
-     * chaque part paie son montant, dans son mode. Les parts doivent égaler
-     * exactement ce qui reste à payer.
+     * Le règlement reçu à l'émission : une vente à la caisse est soldée dès
+     * son émission (les bons d'avoir présentés s'imputent sur ce que le
+     * crédit du client laisse dû, puis les parts doivent égaler exactement
+     * ce qui reste à payer) ; « Émettre et encaisser » règle tout ou partie
+     * de ce que le crédit du client laisse dû, jamais plus. Chaque part paie
+     * son montant, dans son mode, sans reçu de paiement : le document
+     * imprime lui-même ce qu'il a reçu à son émission.
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
@@ -381,9 +401,14 @@ class EmettreFactureAction
     private function encaisserComptant(User $compte, Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {
         $this->imputerLesBonsDAvoir($facture, $reglement->bonsDAvoir);
-        $ecart = $reglement->totalDesParts() - $facture->fresh()->resteDuEnCentimes();
+        $resteDu = $facture->fresh()->resteDuEnCentimes();
+        $ecart = $reglement->totalDesParts() - $resteDu;
 
-        if ($ecart !== 0) {
+        if (! $reglement->aLaCaisse && $ecart > 0) {
+            throw new LogicException(sprintf(EncaisserEnPlusieursModesAction::PARTS_EN_TROP, $this->calculateur->enEuros($reglement->totalDesParts()), $this->calculateur->enEuros(max(0, $resteDu))));
+        }
+
+        if ($reglement->aLaCaisse && $ecart !== 0) {
             throw new LogicException(sprintf($ecart < 0 ? self::TOTAL_A_PAYER_CHANGE : self::TOTAL_A_PAYER_CHANGE_PARTS_EN_TROP, $this->calculateur->enEuros(abs($ecart))));
         }
 
@@ -395,6 +420,7 @@ class EmettreFactureAction
                 $facture->client,
                 ['mode_paiement' => $part->mode->value, 'montant' => $montant, 'reference' => $part->reference, 'recu_le' => $recuLe],
                 [['facture_id' => $facture->getKey(), 'montant' => $montant]],
+                aLEmission: true,
             );
         }
     }

@@ -11,12 +11,14 @@ use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\NatureRecuPaiement;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ImputationDuCredit;
+use App\Domain\Facturation\Services\RecusDePaiement;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -75,6 +77,11 @@ use LogicException;
  * La demande porte un jeton (R3, voir ActionsUniques), cherché sous le
  * verrou du registre : répétée après une réponse perdue, elle rend la
  * contre-passation déjà enregistrée.
+ *
+ * Chaque contre-passation a son reçu, « Contre-passation de paiement » (R2,
+ * voir RecusDePaiement) : ouvert avant elle, qu'elle désigne, et clos une
+ * fois le crédit réimputé, avec chaque document touché, ce qui lui est
+ * rendu ou imputé et ce qui en reste dû.
  */
 class ContrePasserPaiementAction
 {
@@ -87,6 +94,7 @@ class ContrePasserPaiementAction
         private readonly ActionsUniques $actionsUniques,
         private readonly ImputationDuCredit $imputation,
         private readonly CalculateurLigne $calculateur,
+        private readonly RecusDePaiement $recus,
     ) {}
 
     /**
@@ -124,7 +132,7 @@ class ContrePasserPaiementAction
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'contrePasser', $magasin, $original);
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
-            return $this->operateur->pendant($compte, fn (): Paiement => $this->contrePasser($compte, $original, $motif, $journee));
+            return $this->operateur->pendant($compte, fn (): Paiement => $this->contrePasser($compte, $magasin, $original, $motif, $journee));
         }));
     }
 
@@ -133,8 +141,11 @@ class ContrePasserPaiementAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function contrePasser(User $compte, Paiement $original, string $motif, string $journee): Paiement
+    private function contrePasser(User $compte, Magasin $magasin, Paiement $original, string $motif, string $journee): Paiement
     {
+        /** @var Client $client */
+        $client = $original->client;
+        $recu = $this->recus->ouvrir($compte, $magasin, NatureRecuPaiement::ContrePassation, $client, $journee);
         $contrePassation = new Paiement([
             'client_id' => $original->client_id,
             'mode_paiement' => $original->mode_paiement,
@@ -143,7 +154,7 @@ class ContrePasserPaiementAction
             'notes' => $motif,
             'recu_le' => $journee,
         ]);
-        $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey(), 'cree_par' => $compte->getKey()])->save();
+        $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey(), 'cree_par' => $compte->getKey(), 'recu_paiement_id' => $recu->getKey()])->save();
         $factures = [];
 
         foreach ($original->allocations()->get() as $allocation) {
@@ -172,6 +183,7 @@ class ContrePasserPaiementAction
         }
 
         $this->reimputerLeCreditDisponible($contrePassation);
+        $this->recus->clore($recu);
 
         $contrePassation = $contrePassation->fresh();
         $this->registre->enregistrer(ChaineFiscale::Encaissement, 'contre_passation', $this->contenuFiscal->encaissement($contrePassation), $contrePassation);

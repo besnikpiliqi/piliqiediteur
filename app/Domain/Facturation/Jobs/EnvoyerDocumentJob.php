@@ -14,10 +14,12 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
 use App\Domain\Tenancy\Concerns\WithTenantContext;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -38,7 +40,8 @@ use Symfony\Component\Mime\Exception\RfcComplianceException;
 use Throwable;
 
 /**
- * Envoie l'e-mail d'un EnvoiDocument, son PDF en pièce jointe, puis
+ * Envoie l'e-mail d'un EnvoiDocument (un devis, une facture, un avoir ou
+ * un reçu de paiement), son PDF en pièce jointe, puis
  * constate le résultat. Dispatché avec ->afterCommit() par
  * EnvoyerDocumentAction : il ne démarre qu'une fois l'envoi visible en
  * base, et un serveur d'envoi lent ou indisponible ne retarde jamais le
@@ -122,7 +125,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $document = DB::transaction(fn (): Facture|Devis|Avoir|null => $this->relireAvantLeDepart($envoi));
+        $document = DB::transaction(fn (): Facture|Devis|Avoir|RecuPaiement|null => $this->relireAvantLeDepart($envoi));
 
         if ($document === null) {
             return;
@@ -132,6 +135,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             $document instanceof Facture => app(FacturePdfGenerator::class),
             $document instanceof Devis => app(DevisPdfGenerator::class),
             $document instanceof Avoir => app(AvoirPdfGenerator::class),
+            $document instanceof RecuPaiement => app(RecuPaiementPdfGenerator::class),
         };
 
         try {
@@ -196,7 +200,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
      * d'envoyer, document introuvable, devis modifié depuis la demande,
      * relance d'une facture réglée ou soldée entre-temps.
      */
-    private function relireAvantLeDepart(EnvoiDocument $envoi): Facture|Devis|Avoir|null
+    private function relireAvantLeDepart(EnvoiDocument $envoi): Facture|Devis|Avoir|RecuPaiement|null
     {
         $magasin = Magasin::query()->whereKey($envoi->magasin_id)->sharedLock()->firstOrFail();
         app(TenantContext::class)->set($magasin);
@@ -210,13 +214,17 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return null;
         }
 
-        /** @var class-string<Facture|Devis|Avoir> $classe */
+        /** @var class-string<Facture|Devis|Avoir|RecuPaiement> $classe */
         $classe = $envoi->getActualClassNameForMorph($envoi->document_type);
         $lecteur = app(LecteurDesDroits::class);
 
         try {
             $expediteur = $envoi->envoye_par === null ? null : $lecteur->exigerSousVerrou($envoi->envoyePar, self::autorisationDEnvoyer($classe), $magasin);
-            $document = $classe::query()->whereKey($envoi->document_id)->sharedLock()->with(['client', 'lignes'])->first();
+            // Un reçu de paiement ne change jamais : sa table est en ajout
+            // seul, et le compte de l'application, sans droit de modifier
+            // ses lignes, ne peut pas les verrouiller.
+            $requete = $classe::query()->whereKey($envoi->document_id)->with(['client', 'lignes']);
+            $document = ($classe === RecuPaiement::class ? $requete : $requete->sharedLock())->first();
 
             if ($expediteur !== null && $document !== null) {
                 $lecteur->exiger($expediteur, 'envoyer', $magasin, $document);
@@ -280,17 +288,18 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
     /**
      * L'autorisation d'envoyer ce genre de document, que sa policy demande
-     * aussi (voir FacturePolicy::envoyer(), DevisPolicy::envoyer() et
-     * AvoirPolicy::envoyer()) : la question posée sous le verrou de la
-     * ligne de l'expéditeur, avant celui du document, auquel la policy
+     * aussi (voir FacturePolicy::envoyer(), DevisPolicy::envoyer(),
+     * AvoirPolicy::envoyer() et RecuPaiementPolicy::envoyer(), qui demande
+     * celle des factures qu'il règle) : la question posée sous le verrou de
+     * la ligne de l'expéditeur, avant celui du document, auquel la policy
      * répond ensuite.
      *
-     * @param  class-string<Facture|Devis|Avoir>  $classe
+     * @param  class-string<Facture|Devis|Avoir|RecuPaiement>  $classe
      */
     private static function autorisationDEnvoyer(string $classe): string
     {
         return match ($classe) {
-            Facture::class => PermissionRegistry::FACTURE_ENVOYER,
+            Facture::class, RecuPaiement::class => PermissionRegistry::FACTURE_ENVOYER,
             Devis::class => PermissionRegistry::DEVIS_ENVOYER,
             Avoir::class => PermissionRegistry::AVOIR_ENVOYER,
         };

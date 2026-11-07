@@ -11,13 +11,16 @@ use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\NatureRecuPaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\RecusDePaiement;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
@@ -74,6 +77,15 @@ use LogicException;
  * encaissement ; le même jeton pour un autre montant est refusé. Une vente
  * à la caisse et un encaissement en plusieurs modes l'appellent sans
  * jeton : ils portent le leur.
+ *
+ * Un paiement reçu après l'émission de ce qu'il règle a son reçu de
+ * paiement (R2, voir RecusDePaiement) : un paiement saisi seul, dans
+ * « Paiements », ouvre le sien avant de s'enregistrer et le clôt une fois
+ * tout imputé ; une part d'un encaissement en plusieurs modes désigne le
+ * reçu que l'encaissement a ouvert pour toutes ses parts (voir
+ * EncaisserEnPlusieursModesAction). Un paiement reçu à l'émission (une
+ * vente à la caisse, « Émettre et encaisser », voir EmettreFactureAction)
+ * n'en a aucun : le document l'imprime lui-même.
  */
 class EnregistrerPaiementAction
 {
@@ -85,6 +97,7 @@ class EnregistrerPaiementAction
         private readonly OperateurCourant $operateur,
         private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
         private readonly ActionsUniques $actionsUniques,
+        private readonly RecusDePaiement $recus,
     ) {}
 
     /**
@@ -92,13 +105,15 @@ class EnregistrerPaiementAction
      * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
      * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      * @param  list<Avoir>  $bonsDAvoir  les bons d'avoir présentés pour le ticket du client comptoir que règle ce paiement, relus sous le verrou du registre
+     * @param  RecuPaiement|null  $recu  le reçu de l'encaissement en plusieurs modes dont ce paiement est une part, qui l'a ouvert et le clôt
+     * @param  bool  $aLEmission  un paiement reçu à l'émission de ce qu'il règle, sans reçu
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null, array $bonsDAvoir = []): Paiement
+    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null, array $bonsDAvoir = [], ?RecuPaiement $recu = null, bool $aLEmission = false): Paiement
     {
         $magasin = app(TenantContext::class)->magasin();
         $recuLe = Calendrier::jourValide((string) $donneesPaiement['recu_le'])
@@ -126,7 +141,7 @@ class EnregistrerPaiementAction
             'imputations' => array_map(fn (float $montantImpute): string => number_format($montantImpute, 2, '.', ''), $imputations),
         ];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin, $recu, $aLEmission, $recuLe) {
             $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
@@ -136,7 +151,18 @@ class EnregistrerPaiementAction
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
             }
 
-            return $this->operateur->pendant($compte, fn (): Paiement => $this->enregistrer($compte, $magasin, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir));
+            return $this->operateur->pendant($compte, function () use ($compte, $magasin, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $recu, $aLEmission, $recuLe): Paiement {
+                $recuPropre = $recu === null && ! $aLEmission
+                    ? $this->recus->ouvrir($compte, $magasin, NatureRecuPaiement::Encaissement, $client, $recuLe)
+                    : null;
+                $paiement = $this->enregistrer($compte, $magasin, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $recu ?? $recuPropre);
+
+                if ($recuPropre !== null) {
+                    $this->recus->clore($recuPropre);
+                }
+
+                return $paiement;
+            });
         }));
     }
 
@@ -144,20 +170,21 @@ class EnregistrerPaiementAction
      * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
      * @param  array<int, float>  $imputations
      * @param  list<Avoir>  $bonsDAvoir
+     * @param  RecuPaiement|null  $recu  le reçu que le paiement désigne, aucun pour un paiement reçu à l'émission
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, float $montant, array $imputations, array $bonsDAvoir): Paiement
+    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, float $montant, array $imputations, array $bonsDAvoir, ?RecuPaiement $recu): Paiement
     {
         $paiement = new Paiement([
             ...$donneesPaiement,
             'client_id' => $client->getKey(),
             'montant' => $montant,
         ]);
-        $paiement->forceFill(['cree_par' => $compte->getKey()])->save();
+        $paiement->forceFill(['cree_par' => $compte->getKey(), 'recu_paiement_id' => $recu?->getKey()])->save();
 
         foreach ($imputations as $factureId => $montantImpute) {
             $facture = Facture::query()->whereKey($factureId)->lockForUpdate()->firstOrFail();

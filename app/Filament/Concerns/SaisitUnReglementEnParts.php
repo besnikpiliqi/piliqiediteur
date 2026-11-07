@@ -4,6 +4,7 @@ namespace App\Filament\Concerns;
 
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ApercuDuReglement;
@@ -28,8 +29,8 @@ use LogicException;
 
 /**
  * Le règlement en plusieurs parts, d'un seul geste (points 1 et 23), à la
- * caisse (voir Caisse) comme dans « Encaisser » d'une facture (voir
- * FactureResource) : chaque part a un mode, un montant et une référence
+ * caisse (voir Caisse) comme dans « Encaisser » et « Émettre et
+ * encaisser » d'une facture (voir FactureResource) : chaque part a un mode, un montant et une référence
  * facultative, chaque mode une seule part, sauf « Avoir », une part par
  * bon d'avoir, dont on saisit le numéro et dont le montant se lit dans
  * l'aperçu du règlement (voir ApercuDuReglement), jamais saisi. « Avoir »
@@ -45,7 +46,10 @@ use LogicException;
  * part en espèces a un montant reçu et une monnaie à rendre ; sur une
  * facture, elles ne dépassent jamais ce qui reste dû, et un bon d'avoir
  * s'y présente avec au moins une part payée, qui le signe, sans jamais
- * couvrir seul tout ce qui reste dû (voir EncaisserEnPlusieursModesAction).
+ * couvrir seul tout ce qui reste dû (voir EncaisserEnPlusieursModesAction) ;
+ * à l'émission d'un brouillon (« Émettre et encaisser »), elles ne
+ * dépassent jamais ce que le crédit du client laissera dû, sans bon
+ * d'avoir, et un règlement sans aucun montant revient à « Émettre ».
  * L'écran le dit pendant la saisie (« Il reste 10,00 € à répartir. ») et
  * refuse un règlement qui ne tombe pas juste ; l'enregistrement le
  * revérifie sous le verrou du registre.
@@ -77,7 +81,11 @@ trait SaisitUnReglementEnParts
             Placeholder::make('credit_du_client')
                 ->label($libelleDuCredit)
                 ->content(fn (Get $get, ?Model $record): string => self::formaterCentimes($apercu($get, $record, '')->creditDuClient))
-                ->helperText($aLaCaisse ? 'Imputé d\'office sur la vente.' : 'Déjà imputé sur ce document.')
+                ->helperText(fn (?Model $record): string => match (true) {
+                    $aLaCaisse => 'Imputé d\'office sur la vente.',
+                    self::estUnBrouillon($record) => 'Imputé d\'office à l\'émission.',
+                    default => 'Déjà imputé sur ce document.',
+                })
                 ->visible(fn (Get $get, ?Model $record): bool => $apercu($get, $record, '')->creditDuClient > 0),
             Repeater::make('parts')
                 ->label('Règlement')
@@ -296,11 +304,20 @@ trait SaisitUnReglementEnParts
 
     /**
      * Hors de la caisse, seul un ticket du client comptoir resté dû accepte
-     * un bon d'avoir (Q6), jamais une autre facture.
+     * un bon d'avoir (Q6), jamais une autre facture, ni un brouillon qui
+     * s'émet et s'encaisse d'un seul geste (R1).
      */
     private static function accepteLesBons(?Model $record): bool
     {
-        return $record instanceof Facture && ($record->client?->estComptoir() ?? false);
+        return $record instanceof Facture && ! self::estUnBrouillon($record) && ($record->client?->estComptoir() ?? false);
+    }
+
+    /**
+     * Le règlement de « Émettre et encaisser », sur un brouillon (R1).
+     */
+    private static function estUnBrouillon(?Model $record): bool
+    {
+        return $record instanceof Facture && $record->statut === StatutFacture::Brouillon;
     }
 
     /**

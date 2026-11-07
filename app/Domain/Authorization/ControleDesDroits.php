@@ -16,6 +16,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
@@ -138,7 +139,7 @@ final class ControleDesDroits
      * @var list<class-string>
      */
     private const MODELES_CONSULTES_PAR_UN_CABINET = [
-        Client::class, Fournisseur::class, Produit::class, Service::class, Devis::class, Facture::class, Paiement::class, Avoir::class,
+        Client::class, Fournisseur::class, Produit::class, Service::class, Devis::class, Facture::class, Paiement::class, RecuPaiement::class, Avoir::class,
         ClotureCaisse::class, ClotureCaissePersonnelle::class, FactureAchat::class, AvoirFournisseur::class, InventaireOuverture::class, EnregistrementFiscal::class,
     ];
 

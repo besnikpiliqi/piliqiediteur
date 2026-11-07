@@ -29,6 +29,9 @@ enum TypeDocument: string
     case AvoirFournisseur = 'avoir_fournisseur';
     case InventaireOuverture = 'inventaire_ouverture';
     case ClotureCaisse = 'cloture_caisse';
+    // La référence d'un reçu de paiement (R2, voir RecusDePaiement) : un
+    // reçu n'est pas une facture, mais il a sa série dans chaque magasin.
+    case RecuPaiement = 'recu_paiement';
     case Produit = 'produit';
 
     /**
@@ -49,6 +52,7 @@ enum TypeDocument: string
             self::AvoirFournisseur => 'AF',
             self::InventaireOuverture => 'INV',
             self::ClotureCaisse => 'Z',
+            self::RecuPaiement => 'RP',
             self::Produit => 'PRD',
         };
     }

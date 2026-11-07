@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Tenancy\Notifications\NotificationDuMagasin;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\DevisResource;
@@ -47,8 +48,13 @@ class EnvoiDocumentEchoue extends NotificationDuMagasin
             ]);
     }
 
-    private function urlDuDocument(Facture|Devis|Avoir $document): string
+    /**
+     * La fiche du document ; pour un reçu de paiement, celle du premier
+     * document qu'il règle, où il se trouve parmi ses paiements reçus.
+     */
+    private function urlDuDocument(Facture|Devis|Avoir|RecuPaiement $document): string
     {
+        $document = $document instanceof RecuPaiement ? $document->premierDocument() : $document;
         $resource = match (true) {
             $document instanceof Facture => FactureResource::class,
             $document instanceof Devis => DevisResource::class,

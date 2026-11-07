@@ -45,6 +45,7 @@ final class Balayeur
      */
     private const TELECHARGEMENTS = [
         'telecharger_pdf' => ['extension' => '.pdf', 'debut' => '%PDF-'],
+        'telecharger_recu' => ['extension' => '.pdf', 'debut' => '%PDF-'],
     ];
 
     /**

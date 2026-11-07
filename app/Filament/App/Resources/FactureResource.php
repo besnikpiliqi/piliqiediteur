@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\SupprimerFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -32,9 +33,12 @@ use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
@@ -66,13 +70,16 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\HtmlString;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FactureResource extends Resource
 {
@@ -286,9 +293,14 @@ class FactureResource extends Resource
                     // Un paiement saisi par erreur y figure avec sa
                     // contre-passation, en négatif (voir
                     // ContrePasserPaiementAction), dans l'ordre où ils ont
-                    // été enregistrés.
+                    // été enregistrés. Un paiement reçu après l'émission, et
+                    // une contre-passation, ont leur reçu de paiement (R2,
+                    // voir RecusDePaiement), qui se télécharge et s'envoie
+                    // d'ici ; un paiement reçu à l'émission n'en a pas : le
+                    // PDF du document l'imprime.
                     RepeatableEntry::make('allocationsPaiement')
                         ->label('')
+                        ->state(fn (Facture $record) => $record->allocationsPaiement()->with(['paiement.recuPaiement.client', 'paiement.recuPaiement.lignes.facture'])->get())
                         ->schema([
                             TextEntry::make('nature')
                                 ->label('Nature')
@@ -302,8 +314,16 @@ class FactureResource extends Resource
                                 ->money('EUR')
                                 ->color(fn (PaiementAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
+                            TextEntry::make('recu')
+                                ->label('Reçu')
+                                ->state(fn (PaiementAllocation $record): ?string => $record->paiement->recuPaiement?->numero)
+                                ->placeholder('Imprimé sur le document'),
+                            Actions::make([
+                                self::telechargerLeRecu(InfolistAction::make('telecharger_recu')),
+                                self::envoyerLeRecu(InfolistAction::make('envoyer_recu')),
+                            ])->columnSpanFull(),
                         ])
-                        ->columns(5),
+                        ->columns(6),
                 ]),
 
             InfolistSection::make('Crédité par avoir')
@@ -742,7 +762,8 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
                 self::actionSupprimer(Tables\Actions\DeleteAction::make())
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
-                self::emettre(),
+                self::emettre(Tables\Actions\Action::make('emettre')),
+                self::emettreEtEncaisser(Tables\Actions\Action::make('emettre_et_encaisser')),
                 self::encaisser(Tables\Actions\Action::make('encaisser')),
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
                 self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
@@ -884,17 +905,115 @@ class FactureResource extends Resource
     }
 
     /**
-     * Émettre un brouillon. Une vente au-delà du stock (R1) garde la
-     * fenêtre ouverte et y montre l'avertissement que renvoie l'émission
-     * (« Le stock de Câble USB passera à −2 : confirmer la vente ? »), avec
-     * la confirmation qui l'accepte, que la personne autorisée valide ;
-     * renouvelé si le stock a encore baissé entre-temps. La fenêtre porte
-     * le jeton de la demande (R3) : une émission renvoyée après une réponse
-     * perdue rend la facture déjà émise.
+     * « Reçu (PDF) » d'un paiement reçu après l'émission, ou d'une
+     * contre-passation, sur sa ligne des « Paiements reçus » de la fiche
+     * (R2) : le reçu de paiement de tout l'encaissement dont il est une
+     * part, produit depuis ce qui a été enregistré (voir
+     * RecuPaiementPdfGenerator), pour qui voit ce paiement (voir
+     * RecuPaiementPolicy::view()), un compte du cabinet lié qui voit les
+     * paiements du client compris.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
      */
-    private static function emettre(): Tables\Actions\Action
+    public static function telechargerLeRecu(MountableAction $action): MountableAction
     {
-        return Tables\Actions\Action::make('emettre')
+        return $action
+            ->label('Reçu (PDF)')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->link()
+            ->visible(fn (PaiementAllocation $record): bool => ($recu = $record->paiement->recuPaiement) !== null && auth()->user()->can('view', $recu))
+            ->action(function (PaiementAllocation $record): ?StreamedResponse {
+                $recu = $record->paiement->recuPaiement;
+                Gate::authorize('view', $recu);
+                $generateur = app(RecuPaiementPdfGenerator::class);
+
+                try {
+                    $pdf = $generateur->generer($recu)->output();
+                } catch (VenteNonAutoriseeException $refus) {
+                    static::notifierLeRefus($refus);
+
+                    return null;
+                }
+
+                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($recu));
+            });
+    }
+
+    /**
+     * « Envoyer le reçu » d'un paiement reçu après l'émission, ou d'une
+     * contre-passation, par e-mail au client, PDF en pièce jointe (R2), à
+     * l'adresse du client préremplie, avec toutes les règles des e-mails
+     * (voir EnvoyerDocumentAction : limites, droit au moment de l'envoi,
+     * lecture seule, jeton de la demande) : pour qui peut envoyer les
+     * documents qu'il règle (voir RecuPaiementPolicy::envoyer()), jamais un
+     * compte du cabinet lié, qui n'envoie rien, jamais dans le magasin de
+     * démonstration, qui n'écrit à aucun client, ni pour le client comptoir
+     * sans adresse.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function envoyerLeRecu(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Envoyer le reçu')
+            ->icon('heroicon-o-envelope')
+            ->link()
+            ->modalHeading(fn (PaiementAllocation $record): string => "Envoyer par e-mail : {$record->paiement->recuPaiement->libelleDocument()} {$record->paiement->recuPaiement->numero}")
+            ->modalSubmitActionLabel('Envoyer')
+            ->visible(function (PaiementAllocation $record): bool {
+                $recu = $record->paiement->recuPaiement;
+
+                return $recu !== null
+                    && ! $recu->magasin->est_demonstration
+                    && ! ($recu->client->estComptoir() && blank($recu->client->email))
+                    && auth()->user()->can('envoyer', $recu);
+            })
+            ->fillForm(fn (PaiementAllocation $record): array => ['destinataire' => $record->paiement->recuPaiement->client->email])
+            ->form([
+                static::champDuJeton(),
+                static::champDestinataire(),
+                Textarea::make('message')
+                    ->label('Message (facultatif)')
+                    ->helperText('Ajouté au texte de l\'e-mail, avant votre signature.')
+                    ->rows(4)
+                    ->maxLength(2000)
+                    ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
+            ])
+            ->action(fn (PaiementAllocation $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record->paiement->recuPaiement, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
+
+                Notification::make()
+                    ->title("Envoi à {$envoi->destinataire} programmé")
+                    ->body('Le reçu de paiement part par e-mail, PDF en pièce jointe.')
+                    ->success()
+                    ->send();
+            }));
+    }
+
+    /**
+     * « Émettre » un brouillon, depuis la liste ou sa fiche. Une vente
+     * au-delà du stock (R1) garde la fenêtre ouverte et y montre
+     * l'avertissement que renvoie l'émission (« Le stock de Câble USB
+     * passera à −2 : confirmer la vente ? »), avec la confirmation qui
+     * l'accepte, que la personne autorisée valide ; renouvelé si le stock a
+     * encore baissé entre-temps. La fenêtre porte le jeton de la demande
+     * (R3) : une émission renvoyée après une réponse perdue rend la facture
+     * déjà émise.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function emettre(MountableAction $action): MountableAction
+    {
+        return $action
             ->label('Émettre')
             ->icon('heroicon-o-paper-airplane')
             ->color('success')
@@ -905,29 +1024,104 @@ class FactureResource extends Resource
                 : 'Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
             ->form([self::champDuJeton()])
             ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
-            ->action(function (Facture $record, array $data, array $arguments, Tables\Actions\Action $action): void {
-                $avertissement = null;
+            ->action(fn (Facture $record, array $data, array $arguments, MountableAction $action) => self::emettreLeBrouillon($record, $data, $arguments, $action, null));
+    }
 
-                static::executerSansCasser(function () use ($record, $data, $arguments, &$avertissement): void {
-                    self::verifierLeNumeroTvaSurViesSiBesoin($record);
+    /**
+     * « Émettre et encaisser » un brouillon fait hors de la caisse (R1),
+     * depuis la liste ou sa fiche, à côté de « Émettre » : un seul geste
+     * émet le document et enregistre son règlement, dans la même
+     * transaction signée (voir EmettreFactureAction et
+     * ReglementComptant::horsDeLaCaisse()). Le règlement se saisit comme
+     * dans « Encaisser » (voir SaisitUnReglementEnParts) : un ou plusieurs
+     * modes, chacun avec sa référence et son montant, la première part
+     * préremplie avec le mode préféré du client (B8) et ce que laisse dû
+     * son crédit d'avoir, qui s'imputera d'office à l'émission et se montre
+     * en lecture ; jamais un bon d'avoir (Q6). Les parts ne dépassent jamais
+     * ce qui restera dû, un paiement partiel laisse le reste dû avec
+     * l'échéance de la facture, et un règlement sans aucun montant revient à
+     * « Émettre ». Seulement pour qui peut émettre ce document et enregistrer
+     * un encaissement dans ce magasin (voir FacturePolicy::emettreEtEncaisser()).
+     * Une vente au-delà du stock garde la fenêtre ouverte comme « Émettre ».
+     * La fenêtre porte le jeton de la demande (R3).
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function emettreEtEncaisser(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Émettre et encaisser')
+            ->icon('heroicon-o-banknotes')
+            ->color('success')
+            ->modalHeading(fn (array $arguments): string => filled($arguments['avertissements'] ?? null) ? 'Vendre sans stock ?' : 'Émettre et encaisser')
+            ->modalDescription(fn (array $arguments): string|HtmlString => filled($arguments['avertissements'] ?? null)
+                ? static::descriptionDeLAvertissement($arguments)
+                : 'Un numéro définitif sera attribué, l\'échéance fixée, le stock décrémenté et le règlement enregistré : il s\'imprimera sur le document. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
+            ->modalSubmitActionLabel('Émettre et encaisser')
+            ->form([
+                self::champDuJeton(),
+                ...self::composantsDuReglement(
+                    fn (Get $get, ?Model $record, string $racine): ApercuDuReglement => $record instanceof Facture
+                        ? ApercuDuReglement::aLEmission($record)
+                        : new ApercuDuReglement(0, 0, [], [], 0),
+                    fn (Get $get, ?Model $record, string $racine): ?ModePaiement => $record instanceof Facture ? $record->client?->mode_paiement_prefere : null,
+                    false,
+                    'Avoir (crédit du client)',
+                ),
+            ])
+            ->visible(fn (Facture $record): bool => auth()->user()->can('emettreEtEncaisser', $record))
+            ->action(function (Facture $record, array $data, array $arguments, MountableAction $action): void {
+                static::executerSansCasser(function () use ($record, $data, $arguments, $action): void {
+                    $parts = self::partsPayees($data['parts'] ?? []);
 
-                    try {
-                        app(EmettreFactureAction::class)->handle(auth()->user(), $record, confirmation: static::confirmationDesArguments($arguments), jeton: $data['jeton']);
-                    } catch (ConfirmationVenteSansStockRequiseException $exception) {
-                        $avertissement = $exception;
-                    }
+                    self::emettreLeBrouillon($record, $data, $arguments, $action, $parts === [] ? null : ReglementComptant::horsDeLaCaisse($parts));
                 });
-
-                if ($avertissement === null) {
-                    return;
-                }
-
-                $nouveaux = static::argumentsDeLAvertissement($avertissement);
-                $liste = $action->getLivewire();
-                $liste->mountedTableActionsArguments[array_key_last($liste->mountedTableActionsArguments)] = $nouveaux;
-                $action->arguments($nouveaux);
-                $action->halt();
             });
+    }
+
+    /**
+     * Émet le brouillon, avec le règlement de « Émettre et encaisser » s'il
+     * y en a un, puis relit la facture, que sa fiche montre aussitôt émise.
+     * Une vente au-delà du stock garde la fenêtre ouverte, avec
+     * l'avertissement et la confirmation qui l'accepte (voir emettre()).
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $arguments
+     */
+    private static function emettreLeBrouillon(Facture $record, array $data, array $arguments, MountableAction $action, ?ReglementComptant $reglement): void
+    {
+        $avertissement = null;
+
+        static::executerSansCasser(function () use ($record, $data, $arguments, $reglement, &$avertissement): void {
+            self::verifierLeNumeroTvaSurViesSiBesoin($record);
+
+            try {
+                app(EmettreFactureAction::class)->handle(auth()->user(), $record, $reglement, static::confirmationDesArguments($arguments), $data['jeton']);
+            } catch (ConfirmationVenteSansStockRequiseException $exception) {
+                $avertissement = $exception;
+            }
+        });
+
+        if ($avertissement === null) {
+            $record->refresh();
+
+            return;
+        }
+
+        $nouveaux = static::argumentsDeLAvertissement($avertissement);
+        $livewire = $action->getLivewire();
+
+        if ($action instanceof Tables\Actions\Action) {
+            $livewire->mountedTableActionsArguments[array_key_last($livewire->mountedTableActionsArguments)] = $nouveaux;
+        } else {
+            $livewire->mountedActionsArguments[array_key_last($livewire->mountedActionsArguments)] = $nouveaux;
+        }
+
+        $action->arguments($nouveaux);
+        $action->halt();
     }
 
     /**

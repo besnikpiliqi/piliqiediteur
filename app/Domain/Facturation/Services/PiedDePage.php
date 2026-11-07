@@ -8,9 +8,10 @@ use App\Domain\Facturation\Models\Facture;
 use InvalidArgumentException;
 
 /**
- * Le pied fixé en bas de chaque page d'un PDF de vente (point 4), au-dessus
- * de « Page x sur y » (voir MiseEnPageA4) : l'identité légale de la société
- * sur une ligne (voir Emetteur::lignesDeLaSociete()), puis, une par ligne,
+ * Le pied fixé en bas de chaque page d'un PDF de vente (point 4) ou d'un
+ * reçu de paiement (voir pourUnRecu()), au-dessus de « Page x sur y »
+ * (voir MiseEnPageA4) : l'identité légale de la société sur une ligne
+ * (voir Emetteur::lignesDeLaSociete()), puis, une par ligne,
  * son assurance professionnelle quand elle est renseignée (voir
  * Emetteur::ligneDeLAssurance()), les conditions de paiement saisies sur
  * une facture ou un devis, les mentions entre professionnels d'une facture
@@ -82,6 +83,20 @@ final readonly class PiedDePage
                 $document instanceof Avoir ? $document->mentionDuBonDAvoir() : null,
                 $document instanceof Avoir ? $document->mentionDeRegularisation() : null,
             ], filled(...))),
+        );
+    }
+
+    /**
+     * Le pied d'un reçu de paiement (voir RecuPaiementPdfGenerator) :
+     * l'identité de la société et son assurance professionnelle telles que
+     * le reçu les a figées le jour de l'encaissement, sans les mentions
+     * d'une facture, qu'il n'est pas.
+     */
+    public static function pourUnRecu(Emetteur $emetteur): self
+    {
+        return new self(
+            implode(' · ', $emetteur->lignesDeLaSociete()),
+            array_values(array_filter([$emetteur->ligneDeLAssurance()], filled(...))),
         );
     }
 

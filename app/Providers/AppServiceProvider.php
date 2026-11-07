@@ -25,6 +25,7 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Recherche\ConnecteurSqlite;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Models\InventaireOuverture;
@@ -59,6 +60,7 @@ use App\Policies\MembrePolicy;
 use App\Policies\PaiementPolicy;
 use App\Policies\PosteReconnuPolicy;
 use App\Policies\ProduitPolicy;
+use App\Policies\RecuPaiementPolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\SocietePolicy;
 use Filament\Facades\Filament;
@@ -145,6 +147,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Devis::class, DevisPolicy::class);
         Gate::policy(Facture::class, FacturePolicy::class);
         Gate::policy(Paiement::class, PaiementPolicy::class);
+        Gate::policy(RecuPaiement::class, RecuPaiementPolicy::class);
         Gate::policy(Avoir::class, AvoirPolicy::class);
         Gate::policy(ClotureCaisse::class, ClotureCaissePolicy::class);
         Gate::policy(ClotureCaissePersonnelle::class, ClotureCaissePersonnellePolicy::class);
@@ -220,6 +223,7 @@ class AppServiceProvider extends ServiceProvider
             'magasin' => Magasin::class,
             'paiement' => Paiement::class,
             'produit' => Produit::class,
+            'recu_paiement' => RecuPaiement::class,
             'societe' => Societe::class,
             'utilisateur' => User::class,
         ]);

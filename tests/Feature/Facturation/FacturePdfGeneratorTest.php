@@ -9,6 +9,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -19,6 +20,8 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\AvoirPdfGenerator;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -389,10 +392,12 @@ class FacturePdfGeneratorTest extends TestCase
      * d'avoir) doit apparaître sur le document remis au client -- sans ça,
      * rien ne prouve sur le PDF qu'une vente entièrement couverte par un
      * avoir a bien été soldée (voir AppliquerAvoirsDisponiblesAction). Le
-     * bloc « Règlements » nomme l'avoir et dit ce qui reste dû (Q5).
+     * bloc « Règlements » nomme l'avoir et dit ce qui restait dû à
+     * l'émission (Q5, constat C3).
      */
     public function test_le_credit_applique_par_un_avoir_apparait_sur_le_pdf(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -415,7 +420,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         $reglements = $this->reglementsImprimes($nouvelleFacture);
 
-        $this->assertSame(["Avoir {$avoir->fresh()->numero} : 60,00 €", 'Restant dû : 0,00 €'], $reglements);
+        $this->assertSame([['09/10/2026', 'Avoir', $avoir->fresh()->numero, '60,00 €'], ['Restant dû à l\'émission', '0,00 €']], $reglements);
     }
 
     private function payer(Client $client, Facture $facture, string $montant): Paiement
@@ -428,10 +433,12 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Les lignes du bloc « Règlements » du PDF, « libellé : montant », dans
-     * l'ordre ; aucune quand le PDF n'a pas ce bloc.
+     * Les rangées du bloc « Règlements » du PDF, dans l'ordre, chacune avec
+     * le texte de ses cases : la date, le mode, la référence et le montant
+     * de chaque règlement, puis le libellé et le montant de ce qui restait
+     * dû à l'émission ; aucune quand le PDF n'a pas ce bloc.
      *
-     * @return list<string>
+     * @return list<list<string>>
      */
     private function reglementsImprimes(Facture $facture): array
     {
@@ -441,9 +448,13 @@ class FacturePdfGeneratorTest extends TestCase
             return [];
         }
 
-        preg_match_all('#<td class="libelle">(.*?)</td><td class="montant">(.*?)</td>#', Str::betweenFirst($html, '<table class="reglements">', '</table>'), $lignes, PREG_SET_ORDER);
+        preg_match_all('#<tr(?: class="total")?>(.*?)</tr>#', Str::betweenFirst(Str::betweenFirst($html, '<table class="reglements">', '</table>'), '<tbody>', '</tbody>'), $rangees);
 
-        return array_map(fn (array $ligne): string => html_entity_decode("{$ligne[1]} : {$ligne[2]}", ENT_QUOTES), $lignes);
+        return array_map(function (string $rangee): array {
+            preg_match_all('#<td[^>]*>(.*?)</td>#', $rangee, $cases);
+
+            return array_map(fn (string $case): string => html_entity_decode(strip_tags($case), ENT_QUOTES), $cases[1]);
+        }, $rangees[1]);
     }
 
     /**
@@ -496,7 +507,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $errone, 'Saisi sur le mauvais ticket');
 
-        $this->assertSame(['Avoir AV-LYON1-2026-000001 : 50,00 €', 'Restant dû : 50,00 €'], $this->reglementsImprimes($ticket));
+        $this->assertSame([['09/10/2026', 'Avoir', 'AV-LYON1-2026-000001', '50,00 €'], ['Restant dû à l\'émission', '50,00 €']], $this->reglementsImprimes($ticket));
         $this->assertSame([0.0, 80.0, 20.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
     }
 
@@ -811,7 +822,8 @@ class FacturePdfGeneratorTest extends TestCase
      * bon d'avoir de 20,00 €, 30,00 € en espèces et 30,00 € par carte
      * imprime chacun de ses règlements, relus dans son contenu signé : la
      * date, le mode et le montant de chaque paiement, le numéro et le
-     * montant de l'avoir, puis le restant dû (points 3 et 23, Q5).
+     * montant de l'avoir, puis le restant dû à l'émission (points 3 et 23,
+     * Q5, constat C3).
      */
     public function test_les_reglements_de_l_emission_s_impriment_par_mode(): void
     {
@@ -827,7 +839,12 @@ class FacturePdfGeneratorTest extends TestCase
             new PartDeReglement(ModePaiement::CarteBancaire, 3000),
         ], [$bon->numero]));
 
-        $this->assertSame(['09/10/2026 · Espèces : 30,00 €', '09/10/2026 · Carte bancaire : 30,00 €', 'Avoir AV-LYON1-2026-000001 : 20,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($ticket));
+        $this->assertSame([
+            ['09/10/2026', 'Espèces', '', '30,00 €'],
+            ['09/10/2026', 'Carte bancaire', '', '30,00 €'],
+            ['09/10/2026', 'Avoir', 'AV-LYON1-2026-000001', '20,00 €'],
+            ['Restant dû à l\'émission', '0,00 €'],
+        ], $this->reglementsImprimes($ticket));
     }
 
     /**
@@ -993,8 +1010,172 @@ class FacturePdfGeneratorTest extends TestCase
 
         $facture = self::vendreAuComptant(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Virement, 'VIR-42');
 
-        $this->assertSame(['09/10/2026 · Virement · VIR-42 : 30,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($facture));
+        $this->assertSame([['09/10/2026', 'Virement', 'VIR-42', '30,00 €'], ['Restant dû à l\'émission', '0,00 €']], $this->reglementsImprimes($facture));
         $this->assertStringContainsString('Échéance le 08/11/2026', $this->rendu($facture));
+    }
+
+    /**
+     * Les règlements reçus à l'émission s'impriment à gauche du tableau des
+     * totaux, sur la même bande, en colonnes Date, Mode, Référence et
+     * Montant, puis ce qui restait dû à l'émission (constat C3) : chaque
+     * texte du bloc finit avant que le tableau des totaux ne commence, et
+     * le bloc commence à la hauteur de « Total HT ». Ticket de 62,40 € réglé
+     * 20,00 € en espèces et 42,40 € par carte.
+     */
+    public function test_les_reglements_s_impriment_a_gauche_des_totaux_sur_la_meme_bande(): void
+    {
+        $ticket = $this->ticketDeLaCaisse(1, [
+            new PartDeReglement(ModePaiement::Especes, 2000),
+            new PartDeReglement(ModePaiement::CarteBancaire, 4240, 'CB-TRX-4521'),
+        ]);
+
+        $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($ticket)->output())[0];
+
+        $totalHt = $this->texte($page, fn (string $texte): bool => $texte === 'Total HT');
+        $totalTtc = $this->texte($page, fn (string $texte): bool => $texte === 'Total TTC');
+        $haut = $this->texte($page, fn (string $texte): bool => $texte === 'RÈGLEMENTS')['y'];
+        $bas = $this->texte($page, fn (string $texte): bool => $texte === 'Restant dû à l\'émission')['y'];
+        $surLaBande = array_values(array_filter($page['textes'], fn (array $texte): bool => $texte['y'] >= $bas - 0.5 && $texte['y'] <= $haut + 0.5));
+        foreach (['RÈGLEMENTS', 'DATE', 'MODE', 'RÉFÉRENCE', 'MONTANT', 'Espèces', 'Carte bancaire', 'CB-TRX-4521', '20,00 €', '42,40 €', 'Restant dû à l\'émission', '0,00 €'] as $libelle) {
+            $reglement = collect($surLaBande)->firstWhere('texte', $libelle);
+            $this->assertNotNull($reglement, $libelle);
+            $this->assertLessThan($totalHt['x'], $reglement['x'] + $reglement['largeur'], $libelle);
+        }
+        $this->assertCount(2, array_filter($surLaBande, fn (array $texte): bool => $texte['texte'] === '09/10/2026' && $totalHt['x'] > $texte['x'] + $texte['largeur']));
+        $this->assertEqualsWithDelta($totalHt['y'], $haut, 4.0);
+        $this->assertGreaterThan($totalTtc['y'] - 30, $bas);
+        $this->assertChaqueTexteTientEntreLesMarges($page);
+    }
+
+    /**
+     * Une référence passe à la ligne entre deux mots, jamais au milieu d'un
+     * mot, alors que dompdf coupe aussi un texte après un trait d'union
+     * (avant ce lot, « CB- » puis « TRX-4521 ») : chaque mot de chaque
+     * référence s'imprime d'un seul tenant, et la référence de 100
+     * caractères de ce virement s'imprime sur plusieurs lignes de sa
+     * colonne. Quatre modes et un bon d'avoir, cinq règlements, tiennent
+     * sur la bande, entre les marges de la page.
+     */
+    public function test_une_reference_de_reglement_passe_a_la_ligne_entre_deux_mots_jamais_au_milieu_d_un_mot(): void
+    {
+        $virement = 'VIR SEPA 2026-10-09 TK-LYON1-2026-000002 ATELIER-DUPONT-SARL REGLEMENT-COMPLET-DE-LA-VENTE VUE MERCI';
+        $this->assertSame(100, mb_strlen($virement));
+        $ticket = $this->ticketDeLaCaisse(1, [
+            new PartDeReglement(ModePaiement::Especes, 1000),
+            new PartDeReglement(ModePaiement::CarteBancaire, 1000, 'CB-TRX-4521'),
+            new PartDeReglement(ModePaiement::Cheque, 1000, 'CHQ 1234567 BNP PARIBAS'),
+            new PartDeReglement(ModePaiement::Virement, 1240, $virement),
+        ], bonDAvoir: true);
+
+        $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($ticket)->output())[0];
+
+        $mode = $this->texte($page, fn (string $texte): bool => $texte === 'MODE');
+        $montant = $this->texte($page, fn (string $texte): bool => $texte === 'MONTANT');
+        $reference = collect($page['textes'])->first(fn (array $texte): bool => $texte['texte'] === 'RÉFÉRENCE' && abs($texte['y'] - $mode['y']) < 1);
+        $restantDu = $this->texte($page, fn (string $texte): bool => $texte === 'Restant dû à l\'émission');
+        $colonne = collect($page['textes'])->filter(fn (array $texte): bool => $texte['x'] >= $reference['x'] - 0.5 && $texte['x'] < $montant['x'] && $texte['y'] < $mode['y'] && $texte['y'] > $restantDu['y']);
+        $lignes = $colonne->groupBy(fn (array $texte): string => (string) $texte['y'])
+            ->map(fn ($morceaux): string => trim(preg_replace('/\s+/', ' ', $morceaux->sortBy('x')->pluck('texte')->implode(' '))))
+            ->values();
+        $motsImprimes = $lignes->flatMap(fn (string $ligne): array => explode(' ', $ligne))->filter()->values()->all();
+        $this->assertSame(['CB-TRX-4521', 'CHQ', '1234567', 'BNP', 'PARIBAS', ...explode(' ', $virement), 'AV-LYON1-2026-000001'], $motsImprimes);
+        $this->assertGreaterThan(1, $lignes->filter(fn (string $ligne): bool => str_contains($virement, $ligne))->count());
+        $this->assertLessThan($montant['x'], $colonne->max(fn (array $texte): float => $texte['x'] + $texte['largeur']));
+        $this->assertSame(['Restant dû à l\'émission', '0,00 €'], $this->reglementsImprimes($ticket)[5]);
+        $this->assertChaqueTexteTientEntreLesMarges($page);
+    }
+
+    /**
+     * La bande des totaux est une seule rangée de tableau : quel que soit le
+     * nombre de lignes qui la pousse vers le bas de la page, « Total HT »,
+     * « Total TTC », le bloc des règlements et ce qui restait dû à
+     * l'émission s'impriment sur la même page, au-dessus du pied (avant ce
+     * lot, le bloc se coupait entre deux pages de 14 à 20 lignes, et le
+     * tableau des totaux lui-même à 20 et 21 lignes).
+     *
+     * @return array<string, array{int}>
+     */
+    public static function nombresDeLignes(): array
+    {
+        return array_combine(array_map(fn (int $nombre): string => "{$nombre} lignes", range(14, 22, 2)), array_map(fn (int $nombre): array => [$nombre], range(14, 22, 2)));
+    }
+
+    #[DataProvider('nombresDeLignes')]
+    public function test_la_bande_des_totaux_ne_se_coupe_jamais_entre_deux_pages(int $nombreDeLignes): void
+    {
+        $ticket = $this->ticketDeLaCaisse($nombreDeLignes, [
+            new PartDeReglement(ModePaiement::Especes, 1000),
+            new PartDeReglement(ModePaiement::CarteBancaire, 1000, 'CB-778899'),
+            new PartDeReglement(ModePaiement::Cheque, 1000, 'CHQ 1234567 BNP PARIBAS'),
+        ], resteEnVirement: 'VIR-42');
+
+        $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($ticket)->output());
+
+        $pageDe = fn (string $cherche): array => array_keys(array_filter($pages, fn (array $page): bool => in_array($cherche, array_column($page['textes'], 'texte'), true)));
+        $this->assertCount(1, $pageDe('Total TTC'));
+        foreach (['Total HT', 'RÈGLEMENTS', 'Restant dû à l\'émission', 'VIR-42'] as $texte) {
+            $this->assertSame($pageDe('Total TTC'), $pageDe($texte), $texte);
+        }
+        $this->assertLePiedEstSousLesLignes($pages[$pageDe('Total TTC')[0]], $this->textesDuPied($this->compacte($this->rendu($ticket))), 'Page '.($pageDe('Total TTC')[0] + 1).' sur '.count($pages));
+    }
+
+    /**
+     * Le tableau des totaux garde sa place, au point près, qu'un ticket ait
+     * des règlements ou non, et sur un avoir et un devis, qui n'en ont
+     * jamais : la case de gauche de leur bande reste vide.
+     */
+    public function test_l_avoir_le_devis_et_un_document_sans_reglement_gardent_leurs_totaux_a_la_meme_place(): void
+    {
+        $paye = $this->ticketDeLaCaisse(1, [new PartDeReglement(ModePaiement::Especes, 6240)]);
+        $client = Client::factory()->create();
+        $article = [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
+        $sansReglement = $this->emettre($client, $article);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $sansReglement->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, $article);
+        $colonnes = fn (string $pdf): array => array_map(
+            fn (string $libelle): float => $this->texte($this->pagesDuPdf($pdf)[0], fn (string $texte): bool => $texte === $libelle)['x'],
+            ['Total HT', 'Total TVA', 'Total TTC'],
+        );
+
+        $attendues = $colonnes(app(FacturePdfGenerator::class)->generer($paye)->output());
+
+        $this->assertSame($attendues, $colonnes(app(FacturePdfGenerator::class)->generer($sansReglement)->output()));
+        $this->assertSame($attendues, $colonnes(app(AvoirPdfGenerator::class)->generer($avoir)->output()));
+        $this->assertSame($attendues, $colonnes(app(DevisPdfGenerator::class)->generer($devis->load('client', 'lignes', 'magasin'))->output()));
+        $this->assertStringNotContainsString('Règlements', app(AvoirPdfGenerator::class)->html($avoir));
+        $this->assertStringNotContainsString('Règlements', app(FacturePdfGenerator::class)->html($sansReglement));
+    }
+
+    /**
+     * Un ticket du client comptoir vendu à la caisse le 09/10/2026 à 10 h,
+     * de $nombreDeLignes articles à 62,40 € TTC, réglé par ces parts, puis,
+     * s'il le faut, par un virement de ce qui reste à payer, et par le bon
+     * d'avoir de 20,00 € d'une vente précédente.
+     *
+     * @param  list<PartDeReglement>  $parts
+     */
+    private function ticketDeLaCaisse(int $nombreDeLignes, array $parts, bool $bonDAvoir = false, ?string $resteEnVirement = null): Facture
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $this->ouvrirUneSociete(['code' => 'LYON1']);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $bons = [];
+
+        if ($bonDAvoir) {
+            $premier = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+            $bons[] = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $premier->lignes->sole()->id, 'quantite' => 1]])->numero;
+        }
+
+        $lignes = array_map(
+            fn (int $rang): array => ['produit_id' => Produit::factory()->create(['reference' => "ART-{$rang}", 'nom' => "Article numéro {$rang}", 'prix_vente_ttc' => '62.40', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1],
+            range(1, $nombreDeLignes),
+        );
+
+        if ($resteEnVirement !== null) {
+            $parts[] = new PartDeReglement(ModePaiement::Virement, 6240 * $nombreDeLignes - PartDeReglement::total($parts), $resteEnVirement);
+        }
+
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, $lignes, new ReglementComptant($parts, $bons));
     }
 
     /**

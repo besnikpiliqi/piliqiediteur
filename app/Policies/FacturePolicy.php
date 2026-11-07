@@ -60,6 +60,20 @@ class FacturePolicy extends MagasinPolicy
     }
 
     /**
+     * « Émettre et encaisser » un brouillon fait hors de la caisse (R1) :
+     * pouvoir l'émettre et enregistrer un encaissement dans ce magasin,
+     * comme les deux gestes qu'il réunit. Jamais le propriétaire, qui ne
+     * vend jamais, ni un compte du cabinet lié, qui n'a aucune de ces
+     * autorisations.
+     */
+    public function emettreEtEncaisser(User $user, Facture $facture): bool
+    {
+        return $facture->statut === StatutFacture::Brouillon
+            && $this->emettre($user, $facture)
+            && $user->can(PermissionRegistry::PAIEMENT_CREER);
+    }
+
+    /**
      * Enregistrer une preuve de l'exonération d'une facture (voir
      * AjouterPreuveOperationAction) ou noter le bordereau de détaxe d'un
      * ticket (voir NoterBordereauDetaxeAction) : ce qui suit une vente

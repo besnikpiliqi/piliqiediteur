@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Un document qui part par e-mail, son PDF en pièce jointe (voir
- * EnvoyerDocumentAction) : devis, facture ou avoir.
+ * EnvoyerDocumentAction) : devis, facture, avoir ou reçu de paiement.
  */
 interface DocumentEnvoyable
 {
@@ -19,7 +19,8 @@ interface DocumentEnvoyable
 
     /**
      * Ce que le document est pour son client, tel qu'imprimé sur son PDF
-     * (« Facture », « Ticket de caisse », « Devis », « Avoir »).
+     * (« Facture », « Ticket de caisse », « Devis », « Avoir », « Reçu de
+     * paiement »).
      */
     public function libelleDocument(): string;
 
@@ -34,8 +35,10 @@ interface DocumentEnvoyable
      * Le vendeur que le document imprime, et que présente l'e-mail qui le
      * porte (voir DocumentMail) : celui qu'une facture ou un avoir
      * numéroté a signé à son émission (voir FigeSonEmetteur), celui qu'un
-     * devis a figé à son dernier envoi (voir Devis::emetteur()), la société
-     * et le magasin tels qu'ils sont aujourd'hui pour un brouillon.
+     * devis a figé à son dernier envoi (voir Devis::emetteur()), celui
+     * qu'un reçu de paiement a figé le jour de l'encaissement (voir
+     * RecuPaiement::emetteur()), la société et le magasin tels qu'ils sont
+     * aujourd'hui pour un brouillon.
      *
      * @throws DocumentSansEnregistrementSigneException
      */

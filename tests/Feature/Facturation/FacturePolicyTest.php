@@ -289,6 +289,40 @@ class FacturePolicyTest extends TestCase
         $this->assertTrue($vendeur->can('justifier', $this->emettreUneFactureEnTantQue($vendeur, $magasin)));
     }
 
+    /**
+     * « Émettre et encaisser » (R1) : un brouillon que le membre voit, avec
+     * les autorisations d'émettre et d'enregistrer un paiement.
+     *
+     * @return array<string, array{list<string>, bool}>
+     */
+    public static function autorisationsDEmettreEtEncaisser(): array
+    {
+        $voirEtCreer = [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::FACTURE_CREATE];
+
+        return [
+            'émettre et enregistrer un paiement' => [[...$voirEtCreer, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER], true],
+            'sans enregistrer un paiement' => [[...$voirEtCreer, PermissionRegistry::FACTURE_EMETTRE], false],
+            'sans émettre' => [[...$voirEtCreer, PermissionRegistry::PAIEMENT_CREER], false],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $autorisations
+     */
+    #[DataProvider('autorisationsDEmettreEtEncaisser')]
+    public function test_emettre_et_encaisser_exige_d_emettre_et_d_enregistrer_un_paiement_sur_un_brouillon(array $autorisations, bool $peut): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        app(TenantContext::class)->set($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        $this->assertSame($peut, $membre->can('emettreEtEncaisser', $brouillon));
+        $this->assertFalse($membre->can('emettreEtEncaisser', $this->emettreUneFactureEnTantQue($this->responsableDeTest($magasin), $magasin)));
+        $this->assertFalse($this->proprietaireDe($magasin)->can('emettreEtEncaisser', $brouillon));
+    }
+
     private function emettreUneFactureEnTantQue(User $auteur, Magasin $magasin): Facture
     {
         $this->actingAs($auteur);

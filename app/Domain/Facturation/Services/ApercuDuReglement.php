@@ -51,6 +51,17 @@ final readonly class ApercuDuReglement
     }
 
     /**
+     * Le règlement de « Émettre et encaisser » d'un brouillon fait hors de
+     * la caisse (R1) : de son total TTC, le crédit du client qui s'imputera
+     * d'office à l'émission (jamais celui du client comptoir), sans bon
+     * d'avoir (Q6) ; les parts en règlent tout ou partie.
+     */
+    public static function aLEmission(Facture $brouillon): self
+    {
+        return self::aLaCaisse($brouillon->client, app(CalculateurLigne::class)->enCentiemes($brouillon->total_ttc), []);
+    }
+
+    /**
      * L'encaissement d'une facture ou d'un ticket déjà émis : ce qui en
      * reste dû, le crédit du client y étant déjà imputé, moins les bons,
      * que seul un ticket du client comptoir accepte (Q6), et qui n'y

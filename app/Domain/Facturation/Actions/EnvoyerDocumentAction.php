@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\DebitDesEmails;
@@ -28,8 +29,9 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Envoie un devis, une facture ou un avoir par e-mail, PDF en pièce
- * jointe, ou relance une facture échue et impayée. Le document est
+ * Envoie un devis, une facture, un avoir ou un reçu de paiement (voir
+ * RecusDePaiement) par e-mail, PDF en pièce jointe, ou relance une facture
+ * échue et impayée. Le document est
  * vérifié et l'envoi noté ici (voir EnvoiDocument) ; l'e-mail lui-même
  * part en file d'attente une fois la transaction validée (voir
  * EnvoyerDocumentJob), pour qu'un serveur d'envoi lent ou indisponible ne
@@ -84,7 +86,7 @@ class EnvoyerDocumentAction
      * envoi (voir EmettreDevisAction) ; une facture émise devient
      * « envoyée », sans qu'aucun autre statut ne change.
      *
-     * @param  Facture|Devis|Avoir  $document
+     * @param  Facture|Devis|Avoir|RecuPaiement  $document
      * @param  string|null  $jeton  le jeton de la demande (R3)
      *
      * @throws AuthorizationException
@@ -271,7 +273,10 @@ class EnvoyerDocumentAction
     /**
      * Le document relu par la requête du magasin actif, sous verrou ou non :
      * un devis brouillon supprimé entre-temps, ou un document d'un autre
-     * magasin, est refusé.
+     * magasin, est refusé. Un reçu de paiement, qui ne change jamais, se
+     * relit sans verrou : sa table est en ajout seul, et le compte de
+     * l'application, sans droit de modifier ses lignes, ne peut pas les
+     * verrouiller.
      *
      * @template TDocument of Model&DocumentEnvoyable
      *
@@ -284,7 +289,7 @@ class EnvoyerDocumentAction
     {
         $requete = $document::query()->whereKey($document->getKey());
 
-        return ($sousVerrou ? $requete->lockForUpdate() : $requete)->first()
+        return ($sousVerrou && ! $document instanceof RecuPaiement ? $requete->lockForUpdate() : $requete)->first()
             ?? throw new LogicException(self::REFUS_INTROUVABLE);
     }
 

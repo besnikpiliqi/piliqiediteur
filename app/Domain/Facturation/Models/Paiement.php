@@ -39,8 +39,9 @@ class Paiement extends Model
 
     protected $table = 'paiements';
 
-    // contre_passe_paiement_id : jamais en mass assignment, seule
-    // ContrePasserPaiementAction le pose.
+    // contre_passe_paiement_id et recu_paiement_id : jamais en mass
+    // assignment, seules ContrePasserPaiementAction et
+    // EnregistrerPaiementAction les posent.
     protected $fillable = [
         'client_id',
         'mode_paiement',
@@ -95,6 +96,17 @@ class Paiement extends Model
     public function creditsImputes(): HasMany
     {
         return $this->hasMany(AvoirAllocation::class);
+    }
+
+    /**
+     * Le reçu de paiement dont il est une part : celui d'un encaissement
+     * fait après l'émission, ou de cette contre-passation ; aucun pour un
+     * paiement reçu à l'émission, que le document imprime (voir
+     * RecusDePaiement).
+     */
+    public function recuPaiement(): BelongsTo
+    {
+        return $this->belongsTo(RecuPaiement::class);
     }
 
     /**

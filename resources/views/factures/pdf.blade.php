@@ -11,7 +11,8 @@
         de paiement et les mentions, en bas de chaque page (voir
         PiedDePage) ; $tableau : ses lignes, mesurées pour tenir dans la
         largeur de la page (voir TableauDesLignes) ; $reglements : ce qui
-        l'a réglée à son émission (voir ReglementsALEmission).
+        l'a réglée à son émission (voir ReglementsALEmission), à gauche des
+        totaux, sur leur bande (voir documents/pdf/totaux).
 
         L'échéance s'imprime sur toute facture à un professionnel, même
         réglée à son émission (date à laquelle le règlement doit intervenir,
@@ -51,8 +52,6 @@
 
     @include('documents.pdf.lignes', ['document' => $facture, 'tableau' => $tableau])
 
-    @include('documents.pdf.totaux', ['document' => $facture])
-
-    @include('documents.pdf.reglements', ['reglements' => $reglements, 'dateEmission' => $facture->date_emission, 'calendrier' => $facture->magasin->calendrier()])
+    @include('documents.pdf.totaux', ['document' => $facture, 'reglements' => $reglements, 'dateEmission' => $facture->date_emission, 'calendrier' => $facture->magasin->calendrier()])
 </body>
 </html>

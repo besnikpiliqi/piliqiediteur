@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 03/11/2026 à 09:47 UTC par pilotage-sync.sh : « C6 : PostgreSQL sous Windows ».
+Mis à jour le 07/11/2026 à 09:33 UTC par pilotage-sync.sh : « Reprise du 07/11 : course relancée (TR, puis EX) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

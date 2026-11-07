@@ -9,6 +9,10 @@ Cette branche (`claude/pilotage-reprise`) ne contient que les notes de pilotage 
 
 Le code est sur la branche de travail `claude/saas-invoice-editor-architecture-q6eizh` (PR #1 de besnikpiliqi/piliqiediteur, dépôt privé). `CLAUDE.md` de cette branche fait foi pour les règles du projet, sauf sur les sujets où une décision plus récente de l'éditeur l'emporte en attendant le lot qui la reporte dans `CLAUDE.md` (liste au § 7).
 
+## ▶ Reprise du 07/11/2026 vers 09 h 35 UTC : la session d'origine a repris son travail
+
+L'éditeur a fait reprendre la même session (même conteneur, travail non commité de TR intact). Course `wf_f59a9064-d8d` reprise avec `ouverts` = A7b, SL, NAV-1, TR, EX, QA, NAV-2 à NAV-5, ML, DV, EC2, S9-L, S9-A, 21. La passation ci-dessous ne sert plus que si une autre session doit reprendre.
+
 ## ▶ Passation du 03/11/2026 vers 02 h UTC : lire d'abord `notes/reprises/PASSATION-2026-11-03.md`
 
 Session arrêtée à la demande de l'éditeur. Tête poussée `1d3278a` (A7b, SL et NAV-1 poussés, CI verte), aucun commit local. Lot TR en cours arrêté volontairement : son travail non commité est dans `notes/reprises/lot-TR-travail-non-commite.patch` (à appliquer par `git apply --binary` sur `1d3278a`, sans commit). Puis course neuve avec `notes/reprises/args-course-passation-2026-11-03.json` (`ouverts` = TR, EX, QA, NAV-2 à NAV-5, ML, DV, EC2, S9-L, S9-A, 21). Aucune question en attente de l'éditeur ; il lui reste sur son PC `extension=sockets` dans `php.ini` puis `composer install`.

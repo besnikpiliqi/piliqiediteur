@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 14:37 UTC par pilotage-sync.sh : « 07/11 14 h 37 : course coupée par la limite d'usage, reprise de TR:correction ».
+Mis à jour le 07/11/2026 à 15:54 UTC par pilotage-sync.sh : « 07/11 15 h 41 : course reprise après un second redémarrage ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

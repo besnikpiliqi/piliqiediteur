@@ -1,3 +1,16 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 5827219..c645fcc 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -171,7 +171,7 @@ ## Décisions de l'éditeur
+ - Paiements et avoirs : le montant d'un paiement est égal au total imputé sur les factures. Une vente se règle en un ou plusieurs modes (espèces, carte bancaire, chèque, virement, prélèvement ; le prélèvement n'est pas proposé à la caisse), d'un seul geste, à la caisse comme sur une facture, chaque part étant un paiement ; à la caisse, les parts et le crédit d'avoir égalent exactement le total à payer, et seule la part en espèces rend la monnaie ; sur une facture, leur somme ne dépasse jamais le restant dû. Le crédit d'avoir ne fait entrer aucun argent : il s'affiche comme le mode « Avoir » — le crédit du client, imputé d'office, ou un bon d'avoir, dont on saisit le numéro — et s'enregistre comme une imputation, jamais comme un paiement d'un mode. Un paiement erroné se corrige par une contre-passation (paiement opposé, lié à l'original et signé), puis par le bon paiement ; à la contre-passation, le crédit d'avoir disponible du client s'impute aussitôt sur ce qui reste dû, dans le même ordre qu'à l'émission d'un avoir, dans la même transaction signée. Rien n'est jamais remboursé : un retour donne un crédit, imputé automatiquement d'abord sur ce qui reste dû des factures qu'il corrige, puis sur les autres factures impayées du client, de la plus ancienne à la plus récente (pour le client comptoir, seulement sur les tickets qu'il corrige). Un avoir fait au client comptoir sert de bon d'avoir : son numéro permet d'imputer son crédit sur une prochaine vente à la caisse, quel qu'en soit le client, ou sur un ticket du client comptoir resté dû, avec au moins une part payée, qui signe l'imputation et dont la contre-passation la rend au bon (les bons n'y règlent donc jamais seuls tout ce qui reste dû), jamais sur une autre facture, et plusieurs bons peuvent régler une même vente. Une facture en retard le reste tant qu'un montant reste dû après l'échéance. Seule exception à cet ordre d'imputation : le crédit d'un avoir de régularisation (procédure exceptionnelle de l'éditeur) s'impute d'abord sur la facture qu'il régularise, puis sur sa facture rectificative ; cette imputation n'est jamais déclarée comme un encaissement.
+ - Demandes répétées : chaque émission, vente à la caisse, émission de devis, paiement, contre-passation, avoir, envoi, fermeture de caisse, clôture du jour et validation d'achat porte un jeton unique, lié au contenu de la demande (celui de la caisse est celui de son panier) ; une demande répétée après une réponse perdue renvoie le résultat déjà enregistré, sans doublon ; le même jeton avec une demande différente est refusé ; les autres gestes sont protégés par leur état ou une contrainte d'unicité.
+ - Vendeurs : les ventes sont faites par les responsables et les vendeurs, et par un administrateur ou un observateur seulement si on lui a coché les autorisations de vente, jamais par le propriétaire. Un vendeur ne voit et n'encaisse que ses factures, sauf autorisation « voir celles de toute l'équipe » ; son tableau de bord montre « Mes ventes ». Le chiffre d'affaires est net des avoirs, en HT avec le TTC à côté. Le relevé de caisse de chaque compte qui vend (« Fermer ma caisse ») sépare le TTC vendu, les encaissements par mode, le crédit d'avoir utilisé et le reste dû. Le tableau de bord dit le rôle de la personne après « Bonjour » et signale en alerte les factures à encaisser de sa portée (nombre, restant dû, dont en retard, et celles dont un paiement a été contre-passé) : toutes celles du magasin pour le propriétaire, un responsable, un administrateur qui voit celles de toute l'équipe et un compte du cabinet lié à qui le client accorde de voir celles de toute l'équipe ; pour un vendeur ou un observateur autorisé à contre-passer, les siennes, ou toutes avec « voir celles de toute l'équipe » ; dans l'espace d'administration, le propriétaire et chaque administrateur voient ces totaux magasin par magasin, sans nom de client.
+-- Achats et stock : seule une société « Commerce ou atelier » a des produits ; un produit y naît seulement de la validation d'une facture d'achat ou d'un inventaire d'ouverture (stock existant au démarrage d'un magasin, avec son coût unitaire HT), qui exige aussi le droit de créer des produits ; aucun écran ni aucun autre code ne crée un produit autrement. Seules les marchandises revendues s'enregistrent en facture d'achat ; matières premières, fournitures et frais attendent les factures reçues de l'étape 2 et la comptabilité de l'étape 5. Un inventaire d'ouverture se saisit et se valide jusqu'à la première vente du magasin, par une personne autorisée à valider les achats et à créer des produits, et sa validation crée ses produits, entre leur stock au coût saisi, sans TVA ni fournisseur, et s'inscrit au journal d'audit. Un produit se modifie ensuite dans « Produits », sauf son fournisseur et ses données d'achat (coût moyen, quantités reçues), que seuls les achats, les retours et les inventaires font évoluer. Le fournisseur d'un produit est celui de son dernier achat validé, même saisi à la main. Modifier une facture d'achat validée exige l'autorisation de valider. Un avoir fournisseur se crée à la main, depuis le menu « Avoirs fournisseur » ou depuis la fiche d'une facture d'achat (les avoirs reçus par la plateforme agréée ou par l'API y viendront aussi) ; il ne porte que des lignes d'une facture d'achat validée du magasin, chacune liée à sa ligne d'achat, dans la limite de ce qui reste retournable et en stock ; il garde le n° de l'avoir du fournisseur, que l'écran demande, avec un avertissement sans refus quand il manque ; il ne modifie jamais la facture d'achat, s'inscrit au journal d'audit, et la fiche de la facture d'achat montre sous chaque ligne, en orange, ce qui en a été retourné et par quel avoir. Un retour au fournisseur sort au coût de la ligne d'achat retournée et recalcule le coût moyen ; la valeur d'un stock ne descend jamais sous 0 €. Une vente au-delà du stock disponible est refusée, sauf pour une personne autorisée à « vendre sans stock » dans ce magasin (les responsables du magasin le sont toujours ; le propriétaire, qui ne vend jamais, ne l'est jamais ; pour les autres, cette autorisation n'est jamais précochée, et un cabinet lié ne l'a jamais) : elle voit un avertissement avant de valider, qui se renouvelle si le stock a encore baissé, une alerte de stock part, et la quantité négative reste visible jusqu'à sa régularisation par un achat, une réception ou un inventaire ; ces ventes sont journalisées, et des ventes simultanées respectent ces règles sans jamais rendre le stock incohérent.
++- Achats et stock : seule une société « Commerce ou atelier » a des produits ; un produit y naît seulement de la validation d'une facture d'achat ou d'un inventaire d'ouverture (stock existant au démarrage d'un magasin, avec son coût unitaire HT), qui exige aussi le droit de créer des produits ; aucun écran ni aucun autre code ne crée un produit autrement. Seules les marchandises revendues s'enregistrent en facture d'achat ; matières premières, fournitures et frais attendent les factures reçues de l'étape 2 et la comptabilité de l'étape 5. Une facture d'achat ou un avoir fournisseur saisi à la main porte la pièce du fournisseur (PDF ou photo), jointe à la saisie, conservée comme un document et jamais retirée après la validation, et la date de la facture du fournisseur ; sans elle, il se valide mais reste marqué « pièce du fournisseur manquante » dans « À faire » jusqu'à ce qu'elle soit jointe ; un achat reçu par l'API ou par la plateforme agréée n'en exige pas. Un inventaire d'ouverture se saisit et se valide jusqu'à la première vente du magasin, par une personne autorisée à valider les achats et à créer des produits, et sa validation crée ses produits, entre leur stock au coût saisi, sans TVA ni fournisseur, et s'inscrit au journal d'audit. Un produit se modifie ensuite dans « Produits », sauf son fournisseur et ses données d'achat (coût moyen, quantités reçues), que seuls les achats, les retours et les inventaires font évoluer. Le fournisseur d'un produit est celui de son dernier achat validé, même saisi à la main. Modifier une facture d'achat validée exige l'autorisation de valider. Un avoir fournisseur se crée à la main, depuis le menu « Avoirs fournisseur » ou depuis la fiche d'une facture d'achat (les avoirs reçus par la plateforme agréée ou par l'API y viendront aussi) ; il ne porte que des lignes d'une facture d'achat validée du magasin, chacune liée à sa ligne d'achat, dans la limite de ce qui reste retournable et en stock ; il garde le n° de l'avoir du fournisseur, que l'écran demande, avec un avertissement sans refus quand il manque ; il ne modifie jamais la facture d'achat, s'inscrit au journal d'audit, et la fiche de la facture d'achat montre sous chaque ligne, en orange, ce qui en a été retourné et par quel avoir. Un retour au fournisseur sort au coût de la ligne d'achat retournée et recalcule le coût moyen ; la valeur d'un stock ne descend jamais sous 0 €. Une vente au-delà du stock disponible est refusée, sauf pour une personne autorisée à « vendre sans stock » dans ce magasin (les responsables du magasin le sont toujours ; le propriétaire, qui ne vend jamais, ne l'est jamais ; pour les autres, cette autorisation n'est jamais précochée, et un cabinet lié ne l'a jamais) : elle voit un avertissement avant de valider, qui se renouvelle si le stock a encore baissé, une alerte de stock part, et la quantité négative reste visible jusqu'à sa régularisation par un achat, une réception ou un inventaire ; ces ventes sont journalisées, et des ventes simultanées respectent ces règles sans jamais rendre le stock incohérent.
+ - Caisse et clôtures : une seule caisse par magasin. Le calendrier d'un magasin est celui de son territoire : sa journée de caisse et ses clôtures, la date de ses documents, l'année de ses numéros, ses échéances, ses relances et ses délais en jours suivent son heure locale, et minuit est son minuit (une vente faite à 20 h en Martinique est du jour même et se clôt au minuit de la Martinique). Le magasin clôture sa journée par un bouton, selon les autorisations, sans jamais être bloqué par une caisse personnelle restée ouverte : la clôture du jour la ferme d'office, avec la mention « fermée automatiquement » sur son relevé, et son minuit ferme toute caisse personnelle qui ne l'a pas été ; le propriétaire, un responsable ou une personne autorisée à clôturer la journée peut aussi la fermer pour le vendeur ; la fenêtre de confirmation prévient qu'ensuite plus aucune vente n'est possible ce jour-là, et la caisse refuse toute vente jusqu'à son minuit. Sans clôture manuelle, la clôture automatique le fait, passé son minuit, et les journées manquées sont rattrapées dans l'ordre. Un ticket Z est produit chaque jour du calendrier, dimanches et jours de fermeture habituelle compris, à partir de la première vente du magasin, même à zéro, tant que le magasin n'est pas fermé, et numéroté selon l'année de la journée clôturée ; rien n'est déclaré à l'administration pour un jour sans opération. Toutes les ventes et leurs règlements entrent dans les clôtures et les grands totaux. Chaque clôture du jour garde, calculés une seule fois depuis les montants enregistrés et jamais recalculés : ses ventes aux particuliers et leurs avoirs, chacun avec son nombre et ses montants par taux, puis leur net, qui est la base de l'e-reporting ; les factures aux professionnels et leurs avoirs, à titre d'information ; les encaissements par mode de paiement, contre-passations déduites, chaque paiement comptant dans une seule clôture : celle du jour où il est enregistré, ou la suivante s'il l'est après la clôture de ce jour ; le crédit d'avoir utilisé, à part des encaissements ; et les grands totaux perpétuels du magasin après le dernier document qu'elle compte. Ventes et encaissements diffèrent quand un client garde un crédit d'avoir ou paie plus tard. La fiche d'une clôture ouvre chaque ticket et chaque avoir qu'elle compte pour qui peut voir ce document ; une personne qui ne voit que ses ventes y voit les totaux du magasin et le détail de ses seuls documents ; la fiche montre aussi, en français, l'aperçu de ce que l'e-reporting déclarera pour la journée (totaux par catégorie et par taux, opérations non soumises à la TVA en France comprises). Le menu des relevés de caisse s'appelle « Ma caisse » pour qui tient une caisse sans voir les relevés de toute l'équipe, « Les caisses » pour les autres, qui y voient aussi les caisses encore ouvertes ; dans l'espace d'administration, la page « Les caisses » réunit, pour le propriétaire et chaque administrateur, les relevés et les caisses encore ouvertes de chaque magasin réel de sa portée où il voit les relevés de toute l'équipe. L'abandon d'une vente, chaque ligne retirée et chaque baisse du prix d'une ligne avant validation (du prix d'avant sa saisie au prix saisi) s'inscrivent au journal des événements, comme chaque clôture du jour, avec son numéro et ses totaux ; les simples gestes d'écran (recherches, ajouts de lignes, ouvertures de fenêtres, chiffres en cours de frappe) ne s'y inscrivent pas. Le mois de fin d'exercice, réglage de la société (décembre par défaut), est verrouillé dès la première vente de l'un de ses magasins ; la date de fin d'exercice est un même jour civil pour tous ses magasins, que chacun clôt à son minuit local, et une opération appartient à la journée, au mois et à l'exercice de son magasin ; seul un changement légal de la date de clôture, sur procès-verbal, le modifie ensuite, par la procédure de l'éditeur, journalisée dans chaque magasin, avec la date de fin de l'exercice en cours fixée par le procès-verbal et une durée validée par l'expert-comptable de la société, sans jamais toucher un exercice clos ni une archive, ni repousser une clôture obligatoire ; une clôture d'exercice dont la date est déjà passée est rattrapée. Le PDF reproduit le document tel qu'émis, une réimpression porte la mention « Duplicata », et « Payé / Restant dû » reste visible sur la fiche. À la fermeture d'un magasin, ses journées en attente sont clôturées et plus aucun ticket Z n'est produit tant qu'il est fermé ; à sa réouverture, sa caisse reprend au premier jour non clôturé, avec le même registre, les mêmes séries et les mêmes grands totaux. À la fermeture définitive d'un magasin (cessation, cession), clôtures mensuelle et de l'exercice et archive signées finales ; une fermeture temporaire ne clôture que ses journées, et une réouverture après une cessation garde les clôtures finales déjà faites. À la résiliation de la société, clôtures journalière, mensuelle et de l'exercice et archive signées finales, automatiques. Les documents, registres, journaux des événements et le journal d'audit des opérations se conservent 10 ans, sans aucune purge, même après la résiliation ; seules s'effacent, à leur échéance : les traces techniques (adresse IP et navigateur, après 1 an), les copies de pièces de la vérification (dès la décision), les jetons des demandes répétées (après 30 jours), les demandes d'inscription non confirmées, les invitations d'un cabinet, acceptées ou non, 48 heures après leur fin, et 7 jours après pour une invitation refusée (l'acceptation et le refus restent prouvés au journal d'audit), les entrées d'audit de gestion des accès (après 5 ans) et les vérifications d'une société, ses codes de courrier et les entrées d'audit de sa vérification (5 ans après la fin de la relation). Une attestation de l'éditeur par magasin, même pour plusieurs magasins d'une même société ; le volet 2 de chacune est signé par le représentant légal de la société ou son mandataire, dans l'application par le propriétaire qui a validé la société en saisissant le code du courrier recommandé envoyé au nom du représentant légal, ou à la main, un propriétaire devenu propriétaire par transmission signant à la main. Le magasin de démonstration est un mode d'entraînement distinct (registre et séries propres, documents marqués, exclu des totaux réels, entrée et sortie inscrites au journal des événements), décrit dans la notice et l'attestation.
+ - Facture électronique (SUPER PDP) : chaque société a une seule connexion, faite par son propriétaire, à l'entreprise SUPER PDP de son SIREN, et chaque magasin son adresse de réception (SIREN_SIRET) ; une facture reçue est attribuée automatiquement au magasin que désignent avec certitude son SIRET destinataire, son adresse électronique de facturation ou le code de routage de l'établissement ; l'adresse physique et les références du magasin ne servent qu'à proposer une correspondance ; seule une facture dont le destinataire exact est incertain ou dont les informations se contredisent entre dans la liste « À attribuer » de la société, dont le propriétaire et les administrateurs autorisés sont alertés ; chaque magasin ne voit que les factures qui lui sont attribuées, une facture n'est jamais importée dans deux magasins, et chaque attribution ou correction est journalisée ; refuser ou contester une facture reçue : au propriétaire et aux administrateurs autorisés. Seule une facture reçue de marchandises, dans une société qui a des articles, s'importe en brouillon de facture d'achat : l'entrée en stock reste une validation manuelle, un produit inconnu est créé, les cas non gérés (quantités décimales, unités de poids ou de volume, remises de pied de facture) passent en saisie manuelle ; un fournisseur est reconnu par son SIRET ; une facture reçue de frais (loyer, énergie, honoraires…), et toute facture reçue par une société de services, ne crée jamais de produit ni d'entrée en stock : elle reste une facture reçue, à consulter, refuser ou contester, puis à comptabiliser à l'étape 5. Le statut « encaissée » d'une facture de services part à chaque paiement, avec le montant et la date, sauf option pour les débits ; les paiements de particuliers pour des services ne sont déclarés qu'une fois la règle confirmée par l'expert-comptable de la société. Une prestation de services réglée par un crédit d'avoir compte comme encaissée à la date où ce crédit est utilisé, sauf l'imputation d'un avoir de régularisation. Les factures aux clients publics et aux professionnels non assujettis restent hors plateforme, avec un message. Le crédit d'avoir compte dans le montant déjà payé (« dont X € imputés de l'avoir N »). Une vente à 0 % n'est pas transmise tant que son motif d'exonération n'est pas géré. Les ventes aux particuliers sont déclarées par clôture journalière ayant des opérations, suivies jusqu'à l'accusé de réception, journées manquées rattrapées. Les factures émises avant la connexion se transmettent par un bouton, sans rattrapage des clôtures antérieures. Une facture rejetée est redéposée sous le même numéro en ne corrigeant que les données de transmission ajoutées hors du document signé ; une erreur dans le document lui-même se corrige par un avoir et une nouvelle facture.
+ - E-mails : au plus 60 e-mails par heure et par membre et 200 par heure et par magasin, une relance par jour et par facture ; les relances partent dans l'ordre, chacune pas avant son délai, en respectant l'écart entre deux relances ; les alertes de stock bas ou négatif vont au propriétaire de la société, aux responsables du magasin et à toute autre personne qui a accès au magasin et y est autorisée à gérer le stock (administrateurs, vendeurs et observateurs), jamais à un compte d'un cabinet.
 diff --git a/app/Console/Commands/EffacerPiecesVerification.php b/app/Console/Commands/EffacerPiecesVerification.php
 index 3fe5396..d6075a2 100644
 --- a/app/Console/Commands/EffacerPiecesVerification.php
@@ -815,10 +828,10 @@ index 0000000..4e0cccb
 +}
 diff --git a/app/Domain/Achats/Services/PiecesDuFournisseur.php b/app/Domain/Achats/Services/PiecesDuFournisseur.php
 new file mode 100644
-index 0000000..75ce14e
+index 0000000..50813a9
 --- /dev/null
 +++ b/app/Domain/Achats/Services/PiecesDuFournisseur.php
-@@ -0,0 +1,301 @@
+@@ -0,0 +1,303 @@
 +<?php
 +
 +namespace App\Domain\Achats\Services;
@@ -1027,14 +1040,16 @@ index 0000000..75ce14e
 +
 +    /**
 +     * Le type d'un contenu, lu sur ses premiers octets, jamais sur un nom
-+     * de fichier : un PDF commence par « %PDF- » (dans son premier Ko, où la
-+     * norme le laisse), une photo JPEG par FF D8 FF, une image PNG par sa
-+     * signature de huit octets ; null pour tout autre contenu.
++     * de fichier : un PDF commence par « %PDF- » (après une marque d'ordre
++     * des octets ou des blancs, que certains logiciels écrivent avant), une
++     * photo JPEG par FF D8 FF, une image PNG par sa signature de huit
++     * octets ; null pour tout autre contenu, même s'il contient « %PDF- »
++     * plus loin.
 +     */
 +    public static function typeDuContenu(string $contenu): ?string
 +    {
 +        return match (true) {
-+            str_contains(substr($contenu, 0, 1024), '%PDF-') => 'application/pdf',
++            str_starts_with(ltrim(str_starts_with($contenu, "\xEF\xBB\xBF") ? substr($contenu, 3) : $contenu, " \t\r\n"), '%PDF-') => 'application/pdf',
 +            str_starts_with($contenu, "\xFF\xD8\xFF") => 'image/jpeg',
 +            str_starts_with($contenu, "\x89PNG\r\n\x1A\n") => 'image/png',
 +            default => null,
@@ -1753,10 +1768,10 @@ index 0000000..81f3fee
 +}
 diff --git a/app/Filament/Concerns/JointLesPiecesDuFournisseur.php b/app/Filament/Concerns/JointLesPiecesDuFournisseur.php
 new file mode 100644
-index 0000000..72015af
+index 0000000..62b730d
 --- /dev/null
 +++ b/app/Filament/Concerns/JointLesPiecesDuFournisseur.php
-@@ -0,0 +1,246 @@
+@@ -0,0 +1,258 @@
 +<?php
 +
 +namespace App\Filament\Concerns;
@@ -1779,6 +1794,7 @@ index 0000000..72015af
 +use Filament\Notifications\Notification;
 +use Filament\Tables;
 +use Illuminate\Database\Eloquent\Builder;
++use Illuminate\Support\HtmlString;
 +
 +/**
 + * Les pièces du fournisseur à l'écran (décision de l'éditeur du 03/11/2026,
@@ -1789,8 +1805,9 @@ index 0000000..72015af
 + * « Ajouter des pièces » (en brouillon comme après la validation),
 + * « Retirer une pièce » et « Remplacer une pièce » (d'un brouillon
 + * seulement). Chaque geste passe par son action du domaine, qui contrôle
-+ * tout ; l'écran n'est qu'un confort. La classe qui l'utilise utilise aussi
-+ * GereLesExceptionsMetier.
++ * tout ; l'écran n'est qu'un confort. Après chaque geste, la fiche relit
++ * son document, dont la marque a pu changer. La classe qui l'utilise
++ * utilise aussi GereLesExceptionsMetier.
 + */
 +trait JointLesPiecesDuFournisseur
 +{
@@ -1876,19 +1893,26 @@ index 0000000..72015af
 +                    ->hiddenLabel()
 +                    ->state(fn (FactureAchat|AvoirFournisseur $record) => $record->pieces()->get())
 +                    ->schema([
++                        // Un lien de téléchargement (attribut download) : le
++                        // navigateur enregistre le fichier sous son nom
++                        // d'origine sans quitter la fiche.
 +                        TextEntry::make('nom_origine')
 +                            ->label('Fichier')
-+                            ->state(fn (PieceDuFournisseur $record): string => $record->nom_origine)
-+                            ->url(fn (PieceDuFournisseur $record): string => self::adresseDeLaPiece($record))
-+                            ->color('primary'),
++                            ->state(fn (PieceDuFournisseur $record): HtmlString => new HtmlString('<a href="'.e(self::adresseDeLaPiece($record)).'" download="'.e($record->nom_origine).'" class="text-primary-600 underline dark:text-primary-400">'.e($record->nom_origine).'</a>'))
++                            ->html(),
 +                        TextEntry::make('taille')
 +                            ->label('Taille')
 +                            ->state(fn (PieceDuFournisseur $record): string => $record->tailleLisible()),
-+                        TextEntry::make('ajoutee')
++                        TextEntry::make('ajoutee_par_nom')
 +                            ->label('Jointe par')
-+                            ->state(fn (PieceDuFournisseur $record): string => ($record->ajoutee_par_nom ?? '—').' le '.app(TenantContext::class)->calendrierDAffichage()->afficher($record->created_at, 'd/m/Y à H:i')),
++                            ->state(fn (PieceDuFournisseur $record): ?string => $record->ajoutee_par_nom)
++                            ->placeholder('—'),
++                        TextEntry::make('created_at')
++                            ->label('Le')
++                            ->state(fn (PieceDuFournisseur $record): mixed => $record->created_at)
++                            ->dateTime('d/m/Y à H:i'),
 +                    ])
-+                    ->columns(3)
++                    ->columns(4)
 +                    ->visible(fn (FactureAchat|AvoirFournisseur $record): bool => $record->pieces()->exists()),
 +                TextEntry::make('aucune_piece')
 +                    ->hiddenLabel()
@@ -1922,6 +1946,7 @@ index 0000000..72015af
 +                try {
 +                    static::executerSansCasser(function () use ($record, $data): void {
 +                        $jointes = app(JoindreDesPiecesAction::class)->handle(auth()->user(), $record, PieceDeposee::lire($data['pieces'] ?? []));
++                        $record->refresh();
 +                        Notification::make()->title(count($jointes) > 1 ? count($jointes).' pièces jointes.' : 'Pièce jointe.')->success()->send();
 +                    });
 +                } finally {
@@ -1947,6 +1972,7 @@ index 0000000..72015af
 +            ->visible(fn (FactureAchat $record): bool => self::aDesPiecesARetirer($record))
 +            ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
 +                app(RetirerUnePieceAction::class)->handle(auth()->user(), self::pieceChoisie($record, $data['piece']));
++                $record->refresh();
 +                Notification::make()->title('Pièce retirée.')->success()->send();
 +            }));
 +    }
@@ -1973,6 +1999,7 @@ index 0000000..72015af
 +                    static::executerSansCasser(function () use ($record, $data): void {
 +                        [$remplacante] = PieceDeposee::lire($data['pieces'] ?? []) + [null];
 +                        app(RetirerUnePieceAction::class)->handle(auth()->user(), self::pieceChoisie($record, $data['piece']), $remplacante);
++                        $record->refresh();
 +                        Notification::make()->title('Pièce remplacée.')->success()->send();
 +                    });
 +                } finally {
@@ -2323,11 +2350,232 @@ index 0000000..343eebc
 +        Schema::dropIfExists('pieces_fournisseur');
 +    }
 +};
+diff --git a/tests/Browser/Parcours/PiecesDuFournisseurTest.php b/tests/Browser/Parcours/PiecesDuFournisseurTest.php
+new file mode 100644
+index 0000000..c5d7019
+--- /dev/null
++++ b/tests/Browser/Parcours/PiecesDuFournisseurTest.php
+@@ -0,0 +1,207 @@
++<?php
++
++use App\Domain\Achats\Actions\CreerFactureAchatAction;
++use App\Domain\Achats\Actions\ValiderFactureAchatAction;
++use App\Domain\Achats\Models\AvoirFournisseur;
++use App\Domain\Achats\Models\FactureAchat;
++use App\Domain\Achats\Services\PieceDeposee;
++use App\Domain\Achats\Services\PiecesDuFournisseur;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Fournisseur;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
++use Illuminate\Support\Facades\File;
++use Illuminate\Support\Facades\Storage;
++use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
++use Tests\Browser\Support\Navigation;
++
++/*
++ * Les pièces du fournisseur dans le navigateur (décision de l'éditeur du
++ * 03/11/2026, lot EX, F1 = b) : la facture du fournisseur se dépose à la
++ * saisie d'une facture d'achat, avec sa date ; une facture saisie sans
++ * elle est marquée « pièce du fournisseur manquante », que le filtre de la
++ * liste et « À faire » du tableau de bord retrouvent ; la pièce s'ajoute
++ * depuis la fiche, se remplace ou se retire d'un brouillon, et se
++ * télécharge depuis la fiche par chaque rôle qui voit les achats, cabinet
++ * lié compris. La société de test a déjà deux factures d'achat (une
++ * validée, un brouillon) et un avoir fournisseur saisis sans leur pièce
++ * (voir TestCaseDuNavigateur::remplirLeMagasin()).
++ */
++
++const PDF_DU_FOURNISSEUR = "%PDF-1.4\nFacture F-812 du Grossiste du Nord\n%%EOF";
++
++beforeEach(function () {
++    Storage::fake(PiecesDuFournisseur::DISQUE);
++    Storage::fake(FileUploadConfiguration::disk());
++});
++
++/**
++ * Un fichier sur le poste de la personne, prêt à être choisi.
++ */
++function pieceSurLePoste(string $nom, string $contenu): string
++{
++    $chemin = storage_path('framework/testing/pieces-'.getmypid().'/'.$nom);
++    File::ensureDirectoryExists(dirname($chemin));
++    File::put($chemin, $contenu);
++
++    return $chemin;
++}
++
++/**
++ * Une facture d'achat du Grossiste du Nord, de deux bougies, saisie par le
++ * responsable avec ces pièces, validée ou en brouillon.
++ *
++ * @param  list<PieceDeposee>  $pieces
++ */
++function factureDuGrossiste(Magasin $magasin, User $responsable, array $pieces, bool $validee, string $numero = 'F-812'): FactureAchat
++{
++    return app(TenantContext::class)->runAs($magasin, function () use ($responsable, $pieces, $validee, $numero): FactureAchat {
++        $brouillon = app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
++            ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 2, 'prix_unitaire_ht' => '5.00'],
++        ], ['date_facture' => '2026-03-09', 'numero_fournisseur' => $numero], null, $pieces);
++
++        return $validee ? app(ValiderFactureAchatAction::class)->handle($responsable, $brouillon) : $brouillon;
++    });
++}
++
++/**
++ * Télécharge, d'un clic sur son lien, la pièce de ce nom de la fiche
++ * ouverte, et rend le fichier reçu.
++ *
++ * @return array{nom: string, type: string, taille: int, debut: string, contenu: string}
++ */
++function telechargerLaPiece(Navigation $onglet, string $nom): array
++{
++    $onglet->geste(fn () => $onglet->page()->evaluate('(nom) => document.querySelector(`a[download="${nom}"]`).click()', $nom), 'le lien de la pièce « '.$nom.' »')
++        ->attendre()
++        ->verifier();
++    $fichiers = $onglet->telechargements();
++    expect($fichiers)->toHaveCount(1);
++
++    return $fichiers[0];
++}
++
++test('le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche', function () {
++    $societe = $this->societeComplete();
++    $onglet = $this->seConnecter($societe->responsable)
++        ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/create')
++        ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
++        ->remplir('N° de facture du fournisseur', 'F-812')
++        ->remplir('Date de la facture du fournisseur', '2026-03-09')
++        ->envoyerLeFichier(pieceSurLePoste('facture-F-812.pdf', PDF_DU_FOURNISSEUR))
++        ->cliquerSur('Ajouter un produit')
++        ->choisirDansLaListe('Produit', 'Bougie parfumée')
++        ->remplir('Quantité reçue', '2')
++        ->remplir('Prix d\'achat HT', '5')
++        ->soumettre('Ajouter à la facture')
++        ->soumettre('Créer')
++        ->attendreLaPage('/facture-achats$');
++
++    $factureAchat = app(TenantContext::class)->runAs($societe->magasin, fn (): FactureAchat => FactureAchat::query()->where('numero_fournisseur', 'F-812')->sole());
++    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$factureAchat->date_facture, $factureAchat->piece_manquante, $factureAchat->pieces()->sole()->nom_origine]))->toBe(['2026-03-09', false, 'facture-F-812.pdf']);
++
++    $onglet->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey())->voir('facture-F-812.pdf');
++    $fichier = telechargerLaPiece($onglet, 'facture-F-812.pdf');
++    expect([$fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe(['facture-F-812.pdf', 'application/pdf', PDF_DU_FOURNISSEUR]);
++});
++
++test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats', function () {
++    $societe = $this->societeComplete();
++    $comptes = [
++        'le propriétaire' => $societe->proprietaire,
++        'l’administrateur sans la vente' => $societe->administrateur,
++        'l’administrateur autorisé à vendre' => $societe->administrateurVendeur,
++        'le responsable' => $societe->responsable,
++    ];
++    $rang = 0;
++
++    foreach ($comptes as $qui => $compte) {
++        $rang++;
++        $sansPiece = factureDuGrossiste($societe->magasin, $societe->responsable, [], true, 'SANS-'.$rang);
++        $onglet = $this->seConnecter($compte)->aller('/app/'.$societe->magasin->uuid);
++        $onglet->voir('À faire')->voir('3 factures d\'achat sans leur pièce');
++        $onglet->cliquer('a[href*="/facture-achats?tableFilters%5Bpiece_manquante%5D%5BisActive%5D=1"]')->attendreLaPage('/facture-achats');
++        expect([$qui, $onglet->element('.fi-ta-row')->count(), $onglet->element('.fi-ta-row:has-text("SANS-'.$rang.'") >> text=Manquante')->count()])->toBe([$qui, 3, 1]);
++
++        $onglet->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$sansPiece->getRouteKey())
++            ->voir('Pièce du fournisseur manquante')
++            ->cliquerSur('Ajouter des pièces')
++            ->envoyerLeFichier(pieceSurLePoste('facture-'.$rang.'.pdf', PDF_DU_FOURNISSEUR.' '.$rang))
++            ->soumettre('Joindre')
++            ->voir('Pièce jointe.')
++            ->voir('facture-'.$rang.'.pdf');
++
++        expect([$qui, app(TenantContext::class)->runAs($societe->magasin, fn (): bool => $sansPiece->refresh()->piece_manquante)])->toBe([$qui, false]);
++        $onglet->aller('/app/'.$societe->magasin->uuid)->voir('2 factures d\'achat sans leur pièce');
++        $onglet->seDeconnecter();
++    }
++});
++
++test('sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire', function () {
++    $societe = $this->societeComplete();
++    $brouillon = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('mauvaise-facture.pdf', '%PDF-1.4 mauvaise')], false);
++    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$brouillon->getRouteKey());
++
++    $piecesDuBrouillon = fn (): array => app(TenantContext::class)->runAs($societe->magasin, fn (): array => $brouillon->pieces()->get()->all());
++
++    $onglet->cliquerSur('Remplacer une pièce')
++        ->choisir('Pièce', $piecesDuBrouillon()[0]->uuid)
++        ->envoyerLeFichier(pieceSurLePoste('bonne-facture.pdf', PDF_DU_FOURNISSEUR))
++        ->soumettre('Remplacer')
++        ->voir('Pièce remplacée.')
++        ->voir('bonne-facture.pdf')
++        ->nePasVoir('mauvaise-facture.pdf');
++    expect(array_map(fn ($piece): string => $piece->nom_origine, $piecesDuBrouillon()))->toBe(['bonne-facture.pdf']);
++
++    $onglet->cliquerSur('Retirer une pièce')
++        ->choisir('Pièce', $piecesDuBrouillon()[0]->uuid)
++        ->soumettre('Retirer')
++        ->voir('Pièce retirée.')
++        ->voir('Pièce du fournisseur manquante');
++    expect([$piecesDuBrouillon(), app(TenantContext::class)->runAs($societe->magasin, fn (): bool => $brouillon->refresh()->piece_manquante)])->toBe([[], true]);
++});
++
++test('le responsable joint la note d’avoir du fournisseur dans la fenêtre de l’avoir', function () {
++    $societe = $this->societeComplete();
++    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture.pdf', PDF_DU_FOURNISSEUR)], true);
++    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey());
++
++    $onglet->cliquerSur('Créer un avoir fournisseur')
++        ->remplirLaLigne('lignes', 0, 'quantite', '1')
++        ->remplir('N° de l\'avoir du fournisseur', 'AV-NORD-9')
++        ->remplir('Motif du retour', 'Bougie cassée')
++        ->envoyerLeFichier(pieceSurLePoste('note-AV-NORD-9.pdf', '%PDF-1.4 note AV-NORD-9'))
++        ->soumettre('Émettre l\'avoir fournisseur')
++        ->voir('émis.');
++
++    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): AvoirFournisseur => AvoirFournisseur::query()->where('numero_fournisseur', 'AV-NORD-9')->sole());
++    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$avoir->piece_manquante, $avoir->pieces()->pluck('nom_origine')->all()]))->toBe([false, ['note-AV-NORD-9.pdf']]);
++
++    $onglet->aller('/app/'.$societe->magasin->uuid.'/avoir-fournisseurs/'.$avoir->getRouteKey())->voir('note-AV-NORD-9.pdf');
++    expect(base64_decode(telechargerLaPiece($onglet, 'note-AV-NORD-9.pdf')['contenu']))->toBe('%PDF-1.4 note AV-NORD-9');
++});
++
++test('chaque rôle qui voit les achats télécharge la pièce depuis la fiche, cabinet lié compris ; seul qui saisit les achats en ajoute', function () {
++    $societe = $this->societeComplete();
++    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture-F-812.pdf', PDF_DU_FOURNISSEUR)], true);
++    $fiche = '/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey();
++    $comptes = [
++        'le propriétaire' => [$societe->proprietaire, 'app', true],
++        'l’administrateur sans la vente' => [$societe->administrateur, 'app', true],
++        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', true],
++        'le responsable' => [$societe->responsable, 'app', true],
++        'l’observateur' => [$societe->observateur, 'app', false],
++        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', false],
++    ];
++
++    foreach ($comptes as $qui => [$compte, $panneau, $ajoute]) {
++        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($fiche)->voir('facture-F-812.pdf');
++        expect([$qui, base64_decode(telechargerLaPiece($onglet, 'facture-F-812.pdf')['contenu'])])->toBe([$qui, PDF_DU_FOURNISSEUR])
++            ->and([$qui, $onglet->element(Navigation::bouton('Ajouter des pièces'))->count()])->toBe([$qui, $ajoute ? 1 : 0]);
++        $onglet->seDeconnecter();
++    }
++
++    $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid);
++    expect($onglet->element('.fi-sidebar a[href$="/facture-achats"]')->count())->toBe(0);
++});
 diff --git a/tests/Browser/Parcours/TvaDesAchatsTest.php b/tests/Browser/Parcours/TvaDesAchatsTest.php
-index 9969184..54035e5 100644
+index 9969184..e6cbb82 100644
 --- a/tests/Browser/Parcours/TvaDesAchatsTest.php
 +++ b/tests/Browser/Parcours/TvaDesAchatsTest.php
-@@ -100,7 +100,7 @@ function factureDeQuatreDiffuseurs(Magasin $magasin, User $responsable): Facture
+@@ -40,6 +40,7 @@ function factureDeMilleBougies(Navigation $onglet, Magasin $magasin, ?string $ht
+ {
+     $onglet->aller('/app/'.$magasin->uuid.'/facture-achats/create')
+         ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
++        ->remplir('Date de la facture du fournisseur', '2026-03-09')
+         ->cliquerSur('Ajouter un produit')
+         ->choisirDansLaListe('Produit', 'Bougie parfumée')
+         ->remplir('Quantité reçue', '1000')
+@@ -100,7 +101,7 @@ function factureDeQuatreDiffuseurs(Magasin $magasin, User $responsable): Facture
  
          return app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
              ['produit_id' => $diffuseur->id, 'quantite' => 4, 'prix_unitaire_ht' => '12.50'],
@@ -2336,7 +2584,7 @@ index 9969184..54035e5 100644
      });
  }
  
-@@ -212,7 +212,7 @@ function factureDeQuatreDiffuseurs(Magasin $magasin, User $responsable): Facture
+@@ -212,7 +213,7 @@ function factureDeQuatreDiffuseurs(Magasin $magasin, User $responsable): Facture
      $societe = $this->societeComplete();
      $marquee = app(TenantContext::class)->runAs($societe->magasin, fn (): FactureAchat => app(CreerFactureAchatAction::class)->handle($societe->responsable, Fournisseur::query()->where('nom', 'Grossiste du Nord')->sole(), [
          ['produit_id' => Produit::query()->where('reference', 'BOUGIE')->sole()->id, 'quantite' => 2, 'prix_unitaire_ht' => '5.00'],
@@ -2361,6 +2609,57 @@ index bfe9a2d..75cd138 100644
              $this->travelTo(self::aParis('2026-03-09 15:00:00'));
              self::vendreAuComptant($vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $bougie->id, 'quantite' => 1]]);
              $this->travelTo(self::instantDuTest());
+diff --git a/tests/Browser/inventaire-des-actions.php b/tests/Browser/inventaire-des-actions.php
+index f1c384a..005b7b6 100644
+--- a/tests/Browser/inventaire-des-actions.php
++++ b/tests/Browser/inventaire-des-actions.php
+@@ -1765,6 +1765,11 @@
+             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+         ]],
+     ],
++    'app/Filament/App/Widgets/PiecesDuFournisseurManquantesApercu.php' => [
++        'widget' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
++        ]],
++    ],
+     'app/Filament/App/Widgets/StockNegatifApercu.php' => [
+         'widget' => ['lot' => 'NAV-3', 'tests' => []],
+     ],
+@@ -2021,6 +2026,20 @@
+         'champ:mode' => ['lot' => 'NAV-3', 'tests' => []],
+         'champ:name' => ['lot' => 'NAV-3', 'tests' => []],
+     ],
++    'app/Filament/Concerns/JointLesPiecesDuFournisseur.php' => [
++        'action:ajouter_des_pieces' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
++        ]],
++        'action:remplacer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
++        ]],
++        'action:retirer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
++        ]],
++        'filtre:piece_manquante' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
++        ]],
++    ],
+     'app/Filament/Concerns/MontreLeCompteCree.php' => [
+         'action:compteCree' => ['lot' => 'NAV-3', 'tests' => []],
+     ],
+@@ -2284,6 +2303,13 @@
+             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › l’administrateur qui a toutes les autorisations de société ouvre chaque page et chaque action de l’espace sans erreur',
+         ]],
+     ],
++    'app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php' => [
++        'page' => ['lot' => 'NAV-3', 'tests' => [
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche, cabinet lié compris ; seul qui saisit les achats en ajoute',
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche',
++            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable joint la note d’avoir du fournisseur dans la fenêtre de l’avoir',
++        ]],
++    ],
+     'app/Providers/Filament/AppPanelProvider.php' => [
+         'menu:Administration de la société' => ['lot' => 'NAV-4', 'tests' => [
+             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
 diff --git a/tests/Feature/Achats/AvoirFournisseurActionsTest.php b/tests/Feature/Achats/AvoirFournisseurActionsTest.php
 index 11cf5f7..e07286b 100644
 --- a/tests/Feature/Achats/AvoirFournisseurActionsTest.php
@@ -3005,6 +3304,523 @@ index 623e67d..373f28a 100644
              ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
              ->setFormComponentActionData(['produit_id' => $produit->id])
              ->setFormComponentActionData([...$corrections, 'quantite' => 4])
+diff --git a/tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php b/tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
+new file mode 100644
+index 0000000..cf0ef4f
+--- /dev/null
++++ b/tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
+@@ -0,0 +1,98 @@
++<?php
++
++namespace Tests\Feature\Achats;
++
++use App\Domain\Achats\Actions\CreerFactureAchatAction;
++use App\Domain\Achats\Actions\JoindreDesPiecesAction;
++use App\Domain\Achats\Models\FactureAchat;
++use App\Domain\Achats\Models\PieceDuFournisseur;
++use App\Domain\Achats\Services\PieceDeposee;
++use App\Domain\Achats\Services\PiecesDuFournisseur;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Fournisseur;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
++use Illuminate\Foundation\Testing\DatabaseMigrations;
++use Illuminate\Process\InvokedProcess;
++use Illuminate\Support\Facades\File;
++use Illuminate\Support\Facades\Storage;
++use PHPUnit\Framework\Attributes\Group;
++use Tests\TestCase;
++
++/**
++ * Deux dépôts simultanés de pièces du fournisseur sur un même document,
++ * chacun dans son processus, sur une vraie base PostgreSQL : les pièces se
++ * comptent sous le verrou de la ligne du document (voir
++ * PiecesDuFournisseur::joindre()), si bien que le second voit le premier
++ * et qu'un document ne porte jamais plus de dix pièces.
++ *
++ * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
++ * ce que le test a validé. Les deux processus rangent leurs fichiers dans
++ * le même dossier de test, à lui seul, vidé avant et après.
++ */
++class PiecesDuFournisseurConcurrenceTest extends TestCase
++{
++    use DatabaseMigrations;
++
++    private const DOSSIER = 'framework/testing/pieces-fournisseur-concurrence';
++
++    protected function tearDown(): void
++    {
++        File::deleteDirectory(storage_path(self::DOSSIER));
++
++        parent::tearDown();
++    }
++
++    /**
++     * Le disque des pièces, dans le dossier de ce test, pour ce processus.
++     */
++    private static function disqueDuTest(): void
++    {
++        config(['filesystems.disks.'.PiecesDuFournisseur::DISQUE.'.root' => storage_path(self::DOSSIER)]);
++        Storage::forgetDisk(PiecesDuFournisseur::DISQUE);
++    }
++
++    #[Group('concurrence')]
++    public function test_deux_depots_simultanes_ne_depassent_jamais_dix_pieces(): void
++    {
++        $this->exigerUnServeurDeBaseDeDonnees();
++        File::deleteDirectory(storage_path(self::DOSSIER));
++        self::disqueDuTest();
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
++        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
++            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => '2.00'],
++        ], ['date_facture' => '2026-01-15'], null, array_map(fn (int $page): PieceDeposee => new PieceDeposee("page-{$page}.pdf", "%PDF-1.4 page {$page}"), range(1, 9)));
++        $magasinId = $magasin->id;
++        $factureId = $factureAchat->id;
++        $concurrente = null;
++        $this->concurrencerDesQueLaLigneEstVerrouillee('factures_achat', 'for update', static function () use ($magasinId, $factureId): void {
++            self::joindre($magasinId, $factureId, 'concurrente.pdf');
++        }, $concurrente);
++
++        self::joindre($magasinId, $factureId, 'premiere.pdf');
++
++        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
++        $resultat = $concurrente->wait();
++        $this->assertTrue($resultat->failed(), $resultat->output());
++        $this->assertStringContainsString(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, $resultat->errorOutput());
++        app(TenantContext::class)->set($magasin);
++        $this->assertSame(10, PieceDuFournisseur::query()->where('facture_achat_id', $factureId)->count());
++        $this->assertSame(['premiere.pdf'], PieceDuFournisseur::query()->where('nom_origine', 'like', '%e.pdf')->pluck('nom_origine')->all());
++        $this->assertCount(10, Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
++    }
++
++    private static function joindre(int $magasinId, int $factureId, string $nom): void
++    {
++        self::disqueDuTest();
++        $magasin = Magasin::query()->findOrFail($magasinId);
++        app(TenantContext::class)->set($magasin);
++
++        app(JoindreDesPiecesAction::class)->handle(
++            User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(),
++            FactureAchat::query()->findOrFail($factureId),
++            [new PieceDeposee($nom, "%PDF-1.4 {$nom}")],
++        );
++    }
++}
+diff --git a/tests/Feature/Achats/PiecesDuFournisseurTest.php b/tests/Feature/Achats/PiecesDuFournisseurTest.php
+new file mode 100644
+index 0000000..82bc3fc
+--- /dev/null
++++ b/tests/Feature/Achats/PiecesDuFournisseurTest.php
+@@ -0,0 +1,407 @@
++<?php
++
++namespace Tests\Feature\Achats;
++
++use App\Domain\Achats\Actions\CreerFactureAchatAction;
++use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
++use App\Domain\Achats\Actions\JoindreDesPiecesAction;
++use App\Domain\Achats\Actions\ModifierFactureAchatAction;
++use App\Domain\Achats\Actions\RetirerUnePieceAction;
++use App\Domain\Achats\Actions\SupprimerFactureAchatAction;
++use App\Domain\Achats\Actions\ValiderFactureAchatAction;
++use App\Domain\Achats\Enums\SourceFactureAchat;
++use App\Domain\Achats\Models\AvoirFournisseur;
++use App\Domain\Achats\Models\FactureAchat;
++use App\Domain\Achats\Models\PieceDuFournisseur;
++use App\Domain\Achats\Services\PieceDeposee;
++use App\Domain\Achats\Services\PiecesDuFournisseur;
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Fournisseur;
++use App\Domain\Tenancy\Actions\FermerMagasinAction;
++use App\Domain\Tenancy\Enums\ActionAuditee;
++use App\Domain\Tenancy\Enums\MotifFermeture;
++use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use Illuminate\Auth\Access\AuthorizationException;
++use Illuminate\Database\QueryException;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Facades\Storage;
++use InvalidArgumentException;
++use LogicException;
++use Tests\TestCase;
++
++/**
++ * Les pièces du fournisseur jointes aux factures d'achat et aux avoirs
++ * fournisseur saisis à la main (décision de l'éditeur du 03/11/2026, lot
++ * EX, F1 = b) : la vraie facture ou la vraie note d'avoir, en PDF ou en
++ * photo, rangée par magasin sous un nom tiré par l'application, avec son
++ * nom d'origine et son empreinte ; un document saisi à la main sans pièce
++ * s'enregistre et se valide, marqué « pièce du fournisseur manquante »
++ * jusqu'à l'ajout de la première ; avant la validation une pièce se retire
++ * ou se remplace, après elle on ne peut qu'en ajouter ; chaque geste
++ * s'inscrit au journal d'audit. Une saisie à la main porte aussi la date de
++ * la facture du fournisseur.
++ */
++class PiecesDuFournisseurTest extends TestCase
++{
++    use RefreshDatabase;
++
++    private const PDF = "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF";
++
++    private const JPEG = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00photo d'une facture";
++
++    private const PNG = "\x89PNG\r\n\x1A\n\x00\x00\x00\x0DIHDRcapture";
++
++    private Magasin $magasin;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++
++        Storage::fake(PiecesDuFournisseur::DISQUE);
++        $this->magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port', 'code' => 'PORT']);
++    }
++
++    public function test_une_facture_saisie_a_la_main_exige_la_date_de_la_facture_du_fournisseur(): void
++    {
++        try {
++            $this->saisir([], ['date_facture' => null]);
++            $this->fail('Une facture saisie à la main sans la date de la facture du fournisseur est refusée.');
++        } catch (LogicException $refus) {
++            $this->assertSame(FactureAchat::REFUS_SANS_DATE, $refus->getMessage());
++        }
++
++        $this->assertSame(0, FactureAchat::query()->count());
++        $parLApi = $this->saisir([], ['source' => SourceFactureAchat::Api, 'date_facture' => null]);
++        $this->assertNull($parLApi->date_facture);
++
++        $saisie = $this->saisir([], ['date_facture' => '2026-02-27']);
++        $this->assertSame('2026-02-27', $saisie->date_facture);
++        $this->expectExceptionMessage(FactureAchat::REFUS_SANS_DATE);
++        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $saisie, $saisie->fournisseur, [$this->ligne()], ['date_facture' => null]);
++    }
++
++    public function test_une_piece_pdf_se_joint_a_la_saisie_rangee_par_magasin_avec_son_nom_d_origine_et_son_empreinte(): void
++    {
++        $factureAchat = $this->saisir([new PieceDeposee('C:\\Factures\\Grossiste du Nord n°812.pdf', self::PDF)]);
++
++        $piece = $factureAchat->pieces()->sole();
++        $this->assertSame(['Grossiste du Nord n°812.pdf', 'application/pdf', strlen(self::PDF), hash('sha256', self::PDF)], [$piece->nom_origine, $piece->type_mime, $piece->taille, $piece->empreinte]);
++        $this->assertMatchesRegularExpression('#^magasin-'.$this->magasin->id.'/[0-9a-f]{32}\.pdf$#', $piece->chemin);
++        $this->assertSame(self::PDF, Storage::disk(PiecesDuFournisseur::DISQUE)->get($piece->chemin));
++        $this->assertSame(self::auteur()->id, (int) $piece->ajoutee_par);
++        $this->assertFalse($factureAchat->piece_manquante);
++        $this->assertSame([[
++            'document' => ['nature' => 'facture_achat', 'numero' => null, 'numero_fournisseur' => 'F-812'],
++            'empreinte' => hash('sha256', self::PDF),
++            'nom_origine' => 'Grossiste du Nord n°812.pdf',
++        ]], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurJointe));
++        $this->assertSame([], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
++    }
++
++    public function test_sans_piece_la_facture_s_enregistre_et_se_valide_marquee_jusqu_a_l_ajout_de_la_premiere(): void
++    {
++        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 0]);
++        $factureAchat = $this->saisir([], [], ['produit_id' => $produit->id, 'quantite' => 4, 'prix_unitaire_ht' => '2.50']);
++        $this->assertTrue($factureAchat->piece_manquante);
++
++        $validee = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
++        $this->assertTrue($validee->refresh()->piece_manquante);
++        $this->assertSame(4, $produit->refresh()->stock_quantite);
++
++        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $validee, [new PieceDeposee('photo.jpg', self::JPEG)]);
++
++        $this->assertFalse($validee->refresh()->piece_manquante);
++        $designation = ['nature' => 'facture_achat', 'numero' => $validee->numero, 'numero_fournisseur' => 'F-812'];
++        $this->assertSame([['document' => ['nature' => 'facture_achat', 'numero' => null, 'numero_fournisseur' => 'F-812']]], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
++        $this->assertSame([['document' => $designation]], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquanteLevee));
++        $this->assertSame('image/jpeg', $validee->pieces()->sole()->type_mime);
++    }
++
++    public function test_seuls_un_pdf_une_photo_jpeg_ou_png_sont_admis_d_apres_leur_contenu(): void
++    {
++        $factureAchat = $this->saisir([new PieceDeposee('scan.jpg', self::JPEG), new PieceDeposee('capture.png', self::PNG), new PieceDeposee('facture.pdf', "\xEF\xBB\xBF  ".self::PDF)]);
++
++        $this->assertSame(['image/jpeg', 'image/png', 'application/pdf'], $factureAchat->pieces()->pluck('type_mime')->all());
++        $this->assertSame(['jpg', 'png', 'pdf'], $factureAchat->pieces()->get()->map(fn (PieceDuFournisseur $piece): string => pathinfo($piece->chemin, PATHINFO_EXTENSION))->all());
++
++        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_TYPE, 'facture.pdf'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('facture.pdf', 'MZ un programme qui se dit PDF')]));
++        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_TYPE, 'page.html'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('page.html', '<html><body>%PDF-</body>')]));
++        $this->assertSame(3, $factureAchat->pieces()->count());
++    }
++
++    public function test_une_piece_vide_ou_de_plus_de_10_mo_est_refusee_et_rien_ne_reste(): void
++    {
++        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_VIDE, 'vide.pdf'), fn () => $this->saisir([new PieceDeposee('vide.pdf', '')]));
++        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_TROP_GROS, 'enorme.pdf'), fn () => $this->saisir([new PieceDeposee('bonne.pdf', self::PDF), new PieceDeposee('enorme.pdf', self::PDF.str_repeat('x', PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS))]));
++
++        $this->assertSame([0, 0], [FactureAchat::query()->count(), PieceDuFournisseur::query()->count()]);
++        $this->assertSame([], Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
++
++        $tout = $this->saisir([new PieceDeposee('pile.pdf', str_pad(self::PDF, PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS, ' '))]);
++        $this->assertSame(PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS, $tout->pieces()->sole()->taille);
++    }
++
++    public function test_un_document_porte_au_plus_dix_pieces_et_un_meme_fichier_une_seule_fois(): void
++    {
++        $factureAchat = $this->saisir(array_map(fn (int $page): PieceDeposee => new PieceDeposee("page-{$page}.pdf", self::PDF." page {$page}"), range(1, 9)));
++
++        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_DEJA_JOINTE, 'encore.pdf'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('encore.pdf', self::PDF.' page 3')]));
++        $this->assertRefus(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('a.pdf', self::PDF.' a'), new PieceDeposee('b.pdf', self::PDF.' b')]));
++        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('dixieme.pdf', self::PDF.' page 10')]);
++        $this->assertRefus(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('onzieme.pdf', self::PDF.' page 11')]));
++
++        $this->assertSame(10, $factureAchat->pieces()->count());
++        $this->assertCount(10, Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
++        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_DEJA_JOINTE, 'double.pdf'), fn () => $this->saisir([new PieceDeposee('simple.pdf', self::PDF), new PieceDeposee('double.pdf', self::PDF)]));
++    }
++
++    public function test_une_piece_se_retire_ou_se_remplace_d_un_brouillon_et_son_fichier_s_efface(): void
++    {
++        $factureAchat = $this->saisir([new PieceDeposee('mauvaise.pdf', self::PDF.' mauvaise'), new PieceDeposee('bonne.jpg', self::JPEG)]);
++        [$mauvaise, $bonne] = $factureAchat->pieces()->get()->all();
++
++        app(RetirerUnePieceAction::class)->handle(self::auteur(), $mauvaise, new PieceDeposee('corrigee.png', self::PNG));
++
++        $this->assertSame(['bonne.jpg', 'corrigee.png'], $factureAchat->pieces()->pluck('nom_origine')->all());
++        Storage::disk(PiecesDuFournisseur::DISQUE)->assertMissing($mauvaise->chemin);
++        $this->assertFalse($factureAchat->refresh()->piece_manquante);
++        $this->assertSame([], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
++
++        app(RetirerUnePieceAction::class)->handle(self::auteur(), $bonne);
++        app(RetirerUnePieceAction::class)->handle(self::auteur(), $factureAchat->pieces()->sole());
++
++        $this->assertSame(0, $factureAchat->pieces()->count());
++        $this->assertSame([], Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
++        $this->assertTrue($factureAchat->refresh()->piece_manquante);
++        $this->assertSame(['mauvaise.pdf', 'bonne.jpg', 'corrigee.png'], array_column($this->valeursAuditees(ActionAuditee::PieceDuFournisseurRetiree), 'nom_origine'));
++        $this->assertCount(1, $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
++    }
++
++    public function test_une_piece_d_une_facture_validee_ou_d_un_avoir_emis_ne_se_retire_jamais(): void
++    {
++        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]));
++        $avoir = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF.' avoir')]);
++
++        foreach ([$factureAchat->pieces()->sole(), $avoir->pieces()->sole()] as $piece) {
++            try {
++                app(RetirerUnePieceAction::class)->handle(self::auteur(), $piece);
++                $this->fail('Une pièce d\'un document validé ne se retire pas.');
++            } catch (AuthorizationException) {
++                $this->assertTrue(PieceDuFournisseur::query()->whereKey($piece->id)->exists());
++            }
++
++            try {
++                app(PiecesDuFournisseur::class)->retirer(self::auteur(), $piece);
++                $this->fail('Une pièce d\'un document validé ne se retire pas, même sans l\'écran.');
++            } catch (LogicException $refus) {
++                $this->assertSame(PiecesDuFournisseur::REFUS_RETRAIT, $refus->getMessage());
++            }
++
++            $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->where('id', $piece->id)->delete(), 'pieces_fournisseur_effacees_d_un_brouillon_seulement');
++            Storage::disk(PiecesDuFournisseur::DISQUE)->assertExists($piece->chemin);
++        }
++
++        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('page-2.pdf', self::PDF.' page 2')]);
++        $this->assertSame(2, $factureAchat->pieces()->count());
++    }
++
++    public function test_la_base_refuse_une_piece_modifiee_ou_jointe_a_deux_documents_ou_a_aucun(): void
++    {
++        $factureAchat = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
++        $piece = $factureAchat->pieces()->sole();
++        $avoir = AvoirFournisseur::factory()->create(['facture_achat_id' => $factureAchat->id]);
++
++        $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->where('id', $piece->id)->update(['nom_origine' => 'autre.pdf']), 'pieces_fournisseur_jamais_modifiees');
++        $ligne = ['uuid' => 'a3c8f0c4-3b5f-4b11-9a68-0f1f3b6d2c10', 'magasin_id' => $this->magasin->id, 'nom_origine' => 'x.pdf', 'type_mime' => 'application/pdf', 'taille' => 1, 'empreinte' => str_repeat('b', 64), 'chemin' => 'magasin-1/x.pdf'];
++        $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->insert([...$ligne, 'facture_achat_id' => $factureAchat->id, 'avoir_fournisseur_id' => $avoir->id]), 'pieces_fournisseur_un_seul_document');
++        $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->insert($ligne), 'pieces_fournisseur_un_seul_document');
++        $this->assertSame('facture.pdf', $piece->refresh()->nom_origine);
++    }
++
++    public function test_un_achat_recu_par_l_api_n_est_jamais_marque_et_peut_recevoir_une_piece(): void
++    {
++        $factureAchat = $this->saisir([], ['source' => SourceFactureAchat::Api]);
++        $this->assertFalse($factureAchat->piece_manquante);
++
++        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('facturx.pdf', self::PDF)]);
++
++        $this->assertSame(1, $factureAchat->pieces()->count());
++        $this->assertSame([], [...$this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee), ...$this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquanteLevee)]);
++    }
++
++    public function test_un_avoir_fournisseur_porte_sa_note_d_avoir_ou_en_est_marque_a_son_emission(): void
++    {
++        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([new PieceDeposee('facture.pdf', self::PDF)], [], ['quantite' => 5]));
++
++        $avecSaNote = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF.' note')]);
++        $sansSaNote = $this->retourner($factureAchat, []);
++
++        $this->assertSame([false, true], [$avecSaNote->piece_manquante, $sansSaNote->refresh()->piece_manquante]);
++        $this->assertSame(['note.pdf'], $avecSaNote->pieces()->pluck('nom_origine')->all());
++        $this->assertSame([['document' => ['nature' => 'avoir_fournisseur', 'numero' => $sansSaNote->numero, 'numero_fournisseur' => 'AV-12']]], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
++
++        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $sansSaNote, [new PieceDeposee('note-recue.jpg', self::JPEG)]);
++        $this->assertFalse($sansSaNote->refresh()->piece_manquante);
++    }
++
++    public function test_une_demande_d_avoir_repetee_ne_joint_pas_deux_fois_sa_note_et_un_autre_fichier_est_refuse(): void
++    {
++        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([], [], ['quantite' => 5]));
++        $jeton = 'b5a1e3d2-8c4f-4a7e-9b61-2d0f7c3e4a95';
++
++        $premier = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF)], $jeton);
++        $repete = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF)], $jeton);
++
++        $this->assertTrue($premier->is($repete));
++        $this->assertSame([1, 1], [AvoirFournisseur::query()->count(), PieceDuFournisseur::query()->whereNotNull('avoir_fournisseur_id')->count()]);
++        $this->expectException(LogicException::class);
++        $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF.' autre')], $jeton);
++    }
++
++    public function test_un_brouillon_supprime_retire_ses_pieces_et_leurs_fichiers(): void
++    {
++        $brouillon = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
++
++        app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $brouillon);
++
++        $this->assertSame([0, 0], [FactureAchat::query()->count(), PieceDuFournisseur::query()->count()]);
++        $this->assertSame([], Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
++        $this->assertSame(['facture.pdf'], array_column($this->valeursAuditees(ActionAuditee::PieceDuFournisseurRetiree), 'nom_origine'));
++    }
++
++    public function test_joindre_exige_de_saisir_les_achats_et_retirer_un_brouillon(): void
++    {
++        $factureAchat = $this->saisir([]);
++        $consultant = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW]);
++        $acheteur = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]);
++
++        try {
++            app(JoindreDesPiecesAction::class)->handle($consultant, $factureAchat, [new PieceDeposee('facture.pdf', self::PDF)]);
++            $this->fail('Sans le droit de saisir les achats, aucune pièce ne se joint.');
++        } catch (AuthorizationException) {
++            $this->assertSame(0, PieceDuFournisseur::query()->count());
++        }
++
++        $piece = app(JoindreDesPiecesAction::class)->handle($acheteur, $factureAchat, [new PieceDeposee('facture.pdf', self::PDF)])[0];
++        $this->assertSame($acheteur->id, (int) $piece->ajoutee_par);
++
++        $this->expectException(AuthorizationException::class);
++        app(RetirerUnePieceAction::class)->handle($consultant, $piece);
++    }
++
++    public function test_le_cabinet_lie_joint_une_piece_s_il_saisit_les_achats_du_client(): void
++    {
++        $factureAchat = $this->saisir([]);
++        $consultation = $this->collaborateurDuCabinetLie($this->magasin, nom: 'Paul Lefèvre');
++
++        try {
++            app(JoindreDesPiecesAction::class)->handle($consultation, $factureAchat, [new PieceDeposee('facture.pdf', self::PDF)]);
++            $this->fail('Le cabinet qui consulte seulement ne joint aucune pièce.');
++        } catch (AuthorizationException) {
++            $this->assertSame(0, PieceDuFournisseur::query()->count());
++        }
++
++        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Atelier', 'code' => 'ATEL']);
++        $saisie = $this->saisir([]);
++        $autorisees = [...PermissionRegistry::parDefautDuCabinet($autreMagasin->societe->type_activite), PermissionRegistry::FACTURE_ACHAT_CREER];
++        $saisisseur = $this->collaborateurDuCabinetLie($autreMagasin, $autorisees, 'Lucie Moreau');
++
++        $piece = app(JoindreDesPiecesAction::class)->handle($saisisseur, $saisie, [new PieceDeposee('facture.pdf', self::PDF)])[0];
++        $this->assertStringContainsString('Lucie Moreau', (string) $piece->ajoutee_par_nom);
++        $this->assertFalse($saisie->refresh()->piece_manquante);
++    }
++
++    public function test_un_magasin_en_lecture_seule_ne_recoit_plus_de_piece(): void
++    {
++        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([]));
++        app(FermerMagasinAction::class)->handle($this->proprietaireDe($this->magasin), $this->magasin->fresh(), MotifFermeture::Temporaire, 'password');
++
++        $this->expectExceptionObject(new LogicException('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.'));
++        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat->refresh(), [new PieceDeposee('facture.pdf', self::PDF)]);
++    }
++
++    public function test_une_piece_d_un_magasin_est_introuvable_dans_un_autre(): void
++    {
++        $factureAchat = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
++        $piece = $factureAchat->pieces()->sole();
++        $autre = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique de la Gare', 'code' => 'GARE']);
++
++        app(TenantContext::class)->runAs($autre, function () use ($piece): void {
++            $this->assertNull(PieceDuFournisseur::query()->parUuid($piece->uuid)->first());
++            $this->assertSame(0, PieceDuFournisseur::query()->count());
++        });
++    }
++
++    /**
++     * Saisit à la main une facture d'achat du Grossiste du Nord, n° F-812,
++     * datée du 27/02/2026, d'une ligne, avec ces pièces.
++     *
++     * @param  list<PieceDeposee>  $pieces
++     * @param  array<string, mixed>  $attributs
++     * @param  array<string, mixed>  $ligne
++     */
++    private function saisir(array $pieces, array $attributs = [], array $ligne = []): FactureAchat
++    {
++        return app(CreerFactureAchatAction::class)->handle(
++            self::auteur(),
++            Fournisseur::query()->firstOrCreate(['nom' => 'Grossiste du Nord']),
++            [[...$this->ligne(), ...$ligne]],
++            ['date_facture' => '2026-02-27', 'numero_fournisseur' => 'F-812', ...$attributs],
++            null,
++            $pieces,
++        );
++    }
++
++    /**
++     * @return array<string, mixed>
++     */
++    private function ligne(): array
++    {
++        $produit = Produit::query()->where('reference', 'CARNET')->first() ?? Produit::factory()->create(['reference' => 'CARNET', 'taux_tva' => 20, 'suivi_stock' => false]);
++
++        return ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => '3.00'];
++    }
++
++    /**
++     * Retourne un article de la facture d'achat par un avoir saisi à la main,
++     * avec ces pièces, comme l'écran.
++     *
++     * @param  list<PieceDeposee>  $pieces
++     */
++    private function retourner(FactureAchat $factureAchat, array $pieces, ?string $jeton = null): AvoirFournisseur
++    {
++        return app(EnregistrerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [['ligne_achat_id' => $factureAchat->lignes()->first()->id, 'quantite' => 1]], 'Carnet abîmé', 'AV-12', $jeton, null, $pieces);
++    }
++
++    /**
++     * @return list<array<string, mixed>>
++     */
++    private function valeursAuditees(ActionAuditee $action): array
++    {
++        return array_map(fn ($entree): array => $entree->nouvelles_valeurs, $this->entreesDAudit($this->magasin->societe, $action));
++    }
++
++    private function assertRefus(string $message, callable $operation): void
++    {
++        try {
++            $operation();
++            $this->fail("Refus attendu : {$message}");
++        } catch (InvalidArgumentException $refus) {
++            $this->assertSame($message, $refus->getMessage());
++        }
++    }
++
++    private function assertRefusDeLaBase(callable $operation, string $garde): void
++    {
++        try {
++            DB::transaction(fn () => $operation());
++            $this->fail("La base refuse : {$garde}");
++        } catch (QueryException $refus) {
++            $this->assertStringContainsString($garde, $refus->getMessage());
++        }
++    }
++}
 diff --git a/tests/Feature/Achats/TvaDesAchatsParTauxTest.php b/tests/Feature/Achats/TvaDesAchatsParTauxTest.php
 index a73752b..39d1c30 100644
 --- a/tests/Feature/Achats/TvaDesAchatsParTauxTest.php
@@ -3321,7 +4137,7 @@ index a96cbbd..5bb5663 100644
          $devis = static fn (): Devis => app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20])->id, 'quantite' => 1]]);
          $archive = static fn (Model $fiche): Model => tap($fiche, fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(self::auteur(), $fiche));
 diff --git a/tests/Feature/Filament/FactureAchatResourceTest.php b/tests/Feature/Filament/FactureAchatResourceTest.php
-index d60d147..c1abf4f 100644
+index d60d147..76ab34b 100644
 --- a/tests/Feature/Filament/FactureAchatResourceTest.php
 +++ b/tests/Feature/Filament/FactureAchatResourceTest.php
 @@ -62,6 +62,7 @@ public function test_la_facture_dachat_affiche_le_detail_des_avoirs_fournisseur_
@@ -3591,15 +4407,7 @@ index d60d147..c1abf4f 100644
              ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
                  'origine' => 'nouveau',
                  'reference' => 'ECR-IP17-PRO',
-@@ -929,6 +941,7 @@ public function test_un_nouveau_produit_recu_a_la_meme_fiche_que_dans_la_page_pr
-             'code_barres' => '3700000000017',
-             'nom' => 'Ecran Iphone 17 Pro',
-             'fournisseur_id' => $fournisseur->id,
-+            'date_facture' => '2026-01-15',
-             'cmup_ht' => 80,
-             'prix_vente_ttc' => 180,
-             'seuil_alerte' => 1,
-@@ -945,7 +958,7 @@ public function test_rouvrir_un_brouillon_affiche_son_nouveau_produit(): void
+@@ -945,7 +957,7 @@ public function test_rouvrir_un_brouillon_affiche_son_nouveau_produit(): void
          $this->connecterLeProprietaire();
          $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 3, 'prix_unitaire_ht' => '0.47'],
@@ -3608,7 +4416,7 @@ index d60d147..c1abf4f 100644
  
          Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
              ->assertSee('Câble USB-C')
-@@ -982,7 +995,7 @@ public function test_sans_droit_de_creer_des_produits_un_brouillon_qui_garde_le_
+@@ -982,7 +994,7 @@ public function test_sans_droit_de_creer_des_produits_un_brouillon_qui_garde_le_
          $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit_id' => $existant->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
              ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
@@ -3617,7 +4425,7 @@ index d60d147..c1abf4f 100644
          $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [
              PermissionRegistry::FACTURE_ACHAT_VIEW,
              PermissionRegistry::FACTURE_ACHAT_CREER,
-@@ -1027,7 +1040,7 @@ public function test_sans_droit_de_valider_une_facture_dachat_validee_ne_se_corr
+@@ -1027,7 +1039,7 @@ public function test_sans_droit_de_valider_une_facture_dachat_validee_ne_se_corr
          $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
          $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 5],
@@ -3626,7 +4434,7 @@ index d60d147..c1abf4f 100644
          $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]));
          Filament::setTenant($magasin);
  
-@@ -1051,10 +1064,10 @@ public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_modificat
+@@ -1051,10 +1063,10 @@ public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_modificat
          $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
          $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
              ['produit_id' => $produit->id, 'quantite' => 5],
@@ -3639,7 +4447,7 @@ index d60d147..c1abf4f 100644
              ->call('save')
              ->assertHasFormErrors(['fournisseur_id' => 'exists']);
  
-@@ -1073,7 +1086,7 @@ public function test_une_facture_dachat_validee_ne_se_supprime_pas_depuis_sa_mod
+@@ -1073,7 +1085,7 @@ public function test_une_facture_dachat_validee_ne_se_supprime_pas_depuis_sa_mod
          $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
          $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit_id' => $produit->id, 'quantite' => 5],
@@ -3648,7 +4456,7 @@ index d60d147..c1abf4f 100644
  
          Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
              ->assertActionHidden(DeleteAction::class);
-@@ -1093,7 +1106,7 @@ public function test_l_avoir_fournisseur_partage_le_stock_entre_deux_lignes_du_m
+@@ -1093,7 +1105,7 @@ public function test_l_avoir_fournisseur_partage_le_stock_entre_deux_lignes_du_m
          $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
              ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
@@ -3657,7 +4465,7 @@ index d60d147..c1abf4f 100644
          app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
          $component = Livewire::test(ListFacturesAchat::class)->mountTableAction('avoir_fournisseur', $factureAchat);
          $lignes = $component->get('mountedTableActionsData.0.lignes');
-@@ -1124,7 +1137,7 @@ public function test_corriger_une_reception_dont_le_produit_est_archive_affiche_
+@@ -1124,7 +1136,7 @@ public function test_corriger_une_reception_dont_le_produit_est_archive_affiche_
          $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
          $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
@@ -3666,7 +4474,7 @@ index d60d147..c1abf4f 100644
          $produit->delete();
  
          Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
-@@ -1146,7 +1159,7 @@ public function test_corriger_une_reception_dont_le_fournisseur_est_archive_affi
+@@ -1146,7 +1158,7 @@ public function test_corriger_une_reception_dont_le_fournisseur_est_archive_affi
          $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
          $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
              ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
@@ -3675,7 +4483,7 @@ index d60d147..c1abf4f 100644
          $fournisseur->delete();
  
          Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
-@@ -1167,7 +1180,7 @@ public function test_rouvrir_la_ligne_d_un_produit_archive_n_affiche_aucune_erre
+@@ -1167,7 +1179,7 @@ public function test_rouvrir_la_ligne_d_un_produit_archive_n_affiche_aucune_erre
          $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-1', 'taux_tva' => 20]);
          $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
              ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
@@ -3684,7 +4492,7 @@ index d60d147..c1abf4f 100644
          $produit->delete();
          $component = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
          $cle = array_key_first($component->get('data.lignes'));
-@@ -1217,7 +1230,7 @@ public function test_enregistrer_un_brouillon_rouvert_ne_retablit_pas_l_ancienne
+@@ -1217,7 +1229,7 @@ public function test_enregistrer_un_brouillon_rouvert_ne_retablit_pas_l_ancienne
      {
          $this->connecterLeProprietaire();
          $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
@@ -3693,7 +4501,7 @@ index d60d147..c1abf4f 100644
          $page = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
  
          Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])->fillForm(['prix_vente_ttc' => '18'])->call('save')->assertHasNoFormErrors();
-@@ -1309,7 +1322,7 @@ public function test_corriger_dans_la_ligne_un_autre_attribut_garde_le_changemen
+@@ -1309,7 +1321,7 @@ public function test_corriger_dans_la_ligne_un_autre_attribut_garde_le_changemen
      private function factureDAchatQuiAchete(Produit $produit, array $corrections = []): Testable
      {
          return Livewire::test(CreateFactureAchat::class)
@@ -3728,6 +4536,270 @@ index e48a63d..1769a7b 100644
          $page = $this->creationAvecUneLigne(['produit_id' => $cable->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']);
          $cle = array_key_first($page->get('data.lignes'));
  
+diff --git a/tests/Feature/Filament/PiecesDuFournisseurResourceTest.php b/tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
+new file mode 100644
+index 0000000..72c903e
+--- /dev/null
++++ b/tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
+@@ -0,0 +1,258 @@
++<?php
++
++namespace Tests\Feature\Filament;
++
++use App\Domain\Achats\Actions\CreerFactureAchatAction;
++use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
++use App\Domain\Achats\Actions\ValiderFactureAchatAction;
++use App\Domain\Achats\Models\AvoirFournisseur;
++use App\Domain\Achats\Models\FactureAchat;
++use App\Domain\Achats\Models\PieceDuFournisseur;
++use App\Domain\Achats\Services\PieceDeposee;
++use App\Domain\Achats\Services\PiecesDuFournisseur;
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Contacts\Models\Fournisseur;
++use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Filament\App\Resources\AvoirFournisseurResource\Pages\ListAvoirsFournisseur;
++use App\Filament\App\Resources\AvoirFournisseurResource\Pages\ViewAvoirFournisseur;
++use App\Filament\App\Resources\FactureAchatResource;
++use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
++use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
++use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
++use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
++use App\Filament\App\Widgets\PiecesDuFournisseurManquantesApercu;
++use App\Models\User;
++use Filament\Facades\Filament;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Http\UploadedFile;
++use Illuminate\Support\Facades\Storage;
++use Illuminate\Testing\TestResponse;
++use Livewire\Livewire;
++use Tests\TestCase;
++
++/**
++ * Les pièces du fournisseur à l'écran (lot EX) : le champ de dépôt et la
++ * date obligatoire du formulaire d'une facture d'achat, le dépôt dans la
++ * fenêtre d'un avoir fournisseur, la colonne et le filtre « pièce du
++ * fournisseur manquante » des listes, les gestes de la fiche, « À faire »
++ * au tableau de bord, et l'adresse de téléchargement d'une pièce, servie
++ * seulement dans son magasin à qui voit son document.
++ */
++class PiecesDuFournisseurResourceTest extends TestCase
++{
++    use RefreshDatabase;
++
++    private const PDF = "%PDF-1.4\nfacture du fournisseur\n%%EOF";
++
++    private const JPEG = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00note d'avoir";
++
++    private Magasin $magasin;
++
++    private User $responsable;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++
++        Storage::fake(PiecesDuFournisseur::DISQUE);
++        $this->magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port', 'code' => 'PORT']);
++        $this->responsable = $this->membre($this->magasin, RoleMagasin::Responsable, identite: ['name' => 'Rose Martin']);
++        $this->actingAs($this->responsable);
++        Filament::setTenant($this->magasin);
++    }
++
++    public function test_le_formulaire_exige_la_date_et_joint_les_pieces_deposees(): void
++    {
++        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
++        $formulaire = [
++            'fournisseur_id' => Fournisseur::factory()->create(['nom' => 'Grossiste du Nord'])->id,
++            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 3, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
++        ];
++
++        Livewire::test(CreateFactureAchat::class)->fillForm($formulaire)->call('create')->assertHasFormErrors(['date_facture' => 'required']);
++        $this->assertSame(0, FactureAchat::query()->count());
++
++        Livewire::test(CreateFactureAchat::class)
++            ->fillForm([...$formulaire, 'date_facture' => '2026-02-27', 'pieces' => [UploadedFile::fake()->createWithContent('facture-812.pdf', self::PDF)]])
++            ->call('create')
++            ->assertHasNoFormErrors();
++
++        $factureAchat = FactureAchat::query()->sole();
++        $this->assertSame(['2026-02-27', false], [$factureAchat->date_facture, $factureAchat->piece_manquante]);
++        $this->assertSame(['facture-812.pdf', hash('sha256', self::PDF)], [$factureAchat->pieces()->sole()->nom_origine, $factureAchat->pieces()->sole()->empreinte]);
++
++        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
++            ->fillForm(['pieces' => [UploadedFile::fake()->createWithContent('page-2.jpg', self::JPEG)]])
++            ->call('save')
++            ->assertHasNoFormErrors();
++
++        $this->assertSame(['facture-812.pdf', 'page-2.jpg'], $factureAchat->pieces()->pluck('nom_origine')->all());
++    }
++
++    public function test_un_fichier_refuse_garde_la_saisie_et_ne_cree_rien(): void
++    {
++        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
++
++        Livewire::test(CreateFactureAchat::class)
++            ->fillForm([
++                'fournisseur_id' => Fournisseur::factory()->create()->id,
++                'date_facture' => '2026-02-27',
++                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 3, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
++                'pieces' => [UploadedFile::fake()->createWithContent('facture.pdf', 'MZ pas un PDF')],
++            ])
++            ->call('create')
++            ->assertNotified(sprintf(PiecesDuFournisseur::REFUS_TYPE, 'facture.pdf'));
++
++        $this->assertSame([0, 0], [FactureAchat::query()->count(), PieceDuFournisseur::query()->count()]);
++    }
++
++    public function test_la_liste_marque_et_filtre_les_pieces_manquantes_et_a_faire_les_rappelle(): void
++    {
++        $sansPiece = $this->saisir([]);
++        $avecPiece = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
++
++        Livewire::test(ListFacturesAchat::class)
++            ->assertCanSeeTableRecords([$sansPiece, $avecPiece])
++            ->assertTableColumnStateSet('pieces_count', 'Manquante', $sansPiece->getKey())
++            ->assertTableColumnStateSet('pieces_count', '1 pièce', $avecPiece->getKey())
++            ->filterTable('piece_manquante')
++            ->assertCanSeeTableRecords([$sansPiece])
++            ->assertCanNotSeeTableRecords([$avecPiece]);
++
++        Livewire::test(PiecesDuFournisseurManquantesApercu::class)
++            ->assertSeeText('À faire')
++            ->assertSeeText('1 facture d\'achat sans sa pièce')
++            ->assertSee(FactureAchatResource::getUrl('index', ['tableFilters' => ['piece_manquante' => ['isActive' => true]]]), false);
++
++        $avoir = $this->retourner(app(ValiderFactureAchatAction::class)->handle($this->responsable, $avecPiece));
++        Livewire::test(ListAvoirsFournisseur::class)->filterTable('piece_manquante')->assertCanSeeTableRecords([$avoir]);
++        Livewire::test(PiecesDuFournisseurManquantesApercu::class)->assertSeeText('1 avoir fournisseur sans sa pièce');
++
++        $vendeur = $this->membre($this->magasin, RoleMagasin::Vendeur);
++        $this->actingAs($vendeur);
++        $this->assertFalse(PiecesDuFournisseurManquantesApercu::canView());
++    }
++
++    public function test_la_fiche_ajoute_une_piece_et_sur_un_brouillon_la_remplace_ou_la_retire(): void
++    {
++        $brouillon = $this->saisir([new PieceDeposee('mauvaise.pdf', self::PDF)]);
++        $piece = $brouillon->pieces()->sole();
++
++        Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
++            ->assertSeeText('mauvaise.pdf')
++            ->assertSee(FactureAchatResource::adresseDeLaPiece($piece), false)
++            ->callAction('remplacer_une_piece', ['piece' => $piece->uuid, 'pieces' => [UploadedFile::fake()->createWithContent('bonne.jpg', self::JPEG)]])
++            ->assertNotified('Pièce remplacée.');
++        $this->assertSame(['bonne.jpg'], $brouillon->pieces()->pluck('nom_origine')->all());
++
++        Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
++            ->callAction('retirer_une_piece', ['piece' => $brouillon->pieces()->sole()->uuid])
++            ->assertNotified('Pièce retirée.');
++        $this->assertTrue($brouillon->refresh()->piece_manquante);
++
++        $validee = app(ValiderFactureAchatAction::class)->handle($this->responsable, $brouillon);
++        Livewire::test(ViewFactureAchat::class, ['record' => $validee->getRouteKey()])
++            ->assertSeeText(FactureAchatResource::PIECE_MANQUANTE)
++            ->assertActionHidden('retirer_une_piece')
++            ->assertActionHidden('remplacer_une_piece')
++            ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('facture.pdf', self::PDF)]])
++            ->assertNotified('Pièce jointe.');
++        $this->assertFalse($validee->refresh()->piece_manquante);
++    }
++
++    public function test_la_fenetre_de_l_avoir_joint_sa_note_et_la_fiche_de_l_avoir_en_ajoute(): void
++    {
++        $factureAchat = app(ValiderFactureAchatAction::class)->handle($this->responsable, $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]));
++
++        $fiche = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->mountAction('creer_avoir_fournisseur');
++        $fiche->set('mountedActionsData.0.lignes.'.array_key_first($fiche->get('mountedActionsData.0.lignes')).'.quantite', 1)
++            ->setActionData(['numero_fournisseur' => 'AV-9', 'motif' => 'Carnet abîmé', 'pieces' => [UploadedFile::fake()->createWithContent('note-av9.jpg', self::JPEG)]])
++            ->callMountedAction()
++            ->assertHasNoActionErrors();
++
++        $avoir = AvoirFournisseur::query()->sole();
++        $this->assertSame([false, ['note-av9.jpg']], [$avoir->piece_manquante, $avoir->pieces()->pluck('nom_origine')->all()]);
++
++        Livewire::test(ViewAvoirFournisseur::class, ['record' => $avoir->getRouteKey()])
++            ->assertSeeText('note-av9.jpg')
++            ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('note-av9-p2.pdf', self::PDF.' p2')]])
++            ->assertNotified('Pièce jointe.');
++        $this->assertSame(2, $avoir->pieces()->count());
++    }
++
++    public function test_les_gestes_de_la_fiche_ne_s_offrent_qu_a_qui_saisit_les_achats(): void
++    {
++        $brouillon = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
++        $this->actingAs($this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW]));
++
++        Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
++            ->assertSeeText('facture.pdf')
++            ->assertActionHidden('ajouter_des_pieces')
++            ->assertActionHidden('retirer_une_piece')
++            ->assertActionHidden('remplacer_une_piece');
++    }
++
++    public function test_une_piece_se_telecharge_telle_que_deposee_pour_qui_voit_son_document(): void
++    {
++        $piece = $this->saisir([new PieceDeposee('Facture Grossiste.pdf', self::PDF)])->pieces()->sole();
++
++        $reponse = $this->get(FactureAchatResource::adresseDeLaPiece($piece));
++
++        $reponse->assertOk()->assertDownload('Facture Grossiste.pdf');
++        $this->assertSame(self::PDF, $reponse->streamedContent());
++        $this->assertSame(['application/pdf', 'nosniff'], [$reponse->headers->get('Content-Type'), $reponse->headers->get('X-Content-Type-Options')]);
++        $this->assertStringContainsString('no-store', (string) $reponse->headers->get('Cache-Control'));
++    }
++
++    public function test_l_adresse_d_une_piece_est_refusee_hors_de_son_magasin_ou_sans_le_droit_de_voir_les_achats(): void
++    {
++        $piece = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)])->pieces()->sole();
++        $adresse = FactureAchatResource::adresseDeLaPiece($piece);
++        $autre = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique de la Gare', 'code' => 'GARE']);
++        $proprietaire = $this->proprietaireDe($this->magasin);
++
++        $this->telechargerEnTantQue($proprietaire, route('filament.app.pieces-du-fournisseur.telecharger', ['tenant' => $autre, 'piece' => $piece]))->assertNotFound();
++        $this->telechargerEnTantQue($proprietaire, route('filament.app.pieces-du-fournisseur.telecharger', ['tenant' => $this->magasin, 'piece' => 'a3c8f0c4-3b5f-4b11-9a68-0f1f3b6d2c10']))->assertNotFound();
++        $this->telechargerEnTantQue($proprietaire, route('filament.app.pieces-du-fournisseur.telecharger', ['tenant' => $this->magasin, 'piece' => '1']))->assertNotFound();
++        $this->telechargerEnTantQue($this->membre($autre, RoleMagasin::Responsable), $adresse)->assertNotFound();
++        $this->telechargerEnTantQue($this->membre($this->magasin, RoleMagasin::Vendeur), $adresse)->assertForbidden();
++
++        $etranger = $this->ouvrirUneSociete(['nom' => 'Autre société']);
++        $this->telechargerEnTantQue($this->proprietaireDe($etranger), $adresse)->assertNotFound();
++
++        app(TenantContext::class)->set($this->magasin);
++        $this->telechargerEnTantQue($this->collaborateurDuCabinetLie($this->magasin), $adresse)->assertOk();
++        $this->telechargerEnTantQue($proprietaire, $adresse)->assertOk();
++    }
++
++    /**
++     * Une requête de ce compte, dans une session neuve, comme depuis son
++     * propre navigateur.
++     */
++    private function telechargerEnTantQue(User $compte, string $adresse): TestResponse
++    {
++        $this->flushSession();
++
++        return $this->actingAs($compte)->get($adresse);
++    }
++
++    /**
++     * @param  list<PieceDeposee>  $pieces
++     */
++    private function saisir(array $pieces): FactureAchat
++    {
++        $produit = Produit::query()->where('reference', 'CARNET')->first() ?? Produit::factory()->create(['reference' => 'CARNET', 'taux_tva' => 20, 'suivi_stock' => false]);
++
++        return app(CreerFactureAchatAction::class)->handle($this->responsable, Fournisseur::query()->firstOrCreate(['nom' => 'Grossiste du Nord']), [
++            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => '3.00'],
++        ], ['date_facture' => '2026-02-27', 'numero_fournisseur' => 'F-812'], null, $pieces);
++    }
++
++    private function retourner(FactureAchat $factureAchat): AvoirFournisseur
++    {
++        return app(EnregistrerAvoirFournisseurAction::class)->handle($this->responsable, $factureAchat, [['ligne_achat_id' => $factureAchat->lignes()->sole()->id, 'quantite' => 1]], 'Carnet abîmé', 'AV-12');
++    }
++}
 diff --git a/tests/Feature/Filament/ProduitResourceTest.php b/tests/Feature/Filament/ProduitResourceTest.php
 index befa2aa..ca645b3 100644
 --- a/tests/Feature/Filament/ProduitResourceTest.php
@@ -3900,6 +4972,28 @@ index ccbe71d..8032d3e 100644
              'supprimerUnBrouillonDAchat' => app(SupprimerFactureAchatAction::class)->handle($auteur, FactureAchat::query()->findOrFail($parametres['id'])),
              'supprimerUnBrouillonDeFacture' => app(SupprimerFactureAction::class)->handle($auteur, Facture::query()->findOrFail($parametres['id'])),
              'modifierUnBrouillonDeFacture' => app(ModifierFactureAction::class)->handle($auteur, $brouillon = Facture::query()->findOrFail($parametres['id']), $brouillon->client, [['produit_id' => $parametres['produit'], 'quantite' => 1]]),
+diff --git a/tests/Feature/Societe/MagasinDeDemonstrationTest.php b/tests/Feature/Societe/MagasinDeDemonstrationTest.php
+index e4b77fa..09d4475 100644
+--- a/tests/Feature/Societe/MagasinDeDemonstrationTest.php
++++ b/tests/Feature/Societe/MagasinDeDemonstrationTest.php
+@@ -225,11 +225,13 @@ public function test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_j
+         $this->assertSame(['parametre' => 'statut_magasin', 'magasin' => ['id' => $demonstration->id, 'nom' => 'Démonstration'], 'ancienne_valeur' => 'actif', 'nouvelle_valeur' => 'ferme'], $statut);
+         $this->assertNotContains('100', $this->codesDuJournal($reel));
+         $this->assertNotContains('105', $this->codesDuJournal($reel));
+-        // La facture d'achat fictive que valide l'ouverture (voir
+-        // CatalogueDeDemonstration) s'inscrit, comme toute validation, dans
+-        // la chaîne du magasin de démonstration, avant son ouverture.
++        // La facture d'achat fictive que saisit et valide l'ouverture (voir
++        // CatalogueDeDemonstration) s'inscrit, comme toute saisie à la main
++        // sans la pièce du fournisseur (marque posée, décision de l'éditeur
++        // du 03/11/2026, F1 = b) et comme toute validation, dans la chaîne
++        // du magasin de démonstration, avant son ouverture.
+         $this->assertSame(
+-            [ActionAuditee::FactureAchatValidee, ActionAuditee::DemonstrationOuverte, ActionAuditee::DemonstrationFermee],
++            [ActionAuditee::PieceDuFournisseurManquantePosee, ActionAuditee::FactureAchatValidee, ActionAuditee::DemonstrationOuverte, ActionAuditee::DemonstrationFermee],
+             app(TenantContext::class)->runAsSociete($societe, fn () => EntreeAudit::query()->where('magasin_id', $demonstration->id)->orderBy('id')->pluck('action')->all()),
+         );
+     }
 diff --git a/tests/Feature/Societe/PorteDeValidationTest.php b/tests/Feature/Societe/PorteDeValidationTest.php
 index cb44871..f6c1428 100644
 --- a/tests/Feature/Societe/PorteDeValidationTest.php
@@ -3992,6 +5086,18 @@ index 3855ffd..fdcf418 100644
  
          return [
              fn () => app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $brouillon),
+diff --git a/tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php b/tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
+index 0ab70df..194d6f3 100644
+--- a/tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
++++ b/tests/Feature/Tenancy/HistoriqueAuNomFigeTest.php
+@@ -75,6 +75,7 @@ class HistoriqueAuNomFigeTest extends TestCase
+         'taux_factures_achat' => ['ecart_confirme_par' => 'ecart_confirme_par_nom'],
+         'avoirs_fournisseur' => ['cree_par' => 'cree_par_nom'],
+         'taux_avoirs_fournisseur' => ['ecart_confirme_par' => 'ecart_confirme_par_nom'],
++        'pieces_fournisseur' => ['ajoutee_par' => 'ajoutee_par_nom'],
+         'inventaires_ouverture' => ['cree_par' => 'cree_par_nom', 'valide_par' => 'valide_par_nom'],
+         'mouvements_stock' => ['cree_par' => 'cree_par_nom'],
+         'envois_documents' => ['envoye_par' => 'envoye_par_nom'],
 diff --git a/tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php b/tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
 index f79e5c0..1e9af49 100644
 --- a/tests/Feature/Tenancy/MagasinEnLectureSeuleTest.php
@@ -4049,3 +5155,58 @@ index 498ba3c..7d89f86 100644
          $magasinId = $magasin->id;
          $parametresLus = FicheLue::de($magasin->fresh())->valeurs();
          $regler = static function () use ($magasinId, $parametresLus): void {
+diff --git a/tests/Feature/Tenancy/TenantIsolationTest.php b/tests/Feature/Tenancy/TenantIsolationTest.php
+index 83cecef..4492a30 100644
+--- a/tests/Feature/Tenancy/TenantIsolationTest.php
++++ b/tests/Feature/Tenancy/TenantIsolationTest.php
+@@ -6,6 +6,7 @@
+ use App\Domain\Achats\Models\FactureAchat;
+ use App\Domain\Achats\Models\LigneAchat;
+ use App\Domain\Achats\Models\LigneAvoirFournisseur;
++use App\Domain\Achats\Models\PieceDuFournisseur;
+ use App\Domain\Achats\Models\TauxAvoirFournisseur;
+ use App\Domain\Achats\Models\TauxFactureAchat;
+ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+@@ -150,8 +151,8 @@ class TenantIsolationTest extends TestCase
+      * son document, et le jeton d'une demande traitée, que par
+      * ActionsUniques. ActionTraitee, Avoir, AvoirAllocation,
+      * BordereauDetaxe, ConsultationVies, EnregistrementFiscal,
+-     * LigneRecuPaiement, Paiement, PaiementAllocation, PreuveOperation,
+-     * RecuPaiement, TauxAvoirFournisseur, TauxFactureAchat,
++     * LigneRecuPaiement, Paiement, PaiementAllocation, PieceDuFournisseur,
++     * PreuveOperation, RecuPaiement, TauxAvoirFournisseur, TauxFactureAchat,
+      * TeteRegistreFiscal et TraceEvenement sont aussi dans modelesCrees(),
+      * écrits directement par ces tests (voir creerEnregistrement()).
+      *
+@@ -174,6 +175,7 @@ class TenantIsolationTest extends TestCase
+         MouvementStock::class,
+         Paiement::class,
+         PaiementAllocation::class,
++        PieceDuFournisseur::class,
+         PosteReconnu::class,
+         PreuveOperation::class,
+         RecuPaiement::class,
+@@ -224,7 +226,7 @@ public static function modelesCrees(): array
+                 $modele,
+                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
+             ]])
+-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, RecuPaiement::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
++            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, LigneRecuPaiement::class, Paiement::class, PaiementAllocation::class, PieceDuFournisseur::class, PreuveOperation::class, RecuPaiement::class, TauxAvoirFournisseur::class, TauxFactureAchat::class, TeteRegistreFiscal::class, TraceEvenement::class])
+                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
+                     $modele,
+                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
+@@ -601,6 +603,14 @@ private static function creerEnregistrement(string $modele, array $attributs = [
+                 'montant_tva_calcule' => '2.00',
+                 'ordre' => 0,
+             ],
++            PieceDuFournisseur::class => [
++                'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
++                'nom_origine' => 'facture-fournisseur.pdf',
++                'type_mime' => 'application/pdf',
++                'taille' => 1024,
++                'empreinte' => str_repeat('a', 64),
++                'chemin' => 'magasin-0/'.Str::random(32).'.pdf',
++            ],
+             TauxFactureAchat::class => [
+                 'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
+                 'taux_tva' => '20.00',

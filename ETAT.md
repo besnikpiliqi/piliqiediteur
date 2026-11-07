@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 17:22 UTC par pilotage-sync.sh : « 07/11 17 h 20 : TR poussé, CI verte ; EX en cours, travail sauvé ».
+Mis à jour le 07/11/2026 à 17:56 UTC par pilotage-sync.sh : « 07/11 17 h 56 : EX en cours, travail resauvé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
  M app/Console/Commands/EffacerPiecesVerification.php
  M app/Domain/Achats/Actions/CreerFactureAchatAction.php
  M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
@@ -62,6 +63,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
  M tests/Browser/Parcours/TvaDesAchatsTest.php
  M tests/Browser/TestCaseDuNavigateur.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Achats/AvoirFournisseurActionsTest.php
  M tests/Feature/Achats/FactureAchatActionsTest.php
  M tests/Feature/Achats/FactureAchatArchivageConcurrenceTest.php
@@ -95,8 +97,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/Societe/DroitsConcurrenceTest.php
  M tests/Feature/Societe/FermerEtRouvrirMagasinConcurrenceTest.php
  M tests/Feature/Societe/GestesPendantLaClotureOuLaValidationConcurrenceTest.php
- M tests/Feature/Societe/GestesPendantLaFermetureConcurrenceTest.php
- M tests/Feature/Societe/PorteDeValidationTest.php
 ```
 
 ## Dernière course de la chaîne

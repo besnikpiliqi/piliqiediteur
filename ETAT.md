@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 16:56 UTC par pilotage-sync.sh : « Après le lot TR ».
+Mis à jour le 07/11/2026 à 17:22 UTC par pilotage-sync.sh : « 07/11 17 h 20 : TR poussé, CI verte ; EX en cours, travail sauvé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,66 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Console/Commands/EffacerPiecesVerification.php
+ M app/Domain/Achats/Actions/CreerFactureAchatAction.php
+ M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
+ M app/Domain/Achats/Actions/SupprimerFactureAchatAction.php
+ M app/Domain/Achats/Models/AvoirFournisseur.php
+ M app/Domain/Achats/Models/FactureAchat.php
+ M app/Domain/Authorization/ControleDesDroits.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Services/CatalogueDeDemonstration.php
+ M app/Filament/App/Resources/AvoirFournisseurResource.php
+ M app/Filament/App/Resources/AvoirFournisseurResource/Pages/ViewAvoirFournisseur.php
+ M app/Filament/App/Resources/FactureAchatResource.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php
+ M app/Policies/AvoirFournisseurPolicy.php
+ M app/Policies/FactureAchatPolicy.php
+ M app/Providers/Filament/AppPanelProvider.php
+ M config/filesystems.php
+ M database/migrations/2026_10_07_100001_create_factures_achat_table.php
+ M database/migrations/2026_10_07_100003_create_avoirs_fournisseur_table.php
+ M tests/Browser/Parcours/TvaDesAchatsTest.php
+ M tests/Browser/TestCaseDuNavigateur.php
+ M tests/Feature/Achats/AvoirFournisseurActionsTest.php
+ M tests/Feature/Achats/FactureAchatActionsTest.php
+ M tests/Feature/Achats/FactureAchatArchivageConcurrenceTest.php
+ M tests/Feature/Achats/FactureAchatConcurrenceTest.php
+ M tests/Feature/Achats/FicheProduitPendantUneFactureAchatConcurrenceTest.php
+ M tests/Feature/Achats/TvaDesAchatsParTauxTest.php
+ M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+ M tests/Feature/Achats/TvaDuFournisseurConcurrenceTest.php
+ M tests/Feature/Achats/TvaDuFournisseurTest.php
+ M tests/Feature/Authorization/ActionsHorsEcranTest.php
+ M tests/Feature/Authorization/FactureAchatPolicyTest.php
+ M tests/Feature/Authorization/LecteurDesDroitsTest.php
+ M tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
+ M tests/Feature/Cabinets/CabinetsConcurrenceTest.php
+ M tests/Feature/Calendrier/HeureLocaleTest.php
+ M tests/Feature/Calendrier/NuitDeParisTest.php
+ M tests/Feature/Catalogue/FicheProduitConcurrenceTest.php
+ M tests/Feature/Catalogue/OrigineDesProduitsTest.php
+ M tests/Feature/Catalogue/ProduitTest.php
+ M tests/Feature/Facturation/ActionsUniquesTest.php
+ M tests/Feature/Facturation/EnvoyerDocumentJobConcurrenceTest.php
+ M tests/Feature/Facturation/MarquerFacturesEnRetardConcurrenceTest.php
+ M tests/Feature/Filament/AvoirFournisseurResourceTest.php
+ M tests/Feature/Filament/DocumentDisparuDeLEcranTest.php
+ M tests/Feature/Filament/EcranOuvertAvantLaFermetureTest.php
+ M tests/Feature/Filament/FactureAchatResourceTest.php
+ M tests/Feature/Filament/FournisseurProduitResourceTest.php
+ M tests/Feature/Filament/InventaireOuvertureResourceTest.php
+ M tests/Feature/Filament/ProduitResourceTest.php
+ M tests/Feature/Filament/TvaDesAchatsResourceTest.php
+ M tests/Feature/Societe/DroitsConcurrenceTest.php
+ M tests/Feature/Societe/FermerEtRouvrirMagasinConcurrenceTest.php
+ M tests/Feature/Societe/GestesPendantLaClotureOuLaValidationConcurrenceTest.php
+ M tests/Feature/Societe/GestesPendantLaFermetureConcurrenceTest.php
+ M tests/Feature/Societe/PorteDeValidationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -44,7 +104,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-A7b:correction
 A7b:poussee
 A7b:fiche
 A7b:notes
@@ -69,4 +128,5 @@ TR:correction
 TR:poussee
 TR:fiche
 TR:notes
+EX:implementation
 ```

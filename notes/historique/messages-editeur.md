@@ -1392,3 +1392,7 @@ Je veux calcule ligne par ligne avec sa tva et arrondir par ligne et non par tot
 
 Non j’ai dit tu fait séparément ht et ttc donc 8.33+8.33=16,66 et 10+10=20
 
+## 119. 2026-11-08 19:27 UTC
+
+Non tu va jamais recalculer donc tu va juste compter à partir des prix existants et pas recalculer comme par exemple tu recalcule pas à l’inverse
+

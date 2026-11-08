@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 18:58 UTC par pilotage-sync.sh : « Q-CALC précisée : HT et TTC calculés séparément par ligne ».
+Mis à jour le 08/11/2026 à 19:29 UTC par pilotage-sync.sh : « Q-CALC : deux prix existants par fiche, jamais de recalcul ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -59,22 +59,35 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Achats/Models/LigneAvoirFournisseur.php
  M app/Domain/Achats/Models/TauxAvoirFournisseur.php
  M app/Domain/Achats/Models/TauxFactureAchat.php
+ M app/Domain/Achats/Services/MontantsDuFournisseur.php
+ M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
  M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+ M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
  M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
+ M app/Domain/Cabinets/Notifications/AvisDuCabinet.php
  M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/CaisseSecurisee/Concerns/HorodateSonEmission.php
  M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
  M app/Domain/CaisseSecurisee/Listeners/JournaliserFinDeSession.php
  M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
  M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
+ M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
+ M app/Domain/Calendrier/Casts/Instant.php
+ M app/Domain/Calendrier/Casts/JourCivil.php
  M app/Domain/Catalogue/Models/Produit.php
  M app/Domain/Contacts/Models/Client.php
+ M app/Domain/Facturation/Actions/CloturerLesJourneesAction.php
+ M app/Domain/Facturation/Actions/CreerAvoirAction.php
+ M app/Domain/Facturation/Actions/EnregistrerVenteCaisseAction.php
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
  M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
  M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
  M app/Domain/Facturation/Concerns/FigeLeClient.php
  M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
  M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
+ M app/Domain/Facturation/Enums/NatureOperation.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
  M app/Domain/Facturation/Listeners/DecrementerStockApresEmissionFacture.php
  M app/Domain/Facturation/Listeners/RestaurerStockApresEmissionAvoir.php
  M app/Domain/Facturation/Mail/DocumentMail.php
@@ -84,19 +97,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Facturation/Models/ClotureCaisse.php
  M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
  M app/Domain/Facturation/Models/Devis.php
- M app/Domain/Facturation/Models/EnvoiDocument.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Models/LigneAvoir.php
- M app/Domain/Facturation/Models/LigneDevis.php
- M app/Domain/Facturation/Models/LigneFacture.php
- M app/Domain/Facturation/Models/LigneRecuPaiement.php
- M app/Domain/Facturation/Models/Paiement.php
- M app/Domain/Facturation/Models/PaiementAllocation.php
- M app/Domain/Facturation/Models/PreuveOperation.php
- M app/Domain/Facturation/Models/RecuPaiement.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
- M app/Domain/Facturation/Services/ControleNatureOperation.php
 ```
 
 ## Dernière course de la chaîne

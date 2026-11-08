@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 01:05 UTC par pilotage-sync.sh : « CI verte de la mise à jour de sécurité Symfony (0d37396) ».
+Mis à jour le 08/11/2026 à 13:04 UTC par pilotage-sync.sh : « Course neuve wf_93155ec2-50a (QA, PG, FI, AUD…) et reprise de la lecture des archives ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -101,32 +101,8 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ## Dernière course de la chaîne
 
-Course `wf_f59a9064-d8d`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_93155ec2-50a`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-SL:poussee
-SL:fiche
-SL:notes
-NAV-1:implementation
-NAV-1:relecture1
-NAV-1:relecture2
-NAV-1:correction
-NAV-1:poussee
-NAV-1:fiche
-NAV-1:notes
-TR:implementation
-TR:relecture1
-TR:relecture2
-TR:correction
-TR:poussee
-TR:fiche
-TR:notes
-EX:implementation
-EX:relecture1
-EX:relecture2
-EX:correction
-EX:poussee
-EX:fiche
-EX:notes
 QA:implementation
 ```

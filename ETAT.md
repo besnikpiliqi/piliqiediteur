@@ -1,10 +1,10 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 00:02 UTC par pilotage-sync.sh : « Décisions de l'éditeur : Q-FI1 = a, Q-FI2 = a, D55 PostgreSQL seulement ; cahiers FI et PG ; chaîne préparée (QA, PG, FI, AUD…) ».
+Mis à jour le 08/11/2026 à 00:35 UTC par pilotage-sync.sh : « MAJ-S poussé (0d37396) ; travail QA remis dans l'arbre ; lecture des archives reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `c7b1ec3`. Commits locaux pas encore poussés :
+Tête poussée : `0d37396`. Commits locaux pas encore poussés :
 
 ```
 ```
@@ -12,6 +12,7 @@ Tête poussée : `c7b1ec3`. Commits locaux pas encore poussés :
 Derniers commits poussés :
 
 ```
+0d37396 Met à jour six paquets Symfony qui portaient des failles connues
 c7b1ec3 Relecture du lot EX de la série 8
 938db39 Ajoute le téléchargement des documents par période (lot EX 2/2)
 3c83ee0 Joint la pièce du fournisseur aux achats saisis à la main (lot EX 1/2)
@@ -31,13 +32,71 @@ f9b669c Relecture du lot A7b des suites du lot A7
 0772af0 Ouvre le journal d'audit au propriétaire et ajoute les procédures de l'éditeur (lot A7)
 d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 5745e7a Relecture du lot L1 de l'architecture société
-8b15aec Outille le développement local et fixe le fuseau UTC de la base (lot L1)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M composer.lock
+ M .github/workflows/tests.yml
+ M CLAUDE.md
+ M README.md
+ M app/Console/Commands/ClotureAutomatiqueCaisse.php
+ M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+ M app/Console/Commands/ExpirerDevis.php
+ M app/Console/Commands/FermerDemonstrationsInactives.php
+ M app/Console/Commands/MarquerFacturesEnRetard.php
+ M app/Console/Commands/PurgerActionsTraitees.php
+ M app/Console/Commands/PurgerTraces.php
+ M app/Console/Commands/RelancerFacturesImpayees.php
+ M app/Console/Commands/VerifierIntegriteFiscale.php
+ M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
+ M app/Domain/Achats/Concerns/EstUnTauxDuFournisseur.php
+ M app/Domain/Achats/Listeners/DecrementerStockApresEmissionAvoirFournisseur.php
+ M app/Domain/Achats/Listeners/IncrementerStockApresValidationFactureAchat.php
+ M app/Domain/Achats/Models/AvoirFournisseur.php
+ M app/Domain/Achats/Models/FactureAchat.php
+ M app/Domain/Achats/Models/LigneAchat.php
+ M app/Domain/Achats/Models/LigneAvoirFournisseur.php
+ M app/Domain/Achats/Models/TauxAvoirFournisseur.php
+ M app/Domain/Achats/Models/TauxFactureAchat.php
+ M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+ M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/CaisseSecurisee/Concerns/HorodateSonEmission.php
+ M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
+ M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
+ M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
+ M app/Domain/Catalogue/Models/Produit.php
+ M app/Domain/Contacts/Models/Client.php
+ M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
+ M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
+ M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
+ M app/Domain/Facturation/Concerns/FigeLeClient.php
+ M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
+ M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
+ M app/Domain/Facturation/Listeners/DecrementerStockApresEmissionFacture.php
+ M app/Domain/Facturation/Listeners/RestaurerStockApresEmissionAvoir.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
+ M app/Domain/Facturation/Models/Avoir.php
+ M app/Domain/Facturation/Models/AvoirAllocation.php
+ M app/Domain/Facturation/Models/BordereauDetaxe.php
+ M app/Domain/Facturation/Models/ClotureCaisse.php
+ M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
+ M app/Domain/Facturation/Models/Devis.php
+ M app/Domain/Facturation/Models/EnvoiDocument.php
+ M app/Domain/Facturation/Models/Facture.php
+ M app/Domain/Facturation/Models/LigneAvoir.php
+ M app/Domain/Facturation/Models/LigneDevis.php
+ M app/Domain/Facturation/Models/LigneFacture.php
+ M app/Domain/Facturation/Models/LigneRecuPaiement.php
+ M app/Domain/Facturation/Models/Paiement.php
+ M app/Domain/Facturation/Models/PaiementAllocation.php
+ M app/Domain/Facturation/Models/PreuveOperation.php
+ M app/Domain/Facturation/Models/RecuPaiement.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
+ M app/Domain/Facturation/Services/ControleNatureOperation.php
+ M app/Domain/Facturation/Services/DerogationsDePrix.php
 ```
 
 ## Dernière course de la chaîne

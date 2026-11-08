@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 15:01 UTC par pilotage-sync.sh : « Décision Q-CALC : lot CALC (calcul ligne par ligne des documents aux professionnels) inséré après PG ».
+Mis à jour le 08/11/2026 à 18:55 UTC par pilotage-sync.sh : « Course neuve wf_14a12639-401 (QA, PG, CALC, FI, AUD…) ; travail QA resauvé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -101,7 +101,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ## Dernière course de la chaîne
 
-Course `wf_93155ec2-50a`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_14a12639-401`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
 QA:implementation

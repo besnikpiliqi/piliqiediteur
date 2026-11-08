@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 18:55 UTC par pilotage-sync.sh : « Course neuve wf_14a12639-401 (QA, PG, CALC, FI, AUD…) ; travail QA resauvé ».
+Mis à jour le 08/11/2026 à 18:58 UTC par pilotage-sync.sh : « Q-CALC précisée : HT et TTC calculés séparément par ligne ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

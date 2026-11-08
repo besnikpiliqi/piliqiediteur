@@ -1388,3 +1388,7 @@ mais juste il faut calcule la avec la tva ling par linge mais pas affiche 8.3333
 
 Je veux calcule ligne par ligne avec sa tva et arrondir par ligne et non par total. Donc 8.33ht*2=16,66 et pareil 10€ttc et après le total de calcul par rapport aux lignes
 
+## 118. 2026-11-08 18:57 UTC
+
+Non j’ai dit tu fait séparément ht et ttc donc 8.33+8.33=16,66 et 10+10=20
+

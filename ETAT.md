@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 19:29 UTC par pilotage-sync.sh : « Q-CALC : deux prix existants par fiche, jamais de recalcul ».
+Mis à jour le 08/11/2026 à 19:29 UTC par pilotage-sync.sh : « Q-CALC confirmée pour toutes les ventes ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1396,3 +1396,7 @@ Non j’ai dit tu fait séparément ht et ttc donc 8.33+8.33=16,66 et 10+10=20
 
 Non tu va jamais recalculer donc tu va juste compter à partir des prix existants et pas recalculer comme par exemple tu recalcule pas à l’inverse
 
+## 120. 2026-11-08 19:29 UTC
+
+Donc ces calcules seront appliquées pour tout
+

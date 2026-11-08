@@ -1,5 +1,7 @@
 # Passation du 03/11/2026 vers 02 h UTC (fin de session demandée par l'éditeur)
 
+> **Remplacée le 08/11/2026 vers 22 h 20 UTC par `PASSATION-2026-11-08.md`** (arrêt demandé par l'éditeur) : c'est elle qu'il faut suivre pour reprendre. Ce fichier reste pour l'historique de ses sauvegardes.
+
 Message de l'éditeur (03/11 vers 01 h 55 UTC) : « fini ce que t'as à finir car la session va terminer. donc si tu veux arrête et sauvegarde tout pour que tu continues quand je te dis recommence mais comme d'habitude tu le fais tout prêt pour que l'autre compte (session) commence le travail où tu t'arrêtes et qu'il fasse identique comme si c'était toi ».
 
 ## État exact au moment de l'arrêt

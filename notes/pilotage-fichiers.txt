@@ -125,3 +125,4 @@ audits-externes/decision-aud.md
 audits-externes/questions-editeur.md
 calculs/sans-virgule-flottante.md
 calculs/decision-calc.md
+reprises/PASSATION-2026-11-08.md

@@ -1400,3 +1400,7 @@ Non tu va jamais recalculer donc tu va juste compter à partir des prix existant
 
 Donc ces calcules seront appliquées pour tout
 
+## 121. 2026-11-08 22:15 UTC
+
+il faut que tu t'arrete pour l'instain. mais tu sauvegarde tout comme toujours, donc tu note tout ce que t'as fait jusqu'à mtn et note ce que reste à faire et les consignes comment continuer l'autre session. donc tu note et donne les consigne et tout ta memoire pour que l'autre session commence comme si il etais toi.
+

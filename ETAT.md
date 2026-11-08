@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 20:57 UTC par pilotage-sync.sh : « Point de suivi du 08/11 21 h : sauvegarde du lot QA (1 commit local et travail en cours) ».
+Mis à jour le 08/11/2026 à 22:18 UTC par pilotage-sync.sh : « Arrêt demandé par l'éditeur : passation complète du 08/11 (PASSATION-2026-11-08.md), travail du lot QA sauvé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -42,6 +42,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M README.md
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/Calendrier/Casts/Instant.php
+ M app/Domain/Facturation/Services/SaisieDecimale.php
  M app/Domain/Tenancy/Actions/ChangerSiretAction.php
  M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
  M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php

@@ -1,5 +1,5 @@
 diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
-index 2c4b823..5fa4082 100644
+index 2c4b823..af281aa 100644
 --- a/.github/workflows/tests.yml
 +++ b/.github/workflows/tests.yml
 @@ -158,8 +158,8 @@ jobs:
@@ -39,7 +39,7 @@ index 2c4b823..5fa4082 100644
 -            php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
 +          if [ -n "$(php tests/Qualite/qualite.php sensibles-changes "$BASE")" ]; then
 +            php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json
-+            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --git-diff-lines --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
++            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-lines --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
 +            if [ -f storage/qualite/infection.json ]; then
 +              php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
 +            fi
@@ -47,7 +47,7 @@ index 2c4b823..5fa4082 100644
  
        - name: Garder les rapports
 diff --git a/README.md b/README.md
-index 7c1419f..52c3ab7 100644
+index 7c1419f..1043b06 100644
 --- a/README.md
 +++ b/README.md
 @@ -100,8 +100,8 @@ ## Tests, commandes et fonctionnement
@@ -57,7 +57,7 @@ index 7c1419f..52c3ab7 100644
 -- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `php artisan test --parallel --testsuite=Unit,Feature --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test).
 -- *Tests de mutation* : Infection, sur les parties sensibles (calculs, caisse sécurisée, droits et isolation). Il lui faut la couverture de la suite : `php artisan test --parallel --testsuite=Unit,Feature --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --threads=max --coverage=storage/qualite/infection --skip-initial-tests $(php tests/Qualite/qualite.php sensibles)` (chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; remplacez `sensibles` par `sensibles-changes <commit>` pour les seuls fichiers des parties sensibles changés depuis ce commit, comme la CI), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, et liste des mutants qu'aucun test n'arrête). Le passage complet se fait aux relances de la campagne de tests et à l'audit final.
 +- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test).
-+- *Tests de mutation* : Infection, sur les parties sensibles (calculs, caisse sécurisée, droits et isolation). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, et liste des mutants qu'aucun test n'arrête). Le passage complet se fait aux relances de la campagne de tests et à l'audit final.
++- *Tests de mutation* : Infection, sur les parties sensibles (calculs, caisse sécurisée, droits et isolation). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, et liste des mutants qu'aucun test n'arrête). Le passage complet se fait aux relances de la campagne de tests et à l'audit final.
  - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
  - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
  - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, sous un plafond, et `TempsDeReponseTest` (en navigateur) que chacune s'ouvre sous un plafond de temps.
@@ -129,6 +129,30 @@ index 5dd9732..fce2bbd 100644
      }
  
      public function get(Model $model, string $key, mixed $value, array $attributes): ?CarbonImmutable
+diff --git a/app/Domain/Facturation/Services/SaisieDecimale.php b/app/Domain/Facturation/Services/SaisieDecimale.php
+index 875cf69..5b04c83 100644
+--- a/app/Domain/Facturation/Services/SaisieDecimale.php
++++ b/app/Domain/Facturation/Services/SaisieDecimale.php
+@@ -63,6 +63,8 @@ public static function enCentiemes(mixed $saisie): int
+      * la TVA ou la base d'un taux, le total TTC saisi pour contrôle), en
+      * centimes : au centime, jamais arrondi en silence -- « 6.005 » est
+      * refusé (REFUS_MONTANT_TROP_PRECIS), « 6.0 » et « 6.000 » valent 600.
++     * Sans arrondi, ses douze chiffres entiers au plus (voir lire()) le
++     * laissent sous la borne du calcul.
+      *
+      * @throws InvalidArgumentException
+      */
+@@ -76,10 +78,6 @@ public static function montantAuCentime(mixed $saisie): int
+ 
+         $centiemes = (int) $entiers * 100 + (int) str_pad(substr($decimales, 0, 2), 2, '0');
+ 
+-        if ($centiemes >= self::CENTIEMES_MAXIMUM) {
+-            throw new InvalidArgumentException('Montant hors limites.');
+-        }
+-
+         return $negatif ? -$centiemes : $centiemes;
+     }
+ 
 diff --git a/app/Domain/Tenancy/Actions/ChangerSiretAction.php b/app/Domain/Tenancy/Actions/ChangerSiretAction.php
 index 9286124..8b5ab6f 100644
 --- a/app/Domain/Tenancy/Actions/ChangerSiretAction.php
@@ -483,10 +507,10 @@ index c7b435a..3cbebc0 100644
          return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW], ['name' => $email, 'email' => $email]);
 diff --git a/tests/Feature/Authorization/LimitesDesDroitsTest.php b/tests/Feature/Authorization/LimitesDesDroitsTest.php
 new file mode 100644
-index 0000000..33de109
+index 0000000..9af685c
 --- /dev/null
 +++ b/tests/Feature/Authorization/LimitesDesDroitsTest.php
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,198 @@
 +<?php
 +
 +namespace Tests\Feature\Authorization;
@@ -616,7 +640,8 @@ index 0000000..33de109
 +     * Avant la validation de sa société, un magasin réel ne fait aucune
 +     * opération commerciale réelle : son responsable, qui y a tous les
 +     * droits, n'y a aucune des autorisations qu'elles demandent, et garde
-+     * les autres.
++     * les autres ; le cabinet que la société a désigné n'en a aucune non
++     * plus, et garde ses consultations.
 +     */
 +    public function test_un_magasin_qui_ne_peut_pas_vendre_refuse_les_autorisations_commerciales_meme_a_son_responsable(): void
 +    {
@@ -631,6 +656,17 @@ index 0000000..33de109
 +            $this->assertFalse($responsable->can($autorisation), $autorisation);
 +        }
 +        $this->assertTrue($responsable->can(PermissionRegistry::CLIENT_CREATE));
++
++        $cabinet = $this->ouvrirUnCabinet();
++        $this->lierLeCabinet($cabinet, $magasin);
++        $proprietaireDuCabinet = $this->proprietaireDuCabinet($cabinet);
++        $contexte->clear();
++        $contexte->set($magasin);
++
++        foreach (PermissionRegistry::reserveesAuxOperationsCommerciales() as $autorisation) {
++            $this->assertFalse($proprietaireDuCabinet->can($autorisation), $autorisation);
++        }
++        $this->assertTrue($proprietaireDuCabinet->can(PermissionRegistry::CLIENT_VIEW));
 +    }
 +
 +    public function test_la_regle_exists_d_un_modele_de_societe_ne_trouve_que_les_lignes_de_la_societe_active(): void
@@ -781,10 +817,10 @@ index 783ff5c..eb459d1 100644
      {
          config(['caisse_securisee.cle_privee' => null]);
 diff --git a/tests/Feature/Calendrier/HorodatageEnUtcTest.php b/tests/Feature/Calendrier/HorodatageEnUtcTest.php
-index 0856fd8..138e0ee 100644
+index 0856fd8..9438e07 100644
 --- a/tests/Feature/Calendrier/HorodatageEnUtcTest.php
 +++ b/tests/Feature/Calendrier/HorodatageEnUtcTest.php
-@@ -129,6 +129,20 @@ public function test_une_chaine_est_refusee_pour_un_instant(): void
+@@ -129,6 +129,23 @@ public function test_une_chaine_est_refusee_pour_un_instant(): void
          $this->assertThrows(fn () => (new DemandeInscription)->forceFill(['expire_le' => '2026-10-09T08:00:00Z']), InvalidArgumentException::class, "L'instant expire_le s'écrit avec une date qui porte son fuseau, jamais avec une chaîne.");
      }
  
@@ -795,9 +831,12 @@ index 0856fd8..138e0ee 100644
 +     */
 +    public function test_un_texte_lu_en_base_qui_n_est_pas_un_instant_exact_est_refuse(): void
 +    {
-+        $this->assertSame('2026-10-09 08:00:00', Instant::enBase(Instant::depuisLaBase('2026-10-09 08:00:00')));
++        $instant = self::enUtc('2026-10-09 08:00:00');
++        $enBase = Instant::enBase($instant);
 +
-+        foreach (['2026-10-09T08:00:00Z', '2026-10-09 08:00', '2026-02-30 08:00:00', '2026-10-09 24:00:00', ''] as $texte) {
++        $this->assertSame($enBase, Instant::enBase(Instant::depuisLaBase($enBase)));
++
++        foreach ([$instant->format('Y-m-d\\TH:i:s\\Z'), $instant->format('Y-m-d H:i'), str_replace('10-09', '02-30', $enBase), str_replace('08:00:00', '24:00:00', $enBase), ''] as $texte) {
 +            $this->assertThrows(fn () => Instant::depuisLaBase($texte), InvalidArgumentException::class, "« {$texte} » n'est pas un instant en base « AAAA-MM-JJ HH:MM:SS ».");
 +        }
 +    }
@@ -806,7 +845,7 @@ index 0856fd8..138e0ee 100644
       * Un jour civil s'écrit et se relit tel quel, « AAAA-MM-JJ », sur les
       * deux moteurs ; un objet date, qui porte une heure et un fuseau, est
 diff --git a/tests/Feature/Facturation/CloturerCaisseActionTest.php b/tests/Feature/Facturation/CloturerCaisseActionTest.php
-index 81a0e33..3a14785 100644
+index 81a0e33..937d387 100644
 --- a/tests/Feature/Facturation/CloturerCaisseActionTest.php
 +++ b/tests/Feature/Facturation/CloturerCaisseActionTest.php
 @@ -377,6 +377,21 @@ public function test_une_journee_pas_encore_commencee_est_refusee(): void
@@ -821,7 +860,7 @@ index 81a0e33..3a14785 100644
 +    {
 +        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
 +
-+        foreach (['2026-02-30', '2026-10-09 10:00:00', '09/10/2026'] as $journee) {
++        foreach (['2026-02-30', (string) self::aParis('2026-10-09 10:00:00'), '09/10/2026'] as $journee) {
 +            $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $journee), LogicException::class, "« {$journee} » n'est pas une journée : une journée s'écrit AAAA-MM-JJ.");
 +        }
 +
@@ -1351,7 +1390,7 @@ index 5111832..75beeb4 100644
          $this->assertSame([], $responsable->getTenants(Filament::getPanel('societe'))->modelKeys());
          $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
 diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
-index 1eedb1b..91128f6 100644
+index 1eedb1b..6b25686 100644
 --- a/tests/Qualite/qualite.php
 +++ b/tests/Qualite/qualite.php
 @@ -19,6 +19,12 @@
@@ -1376,7 +1415,7 @@ index 1eedb1b..91128f6 100644
  
  /**
   * @return array{analyse_statique: array{niveau: int}, couverture: array<string, float>, mutation: array<string, float>}
-@@ -189,6 +195,14 @@ function nouveauCode(string $clover, string $base): int
+@@ -189,8 +195,16 @@ function nouveauCode(string $clover, string $base): int
  function mutation(string $journal, ?string $rapport): int
  {
      $donnees = json_decode((string) file_get_contents($journal), true, flags: JSON_THROW_ON_ERROR);
@@ -1389,8 +1428,39 @@ index 1eedb1b..91128f6 100644
 +    }
 +
      $parParties = [];
-     $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'tues', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
+-    $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'tues', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
++    $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'delais', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
  
+     foreach ($etats as $cle => $etat) {
+         foreach ($donnees[$cle] ?? [] as $mutant) {
+@@ -198,7 +212,7 @@ function mutation(string $journal, ?string $rapport): int
+             $partie = partieDe($fichier);
+             $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
+ 
+-            if ($etat !== 'tues') {
++            if (! in_array($etat, ['tues', 'delais'], true)) {
+                 $parParties[$partie]['liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']);
+             }
+         }
+@@ -207,15 +221,15 @@ function mutation(string $journal, ?string $rapport): int
+     ksort($parParties);
+     $seuils = seuils()['mutation'];
+     $echec = false;
+-    $texte = "# Score de mutation (MSI) par partie\n\n| Partie | Tués | Survivants | Non couverts | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|\n";
++    $texte = "# Score de mutation (MSI) par partie\n\nUn mutant dont les tests dépassent le délai d'Infection compte, comme Infection le compte, parmi ceux qu'un test arrête ; la colonne « Délai dépassé » les montre à part.\n\n| Partie | Arrêtés | dont délai dépassé | Survivants | Non couverts | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|---:|\n";
+ 
+     foreach ($parParties as $partie => $mesure) {
+-        $tues = $mesure['tues'] ?? 0;
++        $tues = ($mesure['tues'] ?? 0) + ($mesure['delais'] ?? 0);
+         $total = $tues + ($mesure['survivants'] ?? 0) + ($mesure['non_couverts'] ?? 0);
+         $msi = pourcentage($tues, $total);
+         $seuil = $seuils[$partie] ?? null;
+         $echec = $echec || ($seuil !== null && $msi < $seuil);
+-        $texte .= sprintf("| %s | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
++        $texte .= sprintf("| %s | %d | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['delais'] ?? 0, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
+     }
+ 
+     foreach ($parParties as $partie => $mesure) {
 @@ -290,6 +304,70 @@ function sensibles(): int
      return 0;
  }
@@ -1572,10 +1642,10 @@ index 0000000..ac49f28
 +    }
 +}
 diff --git a/tests/Unit/SaisieDecimaleTest.php b/tests/Unit/SaisieDecimaleTest.php
-index 6a3c4b0..0d0a707 100644
+index 6a3c4b0..2f90f74 100644
 --- a/tests/Unit/SaisieDecimaleTest.php
 +++ b/tests/Unit/SaisieDecimaleTest.php
-@@ -53,4 +53,12 @@ public function test_un_nombre_hors_limites_est_refuse_jamais_lu_zero(string $sa
+@@ -53,4 +53,28 @@ public function test_un_nombre_hors_limites_est_refuse_jamais_lu_zero(string $sa
  
          SaisieDecimale::enCentiemes($saisie);
      }
@@ -1586,5 +1656,21 @@ index 6a3c4b0..0d0a707 100644
 +        $this->expectExceptionObject(new InvalidArgumentException('Montant hors limites.'));
 +
 +        SaisieDecimale::montantAuCentime($saisie);
++    }
++
++    /**
++     * Le plus grand montant que douze chiffres entiers écrivent reste sous
++     * la borne du calcul, au centime (999 999 999 999,99 €) ; arrondi, son
++     * dernier demi-centime l'y porte, et il est refusé.
++     */
++    public function test_la_borne_du_calcul_se_compte_apres_l_arrondi(): void
++    {
++        $this->assertSame(99_999_999_999_999, SaisieDecimale::montantAuCentime('999999999999.99'));
++        $this->assertSame(99_999_999_999_999, SaisieDecimale::enCentiemes('999999999999.994'));
++        $this->assertSame(-99_999_999_999_999, SaisieDecimale::enCentiemes('-999999999999.99'));
++
++        $this->expectExceptionObject(new InvalidArgumentException('Montant hors limites.'));
++
++        SaisieDecimale::enCentiemes('999999999999.995');
 +    }
  }

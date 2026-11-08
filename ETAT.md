@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 19:29 UTC par pilotage-sync.sh : « Q-CALC confirmée pour toutes les ventes ».
+Mis à jour le 08/11/2026 à 19:55 UTC par pilotage-sync.sh : « Lecture des archives d'audits finie : rapport, cahier du lot AUD, questions ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,6 +43,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M README.md
  M app/Console/Commands/ClotureAutomatiqueCaisse.php
  M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+ M app/Console/Commands/EffacerPiecesVerification.php
  M app/Console/Commands/ExpirerDevis.php
  M app/Console/Commands/MarquerFacturesEnRetard.php
  M app/Console/Commands/PurgerActionsTraitees.php
@@ -50,6 +51,9 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Console/Commands/RelancerFacturesImpayees.php
  M app/Console/Commands/VerifierIntegriteFiscale.php
  M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/CreerFactureAchatAction.php
+ M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
  M app/Domain/Achats/Concerns/EstUnTauxDuFournisseur.php
  M app/Domain/Achats/Listeners/DecrementerStockApresEmissionAvoirFournisseur.php
  M app/Domain/Achats/Listeners/IncrementerStockApresValidationFactureAchat.php
@@ -59,7 +63,9 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Achats/Models/LigneAvoirFournisseur.php
  M app/Domain/Achats/Models/TauxAvoirFournisseur.php
  M app/Domain/Achats/Models/TauxFactureAchat.php
+ M app/Domain/Achats/Services/ConstructeurLigneAchat.php
  M app/Domain/Achats/Services/MontantsDuFournisseur.php
+ M app/Domain/Authorization/OperateurCourant.php
  M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
  M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
  M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
@@ -79,24 +85,18 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Contacts/Models/Client.php
  M app/Domain/Facturation/Actions/CloturerLesJourneesAction.php
  M app/Domain/Facturation/Actions/CreerAvoirAction.php
+ M app/Domain/Facturation/Actions/CreerDevisAction.php
+ M app/Domain/Facturation/Actions/CreerFactureAction.php
+ M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
+ M app/Domain/Facturation/Actions/EnregistrerAvoirAction.php
  M app/Domain/Facturation/Actions/EnregistrerVenteCaisseAction.php
  M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
  M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
+ M app/Domain/Facturation/Actions/ModifierDevisAction.php
+ M app/Domain/Facturation/Actions/ModifierFactureAction.php
  M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
  M app/Domain/Facturation/Concerns/FigeLeClient.php
- M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
- M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
- M app/Domain/Facturation/Enums/NatureOperation.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Domain/Facturation/Listeners/DecrementerStockApresEmissionFacture.php
- M app/Domain/Facturation/Listeners/RestaurerStockApresEmissionAvoir.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/Avoir.php
- M app/Domain/Facturation/Models/AvoirAllocation.php
- M app/Domain/Facturation/Models/BordereauDetaxe.php
- M app/Domain/Facturation/Models/ClotureCaisse.php
- M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
- M app/Domain/Facturation/Models/Devis.php
 ```
 
 ## Dernière course de la chaîne

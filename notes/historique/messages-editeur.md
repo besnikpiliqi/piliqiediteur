@@ -1358,3 +1358,33 @@ Dans cette méthode, la loi impose que ce qui est affiché sur la facture doit �
 
 Si tu affiches 10,55 € mais que ton ERP calcule en cachette 10,5525 € et affiche un total de 21,11 €, le client va croire que ton logiciel a fait une erreur (car 10,55 × 2 ne fait pas 21,11)."
 
+## 114. 2026-11-08 14:03 UTC
+
+<!-- attach -->
+
+> Le PU HT exact est 8,333333 €. La facture l’imprime arrondi : 8,33 €.
+
+> Le total HT est calculé depuis le TTC : 20,00 ÷ 1,2 = 16,67 €.
+
+
+
+non non tu calcule par linga la tva et pas par le total des article car comme ca normale qui il y aura toujour des erreus de centimes. si on calcule par ligne c est mieux car meme quand le client calcule lui meme alors tombe pil poil. mais normal que Le PU HT exact est 8,333333 €. La facture l’imprime arrondi : 8,33 € doit se calcule comme ca
+
+## 115. 2026-11-08 14:06 UTC
+
+non tu calcule separement par ligne d accord 10€ttc et 8.33€ht
+
+## 116. 2026-11-08 14:09 UTC
+
+<!-- attach -->
+
+> Je recommande le 3. C’est le seul qui reste juste quelle que soit la quantité.
+
+
+
+mais juste il faut calcule la avec la tva ling par linge mais pas affiche 8.3333 mais 8.33€ht
+
+## 117. 2026-11-08 14:58 UTC
+
+Je veux calcule ligne par ligne avec sa tva et arrondir par ligne et non par total. Donc 8.33ht*2=16,66 et pareil 10€ttc et après le total de calcul par rapport aux lignes
+

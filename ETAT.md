@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 13:57 UTC par pilotage-sync.sh : « Question Q-CALC à l'éditeur (arrondi des factures aux professionnels) ».
+Mis à jour le 08/11/2026 à 15:01 UTC par pilotage-sync.sh : « Décision Q-CALC : lot CALC (calcul ligne par ligne des documents aux professionnels) inséré après PG ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

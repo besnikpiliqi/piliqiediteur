@@ -124,3 +124,4 @@ audits-externes/rapport-lecture-2026-11-07.md
 audits-externes/decision-aud.md
 audits-externes/questions-editeur.md
 calculs/sans-virgule-flottante.md
+calculs/decision-calc.md

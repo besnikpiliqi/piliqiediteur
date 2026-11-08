@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 19:55 UTC par pilotage-sync.sh : « Lecture des archives d'audits finie : rapport, cahier du lot AUD, questions ».
+Mis à jour le 08/11/2026 à 20:57 UTC par pilotage-sync.sh : « Point de suivi du 08/11 21 h : sauvegarde du lot QA (1 commit local et travail en cours) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `0d37396`. Commits locaux pas encore poussés :
 
 ```
+1b34f61 Ajoute les outils de qualité et met la CI sur PostgreSQL seulement (lot QA 1/2)
 ```
 
 Derniers commits poussés :
@@ -38,65 +39,41 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ```
  M .github/workflows/tests.yml
- M .gitignore
- M CLAUDE.md
  M README.md
- M app/Console/Commands/ClotureAutomatiqueCaisse.php
- M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
- M app/Console/Commands/EffacerPiecesVerification.php
- M app/Console/Commands/ExpirerDevis.php
- M app/Console/Commands/MarquerFacturesEnRetard.php
- M app/Console/Commands/PurgerActionsTraitees.php
- M app/Console/Commands/PurgerTraces.php
- M app/Console/Commands/RelancerFacturesImpayees.php
- M app/Console/Commands/VerifierIntegriteFiscale.php
- M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/CreerFactureAchatAction.php
- M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Concerns/EstUnTauxDuFournisseur.php
- M app/Domain/Achats/Listeners/DecrementerStockApresEmissionAvoirFournisseur.php
- M app/Domain/Achats/Listeners/IncrementerStockApresValidationFactureAchat.php
- M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Models/FactureAchat.php
- M app/Domain/Achats/Models/LigneAchat.php
- M app/Domain/Achats/Models/LigneAvoirFournisseur.php
- M app/Domain/Achats/Models/TauxAvoirFournisseur.php
- M app/Domain/Achats/Models/TauxFactureAchat.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Achats/Services/MontantsDuFournisseur.php
- M app/Domain/Authorization/OperateurCourant.php
- M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
- M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
- M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
- M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
- M app/Domain/Cabinets/Notifications/AvisDuCabinet.php
- M app/Domain/Cabinets/Services/AccesDesCabinets.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/CaisseSecurisee/Concerns/HorodateSonEmission.php
- M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
- M app/Domain/CaisseSecurisee/Listeners/JournaliserFinDeSession.php
- M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
- M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
- M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
  M app/Domain/Calendrier/Casts/Instant.php
- M app/Domain/Calendrier/Casts/JourCivil.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/CloturerLesJourneesAction.php
- M app/Domain/Facturation/Actions/CreerAvoirAction.php
- M app/Domain/Facturation/Actions/CreerDevisAction.php
- M app/Domain/Facturation/Actions/CreerFactureAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
- M app/Domain/Facturation/Actions/EnregistrerAvoirAction.php
- M app/Domain/Facturation/Actions/EnregistrerVenteCaisseAction.php
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
- M app/Domain/Facturation/Actions/ModifierDevisAction.php
- M app/Domain/Facturation/Actions/ModifierFactureAction.php
- M app/Domain/Facturation/Concerns/EstEnvoyeParEmail.php
- M app/Domain/Facturation/Concerns/FigeLeClient.php
+ M app/Domain/Tenancy/Actions/ChangerSiretAction.php
+ M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
+ M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
+ M app/Domain/Tenancy/Rules/SiretValide.php
+ M app/Policies/AffectationPolicy.php
+ M infection.json5
+ M psalm.xml
+ M tests/Feature/Achats/FactureAchatActionsTest.php
+ M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+ M tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
+ M tests/Feature/Authorization/ClotureCaissePolicyTest.php
+ M tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
+ M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
+ M tests/Feature/Calendrier/HorodatageEnUtcTest.php
+ M tests/Feature/Facturation/CloturerCaisseActionTest.php
+ M tests/Feature/Facturation/CloturerLesJourneesActionTest.php
+ M tests/Feature/Facturation/FermerSaCaisseActionTest.php
+ M tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
+ M tests/Feature/Facturation/ReimputationALaContrePassationTest.php
+ M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
+ M tests/Feature/Filament/ClientResourceTest.php
+ M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
+ M tests/Feature/Filament/InventaireOuvertureResourceTest.php
+ M tests/Feature/Societe/ConnexionParIdentifiantTest.php
+ M tests/Feature/Stock/InventaireOuvertureTest.php
+ M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
+ M tests/Qualite/qualite.php
+ M tests/Unit/CalculateurLigneTest.php
+ M tests/Unit/SaisieDecimaleTest.php
+?? tests/Feature/Achats/ApercuDUnAchatTest.php
+?? tests/Feature/Authorization/LimitesDesDroitsTest.php
+?? tests/Unit/MontantsDuFournisseurTest.php
 ```
 
 ## Dernière course de la chaîne

@@ -215,3 +215,5 @@
 - 08/11 19:25 UTC — Q-CALC précisée encore (19 h 20, « tu va jamais recalculer… pas à l inverse ») : deux prix existants par fiche (PU TTC et PU HT au centime, posés une fois), ventes = multiplications seulement, toutes les ventes tickets compris (sauf réponse contraire) ; decision-calc.md mis à jour.
 
 - 08/11 19:45 UTC — lecture des archives finie (wf_0eece75f-80e : 30 agents) : 112 constats, 45 encore présents (1 bloquant C24, 27 importants, 17 mineurs), 1 déjà corrigé (C36, Symfony), 52 sans objet, 4 à trancher, 3 incertains ; audits-externes/rapport-lecture-2026-11-07.md, decision-aud.md (cahier du lot AUD), questions-editeur.md (Q-AUD1 à Q-AUD5 ; Q-AUD6 et Q-AUD7 au § 4 du cahier) ; relus par la session, publiés, rapport envoyé à l éditeur.
+
+- 08/11 21:00 UTC — point de suivi : PostgreSQL prêt ; course wf_14a12639-401, QA:implementation a commité localement QA 1/2 (1b34f61, outils de qualité et CI PostgreSQL seulement) et poursuit QA 2/2 (36 entrées) ; travail resauvé (commits et non commité, verrous exclus, write-tree c2639572… identique). Rapport des audits envoyé à l éditeur à 19 h 50.

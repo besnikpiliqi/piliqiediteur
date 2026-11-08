@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 22:18 UTC par pilotage-sync.sh : « Arrêt demandé par l'éditeur : passation complète du 08/11 (PASSATION-2026-11-08.md), travail du lot QA sauvé ».
+Mis à jour le 08/11/2026 à 22:24 UTC par pilotage-sync.sh : « Lot CALC : la règle vaut pour toutes les ventes, tickets compris (décision du 08/11 19 h 30), cahier et chaîne alignés ; passation précisée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

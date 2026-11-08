@@ -30,12 +30,11 @@ Ce fichier est le point d'entrée. Il remplace, pour la reprise, `PASSATION-2026
    git -C /home/user/piliqiediteur am <scratchpad>/reprises/lot-QA-commits-locaux.patch
    git -C /home/user/piliqiediteur apply --binary <scratchpad>/reprises/lot-QA-travail-non-commite.patch
    cd /home/user/piliqiediteur
-   composer config allow-plugins.infection/extension-installer true
    composer require --dev larastan/larastan:^3.14 infection/infection:^0.35 --no-interaction
    composer update --working-dir=tools/psalm --no-interaction
    composer audit --locked
    ```
-   Vérifier avant : `sha256sum` des deux correctifs (valeurs du § 1). Le commit refait par `git am` n'a pas ses verrous : les verrous régénérés restent non commités, et l'agent QA qui reprend les mettra dans son prochain commit (TRAVAIL_COUPE lui dit de relire commits locaux et travail non commité). `composer audit --locked` doit dire « No security vulnerability advisories found ».
+   Vérifier avant : `sha256sum` des deux correctifs (valeurs du § 1). Le `composer.json` du correctif déclare déjà les deux outils, leur greffon autorisé (`infection/extension-installer`) et le blocage des versions à faille connue (`audit.block-insecure`) : seuls les verrous sont à refaire. Le commit refait par `git am` n'a pas ses verrous : les verrous régénérés restent non commités, et l'agent QA qui reprend les mettra dans son prochain commit (TRAVAIL_COUPE lui dit de relire commits locaux et travail non commité). `composer audit --locked` doit dire « No security vulnerability advisories found ».
 3. **Lancer une course neuve** (un identifiant de course ne passe pas d'une session à l'autre) : outil Workflow avec `scriptPath` = `<scratchpad>/serie8-lots.js` et `args` = le contenu de `<scratchpad>/reprises/args-course-passation-2026-11-07.json` :
    `{"ouverts": ["QA", "PG", "CALC", "FI", "AUD", "NAV-2", "NAV-3", "NAV-4", "NAV-5", "ML", "DV", "EC2", "S9-L", "S9-A", "21"]}`.
    Terminer le tour aussitôt après le lancement (un message de l'éditeur pendant un tour ouvert coupe les agents ; c'est arrivé deux fois).

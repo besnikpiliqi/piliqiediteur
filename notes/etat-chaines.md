@@ -201,3 +201,5 @@
 - 08/11 01:05 UTC — CI de 0d37396 (MAJ-S) verte : courses GitHub 210 (push, finie à 00 h 55) et 211 (PR, finie à 01 h 02). Lecture des archives en cours (wf_0eece75f-80e).
 
 - 08/11 13:05 UTC — machine redémarrée à 13 h 00 (PostgreSQL relancé) ; les points de suivi de 04 h 06 n ont été remis qu à 13 h 01. Limite d usage de 5 h atteinte vers 03 h 40 par la lecture (16 agents finis sur 30 : 10 lecteurs, regroupement en 112 constats, 5 vérifications). Relancés à 13 h 04 : lecture reprise (wf_0eece75f-80e, tâche wu3uizvpi : 13 vérifications et synthèse) et course neuve de la chaîne wf_93155ec2-50a (tâche wd16shanl ; QA, PG, FI, AUD, NAV-2…). Arbre : 128 entrées de QA, tête 0d37396, stash@{0} gardé.
+
+- 08/11 13:25 UTC — demande de l éditeur (conseil sur la précision des calculs) : notes/calculs/sans-virgule-flottante.md écrit ; À FAIRE dès que la synthèse a écrit audits-externes/decision-aud.md : y ajouter une section « Montants sans nombre à virgule flottante : appliquer notes/calculs/sans-virgule-flottante.md en entier ».

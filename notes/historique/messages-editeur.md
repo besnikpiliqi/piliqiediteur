@@ -1312,3 +1312,21 @@ Updating 1d3278ae..c7b1ec3e
 
 Réessayez
 
+## 109. 2026-11-08 13:06 UTC
+
+donne moi le rapport des audits quand c'est fini
+
+## 110. 2026-11-08 13:07 UTC
+
+donc tu va t'occuper pout tout ce que je t ai envoye en zip ? dont les testes qui sont la dedans et les failles ou erreurs ? donc tu est en train de faire pour ces
+
+## 111. 2026-11-08 13:31 UTC
+
+j'ai lu ca sur internet et je crois qu'il a raison mais tu me dit aussi c'est bien d'apliquer ca: "Le piège absolu à surveiller : La précision mathématique
+
+Les LLM, même puissants comme Opus 5.5, peuvent parfois faire des erreurs d'arrondis ou de logique sur les calculs financiers complexes (remises en cascade, proratas, taxes).
+
+
+
+* La règle d'or : Ne laissez pas Claude inventer la logique de calcul à la volée. Demandez-lui explicitement d'utiliser des bibliothèques reconnues pour la précision financière (comme `decimal.js` en JavaScript/TypeScript ou la classe `Decimal` en Python) plutôt que des nombres à virgule flottante (`float`), pour éviter les erreurs du type `0.1 + 0.2 = 0.30000000000000004`."
+

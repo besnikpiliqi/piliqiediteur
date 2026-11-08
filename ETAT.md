@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 13:04 UTC par pilotage-sync.sh : « Course neuve wf_93155ec2-50a (QA, PG, FI, AUD…) et reprise de la lecture des archives ».
+Mis à jour le 08/11/2026 à 13:33 UTC par pilotage-sync.sh : « Demande de l'éditeur : montants sans nombre à virgule flottante (cahier joint au lot AUD) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

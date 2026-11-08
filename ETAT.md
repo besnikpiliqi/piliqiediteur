@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 00:35 UTC par pilotage-sync.sh : « MAJ-S poussé (0d37396) ; travail QA remis dans l'arbre ; lecture des archives reprise ».
+Mis à jour le 08/11/2026 à 01:05 UTC par pilotage-sync.sh : « CI verte de la mise à jour de sécurité Symfony (0d37396) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

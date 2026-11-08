@@ -25,6 +25,12 @@ final class JourCivil implements CastsAttributes
     }
 
     /**
+     * Une écriture faite sans passer par le type de l'attribut (un tableau
+     * de forceFill(), par exemple) peut porter n'importe quoi, qui est
+     * refusé.
+     *
+     * @param  mixed  $value  un jour « AAAA-MM-JJ », ou n'importe quoi d'autre, qui est refusé
+     *
      * @throws InvalidArgumentException
      */
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string

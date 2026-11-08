@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\ClientResource\Pages;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Services\NumeroTva;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\Concerns\ArchiveLaFiche;
@@ -11,6 +12,9 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 
+/**
+ * @property Client $record
+ */
 class EditClient extends EditRecord
 {
     use ArchiveLaFiche, EnregistreLesCorrectionsDeLaFiche, RevientALaListe;

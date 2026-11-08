@@ -105,7 +105,7 @@ class CalculateurLigne
      * ordre, ceux de chaque taux facturé, dans l'ordre où il apparaît, et
      * ceux du document : chaque total est la somme exacte de ses lignes.
      *
-     * @param  list<array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int}>  $lignes  PU TTC en centimes, taux et remise en centièmes de point
+     * @param  array<array-key, array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int}>  $lignes  PU TTC en centimes, taux et remise en centièmes de point
      * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
      *
      * @throws InvalidArgumentException
@@ -207,7 +207,7 @@ class CalculateurLigne
      * ligne, négative, non nulle à 0 % ou plus grande que sa base -- des
      * montants qu'aucune facture valable ne porte.
      *
-     * @param  list<array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int, montant_ht?: int|null}>  $lignes  PU HT en millionièmes d'euro, taux et remise en centièmes de point, HT écrit par le fournisseur en centimes
+     * @param  array<array-key, array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int, montant_ht?: int|null}>  $lignes  PU HT en millionièmes d'euro, taux et remise en centièmes de point, HT écrit par le fournisseur en centimes
      * @param  array<int, int>  $tvaEcriteParTaux  la TVA qu'écrit la facture, en centimes, par taux en centièmes de point
      * @return array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_ht_calcule: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int, montant_tva_calcule: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}
      *
@@ -640,7 +640,10 @@ class CalculateurLigne
     }
 
     /**
-     * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>  $lignes
+     * Les sommes des HT, des TVA et des TTC de ces lignes, tableaux ou
+     * lignes enregistrées.
+     *
+     * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}|\ArrayAccess<string, mixed>>  $lignes
      * @return array{total_ht: float, total_tva: float, total_ttc: float}
      */
     public function totaliser(iterable $lignes): array
@@ -668,7 +671,7 @@ class CalculateurLigne
      * séparées des HT, des TVA et des TTC qu'entre les lignes d'un
      * document.
      *
-     * @param  iterable<array{total_ht: float|string, total_tva: float|string, total_ttc: float|string}|ArrayAccess<string, mixed>>  $documents
+     * @param  iterable<array{total_ht: float|string, total_tva: float|string, total_ttc: float|string}|\ArrayAccess<string, mixed>>  $documents
      * @return array{total_ht: float, total_tva: float, total_ttc: float}
      */
     public function cumuler(iterable $documents): array
@@ -748,7 +751,7 @@ class CalculateurLigne
      * l'appel (1.5 deviendrait l'entier 1) si le paramètre n'acceptait que
      * des chaînes et des entiers.
      *
-     * @param  string|int  $valeur
+     * @param  mixed  $valeur  une chaîne décimale ou un entier ; toute autre valeur est refusée
      *
      * @throws InvalidArgumentException
      */
@@ -814,7 +817,7 @@ class CalculateurLigne
      * qu'enCentiemes() : une écriture décimale exacte, six décimales au
      * plus, jamais un flottant, et la même borne, en millionièmes.
      *
-     * @param  string|int  $valeur
+     * @param  mixed  $valeur  une chaîne décimale ou un entier ; toute autre valeur est refusée
      *
      * @throws InvalidArgumentException
      */
@@ -1371,11 +1374,13 @@ class CalculateurLigne
 
     /**
      * Produit d'entiers : en PHP, un produit qui déborde devient un
-     * flottant (approché) au lieu d'échouer -- il est refusé.
+     * flottant (approché) au lieu d'échouer -- il est refusé. Le produit
+     * passe par array_product(), qui calcule comme « * » et dit, par son
+     * type (int|float), qu'il peut déborder.
      */
     private function multiplier(int $a, int $b): int
     {
-        $produit = $a * $b;
+        $produit = array_product([$a, $b]);
 
         if (! is_int($produit)) {
             throw new InvalidArgumentException('Montant hors limites.');

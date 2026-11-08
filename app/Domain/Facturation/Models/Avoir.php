@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -110,6 +111,9 @@ class Avoir extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutAvoir::class,
+        'date_emission' => Instant::class,
+        'type_client' => TypeClient::class,
+        'client_etabli_en_france' => 'boolean',
         'franchise_en_base' => 'boolean',
         'regularisation' => 'boolean',
         'nature_operation' => NatureOperation::class,
@@ -144,6 +148,8 @@ class Avoir extends Model implements DocumentEnvoyable
      * SoftDeletes de Client) : il se renvoie, et son crédit s'impute sur
      * les factures de ce client. Il imprime la copie du client prise à son
      * émission (voir copieClient()).
+     *
+     * @return BelongsTo<Client, $this>
      */
     public function client(): BelongsTo
     {
@@ -185,6 +191,9 @@ class Avoir extends Model implements DocumentEnvoyable
      * déduits de ses ventes (voir
      * CloturerCaisseAction) : un retour se compte le jour où il a lieu, pas
      * celui de la vente d'origine.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeEnAttenteDeCloture(Builder $query, Calendrier $calendrier, string $jour): Builder
     {
@@ -201,6 +210,9 @@ class Avoir extends Model implements DocumentEnvoyable
      * tous avec celle de voir les factures de toute l'équipe ; sinon ceux
      * qu'il a créés. Toute liste d'avoirs passe par ici (voir AvoirResource
      * et la fiche d'une clôture, ClotureCaisseResource).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeVisiblesPar(Builder $query, User $user): Builder
     {
@@ -218,6 +230,9 @@ class Avoir extends Model implements DocumentEnvoyable
      * de la casse ni des espaces autour. Un avoir d'un client nommé ou d'un
      * autre magasin (MagasinScope) n'en est jamais un ; son crédit restant
      * (voir creditEnCentimes()) dit s'il sert encore.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeBonDAvoir(Builder $query, string $numero): Builder
     {
@@ -298,6 +313,9 @@ class Avoir extends Model implements DocumentEnvoyable
         return ! $this->estPourUnProfessionnel();
     }
 
+    /**
+     * @return HasMany<LigneAvoir, $this>
+     */
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneAvoir::class)->orderBy('ordre')->orderBy('id');
@@ -305,14 +323,14 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * Les factures distinctes dont proviennent les lignes de cet avoir
-     * (potentiellement plusieurs, voir le docblock de classe). Charger
-     * lignes.ligneFacture.facture au préalable pour éviter un N+1.
+     * (potentiellement plusieurs, voir le docblock de classe), lues avec
+     * ses lignes, quel que soit leur nombre, en une requête par relation.
      *
      * @return Collection<int, Facture>
      */
     public function facturesConcernees(): Collection
     {
-        return $this->lignes
+        return $this->loadMissing('lignes.ligneFacture.facture')->lignes
             ->map(fn (LigneAvoir $ligne) => $ligne->ligneFacture?->facture)
             ->filter()
             ->unique('id')
@@ -336,6 +354,8 @@ class Avoir extends Model implements DocumentEnvoyable
      * Ses imputations, dans l'ordre où elles ont été enregistrées : la
      * base de données ne garantit aucun ordre sans tri, et la fiche les
      * montre dans celui-ci (voir AvoirResource).
+     *
+     * @return HasMany<AvoirAllocation, $this>
      */
     public function allocations(): HasMany
     {

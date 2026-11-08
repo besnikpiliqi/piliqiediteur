@@ -72,10 +72,13 @@ class EffacerPiecesVerification extends Command
         $stockage = FileUploadConfiguration::storage();
         $limite = now()->subMinutes(self::MINUTES_ENTRE_DEUX_PASSAGES)->getTimestamp();
 
-        return collect($stockage->allFiles(FileUploadConfiguration::path()))
-            ->filter(fn (string $fichier): bool => $stockage->exists($fichier) && $stockage->lastModified($fichier) <= $limite)
-            ->each(fn (string $fichier): bool => $stockage->delete($fichier))
-            ->count();
+        $abandonnes = array_filter($stockage->allFiles(FileUploadConfiguration::path()), fn (string $fichier): bool => $stockage->exists($fichier) && $stockage->lastModified($fichier) <= $limite);
+
+        foreach ($abandonnes as $fichier) {
+            $stockage->delete($fichier);
+        }
+
+        return count($abandonnes);
     }
 
     private function effacerLesDossiersDExamenRestes(): int

@@ -26,6 +26,8 @@ use Filament\Pages\Page;
  * (PermissionRegistry::PARAMETRES_GERER). Seul le magasin actif est lu et
  * modifié, et seulement ce que la personne y a corrigé (voir
  * EnregistreLesParametresDuMagasin).
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class ParametresFactures extends Page implements HasForms
 {

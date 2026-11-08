@@ -71,6 +71,9 @@ class LigneFacture extends Model
         return 'Les lignes d\'une facture ou d\'un ticket émis ne se modifient plus : une correction passe par un avoir.';
     }
 
+    /**
+     * @return BelongsTo<Facture, $this>
+     */
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);
@@ -80,6 +83,8 @@ class LigneFacture extends Model
      * Une ligne garde son produit, même archivé depuis (voir les
      * SoftDeletes de Produit) : la vente émise ensuite le sort quand même
      * du stock (voir DecrementerStockApresEmissionFacture).
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {
@@ -89,12 +94,17 @@ class LigneFacture extends Model
     /**
      * Le service du catalogue dont vient la ligne (voir Service), jamais en
      * même temps qu'un produit.
+     *
+     * @return BelongsTo<Service, $this>
      */
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
     }
 
+    /**
+     * @return HasMany<LigneAvoir, $this>
+     */
     public function lignesAvoir(): HasMany
     {
         return $this->hasMany(LigneAvoir::class);

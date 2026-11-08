@@ -175,6 +175,9 @@ class ClotureCaisse extends Model
 
     /**
      * La clôture de tel jour du calendrier (AAAA-MM-JJ).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeDuJour(Builder $query, string $jour): Builder
     {
@@ -235,6 +238,9 @@ class ClotureCaisse extends Model
         }
     }
 
+    /**
+     * @return HasMany<Facture, $this>
+     */
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);
@@ -243,6 +249,8 @@ class ClotureCaisse extends Model
     /**
      * Les avoirs à des particuliers émis ce jour-là, déduits des ventes
      * (voir CloturerCaisseAction).
+     *
+     * @return HasMany<Avoir, $this>
      */
     public function avoirs(): HasMany
     {
@@ -252,19 +260,24 @@ class ClotureCaisse extends Model
     /**
      * Les lignes de toutes les ventes de la journée, pour la ventilation
      * par taux de TVA (voir VentileLaTvaParTaux).
+     *
+     * @return HasManyThrough<LigneFacture, Facture, $this>
      */
     public function lignes(): HasManyThrough
     {
         return $this->hasManyThrough(LigneFacture::class, Facture::class);
     }
 
+    /**
+     * @return HasManyThrough<LigneAvoir, Avoir, $this>
+     */
     public function lignesAvoir(): HasManyThrough
     {
         return $this->hasManyThrough(LigneAvoir::class, Avoir::class);
     }
 
     /**
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>
      */
     protected function lignesAVentiler(): Collection
     {

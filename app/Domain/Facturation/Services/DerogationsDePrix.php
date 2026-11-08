@@ -114,7 +114,7 @@ class DerogationsDePrix
      */
     private function derogation(array $ligne, ?Produit $produit, ?Service $service, ContexteDeVente $contexte): ?string
     {
-        $article = $produit?->nom ?? $service?->nom ?? (string) ($ligne['description'] ?? '');
+        $article = $produit->nom ?? $service->nom ?? (string) ($ligne['description'] ?? '');
         $prix = $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']);
 
         if ($service !== null && ! $service->aUnPrixDeReference()) {

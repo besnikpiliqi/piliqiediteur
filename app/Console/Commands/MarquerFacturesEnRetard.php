@@ -32,7 +32,7 @@ class MarquerFacturesEnRetard extends Command
     {
         $totalMarquees = 0;
 
-        Magasin::query()
+        Magasin::query()->with('societe.proprietaire')
             ->each(function (Magasin $magasin) use ($tenantContext, &$totalMarquees) {
                 $totalMarquees += $tenantContext->runAs($magasin, fn (): int => $this->marquerLesFacturesDe($magasin));
             });

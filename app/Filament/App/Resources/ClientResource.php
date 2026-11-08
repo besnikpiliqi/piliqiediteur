@@ -11,8 +11,10 @@ use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Filament\App\Resources\ClientResource\Pages;
+use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
@@ -94,7 +96,7 @@ class ClientResource extends Resource
 
     private static function visibleSiProfessionnel(): Closure
     {
-        return fn (Get $get, ?Client $record): bool => static::estProfessionnel($get, $record);
+        return fn (Get $get, ?Client $record): bool => self::estProfessionnel($get, $record);
     }
 
     /**
@@ -171,7 +173,7 @@ class ClientResource extends Resource
      */
     private static function champsProfessionnel(): array
     {
-        $visibleSiProfessionnel = static::visibleSiProfessionnel();
+        $visibleSiProfessionnel = self::visibleSiProfessionnel();
 
         return [
             Toggle::make('etabli_en_france')
@@ -189,7 +191,7 @@ class ClientResource extends Resource
                 ->label('SIREN')
                 ->maxLength(9)
                 ->regex('/^\d{9}$/')
-                ->required(fn (Get $get): bool => static::estEtabliEnFrance($get) && blank($get('siret')))
+                ->required(fn (Get $get): bool => self::estEtabliEnFrance($get) && blank($get('siret')))
                 ->rule(new HorsDeLEntrepriseDuMagasin(self::MESSAGE_PROPRE_ENTREPRISE))
                 ->validationMessages([
                     'regex' => 'Le SIREN compte 9 chiffres, sans espace.',
@@ -221,7 +223,7 @@ class ClientResource extends Resource
                 ->maxLength(50)
                 ->required(fn (Get $get): bool => blank($get('numero_tva')))
                 ->validationMessages(['required' => 'Indiquez le n° de TVA ou un autre identifiant de ce client établi hors de France.'])
-                ->visible(fn (Get $get, ?Client $record): bool => static::estProfessionnel($get, $record) && ! static::estEtabliEnFrance($get)),
+                ->visible(fn (Get $get, ?Client $record): bool => self::estProfessionnel($get, $record) && ! self::estEtabliEnFrance($get)),
         ];
     }
 
@@ -252,7 +254,7 @@ class ClientResource extends Resource
      */
     public static function creationRapideSchema(): array
     {
-        $visibleSiProfessionnel = static::visibleSiProfessionnel();
+        $visibleSiProfessionnel = self::visibleSiProfessionnel();
 
         return [
             TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
@@ -382,7 +384,7 @@ class ClientResource extends Resource
             ->visible(fn (Client $record): bool => $record->aUnNumeroTvaVerifiableSurVies())
             ->authorize('update')
             ->action(fn (Client $record) => static::executerSansCasser(
-                fn () => static::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $record)),
+                fn () => self::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $record)),
             ));
     }
 
@@ -412,12 +414,13 @@ class ClientResource extends Resource
                 // client n'ayant plus de facture due, reste un crédit
                 // (voir Client::soldeCrediteurEnCentimes()), que sa
                 // prochaine facture absorbe -- affiché ici tant qu'il
-                // n'est pas intégralement consommé.
+                // n'est pas intégralement consommé. Lu pour toute la page
+                // à la fois (voir ListClients::creditDAvoirEnCentimes()).
                 Tables\Columns\TextColumn::make('solde_crediteur')
                     ->label('Solde créditeur')
-                    ->state(fn (Client $record) => $record->soldeCrediteur())
+                    ->state(fn (Client $record, ListClients $livewire): string => app(CalculateurLigne::class)->enDecimal($livewire->creditDAvoirEnCentimes($record)))
                     ->money('EUR')
-                    ->color(fn (Client $record) => $record->soldeCrediteur() > 0 ? 'warning' : 'gray')
+                    ->color(fn (Client $record, ListClients $livewire): string => $livewire->creditDAvoirEnCentimes($record) > 0 ? 'warning' : 'gray')
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -441,7 +444,7 @@ class ClientResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListClients::route('/'),
+            'index' => ListClients::route('/'),
             'create' => Pages\CreateClient::route('/create'),
             'view' => Pages\ViewClient::route('/{record}'),
             'edit' => Pages\EditClient::route('/{record}/edit'),

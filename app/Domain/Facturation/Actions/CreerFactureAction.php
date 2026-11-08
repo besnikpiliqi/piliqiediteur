@@ -54,7 +54,7 @@ class CreerFactureAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs  conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
      *
      * @throws AuthorizationException quand l'auteur ne peut pas créer de facture, ou introduit une remise ou un prix sans y être autorisé
@@ -75,7 +75,7 @@ class CreerFactureAction
     }
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      */
     private function creer(User $compte, Client $client, array $lignes, array $attributs): Facture

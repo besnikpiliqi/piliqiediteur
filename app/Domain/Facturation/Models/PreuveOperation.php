@@ -61,6 +61,9 @@ class PreuveOperation extends Model
         return 'Une preuve d\'exonération enregistrée ne se modifie ni ne se supprime.';
     }
 
+    /**
+     * @return BelongsTo<Facture, $this>
+     */
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);

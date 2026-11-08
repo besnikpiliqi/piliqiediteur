@@ -32,6 +32,8 @@ use Illuminate\Validation\ValidationException;
  * cabinet d'expertise comptable (voir
  * SocietePolicy::voirLesParametresFiscaux()) ; le formulaire ne
  * s'enregistre que tant qu'elle n'est pas en lecture seule.
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class ParametresFiscauxSociete extends Page implements HasForms
 {

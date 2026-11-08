@@ -70,6 +70,8 @@ class Paiement extends Model
     /**
      * Un paiement garde son client, même archivé depuis (voir les
      * SoftDeletes de Client), comme les factures qu'il règle.
+     *
+     * @return BelongsTo<Client, $this>
      */
     public function client(): BelongsTo
     {
@@ -81,6 +83,8 @@ class Paiement extends Model
      * ont été enregistrées : la base de données ne garantit aucun ordre
      * sans tri, et la liste des paiements les nomme dans celui-ci (voir
      * PaiementResource).
+     *
+     * @return HasMany<PaiementAllocation, $this>
      */
     public function allocations(): HasMany
     {
@@ -92,6 +96,8 @@ class Paiement extends Model
      * restait dû des factures qu'il règle (voir EnregistrerPaiementAction) ;
      * pour une contre-passation, en négatif, celui qu'elle rend aux avoirs
      * (voir ContrePasserPaiementAction).
+     *
+     * @return HasMany<AvoirAllocation, $this>
      */
     public function creditsImputes(): HasMany
     {
@@ -103,6 +109,8 @@ class Paiement extends Model
      * fait après l'émission, ou de cette contre-passation ; aucun pour un
      * paiement reçu à l'émission, que le document imprime (voir
      * RecusDePaiement).
+     *
+     * @return BelongsTo<RecuPaiement, $this>
      */
     public function recuPaiement(): BelongsTo
     {
@@ -111,6 +119,8 @@ class Paiement extends Model
 
     /**
      * Le paiement erroné qu'annule cette contre-passation.
+     *
+     * @return BelongsTo<self, $this>
      */
     public function contrePasse(): BelongsTo
     {
@@ -120,6 +130,8 @@ class Paiement extends Model
     /**
      * La contre-passation qui annule ce paiement, s'il a été saisi par
      * erreur.
+     *
+     * @return HasOne<self, $this>
      */
     public function contrePassation(): HasOne
     {
@@ -134,6 +146,8 @@ class Paiement extends Model
     /**
      * Fermetures de caisse personnelles qui ont compté ce paiement (une
      * seule au plus, voir ClotureCaissePersonnelle::paiements()).
+     *
+     * @return BelongsToMany<ClotureCaissePersonnelle, $this>
      */
     public function cloturesCaissePersonnelles(): BelongsToMany
     {
@@ -147,6 +161,9 @@ class Paiement extends Model
      * paiements, quel qu'en soit l'auteur -- une erreur de saisie que le
      * propriétaire corrige revient dans le relevé de celui qui l'a faite,
      * jamais dans celui du propriétaire.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeNonFermesParLeVendeur(Builder $query, int $vendeurId): Builder
     {

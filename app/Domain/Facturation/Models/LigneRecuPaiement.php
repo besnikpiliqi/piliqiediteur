@@ -46,11 +46,17 @@ class LigneRecuPaiement extends Model
         return 'Ce qu\'un reçu de paiement dit d\'un document ne se modifie ni ne se supprime.';
     }
 
+    /**
+     * @return BelongsTo<RecuPaiement, $this>
+     */
     public function recuPaiement(): BelongsTo
     {
         return $this->belongsTo(RecuPaiement::class);
     }
 
+    /**
+     * @return BelongsTo<Facture, $this>
+     */
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);

@@ -2,10 +2,12 @@
 
 namespace App\Filament\App\Resources\ClientResource\Pages;
 
+use App\Domain\Contacts\Models\Client;
 use App\Filament\App\Resources\ClientResource;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -14,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
  * le client (voir ClientPolicy::view()), y compris un compte du cabinet
  * lié ou l'observateur, dans un magasin suspendu ou fermé, et pour un client
  * archivé, dont les preuves restent lisibles.
+ *
+ * @property Client $record
  */
 class ViewClient extends ViewRecord
 {
@@ -27,7 +31,10 @@ class ViewClient extends ViewRecord
      */
     protected function resolveRecord(int|string $key): Model
     {
-        return ClientResource::getEloquentQuery()->withTrashed()->whereKey($key)->firstOrFail();
+        /** @var Builder<Client> $clients */
+        $clients = ClientResource::getEloquentQuery();
+
+        return $clients->withTrashed()->whereKey($key)->firstOrFail();
     }
 
     /**
@@ -36,7 +43,7 @@ class ViewClient extends ViewRecord
      */
     public function getSubheading(): ?string
     {
-        return $this->getRecord()->trashed()
+        return $this->record->trashed()
             ? 'Client archivé : il n\'est plus proposé pour une nouvelle vente. Restaurez-le depuis la liste des clients archivés pour le modifier.'
             : null;
     }

@@ -86,7 +86,7 @@ class EquipeDuMagasinResource extends Resource
         $contexte = app(TenantContext::class);
 
         return parent::getEloquentQuery()
-            ->with('utilisateur')
+            ->with(['utilisateur', 'magasin'])
             ->where('affectations.magasin_id', $contexte->has() ? $contexte->id() : 0)
             ->whereNotNull('affectations.role');
     }
@@ -117,7 +117,7 @@ class EquipeDuMagasinResource extends Resource
             ->required()
             ->live()
             ->afterStateUpdated(function (Set $set, ?string $state): void {
-                foreach (static::autorisationsAAfficher(RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut(Filament::getTenant()->societe->type_activite) ?? [], 'autorisations') as $champ => $cases) {
+                foreach (static::autorisationsAAfficher(RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut(app(TenantContext::class)->magasin()->societe->type_activite) ?? [], 'autorisations') as $champ => $cases) {
                     $set($champ, $cases);
                 }
             });

@@ -52,7 +52,7 @@ trait BelongsToSociete
      */
     public static function regleExisteDansLaSociete(): Exists
     {
-        $modele = new static;
+        $modele = static::query()->getModel();
 
         return Rule::exists($modele->getTable(), $modele->getKeyName())
             ->where('societe_id', app(TenantContext::class)->societe()->getKey());

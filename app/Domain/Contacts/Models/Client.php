@@ -171,6 +171,8 @@ class Client extends Model
     /**
      * Les vérifications de ses n° de TVA sur VIES, de tous les n° qu'il a
      * eus : chacune reste la preuve de ce qu'elle a vérifié.
+     *
+     * @return HasMany<ConsultationVies, $this>
      */
     public function consultationsVies(): HasMany
     {
@@ -195,11 +197,17 @@ class Client extends Model
             ->first();
     }
 
+    /**
+     * @return HasMany<Avoir, $this>
+     */
     public function avoirs(): HasMany
     {
         return $this->hasMany(Avoir::class);
     }
 
+    /**
+     * @return HasMany<Facture, $this>
+     */
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);
@@ -211,12 +219,12 @@ class Client extends Model
      * encore (voir Facture::client()), en un seul paiement s'il le veut
      * (voir PaiementResource).
      *
-     * @param  Builder<static>  $query
-     * @return Builder<static>
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeQuiPeuventRegler(Builder $query): Builder
     {
-        return $query->withTrashed()->where(fn (Builder $clients): Builder => $clients
+        return $query->withTrashed()->where(fn ($clients) => $clients
             ->whereNull($this->getQualifiedDeletedAtColumn())
             ->orWhereHas('factures', fn (Builder $factures): Builder => $factures->whereIn('statut', StatutFacture::quiAttendentUnReglement())));
     }

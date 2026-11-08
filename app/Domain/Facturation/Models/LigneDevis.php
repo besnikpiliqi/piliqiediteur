@@ -52,6 +52,9 @@ class LigneDevis extends Model
         'montant_ttc' => 'decimal:2',
     ];
 
+    /**
+     * @return BelongsTo<Devis, $this>
+     */
     public function devis(): BelongsTo
     {
         return $this->belongsTo(Devis::class);
@@ -60,6 +63,8 @@ class LigneDevis extends Model
     /**
      * Une ligne garde son produit, même archivé depuis (voir les
      * SoftDeletes de Produit).
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {
@@ -69,6 +74,8 @@ class LigneDevis extends Model
     /**
      * Le service du catalogue dont vient la ligne (voir Service), jamais en
      * même temps qu'un produit.
+     *
+     * @return BelongsTo<Service, $this>
      */
     public function service(): BelongsTo
     {

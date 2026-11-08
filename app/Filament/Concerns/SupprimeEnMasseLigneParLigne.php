@@ -3,7 +3,10 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
 use Closure;
 use Filament\Notifications\Notification;
@@ -11,6 +14,7 @@ use Filament\Tables\Actions\DeleteBulkAction;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Component;
 use LogicException;
 
 /**
@@ -50,30 +54,52 @@ trait SupprimeEnMasseLigneParLigne
     public const LIGNES_GARDEES = 'lignes-cochees-gardees';
 
     /**
-     * @param  Closure(Model): void  $supprimer  l'action du domaine qui supprime une ligne cochée, au nom de la personne connectée
+     * @template TLigne of Model
+     *
+     * @param  Closure(TLigne): mixed  $supprimer  l'action du domaine qui supprime une ligne cochée, au nom de la personne connectée
      */
     protected static function suppressionEnMasse(Closure $supprimer): DeleteBulkAction
     {
-        return DeleteBulkAction::make()
-            ->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne($action, $records, $supprimer, 'supprimée', 'supprimées', 'Vous ne pouvez pas la supprimer, ou elle ne peut plus l\'être.', 'Vous ne pouvez pas les supprimer, ou elles ne peuvent plus l\'être.'));
+        return self::retraitEnMasse(DeleteBulkAction::make(), $supprimer, 'supprimée', 'supprimées', 'Vous ne pouvez pas la supprimer, ou elle ne peut plus l\'être.', 'Vous ne pouvez pas les supprimer, ou elles ne peuvent plus l\'être.');
     }
 
     protected static function archivageEnMasse(): DeleteBulkAction
     {
-        return DeleteBulkAction::make('archiver')
-            ->label('Archiver')
-            ->modalHeading(fn (DeleteBulkAction $action): string => "Archiver les {$action->getPluralModelLabel()} sélectionnés")
-            ->modalDescription('Ils ne seront plus proposés pour un nouveau document, restent lisibles sur les anciens, et se restaurent depuis la liste des archivés.')
-            ->modalSubmitActionLabel('Archiver')
-            ->successNotificationTitle('Archivés')
-            ->icon('heroicon-m-archive-box')
-            ->modalIcon('heroicon-o-archive-box')
-            ->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne($action, $records, fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $fiche), 'archivée', 'archivées', 'Vous ne pouvez pas l\'archiver.', 'Vous ne pouvez pas les archiver.'));
+        return self::retraitEnMasse(
+            DeleteBulkAction::make('archiver')
+                ->label('Archiver')
+                ->modalHeading(fn (DeleteBulkAction $action): string => "Archiver les {$action->getPluralModelLabel()} sélectionnés")
+                ->modalDescription('Ils ne seront plus proposés pour un nouveau document, restent lisibles sur les anciens, et se restaurent depuis la liste des archivés.')
+                ->modalSubmitActionLabel('Archiver')
+                ->successNotificationTitle('Archivés')
+                ->icon('heroicon-m-archive-box')
+                ->modalIcon('heroicon-o-archive-box'),
+            fn (Client|Fournisseur|Produit $fiche) => app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $fiche),
+            'archivée',
+            'archivées',
+            'Vous ne pouvez pas l\'archiver.',
+            'Vous ne pouvez pas les archiver.',
+        );
     }
 
     /**
-     * @param  Collection<int, Model>  $records
-     * @param  Closure(Model): void  $retirer
+     * L'action groupée qui retire chaque ligne cochée par le geste du
+     * domaine, celles qu'il refuse restant cochées.
+     *
+     * @template TLigne of Model
+     *
+     * @param  Closure(TLigne): mixed  $retirer
+     */
+    private static function retraitEnMasse(DeleteBulkAction $action, Closure $retirer, string $participe, string $participePluriel, string $raison, string $raisonPluriel): DeleteBulkAction
+    {
+        return $action->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne($action, $records, $retirer, $participe, $participePluriel, $raison, $raisonPluriel));
+    }
+
+    /**
+     * @template TLigne of Model
+     *
+     * @param  Collection<int, TLigne>  $records
+     * @param  Closure(TLigne): mixed  $retirer
      */
     private static function retirerLigneParLigne(DeleteBulkAction $action, Collection $records, Closure $retirer, string $participe, string $participePluriel, string $raison, string $raisonPluriel): void
     {
@@ -88,7 +114,10 @@ trait SupprimeEnMasseLigneParLigne
 
         $action->deselectRecordsAfterCompletion(false);
         $tableau = $action->getLivewire();
-        $tableau->dispatch(self::LIGNES_GARDEES, composant: $tableau->getId(), cles: self::clesEncoreDansLeMagasin($refusees));
+
+        if ($tableau instanceof Component) {
+            $tableau->dispatch(self::LIGNES_GARDEES, composant: $tableau->getId(), cles: self::clesEncoreDansLeMagasin($refusees));
+        }
 
         Notification::make()
             ->title($conservees === 1
@@ -123,7 +152,10 @@ trait SupprimeEnMasseLigneParLigne
      * fiscal ou du journal d'audit est en plus signalé au journal de
      * l'application.
      *
-     * @param  Closure(Model): void  $retirer
+     * @template TLigne of Model
+     *
+     * @param  Closure(TLigne): mixed  $retirer
+     * @param  TLigne  $record
      */
     private static function retirerSansCasser(Closure $retirer, Model $record): bool
     {

@@ -83,6 +83,8 @@ class EReportingResource extends Resource
     /**
      * Seules les journées du magasin actif qui ont des opérations à
      * déclarer ; aucune dans le magasin de démonstration.
+     *
+     * @return Builder<ClotureCaisse>
      */
     public static function getEloquentQuery(): Builder
     {

@@ -23,6 +23,8 @@ use Illuminate\Support\Str;
  * d'exemple que le magasin modifie, complète ou réduit comme le barème de
  * prix de vente (voir ParametresPrixDeVente). Seul ce que la personne y a
  * corrigé s'enregistre (voir EnregistreLesParametresDuMagasin).
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class ParametresRelances extends Page implements HasForms
 {

@@ -16,7 +16,9 @@ use Filament\Forms\Components\Component;
 use Filament\Forms\Components\TextInput;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Filament\Pages\Auth\Login;
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 /**
  * La connexion aux deux panneaux, propre à PILIQI :
@@ -98,8 +100,13 @@ class Connexion extends Login
         $adresseIp = (string) $requete->ip();
         $limitation = app(LimitationDesConnexions::class);
         $identifiants = ['login' => $normalisee, 'password' => $motDePasse];
-        /** @var FournisseurDesComptes $fournisseur */
-        $fournisseur = Filament::auth()->getProvider();
+        $garde = Filament::auth();
+        $fournisseur = $garde instanceof SessionGuard ? $garde->getProvider() : null;
+
+        if (! $fournisseur instanceof FournisseurDesComptes) {
+            throw new LogicException('La connexion du panneau passe par une garde de session sur le fournisseur des comptes (voir config/auth.php).');
+        }
+
         $compte = $fournisseur->compteDeLaSaisie($identifiants);
         $nonce = $compte === null ? null : app(PostesConnus::class)->nonceDuCompte($requete, $compte);
         $nonce = $nonce !== null && $limitation->posteIgnore($nonce) ? null : $nonce;
@@ -112,14 +119,14 @@ class Connexion extends Login
         }
 
         $admis = Filament::auth()->attempt($identifiants, ($donnees['remember'] ?? false) === true && $compte?->estProprietaire() === true);
-        $connecte = Filament::auth()->user();
+        $connecte = $admis ? Filament::auth()->user() : null;
 
-        if ($admis && (! $connecte instanceof User || ! $connecte->canAccessPanel(Filament::getCurrentPanel()))) {
+        if ($connecte !== null && ! $connecte->canAccessPanel(Filament::getCurrentPanel())) {
             Filament::auth()->logout();
-            $admis = false;
+            $connecte = null;
         }
 
-        if (! $admis || ! $connecte instanceof User) {
+        if ($connecte === null) {
             $limitation->echec($normalisee, $adresseIp, $nonce, $compte, $motDePasse === $normalisee);
             $this->oublierLaSaisie();
 

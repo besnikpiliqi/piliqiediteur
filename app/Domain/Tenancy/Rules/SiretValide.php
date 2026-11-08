@@ -21,14 +21,25 @@ class SiretValide implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (! IdentifiantsInsee::siretValide($value)) {
-            $fail(self::MESSAGE);
+        $refus = $this->refus($value);
 
-            return;
+        if ($refus !== null) {
+            $fail($refus);
         }
+    }
 
-        if ($this->siren !== null && ! str_starts_with($value, $this->siren)) {
-            $fail(self::MESSAGE_AUTRE_SIREN);
-        }
+    /**
+     * Pourquoi ce SIRET est refusé, ou null s'il est valable : le contrôle
+     * d'un formulaire (validate()) et celui d'une action qui réunit ses
+     * propres refus (création, modification et changement de SIRET d'un
+     * magasin).
+     */
+    public function refus(mixed $siret): ?string
+    {
+        return match (true) {
+            ! is_string($siret) || ! IdentifiantsInsee::siretValide($siret) => self::MESSAGE,
+            $this->siren !== null && ! str_starts_with($siret, $this->siren) => self::MESSAGE_AUTRE_SIREN,
+            default => null,
+        };
     }
 }

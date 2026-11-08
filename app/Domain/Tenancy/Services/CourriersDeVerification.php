@@ -60,7 +60,7 @@ class CourriersDeVerification
             return null;
         }
 
-        $premier = $courriers->first()?->envoye_le ?? $societe->created_at;
+        $premier = $courriers->first()->envoye_le ?? $societe->created_at;
 
         return Calendrier::deParis()->decaler($premier, CarbonInterval::days(self::JOURS_AVANT_UN_NOUVEL_ENVOI));
     }
@@ -80,6 +80,6 @@ class CourriersDeVerification
      */
     public function cloturePrevueLe(Societe $societe): CarbonImmutable
     {
-        return Calendrier::deParis()->decaler($this->dernier($societe)?->envoye_le ?? $societe->created_at, CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
+        return Calendrier::deParis()->decaler($this->dernier($societe)->envoye_le ?? $societe->created_at, CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
     }
 }

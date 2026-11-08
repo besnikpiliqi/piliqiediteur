@@ -9,7 +9,6 @@ use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
-use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -75,8 +74,6 @@ final class GardesDesCabinets
      * La table que protège chaque garde, et les colonnes dont la
      * modification la déclenche, séparées par des virgules (null : à
      * l'insertion seulement).
-     *
-     * @var array<string, array{0: string, 1: string|null}>
      */
     private const TABLES = [
         self::CABINETS => ['cabinets', 'societe_id'],
@@ -86,9 +83,12 @@ final class GardesDesCabinets
         self::CLIENTS_CONFIES => ['clients_confies', null],
     ];
 
+    /**
+     * @param  key-of<self::TABLES>  $garde
+     */
     public static function poser(string $garde): void
     {
-        [$table, $colonnes] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
+        [$table, $colonnes] = self::TABLES[$garde];
         $connexion = DB::connection();
 
         $instructions = match ($pilote = $connexion->getDriverName()) {
@@ -106,10 +106,12 @@ final class GardesDesCabinets
      * Retire le déclencheur de la garde puis, sous PostgreSQL, sa fonction,
      * que le déclencheur empêcherait sinon de retirer : dans le down() de
      * la migration, avant sa table.
+     *
+     * @param  key-of<self::TABLES>  $garde
      */
     public static function retirer(string $garde): void
     {
-        [$table] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
+        [$table] = self::TABLES[$garde];
         $connexion = DB::connection();
 
         if ($connexion->getDriverName() === 'pgsql') {
@@ -128,11 +130,12 @@ final class GardesDesCabinets
      * Les déclencheurs SQLite d'une garde, pour qu'un test les retire comme
      * le ferait un administrateur de la base.
      *
+     * @param  key-of<self::TABLES>  $garde
      * @return list<string>
      */
     public static function declencheursSqlite(string $garde): array
     {
-        [, $colonnes] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
+        [, $colonnes] = self::TABLES[$garde];
 
         return $colonnes === null ? ["{$garde}_insert"] : ["{$garde}_insert", "{$garde}_update"];
     }
@@ -143,6 +146,7 @@ final class GardesDesCabinets
      * une modification), son message, et quand elle vaut : toujours, à
      * l'insertion seulement, ou à la modification seulement.
      *
+     * @param  key-of<self::TABLES>  $garde
      * @return list<array{0: string, 1: string, 2: string}>
      */
     private static function refus(string $garde): array
@@ -194,6 +198,7 @@ final class GardesDesCabinets
     }
 
     /**
+     * @param  key-of<self::TABLES>  $garde
      * @return list<string>
      */
     private static function instructionsPostgres(string $garde, string $table, ?string $colonnes): array
@@ -214,6 +219,7 @@ final class GardesDesCabinets
     }
 
     /**
+     * @param  key-of<self::TABLES>  $garde
      * @return list<string>
      */
     private static function instructionsSqlite(string $garde, string $table, ?string $colonnes): array
@@ -234,6 +240,8 @@ final class GardesDesCabinets
     /**
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
      * (apostrophes doublées).
+     *
+     * @param  key-of<self::TABLES>  $garde
      */
     private static function message(string $garde, string $raison): string
     {

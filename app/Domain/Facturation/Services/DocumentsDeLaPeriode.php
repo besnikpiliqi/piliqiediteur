@@ -22,6 +22,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
@@ -267,6 +268,11 @@ final class DocumentsDeLaPeriode
      * pour société active, d'où qu'il parte (l'espace d'un cabinet pose la
      * société du cabinet, celui d'une société la sienne), puis restaure le
      * contexte d'avant.
+     *
+     * @template TResultat
+     *
+     * @param  Closure(): TResultat  $callback
+     * @return TResultat
      */
     public function dansLeMagasin(Magasin $magasin, Closure $callback): mixed
     {
@@ -354,15 +360,42 @@ final class DocumentsDeLaPeriode
         }
 
         $identifiants = array_values(array_unique(array_map(intval(...), array_filter(array_column($designes, 'identifiant'), ctype_digit(...)))));
-        $siens = fn (Builder $documents, bool $deLEquipe): Builder => $documents->when(! $deLEquipe, fn (Builder $leurs): Builder => $leurs->where('cree_par', $compte->getKey()));
 
         return match ($type) {
-            TypeDeDocumentTelechargeable::Ventes => $siens(Facture::query()->emises(), $droits['equipe'])->whereKey($identifiants)->count(),
-            TypeDeDocumentTelechargeable::AvoirsClients => $siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'])->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::Ventes => self::siens(Facture::query()->emises(), $droits['equipe'], $compte)->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::AvoirsClients => self::siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'], $compte)->whereKey($identifiants)->count(),
             TypeDeDocumentTelechargeable::FacturesAchat => FactureAchat::query()->where('statut', StatutFactureAchat::Validee)->whereKey($identifiants)->count(),
             TypeDeDocumentTelechargeable::AvoirsFournisseur => AvoirFournisseur::query()->where('statut', StatutAvoirFournisseur::Emise)->whereKey($identifiants)->count(),
-            TypeDeDocumentTelechargeable::Clotures => $siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'])->whereKey($identifiants)->count(),
+            TypeDeDocumentTelechargeable::Clotures => self::siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'], $compte)->whereKey($identifiants)->count(),
         };
+    }
+
+    /**
+     * Les documents de la requête, ou seulement ceux que le compte a créés
+     * quand il ne voit pas ceux de toute l'équipe.
+     *
+     * @template TDocument of Model
+     *
+     * @param  Builder<TDocument>  $documents
+     * @return Builder<TDocument>
+     */
+    private static function siens(Builder $documents, bool $deLEquipe, User $compte): Builder
+    {
+        return $documents->when(! $deLEquipe, fn (Builder $leurs): Builder => $leurs->where('cree_par', $compte->getKey()));
+    }
+
+    /**
+     * Les achats de l'origine choisie, et seulement ceux dont la pièce du
+     * fournisseur manque quand on ne veut qu'eux.
+     *
+     * @template TAchat of FactureAchat|AvoirFournisseur
+     *
+     * @param  Builder<TAchat>  $achats
+     * @return Builder<TAchat>
+     */
+    private static function achats(Builder $achats, OrigineDesAchats $origine, bool $pieceManquanteSeulement): Builder
+    {
+        return $achats->whereIn('source', $origine->sources())->when($pieceManquanteSeulement, fn (Builder $sansPiece): Builder => $sansPiece->where('piece_manquante', true));
     }
 
     /**
@@ -376,25 +409,23 @@ final class DocumentsDeLaPeriode
         [$debut] = $calendrier->bornesDuJour($du);
         [, $fin] = $calendrier->bornesDuJour($au);
         $nom = "{$magasin->nom} ({$magasin->code})";
-        $siens = fn (Builder $documents, bool $deLEquipe): Builder => $documents->when(! $deLEquipe, fn (Builder $leurs): Builder => $leurs->where('cree_par', $compte->getKey()));
-        $achats = fn (Builder $achats): Builder => $achats->whereIn('source', $origine->sources())->when($pieceManquanteSeulement, fn (Builder $sansPiece): Builder => $sansPiece->where('piece_manquante', true));
         $documents = [];
 
         foreach ($types as $type) {
             $documents = [...$documents, ...match ($type) {
-                TypeDeDocumentTelechargeable::Ventes => $siens(Facture::query()->emises(), $droits['equipe'])
+                TypeDeDocumentTelechargeable::Ventes => self::siens(Facture::query()->emises(), $droits['equipe'], $compte)
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('id')
                     ->get(['id', 'numero', 'date_emission', 'client_nom', 'total_ttc'])
                     ->map(fn (Facture $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $calendrier->jourDe($facture->date_emission), $facture->client_nom, $this->calculateur->enCentiemes($facture->total_ttc)))
                     ->all(),
-                TypeDeDocumentTelechargeable::AvoirsClients => $siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'])
+                TypeDeDocumentTelechargeable::AvoirsClients => self::siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'], $compte)
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('id')
                     ->get(['id', 'numero', 'date_emission', 'client_nom', 'total_ttc'])
                     ->map(fn (Avoir $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->client_nom, $this->calculateur->enCentiemes($avoir->total_ttc)))
                     ->all(),
-                TypeDeDocumentTelechargeable::FacturesAchat => $achats(FactureAchat::query()->with('fournisseur'))
+                TypeDeDocumentTelechargeable::FacturesAchat => self::achats(FactureAchat::query()->with('fournisseur'), $origine, $pieceManquanteSeulement)
                     ->where('statut', StatutFactureAchat::Validee)
                     ->where(fn (Builder $factures): Builder => $factures->whereBetween('date_facture', [$du, $au])
                         ->orWhere(fn (Builder $sansDate): Builder => $sansDate->whereNull('date_facture')->where('date_validation', '>=', $debut)->where('date_validation', '<', $fin)))
@@ -404,14 +435,14 @@ final class DocumentsDeLaPeriode
                     ->sortBy(fn (DocumentTrouve $trouve): string => $trouve->jour)
                     ->values()
                     ->all(),
-                TypeDeDocumentTelechargeable::AvoirsFournisseur => $achats(AvoirFournisseur::query()->with('factureAchat.fournisseur'))
+                TypeDeDocumentTelechargeable::AvoirsFournisseur => self::achats(AvoirFournisseur::query()->with('factureAchat.fournisseur'), $origine, $pieceManquanteSeulement)
                     ->where('statut', StatutAvoirFournisseur::Emise)
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('numero')
                     ->get()
                     ->map(fn (AvoirFournisseur $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->factureAchat->fournisseur->nom, $this->calculateur->enCentiemes($avoir->total_ttc), $avoir->source->getLabel(), (bool) $avoir->piece_manquante))
                     ->all(),
-                TypeDeDocumentTelechargeable::Clotures => $siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'])
+                TypeDeDocumentTelechargeable::Clotures => self::siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'], $compte)
                     ->whereBetween('date_cloture', [$du, $au])
                     ->orderBy('date_cloture')
                     ->get(['id', 'numero', 'date_cloture', 'total_ttc'])

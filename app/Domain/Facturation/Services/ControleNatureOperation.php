@@ -100,11 +100,13 @@ class ControleNatureOperation
         $lignes = $facture->lignes()->with('service')->get();
         $emetteur = Emetteur::duMagasin($facture->magasin);
 
+        // Une nature exonérée qui ne porte pas sur des biens est une
+        // prestation à un professionnel établi hors de France : le document
+        // ne vend que des services dont le lieu suit celui du client (art.
+        // 259-1° du CGI), jamais un service au lieu fixé par la loi (voir
+        // Service::lieu_specifique).
         return array_values(array_filter([
-            ...match (true) {
-                $nature->porteSurDesBiens() => $this->manquementsDeLaLivraison($facture, $lignes),
-                $nature->porteSurDesServices() => $this->manquementsDeLaPrestation($facture, $client, $lignes),
-            },
+            ...($nature->porteSurDesBiens() ? $this->manquementsDeLaLivraison($facture, $lignes) : $this->manquementsDeLaPrestation($facture, $client, $lignes)),
             ...($nature->exigeVies() ? $this->manquementsDuNumeroTva($nature, $client, $jour) : []),
             blank($emetteur->numeroTva) ? 'renseignez le n° de TVA intracommunautaire de la société (Administration de la société > Identité)' : null,
         ]));
@@ -151,7 +153,7 @@ class ControleNatureOperation
         $codePostal = $facture->livraison_code_postal;
         $adresseComplete = filled($facture->livraison_adresse) && filled($codePostal) && filled($facture->livraison_ville) && filled($pays);
         $servicesNonAccessoires = $lignes
-            ->filter(fn (LigneFacture $ligne): bool => $ligne->service_id !== null && ! ($ligne->service?->frais_accessoires ?? false))
+            ->filter(fn (LigneFacture $ligne): bool => $ligne->service_id !== null && ! ($ligne->service->frais_accessoires ?? false))
             ->map(fn (LigneFacture $ligne): string => "« {$ligne->description} »")
             ->unique()
             ->implode(', ');
@@ -208,7 +210,7 @@ class ControleNatureOperation
         $autoliquidation = $facture->nature_operation === NatureOperation::PrestationUeAutoliquidation;
         $biens = $lignes->whereNull('service_id')->map(fn (LigneFacture $ligne): string => "« {$ligne->description} »")->unique()->implode(', ');
         $lieuxFixes = $lignes
-            ->filter(fn (LigneFacture $ligne): bool => $ligne->service?->lieu_specifique ?? false)
+            ->filter(fn (LigneFacture $ligne): bool => $ligne->service->lieu_specifique ?? false)
             ->map(fn (LigneFacture $ligne): string => "« {$ligne->description} »")
             ->unique()
             ->implode(', ');

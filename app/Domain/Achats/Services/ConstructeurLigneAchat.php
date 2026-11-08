@@ -132,7 +132,7 @@ class ConstructeurLigneAchat
      * changé entre-temps par une autre personne ne s'écrit pas ; une ligne
      * sans fiche lue, quand le taux qu'elle dit n'est pas celui du produit.
      *
-     * @param  list<array<string, mixed>>  $lignes  voir enregistrer()
+     * @param  array<array-key, array<string, mixed>>  $lignes  voir enregistrer()
      */
     public function verrouillerLeRegistreSiUnTauxChange(array $lignes): void
     {
@@ -184,7 +184,7 @@ class ConstructeurLigneAchat
      * identifiant croissant (voir Produit::verrouillerPourLeStock()), après
      * la facture d'achat que l'action a verrouillée ou créée.
      *
-     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, fiche_lue?: array<string, mixed>|null, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null, montant_ht?: float|string|null}>  $lignes
+     * @param  array<array-key, array{produit_id?: int|string|null, produit?: array<string, mixed>, fiche_lue?: array<string, mixed>|null, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null, montant_ht?: float|string|null}>  $lignes
      *
      * @throws InvalidArgumentException
      * @throws LogicException

@@ -218,12 +218,19 @@ class FactureAchatResource extends Resource
     }
 
     /**
-     * Chaque facture avec le nombre de ses pièces du fournisseur, lu par la
-     * même requête que la liste (voir colonnePiece()).
+     * Chaque facture avec le nombre de ses pièces du fournisseur (voir
+     * colonnePiece()), et si elle a déjà un avoir fournisseur et des lignes
+     * encore retournables (voir FactureAchat::estModifiable() et
+     * possedeDesLignesRetournables()), lus par la même requête que la
+     * liste, quel que soit le nombre de factures.
+     *
+     * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->withCount('pieces');
+        return parent::getEloquentQuery()
+            ->withCount('pieces')
+            ->withExists(['avoirsFournisseur', 'lignes as lignes_retournables_exists' => fn (Builder $lignes): Builder => $lignes->scopes('retournables')]);
     }
 
     public static function table(Table $table): Table
@@ -842,7 +849,7 @@ class FactureAchatResource extends Resource
         $stockRestant = [];
         $lignes = [];
 
-        foreach ($factureAchat?->lignes ?? [] as $ligne) {
+        foreach ($factureAchat?->loadMissing('lignes.produit')->lignes ?? [] as $ligne) {
             if ($seuleLigne !== null && ! $ligne->is($seuleLigne)) {
                 continue;
             }
@@ -879,7 +886,8 @@ class FactureAchatResource extends Resource
                 return;
             }
 
-            $lignes = collect($get('../../lignes') ?? [])
+            $saisies = $get('../../lignes');
+            $lignes = collect(is_array($saisies) ? $saisies : [])
                 ->filter(fn (mixed $ligne): bool => is_array($ligne) && self::estUnIdentifiant($ligne['ligne_achat_id'] ?? null));
             $lignesDuProduit = LigneAchat::query()
                 ->whereIn('id', $lignes->map(fn (array $ligne): int => (int) $ligne['ligne_achat_id'])->values())

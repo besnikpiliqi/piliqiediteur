@@ -80,7 +80,7 @@ class ModifierFactureAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
@@ -113,7 +113,7 @@ class ModifierFactureAction
     }
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException

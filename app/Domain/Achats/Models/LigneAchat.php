@@ -65,6 +65,9 @@ class LigneAchat extends Model
         });
     }
 
+    /**
+     * @return BelongsTo<FactureAchat, $this>
+     */
     public function factureAchat(): BelongsTo
     {
         return $this->belongsTo(FactureAchat::class);
@@ -75,12 +78,17 @@ class LigneAchat extends Model
      * SoftDeletes de Produit) : il se retourne toujours au fournisseur
      * (voir quantiteRetournableRestante()). Aucun tant que la ligne d'un
      * brouillon garde la fiche d'un nouveau produit.
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {
         return $this->belongsTo(Produit::class)->withTrashed();
     }
 
+    /**
+     * @return HasMany<LigneAvoirFournisseur, $this>
+     */
     public function lignesAvoirFournisseur(): HasMany
     {
         return $this->hasMany(LigneAvoirFournisseur::class);

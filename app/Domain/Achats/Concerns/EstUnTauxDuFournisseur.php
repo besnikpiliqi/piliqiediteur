@@ -2,7 +2,6 @@
 
 namespace App\Domain\Achats\Concerns;
 
-use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 
@@ -26,22 +25,6 @@ trait EstUnTauxDuFournisseur
     {
         return [
             'ecart_confirme_par' => 'ecart_confirme_par_nom',
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'taux_tva' => 'decimal:2',
-            'base_ht' => 'decimal:2',
-            'montant_tva' => 'decimal:2',
-            'montant_tva_calcule' => 'decimal:2',
-            'montant_tva_saisi' => 'decimal:2',
-            'ecart_confirme_le' => Instant::class,
-            'ordre' => 'integer',
         ];
     }
 

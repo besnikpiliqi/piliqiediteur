@@ -116,7 +116,7 @@ final readonly class TableauDesLignes
         $lignes = $document->lignes->map(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): array => [
             'reference' => $ligne->reference ?? '',
             'designation' => $ligne->description,
-            'factureDOrigine' => $ligne instanceof LigneAvoir ? ($ligne->ligneFacture?->facture?->numero ?? '—') : null,
+            'factureDOrigine' => $ligne instanceof LigneAvoir ? ($ligne->ligneFacture?->facture->numero ?? '—') : null,
             'montants' => array_values(array_filter([
                 Number::format($ligne->quantite, locale: 'fr'),
                 $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($enTtc ? $ligne->prix_unitaire_ttc : $ligne->prix_unitaire_ht)),

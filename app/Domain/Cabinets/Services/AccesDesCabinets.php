@@ -205,6 +205,7 @@ class AccesDesCabinets
     public function comptesQuiOntAcces(LienCabinet $lien, bool $avecLesSuspendus = true): Collection
     {
         return User::query()
+            ->with('societe')
             ->where('societe_id', $lien->cabinet_id)
             ->where('statut', '<>', StatutCompte::Retire->value)
             ->when(! $avecLesSuspendus, fn (Builder $comptes) => $comptes->where('statut', StatutCompte::Actif->value))
@@ -236,6 +237,7 @@ class AccesDesCabinets
     private function magasinsDes(Builder $liens): Collection
     {
         return Magasin::query()
+            ->with('societe')
             ->whereIn('magasins.societe_id', $liens->select('liens_cabinet.societe_id'))
             ->where('magasins.est_demonstration', false)
             ->join('societes', 'societes.id', '=', 'magasins.societe_id')

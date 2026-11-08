@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Lecture seule : un relevé se crée uniquement par une fermeture (« Fermer
@@ -77,6 +78,8 @@ class ClotureCaissePersonnelleResource extends Resource
     /**
      * Même confidentialité que ClotureCaisse : sans cloture_caisse.view_toutes,
      * un vendeur ne voit que ses propres relevés.
+     *
+     * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {

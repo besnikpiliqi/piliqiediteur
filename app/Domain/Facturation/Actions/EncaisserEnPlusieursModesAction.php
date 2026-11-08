@@ -136,7 +136,7 @@ class EncaisserEnPlusieursModesAction
      * comptoir du magasin dont il reste du crédit (voir
      * Avoir::scopeBonDAvoir()).
      *
-     * @param  list<string>  $numeros
+     * @param  array<array-key, string>  $numeros
      * @return list<Avoir>
      *
      * @throws LogicException

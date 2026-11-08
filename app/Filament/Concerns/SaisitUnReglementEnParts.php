@@ -137,7 +137,7 @@ trait SaisitUnReglementEnParts
             }
 
             $mode = self::modeDeLaPart($part['mode'] ?? null);
-            $montant = self::montantEnCentimes($part['montant'] ?? null);
+            $montant = self::montantEnCentimes($part['montant']);
 
             if ($montant === 0) {
                 continue;

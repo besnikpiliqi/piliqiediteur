@@ -124,7 +124,7 @@ class ExercicesDeLaSociete
         $rang = $changements->filter(fn (ChangementFinExercice $changement): bool => $changement->debut_exercice_en_cours <= $jour)->keys()->last();
 
         if ($rang === null) {
-            return self::exerciceAuMois($changements->first()?->ancien_mois ?? (int) $societe->mois_fin_exercice, $jour, null);
+            return self::exerciceAuMois($changements->first()->ancien_mois ?? (int) $societe->mois_fin_exercice, $jour, null);
         }
 
         $changement = $changements[$rang];
@@ -133,7 +133,7 @@ class ExercicesDeLaSociete
             return [$changement->debut_exercice_en_cours, $changement->fin_exercice_en_cours_apres];
         }
 
-        $moisSuivant = $changements->get($rang + 1)?->ancien_mois ?? (int) $societe->mois_fin_exercice;
+        $moisSuivant = $changements->get($rang + 1)->ancien_mois ?? (int) $societe->mois_fin_exercice;
 
         return self::exerciceAuMois($moisSuivant, $jour, Calendrier::ajouterJours($changement->fin_exercice_en_cours_apres, 1));
     }

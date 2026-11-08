@@ -71,7 +71,7 @@ class PosteReconnuResource extends Resource
                     ->modalDescription('Ce poste n\'ouvrira plus aucun compte dont le mot de passe est encore son identifiant.')
                     ->authorize('update')
                     ->action(fn (PosteReconnu $record) => static::executerSansCasser(function () use ($record): void {
-                        app(PostesReconnus::class)->retirer(static::auteur(), $record);
+                        app(PostesReconnus::class)->retirer(self::auteur(), $record);
                         Notification::make()->title('Le poste est retiré.')->success()->send();
                     })),
             ])

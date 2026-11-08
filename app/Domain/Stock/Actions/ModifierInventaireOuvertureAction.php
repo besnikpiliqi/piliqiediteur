@@ -44,7 +44,7 @@ class ModifierInventaireOuvertureAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneInventaire::enregistrer()
+     * @param  array<array-key, array<string, mixed>>  $lignes  voir ConstructeurLigneInventaire::enregistrer()
      * @param  array{notes?: string|null}  $attributs
      *
      * @throws AuthorizationException

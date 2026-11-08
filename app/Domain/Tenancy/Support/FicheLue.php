@@ -37,11 +37,13 @@ use UnitEnum;
  * les a rendus : des valeurs simples, que l'écran garde avec lui et que le
  * navigateur peut lire (voir valeurs()), jamais un attribut que l'écran
  * ne montre pas.
+ *
+ * @template TFiche of Model
  */
 final class FicheLue
 {
     /**
-     * @param  class-string<Model>  $modele
+     * @param  class-string<TFiche>  $modele
      * @param  array<string, mixed>  $valeurs  les attributs modifiables de la fiche, tels que la base les a rendus
      */
     private function __construct(
@@ -53,7 +55,11 @@ final class FicheLue
      * La fiche telle que la base l'a rendue à sa lecture : ses attributs
      * modifiables, ou seulement ceux-là parmi eux.
      *
+     * @template TLue of Model
+     *
+     * @param  TLue  $fiche
      * @param  list<string>|null  $attributs
+     * @return self<TLue>
      */
     public static function de(Model $fiche, ?array $attributs = null): self
     {
@@ -64,9 +70,12 @@ final class FicheLue
      * La fiche qu'un écran a lue et gardée (voir valeurs()) : ses attributs
      * modifiables, ou seulement ceux-là parmi eux.
      *
-     * @param  class-string<Model>  $modele
+     * @template TLue of Model
+     *
+     * @param  class-string<TLue>  $modele
      * @param  array<string, mixed>  $valeurs
      * @param  list<string>|null  $attributs
+     * @return self<TLue>
      */
     public static function depuis(string $modele, array $valeurs, ?array $attributs = null): self
     {
@@ -98,6 +107,8 @@ final class FicheLue
     /**
      * Un modèle qui porte les valeurs lues, pour les afficher ou les
      * comparer ; il ne s'enregistre jamais.
+     *
+     * @return TFiche
      */
     public function fiche(): Model
     {

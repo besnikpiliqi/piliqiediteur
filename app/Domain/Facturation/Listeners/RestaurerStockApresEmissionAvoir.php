@@ -30,7 +30,7 @@ class RestaurerStockApresEmissionAvoir
             return;
         }
 
-        foreach ($event->avoir->lignes as $ligne) {
+        foreach ($event->avoir->loadMissing(['lignes.produit', 'lignes.ligneFacture.facture'])->lignes as $ligne) {
             $produit = $ligne->produit;
             $facture = $ligne->ligneFacture?->facture;
 

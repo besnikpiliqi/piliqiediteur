@@ -23,14 +23,6 @@ use App\Domain\Facturation\Services\CopieClient;
  */
 trait FigeLeClient
 {
-    public function initializeFigeLeClient(): void
-    {
-        $this->mergeCasts([
-            'type_client' => TypeClient::class,
-            'client_etabli_en_france' => 'boolean',
-        ]);
-    }
-
     /**
      * Le client que le document imprimera une fois émis, pris sur la même
      * source que son type.

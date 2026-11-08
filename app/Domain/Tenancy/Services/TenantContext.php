@@ -138,6 +138,13 @@ class TenantContext
      * chaque magasin, et par les écritures d'une société dans le journal de
      * chacun de ses magasins.
      *
+     * @template TResultat
+     *
+     * @param-immediately-invoked-callable  $callback
+     *
+     * @param  Closure(): TResultat  $callback
+     * @return TResultat
+     *
      * @throws LogicException quand une société est posée explicitement et que le magasin n'en est pas
      */
     public function runAs(Magasin $magasin, Closure $callback): mixed
@@ -158,6 +165,13 @@ class TenantContext
      * sans magasin actif, puis restaure le magasin et la société posés
      * avant elle : la création d'une société, ou une écriture dans son
      * journal hors de tout panneau.
+     *
+     * @template TResultat
+     *
+     * @param-immediately-invoked-callable  $callback
+     *
+     * @param  Closure(): TResultat  $callback
+     * @return TResultat
      */
     public function runAsSociete(Societe $societe, Closure $callback): mixed
     {

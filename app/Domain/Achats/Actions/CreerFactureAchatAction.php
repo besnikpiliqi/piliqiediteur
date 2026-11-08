@@ -76,7 +76,7 @@ class CreerFactureAchatAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
+     * @param  array<array-key, array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la facture du fournisseur au niveau du document ; aucun, les propositions de PILIQI
      * @param  list<PieceDeposee>  $pieces  les pièces du fournisseur jointes à la saisie

@@ -91,7 +91,7 @@ class RecapitulatifDeCloture
         $finDeLaJournee = $magasin->calendrier()->bornesDuJour($journee)[1]->subSecond();
         $ventes = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $finDeLaJournee);
         $encaissements = $this->registre->enregistrementsJusquA($magasin, ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $finDeLaJournee);
-        $derniereSequenceVente = $ventes->last()?->sequence ?? $precedente?->derniere_sequence_vente;
+        $derniereSequenceVente = $ventes->last()->sequence ?? $precedente?->derniere_sequence_vente;
 
         return [
             'recapitulatif' => [
@@ -104,7 +104,7 @@ class RecapitulatifDeCloture
                 'grands_totaux' => $this->registre->grandsTotauxApres($magasin, $derniereSequenceVente),
             ],
             'derniere_sequence_vente' => $derniereSequenceVente,
-            'derniere_sequence_encaissement' => $encaissements->last()?->sequence ?? $precedente?->derniere_sequence_encaissement,
+            'derniere_sequence_encaissement' => $encaissements->last()->sequence ?? $precedente?->derniere_sequence_encaissement,
         ];
     }
 
@@ -147,7 +147,9 @@ class RecapitulatifDeCloture
      * lignes, tels qu'enregistrés, en centimes ; $sens vaut -1 pour des
      * avoirs, qui s'écrivent en négatif.
      *
-     * @param  EloquentCollection<int, Facture>|EloquentCollection<int, Avoir>  $documents
+     * @template TDocument of Facture|Avoir
+     *
+     * @param  EloquentCollection<int, TDocument>  $documents
      * @return array{nombre: int, ht: int, tva: int, ttc: int, par_taux: list<array{taux: int, ht: int, tva: int, ttc: int}>}
      */
     private function rubrique(EloquentCollection $documents, int $sens): array
@@ -158,7 +160,7 @@ class RecapitulatifDeCloture
             'nombre' => $documents->count(),
             ...$this->montants($documents, 'total', $sens),
             'par_taux' => $documents->toBase()
-                ->flatMap(fn (Facture|Avoir $document): Collection => $document->lignes->toBase())
+                ->flatMap(fn (Facture|Avoir $document): array => $document->lignes->all())
                 ->groupBy(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->taux_tva))
                 ->sortKeysDesc()
                 ->map(fn (Collection $lignes, int $taux): array => ['taux' => $taux, ...$this->montants($lignes, 'montant', $sens)])
@@ -172,7 +174,9 @@ class RecapitulatifDeCloture
      * (colonnes total_*) ou de ces lignes (colonnes montant_*), en
      * centimes.
      *
-     * @param  Collection<int, Facture|Avoir|LigneFacture|LigneAvoir>  $elements
+     * @template TElement of Facture|Avoir|LigneFacture|LigneAvoir
+     *
+     * @param  Collection<int, TElement>  $elements
      * @return array{ht: int, tva: int, ttc: int}
      */
     private function montants(Collection $elements, string $prefixe, int $sens): array

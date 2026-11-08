@@ -12,6 +12,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Les avoirs fournisseur du magasin. Un avoir se crée à la main, par
@@ -41,6 +42,8 @@ class AvoirFournisseurResource extends Resource
     /**
      * Chaque avoir avec sa facture d'achat, son fournisseur et le nombre de
      * ses pièces du fournisseur, lus par la même requête que la liste.
+     *
+     * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {

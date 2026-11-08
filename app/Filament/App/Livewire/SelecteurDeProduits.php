@@ -219,12 +219,18 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                 Filter::make('en_stock')
                     ->label('En stock seulement')
                     ->toggle()
-                    ->query(fn (Builder $query): Builder => $query->enStock()),
+                    ->query(function (Builder $query): Builder {
+                        /** @var Builder<Produit> $query */
+                        return $query->enStock();
+                    }),
                 Filter::make('hors_stock')
                     ->label('Hors stock seulement')
                     ->toggle()
                     ->visible($vendSansStock)
-                    ->query(fn (Builder $query): Builder => $query->epuises()),
+                    ->query(function (Builder $query): Builder {
+                        /** @var Builder<Produit> $query */
+                        return $query->epuises();
+                    }),
             ]);
     }
 
@@ -306,7 +312,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
      */
     public function resteDAutresProduits(): bool
     {
-        return $this->getFilteredTableQuery()->limit(null)->count() > $this->nombreAffiche;
+        return $this->getFilteredTableQuery()->toBase()->cloneWithout(['limit'])->count() > $this->nombreAffiche;
     }
 
     /**

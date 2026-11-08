@@ -126,6 +126,9 @@ class Facture extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutFacture::class,
+        'date_emission' => Instant::class,
+        'type_client' => TypeClient::class,
+        'client_etabli_en_france' => 'boolean',
         'franchise_en_base' => 'boolean',
         'nature_operation' => NatureOperation::class,
         'livraison_date' => JourCivil::class,
@@ -222,6 +225,8 @@ class Facture extends Model implements DocumentEnvoyable
      * SoftDeletes de Client) : la facture reste due, se règle et se relance.
      * Elle imprime la copie de ce client prise à son émission (voir
      * copieClient()).
+     *
+     * @return BelongsTo<Client, $this>
      */
     public function client(): BelongsTo
     {
@@ -246,6 +251,8 @@ class Facture extends Model implements DocumentEnvoyable
      * émise après la correction du SIREN de la société par l'éditeur (voir
      * EmettreLaFactureRectificativeAction) ; aucune pour toute autre
      * facture.
+     *
+     * @return BelongsTo<self, $this>
      */
     public function factureRectifiee(): BelongsTo
     {
@@ -255,6 +262,8 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * La facture rectificative de cette facture, quand elle en a une : au
      * plus une (index unique).
+     *
+     * @return HasOne<self, $this>
      */
     public function rectificative(): HasOne
     {
@@ -277,6 +286,8 @@ class Facture extends Model implements DocumentEnvoyable
      * retenue pour une livraison intracommunautaire ou une prestation
      * autoliquidée (voir ControleNatureOperation) ; aucune pour une autre
      * nature, ni pour un brouillon.
+     *
+     * @return BelongsTo<ConsultationVies, $this>
      */
     public function consultationVies(): BelongsTo
     {
@@ -286,6 +297,8 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Fermetures de caisse personnelles qui ont compté cette vente (une
      * seule au plus, voir ClotureCaissePersonnelle::factures()).
+     *
+     * @return BelongsToMany<ClotureCaissePersonnelle, $this>
      */
     public function cloturesCaissePersonnelles(): BelongsToMany
     {
@@ -297,6 +310,9 @@ class Facture extends Model implements DocumentEnvoyable
      * (envoyée, payée, en retard...) : tout sauf les brouillons, qui n'ont
      * encore ni numéro ni existence légale. Une facture émise le reste
      * pour toujours, même corrigée par un avoir.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeEmises(Builder $query): Builder
     {
@@ -312,6 +328,9 @@ class Facture extends Model implements DocumentEnvoyable
      * tableau de bord (voir FacturesAEncaisserApercu), le filtre « À
      * encaisser » de la liste des factures et les totaux de l'espace de la
      * société (voir FacturesAEncaisserDeLaSociete) la montrent.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeAEncaisser(Builder $query): Builder
     {
@@ -349,6 +368,9 @@ class Facture extends Model implements DocumentEnvoyable
      * en reste dû passe par ici : un montant visible dans un tableau ou un
      * menu est déjà une fuite, et une facture proposée doit être acceptée à
      * l'enregistrement.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeVisiblesPar(Builder $query, User $user): Builder
     {
@@ -365,6 +387,9 @@ class Facture extends Model implements DocumentEnvoyable
      * espaces autour ni les zéros de tête de son rang : « tk-lyon1-2026-12 »
      * trouve TK-LYON1-2026-000012 (voir
      * DocumentNumberingService::numeroSaisi()).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeDeNumero(Builder $query, string $numero): Builder
     {
@@ -388,6 +413,9 @@ class Facture extends Model implements DocumentEnvoyable
      * Les ventes d'un vendeur pas encore comptées dans une fermeture de sa
      * caisse : émises et jamais notées par une fermeture précédente --
      * quel que soit le moment où le brouillon a été créé, et donc son ID.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeNonFermeesParLeVendeur(Builder $query, int $vendeurId): Builder
     {
@@ -403,6 +431,9 @@ class Facture extends Model implements DocumentEnvoyable
      * l'émission le dit pour toujours, même si la fiche du client change
      * depuis : un ticket reste dans la clôture de sa journée, et une
      * facture à un professionnel n'y entre pas.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeTickets(Builder $query): Builder
     {
@@ -415,6 +446,9 @@ class Facture extends Model implements DocumentEnvoyable
      * brouillon, jamais une facture à un professionnel. Un ticket corrigé
      * depuis par un avoir y figure : l'avoir se déduit à part, le jour de
      * son émission.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeEnAttenteDeCloture(Builder $query, Calendrier $calendrier, string $jour): Builder
     {
@@ -424,6 +458,9 @@ class Facture extends Model implements DocumentEnvoyable
             ->whereNull('cloture_caisse_id');
     }
 
+    /**
+     * @return HasMany<LigneFacture, $this>
+     */
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneFacture::class)->orderBy('ordre')->orderBy('id');
@@ -432,6 +469,8 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Les références des preuves qui justifient son exonération (I4, voir
      * PreuvesRequises), de la première enregistrée à la dernière.
+     *
+     * @return HasMany<PreuveOperation, $this>
      */
     public function preuvesOperation(): HasMany
     {
@@ -442,6 +481,8 @@ class Facture extends Model implements DocumentEnvoyable
      * Les n° de bordereau de détaxe notés sur ce ticket (I3, voir
      * NoterBordereauDetaxeAction), du premier noté au dernier : une faute
      * de saisie se corrige en notant le bon n°.
+     *
+     * @return HasMany<BordereauDetaxe, $this>
      */
     public function bordereauxDetaxe(): HasMany
     {
@@ -450,6 +491,8 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Le n° de bordereau de détaxe qui fait foi : le dernier noté.
+     *
+     * @return HasOne<BordereauDetaxe, $this>
      */
     public function bordereauDetaxe(): HasOne
     {
@@ -460,12 +503,18 @@ class Facture extends Model implements DocumentEnvoyable
      * Les factures émises dont l'exonération attend encore une preuve
      * (voir PreuvesRequises::incompletes()) : le filtre et le badge
      * « Preuves à fournir » de la liste des factures.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopePreuvesAFournir(Builder $query): Builder
     {
         return app(PreuvesRequises::class)->incompletes($query);
     }
 
+    /**
+     * @return MorphMany<TransmissionPdp, $this>
+     */
     public function transmissionsPdp(): MorphMany
     {
         return $this->morphMany(TransmissionPdp::class, 'transmissible');
@@ -476,6 +525,8 @@ class Facture extends Model implements DocumentEnvoyable
      * enregistrées (un paiement saisi par erreur, puis sa
      * contre-passation) : la base de données ne garantit aucun ordre sans
      * tri, et la fiche les montre dans celui-ci (voir FactureResource).
+     *
+     * @return HasMany<PaiementAllocation, $this>
      */
     public function allocationsPaiement(): HasMany
     {
@@ -485,6 +536,8 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Ses imputations de crédit d'avoir, dans l'ordre où elles ont été
      * enregistrées (voir allocationsPaiement()).
+     *
+     * @return HasMany<AvoirAllocation, $this>
      */
     public function allocationsAvoir(): HasMany
     {
@@ -497,6 +550,8 @@ class Facture extends Model implements DocumentEnvoyable
      * chacune de ses lignes (LigneAvoir::ligne_facture_id). Impossible
      * d'utiliser une relation Eloquent classique ici, d'où une requête
      * explicite plutôt qu'un hasMany.
+     *
+     * @return Builder<Avoir>
      */
     public function avoirsConcernes(): Builder
     {
@@ -518,6 +573,8 @@ class Facture extends Model implements DocumentEnvoyable
      * données ne garantit aucun ordre sans tri : un avoir modifié après
      * son émission (sa clôture) change de place dans sa table, et un
      * brouillon créé avant un autre peut être émis après lui.
+     *
+     * @return Builder<Avoir>
      */
     public function avoirsEmisConcernes(): Builder
     {
@@ -584,7 +641,9 @@ class Facture extends Model implements DocumentEnvoyable
 
     public function possedeDesLignesCreditables(): bool
     {
-        return $this->lignes->contains(fn (LigneFacture $ligne) => $ligne->quantiteCreditableRestante() > 0);
+        return array_key_exists('lignes_creditables_exists', $this->attributes)
+            ? (bool) $this->attributes['lignes_creditables_exists']
+            : $this->lignes()->creditables()->exists();
     }
 
     public function montantPaye(): float
@@ -740,6 +799,8 @@ class Facture extends Model implements DocumentEnvoyable
      * en échec n'a jamais atteint le client, elle ne compte pas et repart
      * à la relance suivante de la facture (voir
      * EnvoyerDocumentAction::relancer()).
+     *
+     * @return MorphMany<EnvoiDocument, $this>
      */
     public function relancesComptees(): MorphMany
     {

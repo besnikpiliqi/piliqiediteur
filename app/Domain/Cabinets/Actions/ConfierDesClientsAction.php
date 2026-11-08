@@ -5,7 +5,6 @@ namespace App\Domain\Cabinets\Actions;
 use App\Domain\Cabinets\Models\ClientConfie;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
-use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
@@ -44,7 +43,6 @@ class ConfierDesClientsAction
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
         private readonly PorteeDesDroits $portee,
-        private readonly AccesDesCabinets $acces,
     ) {}
 
     /**
@@ -63,7 +61,7 @@ class ConfierDesClientsAction
             $actuels = DB::table('clients_confies')->where('societe_id', $cabinet->getKey())->where('user_id', $collaborateur->getKey())->pluck('lien_id')->map(fn ($id): int => (int) $id)->all();
             $concernes = array_values(array_unique([...$liens, ...$actuels]));
             $clients = LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->pluck('societe_id')->unique()->values()->all();
-            $magasinsVises = Magasin::query()->whereIn('societe_id', $clients)->where('est_demonstration', false)->orderBy('id')->get();
+            $magasinsVises = Magasin::query()->with('societe')->whereIn('societe_id', $clients)->where('est_demonstration', false)->orderBy('id')->get();
 
             $this->journalDesDroits->modifier($auteur, ActionAuditee::ClientsConfiesModifies, [$collaborateur], $magasinsVises, function (User $auteurRelu, array $relus) use ($cabinet, $liens, &$changements): void {
                 [$collaborateurRelu] = $relus;

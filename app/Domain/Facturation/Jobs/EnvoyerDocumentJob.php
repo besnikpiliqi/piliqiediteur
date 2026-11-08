@@ -230,7 +230,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
                 $lecteur->exiger($expediteur, 'envoyer', $magasin, $document);
             }
         } catch (AuthorizationException) {
-            $this->echouer($envoi, self::MOTIF_EXPEDITEUR_SANS_DROIT, collect([$magasin->societe->proprietaire]));
+            $this->echouer($envoi, self::MOTIF_EXPEDITEUR_SANS_DROIT, collect([$magasin->societe->proprietaire])->filter());
 
             return null;
         }
@@ -298,11 +298,12 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
      */
     private static function autorisationDEnvoyer(string $classe): string
     {
-        return match ($classe) {
-            Facture::class, RecuPaiement::class => PermissionRegistry::FACTURE_ENVOYER,
+        return [
+            Facture::class => PermissionRegistry::FACTURE_ENVOYER,
+            RecuPaiement::class => PermissionRegistry::FACTURE_ENVOYER,
             Devis::class => PermissionRegistry::DEVIS_ENVOYER,
             Avoir::class => PermissionRegistry::AVOIR_ENVOYER,
-        };
+        ][$classe];
     }
 
     /**

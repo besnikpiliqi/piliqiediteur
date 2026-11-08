@@ -150,7 +150,7 @@ abstract class ProcedureDeLEditeur extends Command
      */
     protected static function magasinDeLaSociete(Societe $societe, string $code): ?Magasin
     {
-        return Magasin::query()
+        return Magasin::query()->with('societe')
             ->where('societe_id', $societe->getKey())
             ->where('code', CodeMagasin::normaliser($code))
             ->first();

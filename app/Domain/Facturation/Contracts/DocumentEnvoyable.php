@@ -3,7 +3,9 @@
 namespace App\Domain\Facturation\Contracts;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Services\Emetteur;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
@@ -14,6 +16,8 @@ interface DocumentEnvoyable
 {
     /**
      * Son historique d'envois et de relances (voir EnvoiDocument).
+     *
+     * @return MorphMany<EnvoiDocument, covariant Model>
      */
     public function envois(): MorphMany;
 

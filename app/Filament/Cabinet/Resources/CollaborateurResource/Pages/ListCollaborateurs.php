@@ -3,11 +3,11 @@
 namespace App\Filament\Cabinet\Resources\CollaborateurResource\Pages;
 
 use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Concerns\MontreLeCompteCree;
 use App\Models\User;
 use Filament\Actions\Action;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
@@ -50,7 +50,7 @@ class ListCollaborateurs extends ListRecords
                 $cree = null;
 
                 CollaborateurResource::executerLeGeste(function () use ($data, &$cree): void {
-                    $cree = app(CreerCollaborateurAction::class)->handle(auth()->user(), Filament::getTenant(), ['name' => $data['name']], filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null);
+                    $cree = app(CreerCollaborateurAction::class)->handle(auth()->user(), app(TenantContext::class)->societe(), ['name' => $data['name']], filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null);
                 });
 
                 if ($cree instanceof User) {

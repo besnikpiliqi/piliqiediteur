@@ -9,6 +9,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -54,7 +55,7 @@ class InseeSirene implements RepertoireSirene
 
     public function unite(string $siren): ?UniteSirene
     {
-        $corps = $this->consulter("siren/{$siren}");
+        $corps = $this->consulter('siren/'.self::numero($siren, 9));
 
         if ($corps === null) {
             return null;
@@ -79,7 +80,7 @@ class InseeSirene implements RepertoireSirene
 
     public function etablissement(string $siret): ?EtablissementSirene
     {
-        $corps = $this->consulter("siret/{$siret}");
+        $corps = $this->consulter('siret/'.self::numero($siret, 14));
 
         if ($corps === null) {
             return null;
@@ -91,7 +92,7 @@ class InseeSirene implements RepertoireSirene
     public function etablissementsActifs(string $siren): EtablissementsActifs
     {
         $corps = $this->consulter('siret', [
-            'q' => "siren:{$siren} AND periode(etatAdministratifEtablissement:A)",
+            'q' => 'siren:'.self::numero($siren, 9).' AND periode(etatAdministratifEtablissement:A)',
             'date' => Calendrier::deParis()->aujourdhui(),
             'nombre' => self::ETABLISSEMENTS_PAR_RECHERCHE,
         ]);
@@ -155,6 +156,28 @@ class InseeSirene implements RepertoireSirene
             enseigne: $this->texte($periode, 'enseigne1Etablissement') ?? $this->texte($periode, 'denominationUsuelleEtablissement'),
             estSiege: ($etablissement['etablissementSiege'] ?? null) === true,
         );
+    }
+
+    /**
+     * Un SIREN (9 chiffres) ou un SIRET (14 chiffres) tel qu'il entre dans
+     * l'adresse ou la recherche d'une requête au répertoire : seulement des
+     * chiffres, en nombre exact, sinon refusé avant toute requête. Le numéro
+     * vient d'une saisie (inscription, création d'un magasin, invitation
+     * d'un cabinet) : ainsi contrôlé, il ne peut désigner aucune autre
+     * adresse du répertoire ni aucun autre site (analyse des flux de
+     * données, voir psalm.xml).
+     *
+     * @psalm-taint-escape ssrf
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function numero(string $numero, int $chiffres): string
+    {
+        if (preg_match('/\A\d{'.$chiffres.'}\z/', $numero) !== 1) {
+            throw new InvalidArgumentException("Un numéro de {$chiffres} chiffres est attendu pour le répertoire Sirene.");
+        }
+
+        return $numero;
     }
 
     /**

@@ -152,7 +152,8 @@ class ImputationDuCredit
                 ->orderBy('date_emission')
                 ->orderBy('id')
                 ->lockForUpdate()
-                ->get();
+                ->get()
+                ->load(['allocationsPaiement', 'allocationsAvoir', 'magasin']);
 
             foreach ($autres as $avoir) {
                 foreach ($facturesDues as $facture) {

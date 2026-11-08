@@ -42,6 +42,8 @@ trait GereLesExceptionsMetier
      * la valeur de retour (Tables\Actions\Action::make(...)->action(...),
      * Actions\Action::make(...)->action(...)) : on notifie et on
      * s'arrête là, sans rien renvoyer.
+     *
+     * @param  Closure(): mixed  $callback
      */
     protected static function executerSansCasser(Closure $callback): void
     {
@@ -57,6 +59,11 @@ trait GereLesExceptionsMetier
      * impérativement renvoyer un Model : on notifie puis on interrompt
      * proprement le cycle de vie Filament via Halt plutôt que de laisser
      * l'exception se propager.
+     *
+     * @template TResultat
+     *
+     * @param  Closure(): TResultat  $callback
+     * @return TResultat
      */
     protected static function executerOuInterrompre(Closure $callback): mixed
     {

@@ -2,9 +2,11 @@
 
 namespace App\Domain\Facturation\Concerns;
 
+use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneDevis;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
 /**
@@ -35,7 +37,7 @@ trait VentileLaTvaParTaux
      * regroupe d'autres, ventile les lignes de ses tickets, et en négatif
      * celles de ses avoirs.
      *
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>
      */
     protected function lignesAVentiler(): Collection
     {
@@ -43,32 +45,45 @@ trait VentileLaTvaParTaux
     }
 
     /**
-     * @param  Collection<int, Model>  $lignes
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @template TLigne of LigneFacture|LigneAvoir|LigneDevis
+     *
+     * @param  Collection<int, TLigne>  $lignes
+     * @return Collection<int, array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>
      */
     protected static function montantsDesLignes(Collection $lignes): Collection
     {
-        return $lignes->map(fn (Model $ligne): array => $ligne->only(['taux_tva', 'montant_ht', 'montant_tva', 'montant_ttc']))->toBase();
-    }
-
-    /**
-     * Les lignes d'avoirs, qui se déduisent des ventes.
-     *
-     * @param  Collection<int, Model>  $lignes
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: float, montant_tva: float, montant_ttc: float}>
-     */
-    protected static function montantsDeduits(Collection $lignes): Collection
-    {
-        return $lignes->map(fn (Model $ligne): array => [
+        return $lignes->map(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): array => [
             'taux_tva' => $ligne->taux_tva,
-            'montant_ht' => -(float) $ligne->montant_ht,
-            'montant_tva' => -(float) $ligne->montant_tva,
-            'montant_ttc' => -(float) $ligne->montant_ttc,
+            'montant_ht' => $ligne->montant_ht,
+            'montant_tva' => $ligne->montant_tva,
+            'montant_ttc' => $ligne->montant_ttc,
         ])->toBase();
     }
 
     /**
-     * @param  Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>  $lignes
+     * Les lignes d'avoirs, qui se déduisent des ventes : leurs montants en
+     * négatif, au centime.
+     *
+     * @template TLigne of LigneFacture|LigneAvoir|LigneDevis
+     *
+     * @param  Collection<int, TLigne>  $lignes
+     * @return Collection<int, array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>
+     */
+    protected static function montantsDeduits(Collection $lignes): Collection
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $oppose = fn (string $montant): string => $calculateur->enDecimal(-$calculateur->enCentiemes($montant));
+
+        return $lignes->map(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): array => [
+            'taux_tva' => $ligne->taux_tva,
+            'montant_ht' => $oppose($ligne->montant_ht),
+            'montant_tva' => $oppose($ligne->montant_tva),
+            'montant_ttc' => $oppose($ligne->montant_ttc),
+        ])->toBase();
+    }
+
+    /**
+     * @param  Collection<int, array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>  $lignes
      * @return list<array{taux_tva: string, montant_ht: float, montant_tva: float, montant_ttc: float}>
      */
     private static function ventilerParTaux(Collection $lignes): array

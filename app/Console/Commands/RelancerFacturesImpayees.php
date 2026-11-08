@@ -54,7 +54,7 @@ class RelancerFacturesImpayees extends Command
     {
         $totalRelancees = 0;
 
-        Magasin::query()
+        Magasin::query()->with('societe')
             ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif)
             ->whereNull('suspendu_le')

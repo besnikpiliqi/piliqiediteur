@@ -58,7 +58,7 @@ class ClotureAutomatiqueCaisse extends Command
         $caissesFermees = 0;
         $magasinsEnEchec = 0;
 
-        Magasin::query()->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $cloturerLesJournees, $fermerLesCaisses, &$clotures, &$caissesFermees, &$magasinsEnEchec): void {
+        Magasin::query()->with('societe')->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $cloturerLesJournees, $fermerLesCaisses, &$clotures, &$caissesFermees, &$magasinsEnEchec): void {
             $calendrier = $magasin->calendrier();
             $hier = Calendrier::ajouterJours($calendrier->aujourdhui(), -1);
             $finDHier = $calendrier->bornesDuJour($hier)[1]->subSecond();

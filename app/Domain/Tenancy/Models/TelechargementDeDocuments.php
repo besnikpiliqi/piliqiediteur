@@ -84,7 +84,7 @@ class TelechargementDeDocuments extends Model
      * une lecture hors de la société courante, filtrée par le compte qui
      * l'a demandé ; un texte qui n'est pas un uuid ne désigne rien.
      *
-     * @return Builder<TelechargementDeDocuments>
+     * @return Builder<static>
      */
     public static function duLienPour(User $compte, string $uuid): Builder
     {
@@ -99,7 +99,7 @@ class TelechargementDeDocuments extends Model
      * toutes les sociétés : la limite par heure se compte par compte (voir
      * DemanderLeTelechargementDesDocumentsAction).
      *
-     * @return Builder<TelechargementDeDocuments>
+     * @return Builder<static>
      */
     public static function demandesDepuis(User $compte, mixed $instant): Builder
     {
@@ -116,7 +116,7 @@ class TelechargementDeDocuments extends Model
      * société et par le compte, quelle que soit la société active (un
      * compte d'un cabinet les demande pour un client).
      *
-     * @return Builder<TelechargementDeDocuments>
+     * @return Builder<static>
      */
     public static function recentsDe(User $compte, Societe $societe): Builder
     {

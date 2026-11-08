@@ -16,6 +16,9 @@ use Pdo\Sqlite;
  */
 final class ConnecteurSqlite extends SQLiteConnector
 {
+    /**
+     * @param  array<string, mixed>  $config
+     */
     public function connect(array $config): PDO
     {
         $connexion = parent::connect($config);

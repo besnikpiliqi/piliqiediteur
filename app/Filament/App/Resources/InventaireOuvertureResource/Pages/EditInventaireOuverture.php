@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 
 use App\Domain\Stock\Actions\ModifierInventaireOuvertureAction;
+use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
  * Accessible tant que l'inventaire d'ouverture est un brouillon et que le
  * magasin n'a pas vendu (voir InventaireOuverturePolicy::update()), lignes
  * comprises.
+ *
+ * @property InventaireOuverture $record
  */
 class EditInventaireOuverture extends EditRecord
 {
@@ -42,7 +45,7 @@ class EditInventaireOuverture extends EditRecord
     {
         return static::executerOuInterrompre(fn (): Model => app(ModifierInventaireOuvertureAction::class)->handle(
             auth()->user(),
-            $record,
+            $this->record,
             array_values($data['lignes'] ?? []),
             ['notes' => $data['notes'] ?? null],
         ));

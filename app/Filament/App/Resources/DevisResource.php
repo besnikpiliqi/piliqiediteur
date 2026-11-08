@@ -33,6 +33,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class DevisResource extends Resource
 {
@@ -135,6 +136,8 @@ class DevisResource extends Resource
      * la liste : la validité de chacun se compte au jour de son calendrier
      * (voir Devis::validiteDepassee()), sans relire le magasin à chaque
      * ligne.
+     *
+     * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {

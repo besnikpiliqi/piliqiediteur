@@ -84,7 +84,7 @@ class EnregistrerVenteCaisseAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  ConfirmationVenteSansStock|null  $confirmation  l'avertissement d'une vente sans stock, confirmé (R1)
      * @param  string|null  $jeton  le jeton du panier (R3)
      *
@@ -107,7 +107,7 @@ class EnregistrerVenteCaisseAction
     }
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      *
      * @throws AuthorizationException
      * @throws LogicException
@@ -147,14 +147,14 @@ class EnregistrerVenteCaisseAction
      * l'article, la quantité, le prix, le taux et la remise saisis, en
      * texte, dans leur ordre.
      *
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @return list<list<string|null>>
      */
     private static function lignesCanoniques(array $lignes): array
     {
         return array_map(
-            fn (mixed $ligne): array => array_map(
-                fn (string $champ): ?string => is_array($ligne) && is_scalar($ligne[$champ] ?? null) && (string) $ligne[$champ] !== '' ? trim((string) $ligne[$champ]) : null,
+            fn (array $ligne): array => array_map(
+                fn (string $champ): ?string => is_scalar($ligne[$champ] ?? null) && (string) $ligne[$champ] !== '' ? trim((string) $ligne[$champ]) : null,
                 ['produit_id', 'service_id', 'quantite', 'prix_unitaire_ttc', 'taux_tva', 'remise_pourcentage'],
             ),
             array_values($lignes),

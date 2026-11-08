@@ -30,6 +30,8 @@ use Filament\Pages\Page;
  * cochent pour qui ils veulent ; en lecture seule, la page se ferme. Seul
  * le magasin actif est lu et modifié, et rien de la société, et seulement
  * ce que la personne y a corrigé (voir EnregistreLesParametresDuMagasin).
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class CoordonneesMagasin extends Page implements HasForms
 {

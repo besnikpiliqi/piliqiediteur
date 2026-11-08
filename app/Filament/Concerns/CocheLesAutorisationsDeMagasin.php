@@ -5,6 +5,7 @@ namespace App\Filament\Concerns;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
@@ -118,6 +119,6 @@ trait CocheLesAutorisationsDeMagasin
     {
         $tenant = Filament::getTenant();
 
-        return $tenant instanceof Societe ? $tenant->type_activite : $tenant->societe->type_activite;
+        return $tenant instanceof Societe ? $tenant->type_activite : app(TenantContext::class)->magasin()->societe->type_activite;
     }
 }

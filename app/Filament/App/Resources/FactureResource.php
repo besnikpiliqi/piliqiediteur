@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Models\LigneAvoirFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
@@ -23,6 +24,7 @@ use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PreuveOperation;
@@ -123,10 +125,15 @@ class FactureResource extends Resource
      * que les factures que l'utilisateur voit (voir
      * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
      * suffit pas, un montant visible dans un tableau est déjà une fuite.
+     *
+     * @return Builder<Facture>
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        /** @var Builder<Facture> $factures */
+        $factures = parent::getEloquentQuery();
+
+        return $factures
             ->visiblesPar(auth()->user())
             ->with(['client', 'magasin']);
     }
@@ -297,10 +304,14 @@ class FactureResource extends Resource
                     // une contre-passation, ont leur reçu de paiement (R2,
                     // voir RecusDePaiement), qui se télécharge et s'envoie
                     // d'ici ; un paiement reçu à l'émission n'en a pas : le
-                    // PDF du document l'imprime.
+                    // PDF du document l'imprime. Filament lit chaque champ
+                    // d'une ligne depuis la facture elle-même
+                    // (« allocationsPaiement.0.paiement.recu_le ») : les
+                    // imputations s'y chargent avec leur paiement et son
+                    // reçu, en une requête par relation.
                     RepeatableEntry::make('allocationsPaiement')
                         ->label('')
-                        ->state(fn (Facture $record) => $record->allocationsPaiement()->with(['paiement.recuPaiement.client', 'paiement.recuPaiement.lignes.facture'])->get())
+                        ->state(fn (Facture $record) => $record->loadMissing(['allocationsPaiement.paiement.recuPaiement.client', 'allocationsPaiement.paiement.recuPaiement.magasin', 'allocationsPaiement.paiement.recuPaiement.lignes.facture'])->allocationsPaiement)
                         ->schema([
                             TextEntry::make('nature')
                                 ->label('Nature')
@@ -335,6 +346,7 @@ class FactureResource extends Resource
                     // ont été imputés.
                     RepeatableEntry::make('allocationsAvoir')
                         ->label('')
+                        ->state(fn (Facture $record) => $record->loadMissing('allocationsAvoir.avoir')->allocationsAvoir)
                         ->schema([
                             TextEntry::make('avoir.numero')
                                 ->label('Avoir')
@@ -537,12 +549,12 @@ class FactureResource extends Resource
                     }),
                 TextEntry::make('bordereaux_detaxe_remplaces')
                     ->label('N° remplacés')
-                    ->state(fn (Facture $record): array => $record->bordereauxDetaxe()->get()->slice(0, -1)
+                    ->state(fn (Facture $record): array => $record->bordereauxDetaxe->slice(0, -1)
                         ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le ".self::calendrierDuMagasin()->afficher($bordereau->created_at, 'd/m/Y à H:i'))
                         ->values()
                         ->all())
                     ->listWithLineBreaks()
-                    ->visible(fn (Facture $record): bool => $record->bordereauxDetaxe()->count() > 1),
+                    ->visible(fn (Facture $record): bool => $record->bordereauxDetaxe->count() > 1),
             ])
             ->columns(3);
     }
@@ -593,13 +605,20 @@ class FactureResource extends Resource
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
-        $avecRemise = $document?->lignes->contains(fn (Model $ligne): bool => (float) $ligne->remise_pourcentage != 0) ?? false;
         $estUnAchat = $document instanceof FactureAchat || $document instanceof AvoirFournisseur;
         $estUneVente = $document instanceof Facture || $document instanceof Avoir || $document instanceof Devis;
+
+        if ($document instanceof FactureAchat) {
+            // Le bouton « Retourner ce produit » de chaque ligne lit son
+            // produit (voir LigneAchat::quantiteRetournableRestante()).
+            $document->loadMissing('lignes.produit');
+        }
+
+        $avecRemise = ($estUnAchat || $estUneVente) && $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis|LigneAchat|LigneAvoirFournisseur $ligne): bool => (float) $ligne->remise_pourcentage != 0);
         $sansTvaFrancaise = $estUneVente && ContexteDeVente::documentRetireLaTvaDuPrix($document);
         // Un produit, ou un service à son prix de référence : un prix du
         // catalogue dont la TVA est retirée (voir lignes.blade.php).
-        $prixCatalogueSansTvaFrancaise = fn (Model $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0);
+        $prixCatalogueSansTvaFrancaise = fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0);
         $calculateur = app(CalculateurLigne::class);
         $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
         $prixDAchat = fn (string $state): string => $calculateur->prixDAchatAffiche($calculateur->enMillioniemes($state));
@@ -620,13 +639,13 @@ class FactureResource extends Resource
                     ->formatStateUsing($estUnAchat ? $prixDAchat : $prixUnitaire),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
-                    ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
+                    ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
                     ->placeholder('—')
                     ->formatStateUsing($prixUnitaire)
                     ->hidden($estUnAchat),
                 TextEntry::make('taux_tva_du_prix')
                     ->label('TVA retirée')
-                    ->state(fn (Model $record): mixed => $prixCatalogueSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
+                    ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => $prixCatalogueSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
                     ->placeholder('—')
                     ->numeric(maxDecimalPlaces: 2)
                     ->suffix(' %')
@@ -716,12 +735,15 @@ class FactureResource extends Resource
             // la référence de chaque paiement, lit ses imputations en
             // entier. La facture rectificative de chacune, après une
             // correction du SIREN de la société, et la dernière décision
-            // d'examen de ce SIREN disent si l'action « Avoir » s'y propose
-            // (voir AvoirResource::peutCrediter()) : les factures de la
-            // liste partagent le magasin que getEloquentQuery() charge avec
-            // elles, et sa société lit cette décision une seule fois (voir
-            // Societe::dernierExamenDuSiren()).
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id']))
+            // d'examen de ce SIREN, et l'existence de lignes encore à
+            // créditer (voir Facture::possedeDesLignesCreditables()), disent
+            // si l'action « Avoir » s'y propose (voir
+            // AvoirResource::peutCrediter()) : tout se lit avec la page, le
+            // magasin, sa société et cette décision une seule fois, quel que
+            // soit le nombre de factures.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'magasin.societe.dernierExamenDuSiren'])
+                ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => $lignes->scopes('creditables')]))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),
@@ -749,7 +771,10 @@ class FactureResource extends Resource
                 Tables\Filters\Filter::make('preuves_a_fournir')
                     ->label('Preuves à fournir')
                     ->toggle()
-                    ->query(fn (Builder $query): Builder => $query->preuvesAFournir()),
+                    ->query(function (Builder $query): Builder {
+                        /** @var Builder<Facture> $query */
+                        return $query->preuvesAFournir();
+                    }),
                 // Les factures et les tickets émis dont il reste quelque
                 // chose à régler (voir Facture::scopeAEncaisser()), où mène
                 // l'alerte du tableau de bord (voir
@@ -757,7 +782,10 @@ class FactureResource extends Resource
                 Tables\Filters\Filter::make(self::FILTRE_A_ENCAISSER)
                     ->label('À encaisser')
                     ->toggle()
-                    ->query(fn (Builder $query): Builder => $query->aEncaisser()),
+                    ->query(function (Builder $query): Builder {
+                        /** @var Builder<Facture> $query */
+                        return $query->aEncaisser();
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -988,7 +1016,7 @@ class FactureResource extends Resource
             ->fillForm(fn (PaiementAllocation $record): array => ['destinataire' => $record->paiement->recuPaiement->client->email])
             ->form([
                 static::champDuJeton(),
-                static::champDestinataire(),
+                self::champDestinataire(),
                 Textarea::make('message')
                     ->label('Message (facultatif)')
                     ->helperText('Ajouté au texte de l\'e-mail, avant votre signature.')

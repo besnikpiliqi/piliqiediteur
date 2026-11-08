@@ -97,17 +97,6 @@ enum NatureOperation: string implements HasLabel
     }
 
     /**
-     * Une prestation à un professionnel établi hors de France : le document
-     * ne vend que des services dont le lieu suit celui du client (art.
-     * 259-1° du CGI), jamais un service au lieu fixé par la loi (voir
-     * Service::lieu_specifique).
-     */
-    public function porteSurDesServices(): bool
-    {
-        return in_array($this, [self::PrestationUeAutoliquidation, self::PrestationHorsUe], true);
-    }
-
-    /**
      * Une nature qui ne se vend qu'à un client professionnel : un
      * particulier ne peut choisir que la vente en France, l'export ou la
      * livraison vers un DOM.

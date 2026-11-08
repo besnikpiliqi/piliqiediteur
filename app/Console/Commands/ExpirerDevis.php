@@ -32,7 +32,7 @@ class ExpirerDevis extends Command
         $expires = 0;
         $magasinsEnEchec = 0;
 
-        Magasin::query()->each(function (Magasin $magasin) use ($tenantContext, $expirerLesDevis, &$expires, &$magasinsEnEchec): void {
+        Magasin::query()->with('societe')->each(function (Magasin $magasin) use ($tenantContext, $expirerLesDevis, &$expires, &$magasinsEnEchec): void {
             try {
                 $expires += $tenantContext->runAs($magasin, fn (): int => $expirerLesDevis->handle($magasin));
             } catch (Throwable $exception) {

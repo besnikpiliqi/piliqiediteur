@@ -9,6 +9,8 @@ use App\Integrations\Sirene\UniteSirene;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -215,6 +217,34 @@ class InseeSireneTest extends TestCase
         $repertoire = new InseeSirene;
 
         $this->assertSame([null, null], [$repertoire->unite('000000018'), $repertoire->etablissement('00000001800012')]);
+    }
+
+    /**
+     * Un numéro qui n'est pas fait de ses 9 ou 14 chiffres exactement ne
+     * forme jamais l'adresse d'une requête : il est refusé avant, et rien
+     * ne part (analyse des flux de données, voir psalm.xml).
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function numerosMalFormes(): array
+    {
+        return [
+            'SIREN qui remonte dans l\'adresse' => ['unite', '../siret'],
+            'SIREN avec une recherche ajoutée' => ['unite', '000000018?q=x'],
+            'SIREN trop court' => ['unite', '00000001'],
+            'SIRET qui change de site' => ['etablissement', '//exemple.test/'],
+            'SIRET avec un retour à la ligne' => ['etablissement', "00000001800012\n"],
+            'recherche par un SIREN qui élargit la requête' => ['etablissementsActifs', '000000018 OR siren:*'],
+        ];
+    }
+
+    #[DataProvider('numerosMalFormes')]
+    public function test_un_numero_mal_forme_est_refuse_avant_toute_requete(string $methode, string $numero): void
+    {
+        Http::fake();
+
+        $this->assertThrows(fn () => (new InseeSirene)->{$methode}($numero), InvalidArgumentException::class);
+        Http::assertNothingSent();
     }
 
     /**

@@ -25,9 +25,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  *
  * Son objet est noté à la demande, puis relu au départ de l'e-mail (voir
  * objetPour()), comme le rappel d'une relance : il est celui que le
- * client a reçu.
+ * client a reçu. Son document manque quand il a été supprimé depuis (un
+ * devis brouillon jamais numéroté, seul document qui se supprime).
  *
- * @property-read DocumentEnvoyable&Model $document
+ * @property-read Facture|Avoir|Devis|RecuPaiement|null $document
  */
 class EnvoiDocument extends Model
 {
@@ -80,7 +81,7 @@ class EnvoiDocument extends Model
      * DocumentEnvoyable::emetteur() et DocumentMail), précédés du niveau
      * pour une relance.
      *
-     * @param  Model&DocumentEnvoyable  $document
+     * @param  Facture|Avoir|Devis|RecuPaiement  $document
      *
      * @throws DocumentSansEnregistrementSigneException
      */
@@ -91,11 +92,17 @@ class EnvoiDocument extends Model
         return $niveauRelance === null ? $objet : "Relance n°{$niveauRelance} : {$objet}";
     }
 
+    /**
+     * @return MorphTo<Model, $this>
+     */
     public function document(): MorphTo
     {
         return $this->morphTo();
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function envoyePar(): BelongsTo
     {
         return $this->belongsTo(User::class, 'envoye_par');

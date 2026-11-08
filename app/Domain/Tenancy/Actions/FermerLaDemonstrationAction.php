@@ -21,7 +21,6 @@ use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Closure;
 use LogicException;
 use Throwable;
 
@@ -79,9 +78,7 @@ class FermerLaDemonstrationAction
         $contexte = app(TenantContext::class);
         $maintenant = CarbonImmutable::now();
 
-        $auNomDe = fn (Closure $operation): mixed => $auteur === null ? $this->operateur->pendantLeSysteme($operation) : $this->operateur->pendant($auteur, $operation);
-
-        $fermee = $contexte->runAs($demonstration, fn (): bool => $auNomDe(fn (): bool => $this->registre->sousVerrou($demonstration, function () use ($demonstration, $motif, $auteur, $maintenant): bool {
+        $fermee = $contexte->runAs($demonstration, fn (): bool => $this->operateur->auNomDe($auteur, fn (): bool => $this->registre->sousVerrou($demonstration, function () use ($demonstration, $motif, $auteur, $maintenant): bool {
             $verrouille = Magasin::query()->whereKey($demonstration->getKey())->lockForUpdate()->firstOrFail();
 
             if ($verrouille->statut === StatutMagasin::Ferme) {

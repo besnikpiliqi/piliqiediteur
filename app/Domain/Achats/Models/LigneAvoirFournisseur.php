@@ -42,11 +42,17 @@ class LigneAvoirFournisseur extends Model
         'montant_ttc' => 'decimal:2',
     ];
 
+    /**
+     * @return BelongsTo<AvoirFournisseur, $this>
+     */
     public function avoirFournisseur(): BelongsTo
     {
         return $this->belongsTo(AvoirFournisseur::class);
     }
 
+    /**
+     * @return BelongsTo<LigneAchat, $this>
+     */
     public function ligneAchat(): BelongsTo
     {
         return $this->belongsTo(LigneAchat::class);
@@ -56,6 +62,8 @@ class LigneAvoirFournisseur extends Model
      * Une ligne garde son produit, même archivé depuis (voir les
      * SoftDeletes de Produit) : l'avoir émis ensuite le sort quand même du
      * stock (voir DecrementerStockApresEmissionAvoirFournisseur).
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {

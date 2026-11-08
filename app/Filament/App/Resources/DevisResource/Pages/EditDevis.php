@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\DevisResource\Pages;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RecoitLeClientChoisi;
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  * DevisPolicy::update()) : lignes comprises, sans recréer le devis. Un
  * devis envoyé ou accepté repasse en brouillon (voir ModifierDevisAction),
  * ce que la page annonce avant l'enregistrement.
+ *
+ * @property Devis $record
  */
 class EditDevis extends EditRecord
 {
@@ -70,7 +73,7 @@ class EditDevis extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $client = Client::withTrashed()->findOrFail($data['client_id']);
 
-        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(auth()->user(), $record, $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(auth()->user(), $this->record, $client, $data['lignes'], [
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

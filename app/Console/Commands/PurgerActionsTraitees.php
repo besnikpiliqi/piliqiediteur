@@ -37,7 +37,7 @@ class PurgerActionsTraitees extends Command
         $effaces = 0;
         $enEchec = 0;
 
-        Magasin::query()->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $limite, &$effaces, &$enEchec): void {
+        Magasin::query()->with('societe')->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $limite, &$effaces, &$enEchec): void {
             try {
                 $effaces += $tenantContext->runAs($magasin, function () use ($limite): int {
                     $effaces = 0;

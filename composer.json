@@ -18,6 +18,8 @@
     "require-dev": {
         "brianium/paratest": "^7.20",
         "fakerphp/faker": "^1.23",
+        "infection/infection": "^0.35",
+        "larastan/larastan": "^3.14",
         "laravel/boost": "^2.10",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
@@ -74,7 +76,12 @@
         "preferred-install": "dist",
         "sort-packages": true,
         "allow-plugins": {
-            "pestphp/pest-plugin": true
+            "pestphp/pest-plugin": true,
+            "infection/extension-installer": true
+        },
+        "audit": {
+            "abandoned": "fail",
+            "block-insecure": true
         }
     },
     "minimum-stability": "stable",

@@ -205,7 +205,7 @@ class MembreResource extends RessourceDuPanneauSociete
             return null;
         }
 
-        $auteur = User::query()->where('societe_id', $compte->societe_id)->find($compte->acces_redonne_par)?->name ?? 'un compte de la société';
+        $auteur = User::query()->where('societe_id', $compte->societe_id)->find($compte->acces_redonne_par)->name ?? 'un compte de la société';
 
         return 'Le '.$compte->calendrier()->afficherHorsDuMagasin($compte->acces_redonne_le, 'd/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
     }
@@ -267,7 +267,7 @@ class MembreResource extends RessourceDuPanneauSociete
                 'autorisations' => $auteur->estProprietaire() && $affectation->role !== RoleMagasin::Responsable
                     ? array_map(fn (string $cle): string => PermissionRegistry::libelles()[$cle], $affectation->autorisations())
                     : [],
-                'nomination' => $affectation->nomme_par === null ? null : 'Nommé par '.(User::query()->find($affectation->nomme_par)?->name ?? 'un administrateur').' : annulable',
+                'nomination' => $affectation->nomme_par === null ? null : 'Nommé par '.(User::query()->find($affectation->nomme_par)->name ?? 'un administrateur').' : annulable',
             ])
             ->all();
     }

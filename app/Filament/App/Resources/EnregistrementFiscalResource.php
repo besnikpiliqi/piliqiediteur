@@ -6,9 +6,9 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -81,7 +81,7 @@ class EnregistrementFiscalResource extends Resource
             InfolistSection::make('Trace technique')
                 ->description(fn (): string => 'Hors du contenu signé, effacée '.config('conservation.traces_en_mois').' mois après l\'événement.')
                 ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement
-                    && auth()->user()->estProprietaireDuMagasin(Filament::getTenant()))
+                    && auth()->user()->estProprietaireDuMagasin(app(TenantContext::class)->magasin()))
                 ->schema([
                     TextEntry::make('trace.ip')->label('Adresse IP')
                         ->placeholder('Aucune (traitement automatique, ou trace effacée)'),
@@ -148,7 +148,10 @@ class EnregistrementFiscalResource extends Resource
                         DatePicker::make('du')->label('Du'),
                         DatePicker::make('au')->label('Au'),
                     ])
-                    ->query(fn (Builder $query, array $data): Builder => $query->horodatesDuJourAuJour(self::calendrierDuMagasin(), $data['du'] ?? null, $data['au'] ?? null))
+                    ->query(function (Builder $query, array $data): Builder {
+                        /** @var Builder<EnregistrementFiscal> $query */
+                        return $query->horodatesDuJourAuJour(self::calendrierDuMagasin(), $data['du'] ?? null, $data['au'] ?? null);
+                    })
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
                         filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour($data['du'], 'd/m/Y') : null,
                         filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour($data['au'], 'd/m/Y') : null,

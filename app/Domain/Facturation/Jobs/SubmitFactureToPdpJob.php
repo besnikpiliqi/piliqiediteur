@@ -30,6 +30,9 @@ class SubmitFactureToPdpJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 4;
 
+    /**
+     * @var list<int>
+     */
     public array $backoff = [10, 30, 120];
 
     public function __construct(

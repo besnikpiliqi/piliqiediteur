@@ -26,7 +26,7 @@ class IncrementerStockApresValidationFactureAchat
 
     public function handle(FactureAchatValidee $event): void
     {
-        $factureAchat = $event->factureAchat;
+        $factureAchat = $event->factureAchat->loadMissing('lignes.produit');
 
         foreach ($factureAchat->lignes as $ligne) {
             $this->stock->receptionner($ligne->produit, $ligne->quantite, $ligne->coutUnitaireHt(), $factureAchat, "Réception facture d'achat {$factureAchat->numero}");

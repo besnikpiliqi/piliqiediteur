@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!--
+    Analyse des flux de données (taint analysis) de Psalm et de son extension
+    Laravel, décidée par l'éditeur le 07/11/2026 (D54) : chaque donnée venue
+    de l'extérieur (formulaire, adresse, en-tête, fichier envoyé) est suivie
+    jusqu'à une requête SQL, une page, un chemin de fichier, une commande,
+    une redirection, une requête vers un autre site ou un e-mail. Psalm ne
+    sert qu'à cela : le contrôle des types est celui de Larastan
+    (phpstan.neon), et seuls les chemins de sécurité font échouer la CI
+    (php tests/Qualite/qualite.php flux). Psalm s'installe à part, dans
+    tools/psalm (voir le README), et se lance depuis la racine du dépôt :
+    php tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json
+-->
+<psalm
+    errorLevel="8"
+    findUnusedCode="false"
+    findUnusedBaselineEntry="false"
+    cacheDirectory="storage/framework/cache/psalm"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config tools/psalm/vendor/vimeo/psalm/config.xsd"
+>
+    <projectFiles>
+        <directory name="app"/>
+        <directory name="routes"/>
+        <directory name="bootstrap"/>
+        <ignoreFiles>
+            <directory name="vendor"/>
+            <directory name="bootstrap/cache"/>
+        </ignoreFiles>
+    </projectFiles>
+    <plugins>
+        <pluginClass class="Psalm\LaravelPlugin\Plugin"/>
+    </plugins>
+</psalm>

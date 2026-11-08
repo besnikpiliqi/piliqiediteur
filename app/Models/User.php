@@ -168,7 +168,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * @return Attribute<string, string|null>
+     * @return Attribute<string|null, string|null>
      */
     protected function email(): Attribute
     {
@@ -263,7 +263,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function estUnCompteDEntrainement(): bool
     {
-        return $this->magasinDeSonIdentifiant()?->est_demonstration ?? false;
+        return $this->magasinDeSonIdentifiant()->est_demonstration ?? false;
     }
 
     /**
@@ -574,7 +574,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function magasinsDeSaPortee(): Builder
     {
-        $magasins = Magasin::query()->where('magasins.societe_id', $this->societe_id);
+        $magasins = Magasin::query()->with('societe')->where('magasins.societe_id', $this->societe_id);
 
         if ($this->administreTousLesMagasins()) {
             return $magasins;
@@ -897,7 +897,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return app(AccesDesCabinets::class)->magasinsOuverts($this);
         }
 
-        $magasins = Magasin::query()->where('societe_id', $this->societe_id);
+        $magasins = Magasin::query()->with('societe')->where('societe_id', $this->societe_id);
 
         if ($this->estMembre()) {
             $magasins->whereIn('id', $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->select('magasin_id'));
@@ -953,6 +953,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * sa société dans celui de l'administration de la société s'il peut
      * l'administrer, et son cabinet dans l'espace du cabinet pour un compte
      * actif d'un cabinet d'expertise comptable.
+     *
+     * @return array<int, Magasin|Societe>|Collection<int, Magasin>|Collection<int, Societe>
      */
     public function getTenants(Panel $panel): array|Collection
     {

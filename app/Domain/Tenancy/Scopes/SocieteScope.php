@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Scope;
  * données de toutes les sociétés. Une lecture volontairement hors de la
  * société active passe explicitement par withoutGlobalScope(self::class),
  * filtrée et justifiée là où elle se fait.
+ *
+ * @implements Scope<Model>
  */
 class SocieteScope implements Scope
 {

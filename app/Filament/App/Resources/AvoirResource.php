@@ -40,6 +40,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Livewire\Component;
 
 /**
  * Un avoir part toujours du numéro d'un ticket ou d'une facture, jamais du
@@ -96,10 +97,15 @@ class AvoirResource extends Resource
      * Même esprit de confidentialité que FactureResource, mais basée sur
      * le créateur de l'avoir lui-même : voir Avoir::scopeVisiblesPar() et
      * AvoirPolicy.
+     *
+     * @return Builder<Avoir>
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['client', 'lignes.ligneFacture.facture'])->visiblesPar(auth()->user());
+        /** @var Builder<Avoir> $avoirs */
+        $avoirs = parent::getEloquentQuery();
+
+        return $avoirs->with(['client', 'magasin', 'lignes.ligneFacture.facture'])->visiblesPar(auth()->user());
     }
 
     public static function form(Form $form): Form
@@ -174,7 +180,11 @@ class AvoirResource extends Resource
 
                 $set('lignes', $lignes);
                 $set('recherche', null);
-                $component->getLivewire()->resetErrorBag($component->getStatePath());
+                $page = $component->getLivewire();
+
+                if ($page instanceof Component) {
+                    $page->resetErrorBag($component->getStatePath());
+                }
             });
     }
 
@@ -290,7 +300,7 @@ class AvoirResource extends Resource
         $lignesVues = LigneFacture::query()
             ->whereKey($identifiants->all())
             ->whereHas('facture', fn (Builder $query) => $query->emises()->visiblesPar(auth()->user()))
-            ->with('facture')
+            ->with('facture.client')
             ->get()
             ->keyBy('id');
 

@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Model;
  * comprises. Les pièces du fournisseur déposées s'ajoutent à celles déjà
  * jointes (voir ModifierFactureAchatAction) ; leurs fichiers s'effacent du
  * dossier temporaire des envois une fois la facture enregistrée.
+ *
+ * @property FactureAchat $record
  */
 class EditFactureAchat extends EditRecord
 {
@@ -35,7 +38,7 @@ class EditFactureAchat extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['lignes'] = $this->record->lignes
+        $data['lignes'] = $this->record->loadMissing('lignes.produit')->lignes
             ->map(fn (LigneAchat $ligne): array => FactureAchatResource::ligneDejaEnregistree($ligne))
             ->all();
         $data['escompte_pourcentage'] = FactureAchatResource::pourcentageEnTexte($this->record->escompte_pourcentage);
@@ -51,7 +54,7 @@ class EditFactureAchat extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $fournisseur = Fournisseur::withTrashed()->findOrFail($data['fournisseur_id']);
 
-        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(auth()->user(), $record, $fournisseur, array_values($data['lignes']), [
+        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(auth()->user(), $this->record, $fournisseur, array_values($data['lignes']), [
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
             'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,

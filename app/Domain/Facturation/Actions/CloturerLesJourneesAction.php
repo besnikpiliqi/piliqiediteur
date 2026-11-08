@@ -107,7 +107,7 @@ class CloturerLesJourneesAction
     public function parUnePersonne(User $auteur, Magasin $magasin, string $jour, ?string $jeton = null): array
     {
         $this->verifierQueLeMagasinEstActif($magasin);
-        $clotures = new Collection;
+        $clotures = (new ClotureCaisse)->newCollection();
 
         $demande = $this->actionsUniques->executerParEtapes(
             $jeton,

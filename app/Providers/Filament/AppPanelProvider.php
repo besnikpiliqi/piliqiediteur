@@ -10,6 +10,8 @@ use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\EspaceDeLaSociete;
+use App\Filament\InitialesDuCompte;
+use App\Filament\PoliceServieParPiliqi;
 use App\Http\Controllers\TelechargerLesDocumentsController;
 use App\Http\Controllers\TelechargerUnePieceDuFournisseurController;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
@@ -78,6 +80,10 @@ class AppPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('app')
+            // La police et l'image des initiales du compte viennent de PILIQI,
+            // jamais d'un site tiers (Q-TIERS, voir InitialesDuCompte).
+            ->font('Inter', provider: PoliceServieParPiliqi::class)
+            ->defaultAvatarProvider(InitialesDuCompte::class)
             ->path('app')
             ->login(Connexion::class)
             ->registration(InscriptionSociete::class)
@@ -178,7 +184,11 @@ class AppPanelProvider extends PanelProvider
             // Tant que la société n'est pas validée, ce qui reste désactivé ;
             // dans le magasin de démonstration, que ses documents n'ont
             // aucune valeur.
-            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => Filament::getTenant(), 'societe' => Filament::getTenant()?->societe]))
+            ->renderHook(PanelsRenderHook::CONTENT_START, function (): View {
+                $magasin = Filament::getTenant();
+
+                return view('filament.verification-en-cours', ['magasin' => $magasin, 'societe' => $magasin instanceof Magasin ? $magasin->societe : null]);
+            })
             // Dans chaque tableau : après une action groupée en partie
             // refusée, seules les lignes refusées restent cochées (voir
             // SupprimeEnMasseLigneParLigne).

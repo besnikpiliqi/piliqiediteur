@@ -15,6 +15,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -181,7 +182,7 @@ class InvitationsEtDemandes extends Page
      * l'échéance est passée se lit expirée, avant même que la tâche
      * horaire ne l'expire.
      *
-     * @return Liste<int, array{uuid: string, siren: string, demande_le: mixed, expire_le: mixed, en_cours: bool, etat: string, fin: mixed}>
+     * @return Liste<int, array{uuid: string, siren: string, demande_le: CarbonImmutable|null, expire_le: CarbonImmutable|null, en_cours: bool, etat: string, fin: CarbonImmutable|null}>
      */
     public function demandesEnvoyees(): Liste
     {
@@ -208,7 +209,7 @@ class InvitationsEtDemandes extends Page
      * Les demandes reçues des clients qui ont désigné le cabinet, encore en
      * cours, chacune avec la dénomination, le SIREN et la ville du client.
      *
-     * @return Liste<int, array{uuid: string, client: Societe, demande_le: mixed, expire_le: mixed}>
+     * @return Liste<int, array{uuid: string, client: Societe|null, demande_le: CarbonImmutable|null, expire_le: CarbonImmutable|null}>
      */
     public function demandesRecues(): Liste
     {

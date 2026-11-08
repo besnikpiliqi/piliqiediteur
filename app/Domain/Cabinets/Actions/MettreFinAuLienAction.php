@@ -230,17 +230,18 @@ class MettreFinAuLienAction
         $client = Societe::query()->findOrFail($lien->societe_id);
         $avant = $this->acces->comptesQuiOntAcces($lien);
 
-        $termine = false;
-
-        $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($motif, $controle, &$termine): void {
+        $termine = $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($motif, $controle): bool {
             [$relu] = $relus;
             $controle($auteurRelu, $relu);
 
-            if ($relu->estActif()) {
-                self::terminerSousVerrou($relu, $auteurRelu, $motif);
-                $termine = true;
+            if (! $relu->estActif()) {
+                return false;
             }
-        }, function (Societe $journal, array $relus) use ($client, $motif, &$termine): array {
+
+            self::terminerSousVerrou($relu, $auteurRelu, $motif);
+
+            return true;
+        }, function (Societe $journal, array $relus, bool $termine) use ($client, $motif): array {
             [$relu] = $relus;
 
             return ! $termine ? [] : [[ActionAuditee::LienTermine, [

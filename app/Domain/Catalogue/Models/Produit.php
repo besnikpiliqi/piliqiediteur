@@ -137,6 +137,8 @@ class Produit extends Model
      * Le fournisseur de son dernier achat validé (voir
      * rattacherAuFournisseur()), même archivé depuis : la fiche l'affiche
      * toujours (voir ProduitResource).
+     *
+     * @return BelongsTo<Fournisseur, $this>
      */
     public function fournisseur(): BelongsTo
     {
@@ -181,16 +183,25 @@ class Produit extends Model
         return $this;
     }
 
+    /**
+     * @return HasMany<MouvementStock, $this>
+     */
     public function mouvementsStock(): HasMany
     {
         return $this->hasMany(MouvementStock::class);
     }
 
+    /**
+     * @return HasMany<LigneAchat, $this>
+     */
     public function lignesAchat(): HasMany
     {
         return $this->hasMany(LigneAchat::class);
     }
 
+    /**
+     * @return HasMany<LigneInventaireOuverture, $this>
+     */
     public function lignesInventaireOuverture(): HasMany
     {
         return $this->hasMany(LigneInventaireOuverture::class);
@@ -259,6 +270,7 @@ class Produit extends Model
      * dans le magasin, puis par ordre de ligne.
      *
      * @param  'asc'|'desc'  $sens
+     * @return HasMany<LigneAchat, $this>
      */
     public function achatsValides(string $sens = 'asc'): HasMany
     {
@@ -292,7 +304,7 @@ class Produit extends Model
         $calculateur = app(CalculateurLigne::class);
         $dernierAchat = $this->lignesAchat()->orderByDesc('facture_achat_id')->orderByDesc('ordre')->orderByDesc('id')->first();
 
-        return $dernierAchat?->prix_unitaire_ht ?? $calculateur->enDecimal(SaisieDecimale::enCentiemes((string) ($this->cmup_ht ?? '0')));
+        return $dernierAchat->prix_unitaire_ht ?? $calculateur->enDecimal(SaisieDecimale::enCentiemes((string) ($this->cmup_ht ?? '0')));
     }
 
     /**
@@ -322,7 +334,7 @@ class Produit extends Model
     }
 
     /**
-     * @param  Builder<Produit>  $query
+     * @param  Builder<static>  $query
      */
     protected function performInsert(Builder $query): bool
     {
@@ -330,7 +342,7 @@ class Produit extends Model
     }
 
     /**
-     * @param  Builder<Produit>  $query
+     * @param  Builder<static>  $query
      */
     protected function performUpdate(Builder $query): bool
     {
@@ -368,7 +380,7 @@ class Produit extends Model
      * référence ne pourrait plus être relue. Tout autre refus de la base
      * remonte tel quel.
      *
-     * @param  Builder<Produit>  $query
+     * @param  Builder<static>  $query
      * @param  Closure(): bool  $ecriture
      */
     private function refuserUneReferencePriseEntreTemps(Builder $query, Closure $ecriture): bool

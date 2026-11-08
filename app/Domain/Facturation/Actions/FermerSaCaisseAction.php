@@ -219,7 +219,7 @@ class FermerSaCaisseAction
             ->orderByDesc('id')
             ->first();
         $calendrier = app(TenantContext::class)->magasin()->calendrier();
-        $depuis = $derniere?->jusqu_au ?? $calendrier->debutDuJour($calendrier->jourDe($jusquAu));
+        $depuis = $derniere->jusqu_au ?? $calendrier->debutDuJour($calendrier->jourDe($jusquAu));
 
         foreach ([$factures->min('date_emission'), $paiements->min('created_at')] as $plusAncien) {
             if ($plusAncien !== null && $plusAncien->lt($depuis)) {

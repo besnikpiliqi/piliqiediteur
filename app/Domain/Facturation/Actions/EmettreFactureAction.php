@@ -435,7 +435,7 @@ class EmettreFactureAction
      * registre, dont le crédit n'est pas épuisé. Un bon qui ne trouve plus
      * rien à régler est refusé.
      *
-     * @param  list<string>  $numeros
+     * @param  array<array-key, string>  $numeros
      *
      * @throws LogicException
      */

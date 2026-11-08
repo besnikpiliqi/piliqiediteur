@@ -77,6 +77,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
+use Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Auth;
@@ -125,6 +128,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Calendrier::exigerUnFuseauUtc();
+        $this->interdireLesRequetesCacheesHorsProduction();
 
         // Les modèles vivent sous App\Domain\<Domaine>\Models\... plutôt
         // qu'à plat sous App\Models. La convention par défaut de Laravel
@@ -177,6 +181,22 @@ class AppServiceProvider extends ServiceProvider
         $this->nommerLesChampsDansLesMessages();
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
         $this->neJamaisMettreEnFormeLesTextesDesEmails();
+    }
+
+    /**
+     * Hors production (développement, tests, CI), une relation lue fiche
+     * par fiche dans une boucle (une requête par fiche, « N+1 ») et un
+     * attribut lu sans avoir été chargé (une colonne absente du select)
+     * lèvent une exception au lieu de passer inaperçus : chaque liste,
+     * tableau de bord ou PDF charge d'avance ce qu'il lit. En production,
+     * rien ne change : la page s'affiche, plus lentement.
+     */
+    private function interdireLesRequetesCacheesHorsProduction(): void
+    {
+        $horsProduction = ! $this->app->isProduction();
+
+        Model::preventLazyLoading($horsProduction);
+        Model::preventAccessingMissingAttributes($horsProduction);
     }
 
     /**
@@ -298,35 +318,23 @@ class AppServiceProvider extends ServiceProvider
     {
         Select::configureUsing(function (Select $select): void {
             $select->rule(
-                static fn (Select $component): Exists => $component->getRelationship()->getRelated()::regleExisteDansLeMagasin(),
-                static function (Select $component): bool {
-                    $relation = $component->getRelationship();
-
-                    if (! $relation instanceof BelongsTo || ! in_array(BelongsToMagasin::class, class_uses_recursive($relation->getRelated()), true)) {
-                        return false;
-                    }
-
-                    $fiche = $relation->getParent();
-
-                    return ! $fiche->exists
-                        || (string) $component->getState() !== (string) $fiche->getOriginal($relation->getForeignKeyName());
-                },
+                static fn (Select $component): ?Exists => self::regleDuChoixDansLeMagasin($component),
+                static fn (Select $component): bool => self::regleDuChoixDansLeMagasin($component) !== null,
             );
         });
 
         Select::macro('relationProposable', function (string $relation, string $attributAffiche, ?array $colonnesDeRecherche = null): Select {
-            /** @var Select $this */
             return $this->relationship(
                 $relation,
                 $attributAffiche,
-                static fn (Builder $query, Select $component, ?Model $record): Builder => $query->proposables(
-                    $record?->getOriginal($component->getRelationship()->getForeignKeyName()),
-                ),
+                static fn (Builder $query, Select $component, ?Model $record): Builder => $query->scopes(['proposables' => [
+                    $record?->getOriginal(AppServiceProvider::relationDuChoix($component)->getForeignKeyName()),
+                ]]),
             )->getSearchResultsUsing(static function (Select $component, string $search) use ($attributAffiche, $colonnesDeRecherche): array {
-                /** @var BelongsTo<Model, Model> $relation */
-                $relation = Relation::noConstraints(static fn (): Relation => $component->getRelationship());
+                $relation = Relation::noConstraints(static fn (): BelongsTo => AppServiceProvider::relationDuChoix($component));
                 $cle = $relation->getRelated()->getKeyName();
-                $proposables = $relation->getQuery()->proposables($component->getRecord()?->getOriginal($relation->getForeignKeyName()));
+                $proposables = $relation->getQuery();
+                $proposables->scopes(['proposables' => [$component->getRecord()?->getOriginal($relation->getForeignKeyName())]]);
 
                 return RechercheSansAccents::appliquer($proposables, $search, $colonnesDeRecherche ?? [$attributAffiche])
                     ->orderBy($attributAffiche)
@@ -336,6 +344,51 @@ class AppServiceProvider extends ServiceProvider
                     ->all();
             });
         });
+    }
+
+    /**
+     * La règle « exists » d'un choix d'une fiche d'un magasin (un modèle
+     * BelongsToMagasin, le seul qui sait regleExisteDansLeMagasin()), à
+     * vérifier quand la fiche est nouvelle ou que le choix a changé ; null
+     * pour tout autre champ.
+     */
+    private static function regleDuChoixDansLeMagasin(Select $component): ?Exists
+    {
+        $relation = $component->getRelationship();
+
+        if (! $relation instanceof BelongsTo) {
+            return null;
+        }
+
+        $modele = $relation->getRelated()::class;
+        $fiche = $relation->getParent();
+
+        if (! method_exists($modele, 'regleExisteDansLeMagasin')
+            || ($fiche->exists && (string) $component->getState() === (string) $fiche->getOriginal($relation->getForeignKeyName()))) {
+            return null;
+        }
+
+        return $modele::regleExisteDansLeMagasin();
+    }
+
+    /**
+     * La relation d'un choix proposable (relationProposable()) : toujours
+     * celle d'une fiche vers le client ou le fournisseur qu'elle désigne.
+     * Publique : la macro s'exécute dans la portée du Select qui l'appelle.
+     *
+     * @return BelongsTo<Model, Model>
+     *
+     * @throws LogicException
+     */
+    public static function relationDuChoix(Select $component): BelongsTo
+    {
+        $relation = $component->getRelationship();
+
+        if (! $relation instanceof BelongsTo) {
+            throw new LogicException("Le choix « {$component->getName()} » n'est pas celui d'une fiche liée (BelongsTo).");
+        }
+
+        return $relation;
     }
 
     /**
@@ -371,15 +424,17 @@ class AppServiceProvider extends ServiceProvider
      * Les options d'un champ du panneau société ne portent sur des magasins
      * ou des comptes que par une relation de la société affichée (ses
      * magasins, ses membres) ; un modèle propre à une société l'est déjà
-     * par SocieteScope.
+     * par SocieteScope. Une relation BelongsToThrough, que Filament sait
+     * lire quand son paquet est installé, n'existe pas ici.
      *
      * @throws LogicException
      */
     public static function verifierLesChoixDuPanneauSociete(Select|CheckboxList $component): void
     {
         $relation = $component->getRelationship();
+        $connue = $relation instanceof BelongsTo || $relation instanceof BelongsToMany || $relation instanceof HasOneOrMany || $relation instanceof HasOneOrManyThrough;
 
-        if ($relation === null || ! in_array($relation->getRelated()::class, [Magasin::class, User::class], true)) {
+        if (! $connue || ! in_array($relation->getRelated()::class, [Magasin::class, User::class], true)) {
             return;
         }
 
@@ -408,7 +463,6 @@ class AppServiceProvider extends ServiceProvider
                 $composant->timezone(static fn (): string => app(TenantContext::class)->calendrierDAffichage()->fuseau());
             });
             $composant::macro('jour', function (string $format = 'd/m/Y'): TextColumn|TextEntry {
-                /** @var TextColumn|TextEntry $this */
                 return $this->formatStateUsing(static fn (?string $state): ?string => blank($state) ? null : Calendrier::afficherJour($state, $format));
             });
         }
@@ -423,7 +477,6 @@ class AppServiceProvider extends ServiceProvider
     private function declarerLaRechercheSansAccents(): void
     {
         TextColumn::macro('rechercheSansAccents', function (): TextColumn {
-            /** @var TextColumn $this */
             return $this->searchable(query: RechercheSansAccents::dans($this->getName()));
         });
     }
@@ -437,7 +490,6 @@ class AppServiceProvider extends ServiceProvider
     private function declarerLAdresseDeConnexion(): void
     {
         TextInput::macro('adresseDeConnexion', function (): TextInput {
-            /** @var TextInput $this */
             return $this
                 ->mutateStateForValidationUsing(static fn (?string $state): ?string => $state === null ? null : User::normaliserEmail($state))
                 ->dehydrateStateUsing(static fn (?string $state): ?string => $state === null ? null : User::normaliserEmail($state));
@@ -456,7 +508,6 @@ class AppServiceProvider extends ServiceProvider
     private function declarerLaSaisieEnDirect(): void
     {
         TextInput::macro('saisieEnDirect', function (): TextInput {
-            /** @var TextInput $this */
             return $this->live()->stateBindingModifiers(['live', 'unintrusive']);
         });
     }

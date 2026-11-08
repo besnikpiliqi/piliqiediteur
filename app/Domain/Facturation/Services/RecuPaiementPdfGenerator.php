@@ -81,10 +81,10 @@ class RecuPaiementPdfGenerator
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])->all(),
             ]),
-            'totaux' => array_values(array_filter([
+            'totaux' => array_filter([
                 ['libelle' => $total < 0 ? 'Total contre-passé' : 'Total encaissé', 'montant' => $this->calculateur->enEuros($total)],
                 $credit === 0 ? null : ['libelle' => $credit < 0 ? 'Crédit d\'avoir rendu' : 'Crédit d\'avoir imputé', 'montant' => $this->calculateur->enEuros($credit)],
-            ])),
+            ]),
             'documents' => $recu->lignes->map(fn (LigneRecuPaiement $ligne): array => [
                 'numero' => $ligne->facture->numero,
                 'libelle' => $ligne->facture->libelleDocument(),

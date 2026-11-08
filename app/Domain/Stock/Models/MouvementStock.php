@@ -57,12 +57,17 @@ class MouvementStock extends Model
     /**
      * Un mouvement garde son produit, même archivé depuis (voir les
      * SoftDeletes de Produit).
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {
         return $this->belongsTo(Produit::class)->withTrashed();
     }
 
+    /**
+     * @return MorphTo<Model, $this>
+     */
     public function source(): MorphTo
     {
         return $this->morphTo();

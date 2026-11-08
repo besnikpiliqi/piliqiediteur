@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\FactureResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
+use App\Domain\Facturation\Models\Facture;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -20,6 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  * ressaisir en cas d'erreur de saisie. La suppression complète reste aussi
  * disponible ici (cascade DB sur les lignes, voir la migration
  * lignes_facture) sans avoir besoin de les retirer une à une d'abord.
+ *
+ * @property Facture $record
  */
 class EditFacture extends EditRecord
 {
@@ -61,7 +64,7 @@ class EditFacture extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $client = Client::withTrashed()->findOrFail($data['client_id']);
 
-        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle(auth()->user(), $record, $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle(auth()->user(), $this->record, $client, $data['lignes'], [
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...FactureResource::attributsDeLaNature($data),

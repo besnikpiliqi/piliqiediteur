@@ -65,7 +65,7 @@ class ConstructeurLigneInventaire
      * Enregistre les lignes de l'inventaire, dans leur ordre, à la place de
      * celles qu'il avait, puis sa valeur.
      *
-     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: mixed, cout_unitaire_ht: mixed}>  $lignes
+     * @param  array<array-key, array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: mixed, cout_unitaire_ht: mixed}>  $lignes
      *
      * @throws InvalidArgumentException
      * @throws LogicException
@@ -253,13 +253,15 @@ class ConstructeurLigneInventaire
      * coût unitaire (en millionièmes d'euro), arrondie une fois au centime le
      * plus proche, un demi-centime au centime supérieur, dans les limites des
      * colonnes -- 1 000 x 0,1234 € valent 123,40 € ; zéro pour un produit qui
-     * ne suit pas son stock, dont rien n'entre en stock.
+     * ne suit pas son stock, dont rien n'entre en stock. Le produit passe par
+     * array_product(), qui calcule comme « * » et rend un flottant quand il
+     * déborde d'un entier.
      *
      * @throws InvalidArgumentException
      */
     private function valeurDuStock(int $quantite, int $cout, bool $suiviStock): int
     {
-        $millioniemes = $quantite * $cout;
+        $millioniemes = array_product([$quantite, $cout]);
         $valeur = is_int($millioniemes) ? intdiv($millioniemes, 10000) + (2 * ($millioniemes % 10000) >= 10000 ? 1 : 0) : null;
 
         if ($quantite > self::QUANTITE_MAXIMUM || $valeur === null || $valeur > self::VALEUR_MAXIMUM) {

@@ -100,8 +100,29 @@ class NotificationsDeLaSocieteTest extends TestCase
         return collect(File::allFiles(app_path()))
             ->map(fn (SplFileInfo $fichier): string => 'App\\'.Str::of($fichier->getRelativePathname())->beforeLast('.php')->replace('/', '\\'))
             ->filter(fn (string $classe): bool => class_exists($classe) && is_subclass_of($classe, Notification::class) && ! (new ReflectionClass($classe))->isAbstract())
-            ->filter(fn (string $classe): bool => in_array('database', (new ReflectionClass($classe))->newInstanceWithoutConstructor()->via(new \stdClass), true))
+            ->filter(fn (string $classe): bool => in_array('database', self::sansSonConstructeur($classe)->via(new \stdClass), true))
             ->values()
             ->all();
+    }
+
+    /**
+     * Une notification créée sans son constructeur, dont chaque propriété
+     * promue qui a une valeur par défaut la reçoit, comme une notification
+     * créée sans cet argument : son canal (via()) peut la lire.
+     *
+     * @param  class-string<Notification>  $classe
+     */
+    private static function sansSonConstructeur(string $classe): Notification
+    {
+        $reflexion = new ReflectionClass($classe);
+        $notification = $reflexion->newInstanceWithoutConstructor();
+
+        foreach ($reflexion->getConstructor()?->getParameters() ?? [] as $parametre) {
+            if ($parametre->isPromoted() && $parametre->isDefaultValueAvailable()) {
+                $reflexion->getProperty($parametre->getName())->setValue($notification, $parametre->getDefaultValue());
+            }
+        }
+
+        return $notification;
     }
 }

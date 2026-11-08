@@ -84,11 +84,17 @@ class AvoirFournisseur extends Model
         });
     }
 
+    /**
+     * @return BelongsTo<FactureAchat, $this>
+     */
     public function factureAchat(): BelongsTo
     {
         return $this->belongsTo(FactureAchat::class);
     }
 
+    /**
+     * @return HasMany<LigneAvoirFournisseur, $this>
+     */
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneAvoirFournisseur::class)->orderBy('ordre')->orderBy('id');
@@ -109,6 +115,8 @@ class AvoirFournisseur extends Model
      * Sa TVA, taux par taux, telle que l'écrit la note d'avoir du
      * fournisseur (voir TvaDuFournisseur), dans l'ordre où chaque taux
      * apparaît.
+     *
+     * @return HasMany<TauxAvoirFournisseur, $this>
      */
     public function taux(): HasMany
     {

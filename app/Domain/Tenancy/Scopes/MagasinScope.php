@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\Scope;
  * cross-tenant (Super Admin) doit passer explicitement par
  * withoutGlobalScope(self::class), jamais par un contexte "vide" qui
  * désactiverait silencieusement le filtre.
+ *
+ * @implements Scope<Model>
  */
 class MagasinScope implements Scope
 {

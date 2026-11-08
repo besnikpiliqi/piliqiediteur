@@ -122,6 +122,8 @@ use LogicException;
  * la caisse rechargée, vide, rappelle la dernière vente enregistrée (voir
  * derniereVenteEnregistree()). Chaque nouvelle vente, encaissée ou
  * abandonnée, prend un nouveau jeton.
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class Caisse extends Page implements HasForms
 {
@@ -303,7 +305,7 @@ class Caisse extends Page implements HasForms
      */
     private function remplirFormulaire(?PanierCaisse $panier, ?array $parts = null): void
     {
-        $clientId = $panier?->client_id ?? Client::query()->where('est_comptoir', true)->value('id');
+        $clientId = $panier->client_id ?? Client::query()->where('est_comptoir', true)->value('id');
 
         $this->form->fill([
             'client_id' => $clientId,

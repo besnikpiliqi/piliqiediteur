@@ -14,6 +14,8 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -196,54 +198,58 @@ final class RecapitulatifDesDocuments
                     ? [$ligne(['ht' => 0, 'tva' => 0, 'ttc' => 0])]
                     : array_map(fn (array $taux): array => $ligne([...$taux, 'taux' => self::taux($taux['taux'] / 100)]), $nets);
             case TypeDeDocumentTelechargeable::Encaissements:
-                return $this->lignesDuReleve($lus['paiements']->get($document->identifiant, collect()), $lus['credits'][$document->identifiant] ?? 0, $ligne);
+                return array_map(
+                    fn (array $encaisse): array => $ligne(['ttc' => $encaisse['ttc']], mode: $encaisse['mode']),
+                    $this->encaissementsDuReleve($lus['paiements']->get($document->identifiant, collect()), $lus['credits'][$document->identifiant] ?? 0),
+                );
         }
     }
 
     /**
-     * Une ligne par mode qui a des paiements, puis le crédit d'avoir
-     * utilisé, s'il y en a.
+     * Ce que le relevé encaisse : un montant par mode qui a des paiements,
+     * puis le crédit d'avoir utilisé, s'il y en a.
      *
      * @param  Collection<int, Paiement>  $paiements  les paiements du mois que la personne voit
-     * @param  callable(array<string, mixed>, ?string=, ?string=, ?array<int, int>=): list<string>  $ligne
-     * @return list<list<string>>
+     * @return list<array{ttc: int, mode: string}>
      */
-    private function lignesDuReleve(Collection $paiements, int $credit, callable $ligne): array
+    private function encaissementsDuReleve(Collection $paiements, int $credit): array
     {
-        $lignes = [];
+        $encaissements = [];
 
         foreach ([...ModePaiement::aLaCaisse(), ModePaiement::Prelevement] as $mode) {
             $duMode = $paiements->filter(fn (Paiement $paiement): bool => $paiement->mode_paiement === $mode);
 
             if ($duMode->isNotEmpty()) {
-                $lignes[] = $ligne(['ttc' => (int) $duMode->sum(fn (Paiement $paiement): int => $this->calculateur->enCentiemes($paiement->montant))], mode: $mode->getLabel());
+                $encaissements[] = ['ttc' => (int) $duMode->sum(fn (Paiement $paiement): int => $this->calculateur->enCentiemes($paiement->montant)), 'mode' => $mode->getLabel()];
             }
         }
 
         if ($credit !== 0) {
-            $lignes[] = $ligne(['ttc' => $credit], mode: 'Avoir (crédit utilisé)');
+            $encaissements[] = ['ttc' => $credit, 'mode' => 'Avoir (crédit utilisé)'];
         }
 
-        return $lignes;
+        return $encaissements;
     }
 
     /**
      * Les montants de ces lignes, additionnés en centimes taux par taux,
      * du plus fort au plus faible.
      *
-     * @param  Collection<int, Model>  $lignes
+     * @template TLigne of LigneFacture|LigneAvoir
+     *
+     * @param  Collection<int, TLigne>  $lignes
      * @return Collection<string, array{taux: string, ht: int, tva: int, ttc: int}>
      */
     private function parTaux(Collection $lignes): Collection
     {
         return $lignes
-            ->groupBy(fn (Model $ligne): string => number_format((float) $ligne->taux_tva, 2, '.', ''))
+            ->groupBy(fn (LigneFacture|LigneAvoir $ligne): string => number_format((float) $ligne->taux_tva, 2, '.', ''))
             ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
             ->map(fn (Collection $duTaux, string $taux): array => [
                 'taux' => self::taux($taux),
-                'ht' => (int) $duTaux->sum(fn (Model $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ht)),
-                'tva' => (int) $duTaux->sum(fn (Model $ligne): int => $this->calculateur->enCentiemes($ligne->montant_tva)),
-                'ttc' => (int) $duTaux->sum(fn (Model $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)),
+                'ht' => (int) $duTaux->sum(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ht)),
+                'tva' => (int) $duTaux->sum(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_tva)),
+                'ttc' => (int) $duTaux->sum(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)),
             ]);
     }
 

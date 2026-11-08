@@ -84,8 +84,8 @@ class VerificateurJournalAudit
                 $derniere = $entree;
             });
 
-        $derniereSequence = $derniere?->sequence ?? ($tete->reprise_sequence ?? 0);
-        $derniereEmpreinte = $derniere?->empreinte ?? $tete->reprise_empreinte;
+        $derniereSequence = $derniere->sequence ?? ($tete->reprise_sequence ?? 0);
+        $derniereEmpreinte = $derniere->empreinte ?? $tete->reprise_empreinte;
 
         if ($derniereSequence !== $tete->sequence || $derniereEmpreinte !== $tete->empreinte) {
             $anomalies[] = "{$nom} : la tête retient la séquence {$tete->sequence}, la chaîne s'arrête à {$derniereSequence} ; des dernières entrées manquent ou ont été ajoutées hors du journal.";

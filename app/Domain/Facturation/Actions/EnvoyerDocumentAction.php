@@ -22,7 +22,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
@@ -243,6 +242,8 @@ class EnvoyerDocumentAction
      * devis supprimé entre-temps est refusé), et le droit de l'auteur
      * d'envoyer ce document-là.
      *
+     * @param  Facture|Devis|Avoir|RecuPaiement  $document
+     *
      * @throws AuthorizationException
      * @throws LogicException
      */
@@ -258,7 +259,7 @@ class EnvoyerDocumentAction
      * Le document relu sous verrou, par la requête du magasin actif : un
      * document d'un autre magasin n'existe pas ici.
      *
-     * @template TDocument of Model&DocumentEnvoyable
+     * @template TDocument of Facture|Avoir|Devis|RecuPaiement
      *
      * @param  TDocument  $document
      * @return TDocument
@@ -278,7 +279,7 @@ class EnvoyerDocumentAction
      * l'application, sans droit de modifier ses lignes, ne peut pas les
      * verrouiller.
      *
-     * @template TDocument of Model&DocumentEnvoyable
+     * @template TDocument of Facture|Avoir|Devis|RecuPaiement
      *
      * @param  TDocument  $document
      * @return TDocument
@@ -296,7 +297,7 @@ class EnvoyerDocumentAction
     /**
      * @throws LogicException
      */
-    private function verifierLeDebit(Model&DocumentEnvoyable $document, ?User $expediteur): void
+    private function verifierLeDebit(Facture|Avoir|Devis|RecuPaiement $document, ?User $expediteur): void
     {
         if ($expediteur !== null) {
             $this->debit->verifier($expediteur, (int) $document->magasin_id);

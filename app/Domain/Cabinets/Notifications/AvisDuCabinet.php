@@ -47,7 +47,7 @@ class AvisDuCabinet extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ($this->parCourriel ?? false) ? ['database', 'mail'] : ['database'];
+        return $this->parCourriel ? ['database', 'mail'] : ['database'];
     }
 
     public function toMail(object $notifiable): MailMessage

@@ -58,6 +58,20 @@ final class OperateurCourant
     }
 
     /**
+     * L'opération au nom de cette personne, ou du système quand il n'y en
+     * a pas (une procédure de l'éditeur, une tâche planifiée).
+     *
+     * @template TResultat
+     *
+     * @param  Closure(): TResultat  $operation
+     * @return TResultat
+     */
+    public function auNomDe(?User $operateur, Closure $operation): mixed
+    {
+        return $this->poser(true, $operateur, $operation);
+    }
+
+    /**
      * La personne posée ; null sous pendantLeSysteme(), sans jamais revenir
      * à la personne connectée ; si rien n'est posé, la personne connectée,
      * pour les seuls événements techniques hors action.

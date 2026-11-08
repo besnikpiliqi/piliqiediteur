@@ -368,8 +368,8 @@ class InalterabiliteTest extends TestCase
         return [
             'magasin' => [static fn (Facture $facture): Model => $facture->magasin],
             'auteur de la facture' => [static fn (Facture $facture): Model => User::query()->findOrFail($facture->cree_par)],
-            'produit d\'une ligne' => [static fn (Facture $facture): Model => $facture->lignes->firstWhere('produit_id', '!=', null)->produit],
-            'service d\'une ligne' => [static fn (Facture $facture): Model => $facture->lignes->firstWhere('service_id', '!=', null)->service],
+            'produit d\'une ligne' => [static fn (Facture $facture): Model => $facture->load('lignes.produit')->lignes->firstWhere('produit_id', '!=', null)->produit],
+            'service d\'une ligne' => [static fn (Facture $facture): Model => $facture->load('lignes.service')->lignes->firstWhere('service_id', '!=', null)->service],
         ];
     }
 

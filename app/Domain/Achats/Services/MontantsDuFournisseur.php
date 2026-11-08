@@ -49,10 +49,11 @@ final readonly class MontantsDuFournisseur
      * La saisie d'un écran ou d'un appel de l'API : « taux », une liste de
      * taux avec leur TVA (« montant_tva ») et, pour l'API, leur base
      * (« base_ht ») ; « total_ttc » ; « confirmation ». Une TVA, une base ou
-     * un total laissés vides ne disent rien. Un montant s'écrit au centime
-     * (voir SaisieDecimale::montantAuCentime()).
+     * un total laissés vides ne disent rien, comme un taux qui n'est pas un
+     * tableau. Un montant s'écrit au centime (voir
+     * SaisieDecimale::montantAuCentime()).
      *
-     * @param  array{taux?: iterable<array{taux_tva?: mixed, montant_tva?: mixed, base_ht?: mixed}>|null, total_ttc?: mixed, confirmation?: mixed}  $saisie
+     * @param  array{taux?: iterable<mixed>|null, total_ttc?: mixed, confirmation?: mixed}  $saisie
      *
      * @throws InvalidArgumentException
      */

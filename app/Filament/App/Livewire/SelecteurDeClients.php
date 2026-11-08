@@ -5,6 +5,7 @@ namespace App\Filament\App\Livewire;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Filament\App\Resources\ClientResource;
@@ -116,7 +117,10 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                 // (voir Facture::scopeVisiblesPar()).
                 TextColumn::make('factures_max_date_emission')
                     ->label('Dernier achat')
-                    ->max(['factures' => fn (Builder $query): Builder => $query->visiblesPar(auth()->user())], 'date_emission')
+                    ->max(['factures' => function (Builder $query): Builder {
+                        /** @var Builder<Facture> $query */
+                        return $query->visiblesPar(auth()->user());
+                    }], 'date_emission')
                     ->dateTime('d/m/Y')
                     ->placeholder('—')
                     ->visible($voitLesFiches)
@@ -137,7 +141,10 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                     ->label('Avec un crédit d\'avoir')
                     ->toggle()
                     ->visible($voitLesFiches)
-                    ->query(fn (Builder $query): Builder => $query->avecUnCreditDAvoir()),
+                    ->query(function (Builder $query): Builder {
+                        /** @var Builder<Client> $query */
+                        return $query->avecUnCreditDAvoir();
+                    }),
             ])
             ->headerActions([
                 Action::make('nouveauClient')

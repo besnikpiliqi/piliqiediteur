@@ -140,6 +140,7 @@ class EReportingDesParticuliers
 
         $avecDesTransactions = fn (Builder $clotures): Builder => $clotures->where('clotures_caisse.nombre_ventes', '>', 0)->orWhere('clotures_caisse.nombre_avoirs', '>', 0);
         $parLeursEncaissements = ClotureCaisse::query()
+            ->with('magasin')
             ->where('clotures_caisse.magasin_id', $magasin->getKey())
             ->whereNot($avecDesTransactions)
             ->where(fn (Builder $clotures): Builder => self::quiComptentUnReglementDeService($clotures))
@@ -148,6 +149,7 @@ class EReportingDesParticuliers
             ->modelKeys();
 
         return ClotureCaisse::query()
+            ->with('magasin')
             ->where('clotures_caisse.magasin_id', $magasin->getKey())
             ->where(fn (Builder $clotures): Builder => $avecDesTransactions($clotures)->orWhereIn('clotures_caisse.id', $parLeursEncaissements));
     }

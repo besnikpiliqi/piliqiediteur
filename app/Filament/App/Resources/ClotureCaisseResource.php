@@ -19,6 +19,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 
@@ -60,6 +61,8 @@ class ClotureCaisseResource extends Resource
      * Confidentialité par vendeur (voir ClotureCaissePolicy) : sans
      * cloture_caisse.view_toutes, la liste elle-même ne doit montrer que
      * les clôtures déclenchées par l'utilisateur courant.
+     *
+     * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {
@@ -232,8 +235,8 @@ class ClotureCaisseResource extends Resource
      * numéro ni client, null quand elle les voit tous. Les totaux
      * s'additionnent en centimes (voir CalculateurLigne).
      *
-     * @param  HasMany<Facture>|HasMany<Avoir>  $tous
-     * @param  HasMany<Facture>|HasMany<Avoir>  $visibles
+     * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $tous
+     * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $visibles
      * @return array{visibles: list<array{numero: string, url: string, client_nom: string|null, ht: string, tva: string, ttc: string}>, autres: string|null}
      */
     private static function documentsVisibles(HasMany $tous, HasMany $visibles): array

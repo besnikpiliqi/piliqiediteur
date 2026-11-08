@@ -115,6 +115,8 @@ class ClotureCaissePersonnelle extends Model
     /**
      * Les ventes comptées par cette fermeture -- chacune ne l'est jamais
      * que par une seule (voir Facture::scopeNonFermeesParLeVendeur()).
+     *
+     * @return BelongsToMany<Facture, $this>
      */
     public function factures(): BelongsToMany
     {
@@ -125,6 +127,8 @@ class ClotureCaissePersonnelle extends Model
      * Les paiements comptés par cette fermeture, contre-passations
      * comprises -- chacun ne l'est jamais que par une seule (voir
      * Paiement::scopeNonFermesParLeVendeur()).
+     *
+     * @return BelongsToMany<Paiement, $this>
      */
     public function paiements(): BelongsToMany
     {
@@ -147,10 +151,10 @@ class ClotureCaissePersonnelle extends Model
      */
     public function encaissementsEnClair(): array
     {
-        return array_values(array_map(
+        return array_map(
             fn (string $mode, string $montant): string => ModePaiement::from($mode)->getLabel().' : '.number_format((float) $montant, 2, ',', ' ').' €',
             array_keys($this->encaissements),
             $this->encaissements,
-        ));
+        );
     }
 }

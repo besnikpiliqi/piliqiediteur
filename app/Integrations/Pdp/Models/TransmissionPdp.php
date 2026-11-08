@@ -43,16 +43,25 @@ class TransmissionPdp extends Model
         });
     }
 
+    /**
+     * @return MorphTo<Model, $this>
+     */
     public function transmissible(): MorphTo
     {
         return $this->morphTo();
     }
 
+    /**
+     * @return HasMany<EvenementTransmissionPdp, $this>
+     */
     public function evenements(): HasMany
     {
         return $this->hasMany(EvenementTransmissionPdp::class);
     }
 
+    /**
+     * @param  array<string, mixed>|null  $chargeUtile  ce que la plateforme a envoyé avec ce statut
+     */
     public function enregistrerChangementStatut(StatutTransmissionPdp $statut, ?array $chargeUtile = null): void
     {
         $this->forceFill([

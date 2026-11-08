@@ -120,17 +120,25 @@ class Devis extends Model implements DocumentEnvoyable
      * sortira le reprend (voir CreerFactureDepuisDevisAction). Un devis ne
      * part pas si la fiche a changé de type depuis (voir
      * EmettreDevisAction).
+     *
+     * @return BelongsTo<Client, $this>
      */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class)->withTrashed();
     }
 
+    /**
+     * @return HasMany<LigneDevis, $this>
+     */
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneDevis::class)->orderBy('ordre')->orderBy('id');
     }
 
+    /**
+     * @return HasMany<Facture, $this>
+     */
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);

@@ -21,6 +21,7 @@ use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Database\DatabaseTransactionRecord;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -236,7 +237,7 @@ class RegistreFiscal
      */
     public function sousVerrouDesMagasinsDesClients(Societe $cabinet, Collection $magasins, Closure $operation): mixed
     {
-        $magasins = $magasins->sortBy(fn (Magasin $magasin): int => $magasin->getKey())->values();
+        $magasins = (new EloquentCollection($magasins->sortBy(fn (Magasin $magasin): int => $magasin->getKey())->values()->all()))->loadMissing('societe');
         $clients = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
             ->where('cabinet_id', $cabinet->getKey())
             ->whereIn('societe_id', $magasins->pluck('societe_id')->unique()->values()->all())

@@ -77,7 +77,7 @@ class CreerAvoirAction
     ) {}
 
     /**
-     * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     * @param  array<array-key, array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
      * @param  bool  $regularisation  l'avoir de régularisation d'une facture désignée par l'examen du SIREN de la société (voir RegularisationDUneFacture)
      *
      * @throws AuthorizationException
@@ -140,7 +140,7 @@ class CreerAvoirAction
                 }
 
                 $restante = $ligneFacture->quantiteCreditableRestante();
-                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à créditer');
+                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'], 'La quantité à créditer');
 
                 if ($quantite > $restante) {
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");

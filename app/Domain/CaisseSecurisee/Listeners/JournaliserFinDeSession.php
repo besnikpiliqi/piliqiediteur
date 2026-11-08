@@ -50,6 +50,7 @@ class JournaliserFinDeSession
         $session = $requete->session();
         $duCabinet = $utilisateur->estDUnCabinet();
         $magasins = Magasin::query()
+            ->with('societe')
             ->whereKey(MagasinsOuvertsParLaSession::de($session))
             ->when(! $duCabinet, fn ($magasins) => $magasins->where('societe_id', $utilisateur->societe_id))
             ->orderBy('id')

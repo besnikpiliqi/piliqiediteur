@@ -302,7 +302,7 @@ class Societe extends Model implements HasName
      */
     public function magasins(): HasMany
     {
-        return $this->hasMany(Magasin::class);
+        return $this->hasMany(Magasin::class)->chaperone('societe');
     }
 
     /**
@@ -313,7 +313,7 @@ class Societe extends Model implements HasName
      */
     public function magasinsReels(): HasMany
     {
-        return $this->hasMany(Magasin::class)->where('est_demonstration', false);
+        return $this->hasMany(Magasin::class)->where('est_demonstration', false)->chaperone('societe');
     }
 
     /**
@@ -332,7 +332,7 @@ class Societe extends Model implements HasName
      */
     public function membres(): HasMany
     {
-        return $this->hasMany(User::class);
+        return $this->hasMany(User::class)->chaperone('societe');
     }
 
     /**
@@ -340,7 +340,7 @@ class Societe extends Model implements HasName
      */
     public function proprietaire(): HasOne
     {
-        return $this->hasOne(User::class)->where('role_societe', RoleSociete::Proprietaire->value);
+        return $this->hasOne(User::class)->where('role_societe', RoleSociete::Proprietaire->value)->chaperone('societe');
     }
 
     /**

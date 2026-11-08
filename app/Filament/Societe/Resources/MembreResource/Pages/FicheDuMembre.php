@@ -86,7 +86,7 @@ class FicheDuMembre extends ViewRecord
                 ];
             })
             ->form(MembreResource::champsDuRoleDeMembre())
-            ->modalDescription(fn (): string => 'Son magasin ne change pas : '.($this->compte()->magasinDeSonIdentifiant()?->nom ?? '—').'.')
+            ->modalDescription(fn (): string => 'Son magasin ne change pas : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.')
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
                     $role = MembreResource::roleSaisi($data);
@@ -146,7 +146,7 @@ class FicheDuMembre extends ViewRecord
                 Group::make([
                     Placeholder::make('magasin_de_rattachement')
                         ->label('Son magasin, définitif')
-                        ->content(fn (): string => $this->compte()->magasinDeSonIdentifiant()?->nom ?? '—')
+                        ->content(fn (): string => $this->compte()->magasinDeSonIdentifiant()->nom ?? '—')
                         ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() !== null),
                     Select::make('magasin_id')
                         ->label('Son magasin, définitif')
@@ -288,7 +288,7 @@ class FicheDuMembre extends ViewRecord
                 default => [],
             })
             ->requiresConfirmation(fn (): bool => ! $this->auteur()->estProprietaire())
-            ->modalDescription(fn (): string => $this->compte()->estMembre() ? 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()?->nom ?? '—').'.' : 'Il retrouve son rôle.')
+            ->modalDescription(fn (): string => $this->compte()->estMembre() ? 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.' : 'Il retrouve son rôle.')
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
                     $action = app(ChangerStatutCompteAction::class);

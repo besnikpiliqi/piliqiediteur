@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
@@ -16,7 +17,6 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Models\User;
 use Filament\Actions;
-use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Collection;
@@ -114,7 +114,7 @@ class ListClotureCaisses extends ListRecords
                 ->visible(fn (): bool => auth()->user()->can('cloturer', ClotureCaisse::class)
                     && $this->journeesACloturer()->isNotEmpty())
                 ->action(fn (array $data) => static::executerSansCasser(function () use ($journeeVisee, $enClair, $data): void {
-                    ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne(auth()->user(), Filament::getTenant(), $journeeVisee, $data['jeton']);
+                    ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne(auth()->user(), app(TenantContext::class)->magasin(), $journeeVisee, $data['jeton']);
                     $this->journeesEnAttente = $this->vendeursEnAttente = null;
 
                     if ($clotures->isEmpty()) {

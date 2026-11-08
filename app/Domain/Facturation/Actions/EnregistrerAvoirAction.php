@@ -53,7 +53,7 @@ class EnregistrerAvoirAction
     ) {}
 
     /**
-     * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     * @param  array<array-key, array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
      * @param  string|null  $jeton  le jeton de la demande (R3)
      *
      * @throws AuthorizationException

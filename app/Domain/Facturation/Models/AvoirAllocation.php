@@ -46,11 +46,17 @@ class AvoirAllocation extends Model
         return 'Ce qu\'un avoir crédite d\'une facture ne se modifie ni ne se supprime.';
     }
 
+    /**
+     * @return BelongsTo<Avoir, $this>
+     */
     public function avoir(): BelongsTo
     {
         return $this->belongsTo(Avoir::class);
     }
 
+    /**
+     * @return BelongsTo<Facture, $this>
+     */
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);
@@ -60,6 +66,8 @@ class AvoirAllocation extends Model
      * Le paiement qui a imputé ce crédit, ou la contre-passation qui l'a
      * rendu ou réimputé ; null pour un crédit imputé à l'émission d'un
      * avoir ou d'une facture.
+     *
+     * @return BelongsTo<Paiement, $this>
      */
     public function paiement(): BelongsTo
     {

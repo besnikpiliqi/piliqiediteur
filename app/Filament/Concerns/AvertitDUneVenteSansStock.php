@@ -49,7 +49,9 @@ trait AvertitDUneVenteSansStock
      */
     protected static function descriptionDeLAvertissement(array $arguments): HtmlString
     {
-        return new HtmlString(collect($arguments['avertissements'] ?? [])
+        $avertissements = $arguments['avertissements'] ?? [];
+
+        return new HtmlString(collect(is_array($avertissements) ? $avertissements : [])
             ->map(fn (mixed $avertissement): string => e((string) $avertissement))
             ->push(e('Confirmer la vente ? La quantité négative restera à régulariser par un achat, une réception ou un inventaire.'))
             ->implode('<br>'));

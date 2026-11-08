@@ -31,13 +31,13 @@ trait ProtegeLesDonneesValidees
 {
     public static function bootProtegeLesDonneesValidees(): void
     {
-        static::creating(static function (Model $donnee): void {
+        static::creating(static function (self $donnee): void {
             if ($donnee->estValidee()) {
                 throw DonneeFiscaleInalterableException::ajout($donnee->regleDInalterabilite());
             }
         });
 
-        static::updating(static function (Model $donnee): void {
+        static::updating(static function (self $donnee): void {
             if (! $donnee->estValidee()) {
                 return;
             }
@@ -49,7 +49,7 @@ trait ProtegeLesDonneesValidees
             }
         });
 
-        static::deleting(static function (Model $donnee): void {
+        static::deleting(static function (self $donnee): void {
             if ($donnee->estValidee()) {
                 throw DonneeFiscaleInalterableException::suppression($donnee->regleDInalterabilite());
             }

@@ -19,6 +19,7 @@ use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use LogicException;
 
 /**
  * L'e-mail qui porte un devis, une facture, un avoir ou un reçu de
@@ -42,21 +43,27 @@ use Illuminate\Mail\Mailables\Envelope;
  */
 class DocumentMail extends Mailable
 {
+    private readonly Facture|Devis|Avoir|RecuPaiement $document;
+
     private readonly Emetteur $emetteur;
 
     /**
      * L'émetteur se lit ici, au départ de l'e-mail (voir
      * EnvoyerDocumentJob), dans le magasin de l'envoi : pour une facture
-     * ou un avoir, dans son enregistrement signé au registre fiscal.
+     * ou un avoir, dans son enregistrement signé au registre fiscal. Un
+     * envoi dont le document a été supprimé depuis (un devis brouillon) ne
+     * part pas : EnvoyerDocumentJob le constate avant, sans e-mail.
      *
      * @throws DocumentSansEnregistrementSigneException
+     * @throws LogicException
      */
     public function __construct(
         public readonly EnvoiDocument $envoi,
         private readonly string $pdf,
         private readonly string $nomFichier,
     ) {
-        $this->emetteur = $envoi->document->emetteur();
+        $this->document = $envoi->document ?? throw new LogicException('Le document de cet envoi n\'existe plus : l\'e-mail ne part pas.');
+        $this->emetteur = $this->document->emetteur();
     }
 
     public function envelope(): Envelope
@@ -112,24 +119,27 @@ class DocumentMail extends Mailable
             return null;
         }
 
-        /** @var DocumentEnvoyable $document */
-        $document = $this->envoi->document;
-
-        if ($document instanceof RecuPaiement) {
-            return $this->introductionDuRecu($document);
-        }
-
-        $montant = number_format((float) $document->total_ttc, 2, ',', ' ').' € TTC';
+        $document = $this->document;
 
         return match (true) {
-            $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de {$montant}.",
-            $document instanceof Facture && $document->montantRestant() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}, déjà réglée.",
-            $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}"
+            $document instanceof RecuPaiement => $this->introductionDuRecu($document),
+            $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de ".self::montant($document).'.',
+            $document instanceof Facture && $document->montantRestant() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document).', déjà réglée.',
+            $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document)
                 .($document->date_echeance ? ', à régler au plus tard le '.Calendrier::afficherJour($document->date_echeance, 'd/m/Y').'.' : '.'),
-            $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de {$montant}"
+            $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de ".self::montant($document)
                 .($document->date_validite ? ', valable jusqu\'au '.Calendrier::afficherJour($document->date_validite, 'd/m/Y').'.' : '.'),
-            $document instanceof Avoir => "Veuillez trouver ci-joint notre avoir {$document->numero} d'un montant de {$montant}.",
+            $document instanceof Avoir => "Veuillez trouver ci-joint notre avoir {$document->numero} d'un montant de ".self::montant($document).'.',
         };
+    }
+
+    /**
+     * Le total TTC d'une vente, d'un devis ou d'un avoir, tel qu'il
+     * s'imprime : « 1 234,50 € TTC ».
+     */
+    private static function montant(Facture|Devis|Avoir $document): string
+    {
+        return number_format((float) $document->total_ttc, 2, ',', ' ').' € TTC';
     }
 
     /**

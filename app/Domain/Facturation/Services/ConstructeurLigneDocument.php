@@ -41,7 +41,7 @@ class ConstructeurLigneDocument
      * d'erreur. Un brouillon déjà composé avec lui s'émet toujours, sans
      * repasser par ici, et le sort du stock (voir LigneFacture::produit()).
      *
-     * @param  list<array<string, mixed>>  $lignesDonnees
+     * @param  array<array-key, array<string, mixed>>  $lignesDonnees
      *
      * @throws InvalidArgumentException
      * @throws LogicException
@@ -207,11 +207,11 @@ class ConstructeurLigneDocument
         };
         $tauxTva = $contexte->exonere() ? 0 : $tauxTvaDuPrix;
 
-        $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
+        $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite']);
 
         $prixUnitaireTtc = filled($prixSaisi)
             ? SaisieDecimale::enCentiemes($prixSaisi)
-            : $this->calculateur->enCentiemes($produit?->prix_vente_ttc ?? $service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."));
+            : $this->calculateur->enCentiemes($produit->prix_vente_ttc ?? $service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."));
 
         if ($prixUnitaireTtc < 0) {
             throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');
@@ -227,7 +227,7 @@ class ConstructeurLigneDocument
             'produit_id' => $produit?->id,
             'service_id' => $service?->id,
             'nature' => $produit !== null ? NatureLigne::Bien : NatureLigne::Service,
-            'description' => $produit?->nom ?? $service->nom,
+            'description' => $produit->nom ?? $service->nom,
             'reference' => $produit?->reference,
             'quantite' => $quantite,
             'prix_unitaire_ht' => $this->calculateur->enDecimalAuMillionieme($this->calculateur->prixUnitaireHtExact($prixUnitaireTtc, $tauxTvaDuPrix)),

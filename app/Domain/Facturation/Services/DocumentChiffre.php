@@ -13,7 +13,7 @@ final readonly class DocumentChiffre
 {
     /**
      * @param  array<array-key, array<string, mixed>>  $lignes  par clé de ligne, chacune avec montant_ht, montant_tva et montant_ttc
-     * @param  array<string, array{montant_ht: string, montant_tva: string, montant_ttc: string}>  $parTaux  par taux facturé (« 20.00 »), dans l'ordre où il apparaît
+     * @param  array<string, array{montant_ht: string, montant_tva: string, montant_ttc: string, montant_tva_calcule?: string}>  $parTaux  par taux facturé (« 20.00 »), dans l'ordre où il apparaît ; pour un achat, avec la TVA que PILIQI propose (montant_tva_calcule)
      * @param  array{total_ht: string, total_tva: string, total_ttc: string}  $totaux
      */
     public function __construct(

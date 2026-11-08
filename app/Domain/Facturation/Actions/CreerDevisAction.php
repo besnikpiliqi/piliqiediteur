@@ -49,7 +49,7 @@ class CreerDevisAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs  date_validite, conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
      *
      * @throws AuthorizationException
@@ -70,7 +70,7 @@ class CreerDevisAction
     }
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException

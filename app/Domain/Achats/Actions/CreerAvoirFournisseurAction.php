@@ -71,7 +71,7 @@ class CreerAvoirFournisseurAction
     public const LONGUEUR_NUMERO_FOURNISSEUR = 60;
 
     /**
-     * @param  list<array{ligne_achat_id: int|string, quantite: int|string, montant_ht?: float|string|null}>  $lignesSelectionnees
+     * @param  array<array-key, array{ligne_achat_id: int|string, quantite: int|string, montant_ht?: float|string|null}>  $lignesSelectionnees
      * @param  string|null  $numeroFournisseur  le n° de l'avoir chez le fournisseur, facultatif
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la note d'avoir du fournisseur au niveau du document ; aucun, les propositions de PILIQI
      *
@@ -87,7 +87,7 @@ class CreerAvoirFournisseurAction
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, AvoirFournisseur::class);
             $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
             $this->lecteur->exiger($compte, 'view', $magasin, $factureAchat);
-            $factureAchat->load('lignes');
+            $factureAchat->load('lignes.produit');
 
             if ($factureAchat->statut !== StatutFactureAchat::Validee) {
                 throw new LogicException("Impossible de créer un avoir fournisseur sur une facture d'achat au statut [{$factureAchat->statut->value}].");
@@ -121,7 +121,7 @@ class CreerAvoirFournisseurAction
                 }
 
                 $restante = $ligneAchat->quantiteRetournableRestante();
-                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à retourner');
+                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'], 'La quantité à retourner');
 
                 if ($quantite > $restante) {
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");

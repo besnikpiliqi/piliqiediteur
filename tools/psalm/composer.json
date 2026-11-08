@@ -1,0 +1,21 @@
+{
+    "name": "piliqi/outil-psalm",
+    "description": "Analyse des flux de données (Psalm et son extension Laravel), outil de développement à part du logiciel : voir le README.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "psalm/plugin-laravel": "^4.19",
+        "vimeo/psalm": "^7.1"
+    },
+    "config": {
+        "allow-plugins": false,
+        "sort-packages": true,
+        "audit": {
+            "abandoned": "fail",
+            "block-insecure": true
+        },
+        "platform-check": false
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

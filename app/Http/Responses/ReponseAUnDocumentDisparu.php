@@ -5,6 +5,7 @@ namespace App\Http\Responses;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
@@ -93,6 +94,7 @@ final class ReponseAUnDocumentDisparu
      * composant est une page de la ressource de ce modèle. Livewire ne dit
      * pas quelle clé il cherchait (voir ModelSynth::hydrate()).
      *
+     * @param  ModelNotFoundException<Model>  $introuvable
      * @return class-string<Page>|null
      */
     private static function pageDuDocument(mixed $composant, ModelNotFoundException $introuvable): ?string

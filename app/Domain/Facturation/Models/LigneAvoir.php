@@ -66,11 +66,17 @@ class LigneAvoir extends Model
         return 'Les lignes d\'un avoir émis ne se modifient plus.';
     }
 
+    /**
+     * @return BelongsTo<Avoir, $this>
+     */
     public function avoir(): BelongsTo
     {
         return $this->belongsTo(Avoir::class);
     }
 
+    /**
+     * @return BelongsTo<LigneFacture, $this>
+     */
     public function ligneFacture(): BelongsTo
     {
         return $this->belongsTo(LigneFacture::class);
@@ -80,6 +86,8 @@ class LigneAvoir extends Model
      * Une ligne garde son produit, même archivé depuis (voir les
      * SoftDeletes de Produit) : le retour le remet quand même en stock
      * (voir RestaurerStockApresEmissionAvoir).
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {

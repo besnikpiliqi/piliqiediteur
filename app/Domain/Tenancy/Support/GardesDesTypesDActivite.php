@@ -5,7 +5,6 @@ namespace App\Domain\Tenancy\Support;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
-use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -74,9 +73,12 @@ final class GardesDesTypesDActivite
         self::INVENTAIRES_OUVERTURE => ['inventaires_ouverture', 'magasin_id'],
     ];
 
+    /**
+     * @param  key-of<self::TABLES>  $garde
+     */
     public static function poser(string $garde): void
     {
-        [$table, $colonnes] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
+        [$table, $colonnes] = self::TABLES[$garde];
         $connexion = DB::connection();
 
         $instructions = match ($pilote = $connexion->getDriverName()) {
@@ -94,10 +96,12 @@ final class GardesDesTypesDActivite
      * Retire le déclencheur de la garde puis, sous PostgreSQL, sa fonction,
      * que le déclencheur empêcherait sinon de retirer : dans le down() de
      * la migration, avant sa table.
+     *
+     * @param  key-of<self::TABLES>  $garde
      */
     public static function retirer(string $garde): void
     {
-        [$table] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
+        [$table] = self::TABLES[$garde];
         $connexion = DB::connection();
 
         if ($connexion->getDriverName() === 'pgsql') {
@@ -118,6 +122,7 @@ final class GardesDesTypesDActivite
      * une modification), son message, et si elle ne vaut qu'à la
      * modification.
      *
+     * @param  key-of<self::TABLES>  $garde
      * @return list<array{0: string, 1: string, 2: bool}>
      */
     private static function refus(string $garde): array
@@ -160,6 +165,7 @@ final class GardesDesTypesDActivite
     }
 
     /**
+     * @param  key-of<self::TABLES>  $garde
      * @return list<string>
      */
     private static function instructionsPostgres(string $garde, string $table, string $colonnes): array
@@ -176,6 +182,7 @@ final class GardesDesTypesDActivite
     }
 
     /**
+     * @param  key-of<self::TABLES>  $garde
      * @return list<string>
      */
     private static function instructionsSqlite(string $garde, string $table, string $colonnes): array
@@ -194,6 +201,8 @@ final class GardesDesTypesDActivite
     /**
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
      * (apostrophes doublées).
+     *
+     * @param  key-of<self::TABLES>  $garde
      */
     private static function message(string $garde, string $raison): string
     {

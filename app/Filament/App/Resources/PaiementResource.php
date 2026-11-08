@@ -32,6 +32,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
 
@@ -63,6 +64,8 @@ class PaiementResource extends Resource
      * Même règle de confidentialité par vendeur que FactureResource (voir
      * PaiementPolicy::view) : la liste elle-même doit déjà être filtrée,
      * pas seulement l'accès direct à un enregistrement.
+     *
+     * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {
@@ -319,7 +322,7 @@ class PaiementResource extends Resource
                 Tables\Columns\TextColumn::make('allocations')
                     ->label('Factures réglées')
                     ->state(fn (Paiement $record) => $record->allocations
-                        ->map(fn ($allocation) => $allocation->facture?->numero ?? '—')
+                        ->map(fn ($allocation) => $allocation->facture->numero ?? '—')
                         ->join(', '))
                     ->wrap(),
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->toggleable(),

@@ -29,6 +29,9 @@ class EvenementTransmissionPdp extends Model
         'charge_utile' => 'array',
     ];
 
+    /**
+     * @return BelongsTo<TransmissionPdp, $this>
+     */
     public function transmission(): BelongsTo
     {
         return $this->belongsTo(TransmissionPdp::class, 'transmission_pdp_id');

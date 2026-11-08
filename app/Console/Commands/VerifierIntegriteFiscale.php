@@ -136,7 +136,7 @@ class VerifierIntegriteFiscale extends Command
             ->whereColumn("{$table}.magasin_id", 'magasins.id')
             ->when($numerote, static fn (QueryBuilder $documents): QueryBuilder => $documents->whereNotNull("{$table}.numero"));
 
-        return Magasin::query()
+        return Magasin::query()->with('societe')
             ->where(fn (Builder $magasins): Builder => $magasins
                 ->whereExists($donneesDuMagasin('tetes_registre_fiscal'))
                 ->orWhereExists($donneesDuMagasin('enregistrements_fiscaux'))

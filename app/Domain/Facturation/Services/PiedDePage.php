@@ -96,7 +96,7 @@ final readonly class PiedDePage
     {
         return new self(
             implode(' · ', $emetteur->lignesDeLaSociete()),
-            array_values(array_filter([$emetteur->ligneDeLAssurance()], filled(...))),
+            array_filter([$emetteur->ligneDeLAssurance()], filled(...)),
         );
     }
 

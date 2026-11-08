@@ -1,15 +1,14 @@
 // Surveillance de chaque page des tests en navigateur, posée avant tout
 // script de la page (voir Navigation::ouvrir()) :
 // - chaque erreur JavaScript, promesse rejetée, appel à console.error ou
-//   console.warn, ressource de l'application qui ne se charge pas et
-//   requête vers un autre site s'inscrit dans window.__piliqi.erreurs, que
-//   le test relit et vide à chaque vérification (voir
-//   Navigation::verifier()). Le navigateur des tests ne joint aucun autre
-//   site (voir Navigation::ouvrir()) : seules sont tolérées les deux
-//   ressources que Filament fait demander à d'autres sites par chaque page
-//   (TIERS_DE_FILAMENT : la police Inter et l'image des initiales du
-//   compte connecté), refusées par le navigateur sans aucune requête
-//   réelle ;
+//   console.warn, ressource de l'application qui ne se charge pas,
+//   requête vers un autre site et violation de la politique de contenu
+//   (Content-Security-Policy, voir AjouterLesEnTetesDeSecurite) s'inscrit
+//   dans window.__piliqi.erreurs, que le test relit et vide à chaque
+//   vérification (voir Navigation::verifier()). Le navigateur des tests ne
+//   joint aucun autre site (voir Navigation::ouvrir()), et aucune page n'en
+//   demande : la police et l'image des initiales du compte viennent de
+//   PILIQI (Q-TIERS) ;
 // - chaque requête fetch ou XMLHttpRequest (celles de Livewire comprises,
 //   l'envoi d'un fichier passant par la seconde) se compte : lancées, en
 //   cours et finies ; une page qui commence à en quitter une autre (un lien
@@ -34,8 +33,6 @@
         return;
     }
 
-    const TIERS_DE_FILAMENT = ['https://fonts.bunny.net/', 'https://ui-avatars.com/api/'];
-
     const etat = { erreurs: [], enCours: 0, lancees: 0, finies: 0, lectures: 0, quitte: false, telechargements: [] };
     window.__piliqi = etat;
 
@@ -56,11 +53,7 @@
 
         return ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) && url.origin !== location.origin;
     };
-    const noterUnAutreSite = (adresse) => {
-        if (! TIERS_DE_FILAMENT.some((tiers) => String(adresse).startsWith(tiers))) {
-            noter('requête vers un autre site', adresse);
-        }
-    };
+    const noterUnAutreSite = (adresse) => noter('requête vers un autre site', adresse);
 
     for (const niveau of ['error', 'warn']) {
         const original = console[niveau];
@@ -85,6 +78,11 @@
     }, true);
 
     window.addEventListener('unhandledrejection', (evenement) => noter('promesse rejetée', texte(evenement.reason)));
+
+    document.addEventListener('securitypolicyviolation', (evenement) => noter(
+        'politique de contenu',
+        evenement.effectiveDirective + ' refuse ' + (evenement.blockedURI || 'un contenu écrit dans la page') + (evenement.sourceFile ? ' (' + evenement.sourceFile + ':' + evenement.lineNumber + ')' : ''),
+    ));
 
     new PerformanceObserver((liste) => {
         for (const ressource of liste.getEntries()) {
@@ -142,13 +140,29 @@
         lecteur.readAsDataURL(fichier);
     });
 
+    // Le fichier qu'un script de la page rend téléchargeable par une
+    // adresse blob: (Livewire pour le fichier d'une action) se garde quand
+    // l'adresse se crée : il se lit ensuite sans requête, la politique de
+    // contenu ne permettant de joindre que PILIQI (connect-src 'self').
+    const fichiersDesAdresses = new Map();
+    const creerAdresseOriginal = URL.createObjectURL;
+    URL.createObjectURL = function (objet) {
+        const adresse = creerAdresseOriginal.call(URL, objet);
+
+        if (objet instanceof Blob) {
+            fichiersDesAdresses.set(adresse, objet);
+        }
+
+        return adresse;
+    };
+
     const cliquerOriginal = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function () {
         if (this.hasAttribute('download')) {
             const nom = this.download;
+            const fichierGarde = fichiersDesAdresses.get(this.href);
             etat.lectures++;
-            fetchOriginal(this.href)
-                .then((reponse) => reponse.blob())
+            (fichierGarde !== undefined ? Promise.resolve(fichierGarde) : fetchOriginal(this.href).then((reponse) => reponse.blob()))
                 .then(async (fichier) => etat.telechargements.push({ nom, type: fichier.type, taille: fichier.size, debut: await fichier.slice(0, 16).text(), contenu: await enBase64(fichier) }))
                 .catch((erreur) => noter('téléchargement illisible', nom + ' : ' + texte(erreur)))
                 .finally(() => etat.lectures--);

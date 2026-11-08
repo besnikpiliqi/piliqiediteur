@@ -76,7 +76,9 @@ class PreuvesRequises
      */
     public function manquantes(Facture $facture): array
     {
-        if (! $this->concerne($facture)) {
+        $nature = $facture->nature_operation;
+
+        if (! in_array($nature, [NatureOperation::ExportHorsUe, NatureOperation::LivraisonDom, NatureOperation::LivraisonIntracommunautaire], true) || ! $this->concerne($facture)) {
             return [];
         }
 
@@ -85,7 +87,7 @@ class PreuvesRequises
         $declaration = $nombreDe(TypePreuve::Mrn, TypePreuve::Cn23) > 0 ? null : TypePreuve::Mrn->getLabel().', ou '.lcfirst(TypePreuve::Cn23->getLabel());
         $transportsA = $nombreDe(TypePreuve::TransportA);
 
-        return array_values(array_filter(match ($facture->nature_operation) {
+        return array_values(array_filter(match ($nature) {
             NatureOperation::ExportHorsUe => [$declaration],
             NatureOperation::LivraisonDom => [$declaration, $transportsA > 0 ? null : TypePreuve::TransportA->getLabel()],
             NatureOperation::LivraisonIntracommunautaire => [
@@ -102,8 +104,10 @@ class PreuvesRequises
      * comptée par une sous-requête, que filtre MagasinScope comme la
      * facture elle-même.
      *
-     * @param  Builder<Facture>  $factures
-     * @return Builder<Facture>
+     * @template TFacture of Facture
+     *
+     * @param  Builder<TFacture>  $factures
+     * @return Builder<TFacture>
      */
     public function incompletes(Builder $factures): Builder
     {

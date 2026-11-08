@@ -332,7 +332,7 @@ trait TelechargeLesDocumentsParPeriode
             'nombreSelectionnes' => count($selectionnes),
             'totalSelectionne' => $calculateur->enEuros(array_sum(array_map(fn (DocumentTrouve $document): int => $document->ttc, $selectionnes))),
             'euros' => fn (int $centimes): string => $calculateur->enEuros($centimes),
-            'telechargements' => $societe instanceof Societe && $compte instanceof User ? TelechargementDeDocuments::recentsDe($compte, $societe)->get() : collect(),
+            'telechargements' => $societe instanceof Societe && $compte instanceof User ? TelechargementDeDocuments::recentsDe($compte, $societe)->get()->each->setRelation('demandeur', $compte) : collect(),
         ];
     }
 

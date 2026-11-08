@@ -3,6 +3,7 @@
 namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Concerns\EstUnTauxDuFournisseur;
+use App\Domain\Calendrier\Casts\Instant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -28,6 +29,28 @@ class TauxFactureAchat extends Model
         'ordre',
     ];
 
+    /**
+     * Le taux, sa base et ses TVA comme une colonne decimal(12,2) sur les
+     * deux moteurs (« 20.00 »), la confirmation d'un écart en UTC.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'taux_tva' => 'decimal:2',
+            'base_ht' => 'decimal:2',
+            'montant_tva' => 'decimal:2',
+            'montant_tva_calcule' => 'decimal:2',
+            'montant_tva_saisi' => 'decimal:2',
+            'ecart_confirme_le' => Instant::class,
+            'ordre' => 'integer',
+        ];
+    }
+
+    /**
+     * @return BelongsTo<FactureAchat, $this>
+     */
     public function factureAchat(): BelongsTo
     {
         return $this->belongsTo(FactureAchat::class);

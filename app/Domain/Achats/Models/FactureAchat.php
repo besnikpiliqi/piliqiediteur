@@ -144,26 +144,36 @@ class FactureAchat extends Model
      * Une facture d'achat garde son fournisseur, même archivé depuis (voir
      * les SoftDeletes de Fournisseur) : elle s'affiche et se retrouve
      * toujours avec lui.
+     *
+     * @return BelongsTo<Fournisseur, $this>
      */
     public function fournisseur(): BelongsTo
     {
         return $this->belongsTo(Fournisseur::class)->withTrashed();
     }
 
+    /**
+     * @return HasMany<LigneAchat, $this>
+     */
     public function lignes(): HasMany
     {
-        return $this->hasMany(LigneAchat::class)->orderBy('ordre')->orderBy('id');
+        return $this->hasMany(LigneAchat::class)->orderBy('ordre')->orderBy('id')->chaperone('factureAchat');
     }
 
     /**
      * Sa TVA, taux par taux, telle que l'écrit la facture du fournisseur
      * (voir TvaDuFournisseur), dans l'ordre où chaque taux apparaît.
+     *
+     * @return HasMany<TauxFactureAchat, $this>
      */
     public function taux(): HasMany
     {
         return $this->hasMany(TauxFactureAchat::class)->orderBy('ordre')->orderBy('id');
     }
 
+    /**
+     * @return HasMany<AvoirFournisseur, $this>
+     */
     public function avoirsFournisseur(): HasMany
     {
         return $this->hasMany(AvoirFournisseur::class);
@@ -204,6 +214,8 @@ class FactureAchat extends Model
      * EmettreAvoirFournisseurAction). La base de données ne garantit aucun
      * ordre sans tri, et un brouillon créé avant un autre peut être émis
      * après lui.
+     *
+     * @return HasMany<AvoirFournisseur, $this>
      */
     public function avoirsFournisseurEmis(): HasMany
     {
@@ -222,7 +234,7 @@ class FactureAchat extends Model
      */
     public function possedeDesLignesRetournables(): bool
     {
-        return $this->lignes()->retournables()->exists();
+        return $this->dejaLu('lignes_retournables_exists') ?? $this->lignes()->retournables()->exists();
     }
 
     /**
@@ -334,9 +346,20 @@ class FactureAchat extends Model
         }
 
         if ($this->statut === StatutFactureAchat::Validee) {
-            return $this->avoirsFournisseur()->doesntExist();
+            return ! ($this->dejaLu('avoirs_fournisseur_exists') ?? $this->avoirsFournisseur()->exists());
         }
 
         return true;
+    }
+
+    /**
+     * Une réponse que la requête de la liste des factures d'achat a déjà
+     * lue pour toute sa page (withExists, voir
+     * FactureAchatResource::getEloquentQuery()), sinon null : la question
+     * se pose alors à la base.
+     */
+    private function dejaLu(string $attribut): ?bool
+    {
+        return array_key_exists($attribut, $this->attributes) ? (bool) $this->attributes[$attribut] : null;
     }
 }

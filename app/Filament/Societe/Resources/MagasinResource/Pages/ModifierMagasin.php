@@ -53,6 +53,8 @@ use Illuminate\Validation\ValidationException;
  * verrous, avec ses propres messages, qui s'affichent tels quels. Un
  * magasin cédé ne se modifie plus : la page le montre sans rien
  * enregistrer.
+ *
+ * @property Magasin $record
  */
 class ModifierMagasin extends EditRecord
 {
@@ -149,9 +151,9 @@ class ModifierMagasin extends EditRecord
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return static::executerOuInterrompre(function () use ($record, $data): Magasin {
+        return static::executerOuInterrompre(function () use ($data): Magasin {
             try {
-                return app(ModifierEtablissementAction::class)->handle($this->auteur(), $record, Arr::only($data, self::CHAMPS));
+                return app(ModifierEtablissementAction::class)->handle($this->auteur(), $this->record, Arr::only($data, self::CHAMPS));
             } catch (ValidationException $refus) {
                 throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }

@@ -10,6 +10,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,11 +73,17 @@ class EnregistrementFiscal extends Model
         return 'Un enregistrement du registre fiscal ne se modifie ni ne se supprime : une correction s\'inscrit par un nouvel enregistrement.';
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function operateur(): BelongsTo
     {
         return $this->belongsTo(User::class, 'operateur_id');
     }
 
+    /**
+     * @return MorphTo<Model, $this>
+     */
     public function document(): MorphTo
     {
         return $this->morphTo();
@@ -86,6 +93,8 @@ class EnregistrementFiscal extends Model
      * L'adresse IP et le navigateur d'un événement technique inscrit
      * pendant une requête HTTP, tant qu'ils ne sont pas effacés (voir
      * TraceEvenement) : jamais dans le contenu signé.
+     *
+     * @return HasOne<TraceEvenement, $this>
      */
     public function trace(): HasOne
     {
@@ -97,6 +106,9 @@ class EnregistrementFiscal extends Model
      * calendrier, celui de leur magasin (« AAAA-MM-JJ »), bornes comprises :
      * du minuit de $du au minuit qui suit $au, exclu. Une borne absente ne
      * limite rien.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
      */
     public function scopeHorodatesDuJourAuJour(Builder $query, Calendrier $calendrier, ?string $du, ?string $au): Builder
     {

@@ -82,6 +82,8 @@ class RecuPaiement extends Model implements DocumentEnvoyable
     /**
      * Le client des paiements, même archivé depuis (voir les SoftDeletes
      * de Client), comme les documents qu'ils règlent.
+     *
+     * @return BelongsTo<Client, $this>
      */
     public function client(): BelongsTo
     {
@@ -91,6 +93,8 @@ class RecuPaiement extends Model implements DocumentEnvoyable
     /**
      * Ses paiements, dans l'ordre où ils ont été enregistrés : chaque part
      * de l'encaissement, ou la contre-passation.
+     *
+     * @return HasMany<Paiement, $this>
      */
     public function paiements(): HasMany
     {
@@ -100,6 +104,8 @@ class RecuPaiement extends Model implements DocumentEnvoyable
     /**
      * Chaque document qu'il règle, dans l'ordre où l'encaissement les a
      * réglés.
+     *
+     * @return HasMany<LigneRecuPaiement, $this>
      */
     public function lignes(): HasMany
     {
@@ -108,6 +114,8 @@ class RecuPaiement extends Model implements DocumentEnvoyable
 
     /**
      * Son historique d'envois par e-mail (voir EnvoyerDocumentAction).
+     *
+     * @return MorphMany<EnvoiDocument, $this>
      */
     public function envois(): MorphMany
     {
@@ -147,7 +155,7 @@ class RecuPaiement extends Model implements DocumentEnvoyable
      */
     public function premierDocument(): Facture
     {
-        return $this->lignes->first()?->facture
+        return $this->lignes->first()->facture
             ?? throw new LogicException("Le reçu de paiement {$this->numero} ne règle aucun document.");
     }
 

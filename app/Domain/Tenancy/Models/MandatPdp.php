@@ -47,11 +47,17 @@ class MandatPdp extends Model
         'reponse_brute' => 'array',
     ];
 
+    /**
+     * @return BelongsTo<Magasin, $this>
+     */
     public function magasin(): BelongsTo
     {
         return $this->belongsTo(Magasin::class);
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function accordePar(): BelongsTo
     {
         return $this->belongsTo(User::class, 'accorde_par');

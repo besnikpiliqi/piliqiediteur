@@ -60,6 +60,9 @@ class BordereauDetaxe extends Model
         return 'Un n° de bordereau de détaxe noté ne se modifie ni ne se supprime : notez le bon n°, le dernier noté fait foi.';
     }
 
+    /**
+     * @return BelongsTo<Facture, $this>
+     */
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);

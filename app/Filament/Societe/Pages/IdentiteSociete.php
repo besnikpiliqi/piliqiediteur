@@ -42,6 +42,8 @@ use Illuminate\Validation\ValidationException;
  * comptable, qui ne facture rien dans le logiciel, n'y lit ni ce qui
  * manque pour facturer, ni l'assurance : sa page, dans l'espace du
  * cabinet, en hérite (voir IdentiteDuCabinet).
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class IdentiteSociete extends Page implements HasForms
 {

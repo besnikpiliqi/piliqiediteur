@@ -772,7 +772,7 @@ class Magasin extends Model implements HasName
      */
     public function delaiDePaiementPour(?Client $client): int
     {
-        return $client?->delai_paiement_jours ?? $this->delai_paiement_jours;
+        return $client->delai_paiement_jours ?? $this->delai_paiement_jours;
     }
 
     /**
@@ -811,7 +811,10 @@ class Magasin extends Model implements HasName
             throw new LogicException('Le SIRET et le territoire d\'un magasin ne se modifient que dans le contexte de sa société.');
         }
 
-        return new Collection([$this]);
+        /** @var Collection<int, Magasin> $journal */
+        $journal = new Collection([$this]);
+
+        return $journal;
     }
 
     /**
@@ -942,17 +945,25 @@ class Magasin extends Model implements HasName
      * handleRecordCreation() ne s'en servent pas, et un produit ne se crée
      * jamais par un écran (voir OrigineDesProduits). L'isolation, elle, reste
      * BelongsToMagasin + MagasinScope.
+     *
+     * @return HasMany<Client, $this>
      */
     public function clients(): HasMany
     {
         return $this->hasMany(Client::class);
     }
 
+    /**
+     * @return HasMany<Fournisseur, $this>
+     */
     public function fournisseurs(): HasMany
     {
         return $this->hasMany(Fournisseur::class);
     }
 
+    /**
+     * @return HasMany<Service, $this>
+     */
     public function services(): HasMany
     {
         return $this->hasMany(Service::class);

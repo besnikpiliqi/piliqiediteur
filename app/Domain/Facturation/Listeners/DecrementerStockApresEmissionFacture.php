@@ -30,7 +30,7 @@ class DecrementerStockApresEmissionFacture
             return;
         }
 
-        foreach ($event->facture->lignes as $ligne) {
+        foreach ($event->facture->loadMissing('lignes.produit')->lignes as $ligne) {
             $produit = $ligne->produit;
 
             if ($produit !== null && $produit->suivi_stock) {

@@ -245,10 +245,7 @@ class ModifierEtablissementAction
                     }
 
                     $siret = $societe->siren.$nic;
-                    $refus = null;
-                    (new SiretValide($societe->siren))->validate($attribut, $siret, function (string $message) use (&$refus): void {
-                        $refus = $message;
-                    });
+                    $refus = (new SiretValide($societe->siren))->refus($siret);
 
                     if ($refus === null && $societe->magasins()->portantLeSiret($siret)->whereKeyNot($magasin->getKey())->exists()) {
                         $refus = SiretsDesMagasins::MESSAGE_SIRET_RESERVE;

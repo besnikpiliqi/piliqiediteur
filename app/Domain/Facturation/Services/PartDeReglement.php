@@ -86,7 +86,7 @@ final readonly class PartDeReglement
      * Les numéros des bons d'avoir présentés, tels que la recherche d'un
      * bon les lit (voir Avoir::scopeBonDAvoir()), chacun une seule fois.
      *
-     * @param  list<string>  $numeros
+     * @param  array<array-key, string>  $numeros
      * @return list<string>
      *
      * @throws LogicException

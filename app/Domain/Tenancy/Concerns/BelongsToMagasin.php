@@ -7,7 +7,6 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
@@ -41,6 +40,9 @@ trait BelongsToMagasin
         });
     }
 
+    /**
+     * @return BelongsTo<Magasin, $this>
+     */
     public function magasin(): BelongsTo
     {
         return $this->belongsTo(Magasin::class);
@@ -60,7 +62,7 @@ trait BelongsToMagasin
      */
     public static function regleExisteDansLeMagasin(?Builder $parmi = null): Exists
     {
-        $modele = new static;
+        $modele = static::query()->getModel();
         $regle = Rule::exists($modele->getTable(), $modele->getKeyName())
             ->where('magasin_id', app(TenantContext::class)->id());
 
@@ -68,7 +70,7 @@ trait BelongsToMagasin
             return $regle->where(fn (QueryBuilder $fiches): QueryBuilder => $fiches->whereIn($modele->getKeyName(), $parmi->select($modele->getQualifiedKeyName())));
         }
 
-        return in_array(SoftDeletes::class, class_uses_recursive(static::class), true)
+        return method_exists($modele, 'getDeletedAtColumn')
             ? $regle->whereNull($modele->getDeletedAtColumn())
             : $regle;
     }

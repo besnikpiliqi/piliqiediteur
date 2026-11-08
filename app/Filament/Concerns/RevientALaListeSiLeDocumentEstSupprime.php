@@ -27,7 +27,7 @@ trait RevientALaListeSiLeDocumentEstSupprime
     {
         $document = $this->getRecord();
 
-        if ($document->trashed()) {
+        if (method_exists($document, 'trashed') && $document->trashed()) {
             throw (new ModelNotFoundException)->setModel($document::class, [$document->getKey()]);
         }
     }

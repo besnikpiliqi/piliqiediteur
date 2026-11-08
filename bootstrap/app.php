@@ -19,6 +19,7 @@ use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
+use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
 use App\Http\Middleware\FaireConfianceAuxMandataires;
 use App\Http\Responses\ReponseAUnDocumentDisparu;
 use App\Http\Responses\ReponseAUnePageExpiree;
@@ -53,6 +54,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Les rappels des prestataires arrivent sans session : ils se
         // prouvent par leur signature (voir RappelsDesPrestatairesController).
         $middleware->validateCsrfTokens(except: ['rappels/*']);
+        // Chaque réponse, page, fichier, réponse JSON ou erreur, porte les
+        // en-têtes de sécurité (voir AjouterLesEnTetesDeSecurite).
+        $middleware->append(AjouterLesEnTetesDeSecurite::class);
     })
     ->withSchedule(function (Schedule $schedule): void {
         // Les tâches du calendrier des magasins passent toutes les heures,

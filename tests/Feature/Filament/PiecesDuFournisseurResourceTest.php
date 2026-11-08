@@ -31,6 +31,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
+use Tests\Feature\EnTetesDeSecuriteTest;
 use Tests\TestCase;
 
 use function Livewire\invade;
@@ -226,6 +227,16 @@ class PiecesDuFournisseurResourceTest extends TestCase
         $this->assertSame(self::PDF, $reponse->streamedContent());
         $this->assertSame(['application/pdf', 'nosniff'], [$reponse->headers->get('Content-Type'), $reponse->headers->get('X-Content-Type-Options')]);
         $this->assertStringContainsString('no-store', (string) $reponse->headers->get('Cache-Control'));
+    }
+
+    public function test_une_piece_telechargee_porte_les_en_tetes_de_securite(): void
+    {
+        $piece = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)])->pieces()->sole();
+
+        $reponse = $this->get(FactureAchatResource::adresseDeLaPiece($piece));
+
+        $reponse->assertOk();
+        EnTetesDeSecuriteTest::verifierLesEnTetes($reponse);
     }
 
     public function test_l_adresse_d_une_piece_est_refusee_hors_de_son_magasin_ou_sans_le_droit_de_voir_les_achats(): void

@@ -28,6 +28,8 @@ use InvalidArgumentException;
  * BaremePrixDeVente) : un bénéfice selon le prix d'achat de l'article,
  * appliqué aux produits de ses factures d'achat. Seul ce que la personne
  * y a corrigé s'enregistre (voir EnregistreLesParametresDuMagasin).
+ *
+ * @property Form $form le formulaire de la page (voir InteractsWithForms)
  */
 class ParametresPrixDeVente extends Page implements HasForms
 {

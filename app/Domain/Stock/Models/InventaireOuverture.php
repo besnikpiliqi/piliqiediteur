@@ -92,6 +92,9 @@ class InventaireOuverture extends Model
         }
     }
 
+    /**
+     * @return HasMany<LigneInventaireOuverture, $this>
+     */
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneInventaireOuverture::class)->orderBy('ordre')->orderBy('id');

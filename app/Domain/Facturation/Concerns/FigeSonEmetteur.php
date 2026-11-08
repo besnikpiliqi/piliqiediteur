@@ -35,6 +35,8 @@ trait FigeSonEmetteur
      * EmettreFactureAction et EmettreAvoirAction). Un document n'en a
      * qu'un ; si la vérification de l'intégrité lui en trouve un second,
      * le premier de la chaîne, celui de son émission, fait foi.
+     *
+     * @return MorphOne<EnregistrementFiscal, $this>
      */
     public function enregistrementDeVente(): MorphOne
     {

@@ -72,6 +72,9 @@ class LigneInventaireOuverture extends Model
         });
     }
 
+    /**
+     * @return BelongsTo<InventaireOuverture, $this>
+     */
     public function inventaireOuverture(): BelongsTo
     {
         return $this->belongsTo(InventaireOuverture::class);
@@ -81,6 +84,8 @@ class LigneInventaireOuverture extends Model
      * Le produit que la ligne fait entrer en stock, même archivé depuis ;
      * aucun tant que la ligne d'un brouillon garde la fiche d'un nouveau
      * produit.
+     *
+     * @return BelongsTo<Produit, $this>
      */
     public function produit(): BelongsTo
     {

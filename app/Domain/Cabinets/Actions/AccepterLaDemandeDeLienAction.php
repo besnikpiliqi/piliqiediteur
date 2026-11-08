@@ -60,10 +60,8 @@ class AccepterLaDemandeDeLienAction
     public function handle(User $auteur, LienCabinet $lien, ?array $autorisations = null): LienCabinet
     {
         $client = Societe::query()->findOrFail($lien->societe_id);
-        $remplace = null;
-        $ancienAcces = collect();
 
-        $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations, &$remplace, &$ancienAcces): void {
+        [$remplace, $ancienAcces] = $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations): array {
             [$demande] = $relus;
             $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'accepter', $demande);
 
@@ -83,6 +81,7 @@ class AccepterLaDemandeDeLienAction
             }
 
             $remplace = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->whereKeyNot($demande->getKey())->first();
+            $ancienAcces = collect();
 
             if ($remplace !== null) {
                 $ancienAcces = $this->acces->comptesQuiOntAcces($remplace);
@@ -97,8 +96,11 @@ class AccepterLaDemandeDeLienAction
                 'jeton_hache' => null,
             ])->save();
             $demande->accorder($autorisations ?? PermissionRegistry::parDefautDuCabinet($clientVerrouille->type_activite));
-        }, function (Societe $journal, array $relus) use ($client, $autorisations, &$remplace): array {
+
+            return [$remplace, $ancienAcces];
+        }, function (Societe $journal, array $relus, array $resultat) use ($client, $autorisations): array {
             [$demande] = $relus;
+            [$remplace] = $resultat;
             $cabinet = Societe::query()->findOrFail($demande->cabinet_id);
             $active = [ActionAuditee::LienActive, [
                 'cabinet' => IdentiteDansLeJournal::de($cabinet),
@@ -115,7 +117,7 @@ class AccepterLaDemandeDeLienAction
             return match (true) {
                 $journal->is($client) => array_values(array_filter([$termine, $active])),
                 (int) $journal->getKey() === (int) $cabinet->getKey() => [$active],
-                default => array_values(array_filter([$termine])),
+                default => array_filter([$termine]),
             };
         });
 

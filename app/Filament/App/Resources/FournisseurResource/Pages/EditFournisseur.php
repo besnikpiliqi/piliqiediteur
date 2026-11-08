@@ -2,12 +2,16 @@
 
 namespace App\Filament\App\Resources\FournisseurResource\Pages;
 
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\EnregistreLesCorrectionsDeLaFiche;
 use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\EditRecord;
 
+/**
+ * @property Fournisseur $record
+ */
 class EditFournisseur extends EditRecord
 {
     use ArchiveLaFiche, EnregistreLesCorrectionsDeLaFiche, RevientALaListe;

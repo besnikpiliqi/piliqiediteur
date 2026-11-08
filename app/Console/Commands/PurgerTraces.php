@@ -54,7 +54,7 @@ class PurgerTraces extends Command
         $effacees = 0;
         $enEchec = 0;
 
-        Magasin::query()->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $limite, &$effacees, &$enEchec): void {
+        Magasin::query()->with('societe')->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $limite, &$effacees, &$enEchec): void {
             try {
                 $effacees += $tenantContext->runAs($magasin, fn (): int => $this->effacerLesTracesExpirees(TraceEvenement::query(...), 'enregistrement_fiscal_id', $limite));
             } catch (Throwable $exception) {
@@ -87,7 +87,9 @@ class PurgerTraces extends Command
     /**
      * Les traces expirées du magasin ou de la société actifs, lot par lot.
      *
-     * @param  Closure(): Builder<Model>  $traces  la requête des traces, sous le scope du magasin ou de la société actifs
+     * @template TTrace of Model
+     *
+     * @param  Closure(): Builder<TTrace>  $traces  la requête des traces, sous le scope du magasin ou de la société actifs
      * @param  CarbonImmutable  $limite  l'instant du passage
      */
     private function effacerLesTracesExpirees(Closure $traces, string $cle, CarbonImmutable $limite): int

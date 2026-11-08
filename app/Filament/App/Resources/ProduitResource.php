@@ -243,7 +243,7 @@ class ProduitResource extends Resource
                     // choisit jamais ici.
                     Placeholder::make('fournisseur')
                         ->label('Fournisseur')
-                        ->content(fn (?Produit $record): string => $record?->fournisseur?->nom ?? 'Aucun achat validé')
+                        ->content(fn (?Produit $record): string => $record?->fournisseur->nom ?? 'Aucun achat validé')
                         ->helperText('Celui de sa dernière facture d\'achat validée, saisie à la main ou reçue automatiquement.'),
                 ])->columns(2),
 
@@ -319,11 +319,14 @@ class ProduitResource extends Resource
                         'epuise' => 'Épuisé',
                         'negatif' => 'Stock négatif',
                     ])
-                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
-                        'en_stock' => $query->where('suivi_stock', true)->where('stock_quantite', '>', 0),
-                        'epuise' => $query->epuises(),
-                        'negatif' => $query->enStockNegatif(),
-                        default => $query,
+                    ->query(function (Builder $query, array $data): Builder {
+                        /** @var Builder<Produit> $query */
+                        return match ($data['value'] ?? null) {
+                            'en_stock' => $query->where('suivi_stock', true)->where('stock_quantite', '>', 0),
+                            'epuise' => $query->epuises(),
+                            'negatif' => $query->enStockNegatif(),
+                            default => $query,
+                        };
                     }),
                 static::filtreDesArchives(),
             ])

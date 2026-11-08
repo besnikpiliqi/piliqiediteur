@@ -38,11 +38,17 @@ class PaiementAllocation extends Model
         return 'Ce qu\'un paiement règle d\'une facture ne se modifie ni ne se supprime.';
     }
 
+    /**
+     * @return BelongsTo<Paiement, $this>
+     */
     public function paiement(): BelongsTo
     {
         return $this->belongsTo(Paiement::class);
     }
 
+    /**
+     * @return BelongsTo<Facture, $this>
+     */
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);

@@ -257,7 +257,7 @@ trait AjouteDesLignesDeVente
             'taux_tva' => self::pourcentageEnTexte(match (true) {
                 ! $tauxImpose || $ligne->service_id === null => $ligne->taux_tva,
                 app(CalculateurLigne::class)->enCentiemes($ligne->taux_tva_du_prix) > 0 => $ligne->taux_tva_du_prix,
-                default => $ligne->service?->taux_tva ?? self::magasin()->tauxTvaParDefaut(),
+                default => $ligne->service->taux_tva ?? self::magasin()->tauxTvaParDefaut(),
             }),
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
         ])->all();
@@ -903,20 +903,20 @@ trait AjouteDesLignesDeVente
     }
 
     /**
-     * Deux quantités d'un même produit ajoutées l'une à l'autre ; au-delà
-     * de ce qu'un entier peut compter, la sélection est refusée.
+     * Deux quantités d'un même produit, entières et positives (voir
+     * QuantiteEntiere), ajoutées l'une à l'autre ; au-delà de ce qu'un
+     * entier peut compter, la sélection est refusée avant l'addition, qui
+     * deviendrait sinon un flottant approché.
      *
      * @throws InvalidArgumentException
      */
     private static function quantiteCumulee(int $quantite, int $ajoutee): int
     {
-        $somme = $quantite + $ajoutee;
-
-        if (! is_int($somme)) {
+        if ($quantite > PHP_INT_MAX - $ajoutee) {
             throw new InvalidArgumentException('La quantité d\'un produit compterait plus d\'articles qu\'une vente ne peut en compter : baissez-la.');
         }
 
-        return $somme;
+        return $quantite + $ajoutee;
     }
 
     /**

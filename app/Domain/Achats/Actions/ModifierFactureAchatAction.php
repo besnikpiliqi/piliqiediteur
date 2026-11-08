@@ -122,7 +122,7 @@ class ModifierFactureAchatAction
     private const CHAMPS_AUDITES = ['numero_fournisseur', 'date_facture', 'escompte_pourcentage', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'];
 
     /**
-     * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
+     * @param  array<array-key, array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la facture du fournisseur au niveau du document ; aucun, les propositions de PILIQI
      * @param  list<PieceDeposee>  $pieces  les pièces du fournisseur ajoutées à la saisie (voir PiecesDuFournisseur)

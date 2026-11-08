@@ -6,6 +6,8 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
+use App\Filament\InitialesDuCompte;
+use App\Filament\PoliceServieParPiliqi;
 use App\Filament\Societe\Pages\AccepterLaTransmission;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Controllers\TelechargerLesDocumentsController;
@@ -61,6 +63,10 @@ class SocietePanelProvider extends PanelProvider
     {
         return $panel
             ->id('societe')
+            // La police et l'image des initiales du compte viennent de PILIQI,
+            // jamais d'un site tiers (Q-TIERS, voir InitialesDuCompte).
+            ->font('Inter', provider: PoliceServieParPiliqi::class)
+            ->defaultAvatarProvider(InitialesDuCompte::class)
             ->path('societe')
             ->login(Connexion::class)
             ->profile(ModifierProfil::class)

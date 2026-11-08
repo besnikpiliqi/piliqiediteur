@@ -1,0 +1,17 @@
+{
+    "analyse_statique": {
+        "niveau": 6
+    },
+    "couverture": {
+        "achats_et_stock": 97,
+        "cabinets": 94,
+        "caisse_securisee": 97,
+        "calculs": 96,
+        "droits_et_isolation": 89,
+        "ecrans_et_socle": 97,
+        "facturation": 97,
+        "pages_publiques": 95,
+        "societe": 94
+    },
+    "mutation": {}
+}

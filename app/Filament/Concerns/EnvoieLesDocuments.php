@@ -4,11 +4,11 @@ namespace App\Filament\Concerns;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
-use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
@@ -60,7 +60,7 @@ trait EnvoieLesDocuments
         return $action
             ->label('PDF')
             ->icon('heroicon-o-arrow-down-tray')
-            ->visible(fn (Model&DocumentEnvoyable $record): bool => filled($record->numero))
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => filled($record->numero))
             ->action(function (Facture|Devis|Avoir $record): ?StreamedResponse {
                 $generateur = match (true) {
                     $record instanceof Facture => app(FacturePdfGenerator::class),
@@ -97,16 +97,16 @@ trait EnvoieLesDocuments
             ->label('Envoyer par e-mail')
             ->icon('heroicon-o-envelope')
             ->color('success')
-            ->modalHeading(fn (Model&DocumentEnvoyable $record): string => "Envoyer par e-mail : {$record->libelleDocument()} ".($record->numero ?? '(brouillon)'))
-            ->modalDescription(fn (Model&DocumentEnvoyable $record): ?string => $record instanceof Devis && blank($record->numero)
+            ->modalHeading(fn (Facture|Avoir|Devis|RecuPaiement $record): string => "Envoyer par e-mail : {$record->libelleDocument()} ".($record->numero ?? '(brouillon)'))
+            ->modalDescription(fn (Facture|Avoir|Devis|RecuPaiement $record): ?string => $record instanceof Devis && blank($record->numero)
                 ? 'Ce devis reçoit son numéro en partant : il ne sera plus un brouillon.'
                 : null)
             ->modalSubmitActionLabel('Envoyer')
-            ->visible(fn (Model&DocumentEnvoyable $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
-            ->fillForm(fn (Model&DocumentEnvoyable $record): array => ['destinataire' => $record->client->email])
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
+            ->fillForm(fn (Facture|Avoir|Devis|RecuPaiement $record): array => ['destinataire' => $record->client->email])
             ->form([
                 static::champDuJeton(),
-                static::champDestinataire(),
+                self::champDestinataire(),
                 Textarea::make('message')
                     ->label('Message (facultatif)')
                     ->helperText('Ajouté au texte de l\'e-mail, avant votre signature.')
@@ -114,10 +114,10 @@ trait EnvoieLesDocuments
                     ->maxLength(2000)
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
-            ->action(fn (Model&DocumentEnvoyable $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
+            ->action(fn (Facture|Avoir|Devis|RecuPaiement $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
                 $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
 
-                static::confirmerLEnvoi($envoi, $record);
+                self::confirmerLEnvoi($envoi, $record);
             }));
     }
 
@@ -141,11 +141,11 @@ trait EnvoieLesDocuments
             ->modalSubmitActionLabel('Relancer')
             ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
             ->fillForm(fn (Facture $record): array => ['destinataire' => $record->client->email])
-            ->form([static::champDuJeton(), static::champDestinataire()])
+            ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
                 $envoi = app(EnvoyerDocumentAction::class)->relancer(auth()->user(), $record, $data['destinataire'], $data['jeton']);
 
-                static::confirmerLEnvoi($envoi, $record);
+                self::confirmerLEnvoi($envoi, $record);
             }));
     }
 
@@ -157,11 +157,11 @@ trait EnvoieLesDocuments
     public static function envoisSection(): Section
     {
         return Section::make('Envois')
-            ->visible(fn (Model&DocumentEnvoyable $record): bool => $record->envois()->exists())
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->envois()->exists())
             ->schema([
                 RepeatableEntry::make('envois')
                     ->label('')
-                    ->state(fn (Model&DocumentEnvoyable $record) => $record->envois()->latest('id')->get())
+                    ->state(fn (Facture|Avoir|Devis|RecuPaiement $record) => $record->envois()->latest('id')->get())
                     ->schema([
                         TextEntry::make('created_at')->label('Date')->state(fn (EnvoiDocument $record) => $record->envoye_le ?? $record->created_at)->dateTime('d/m/Y à H:i'),
                         TextEntry::make('destinataire')->label('Destinataire')->state(fn (EnvoiDocument $record) => $record->destinataire),

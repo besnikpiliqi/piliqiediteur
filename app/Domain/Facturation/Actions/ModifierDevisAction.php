@@ -66,7 +66,7 @@ class ModifierDevisAction
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
@@ -100,7 +100,7 @@ class ModifierDevisAction
     }
 
     /**
-     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException

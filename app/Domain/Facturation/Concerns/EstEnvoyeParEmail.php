@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  */
 trait EstEnvoyeParEmail
 {
+    /**
+     * @return MorphMany<EnvoiDocument, $this>
+     */
     public function envois(): MorphMany
     {
         return $this->morphMany(EnvoiDocument::class, 'document');

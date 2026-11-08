@@ -42,6 +42,7 @@ final class DestinatairesDesAlertes
             ->select('user_id');
 
         return User::query()
+            ->with('societe')
             ->where('societe_id', $magasin->societe_id)
             ->where(fn ($comptes) => $comptes
                 ->where('role_societe', RoleSociete::Proprietaire->value)

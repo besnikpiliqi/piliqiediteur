@@ -2,11 +2,13 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use Filament\Actions\DeleteAction;
 use Filament\Tables\Actions\RestoreAction;
 use Filament\Tables\Filters\TrashedFilter;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * Un client, un produit ou un fournisseur ne se supprime jamais : il
@@ -34,7 +36,7 @@ trait ArchiveLaFiche
             ->modalSubmitActionLabel('Archiver')
             ->modalIcon('heroicon-o-archive-box')
             ->successNotificationTitle($notification)
-            ->using(fn (Model $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            ->using(fn (Client|Fournisseur|Produit $record): bool => static::executerOuInterrompre(function () use ($record): bool {
                 app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $record);
 
                 return true;
@@ -58,7 +60,7 @@ trait ArchiveLaFiche
     {
         return RestoreAction::make()
             ->label('Restaurer')
-            ->using(fn (Model $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            ->using(fn (Client|Fournisseur|Produit $record): bool => static::executerOuInterrompre(function () use ($record): bool {
                 app(ArchiverUneFicheAction::class)->restaurer(auth()->user(), $record);
 
                 return true;

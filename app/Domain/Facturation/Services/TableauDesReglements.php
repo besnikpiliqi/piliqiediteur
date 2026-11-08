@@ -113,7 +113,7 @@ final readonly class TableauDesReglements
             'mode' => $reglement['mode'],
             'mots' => self::mots($reglement['reference'], $place, $polices),
             'montant' => $calculateur->enEuros($reglement['montant']),
-        ], array_values($reglements)));
+        ], $reglements));
     }
 
     /**

@@ -76,7 +76,7 @@ abstract class RepondreAUneDemandeDeLien
             $relu->forceFill(['etat' => $etat, 'jeton_hache' => null, 'repondu_par' => $auteurRelu?->getKey(), 'repondu_le' => now()])->save();
             $duCabinet = $relu->origine === OrigineDuLien::DemandeDuCabinet;
 
-            $duVisiteur = (int) ($auteurRelu?->societe_id ?? $client->getKey());
+            $duVisiteur = (int) ($auteurRelu->societe_id ?? $client->getKey());
             $auJournalDe = fn (Societe $journal, array $valeurs): mixed => (int) $journal->getKey() === $duVisiteur
                 ? $this->inscrire($journal, $action, $auteurRelu, $valeurs, $relu)
                 : $this->traces->horsDeSaSociete(fn () => $this->inscrire($journal, $action, $auteurRelu, $valeurs, $relu));

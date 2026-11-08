@@ -20,7 +20,7 @@ class DecrementerStockApresEmissionAvoirFournisseur
 
     public function handle(AvoirFournisseurEmis $event): void
     {
-        $avoirFournisseur = $event->avoirFournisseur;
+        $avoirFournisseur = $event->avoirFournisseur->loadMissing(['factureAchat', 'lignes.produit', 'lignes.ligneAchat.factureAchat']);
 
         foreach ($avoirFournisseur->lignes as $ligne) {
             if ($ligne->produit->suivi_stock) {

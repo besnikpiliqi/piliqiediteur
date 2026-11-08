@@ -231,6 +231,8 @@ class VerificateurIntegrite
      *   niveau : PostgreSQL ne le change qu'en tête de la transaction la
      *   plus externe, jamais dans un point de sauvegarde ;
      * - sous SQLite, une transaction lit toujours une même photo.
+     *
+     * @param  Closure(): void  $verification
      */
     private function dansUnInstantaneCoherent(Closure $verification): void
     {
@@ -823,6 +825,7 @@ class VerificateurIntegrite
     /**
      * La chaîne et les types des enregistrements d'un document.
      *
+     * @param  key-of<self::MODELES>  $alias
      * @return array{0: string, 1: list<string>}
      */
     private static function enregistrementsDuDocument(string $alias): array
@@ -846,6 +849,8 @@ class VerificateurIntegrite
      * document et ne rend que ceux qui sont en défaut. Un document rendu
      * avec un seul enregistrement est donc enregistré sous un autre type
      * que le sien.
+     *
+     * @param  key-of<self::MODELES>  $alias
      */
     private function verifierLEnregistrementUniqueDesDocuments(string $alias): void
     {
@@ -921,6 +926,8 @@ class VerificateurIntegrite
      * Chaque enregistrement d'un document désigne un document numéroté du
      * magasin (un paiement du magasin) : la base ne rend que ceux qui n'en
      * désignent aucun.
+     *
+     * @param  key-of<self::MODELES>  $alias
      */
     private function verifierLesDocumentsDesEnregistrements(string $alias): void
     {
@@ -1047,6 +1054,7 @@ class VerificateurIntegrite
      * Les imputations que signent les enregistrements du document, relues
      * une seule fois pour les imputations du même document qui se suivent.
      *
+     * @param  key-of<self::MODELES>  $alias
      * @return list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
      */
     private function imputationsSigneesDuDocument(string $alias, int $documentId): array
@@ -1082,6 +1090,7 @@ class VerificateurIntegrite
      * imputations d'un avoir sur les factures de son client. Un identifiant
      * ou un montant illisible vaut null.
      *
+     * @param  key-of<self::MODELES>  $alias
      * @param  array<array-key, mixed>  $donnees
      * @return list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
      */
@@ -1149,6 +1158,7 @@ class VerificateurIntegrite
     }
 
     /**
+     * @param  key-of<self::MODELES>  $alias
      * @param  list<array{0: Builder<PaiementAllocation>|Builder<AvoirAllocation>, 1: string}>  $sommes  les imputations et la colonne qui désigne le document
      */
     private function verifierLesMontantsImputesSur(string $alias, array $sommes): void
@@ -1287,6 +1297,7 @@ class VerificateurIntegrite
      * et le rang du numéro dans la série, ou null après avoir signalé qu'il
      * n'appartient à aucune.
      *
+     * @param  key-of<self::MODELES>  $alias
      * @param  array<string, SequenceDocument>  $series  par préfixe
      * @return array{0: SequenceDocument, 1: int}|null
      */
@@ -1313,6 +1324,9 @@ class VerificateurIntegrite
         return [$serie, $prefixeEtRang[1]];
     }
 
+    /**
+     * @param  key-of<self::MODELES>  $alias
+     */
     private function verifierLAnneeDuNumero(SequenceDocument $serie, stdClass $document, string $alias): void
     {
         $emission = self::horodatageEnBase($document->date_emission);
@@ -1334,6 +1348,7 @@ class VerificateurIntegrite
     }
 
     /**
+     * @param  key-of<self::MODELES>  $alias
      * @param  int  $attribuesPresents  le nombre de documents de la série dont le numéro est l'un de ceux qu'elle a attribués
      * @param  list<int>  $horsDeLaSerie  les rangs des documents de la série hors de ceux qu'elle a attribués
      */
@@ -1371,6 +1386,7 @@ class VerificateurIntegrite
      * l'ordre de leurs numéros (une écriture plus longue est un numéro plus
      * grand, sans zéro de tête), jusqu'à les avoir trouvés.
      *
+     * @param  key-of<self::MODELES>  $alias
      * @return list<int>
      */
     private function premiersNumerosManquants(string $alias, SequenceDocument $serie): array
@@ -1437,6 +1453,8 @@ class VerificateurIntegrite
      * TK-LYON1-2026-000001 », « La facture FAC-LYON1-2026-000001 »,
      * « L'avoir AV-LYON1-2026-000001 », « Le paiement (identifiant interne
      * 12) », ou par son identifiant interne un document sans numéro.
+     *
+     * @param  key-of<self::MODELES>  $alias
      */
     private static function libelleDuDocument(string $alias, ?int $documentId, ?string $numero): string
     {
@@ -1453,6 +1471,8 @@ class VerificateurIntegrite
 
     /**
      * Le numéro d'un document à désigner dans un message.
+     *
+     * @param  key-of<self::MODELES>  $alias
      */
     private static function numeroDuDocument(string $alias, ?int $documentId): ?string
     {
@@ -1588,12 +1608,13 @@ class VerificateurIntegrite
     /**
      * Le montant en centimes d'une imputation en base, ou null s'il n'est
      * pas un montant décimal lisible : une imputation insérée directement
-     * en base peut porter n'importe quoi.
+     * en base peut porter n'importe quoi, que le cast decimal de sa lecture
+     * refuse (MathException) ou qui n'est pas un montant au centime.
      */
     private function centimes(PaiementAllocation|AvoirAllocation $allocation): ?int
     {
         try {
-            return $this->calculateur->enCentiemes($allocation->montant_alloue);
+            return $this->calculateur->enCentiemes($allocation->getAttribute('montant_alloue'));
         } catch (InvalidArgumentException|MathException) {
             return null;
         }

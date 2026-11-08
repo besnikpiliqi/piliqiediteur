@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\ProduitResource\Pages;
 
+use App\Domain\Catalogue\Models\Produit;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\EnregistreLesCorrectionsDeLaFiche;
@@ -16,6 +17,8 @@ use Filament\Resources\Pages\EditRecord;
  * registre fiscal, pris seulement dans ce cas (voir ModifierUneFicheAction
  * et JournaliseSesParametresDeConformite) : quand le registre ne peut pas
  * l'inscrire, la fiche n'est pas modifiée et l'écran dit pourquoi.
+ *
+ * @property Produit $record
  */
 class EditProduit extends EditRecord
 {

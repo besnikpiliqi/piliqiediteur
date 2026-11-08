@@ -46,7 +46,7 @@ trait EnregistreLesCorrectionsDeLaFiche
     protected function authorizeAccess(): void
     {
         $fiche = $this->getRecord();
-        $archiveeDepuisLaLecture = $this->ficheLue !== [] && $fiche->trashed();
+        $archiveeDepuisLaLecture = $this->ficheLue !== [] && method_exists($fiche, 'trashed') && $fiche->trashed();
 
         abort_unless($archiveeDepuisLaLecture ? static::getResource()::canView($fiche) : static::getResource()::canEdit($fiche), 403);
     }
@@ -60,7 +60,7 @@ trait EnregistreLesCorrectionsDeLaFiche
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $enregistree = static::executerOuInterrompre(fn (): Model => app(ModifierUneFicheAction::class)->handle(auth()->user(), $record, $this->ficheLue, $data));
+        $enregistree = static::executerOuInterrompre(fn (): Model => app(ModifierUneFicheAction::class)->handle(auth()->user(), $this->record, $this->ficheLue, $data));
         $this->ficheLue = FicheLue::de($enregistree)->valeurs();
 
         return $enregistree;

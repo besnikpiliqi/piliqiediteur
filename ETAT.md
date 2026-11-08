@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 13:33 UTC par pilotage-sync.sh : « Demande de l'éditeur : montants sans nombre à virgule flottante (cahier joint au lot AUD) ».
+Mis à jour le 08/11/2026 à 13:57 UTC par pilotage-sync.sh : « Question Q-CALC à l'éditeur (arrondi des factures aux professionnels) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,12 +38,12 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ```
  M .github/workflows/tests.yml
+ M .gitignore
  M CLAUDE.md
  M README.md
  M app/Console/Commands/ClotureAutomatiqueCaisse.php
  M app/Console/Commands/Editeur/ProcedureDeLEditeur.php
  M app/Console/Commands/ExpirerDevis.php
- M app/Console/Commands/FermerDemonstrationsInactives.php
  M app/Console/Commands/MarquerFacturesEnRetard.php
  M app/Console/Commands/PurgerActionsTraitees.php
  M app/Console/Commands/PurgerTraces.php
@@ -64,6 +64,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Cabinets/Services/AccesDesCabinets.php
  M app/Domain/CaisseSecurisee/Concerns/HorodateSonEmission.php
  M app/Domain/CaisseSecurisee/Concerns/ProtegeLesDonneesValidees.php
+ M app/Domain/CaisseSecurisee/Listeners/JournaliserFinDeSession.php
  M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
  M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
  M app/Domain/Catalogue/Models/Produit.php
@@ -96,7 +97,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
  M app/Domain/Facturation/Services/ControleNatureOperation.php
- M app/Domain/Facturation/Services/DerogationsDePrix.php
 ```
 
 ## Dernière course de la chaîne

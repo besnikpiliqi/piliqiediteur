@@ -1330,3 +1330,31 @@ Les LLM, même puissants comme Opus 5.5, peuvent parfois faire des erreurs d'arr
 
 * La règle d'or : Ne laissez pas Claude inventer la logique de calcul à la volée. Demandez-lui explicitement d'utiliser des bibliothèques reconnues pour la précision financière (comme `decimal.js` en JavaScript/TypeScript ou la classe `Decimal` en Python) plutôt que des nombres à virgule flottante (`float`), pour éviter les erreurs du type `0.1 + 0.2 = 0.30000000000000004`."
 
+## 112. 2026-11-08 13:39 UTC
+
+j 'ai pas compris ce que tu vas faire
+
+## 113. 2026-11-08 13:56 UTC
+
+j'ai une disscousion pour le calcule avec qqun "
+
+en fait chez moi il y pas de 10.5525 mais dans ce "10.5525" est 10.55 car il prend plus bas mais dans le calcule il prends et cumule 105525 et qui avec plusieur lignes ca changer le resultat, donc c est pas 10.55 * 2 = 21.1 mais 21.105, donc ca va cumuler
+
+
+
+Tu viens de pointer du doigt le problème le plus critique et le plus technique de la création d'un ERP, et tu as totalement raison. C'est exactement là que 90 % des développeurs se trompent et que les comptables s'arrachent les cheveux.
+
+Ce que tu décris s'appelle l'écart d'arrondi sur les lignes contre l'arrondi global.
+
+En Europe (et selon les règles fiscales strictes), tu as deux manières légales de gérer ce cumul de millièmes, et tu dois donner une consigne très claire à ton Claude selon la méthode que tu choisis.
+
+
+
+Méthode 1 : L'arrondi à la ligne (La méthode standard)
+
+
+
+Dans cette méthode, la loi impose que ce qui est affiché sur la facture doit être mathématiquement vrai pour le client qui la lit. Si le client voit écrit 10,55 € sur la facture, pour lui, le calcul doit être 10,55 × 2 = 21,10 €.
+
+Si tu affiches 10,55 € mais que ton ERP calcule en cachette 10,5525 € et affiche un total de 21,11 €, le client va croire que ton logiciel a fait une erreur (car 10,55 × 2 ne fait pas 21,11)."
+

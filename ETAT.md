@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 07/11/2026 à 23:51 UTC par pilotage-sync.sh : « Chaîne arrêtée à 23 h 40 (QA coupé) : travail QA sauvé et mis de côté ; mise à jour de sécurité Symfony en cours ; lecture des audits de l'éditeur lancée ».
+Mis à jour le 08/11/2026 à 00:02 UTC par pilotage-sync.sh : « Décisions de l'éditeur : Q-FI1 = a, Q-FI2 = a, D55 PostgreSQL seulement ; cahiers FI et PG ; chaîne préparée (QA, PG, FI, AUD…) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

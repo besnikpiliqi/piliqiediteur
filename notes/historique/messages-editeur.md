@@ -1272,3 +1272,7 @@ Un PDF peut contenir du JavaScript, des actions automatiques ou des fichiers joi
 
 @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/071d6136-PILIQI_corrections_2026-11-06_2.zip" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/c6a5368a-rapport_cabinets_complet.zip" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/5816c635-PILIQI_AUDIT_PG17_20261106_092642.zip" il faut que tu lise tout ces que te donne. c'est tres important pour logiciel
 
+## 106. 2026-11-07 23:56 UTC
+
+q-fi1(a), q-fi2 (a)
+

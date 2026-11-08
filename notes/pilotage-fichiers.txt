@@ -118,3 +118,8 @@ reprises/lot-QA-travail-non-commite.patch
 reprises/lot-QA-commits-locaux.patch
 reprises/args-course-passation-2026-11-03.json
 reprises/args-course-passation-2026-11-07.json
+fichiers/decision-fi.md
+postgresql/decision-pg.md
+audits-externes/rapport-lecture-2026-11-07.md
+audits-externes/decision-aud.md
+audits-externes/questions-editeur.md

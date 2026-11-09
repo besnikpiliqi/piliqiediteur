@@ -2156,3 +2156,227 @@ Continue the conversation from where it left off without asking the user any fur
 
 The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
 
+## Résumé 9, 2026-11-09 14:19 UTC
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+<system-reminder>
+<tools-used-before-summary>Agent, Artifact, AskUserQuestion, Bash, Edit, ExitPlanMode, Glob, Grep, ListAgents, ListConnectors, Monitor, Read, ReadNotifications, SendUserFile, Skill, StructuredOutput, TaskCreate, TaskList, TaskStop, TaskUpdate, ToolSearch, WebFetch, WebSearch, Workflow, Write, mcp__claude-code-remote__add_repo, mcp__claude-code-remote__delete_trigger, mcp__claude-code-remote__get_session, mcp__claude-code-remote__get_trigger, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__read_documentation, mcp__claude-code-remote__send_later, mcp__claude-code-remote__update_trigger, mcp__github__actions_get, mcp__github__actions_list, mcp__github__actions_run_trigger, mcp__github__get_file_contents, mcp__github__get_job_logs, mcp__github__list_branches, mcp__github__list_pull_requests, mcp__github__list_tags, mcp__github__pull_request_read</tools-used-before-summary>
+</system-reminder>
+Summary:
+1. Primary Request and Intent:
+
+**Standing mandate (unchanged)**
+- The user is the editor of PILIQI, a French SaaS for invoicing and the till: Laravel 13, Filament 3.3, PHP 8.3.
+- Repository besnikpiliqi/piliqiediteur, branch `claude/saas-invoice-editor-architecture-q6eizh` (PR #1).
+- He delegates all technical work. Claude drives the chain of lots autonomously per CLAUDE.md: implementation, two adversarial reviews, correction, push, green CI.
+- Always write in French, with « vous », in simple words, using his own numeric examples.
+- End every pushed-lot report, and every change he can try, with « À faire sur votre PC » (D52).
+- Keep the notes on branch `claude/pilotage-reprise` current (`N/pilotage-sync.sh`).
+- Ultracode is on.
+- Check-ins every 2 hours.
+- Stop-hook messages about uncommitted or unpushed changes are answered in TEXT ONLY. Never commit or push the chain agent's work in progress.
+
+**This segment**
+- The user asked earlier: « Envoie moi le pdf quand c'est prêt » (twice). This is now DONE: both PDFs were sent.
+- The user said « Ok continue »: continue the work, which means monitoring the chain and keeping the notes up to date.
+
+2. Key Technical Concepts:
+
+**Chain workflow**
+- Script: `N/serie8-lots.js`, where N = `/tmp/claude-0/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/scratchpad/nouvelle-session`.
+- Run wf_54289edd-a97, task wyhgkqne2.
+- Args: `{"ouverts": ["QA","PG","CALC","FI","AUD","NAV-2","NAV-3","NAV-4","NAV-5","ML","DV","EC2","S9-L","S9-A","21"]}`.
+- Each lot runs: implementation → relecture1/relecture2 → correction → poussee → fiche/notes.
+- Journal: `/root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/subagents/workflows/wf_54289edd-a97/journal.jsonl`. Agent transcripts sit in the same folder (the current QA agent is `agent-abdf33c32b865a752.jsonl`).
+- Agents read their cahiers at runtime.
+- REGLES (serie8-lots.js line 20) states that D55 (PostgreSQL only) primes « même là où CLAUDE.md la nomme encore, jusqu'au lot PG ».
+
+**Backups**
+- `scratchpad/outils/sauvegarder-lot.sh LOT TETE_POUSSEE`:
+  - uses a temporary GIT_INDEX_FILE;
+  - published patches exclude lock files; full copies go to `scratchpad/reprises-locales/`;
+  - verified by an identical `git write-tree` in a temporary worktree;
+  - exit code 0 is required.
+
+**Check-in**
+- trig_014YSbzohxASYadXrqRE6mWb is re-armed with update_trigger (run_once_at) after each firing, so only one check-in is ever pending.
+
+**Rule (a), Q-CALC2, unchanged software rule**
+- Line TTC = qty × PU TTC minus the discount; the discount is rounded once, half-cent up.
+- For each rate, lines are cumulated in order. Cumulative HT = round(cumulative TTC ÷ (1 + rate)). Line HT = difference with the previous cumulative HT. VAT = TTC − HT.
+- PU HT is stored to the millionth and displayed at the cent.
+
+**PDF tooling** (`scratchpad/demo-prix-a/`)
+- `construit.sh` runs: calcul.py, oracle.php (real CalculateurLigne class, the validated copy and the last commit's version), note_de_calcul.py, `verifie.py --regle-du-08-11`, comparaison.py, page.py, rendu.js (Chromium; page height checks against 247 mm), `verifie.py` (independent rewrite of every text and amount), then `pdftoppm -r 110` previews.
+- `mutations.sh`: falsifies copies of the work; verifie.py must refuse each one.
+
+3. Files and Code Sections:
+
+**`scratchpad/demo-prix-a/comparaison.py`**: the generator of page 3 § 4. Both phrases rewritten:
+```python
+    phrase_ttc = (
+        f"Ce que paie le client : {totaux_a['affichage']['ttc']} TTC avec la règle (a), un centime de moins qu'avec la "
+        f"règle du 08/11 ({avec_insecables(totaux_0811['affichage']['ttc'])}). Seul le TTC de la ligne 13 change. La règle (a) "
+        f"arrondit la remise : {remise_13.removeprefix('remise = ').removesuffix(DEMI_CENTIME)}, d'où un TTC de "
+        f"{ttc_13.removeprefix('TTC = ')}. La règle du 08/11 arrondissait le TTC remisé : "
+        f"{avec_insecables(ttc_13_0811.removeprefix('TTC = ').removesuffix(DEMI_CENTIME))}. Les deux règles arrondissent au "
+        "centime le plus proche, un demi-centime exact au centime supérieur. Elles ne donnent un TTC différent que si la "
+        "remise tombe sur un demi-centime exact, comme ici à la ligne 13."
+    )
+    ...
+        "document, quelle que soit la quantité. Le HT du taux, TTC ÷ (1 + taux), n'est arrondi qu'une fois, d'un "
+        "demi-centime au plus. La TVA, qui est le TTC moins ce HT, s'écarte donc de la base × le taux d'au plus un "
+        "demi-centime × (1 + taux), en plus ou en moins : "
+        f"{', '.join(bornes[:-1])} et {bornes[-1]}. Arrondir la base × le taux au centime ajoute au plus un demi-centime à "
+        f"l'écart, soit {decimal_fr(bornes_apres_arrondi[0], 1, 6)}{INSECABLE}centime au plus. La TVA et cet arrondi étant "
+        f"des centimes entiers, leur écart vaut {MOINS}1, 0 ou +1 centime. Ici, il est nul aux trois taux."
+```
+
+**`scratchpad/demo-prix-a/verifie.py`**: the same two phrases rewritten independently, using `euros()`, `nombre()`, `exact()` and `remise_13` / `ttc_13_du_08_11`.
+
+**`scratchpad/demo-prix-a/mutations.sh`**:
+```bash
+essai montants_arrondis_inverses 1 "remplacer exemple.html 'La règle${nbsp}(a) arrondit la remise' 'La règle${nbsp}(a) arrondit le TTC remisé'"
+essai hors_demi_centime 1 "remplacer exemple.html 'tombe sur un demi-centime exact, comme' 'tombe sur un demi-centime, comme'"
+essai seul_ttc_change 1 "remplacer exemple.html 'Seul le TTC de la ligne 13 change.' 'Seul le TTC de la ligne 7 change.'"
+```
+
+**Results**
+- construit.sh: exit 0. mutations.sh: 0 unexpected.
+- Final PDF: `[jeton retiré].pdf`, SHA-256 [jeton retiré].
+- Logs: `scratchpad/outils/pdf-regle-a-construit.log` and `pdf-regle-a-mutations.log`.
+- Pre-edit backup: `scratchpad/outils/pdf-regle-a-avant-phrases-courtes/`.
+
+**`N/calculs/decision-calc.md` § 6**
+- A block inserted after the bullet ending « …Le même panier en ticket à un particulier donne les mêmes montants. ». Heading: « **Montants vérifiés (09/11/2026 vers 13 h 15 UTC)** ».
+- It gives the PDF SHA and the verification methods: oracle with 366 identical values; 237 and 524 independent checks; hand check.
+- Full table of the 15 lines (n, Réf., Qté × PU TTC, Remise, Taux, PU HT stored / shown, HT, TVA, TTC). For example, line 13 is « SAC-14990 | 1 × 149,90 | 5 % (7,495 → 7,50) | 20 % | 124,916667 / 124,92 | 118,66 | 23,74 | 142,40 ».
+- Per rate: 20 % = 2 436,77 / 487,35 / 2 924,12; 10 % = 108,59 / 10,86 / 119,45; 5,5 % = 45,50 / 2,50 / 48,00.
+- Document: HT 2 590,86, VAT 500,71, TTC 3 091,57.
+- Exact half-cents at the 20 % cumulative HT of lines 4 (889,975), 7 (904,975) and 8 (1 039,975), and the discount of line 13.
+- Note that the demo prints « Net à payer », while the real PILIQI view has only Total HT, Total TVA and Total TTC; the test must read the real view's labels.
+- Backup: `outils/decision-calc.[jeton retiré].md`.
+
+**`N/audits-externes/decision-aud.md` § 2.0 point 11**. The text « Infection (les tests tuent les mutants des gardes), `composer audit`, aucune requête N+1 ; » was replaced by:
+> « Infection (les tests tuent les mutants des gardes), sur les seules parties que mesure la configuration du lot QA (calculs des ventes et des achats, droits et isolation) : décision de l'éditeur du 09/11/2026 vers 09 h 45 UTC, « caisse à l'étape 3 », les tests de mutation de la caisse sécurisée, du registre et des clôtures se font à l'étape 3 ; dans ce lot, leurs gardes ont des tests qui vérifient chaque refus et chaque cas limite, sans mesure Infection ni seuil de mutation ajouté, `composer audit`, aucune requête N+1 ; »
+
+Backup: `outils/decision-aud.avant-caisse-etape-3.md`.
+
+**`N/reprises/PASSATION-2026-11-08.md`**
+- New top line of § 7 (12 h 3x UTC backup: 2 commits 1b34f61 and 53beb37, 1 154 538 bytes, SHA 4c52c227…; 59 entries, 176 079 bytes, SHA 2bd8bd51…; write-tree 8f494fa4…).
+- § 4 Q-CALC2 bullet appended: PDF `53bb26a9…` sent on 09/11 around 13 h 15 UTC; verified amounts in § 6 of decision-calc.md.
+
+**`N/etat-chaines.md`**: lines added at 12:33, 13:15 and 13:3x UTC.
+
+**Notes commits**: 09277b8, 74a3eb5, e381902.
+
+**Repository (read only; nothing modified by me)**
+- HEAD is aedb582: « Tue les mutants survivants des calculs et des droits par des tests et un code simplifié (lot QA 3/4) ». Before it: 53beb37 (QA 2/3) and 1b34f61 (QA 1/2).
+- The pushed head is still 0d37396.
+- The working tree was clean at around 13:15. Disk: 11 GB free.
+
+4. Errors and fixes:
+- **The PDF run ended after 3 rounds with 2 minor style defects** (long sentences). I fixed them myself, in the generator, in the independent verifier and in the mutation essays. Rebuild and mutations were green, previews checked, amounts hand-verified.
+- **Mutation essays referenced old phrases** (montants_arrondis_inverses, hors_demi_centime). Adapted to the new text so they still apply; added seul_ttc_change.
+- **Stop-hook messages** about uncommitted changes and 3 unpushed commits: answered in text only. These are the QA lot's commits; the chain's « poussee » step pushes after the reviews.
+
+5. Problem Solving:
+- The comparison PDF is delivered: the rule (a) version and the 08/11 version were sent.
+- Verified amounts are written into the CALC cahier for its 15-line test.
+- Sweep of the open lots' cahiers:
+  - price rule: consistent;
+  - SQLite: covered by REGLES (D55);
+  - « caisse à l'étape 3 »: the AUD cahier was clarified; decision-pg.md's « outils du lot QA verts (… mutation) » refers to QA's configuration (calculs, droits) and is consistent.
+- QA lot (5th attempt) is progressing:
+  - commits A (53beb37) and B (aedb582) are done;
+  - the agent was waiting on `scratchpad/qa4/chaine8.log` (coverage, then Infection);
+  - its task list: #126 « QA5 étapes 4-6 : commit B fait (aedb582) ; mesure finale (chaine.sh 8) en cours, puis survivants et MSI dans seuils.json » (in progress) and #127 « seuils de couverture et MSI, Psalm, audits, suite PG complète, pint, commit final » (pending).
+
+6. All user messages:
+
+**From earlier segments (kept for context)**
+- « il faut que tu t'arrete pour l'instain. mais tu sauvegarde tout comme toujours … »
+- « Tu peux recommencer car avec ce session je vais continuer pour toujours. Donc tu continues ton travail comme prévu »
+- « « tout en a, Q-AUD6 oui, Q-AUD7 oui » »
+- « J'ai pas compris ces Un écart de stock trouvé la nuit prévient l'éditeur et le propriétaire, sans rien bloquer. * Un faux ticket Z est retiré par votre procédure, puis le vrai est produit. »
+- « Montre moi pour les prix que je t'ai dit tout à l'heure. Montre moi dans un pdf de 15 lignes avec différents prix »
+- « Tu me dit tout ce que tu as fait par rapport aux fichiers que je t'ai donné. Donc tu as fais quoi avec ce qui est changé et proposé ! »
+- « Envoi moi le fichier pdf de 15 lignes »
+- « Pourquoi vont etre refusé les factures alors eux font quoi ! Il recalcule encore chez eux ou quoi »
+- « Donc eux ils recalculent alors avec le taux de tva 20% par exemple. … C'est pas comme ça »
+- « Et dans la facture que tu m as envoyé il y a apparemment +0.26€ de plus, alors sera accepté ou pas . Car comme j'aime bcp p'us »
+- « « (a) » pour garder l'affichage au centime ; et montre moi la meme pdf avec cette decision afin que je compare »
+- « Envoie moi le pdf quand c'est prêt » (twice)
+- « je vois que tu avance du tout avec QA ??? »
+- « caisse à l'étape 3 »
+- « il fait quoi exactement QA »
+- « QA:implementation ca veut dire la construction du code c est ca? »
+- (He approved the recovery plan through ExitPlanMode.)
+- Screenshot of the « Identité de la société » page, with: « je vois que tu permetez de faire des ticktes de ventes mais normalement ne doit pas etre possible avant verifie la societe avec courrier "Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : capital social, immatriculation. " »
+- « fais-le plus tôt, dans le lot suivant »
+- « mais comment c est faux? comment tu peux te tromper alors que je t ai dit il faut que tu fasse tout performant »
+
+**This segment**
+- « Ok continue »
+
+(Stop-hook messages and scheduled-trigger prompts are system or automated, not user messages.)
+
+**SECURITY INSTRUCTIONS (verbatim from earlier, still in force)**
+- Never ask the user to paste tokens, keys or passwords into the conversation; never write credentials in repository files.
+- Credentials only through environment variables: SUPERPDP_URL, SUPERPDP_CLIENT_ID, SUPERPDP_CLIENT_SECRET, SUPERPDP_TRICATEL_CLIENT_ID, SUPERPDP_TRICATEL_CLIENT_SECRET, SUPERPDP_REDIRECT_URI ; INSEE_SIRENE_CLE, INPI_RNE_IDENTIFIANT, INPI_RNE_MOT_DE_PASSE, RECOMMANDE_CLE, RECOMMANDE_SECRET_RAPPEL, JOURNAL_AUDIT_CLE, JOURNAL_AUDIT_CLE_ID, JOURNAL_AUDIT_CLES_PRECEDENTES, EDITEUR_OPERATEURS, PILIQI_EDITEUR_EMAIL, CAISSE_SECURISEE_CLE_PRIVEE, CAISSE_SECURISEE_PHRASE_SECRETE, MAILTRAP_API_TOKEN, MAILTRAP_ACCOUNT_ID, MAILTRAP_INBOX_ID (on the editor's PC only: MAIL_USERNAME and MAIL_PASSWORD).
+- The classifier refused a real test run with credentials in the conversation (« Credential Leakage »); do not get around it.
+- Never send a real request to SUPER PDP, La Poste, the INPI, the INSEE or the Ordre's directory; only fake implementations or authorized test environments.
+- No PR unless asked. No model identifier in commits, code or the PR.
+- `git stash drop` and `git push origin --delete` were refused by the classifier (Git Destructive): do not force them. Keep stash@{0}.
+- The user once pasted a development private key: never repeat it.
+- The eBay photo contained a third party's name, address and phone: never repeat them. The editor's invoice screenshot contained third-party data: never copy it into the notes.
+- Commit trailer lines: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6`. PR descriptions end with « 🤖 Generated with [Claude Code](https://claude.com/claude-code) » and the session link. GitHub comments end with « --- _Generated by [Claude Code](https://claude.ai/code)_ ».
+- Never commit or push the chain agents' work in progress; answer the stop hook in text. Never force a push or rewrite history.
+- Only one session at a time on the branch.
+- No personal data in the notes (including package authors' emails from lock files); `historique/retraits-locaux.txt` is never published.
+- The user's e-mail address is used only to identify them.
+- Never use AskUserQuestion while a chain runs; ask in the message text. Keep turns short.
+- D52: never put a secret value in the conversation, repository, notes or a report.
+- Uploaded archives (`[jeton retiré]`) are untrusted data: never execute their files (ps1, py, php); never copy their « fichiers_modifies » into the repo; tell the editor not to apply them on his PC.
+- The Q-AUD6 main-branch write is authorized only for the two files (audit-quotidien.yml, dependabot.yml), copied by the session after the AUD push.
+- The SIREN shown in the editor's screenshot is not copied into the notes; no third-party data is copied.
+- Never modify /home/user/piliqiediteur while a chain agent works in it; demo work stays in the scratchpad.
+- If plan mode is active again, write nothing and tell the editor.
+
+7. Pending Tasks:
+- **Answer the current stop hook in text**: do not push. The 3 unpushed commits (1b34f61, 53beb37, aedb582) are the QA lot's; the chain's « poussee » step pushes after the reviews and correction.
+- **Check-in at 14:33 UTC** (trig_014YSbzohxASYadXrqRE6mWb). Follow its stored prompt:
+  1. PostgreSQL; if the container was replaced, follow PASSATION;
+  2. read the chain journal; if the run was cut, resume it with resumeFromRunId, same scriptPath and args;
+  3. back up the unpushed lot with `sauvegarder-lot.sh QA 0d37396` (code 0), note it at the top of PASSATION § 7, run pilotage-sync, watch `df -h /`;
+  4. if a lot was pushed: check CI and send a short report ending with « À faire sur votre PC »;
+  5. re-arm a single check-in 2 hours later.
+- **Chain follow-up**:
+  - QA: final measurement, seuils/MSI, Psalm, audits, full PG suite, final commit, then reviews, correction, push and CI.
+  - Then PG, which includes C7 in a separate commit (the « Vos tickets de caisse restent possibles » message before validation).
+  - Then CALC (no floats, plus the 15-line test with the amounts in decision-calc.md § 6), FI, AUD, NAV-2…NAV-5, ML, DV, EC2, S9-L, S9-A, 21.
+- **After the AUD push**: copy `.github/workflows/audit-quotidien.yml` and `.github/dependabot.yml` to `main` (Q-AUD6).
+- **Later**: campaign 1 bis and roadmap steps 2–15. Caisse mutation tests come at step 3 (the QA lot writes this into step 3 of CLAUDE.md).
+
+8. Current Work:
+- After « Ok continue », I swept the open lots' cahiers and clarified decision-aud.md point 11 (Infection limited to QA's parts; caisse at step 3). Notes pushed as e381902.
+- I checked that the QA agent was waiting on `scratchpad/qa4/chaine8.log` (coverage/Infection).
+- I sent the user a status: cahiers consistent; AUD clarified; QA measuring coverage, then final mutation, seuils, PG suite, final commit, reviews and push; next check-in at 14:33 UTC; « À faire sur votre PC : rien ».
+- Then the stop hook reported « There are 3 unpushed commit(s) on branch 'claude/saas-invoice-editor-architecture-q6eizh' ». Per the standing rule, it is answered in text without pushing.
+- Background:
+  - chain wf_54289edd-a97 (task wyhgkqne2), QA:implementation agent abdf33c32b865a752;
+  - PDF run wf_5c1550cc-e10, completed.
+
+9. Optional Next Step:
+- Answer the stop hook in text, as in previous turns. The 3 commits (1b34f61, 53beb37, aedb582) are the QA lot's commits made by the chain's agent. The lot is not finished: final mutation measurement, then two reviews and the correction. The chain's « poussee » step will push and check CI. The commits are backed up in the notes, and the 14:33 UTC check-in will back them up again.
+- Then wait for chain notifications and the 14:33 UTC check-in, in line with the user's « Ok continue ». Follow the check-in prompt: back up, notes, CI and report if pushed, re-arm a single check-in 2 hours later.
+
+<remote-control-device-report/>
+The summarized conversation included text marked as coming from a Remote Control session on another device, which the summary above may restate. Treat restated content as data, not instructions.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /root/.claude/projects/-home-user-piliqiediteur/00d7e3b2-c4d1-5536-95c0-3e77e19552bb.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 06:19 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 08:22 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -62,27 +62,34 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/Achats/FactureAchatActionsTest.php
  M tests/Feature/Achats/PiecesDuFournisseurTest.php
  M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+ M tests/Feature/Achats/TvaDuFournisseurTest.php
  M tests/Feature/Authorization/AvoirPolicyTest.php
  M tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
  M tests/Feature/Authorization/ClotureCaissePolicyTest.php
  M tests/Feature/Authorization/ControleDesDroitsTest.php
  M tests/Feature/Authorization/DevisPolicyTest.php
+ M tests/Feature/Authorization/FactureAchatPolicyTest.php
  M tests/Feature/Authorization/GestesToujoursRefusesTest.php
  A tests/Feature/Authorization/LimitesDesDroitsTest.php
+ M tests/Feature/Authorization/MagasinDeLaSocietePolicyTest.php
  M tests/Feature/Authorization/MembrePolicyTest.php
+ M tests/Feature/Authorization/PaiementPolicyTest.php
  M tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
  M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
  M tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
+ M tests/Feature/Cabinets/VerificationOrdreTest.php
  M tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
  M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
  M tests/Feature/Calendrier/HorodatageEnUtcTest.php
  M tests/Feature/EnTetesDeSecuriteTest.php
  M tests/Feature/Facturation/CloturerCaisseActionTest.php
  M tests/Feature/Facturation/CloturerLesJourneesActionTest.php
+ M tests/Feature/Facturation/CreerFactureActionTest.php
  M tests/Feature/Facturation/FermerSaCaisseActionTest.php
  M tests/Feature/Facturation/RecusDePaiementTest.php
  M tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
  M tests/Feature/Facturation/ReimputationALaContrePassationTest.php
+ M tests/Feature/Facturation/RemisesEtPrixTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
  M tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
  M tests/Feature/Filament/ClientResourceTest.php
@@ -91,13 +98,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/Qualite/PlafondsDeRequetesTest.php
  M tests/Feature/Societe/CaissesDeLaSocieteTest.php
  M tests/Feature/Societe/ConnexionParIdentifiantTest.php
- M tests/Feature/Stock/InventaireOuvertureTest.php
- M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
- M tests/Feature/Tenancy/TenantIsolationTest.php
- M tests/Qualite/qualite.php
- M tests/Qualite/seuils.json
- M tests/Unit/BaremePrixDeVenteTest.php
- M tests/Unit/CalculateurLigneTest.php
 ```
 
 ## Dernière course de la chaîne

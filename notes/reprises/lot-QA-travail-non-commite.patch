@@ -983,10 +983,10 @@ index 14ab680..80af232 100644
 +}
 diff --git a/tests/Feature/Achats/ApercuDUnAchatTest.php b/tests/Feature/Achats/ApercuDUnAchatTest.php
 new file mode 100644
-index 0000000..50b81c8
+index 0000000..4664f91
 --- /dev/null
 +++ b/tests/Feature/Achats/ApercuDUnAchatTest.php
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,74 @@
 +<?php
 +
 +namespace Tests\Feature\Achats;
@@ -1020,6 +1020,24 @@ index 0000000..50b81c8
 +        $this->assertSame(['total_ht' => '20.00', 'total_tva' => '4.00', 'total_ttc' => '24.00'], $apercu->totaux);
 +    }
 +
++    /**
++     * Une ligne illisible ou pas encore valable n'arrête pas la lecture des
++     * suivantes ; une ligne sans taux se calcule à 0 %, et chaque ligne de
++     * l'aperçu garde le nom et la référence de son produit.
++     */
++    public function test_les_lignes_qui_suivent_une_ligne_ignoree_se_calculent_et_gardent_leur_produit(): void
++    {
++        $apercu = app(ConstructeurLigneAchat::class)->apercu([
++            'pas un tableau' => 'ligne illisible',
++            'prix négatif' => ['prix_unitaire_ht' => '-5.00', 'quantite' => 1, 'taux_tva' => '20'],
++            'sans taux' => ['prix_unitaire_ht' => '10.00', 'quantite' => 1, 'produit' => ['nom' => 'Carnet', 'reference' => 'CARNET']],
++        ]);
++
++        $this->assertSame(['sans taux'], array_keys($apercu->lignes));
++        $this->assertSame(['Carnet', 'CARNET'], [$apercu->lignes['sans taux']['description'], $apercu->lignes['sans taux']['reference']]);
++        $this->assertSame(['total_ht' => '10.00', 'total_tva' => '0.00', 'total_ttc' => '10.00'], $apercu->totaux);
++    }
++
 +    public function test_une_tva_ecrite_pour_un_taux_sans_ligne_laisse_la_proposition_de_piliqi(): void
 +    {
 +        $apercu = app(ConstructeurLigneAchat::class)->apercu(
@@ -1044,10 +1062,17 @@ index 0000000..50b81c8
 +    }
 +}
 diff --git a/tests/Feature/Achats/FactureAchatActionsTest.php b/tests/Feature/Achats/FactureAchatActionsTest.php
-index f08e72f..51bdca9 100644
+index f08e72f..dd0377a 100644
 --- a/tests/Feature/Achats/FactureAchatActionsTest.php
 +++ b/tests/Feature/Achats/FactureAchatActionsTest.php
-@@ -131,6 +131,33 @@ public function test_une_ligne_sans_produit_est_refusee(): void
+@@ -125,12 +125,39 @@ public function test_une_ligne_sans_produit_est_refusee(): void
+     {
+         $fournisseur = Fournisseur::factory()->create();
+ 
+-        $this->expectException(InvalidArgumentException::class);
++        $this->expectExceptionObject(new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue, existant ou nouveau.'));
+         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
+             ['quantite' => 5],
          ], ['date_facture' => '2026-01-15']);
      }
  
@@ -1081,6 +1106,49 @@ index f08e72f..51bdca9 100644
      /**
       * Un brouillon ne crée aucun produit : sa ligne garde seulement la fiche
       * du nouveau produit, et se calcule comme toute ligne d'achat -- 3 x
+@@ -255,6 +282,42 @@ public function test_un_nouveau_produit_sans_prix_de_vente_prend_celui_du_bareme
+         $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
+     }
+ 
++    /**
++     * Un nouveau produit resté sans prix de vente dans le brouillon prend, à
++     * la validation, celui du barème que le magasin a activé entre-temps.
++     */
++    public function test_un_nouveau_produit_sans_prix_au_brouillon_prend_le_bareme_active_avant_sa_validation(): void
++    {
++        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
++            ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10, 'remise_pourcentage' => 50],
++        ], ['date_facture' => '2026-01-15']);
++        $this->assertNull($factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc'] ?? null);
++
++        app(TenantContext::class)->magasin()->update(['prix_vente_automatique' => true]);
++        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
++
++        $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
++    }
++
++    /**
++     * Un nouveau produit qui ne suit pas son stock naît lui aussi chez le
++     * fournisseur de la facture, à son coût d'achat, et sa ligne reçoit la
++     * référence que la validation lui donne.
++     */
++    public function test_un_nouveau_produit_sans_suivi_de_stock_nait_chez_le_fournisseur_a_son_cout_avec_sa_reference(): void
++    {
++        $fournisseur = Fournisseur::factory()->create();
++        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
++            ['produit' => ['nom' => 'Abonnement', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false], 'quantite' => 2, 'prix_unitaire_ht' => '3.50'],
++        ], ['date_facture' => '2026-01-15']);
++
++        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
++
++        $produit = Produit::query()->sole();
++        $this->assertNotNull($produit->reference);
++        $this->assertSame([$fournisseur->id, '3.5000', $produit->reference], [$produit->fournisseur_id, $produit->cmup_ht, $factureAchat->lignes()->sole()->reference]);
++    }
++
+     /**
+      * Le barème part du coût exact : 2,35 € remisés de 15 % coûtent
+      * 1,9975 €, sous le palier de 2 € -- 10 € de bénéfice, (1,9975 € +
 diff --git a/tests/Feature/Achats/PiecesDuFournisseurTest.php b/tests/Feature/Achats/PiecesDuFournisseurTest.php
 index 82bc3fc..dd5da9a 100644
 --- a/tests/Feature/Achats/PiecesDuFournisseurTest.php
@@ -1136,6 +1204,21 @@ index 7fd866d..95e2fe3 100644
      /**
       * Le brouillon garde ce qu'écrit la note d'avoir (le HT d'une ligne, la
       * TVA d'un taux) ; son émission les retient, et arrête ses montants.
+diff --git a/tests/Feature/Achats/TvaDuFournisseurTest.php b/tests/Feature/Achats/TvaDuFournisseurTest.php
+index 6516ea4..5877dd6 100644
+--- a/tests/Feature/Achats/TvaDuFournisseurTest.php
++++ b/tests/Feature/Achats/TvaDuFournisseurTest.php
+@@ -274,6 +274,10 @@ public function test_les_montants_qu_aucune_facture_valable_ne_porte_sont_refuse
+             'La base à 20 % écrite sur la facture (10,01 €) n\'est pas la somme des HT de ses lignes (10,00 €) : saisissez le HT de chaque ligne tel que la facture l\'écrit.',
+             fn () => $this->creer($vingt, MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '20', 'base_ht' => '10.01', 'montant_tva' => '2.00']]]), ['source' => SourceFactureAchat::Api]),
+         );
++        $this->assertRefus(
++            'La base à 5,5 % écrite sur la facture (3,00 €) n\'est pas la somme des HT de ses lignes (0,00 €) : saisissez le HT de chaque ligne tel que la facture l\'écrit.',
++            fn () => $this->creer($vingt, MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '5.5', 'base_ht' => '3.00']]]), ['source' => SourceFactureAchat::Api]),
++        );
+ 
+         $this->assertSame(0, FactureAchat::query()->count());
+         $this->assertSame(0, TauxFactureAchat::query()->count());
 diff --git a/tests/Feature/Authorization/AvoirPolicyTest.php b/tests/Feature/Authorization/AvoirPolicyTest.php
 index 3825901..229d417 100644
 --- a/tests/Feature/Authorization/AvoirPolicyTest.php
@@ -1371,6 +1454,74 @@ index 0a81b6d..3f83125 100644
      /**
       * @return array<string, array{RoleMagasin, list<string>|null, bool}>
       */
+diff --git a/tests/Feature/Authorization/FactureAchatPolicyTest.php b/tests/Feature/Authorization/FactureAchatPolicyTest.php
+index d3cdfad..4d071e7 100644
+--- a/tests/Feature/Authorization/FactureAchatPolicyTest.php
++++ b/tests/Feature/Authorization/FactureAchatPolicyTest.php
+@@ -4,11 +4,13 @@
+ 
+ use App\Domain\Achats\Actions\CreerFactureAchatAction;
+ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
++use App\Domain\Achats\Enums\SourceFactureAchat;
+ use App\Domain\Achats\Models\FactureAchat;
+ use App\Domain\Authorization\PermissionRegistry;
+ use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Contacts\Models\Fournisseur;
+ use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Services\TenantContext;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Tests\TestCase;
+ 
+@@ -16,7 +18,8 @@
+  * Un brouillon de facture d'achat se modifie avec le droit de saisir les
+  * factures d'achat ; une facture validée, dont le stock est déjà entré, ne
+  * se corrige qu'avec en plus le droit de les valider (voir
+- * FactureAchatPolicy::update()).
++ * FactureAchatPolicy::update()), et jamais une facture récupérée par API ni
++ * une facture qu'on ne voit pas.
+  */
+ class FactureAchatPolicyTest extends TestCase
+ {
+@@ -42,10 +45,37 @@ public function test_avec_le_droit_de_valider_une_facture_validee_se_corrige():
+         $this->assertTrue($vendeur->can('update', $validee));
+     }
+ 
+-    private function brouillon(): FactureAchat
++    /**
++     * Une facture d'achat qu'on ne voit pas ne se modifie jamais : sans le
++     * droit de voir les achats, ni depuis un autre magasin de la société ;
++     * une facture récupérée par API, une fois validée, ne se modifie pas,
++     * même avec tous les droits des achats.
++     */
++    public function test_une_facture_qu_on_ne_voit_pas_ou_recuperee_par_api_ne_se_modifie_pas(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $sansLaVue = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_CREER]);
++        $tousLesDroits = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
++        $brouillon = $this->brouillon();
++        $recupereeParApi = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->brouillon(['source' => SourceFactureAchat::Api]));
++        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
++        $responsableDeLAutre = $this->responsable($autre);
++
++        app(TenantContext::class)->runAs($magasin, function () use ($sansLaVue, $tousLesDroits, $brouillon, $recupereeParApi): void {
++            $this->assertFalse($sansLaVue->can('update', $brouillon));
++            $this->assertTrue($tousLesDroits->can('update', $brouillon));
++            $this->assertFalse($tousLesDroits->can('update', $recupereeParApi));
++        });
++        app(TenantContext::class)->runAs($autre, fn () => $this->assertFalse($responsableDeLAutre->can('update', $brouillon)));
++    }
++
++    /**
++     * @param  array<string, mixed>  $options
++     */
++    private function brouillon(array $options = []): FactureAchat
+     {
+         return app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+             ['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 5],
+-        ], ['date_facture' => '2026-01-15']);
++        ], ['date_facture' => '2026-01-15', ...$options]);
+     }
+ }
 diff --git a/tests/Feature/Authorization/GestesToujoursRefusesTest.php b/tests/Feature/Authorization/GestesToujoursRefusesTest.php
 index 61d47e4..852ce36 100644
 --- a/tests/Feature/Authorization/GestesToujoursRefusesTest.php
@@ -1722,6 +1873,85 @@ index 0000000..862023b
 +        $this->assertSame([true, false], $voit($this->proprietaireDe($autreMagasin)));
 +    }
 +}
+diff --git a/tests/Feature/Authorization/MagasinDeLaSocietePolicyTest.php b/tests/Feature/Authorization/MagasinDeLaSocietePolicyTest.php
+index 7869178..bc7fbc3 100644
+--- a/tests/Feature/Authorization/MagasinDeLaSocietePolicyTest.php
++++ b/tests/Feature/Authorization/MagasinDeLaSocietePolicyTest.php
+@@ -5,6 +5,7 @@
+ use App\Domain\Authorization\AutorisationsSociete;
+ use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+ use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Enums\StatutCompte;
+ use App\Domain\Tenancy\Enums\StatutSociete;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
+@@ -58,6 +59,66 @@ public function test_chaque_compte_n_a_que_les_gestes_de_sa_portee_sur_un_magasi
+         ], array_map(fn (User $compte): array => self::permis($compte, $magasin), $comptes));
+     }
+ 
++    /**
++     * Lire les magasins dans l'espace d'administration (la liste, puis un
++     * magasin) : le propriétaire et un administrateur actifs, chacun ceux de
++     * sa portée ; jamais un administrateur suspendu, un responsable ni le
++     * propriétaire d'une autre société.
++     */
++    public function test_seuls_le_proprietaire_et_les_administrateurs_actifs_lisent_les_magasins_de_leur_portee(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
++        $suspendu = $this->administrateur($magasin);
++        $suspendu->forceFill(['statut' => StatutCompte::Suspendu])->save();
++        $comptes = [
++            'propriétaire' => $this->proprietaireDe($magasin),
++            'administrateur de ce magasin' => $this->administrateur($magasin, [$magasin->id]),
++            'administrateur d\'un autre magasin' => $this->administrateur($magasin, [$autre->id]),
++            'administrateur suspendu' => $suspendu,
++            'responsable' => $this->responsable($magasin),
++            'propriétaire d\'une autre société' => $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ailleurs'])),
++        ];
++        $this->dansLaSociete($magasin);
++
++        $this->assertSame([
++            'propriétaire' => [true, true],
++            'administrateur de ce magasin' => [true, true],
++            'administrateur d\'un autre magasin' => [true, false],
++            'administrateur suspendu' => [false, false],
++            'responsable' => [false, false],
++            'propriétaire d\'une autre société' => [false, false],
++        ], array_map(fn (User $compte): array => [$compte->fresh()->can('viewAny', Magasin::class), $compte->fresh()->can('view', $magasin)], $comptes));
++    }
++
++    /**
++     * Ouvrir le magasin de démonstration d'une société pas encore validée :
++     * son propriétaire, ou un administrateur de tous les magasins autorisé
++     * à les gérer ; jamais un administrateur d'une sélection de magasins,
++     * même autorisé, ni un administrateur sans cette autorisation, ni un
++     * responsable.
++     */
++    public function test_seul_qui_gere_tous_les_magasins_ouvre_la_demonstration(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
++        $comptes = [
++            'propriétaire' => $this->proprietaireDe($magasin),
++            'administrateur de tous les magasins autorisé' => $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]),
++            'administrateur de tous les magasins sans l\'autorisation' => $this->administrateur($magasin),
++            'administrateur de ce magasin autorisé' => $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]),
++            'responsable' => $this->responsable($magasin),
++        ];
++        $this->dansLaSociete($magasin);
++
++        $this->assertSame([
++            'propriétaire' => true,
++            'administrateur de tous les magasins autorisé' => true,
++            'administrateur de tous les magasins sans l\'autorisation' => false,
++            'administrateur de ce magasin autorisé' => false,
++            'responsable' => false,
++        ], array_map(fn (User $compte): bool => $compte->fresh()->can('ouvrirLaDemonstration', $magasin->societe), $comptes));
++    }
++
+     public function test_personne_n_agit_sur_le_magasin_de_demonstration(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
 diff --git a/tests/Feature/Authorization/MembrePolicyTest.php b/tests/Feature/Authorization/MembrePolicyTest.php
 index 2a64ace..b4fc025 100644
 --- a/tests/Feature/Authorization/MembrePolicyTest.php
@@ -1803,6 +2033,30 @@ index 2a64ace..b4fc025 100644
          }
      }
  
+diff --git a/tests/Feature/Authorization/PaiementPolicyTest.php b/tests/Feature/Authorization/PaiementPolicyTest.php
+index cf680ad..aa7fc1d 100644
+--- a/tests/Feature/Authorization/PaiementPolicyTest.php
++++ b/tests/Feature/Authorization/PaiementPolicyTest.php
+@@ -53,6 +53,19 @@ public function test_avec_la_vue_totale_un_membre_voit_les_paiements_de_toute_l_
+         $this->assertTrue($collaborateur->can('view', $paiementDuVendeur));
+     }
+ 
++    /**
++     * Sans l'autorisation de voir les paiements, aucun ne se voit, même avec
++     * la vue des factures de toute l'équipe.
++     */
++    public function test_sans_l_autorisation_de_voir_les_paiements_aucun_ne_se_voit(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $observateur = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
++
++        $this->assertFalse($observateur->can('view', $this->encaisserUnPaiementEnTantQue($vendeur)));
++    }
++
+     /**
+      * @return array<string, array{0: RoleMagasin, 1: list<string>|null}>
+      */
 diff --git a/tests/Feature/Authorization/PosteReconnuPolicyTest.php b/tests/Feature/Authorization/PosteReconnuPolicyTest.php
 new file mode 100644
 index 0000000..ab36f82
@@ -1876,10 +2130,35 @@ index bf71e89..289cad9 100644
              $this->actingAs($compte)->get("/app/{$magasin->uuid}")->assertNotFound();
          }
 diff --git a/tests/Feature/Cabinets/IsolationDesCabinetsTest.php b/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
-index 812578b..b4bdd58 100644
+index 812578b..3ba2fab 100644
 --- a/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
 +++ b/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
-@@ -248,6 +248,25 @@ public function test_un_collaborateur_ne_voit_ni_les_invitations_ni_les_demandes
+@@ -3,6 +3,8 @@
+ namespace Tests\Feature\Cabinets;
+ 
+ use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
++use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
++use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
+ use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
+ use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
+ use App\Domain\Cabinets\Models\ClientConfie;
+@@ -12,6 +14,7 @@
+ use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Contacts\Models\Client;
+ use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
++use App\Domain\Tenancy\Enums\StatutCompte;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\TenantContext;
+@@ -27,6 +30,7 @@
+ use Illuminate\Auth\Access\AuthorizationException;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Facades\Mail;
+ use Livewire\Exceptions\MethodNotFoundException;
+ use Livewire\Livewire;
+ use LogicException;
+@@ -248,6 +252,82 @@ public function test_un_collaborateur_ne_voit_ni_les_invitations_ni_les_demandes
              $this->get(InvitationsEtDemandes::getUrl(panel: 'cabinet', tenant: $this->c1))->assertForbidden();
              $this->assertFalse($collaborateur->can('viewAny', InvitationCabinet::class));
              $this->assertFalse($collaborateur->can('view', $invitation));
@@ -1903,6 +2182,63 @@ index 812578b..b4bdd58 100644
 +
 +        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
 +        $this->assertSame([false, false], [$autreProprietaire->can('view', $invitation), $autreProprietaire->can('retirer', $invitation)]);
++    }
++
++    /**
++     * Les liens et les demandes d'un cabinet (voir, accepter, retirer,
++     * mettre fin) restent aux gestes de son propriétaire actif : jamais le
++     * propriétaire d'un autre cabinet, ni le sien une fois suspendu.
++     */
++    public function test_un_autre_cabinet_ou_un_proprietaire_suspendu_n_agit_sur_aucun_lien_du_cabinet(): void
++    {
++        $designant = $this->ouvrirUneSociete(['nom' => 'W', 'raison_sociale' => 'CLIENTE W']);
++        $invitee = $this->ouvrirUneSociete(['nom' => 'V', 'raison_sociale' => 'CLIENTE V']);
++        app(TenantContext::class)->clear();
++        Mail::fake();
++        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($designant), $designant->societe, $this->c1);
++        $this->demanderLeRattachement($this->c1, $invitee->societe, 'v@b.test');
++        $demandeDuCabinet = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $this->c1->id)->where('societe_id', $invitee->societe_id)->sole();
++        $proprietaire = $this->proprietaireDuCabinet($this->c1);
++        $autreProprietaire = $this->proprietaireDuCabinet($this->c2);
++        $gestes = fn (User $compte): array => array_map(
++            fn (LienCabinet $lien): array => [$compte->can('view', $lien), $compte->can('accepter', $lien), $compte->can('retirer', $lien), $compte->can('mettreFin', $lien)],
++            ['désignation du client' => $designation, 'demande du cabinet' => $demandeDuCabinet, 'lien actif' => $this->lienY],
++        );
++        $aucun = ['désignation du client' => [false, false, false, false], 'demande du cabinet' => [false, false, false, false], 'lien actif' => [false, false, false, false]];
++
++        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
++        $this->assertSame([
++            'désignation du client' => [true, true, false, false],
++            'demande du cabinet' => [true, false, true, false],
++            'lien actif' => [true, false, false, true],
++        ], $gestes($proprietaire));
++
++        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
++        $this->assertSame($aucun, $gestes($autreProprietaire));
++
++        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
++        $proprietaire->forceFill(['statut' => StatutCompte::Suspendu])->save();
++        $this->assertSame($aucun, $gestes($proprietaire->fresh()));
++    }
++
++    /**
++     * Le propriétaire d'un cabinet n'invite qu'au nom de son cabinet,
++     * jamais au nom d'un autre : rien ne part et aucune invitation ne naît.
++     */
++    public function test_le_proprietaire_d_un_cabinet_n_invite_jamais_au_nom_d_un_autre_cabinet(): void
++    {
++        Mail::fake();
++        $autreProprietaire = $this->proprietaireDuCabinet($this->c2);
++        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
++
++        $this->assertSame([true, false], [$autreProprietaire->can('create', [InvitationCabinet::class, $this->c2]), $autreProprietaire->can('create', [InvitationCabinet::class, $this->c1])]);
++        $this->assertThrows(
++            fn () => app(InviterUneEntrepriseAction::class)->handle($autreProprietaire, $this->c1, SocieteFactory::sirenFictif(), 'a@b.test', self::MOT_DE_PASSE_CHOISI),
++            AuthorizationException::class,
++            InviterUneEntrepriseAction::MESSAGE_PROPRIETAIRE_SEUL,
++        );
++        $this->assertSame(0, InvitationCabinet::query()->withoutGlobalScopes()->count());
++        Mail::assertNothingSent();
 +    }
  }
 diff --git a/tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php b/tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
@@ -1959,6 +2295,37 @@ index 69624fb..488df17 100644
      public function test_une_societe_invite_son_cabinet_a_creer_son_espace_sans_garder_son_adresse(): void
      {
          $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+diff --git a/tests/Feature/Cabinets/VerificationOrdreTest.php b/tests/Feature/Cabinets/VerificationOrdreTest.php
+index 5486f6c..a8947fa 100644
+--- a/tests/Feature/Cabinets/VerificationOrdreTest.php
++++ b/tests/Feature/Cabinets/VerificationOrdreTest.php
+@@ -121,8 +121,9 @@ public function test_sans_annuaire_automatique_la_demande_alerte_l_editeur_et_at
+     /**
+      * Seul le propriétaire du cabinet fait vérifier son inscription : ni un
+      * collaborateur, qui voit la page sans le bouton et dont l'action
+-     * forgée ne se monte pas, ni le propriétaire d'une autre société, ni un
+-     * propriétaire suspendu ; une inscription vérifiée ne se redemande pas.
++     * forgée ne se monte pas, ni le propriétaire d'une autre société ou d'un
++     * autre cabinet, ni un propriétaire suspendu ; une inscription vérifiée
++     * ne se redemande pas.
+      */
+     public function test_seul_le_proprietaire_du_cabinet_demande_la_verification_de_l_ordre(): void
+     {
+@@ -137,9 +138,14 @@ public function test_seul_le_proprietaire_du_cabinet_demande_la_verification_de_
+         app(TenantContext::class)->clear();
+ 
+         $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($autre, $cabinet, self::DONNEES), AuthorizationException::class, VerifierLOrdreAction::MESSAGE_PROPRIETAIRE_SEUL);
++        $proprietaireDUnAutreCabinet = $this->proprietaireDuCabinet($this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux'));
++        app(TenantContext::class)->clear();
++        $this->assertFalse($proprietaireDUnAutreCabinet->can('verifierLOrdre', $cabinet->cabinet()->sole()));
++        $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($proprietaireDUnAutreCabinet, $cabinet, self::DONNEES), AuthorizationException::class, VerifierLOrdreAction::MESSAGE_PROPRIETAIRE_SEUL);
+ 
+         $proprietaire = $this->proprietaireDuCabinet($cabinet);
+         $proprietaire->forceFill(['statut' => StatutCompte::Suspendu])->save();
++        $this->assertFalse($proprietaire->can('verifierLOrdre', $cabinet->cabinet()->sole()));
+         $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($proprietaire, $cabinet, self::DONNEES), AuthorizationException::class);
+         $this->assertNull($cabinet->cabinet()->sole()->ordre_verifie_le);
+ 
 diff --git a/tests/Feature/CaisseSecurisee/JournalEvenementsTest.php b/tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
 index 758f8d2..f239517 100644
 --- a/tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
@@ -2097,6 +2464,43 @@ index 0856fd8..cd6b00e 100644
      /**
       * Un jour civil s'écrit et se relit tel quel, « AAAA-MM-JJ », sur les
       * deux moteurs ; un objet date, qui porte une heure et un fuseau, est
+diff --git a/tests/Feature/Catalogue/MargeDuCatalogueTest.php b/tests/Feature/Catalogue/MargeDuCatalogueTest.php
+new file mode 100644
+index 0000000..51b582e
+--- /dev/null
++++ b/tests/Feature/Catalogue/MargeDuCatalogueTest.php
+@@ -0,0 +1,31 @@
++<?php
++
++namespace Tests\Feature\Catalogue;
++
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Catalogue\Services\MargeDuCatalogue;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Tests\TestCase;
++
++/**
++ * La marge d'un produit du catalogue (voir MargeDuCatalogue) se lit sur
++ * son prix de vente hors taxe : son prix TTC ÷ (1 + son taux) ; en
++ * franchise en base, la vente se fait sans TVA, et le prix TTC est tout
++ * entier hors taxe.
++ */
++class MargeDuCatalogueTest extends TestCase
++{
++    use RefreshDatabase;
++
++    public function test_en_franchise_en_base_le_prix_de_vente_est_tout_entier_hors_taxe(): void
++    {
++        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $produit = Produit::factory()->create(['prix_vente_ttc' => '1000.00', 'taux_tva' => 20, 'cmup_ht' => '400']);
++
++        $assujetti = MargeDuCatalogue::de($produit, false);
++        $enFranchise = MargeDuCatalogue::de($produit, true);
++
++        $this->assertSame([2000, 83333, 43333, 5200], [$assujetti->tauxTva, $assujetti->prixVenteHt, $assujetti->beneficeUnitaireHt, $assujetti->tauxDeMarque]);
++        $this->assertSame([0, 100000, 60000, 6000], [$enFranchise->tauxTva, $enFranchise->prixVenteHt, $enFranchise->beneficeUnitaireHt, $enFranchise->tauxDeMarque]);
++    }
++}
 diff --git a/tests/Feature/EnTetesDeSecuriteTest.php b/tests/Feature/EnTetesDeSecuriteTest.php
 index c23ed51..94916d5 100644
 --- a/tests/Feature/EnTetesDeSecuriteTest.php
@@ -2215,6 +2619,30 @@ index 023bb2e..879e65e 100644
 +        Exceptions::assertReported(fn (RuntimeException $panne): bool => $panne->getMessage() === 'Panne du serveur de base de données.');
 +    }
  }
+diff --git a/tests/Feature/Facturation/CreerFactureActionTest.php b/tests/Feature/Facturation/CreerFactureActionTest.php
+index 5e38dd9..6c5d152 100644
+--- a/tests/Feature/Facturation/CreerFactureActionTest.php
++++ b/tests/Feature/Facturation/CreerFactureActionTest.php
+@@ -71,6 +71,19 @@ public function test_chaque_ligne_sait_si_elle_vend_un_bien_ou_un_service(): voi
+         $this->assertSame(['Écran iPhone 13', 'Pose écran'], $lignes->pluck('description')->all());
+     }
+ 
++    /**
++     * Une ligne de service vendue sans taux saisi prend celui de sa fiche,
++     * pas le taux par défaut du magasin.
++     */
++    public function test_une_ligne_de_service_prend_le_taux_de_sa_fiche(): void
++    {
++        $reparation = Service::factory()->auPrixDe('10.55', '5.5')->create(['nom' => 'Réparation']);
++
++        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['service_id' => $reparation->id, 'quantite' => 1]]);
++
++        $this->assertSame(['5.50', '10.55'], [$facture->lignes->sole()->taux_tva, $facture->total_ttc]);
++    }
++
+     public function test_une_ligne_sans_produit_ni_service_est_refusee(): void
+     {
+         $client = Client::factory()->create();
 diff --git a/tests/Feature/Facturation/FermerSaCaisseActionTest.php b/tests/Feature/Facturation/FermerSaCaisseActionTest.php
 index 9a60265..0e47e44 100644
 --- a/tests/Feature/Facturation/FermerSaCaisseActionTest.php
@@ -2333,6 +2761,47 @@ index 370454d..a7cffed 100644
 +        DB::disableQueryLog();
 +    }
  }
+diff --git a/tests/Feature/Facturation/RemisesEtPrixTest.php b/tests/Feature/Facturation/RemisesEtPrixTest.php
+index b14ab62..450bcc7 100644
+--- a/tests/Feature/Facturation/RemisesEtPrixTest.php
++++ b/tests/Feature/Facturation/RemisesEtPrixTest.php
+@@ -23,6 +23,7 @@
+ use App\Domain\Facturation\Enums\StatutFacture;
+ use App\Domain\Facturation\Models\Facture;
+ use App\Domain\Facturation\Models\LigneFacture;
++use App\Domain\Facturation\Services\ContexteDeVente;
+ use App\Domain\Facturation\Services\DerogationsDePrix;
+ use App\Domain\Tenancy\Actions\ModifierMembreAction;
+ use App\Domain\Tenancy\Enums\RoleMagasin;
+@@ -247,6 +248,28 @@ public function test_modifier_une_autre_ligne_d_un_brouillon_garde_la_remise_acc
+         $this->assertSame([['10.00', 1], ['0.00', 3]], $modifie->lignes->sortBy('ordre')->map(fn (LigneFacture $ligne): array => [$ligne->remise_pourcentage, $ligne->quantite])->values()->all());
+     }
+ 
++    /**
++     * Une ligne dérogatoire déjà enregistrée ne couvre qu'une ligne : reprise
++     * deux fois, la seconde demande l'autorisation ; deux lignes identiques
++     * déjà accordées le restent toutes les deux ; une nouvelle dérogation
++     * qui suit une ligne reprise est demandée, son pourcentage écrit avec
++     * une virgule.
++     */
++    public function test_chaque_ligne_derogatoire_deja_enregistree_ne_couvre_qu_une_ligne(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $cable = $this->produit('Câble USB', '12.00');
++        $contexte = ContexteDeVente::pour(null, $magasin);
++        $remisee = ['produit_id' => $cable->id, 'service_id' => null, 'quantite' => 1, 'prix_unitaire_ttc' => '12.00', 'taux_tva_du_prix' => '20.00', 'remise_pourcentage' => '10.00'];
++        $autreRemise = [...$remisee, 'remise_pourcentage' => '12.50'];
++        $derogations = app(DerogationsDePrix::class);
++        $demande = fn (string $remise): string => "Accorder une remise de {$remise} % sur « Câble USB » ".DerogationsDePrix::AUTORISATION.'.';
++
++        $this->assertSame([1 => $demande('10')], $derogations->introduites([$remisee], [$remisee, $remisee], $contexte));
++        $this->assertSame([], $derogations->introduites([$remisee, $remisee], [$remisee, $remisee], $contexte));
++        $this->assertSame([1 => $demande('12,5')], $derogations->introduites([$remisee], [$remisee, $autreRemise], $contexte));
++    }
++
+     public function test_changer_le_produit_ou_la_quantite_d_une_ligne_remisee_exige_l_autorisation(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 diff --git a/tests/Feature/Facturation/TelechargementDesDocumentsTest.php b/tests/Feature/Facturation/TelechargementDesDocumentsTest.php
 index 095256e..e4dad49 100644
 --- a/tests/Feature/Facturation/TelechargementDesDocumentsTest.php
@@ -2983,10 +3452,18 @@ index dcafc2b..8a80855 100644
       * Un vendeur promu responsable de son magasin alors que son mot de
       * passe est encore son identifiant choisit le sien à sa connexion
 diff --git a/tests/Feature/Stock/InventaireOuvertureTest.php b/tests/Feature/Stock/InventaireOuvertureTest.php
-index dac9cfc..80b7900 100644
+index dac9cfc..8ac5151 100644
 --- a/tests/Feature/Stock/InventaireOuvertureTest.php
 +++ b/tests/Feature/Stock/InventaireOuvertureTest.php
-@@ -335,7 +335,8 @@ public function test_un_compte_de_cabinet_consulte_un_inventaire_et_ne_le_saisit
+@@ -19,6 +19,7 @@
+ use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
+ use App\Domain\Stock\Enums\StatutInventaireOuverture;
+ use App\Domain\Stock\Models\InventaireOuverture;
++use App\Domain\Stock\Services\ConstructeurLigneInventaire;
+ use App\Domain\Stock\Models\LigneInventaireOuverture;
+ use App\Domain\Stock\Models\MouvementStock;
+ use App\Domain\Tenancy\Enums\ActionAuditee;
+@@ -335,7 +336,8 @@ public function test_un_compte_de_cabinet_consulte_un_inventaire_et_ne_le_saisit
      /**
       * Un inventaire d'ouverture et ses produits restent dans leur magasin :
       * depuis un autre magasin de la même société, l'inventaire est
@@ -2996,7 +3473,7 @@ index dac9cfc..80b7900 100644
       */
      public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
      {
-@@ -344,6 +345,7 @@ public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
+@@ -344,6 +346,7 @@ public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
          $inventaireDeA = $this->saisir([self::ligneDUnNouveauCarnet()]);
          $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'Boutique B']);
  
@@ -3004,7 +3481,7 @@ index dac9cfc..80b7900 100644
          $this->assertThrows(fn () => $this->valider($inventaireDeA), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
          $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaireDeA, [self::ligneDUnNouveauCarnet()]), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
          $this->assertThrows(fn () => $this->saisir([['produit_id' => $tasseDeA->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), InvalidArgumentException::class, 'Ce produit est introuvable dans le magasin.');
-@@ -452,6 +454,29 @@ public function test_un_produit_deja_recu_n_est_pas_inventorie_de_nouveau(): voi
+@@ -452,6 +455,29 @@ public function test_un_produit_deja_recu_n_est_pas_inventorie_de_nouveau(): voi
          $this->assertSame([StatutInventaireOuverture::Brouillon, 0, 5], [$brouillon->fresh()->statut, Produit::query()->where('nom', 'Carnet A5')->count(), $tasse->fresh()->stock_quantite]);
      }
  
@@ -3034,7 +3511,7 @@ index dac9cfc..80b7900 100644
      /**
       * @return array<string, array{0: list<array<string, mixed>>, 1: string}>
       */
-@@ -477,6 +502,38 @@ public static function lignesRefusees(): array
+@@ -477,6 +503,38 @@ public static function lignesRefusees(): array
                  [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 0, 'cout_unitaire_ht' => '1.00']],
                  'La quantité doit être un nombre entier d\'articles, au moins 1.',
              ],
@@ -3073,6 +3550,67 @@ index dac9cfc..80b7900 100644
          ];
      }
  
+@@ -493,6 +551,60 @@ public function test_une_ligne_invalide_est_refusee_et_rien_n_est_enregistre(arr
+         $this->assertSame(0, InventaireOuverture::query()->count());
+     }
+ 
++    /**
++     * @return array<string, array{array<string, mixed>, string}>
++     */
++    public static function lignesAuxBornes(): array
++    {
++        $carnet = ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'];
++
++        return [
++            'prix de vente, taux de TVA et coût nuls' => [['produit' => [...$carnet, 'prix_vente_ttc' => '0', 'taux_tva' => '0'], 'quantite' => 1, 'cout_unitaire_ht' => '0'], '0.00'],
++            'taux de TVA de 100 %' => [['produit' => [...$carnet, 'taux_tva' => '100'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00'], '1.00'],
++            'un demi-centime' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '0.005'], '0.01'],
++            'trois demi-centimes' => [['produit' => $carnet, 'quantite' => 3, 'cout_unitaire_ht' => '0.005'], '0.02'],
++            'sous le demi-centime' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '0.004999'], '0.00'],
++            'la plus grande quantité' => [['produit' => $carnet, 'quantite' => ConstructeurLigneInventaire::QUANTITE_MAXIMUM, 'cout_unitaire_ht' => '0'], '0.00'],
++            'la plus grande valeur' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '999999999999.99'], '999999999999.99'],
++        ];
++    }
++
++    /**
++     * Une ligne à ses bornes est acceptée : un prix de vente, un taux de TVA
++     * et un coût nuls, un taux de 100 %, la plus grande quantité et la plus
++     * grande valeur que le logiciel accepte. La valeur d'une ligne
++     * s'arrondit une seule fois au centime le plus proche, un demi-centime
++     * au centime supérieur.
++     *
++     * @param  array<string, mixed>  $ligne
++     */
++    #[DataProvider('lignesAuxBornes')]
++    public function test_une_ligne_a_ses_bornes_est_acceptee(array $ligne, string $valeur): void
++    {
++        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++
++        $this->assertSame($valeur, $this->saisir([$ligne])->valeur_ht);
++    }
++
++    /**
++     * Les lignes se rangent dans l'ordre de la saisie, quelles que soient
++     * leurs clés (celles d'un formulaire), et un taux de TVA ou une
++     * référence laissés vides prennent leur valeur par défaut : le taux du
++     * magasin, une référence générée à la validation.
++     */
++    public function test_les_lignes_se_rangent_dans_leur_ordre_et_un_champ_vide_prend_sa_valeur_par_defaut(): void
++    {
++        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++
++        $inventaire = $this->saisir([
++            'premiere-ligne' => ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '', 'reference' => ''], 'quantite' => 1, 'cout_unitaire_ht' => '2.00'],
++            'seconde-ligne' => ['produit' => ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90'], 'quantite' => 1, 'cout_unitaire_ht' => '3.00'],
++        ]);
++
++        $this->assertSame([['Carnet A5', 0], ['Carnet A4', 1]], $inventaire->lignes()->get()->map(fn ($ligne): array => [$ligne->description, (int) $ligne->ordre])->all());
++        $this->assertSame('20.00', $inventaire->lignes()->first()->nouveau_produit['taux_tva']);
++    }
++
+     /**
+      * Un même produit ne figure que sur une ligne, et la référence d'un
+      * nouveau produit n'est jamais celle d'un produit du magasin.
 diff --git a/tests/Feature/Tenancy/AccesAuxPanneauxTest.php b/tests/Feature/Tenancy/AccesAuxPanneauxTest.php
 index 5111832..75beeb4 100644
 --- a/tests/Feature/Tenancy/AccesAuxPanneauxTest.php
@@ -3765,12 +4303,48 @@ index caacf15..8d6fb4a 100644
          ];
      }
  
+diff --git a/tests/Unit/EcartsDUnTauxTest.php b/tests/Unit/EcartsDUnTauxTest.php
+new file mode 100644
+index 0000000..a786053
+--- /dev/null
++++ b/tests/Unit/EcartsDUnTauxTest.php
+@@ -0,0 +1,30 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Achats\Services\EcartsDUnTaux;
++use PHPUnit\Framework\TestCase;
++
++/**
++ * Les écarts d'un taux entre ce qu'écrit la facture du fournisseur et ce
++ * que propose PILIQI (voir EcartsDUnTaux) : chaque HT de ligne écarté de
++ * plus de 0,02 € et une TVA écartée de plus de 0,01 € par ligne du taux
++ * ont chacun leur avertissement, dans l'ordre des lignes, la TVA à la
++ * fin ; un écart dans la tolérance n'en a aucun.
++ */
++class EcartsDUnTauxTest extends TestCase
++{
++    public function test_chaque_ecart_au_dela_de_la_tolerance_a_son_avertissement(): void
++    {
++        $ecarts = new EcartsDUnTaux(2000, 1505, 300, 310, [
++            ['description' => 'Carnet', 'reference' => 'CARNET', 'ht_calcule' => 500, 'ht_retenu' => 503],
++            ['description' => 'Stylo', 'reference' => null, 'ht_calcule' => 500, 'ht_retenu' => 502],
++            ['description' => 'Cahier', 'reference' => null, 'ht_calcule' => 500, 'ht_retenu' => 500],
++        ]);
++
++        $this->assertSame([
++            sprintf(EcartsDUnTaux::AVERTISSEMENT_HT, 'Carnet', '5,03 €', '0,03 €', '5,00 €'),
++            sprintf(EcartsDUnTaux::AVERTISSEMENT_TVA, '20 %', '3,10 €', '0,10 €', '3,00 €'),
++        ], $ecarts->avertissements());
++    }
++}
 diff --git a/tests/Unit/MontantsDuFournisseurTest.php b/tests/Unit/MontantsDuFournisseurTest.php
 new file mode 100644
-index 0000000..ea810ce
+index 0000000..a09174b
 --- /dev/null
 +++ b/tests/Unit/MontantsDuFournisseurTest.php
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,65 @@
 +<?php
 +
 +namespace Tests\Unit;
@@ -3811,6 +4385,19 @@ index 0000000..ea810ce
 +        $montants = MontantsDuFournisseur::depuisLaSaisie(['taux' => null, 'total_ttc' => '24.00']);
 +
 +        $this->assertSame([[], [], 2400, false], [$montants->tvaParTaux, $montants->baseParTaux, $montants->totalTtc, $montants->confirmation]);
++    }
++
++    /**
++     * Chaque montant écrit, et la confirmation, distinguent une demande
++     * d'une autre (voir ActionsUniques) : le même jeton avec un autre
++     * montant est une autre demande.
++     */
++    public function test_la_saisie_se_retient_tout_entiere_pour_distinguer_une_demande(): void
++    {
++        $this->assertSame(
++            ['tva_par_taux' => [2000 => 400], 'base_par_taux' => [2000 => 2000], 'total_ttc' => 2400, 'confirmation' => true],
++            (new MontantsDuFournisseur([2000 => 400], [2000 => 2000], 2400, true))->enTableau(),
++        );
 +    }
 +
 +    /**
@@ -3970,7 +4557,7 @@ index fd3bbf2..a9bd5a2 100644
              'texte du formulaire' => ['3', 3],
              'flottant entier' => [4.0, 4],
 diff --git a/tests/Unit/SaisieDecimaleTest.php b/tests/Unit/SaisieDecimaleTest.php
-index 6a3c4b0..256a477 100644
+index 6a3c4b0..eac9c7a 100644
 --- a/tests/Unit/SaisieDecimaleTest.php
 +++ b/tests/Unit/SaisieDecimaleTest.php
 @@ -3,6 +3,7 @@
@@ -3981,7 +4568,7 @@ index 6a3c4b0..256a477 100644
  use InvalidArgumentException;
  use PHPUnit\Framework\Attributes\DataProvider;
  use PHPUnit\Framework\TestCase;
-@@ -53,4 +54,75 @@ public function test_un_nombre_hors_limites_est_refuse_jamais_lu_zero(string $sa
+@@ -53,4 +54,77 @@ public function test_un_nombre_hors_limites_est_refuse_jamais_lu_zero(string $sa
  
          SaisieDecimale::enCentiemes($saisie);
      }
@@ -4026,6 +4613,8 @@ index 6a3c4b0..256a477 100644
 +        $this->assertSame(123456789012345678, SaisieDecimale::enMillioniemes(' 123456789012.345678 '));
 +        $this->assertThrows(fn () => SaisieDecimale::enCentiemes(null), 'Nombre illisible.');
 +        $this->assertThrows(fn () => SaisieDecimale::enCentiemes([]), 'Nombre illisible.');
++        $this->assertThrows(fn () => SaisieDecimale::enCentiemes('douze'), '« douze » n\'est pas un nombre.');
++        $this->assertThrows(fn () => SaisieDecimale::montantAuCentime('12,50'), '« 12,50 » n\'est pas un nombre.');
 +    }
 +
 +    /**

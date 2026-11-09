@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 14:34 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 16:34 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -46,6 +46,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
  M tests/Feature/Stock/InventaireOuvertureTest.php
  M tests/Qualite/seuils.json
+ M tests/Unit/BaremePrixDeVenteTest.php
  M tests/Unit/CalculateurLigneLimitesTest.php
 ?? tests/Unit/ReglementComptantTest.php
 ```

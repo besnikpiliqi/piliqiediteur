@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 10:49 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 12:35 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `0d37396`. Commits locaux pas encore poussés :
 
 ```
+53beb37 Plafonne les requêtes des espaces de la société et du cabinet et limite la mutation aux calculs et aux droits (lot QA 2/3)
 1b34f61 Ajoute les outils de qualité et met la CI sur PostgreSQL seulement (lot QA 1/2)
 ```
 
@@ -38,66 +39,65 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .github/workflows/tests.yml
- M CLAUDE.md
  M README.md
- M app/Domain/Cabinets/Services/AccesDesCabinets.php
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/Calendrier/Casts/Instant.php
+ M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
+ M app/Domain/Achats/Services/ConstructeurLigneAchat.php
+ M app/Domain/Achats/Services/EcartsDUnTaux.php
+ M app/Domain/Achats/Services/MontantsDuFournisseur.php
+ M app/Domain/Achats/Services/TvaDuFournisseur.php
+ M app/Domain/Authorization/ControleDesDroits.php
+ M app/Domain/Authorization/LecteurDesDroits.php
+ M app/Domain/Cabinets/Models/LienCabinet.php
  M app/Domain/Catalogue/Services/BaremePrixDeVente.php
- M app/Domain/Facturation/Services/CaissesDeLaSociete.php
+ M app/Domain/Catalogue/Services/MargeDuCatalogue.php
+ M app/Domain/Facturation/Models/Avoir.php
  M app/Domain/Facturation/Services/CalculateurLigne.php
+ M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
+ M app/Domain/Facturation/Services/DerogationsDePrix.php
+ M app/Domain/Facturation/Services/DocumentChiffre.php
+ M app/Domain/Facturation/Services/ImputationDuCredit.php
+ M app/Domain/Facturation/Services/PartDeReglement.php
+ M app/Domain/Facturation/Services/QuantiteEntiere.php
+ M app/Domain/Facturation/Services/ReglementComptant.php
  M app/Domain/Facturation/Services/SaisieDecimale.php
- M app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
- M app/Domain/Tenancy/Actions/ChangerSiretAction.php
- M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
- M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
- M app/Domain/Tenancy/Rules/SiretValide.php
+ M app/Domain/Facturation/Services/TerritoireFiscal.php
+ M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
+ M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+ M app/Domain/Tenancy/Concerns/BelongsToSociete.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Domain/Tenancy/Services/PorteeDesAdministrateurs.php
+ M app/Domain/Tenancy/Services/PorteeDesDroits.php
+ M app/Domain/Tenancy/Services/TenantContext.php
+ M app/Http/Middleware/ExigerSonPropreMotDePasse.php
+ M app/Http/Middleware/MenerUnCabinetASonEspace.php
+ M app/Http/Middleware/MenerUnCompteSansMagasin.php
  M app/Models/User.php
  M app/Policies/AffectationPolicy.php
- M app/Providers/AppServiceProvider.php
- M infection.json5
- M psalm.xml
- M tests/Browser/Parcours/TempsDeReponseTest.php
- A tests/Feature/Achats/ApercuDUnAchatTest.php
+ M app/Policies/CabinetPolicy.php
+ M app/Policies/ClotureCaissePersonnellePolicy.php
+ M app/Policies/EntreeAuditPolicy.php
+ M app/Policies/InvitationCabinetPolicy.php
+ M app/Policies/LienCabinetPolicy.php
+ M app/Policies/MagasinPolicy.php
+ M app/Policies/MembrePolicy.php
+ M app/Policies/PosteReconnuPolicy.php
+ M app/Policies/SocietePolicy.php
  M tests/Feature/Achats/FactureAchatActionsTest.php
- M tests/Feature/Achats/PiecesDuFournisseurTest.php
  M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
  M tests/Feature/Achats/TvaDuFournisseurTest.php
- M tests/Feature/Authorization/AvoirPolicyTest.php
- M tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
- M tests/Feature/Authorization/ClotureCaissePolicyTest.php
  M tests/Feature/Authorization/ControleDesDroitsTest.php
- M tests/Feature/Authorization/DevisPolicyTest.php
- M tests/Feature/Authorization/FactureAchatPolicyTest.php
- M tests/Feature/Authorization/GestesToujoursRefusesTest.php
- A tests/Feature/Authorization/LimitesDesDroitsTest.php
- M tests/Feature/Authorization/MagasinDeLaSocietePolicyTest.php
- M tests/Feature/Authorization/MembrePolicyTest.php
- M tests/Feature/Authorization/PaiementPolicyTest.php
- M tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
- M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
- M tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
- M tests/Feature/Cabinets/VerificationOrdreTest.php
- M tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
- M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
- M tests/Feature/Calendrier/HorodatageEnUtcTest.php
- M tests/Feature/EnTetesDeSecuriteTest.php
- M tests/Feature/Facturation/CloturerCaisseActionTest.php
- M tests/Feature/Facturation/CloturerLesJourneesActionTest.php
- M tests/Feature/Facturation/CreerFactureActionTest.php
- M tests/Feature/Facturation/FermerSaCaisseActionTest.php
- M tests/Feature/Facturation/RecusDePaiementTest.php
- M tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
- M tests/Feature/Facturation/ReimputationALaContrePassationTest.php
- M tests/Feature/Facturation/RemisesEtPrixTest.php
- M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
- M tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
- M tests/Feature/Filament/ClientResourceTest.php
- M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
- M tests/Feature/Filament/InventaireOuvertureResourceTest.php
- M tests/Feature/Qualite/PlafondsDeRequetesTest.php
- M tests/Feature/Societe/CaissesDeLaSocieteTest.php
+ M tests/Feature/Authorization/LimitesDesDroitsTest.php
+ M tests/Feature/Cabinets/AutorisationsDuCabinetTest.php
+ M tests/Feature/Facturation/ConstructeurLigneDocumentTest.php
+ M tests/Feature/Facturation/RegularisationDUneFactureTest.php
+ M tests/Feature/Stock/InventaireOuvertureTest.php
+ M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
+ M tests/Unit/CalculateurLigneLimitesTest.php
+ M tests/Unit/CalculateurLigneTest.php
+ M tests/Unit/EcartsDUnTauxTest.php
+?? tests/Feature/Facturation/DerogationsDePrixTest.php
+?? tests/Unit/CalculateurLigneAuHasardTest.php
 ```
 
 ## Dernière course de la chaîne

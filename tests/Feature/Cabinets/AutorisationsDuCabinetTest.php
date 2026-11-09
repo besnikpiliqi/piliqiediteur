@@ -231,14 +231,6 @@ class AutorisationsDuCabinetTest extends TestCase
      */
     private function retirerLaGardeDesCabinets(string $garde): void
     {
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::unprepared("DROP TRIGGER IF EXISTS {$garde} ON autorisations_cabinet");
-
-            return;
-        }
-
-        foreach (GardesDesCabinets::declencheursSqlite($garde) as $declencheur) {
-            DB::unprepared("DROP TRIGGER IF EXISTS {$declencheur}");
-        }
+        DB::unprepared("DROP TRIGGER IF EXISTS {$garde} ON autorisations_cabinet");
     }
 }

@@ -19,8 +19,7 @@ use Tests\TestCase;
 /**
  * La trace technique d'un événement (adresse IP et navigateur, S13) ne se
  * modifie jamais et ne s'efface qu'une fois expirée : la base le refuse
- * elle-même, sous SQLite comme sous PostgreSQL, à toute requête qui ne
- * passe pas par le modèle (voir
+ * elle-même à toute requête qui ne passe pas par le modèle (voir
  * DeclencheursDeProtection::effacementApresExpiration()). L'heure de
  * référence est celle du serveur de base de données : les traces de ces
  * tests expirent par rapport à elle (voir maintenantSelonLaBase()), jamais
@@ -94,11 +93,9 @@ class TraceEvenementTest extends TestCase
     }
 
     /**
-     * Une insertion qui remplacerait la trace (INSERT OR REPLACE sous
-     * SQLite, qui efface la ligne en conflit, INSERT ... ON CONFLICT DO
-     * UPDATE sous PostgreSQL, qui la modifie) ne la falsifie pas pour la
-     * rendre effaçable : la base la refuse comme une suppression avant
-     * expiration ou comme une modification.
+     * Une insertion qui remplacerait la trace (INSERT ... ON CONFLICT DO
+     * UPDATE, qui la modifie) ne la falsifie pas pour la rendre effaçable :
+     * la base la refuse comme une modification.
      */
     public function test_une_trace_ne_se_reecrit_pas_par_une_insertion_qui_la_remplace(): void
     {
@@ -108,14 +105,12 @@ class TraceEvenementTest extends TestCase
         $avant = $ligne();
         $valeurs = '(?, ?, ?, ?, ?, ?)';
         $colonnes = '(enregistrement_fiscal_id, magasin_id, ip, agent_utilisateur, expire_le, created_at)';
-        $remplacement = DB::connection()->getDriverName() === 'pgsql'
-            ? "INSERT INTO traces_evenements {$colonnes} VALUES {$valeurs} ON CONFLICT (enregistrement_fiscal_id) DO UPDATE SET ip = excluded.ip, expire_le = excluded.expire_le"
-            : "INSERT OR REPLACE INTO traces_evenements {$colonnes} VALUES {$valeurs}";
+        $remplacement = "INSERT INTO traces_evenements {$colonnes} VALUES {$valeurs} ON CONFLICT (enregistrement_fiscal_id) DO UPDATE SET ip = excluded.ip, expire_le = excluded.expire_le";
 
         $this->assertThrows(
             $this->dansUnPointDeSauvegarde(fn () => DB::statement($remplacement, [$trace->getKey(), $trace->magasin_id, '0.0.0.0', 'falsifié', Instant::enBase(self::enUtc('2000-01-01 00:00:00')), Instant::enBase(self::enUtc('2000-01-01 00:00:00'))])),
             QueryException::class,
-            'traces_evenements : ',
+            'traces_evenements : modification refusée',
         );
 
         $this->assertSame('203.0.113.7', $avant['ip']);

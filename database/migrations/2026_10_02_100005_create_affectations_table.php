@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Schema;
  * Les clés étrangères composites (societe_id, user_id) et (societe_id,
  * magasin_id) font refuser par la base l'affectation d'un compte au
  * magasin d'une autre société que la sienne ; une affectation sans
- * magasin n'en vérifie aucun (MATCH SIMPLE, sur les deux moteurs).
+ * magasin n'en vérifie aucun (MATCH SIMPLE).
  */
 return new class extends Migration
 {

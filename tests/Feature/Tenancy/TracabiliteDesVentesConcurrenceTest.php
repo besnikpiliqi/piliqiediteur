@@ -37,7 +37,6 @@ class TracabiliteDesVentesConcurrenceTest extends TestCase
 
     public function test_deux_premieres_ventes_simultanees_du_meme_vendeur_dans_a_et_b_n_en_laissent_passer_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $vendeur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], [...PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), ...PermissionRegistry::deVente()]);

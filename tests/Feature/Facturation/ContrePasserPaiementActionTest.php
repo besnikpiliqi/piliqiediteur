@@ -391,10 +391,6 @@ class ContrePasserPaiementActionTest extends TestCase
      */
     public function test_aucune_requete_ne_verrouille_une_ligne_d_une_table_en_ajout_seul(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('SQLite n\'écrit aucun verrou de ligne : ce test ne tourne que sous PostgreSQL.');
-        }
-
         $tablesEnAjoutSeul = collect(DB::select("select distinct c.relname as nom from pg_trigger t join pg_class c on c.oid = t.tgrelid where t.tgname like '%\\_ajout\\_seul\\_update'"))->pluck('nom')->sort()->values()->all();
         $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'changements_fin_exercice', 'consultations_vies', 'enregistrements_fiscaux', 'lignes_recu_paiement', 'paiement_allocations', 'paiements', 'preuves_operation', 'recus_paiement'], $tablesEnAjoutSeul);
         $verrous = [];

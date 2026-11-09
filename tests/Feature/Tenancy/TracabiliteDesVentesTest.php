@@ -167,13 +167,12 @@ class TracabiliteDesVentesTest extends TestCase
     }
 
     /**
-     * Version déterministe, sous les deux moteurs, de
+     * Version déterministe, dans un seul processus, de
      * TracabiliteDesVentesConcurrenceTest : la première vente du vendeur à
      * Lyon est faite dès que sa vente de Villeurbanne a verrouillé son
      * registre ; sous le verrou de sa ligne, la vente de Villeurbanne la
-     * voit et est refusée. (Une seule connexion SQLite : la vente de Lyon,
-     * faite dans la transaction de celle de Villeurbanne, s'annule avec
-     * elle.)
+     * voit et est refusée. (Une seule connexion : la vente de Lyon, faite
+     * dans la transaction de celle de Villeurbanne, s'annule avec elle.)
      */
     public function test_deux_premieres_ventes_simultanees_du_meme_vendeur_dans_a_et_b_n_en_laissent_passer_qu_une(): void
     {

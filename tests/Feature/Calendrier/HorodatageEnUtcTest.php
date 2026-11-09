@@ -150,9 +150,8 @@ class HorodatageEnUtcTest extends TestCase
     }
 
     /**
-     * Un jour civil s'écrit et se relit tel quel, « AAAA-MM-JJ », sur les
-     * deux moteurs ; un objet date, qui porte une heure et un fuseau, est
-     * refusé.
+     * Un jour civil s'écrit et se relit tel quel, « AAAA-MM-JJ » ; un objet
+     * date, qui porte une heure et un fuseau, est refusé.
      */
     public function test_un_jour_civil_s_ecrit_et_se_relit_tel_quel_et_refuse_un_objet_date(): void
     {
@@ -197,10 +196,6 @@ class HorodatageEnUtcTest extends TestCase
 
     public function test_la_session_postgresql_est_en_utc(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('La session de base n\'a de fuseau que sous PostgreSQL.');
-        }
-
         $this->assertSame('UTC', DB::selectOne('show timezone')->TimeZone);
     }
 

@@ -60,7 +60,6 @@ class BrouillonDeFactureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_gestes_simultanes_sur_un_brouillon_de_facture_passent_l_un_apres_l_autre(string $premier, string $second, ?string $refus): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);

@@ -47,7 +47,6 @@ class CreerEtablissementConcurrenceTest extends TestCase
     #[DataProvider('valeursPrisesParLaPremiereCreation')]
     public function test_deux_creations_simultanees_du_meme_code_ou_du_meme_siret_n_en_retiennent_qu_une(string $champ, string $message): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $societeId = $societe->id;
         $nicDuTest = substr(IdentifiantsInsee::avecSaCle($societe->siren.'0005'), 9);

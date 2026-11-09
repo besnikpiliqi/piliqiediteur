@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('reference', 60);
             // Clé de doublon de la référence, calculée en PHP (voir
             // Produit::normaliserReference()) : « ABC » et « abc » sont la
-            // même référence, sur les deux moteurs. La référence reste
-            // enregistrée telle que saisie.
+            // même référence. La référence reste enregistrée telle que
+            // saisie.
             $table->string('reference_normalisee', 60);
             $table->string('code_barres', 50)->nullable();
             $table->string('nom', 200);

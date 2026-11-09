@@ -3,7 +3,6 @@
 namespace App\Domain\Tenancy\Support;
 
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Les gardes par lesquelles la base elle-même protège les identifiants de
@@ -20,24 +19,16 @@ use RuntimeException;
  *   à une valeur : aucun compte réel ne devient pour toujours un compte
  *   d'entraînement.
  *
- * PostgreSQL : une contrainte CHECK pour la forme, une fonction plpgsql et
- * ses déclencheurs BEFORE INSERT, UPDATE et DELETE pour chaque ligne, et
- * BEFORE TRUNCATE pour l'instruction. SQLite : des déclencheurs BEFORE
- * INSERT, UPDATE et DELETE (SQLite n'a pas de TRUNCATE, et une contrainte
- * ne s'y ajoute pas après la création de la table).
- *
- * Seuls PostgreSQL et SQLite sont pris en charge : sur tout autre pilote,
- * la migration échoue au lieu de laisser les identifiants sans garde. Les
- * déclencheurs disparaissent avec la table ; la fonction, sous PostgreSQL,
- * se retire par retirer(), après la table.
+ * Une contrainte CHECK pour la forme, une fonction plpgsql et ses
+ * déclencheurs BEFORE INSERT, UPDATE et DELETE pour chaque ligne, et
+ * BEFORE TRUNCATE pour l'instruction. Les déclencheurs disparaissent avec
+ * la table ; la fonction se retire par retirer(), après la table.
  */
 final class GardesDesIdentifiants
 {
     private const DEMONSTRATION = 'EXISTS (SELECT 1 FROM magasins WHERE id = NEW.magasin_id AND est_demonstration = TRUE)';
 
     private const COMPTE_DE_MEMBRE = "COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), '') = 'membre'";
-
-    private const MESSAGE_FORME = 'identifiants : un identifiant compte 8 chiffres, le premier de 1 à 9';
 
     private const MESSAGE_EFFACEMENT = 'identifiants : un identifiant ne s\'efface jamais';
 
@@ -55,69 +46,27 @@ final class GardesDesIdentifiants
     public static function poser(): void
     {
         $connexion = DB::connection();
+        $figees = implode(' OR ', array_map(static fn (string $colonne): string => "NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne}", self::COLONNES_FIGEES));
 
-        $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres(),
-            'sqlite' => self::instructionsSqlite(),
-            default => throw new RuntimeException("Les identifiants doivent être gardés par la base : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
-        };
-
-        foreach ($instructions as $instruction) {
-            $connexion->unprepared($instruction);
-        }
+        $connexion->unprepared("ALTER TABLE identifiants ADD CONSTRAINT identifiants_forme CHECK (identifiant ~ '^[1-9][0-9]{7}$')");
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
+            ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_EFFACEMENT).'; END IF; '
+            ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_ENTRAINEMENT).'; END IF; '
+            ."IF TG_OP = 'UPDATE' THEN "
+            ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_MODIFICATION).'; END IF; '
+            .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
+            .'END IF; '
+            .'RETURN NEW; END $$');
+        $connexion->unprepared('CREATE TRIGGER garde_identifiants BEFORE INSERT OR UPDATE OR DELETE ON identifiants FOR EACH ROW EXECUTE FUNCTION garde_identifiants()');
+        $connexion->unprepared('CREATE TRIGGER garde_identifiants_vidage BEFORE TRUNCATE ON identifiants FOR EACH STATEMENT EXECUTE FUNCTION garde_identifiants()');
     }
 
     /**
-     * Retire la fonction des gardes sous PostgreSQL, une fois la table
-     * supprimée ; rien sous SQLite.
+     * Retire la fonction des gardes, une fois la table supprimée.
      */
     public static function retirer(): void
     {
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::connection()->unprepared('DROP FUNCTION IF EXISTS garde_identifiants()');
-        }
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function instructionsPostgres(): array
-    {
-        $figees = implode(' OR ', array_map(static fn (string $colonne): string => "NEW.{$colonne} IS DISTINCT FROM OLD.{$colonne}", self::COLONNES_FIGEES));
-
-        return [
-            "ALTER TABLE identifiants ADD CONSTRAINT identifiants_forme CHECK (identifiant ~ '^[1-9][0-9]{7}$')",
-            'CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
-                ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_EFFACEMENT).'; END IF; '
-                ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_ENTRAINEMENT).'; END IF; '
-                ."IF TG_OP = 'UPDATE' THEN "
-                ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_MODIFICATION).'; END IF; '
-                .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
-                .'END IF; '
-                .'RETURN NEW; END $$',
-            'CREATE TRIGGER garde_identifiants BEFORE INSERT OR UPDATE OR DELETE ON identifiants FOR EACH ROW EXECUTE FUNCTION garde_identifiants()',
-            'CREATE TRIGGER garde_identifiants_vidage BEFORE TRUNCATE ON identifiants FOR EACH STATEMENT EXECUTE FUNCTION garde_identifiants()',
-        ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function instructionsSqlite(): array
-    {
-        $figees = implode(' OR ', array_map(static fn (string $colonne): string => "NEW.{$colonne} IS NOT OLD.{$colonne}", self::COLONNES_FIGEES));
-
-        return [
-            'CREATE TRIGGER identifiants_garde_insert BEFORE INSERT ON identifiants BEGIN '
-                .'SELECT RAISE(ABORT, '.self::litteral(self::MESSAGE_FORME).") WHERE NEW.identifiant IS NULL OR NEW.identifiant NOT GLOB '[1-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'; "
-                .'SELECT RAISE(ABORT, '.self::litteral(self::MESSAGE_ENTRAINEMENT).') WHERE NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE.'; '
-                .'END',
-            'CREATE TRIGGER identifiants_garde_update BEFORE UPDATE ON identifiants BEGIN '
-                .'SELECT RAISE(ABORT, '.self::litteral(self::MESSAGE_MODIFICATION).") WHERE {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS NOT OLD.magasin_id); "
-                .'SELECT RAISE(ABORT, '.self::litteral(self::MESSAGE_DEMONSTRATION_APRES_COUP).') WHERE OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION.'; '
-                .'END',
-            'CREATE TRIGGER identifiants_garde_delete BEFORE DELETE ON identifiants BEGIN SELECT RAISE(ABORT, '.self::litteral(self::MESSAGE_EFFACEMENT).'); END',
-        ];
+        DB::connection()->unprepared('DROP FUNCTION IF EXISTS garde_identifiants()');
     }
 
     /**

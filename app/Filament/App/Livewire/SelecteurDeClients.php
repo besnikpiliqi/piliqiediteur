@@ -80,10 +80,10 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
         return $table
             ->query(fn (): Builder => Client::query())
             // Avant le tri choisi : le client comptoir reste en tête. Seul
-            // il a est_comptoir rempli (vrai), les autres l'ont vide, et
-            // PostgreSQL range les valeurs vides en tête d'un tri
-            // décroissant, SQLite à la fin : « est vide » se trie pareil
-            // sur les deux moteurs.
+            // il a est_comptoir rempli (vrai), les autres l'ont vide :
+            // trié par « est vide », il passe avant eux, quand PostgreSQL
+            // rangerait les valeurs vides en tête d'un tri décroissant de
+            // la colonne.
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->orderByRaw($query->getQuery()->getGrammar()->wrap($query->qualifyColumn('est_comptoir')).' is null'))
             ->defaultSort('created_at', 'desc')
             ->paginated([25, 50, 100])

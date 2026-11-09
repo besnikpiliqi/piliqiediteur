@@ -68,8 +68,8 @@ use TypeError;
  * une requête authentifiée ; rien ne s'inscrit au registre sans opérateur
  * posé.
  *
- * Les tests « entre l'écran et le verrou » rendent l'ordre déterministe
- * sous les deux moteurs : l'autre transaction retire le droit dès la
+ * Les tests « entre l'écran et le verrou » rendent l'ordre déterministe,
+ * dans un seul processus : l'autre transaction retire le droit dès la
  * première requête de l'action (le verrou du registre, ou celui des
  * comptes), avant que l'action relise son auteur.
  */

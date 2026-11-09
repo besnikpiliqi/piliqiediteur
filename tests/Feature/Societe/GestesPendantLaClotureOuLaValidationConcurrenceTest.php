@@ -118,7 +118,6 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_geste_simultane_au_refus_de_l_inscription_passe_avant_elle_ou_est_refuse_apres(string $geste, bool $leGesteDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $magasin = $this->creerLeMagasinDuSiege($societe);
         app(TenantContext::class)->set($magasin);
@@ -167,7 +166,6 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_facture_d_achat_validee_pendant_la_saisie_du_code_passe_avant_ou_apres_elle_sans_interblocage(bool $laFactureDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $magasin = $this->creerLeMagasinDuSiege($societe);
         app(TenantContext::class)->set($magasin);
@@ -239,7 +237,6 @@ class GestesPendantLaClotureOuLaValidationConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_geste_du_proprietaire_pendant_la_saisie_du_code_passe_avant_ou_apres_elle_sans_interblocage(string $geste, bool $leGesteDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $magasin = $this->creerLeMagasinDuSiege($societe);
         app(TenantContext::class)->set($magasin);

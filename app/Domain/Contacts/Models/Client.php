@@ -309,9 +309,10 @@ class Client extends Model
      * comparaison se fait dans la requête du tableau, avoir par avoir, sans
      * rien lire à part, sur des centimes entiers : chaque montant y est
      * arrondi au centime et converti en entier avant d'être additionné,
-     * jamais additionné tel quel dans sa colonne décimale, que SQLite
-     * additionnerait en nombres à virgule. Le crédit affiché se calcule à
-     * part, pour la page (voir creditsDAvoirEnCentimes()).
+     * jamais additionné tel quel dans sa colonne décimale (CLAUDE.md : aucun
+     * total ne s'obtient par une somme que la base ferait sur une colonne
+     * décimale). Le crédit affiché se calcule à part, pour la page (voir
+     * creditsDAvoirEnCentimes()).
      *
      * @param  Builder<static>  $query
      */

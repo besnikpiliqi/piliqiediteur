@@ -103,8 +103,8 @@ final readonly class PiedDePage
     /**
      * Refuse des conditions de paiement plus longues que
      * CARACTERES_DES_CONDITIONS_DE_PAIEMENT, avant que la facture ou le
-     * devis ne s'enregistre : le même refus sur tous les moteurs de base
-     * de données, leur colonne étant un texte libre.
+     * devis ne s'enregistre : leur colonne est un texte libre, que la base
+     * ne borne pas.
      *
      * @throws InvalidArgumentException
      */

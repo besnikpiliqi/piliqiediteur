@@ -74,7 +74,6 @@ class FicheProduitPendantUneFactureAchatConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_fiche_modifiee_pendant_l_enregistrement_garde_la_modification_du_collegue(bool $avecLeDroitSurLesProduits, array $modification, array $ficheAttendue): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $produit] = $this->laBoutiqueEtSaCoque($avecLeDroitSurLesProduits);
         $page = $this->factureDAchatQuiAchete($produit);
         $magasinId = $magasin->id;
@@ -104,7 +103,6 @@ class FicheProduitPendantUneFactureAchatConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_modification_qui_attend_la_facture_garde_les_deux_corrections(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $produit] = $this->laBoutiqueEtSaCoque(true);
         $page = $this->factureDAchatQuiAchete($produit, ['nom' => 'Coque iPhone 15 noire']);
         $magasinId = $magasin->id;

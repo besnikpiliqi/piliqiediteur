@@ -35,7 +35,6 @@ class CaissesPersonnellesFermeesDOfficeConcurrenceTest extends TestCase
 
     public function test_une_fermeture_du_vendeur_et_une_fermeture_d_office_simultanees_ne_comptent_rien_deux_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $vendeur = $this->vendeurDeLaPremiereHeure($magasin);

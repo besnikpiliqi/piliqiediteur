@@ -51,7 +51,6 @@ class FactureAchatConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_suppression_simultanee_passe_avant_ou_apres_la_validation_d_une_facture_d_achat(bool $laValidationDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'reference' => 'COQUE', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],

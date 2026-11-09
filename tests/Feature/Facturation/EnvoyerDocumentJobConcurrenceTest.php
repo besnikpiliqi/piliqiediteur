@@ -110,7 +110,6 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_devis_modifie_pendant_le_depart_de_son_e_mail_part_tel_qu_il_a_ete_demande_ou_ne_part_pas(bool $leDepartDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         Mail::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -181,7 +180,6 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_relance_dont_la_facture_est_payee_pendant_son_depart_dit_ce_qui_restait_du_ou_ne_part_pas(bool $leDepartDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -273,7 +271,6 @@ class EnvoyerDocumentJobConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_le_depart_d_un_e_mail_et_un_autre_geste_simultanes_passent_l_un_apres_l_autre_sans_interblocage(string $depart, string $geste, bool $leDepartDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = self::responsableDeTest($magasin);

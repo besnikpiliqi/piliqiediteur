@@ -69,7 +69,6 @@ class InventaireOuvertureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_premiere_vente_simultanee_passe_avant_ou_apres_la_validation_d_un_inventaire(bool $laValidationDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $inventaire = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [
@@ -122,7 +121,6 @@ class InventaireOuvertureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_suppression_simultanee_passe_avant_ou_apres_la_validation_d_un_inventaire(bool $laValidationDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $inventaire = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [
             ['produit' => ['nom' => 'Carnet A5', 'reference' => 'CARNET-A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
@@ -177,7 +175,6 @@ class InventaireOuvertureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_brouillon_saisi_pendant_la_premiere_vente_passe_avant_elle_ou_est_refuse_apres(string $geste, bool $laSaisieDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $inventaireId = $geste === 'modifier' ? app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [self::carnets(10)])->id : null;

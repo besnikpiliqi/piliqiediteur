@@ -898,9 +898,8 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
-     * « NaN » (pas un nombre) : le montant illisible qu'accepte une colonne
-     * numeric de PostgreSQL, qui refuse tout autre texte ; SQLite le garde
-     * en texte.
+     * « NaN » (pas un nombre) : le seul montant illisible qu'accepte une
+     * colonne numeric de PostgreSQL, qui refuse tout autre texte.
      */
     public function test_une_imputation_au_montant_illisible_est_detectee(): void
     {

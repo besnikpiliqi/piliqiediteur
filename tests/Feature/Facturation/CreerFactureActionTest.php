@@ -147,9 +147,9 @@ class CreerFactureActionTest extends TestCase
 
     /**
      * Les conditions de paiement s'impriment dans le pied de chaque page du
-     * PDF : l'action refuse elle-même plus de 500 caractères, avec le même
-     * message sur tous les moteurs de base de données, à la création comme
-     * à la modification d'un brouillon, qui garde alors les siennes.
+     * PDF : l'action refuse elle-même plus de 500 caractères, que la base
+     * ne borne pas, à la création comme à la modification d'un brouillon,
+     * qui garde alors les siennes.
      */
     public function test_des_conditions_de_paiement_de_plus_de_500_caracteres_sont_refusees_a_la_creation_comme_a_la_modification(): void
     {

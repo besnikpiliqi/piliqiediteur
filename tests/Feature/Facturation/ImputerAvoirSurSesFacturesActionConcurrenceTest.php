@@ -70,7 +70,6 @@ class ImputerAvoirSurSesFacturesActionConcurrenceTest extends TestCase
      */
     public function test_deux_avoirs_simultanes_ne_reglent_jamais_deux_fois_le_meme_reste_du(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
         $dupont = Client::factory()->professionnel()->create(['nom' => 'Dupont']);

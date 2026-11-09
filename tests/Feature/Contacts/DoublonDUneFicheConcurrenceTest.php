@@ -38,7 +38,6 @@ class DoublonDUneFicheConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_siret_enregistre_par_un_collegue_pendant_une_modification_la_fait_refuser_avec_un_message(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = self::responsableDeTest($magasin);
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste', 'siret' => null]);

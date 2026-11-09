@@ -43,27 +43,11 @@ return new class extends Migration
 
     /**
      * Une famille est celle des articles ou la famille commune : une
-     * contrainte CHECK sous PostgreSQL ; SQLite n'en ajoute pas à une
-     * table créée, et la même condition y est vérifiée par des
-     * déclencheurs BEFORE INSERT et BEFORE UPDATE. L'une et les autres
-     * disparaissent avec la table.
+     * contrainte CHECK, qui disparaît avec la table.
      */
     private function limiterLesFamilles(): void
     {
-        $nom = 'referentiel_autorisations_magasin_famille_connue';
-        $condition = "famille IN ('".PermissionRegistry::FAMILLE_COMMUNE."', '".PermissionRegistry::FAMILLE_ARTICLES."')";
-
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::statement("ALTER TABLE referentiel_autorisations_magasin ADD CONSTRAINT {$nom} CHECK ({$condition})");
-
-            return;
-        }
-
-        foreach (['INSERT', 'UPDATE'] as $operation) {
-            DB::unprepared("CREATE TRIGGER {$nom}_".strtolower($operation)." BEFORE {$operation} ON referentiel_autorisations_magasin"
-                ." WHEN NOT (NEW.{$condition})"
-                ." BEGIN SELECT RAISE(ABORT, '{$nom} : famille inconnue'); END");
-        }
+        DB::statement("ALTER TABLE referentiel_autorisations_magasin ADD CONSTRAINT referentiel_autorisations_magasin_famille_connue CHECK (famille IN ('".PermissionRegistry::FAMILLE_COMMUNE."', '".PermissionRegistry::FAMILLE_ARTICLES."'))");
     }
 
     public function down(): void

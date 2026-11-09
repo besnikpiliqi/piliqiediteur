@@ -34,7 +34,6 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
 
     public function test_deux_fermetures_simultanees_du_meme_vendeur_se_suivent_sans_compter_deux_fois_ses_ventes_ni_ses_paiements(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $vendeur = $this->vendeurDeLaPremiereHeure($magasin);

@@ -6,23 +6,19 @@ use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Normalizer;
 
 /**
  * Les recherches de l'utilisateur ignorent la casse et les accents :
  * « creme » trouve « Crème », « ECRAN » trouve « écran ». La base compare
  * la colonne et le terme cherché passés tous deux par la fonction SQL
- * sans_casse_ni_accents(), le même pliage sur les deux moteurs (voir
- * plier()) : sous PostgreSQL, une fonction SQL que crée la migration
+ * sans_casse_ni_accents(), que crée la migration
  * create_fonction_sans_casse_ni_accents depuis les constantes de cette
- * classe ; sous SQLite, plier() elle-même, enregistrée sur chaque
- * connexion (voir ConnecteurSqlite). Les mêmes tests prouvent donc le
- * comportement sur les deux moteurs, et un test compare les deux
- * fonctions sur toutes les lettres et tous les symboles courants (voir
- * RechercheSansAccentsTest). Les caractères % et _ tapés se cherchent
- * tels quels, échappés par « ! » : PDO lirait une barre oblique inverse
- * dans la requête comme l'échappement d'une apostrophe, et compterait mal
- * ses paramètres.
+ * classe (voir creationDeLaFonction()) ; un test compare son pliage, sur
+ * toutes les lettres et tous les symboles courants, à celui que définit
+ * Unicode (voir RechercheSansAccentsTest). Les caractères % et _ tapés se
+ * cherchent tels quels, échappés par « ! » : PDO lirait une barre oblique
+ * inverse dans la requête comme l'échappement d'une apostrophe, et
+ * compterait mal ses paramètres.
  *
  * Seule aide des recherches : colonnes des tableaux Filament
  * (rechercheSansAccents(), voir AppServiceProvider, ou dans(), comme les
@@ -42,7 +38,7 @@ final class RechercheSansAccents
      *
      * @var list<array{int, int}>
      */
-    private const DIACRITIQUES = [
+    public const DIACRITIQUES = [
         [0x0300, 0x036F],
         [0x1AB0, 0x1AFF],
         [0x1DC0, 0x1DFF],
@@ -53,11 +49,12 @@ final class RechercheSansAccents
     /**
      * Les lettres que la décomposition canonique ne sépare d'aucun accent
      * (ligatures, lettres barrées), en minuscules, et les apostrophes
-     * typographiques des claviers de téléphone.
+     * typographiques des claviers de téléphone, chacune avec ce qui la
+     * remplace une fois le texte en minuscules.
      *
      * @var array<string, string>
      */
-    private const LETTRES_SANS_DECOMPOSITION = [
+    public const LETTRES_SANS_DECOMPOSITION = [
         'æ' => 'ae',
         'œ' => 'oe',
         'ß' => 'ss',
@@ -116,57 +113,30 @@ final class RechercheSansAccents
     }
 
     /**
-     * Le pliage des recherches, celui de sans_casse_ni_accents() sur les
-     * deux moteurs : décomposition canonique (NFD), diacritiques retirés,
-     * minuscules (correspondance simple d'Unicode, celle de lower() sous
-     * PostgreSQL), puis ligatures et lettres barrées remplacées (« Œuvre »
-     * devient « oeuvre », « Łódź » devient « lodz »). Tout autre caractère
-     * reste tel quel : « ½ », « °C » ou « € » se cherchent comme ils
-     * s'écrivent, jamais retirés. Un texte qui n'est pas de l'UTF-8 valide
-     * ne correspond à rien.
+     * La fonction sans_casse_ni_accents(), que crée la migration
+     * create_fonction_sans_casse_ni_accents, sans aucune extension :
+     * décomposition canonique (normalize(texte, NFD)), diacritiques retirés
+     * (regexp_replace()), minuscules (lower(), la correspondance simple
+     * d'Unicode sous la collation C.UTF-8 de la base, voir CLAUDE.md,
+     * Outillage : sous la collation « C », elle ne mettrait en minuscules
+     * que les lettres ASCII), puis ligatures et lettres barrées remplacées
+     * (replace()) : « Œuvre » devient « oeuvre », « Łódź » devient « lodz ».
+     * Tout autre caractère reste tel quel : « ½ », « °C » ou « € » se
+     * cherchent comme ils s'écrivent, jamais retirés.
      */
-    public static function plier(?string $texte): ?string
+    public static function creationDeLaFonction(): string
     {
-        $decompose = $texte === null ? false : Normalizer::normalize($texte, Normalizer::FORM_D);
-
-        if ($decompose === false) {
-            return null;
-        }
-
-        $sansDiacritiques = (string) preg_replace('/['.self::classeDesDiacritiques('\x{%04X}').']/u', '', $decompose);
-
-        return strtr(mb_convert_case($sansDiacritiques, MB_CASE_LOWER_SIMPLE, 'UTF-8'), self::LETTRES_SANS_DECOMPOSITION);
-    }
-
-    /**
-     * La fonction sans_casse_ni_accents() de PostgreSQL, que crée la
-     * migration create_fonction_sans_casse_ni_accents : le pliage de
-     * plier(), étape par étape (normalize(), regexp_replace(), lower(),
-     * replace()), sans aucune extension. lower() suit la collation C.UTF-8
-     * de la base (voir CLAUDE.md, Outillage) : sous la collation « C »,
-     * elle ne mettrait en minuscules que les lettres ASCII.
-     */
-    public static function creationDeLaFonctionPostgresql(): string
-    {
-        $pliage = "lower(regexp_replace(normalize(texte, NFD), '[".self::classeDesDiacritiques('\u%04X')."]', '', 'g'))";
+        $diacritiques = implode('', array_map(
+            static fn (array $plage): string => sprintf('\\u%04X-\\u%04X', $plage[0], $plage[1]),
+            self::DIACRITIQUES,
+        ));
+        $pliage = "lower(regexp_replace(normalize(texte, NFD), '[{$diacritiques}]', '', 'g'))";
 
         foreach (self::LETTRES_SANS_DECOMPOSITION as $lettre => $remplacement) {
             $pliage = 'replace('.$pliage.', '.self::litteralSql($lettre).', '.self::litteralSql($remplacement).')';
         }
 
         return 'CREATE OR REPLACE FUNCTION '.self::FONCTION_SQL.'(texte text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$ SELECT '.$pliage.' $$';
-    }
-
-    /**
-     * Les plages de DIACRITIQUES, chaque code point écrit au format donné
-     * (PCRE : \x{0300} ; expressions régulières de PostgreSQL : \u0300).
-     */
-    private static function classeDesDiacritiques(string $format): string
-    {
-        return implode('', array_map(
-            static fn (array $plage): string => sprintf($format, $plage[0]).'-'.sprintf($format, $plage[1]),
-            self::DIACRITIQUES,
-        ));
     }
 
     private static function litteralSql(string $texte): string

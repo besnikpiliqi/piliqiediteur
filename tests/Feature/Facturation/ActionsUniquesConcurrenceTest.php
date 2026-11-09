@@ -37,7 +37,6 @@ class ActionsUniquesConcurrenceTest extends TestCase
 
     public function test_deux_demandes_simultanees_avec_le_meme_jeton_ne_font_qu_un_effet(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = self::responsableDeTest($magasin);
         $produit = Produit::factory()->create(['nom' => 'Câble USB', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);

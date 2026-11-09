@@ -35,7 +35,6 @@ class TvaDuFournisseurConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_confirmations_simultanees_du_meme_ecart_n_en_inscrivent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $produit = Produit::factory()->create(['reference' => 'COQUE-16', 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [self::ligne($produit->id)], ['date_facture' => '2026-01-15']);

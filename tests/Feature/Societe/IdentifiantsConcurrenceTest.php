@@ -53,7 +53,6 @@ class IdentifiantsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_creations_simultanees_dans_deux_societes_qui_tirent_le_meme_identifiant_aboutissent_toutes_deux(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Première Boutique']);
         $autre = $this->ouvrirUneSociete(['nom' => 'Seconde Boutique']);
         [$autreId, $autreProprietaireId] = [$autre->id, $this->proprietaireDe($autre)->id];
@@ -84,7 +83,6 @@ class IdentifiantsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_creations_simultanees_du_meme_jeton_ne_creent_qu_un_compte(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $jeton = (string) Str::uuid();
@@ -116,7 +114,6 @@ class IdentifiantsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_retrogradations_simultanees_d_un_administrateur_n_ecrivent_qu_un_magasin_de_rattachement(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -143,7 +140,6 @@ class IdentifiantsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_des_creations_simultanees_d_un_meme_auteur_ne_depassent_pas_la_limite_du_jour(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);

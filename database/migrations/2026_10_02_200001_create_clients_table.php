@@ -36,9 +36,9 @@ return new class extends Migration
             $table->string('mode_paiement_prefere', 20)->nullable();
             $table->text('notes')->nullable();
             // Vrai pour la seule fiche du client comptoir du magasin (voir
-            // CreerEtablissementAction), NULL pour toutes les autres : un index
-            // unique ignore les NULL (PostgreSQL comme SQLite), il
-            // n'admet donc qu'un client comptoir par magasin.
+            // CreerEtablissementAction), NULL pour toutes les autres : un
+            // index unique ignore les NULL, il n'admet donc qu'un client
+            // comptoir par magasin.
             $table->boolean('est_comptoir')->nullable();
             $table->timestamps();
             // Un client ne se supprime pas : il s'archive (voir

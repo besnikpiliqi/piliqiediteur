@@ -69,7 +69,6 @@ class TelechargementDesDocumentsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_demandes_simultanees_ne_depassent_jamais_dix_par_heure(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         File::deleteDirectory(storage_path(self::DOSSIER));
         self::disqueDuTest();
         $this->travelTo(self::aParis('2026-03-10 10:00:00'));
@@ -114,7 +113,6 @@ class TelechargementDesDocumentsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_export_pendant_une_emission_ne_voit_la_facture_qu_une_fois_emise(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         self::disqueDuTest();
         $this->travelTo(self::aParis('2026-03-10 10:00:00'));
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Boutique du Port', 'code' => 'PORT']));

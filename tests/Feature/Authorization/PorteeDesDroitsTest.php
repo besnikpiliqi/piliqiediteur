@@ -534,8 +534,8 @@ class PorteeDesDroitsTest extends TestCase
     /**
      * Exécute le changement concurrent dès que l'action du test lit le
      * registre de son premier magasin, avant de relire l'auteur sous les
-     * verrous (voir JournalDesDroits) : l'ordre est le même sous les deux
-     * moteurs.
+     * verrous (voir JournalDesDroits) : l'ordre est le même à chaque
+     * passage.
      */
     private function avantLesVerrous(Closure $changement): void
     {

@@ -16,43 +16,25 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => env('DB_CONNECTION', 'pgsql'),
 
     /*
     |--------------------------------------------------------------------------
     | Database Connections
     |--------------------------------------------------------------------------
     |
-    | PostgreSQL en production, SQLite en développement et pour les tests
-    | rapides ; la suite complète passe sur les deux (voir CLAUDE.md). La
-    | base PostgreSQL est créée avec la collation déterministe C.UTF-8 :
-    | l'ordre binaire, celui de SQLite, ne change jamais l'ordre d'un
-    | contenu signé, et lower() met en minuscules toutes les lettres, pas
-    | seulement celles de l'ASCII. Les recherches ignorent la casse et les
-    | accents par la fonction sans_casse_ni_accents(), le même pliage
-    | créé par une migration sous PostgreSQL et enregistré sur chaque
-    | connexion SQLite (voir RechercheSansAccents).
+    | PostgreSQL (17 ou 18), seul moteur de PILIQI, en production, en
+    | développement et pour les tests (décision de l'éditeur du
+    | 08/11/2026). La base est créée en UTF8 avec la collation déterministe
+    | C.UTF-8 : l'ordre binaire ne change jamais l'ordre d'un contenu signé,
+    | et lower() met en minuscules toutes les lettres, pas seulement celles
+    | de l'ASCII. Les recherches ignorent la casse et les accents par la
+    | fonction sans_casse_ni_accents(), créée par une migration (voir
+    | RechercheSansAccents). La session est en UTC, comme l'application.
     |
     */
 
     'connections' => [
-
-        'sqlite' => [
-            'driver' => 'sqlite',
-            'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
-            'prefix' => '',
-            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
-            'transaction_mode' => 'DEFERRED',
-            // Sans recursive_triggers, la résolution de conflit REPLACE
-            // (INSERT OR REPLACE) efface la ligne en conflit sans lancer
-            // ses déclencheurs DELETE : ceux des tables protégées (voir
-            // DeclencheursDeProtection) ne refuseraient pas le remplacement.
-            'pragmas' => ['recursive_triggers' => 'ON'],
-        ],
 
         'pgsql' => [
             'driver' => 'pgsql',

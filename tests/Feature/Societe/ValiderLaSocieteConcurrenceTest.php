@@ -42,7 +42,6 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
      */
     public function test_deux_saisies_simultanees_du_bon_code_ne_valident_qu_une_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $this->creerLeMagasinDuSiege($societe);
         $siren = (string) $societe->siren;
@@ -81,7 +80,6 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
      */
     public function test_un_magasin_cree_pendant_la_validation_de_la_societe_est_mis_en_activite(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $this->creerLeMagasinDuSiege($societe);
         $siren = (string) $societe->siren;

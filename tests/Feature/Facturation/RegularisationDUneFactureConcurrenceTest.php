@@ -54,7 +54,6 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_avoirs_de_regularisation_simultanes_de_la_meme_facture_n_en_emettent_qu_un(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         $proprietaire = $this->proprietaireDe($magasin);
         $magasinId = $magasin->id;
@@ -80,7 +79,6 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_factures_rectificatives_simultanees_de_la_meme_facture_n_en_emettent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         $responsable = self::responsableDeTest($magasin);
         $magasinId = $magasin->id;
@@ -111,7 +109,6 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_l_avoir_et_la_rectificative_simultanes_reglent_une_seule_fois_la_rectificative(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
@@ -147,7 +144,6 @@ class RegularisationDUneFactureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_la_rectificative_puis_l_avoir_simultanes_reglent_une_seule_fois_la_rectificative(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
         app(EnregistrerPaiementAction::class)->handle(self::responsableDeTest($magasin), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,

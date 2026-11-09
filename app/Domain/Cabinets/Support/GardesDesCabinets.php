@@ -9,8 +9,6 @@ use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
-use InvalidArgumentException;
-use RuntimeException;
 
 /**
  * Les gardes par lesquelles la base elle-même tient l'espace des cabinets
@@ -42,12 +40,8 @@ use RuntimeException;
  * changeant jamais (voir GardesDesTypesDActivite), une garde qui le lit ne
  * verrouille rien : aucune écriture simultanée ne peut le rendre faux.
  *
- * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE par garde
- * (INSERT, ou INSERT OR UPDATE OF les colonnes qu'elle lit). SQLite : un
- * déclencheur BEFORE INSERT et, s'il y a lieu, un BEFORE UPDATE OF ces
- * colonnes par garde, qui refusent par RAISE(ABORT, ...). Seuls
- * PostgreSQL et SQLite sont pris en charge : sur tout autre pilote, la
- * migration échoue au lieu de laisser la table sans garde.
+ * Chaque garde est une fonction plpgsql et son déclencheur BEFORE (INSERT,
+ * ou INSERT OR UPDATE OF les colonnes qu'elle lit).
  */
 final class GardesDesCabinets
 {
@@ -90,23 +84,24 @@ final class GardesDesCabinets
     public static function poser(string $garde): void
     {
         [$table, $colonnes] = self::TABLES[$garde];
+        $controles = implode(' ', array_map(
+            static fn (array $un): string => match ($un[2]) {
+                self::TOUJOURS => '',
+                default => "IF TG_OP = '{$un[2]}' THEN ",
+            }."IF {$un[0]} THEN RAISE EXCEPTION '%', ".self::message($garde, $un[1]).'; END IF;'.($un[2] === self::TOUJOURS ? '' : ' END IF;'),
+            self::refus($garde),
+        ));
+        $moments = $colonnes === null ? 'INSERT' : "INSERT OR UPDATE OF {$colonnes}";
         $connexion = DB::connection();
 
-        $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres($garde, $table, $colonnes),
-            'sqlite' => self::instructionsSqlite($garde, $table, $colonnes),
-            default => throw new RuntimeException("L'espace des cabinets doit être gardé par la base : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
-        };
-
-        foreach ($instructions as $instruction) {
-            $connexion->unprepared($instruction);
-        }
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$controles} RETURN NEW; END \$\$");
+        $connexion->unprepared("CREATE TRIGGER {$garde} BEFORE {$moments} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()");
     }
 
     /**
-     * Retire le déclencheur de la garde puis, sous PostgreSQL, sa fonction,
-     * que le déclencheur empêcherait sinon de retirer : dans le down() de
-     * la migration, avant sa table.
+     * Retire le déclencheur de la garde puis sa fonction, que le
+     * déclencheur empêcherait sinon de retirer : dans le down() de la
+     * migration, avant sa table.
      *
      * @param  key-of<self::TABLES>  $garde
      */
@@ -115,36 +110,15 @@ final class GardesDesCabinets
         [$table] = self::TABLES[$garde];
         $connexion = DB::connection();
 
-        if ($connexion->getDriverName() === 'pgsql') {
-            $connexion->unprepared("DROP TRIGGER IF EXISTS {$garde} ON {$table}");
-            $connexion->unprepared("DROP FUNCTION IF EXISTS garde_{$garde}()");
-
-            return;
-        }
-
-        foreach (["{$garde}_insert", "{$garde}_update"] as $declencheur) {
-            $connexion->unprepared("DROP TRIGGER IF EXISTS {$declencheur}");
-        }
+        $connexion->unprepared("DROP TRIGGER IF EXISTS {$garde} ON {$table}");
+        $connexion->unprepared("DROP FUNCTION IF EXISTS garde_{$garde}()");
     }
 
     /**
-     * Les déclencheurs SQLite d'une garde, pour qu'un test les retire comme
-     * le ferait un administrateur de la base.
-     *
-     * @return list<string>
-     */
-    public static function declencheursSqlite(string $garde): array
-    {
-        [, $colonnes] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
-
-        return $colonnes === null ? ["{$garde}_insert"] : ["{$garde}_insert", "{$garde}_update"];
-    }
-
-    /**
-     * Les refus de chaque garde : la condition qui refuse, en SQL commun
-     * aux deux moteurs (NEW désigne la ligne écrite, OLD la ligne d'avant
-     * une modification), son message, et quand elle vaut : toujours, à
-     * l'insertion seulement, ou à la modification seulement.
+     * Les refus de chaque garde : la condition qui refuse, en SQL (NEW
+     * désigne la ligne écrite, OLD la ligne d'avant une modification), son
+     * message, et quand elle vaut : toujours, à l'insertion seulement, ou à
+     * la modification seulement.
      *
      * @param  key-of<self::TABLES>  $garde
      * @return list<array{0: string, 1: string, 2: string}>
@@ -195,46 +169,6 @@ final class GardesDesCabinets
     private static function liste(array $valeurs): string
     {
         return implode(', ', array_map(static fn (string $valeur): string => "'{$valeur}'", $valeurs));
-    }
-
-    /**
-     * @param  key-of<self::TABLES>  $garde
-     * @return list<string>
-     */
-    private static function instructionsPostgres(string $garde, string $table, ?string $colonnes): array
-    {
-        $controles = implode(' ', array_map(
-            static fn (array $un): string => match ($un[2]) {
-                self::TOUJOURS => '',
-                default => "IF TG_OP = '{$un[2]}' THEN ",
-            }."IF {$un[0]} THEN RAISE EXCEPTION '%', ".self::message($garde, $un[1]).'; END IF;'.($un[2] === self::TOUJOURS ? '' : ' END IF;'),
-            self::refus($garde),
-        ));
-        $moments = $colonnes === null ? 'INSERT' : "INSERT OR UPDATE OF {$colonnes}";
-
-        return [
-            "CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$controles} RETURN NEW; END \$\$",
-            "CREATE TRIGGER {$garde} BEFORE {$moments} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()",
-        ];
-    }
-
-    /**
-     * @param  key-of<self::TABLES>  $garde
-     * @return list<string>
-     */
-    private static function instructionsSqlite(string $garde, string $table, ?string $colonnes): array
-    {
-        $controles = static fn (string $moment): string => implode(' ', array_map(
-            static fn (array $un): string => 'SELECT RAISE(ABORT, '.self::message($garde, $un[1]).") WHERE {$un[0]};",
-            array_filter(self::refus($garde), static fn (array $un): bool => $un[2] === self::TOUJOURS || $un[2] === $moment),
-        ));
-        $instructions = ["CREATE TRIGGER {$garde}_insert BEFORE INSERT ON {$table} BEGIN {$controles('INSERT')} END"];
-
-        if ($colonnes !== null) {
-            $instructions[] = "CREATE TRIGGER {$garde}_update BEFORE UPDATE OF {$colonnes} ON {$table} BEGIN {$controles('UPDATE')} END";
-        }
-
-        return $instructions;
     }
 
     /**

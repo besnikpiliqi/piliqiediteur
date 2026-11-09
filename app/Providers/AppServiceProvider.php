@@ -11,7 +11,6 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\ConnexionPostgres;
-use App\Domain\Calendrier\Connexions\ConnexionSqlite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
@@ -26,7 +25,6 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\RecuPaiement;
-use App\Domain\Recherche\ConnecteurSqlite;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -104,23 +102,17 @@ class AppServiceProvider extends ServiceProvider
      * Le contexte d'origine des produits (voir OrigineDesProduits) vit de
      * même le temps d'une requête ou d'un job, jamais au-delà.
      *
-     * Chaque connexion SQLite reçoit la fonction des recherches sans casse
-     * ni accents (voir ConnecteurSqlite).
-     *
      * Une connexion réussie mène à l'accueil du panneau, même pour un
      * compte qui n'a encore aucun magasin (voir ReponseDeConnexion), à la
      * place de la réponse de Filament.
      *
-     * Les connexions SQLite et PostgreSQL lient leurs dates en UTC (voir
-     * LieLesDatesEnUtc).
+     * La connexion PostgreSQL lie ses dates en UTC (voir ConnexionPostgres).
      */
     public function register(): void
     {
         $this->app->scoped(RegistreFiscal::class);
         $this->app->scoped(OrigineDesProduits::class);
-        $this->app->bind('db.connector.sqlite', ConnecteurSqlite::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
-        Connection::resolverFor('sqlite', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionSqlite => new ConnexionSqlite($pdo, $base, $prefixe, $configuration));
         Connection::resolverFor('pgsql', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres => new ConnexionPostgres($pdo, $base, $prefixe, $configuration));
     }
 

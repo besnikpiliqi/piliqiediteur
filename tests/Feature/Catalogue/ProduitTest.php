@@ -81,9 +81,8 @@ class ProduitTest extends TestCase
 
     /**
      * La casse d'une lettre accentuée compte comme celle d'une autre
-     * lettre, sur les deux moteurs : la clé de la référence se calcule en
-     * PHP, pas par le lower() de la base, qui sous SQLite ne met en
-     * minuscules que les lettres ASCII.
+     * lettre : la clé de la référence se calcule en PHP, par le repliement
+     * de casse d'Unicode, et non par la collation de la base.
      */
     public function test_une_reference_accentuee_deja_prise_sous_une_autre_casse_est_refusee(): void
     {

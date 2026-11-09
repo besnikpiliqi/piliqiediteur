@@ -32,7 +32,6 @@ class VerificateurIntegriteConcurrenceTest extends TestCase
 
     public function test_une_vente_validee_pendant_la_verification_n_y_parait_pas_a_moitie(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);

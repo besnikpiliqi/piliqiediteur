@@ -1002,20 +1002,12 @@ abstract class TestCase extends BaseTestCase
      */
     protected function retirerLaGardeDesDroits(string $garde): void
     {
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::unprepared("DROP TRIGGER {$garde} ON ".match ($garde) {
-                GardesDesDroits::AFFECTATIONS => 'affectations',
-                GardesDesDroits::CASES => 'autorisations_affectations',
-                GardesDesDroits::AUTORISATIONS_SOCIETE => 'autorisations_societe',
-                GardesDesDroits::ROLES => 'users',
-            });
-
-            return;
-        }
-
-        foreach (GardesDesDroits::declencheursSqlite($garde) as $declencheur) {
-            DB::unprepared("DROP TRIGGER {$declencheur}");
-        }
+        DB::unprepared("DROP TRIGGER {$garde} ON ".match ($garde) {
+            GardesDesDroits::AFFECTATIONS => 'affectations',
+            GardesDesDroits::CASES => 'autorisations_affectations',
+            GardesDesDroits::AUTORISATIONS_SOCIETE => 'autorisations_societe',
+            GardesDesDroits::ROLES => 'users',
+        });
     }
 
     /**
@@ -1492,10 +1484,9 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * L'opération, exécutée dans un point de sauvegarde (une transaction
-     * imbriquée dans celle du test) : sous PostgreSQL, une erreur SQL
-     * annule toute la transaction en cours, et le test ne pourrait plus
-     * rien lire ensuite ; le point de sauvegarde n'annule que l'opération
-     * refusée, sur les deux moteurs.
+     * imbriquée dans celle du test) : une erreur SQL annule toute la
+     * transaction en cours, et le test ne pourrait plus rien lire ensuite ;
+     * le point de sauvegarde n'annule que l'opération refusée.
      */
     protected function dansUnPointDeSauvegarde(Closure $operation): Closure
     {
@@ -1512,29 +1503,20 @@ abstract class TestCase extends BaseTestCase
      */
     protected function maintenantSelonLaBase(): CarbonImmutable
     {
-        $maintenant = DB::connection()->getDriverName() === 'pgsql'
-            ? DB::selectOne("select to_char(now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as maintenant")->maintenant
-            : DB::selectOne('select CURRENT_TIMESTAMP as maintenant')->maintenant;
+        $maintenant = DB::selectOne("select to_char(now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as maintenant")->maintenant;
 
         return CarbonImmutable::createFromFormat('Y-m-d H:i:s', $maintenant, 'UTC');
     }
 
     /**
-     * Range ces tables, sous PostgreSQL, dans l'ordre inverse de leurs
-     * identifiants (CLUSTER sur un index décroissant ; le DDL et la
-     * réécriture s'annulent avec la transaction du test) : une requête
-     * sans tri rend alors leurs lignes à l'envers de leur enregistrement,
-     * comme après qu'un VACUUM a libéré une place qu'une ligne plus récente
-     * a reprise, ou après une restauration. SQLite range toujours les
-     * lignes d'une table dans l'ordre de leur identifiant : rien n'y
-     * change, et le test n'y vérifie que l'ordre que donne l'application.
+     * Range ces tables dans l'ordre inverse de leurs identifiants (CLUSTER
+     * sur un index décroissant ; le DDL et la réécriture s'annulent avec la
+     * transaction du test) : une requête sans tri rend alors leurs lignes à
+     * l'envers de leur enregistrement, comme après qu'un VACUUM a libéré une
+     * place qu'une ligne plus récente a reprise, ou après une restauration.
      */
     protected function inverserLOrdrePhysiqueDesLignes(string ...$tables): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            return;
-        }
-
         foreach ($tables as $table) {
             DB::statement("CREATE INDEX {$table}_ordre_inverse ON {$table} (id DESC)");
             DB::statement("CLUSTER {$table} USING {$table}_ordre_inverse");
@@ -1544,15 +1526,13 @@ abstract class TestCase extends BaseTestCase
     /**
      * Retire un déclencheur de protection (voir DeclencheursDeProtection),
      * comme le ferait un administrateur de la base, pour falsifier une
-     * table en ajout seul le temps d'un test. Le DDL de PostgreSQL et de
-     * SQLite est transactionnel : le retour en arrière de la transaction
-     * du test le rétablit.
+     * table en ajout seul le temps d'un test. Le DDL de PostgreSQL est
+     * transactionnel : le retour en arrière de la transaction du test le
+     * rétablit.
      */
     protected function retirerLeDeclencheur(string $table, string $declencheur): void
     {
-        DB::unprepared(DB::connection()->getDriverName() === 'pgsql'
-            ? "DROP TRIGGER {$declencheur} ON {$table}"
-            : "DROP TRIGGER {$declencheur}");
+        DB::unprepared("DROP TRIGGER {$declencheur} ON {$table}");
     }
 
     /**
@@ -1587,18 +1567,6 @@ abstract class TestCase extends BaseTestCase
         $this->app->instance(RepertoireSirene::class, $repertoire);
 
         return $repertoire;
-    }
-
-    /**
-     * Deux processus ne partagent une base qu'avec un serveur de base de
-     * données : les tests de concurrence ne tournent que sous PostgreSQL,
-     * la base SQLite des tests vivant dans la mémoire de leur processus.
-     */
-    protected function exigerUnServeurDeBaseDeDonnees(): void
-    {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('Deux processus ne partagent une base qu\'avec un serveur : ce test ne tourne que sous PostgreSQL.');
-        }
     }
 
     /**

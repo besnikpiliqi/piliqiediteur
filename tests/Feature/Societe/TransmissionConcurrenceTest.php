@@ -56,8 +56,6 @@ class TransmissionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_accepter_et_annuler_une_transmission_en_meme_temps_ne_donne_qu_un_resultat(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
-
         [$proprietaireId, $administrateurId, $jeton] = $this->transmissionDemandee('Acceptée d\'abord');
         $annulation = null;
         $this->concurrencerDesQueLaDemandeEstVerrouillee(static function () use ($proprietaireId, $administrateurId): void {
@@ -93,7 +91,6 @@ class TransmissionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_acceptations_simultanees_du_meme_lien_ne_transmettent_qu_une_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$proprietaireId, $administrateurId, $jeton] = $this->transmissionDemandee('Ma Boutique');
         $concurrente = null;
         $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($administrateurId, $jeton): void {
@@ -117,7 +114,6 @@ class TransmissionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_acces_redonne_pendant_l_acceptation_d_une_transmission_la_fait_refuser(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$proprietaireId, $administrateurId, $jeton] = $this->transmissionDemandee('Ma Boutique');
         $connexionDuTest = DB::getDefaultConnection();
         $acceptation = null;
@@ -149,7 +145,6 @@ class TransmissionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_transmission_acceptee_pendant_la_cloture_de_l_inscription_ne_garde_aucune_adresse_de_connexion(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'inscrite@example.test');
         $administrateur = $this->administrateurPretAReprendre($this->creerLeMagasinDuSiege($societe), 'repreneur@example.test');

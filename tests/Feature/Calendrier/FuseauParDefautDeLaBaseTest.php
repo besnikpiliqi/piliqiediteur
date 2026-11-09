@@ -14,16 +14,17 @@ use Illuminate\Support\Facades\DB;
 use Mockery;
 use Mockery\MockInterface;
 use PDOException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
 /**
+ * La première migration n'accepte que PostgreSQL, seul moteur de PILIQI.
  * Le fuseau par défaut de la base PostgreSQL, que reçoit toute session
  * ouverte hors de l'application, est fixé à UTC par les migrations, sans
- * commande manuelle ; sous SQLite, qui n'a pas de fuseau de session, la
- * migration ne fait rien. Un rôle qui n'a pas le droit de changer les
- * réglages de la base fait échouer la migration avec un message qui dit
- * quoi faire, sauf si la base est déjà à UTC. Le diagnostic d'un fuseau
+ * commande manuelle. Un rôle qui n'a pas le droit de changer les réglages
+ * de la base fait échouer la migration avec un message qui dit quoi faire,
+ * sauf si la base est déjà à UTC. Le diagnostic d'un fuseau
  * qui n'est pas l'UTC en nomme la cause et donne la commande qui la
  * corrige, même une fois les migrations passées.
  *
@@ -41,13 +42,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
     private function migrationDuFuseau(): Migration
     {
         return require database_path('migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php');
-    }
-
-    private function exigerPostgresql(): void
-    {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('Le fuseau par défaut d\'une base n\'existe que sous PostgreSQL.');
-        }
     }
 
     /**
@@ -151,15 +145,14 @@ class FuseauParDefautDeLaBaseTest extends TestCase
     }
 
     /**
-     * Une connexion simulée sous PostgreSQL, dont la base, le rôle, le
-     * propriétaire et les réglages du fuseau sont ceux-ci.
+     * Une connexion simulée, dont la base, le rôle, le propriétaire et les
+     * réglages du fuseau sont ceux-ci.
      *
      * @param  array<string, string|null>  $etat
      */
     private function connexionSimulee(array $etat): Connection&MockInterface
     {
         $connexion = Mockery::mock(Connection::class);
-        $connexion->shouldReceive('getDriverName')->andReturn('pgsql');
         $connexion->shouldReceive('selectOne')->once()->andReturn((object) [
             'base' => 'piliqi',
             'role' => 'piliqi_migrations',
@@ -175,15 +168,55 @@ class FuseauParDefautDeLaBaseTest extends TestCase
     }
 
     /**
+     * Deux autres moteurs, jamais joints : la migration s'arrête avant
+     * d'ouvrir leur connexion.
+     *
+     * @return array<string, array{0: array<string, string>}>
+     */
+    public static function autresBases(): array
+    {
+        return [
+            'SQLite' => [['driver' => 'sqlite', 'database' => ':memory:']],
+            'MySQL' => [['driver' => 'mysql', 'host' => '127.0.0.1', 'database' => 'piliqi']],
+        ];
+    }
+
+    /**
+     * Les déclencheurs et les gardes de la base ne s'écrivent que pour
+     * PostgreSQL : sur une autre base, la première migration s'arrête
+     * avant toute table, en disant quoi régler, au lieu de laisser une
+     * table sans sa protection. La connexion par défaut est rendue avant
+     * que RefreshDatabase n'annule la transaction du test.
+     *
+     * @param  array<string, string>  $configuration
+     */
+    #[DataProvider('autresBases')]
+    public function test_les_migrations_s_arretent_avant_toute_table_sur_une_autre_base_que_postgresql(array $configuration): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+        config(['database.connections.autre_base' => $configuration]);
+        DB::setDefaultConnection('autre_base');
+
+        try {
+            $this->assertThrows(
+                fn () => $this->migrationDuFuseau()->up(),
+                RuntimeException::class,
+                "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « autre_base » utilise le pilote « {$configuration['driver']} ». Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), puis relancez php artisan migrate.",
+            );
+        } finally {
+            DB::setDefaultConnection($connexionDuTest);
+            DB::purge('autre_base');
+        }
+    }
+
+    /**
      * Après les migrations, une nouvelle session reçoit « UTC », le nom que
      * fixe la migration, et non le fuseau de postgresql.conf (souvent
      * « Etc/UTC ») ; c'est bien la migration qui le fixe pour la base :
      * son réglage retiré, elle le rétablit.
      */
-    public function test_sous_postgresql_les_migrations_fixent_a_utc_le_fuseau_par_defaut_de_la_base(): void
+    public function test_les_migrations_fixent_a_utc_le_fuseau_par_defaut_de_la_base(): void
     {
-        $this->exigerPostgresql();
-
         $fuseauApresLesMigrations = $this->dansUneNouvelleSession(static fn (Connection $session): string => (string) $session->selectOne("select reset_val from pg_settings where name = 'TimeZone'")->reset_val);
         FuseauParDefautDeLaBase::retirer(DB::connection());
         $reglagesRetires = $this->reglagesDeLaBase();
@@ -193,21 +226,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
         $this->assertSame('UTC', $fuseauApresLesMigrations);
         $this->assertSame([], $reglagesRetires);
         $this->assertSame(['TimeZone=UTC'], $this->reglagesDeLaBase());
-    }
-
-    public function test_sous_sqlite_la_migration_du_fuseau_ne_fait_rien(): void
-    {
-        if (DB::connection()->getDriverName() !== 'sqlite') {
-            $this->markTestSkipped('Ce test vérifie la migration sous SQLite.');
-        }
-
-        DB::flushQueryLog();
-        DB::enableQueryLog();
-
-        $this->migrationDuFuseau()->up();
-        $this->migrationDuFuseau()->down();
-
-        $this->assertSame([], DB::getQueryLog());
     }
 
     /**
@@ -271,7 +289,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
      */
     public function test_sans_reglage_de_la_base_le_diagnostic_nomme_le_fuseau_du_serveur_et_la_commande_qui_le_corrige(): void
     {
-        $this->exigerPostgresql();
         [$base, $role] = $this->baseEtRoleDuTest();
         $paris = Calendrier::deParis()->fuseau();
         $reglages = $this->connexion('reglages');
@@ -300,7 +317,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
 
     public function test_un_reglage_de_la_base_qui_n_est_pas_utc_est_nomme_avec_la_commande_qui_le_corrige(): void
     {
-        $this->exigerPostgresql();
         [$base, $role] = $this->baseEtRoleDuTest();
         $paris = Calendrier::deParis()->fuseau();
         $reglages = $this->connexion('reglages');
@@ -324,7 +340,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
 
     public function test_un_reglage_du_role_dans_la_base_est_nomme_avec_la_commande_qui_le_retire(): void
     {
-        $this->exigerPostgresql();
         [$base, $role] = $this->baseEtRoleDuTest();
         $paris = Calendrier::deParis()->fuseau();
         $reglages = $this->connexion('reglages');
@@ -365,7 +380,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
 
     public function test_des_options_de_connexion_qui_remplacent_l_utc_de_la_base_sont_nommees(): void
     {
-        $this->exigerPostgresql();
         [$base] = $this->baseEtRoleDuTest();
         $martinique = Calendrier::duTerritoire(Territoire::Martinique)->fuseau();
 

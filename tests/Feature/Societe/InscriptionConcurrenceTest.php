@@ -34,7 +34,6 @@ class InscriptionConcurrenceTest extends TestCase
 
     public function test_deux_inscriptions_simultanees_du_meme_siren_n_en_creent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $siren = SocieteFactory::sirenFictif();
         $concurrente = null;
         DB::listen(function (QueryExecuted $requete) use (&$concurrente, $siren): void {

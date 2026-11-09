@@ -30,8 +30,8 @@ class TauxFactureAchat extends Model
     ];
 
     /**
-     * Le taux, sa base et ses TVA comme une colonne decimal(12,2) sur les
-     * deux moteurs (« 20.00 »), la confirmation d'un écart en UTC.
+     * Le taux, sa base et ses TVA comme une colonne decimal(12,2)
+     * (« 20.00 »), la confirmation d'un écart en UTC.
      *
      * @return array<string, string>
      */

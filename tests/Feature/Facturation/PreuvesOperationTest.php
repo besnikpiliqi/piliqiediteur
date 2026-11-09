@@ -465,10 +465,6 @@ class PreuvesOperationTest extends TestCase
      */
     public function test_enregistrer_une_preuve_ne_verrouille_aucune_preuve(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('SQLite n\'écrit aucun verrou de ligne : ce test ne tourne que sous PostgreSQL.');
-        }
-
         $this->magasin();
         $livraison = $this->venteEmise('intracommunautaire');
         $verrous = [];

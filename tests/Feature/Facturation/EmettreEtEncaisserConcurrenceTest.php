@@ -40,7 +40,6 @@ class EmettreEtEncaisserConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_emettre_et_encaisser_simultanes_du_meme_brouillon_n_emettent_et_n_encaissent_qu_une_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);

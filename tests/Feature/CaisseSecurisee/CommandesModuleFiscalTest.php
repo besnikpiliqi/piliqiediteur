@@ -165,8 +165,7 @@ class CommandesModuleFiscalTest extends TestCase
     }
 
     /**
-     * Sous PostgreSQL, le fuseau par défaut de la base (celui que reçoit
-     * toute session avant que l'application ne fixe le sien) doit être
+     * Le fuseau par défaut de la base (celui que reçoit toute session avant que l'application ne fixe le sien) doit être
      * l'UTC : une session dont les options de connexion donnent le fuseau
      * de Paris pour fuseau de départ fait échouer le diagnostic, qui en
      * nomme la cause, alors que SHOW TIMEZONE y rend l'UTC que
@@ -179,10 +178,6 @@ class CommandesModuleFiscalTest extends TestCase
      */
     public function test_diagnostiquer_echoue_quand_le_fuseau_par_defaut_de_la_base_n_est_pas_utc(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('Le fuseau par défaut d\'une base n\'existe que sous PostgreSQL.');
-        }
-
         $connexionDuTest = DB::getDefaultConnection();
         config(['database.connections.reglage_de_la_base' => config("database.connections.{$connexionDuTest}")]);
         FuseauParDefautDeLaBase::fixerAUtc(DB::connection('reglage_de_la_base'));

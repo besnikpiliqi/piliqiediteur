@@ -69,7 +69,6 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
 
     public function test_deux_paiements_simultanes_de_60_euros_sur_un_ticket_de_100_euros_n_en_acceptent_qu_un(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $ticket = $this->ticketDeCentEuros();
         $magasinId = $ticket->magasin_id;
         $clientId = (int) $ticket->client_id;
@@ -94,7 +93,6 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
 
     public function test_deux_contre_passations_simultanees_du_meme_paiement_n_en_acceptent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $ticket = $this->ticketDeCentEuros();
         $errone = self::payer((int) $ticket->client_id, $ticket->id, '60.00');
         $magasinId = $ticket->magasin_id;
@@ -125,7 +123,6 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
      */
     public function test_une_contre_passation_et_une_facture_emise_au_meme_instant_n_imputent_le_credit_qu_une_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
         $client = Client::factory()->create();

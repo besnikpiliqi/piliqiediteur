@@ -20,7 +20,7 @@ use Tests\TestCase;
  * Les gardes de la base sur les articles (voir GardesDesTypesDActivite) :
  * une société sans articles n'a ni produit, ni facture d'achat, ni avoir
  * fournisseur, ni inventaire d'ouverture, même écrits par DB::table(),
- * sans passer par l'application, sur les deux moteurs.
+ * sans passer par l'application.
  */
 class GardesDesTypesDActiviteTest extends TestCase
 {

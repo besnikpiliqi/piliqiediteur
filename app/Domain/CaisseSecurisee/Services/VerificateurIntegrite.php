@@ -220,17 +220,15 @@ class VerificateurIntegrite
 
     /**
      * Toutes les lectures de la vérification voient la même photo de la
-     * base, prise à sa première lecture :
-     * - sous PostgreSQL, dont le niveau par défaut (READ COMMITTED) prend
-     *   une nouvelle photo à chaque requête, la transaction s'ouvre en
-     *   REPEATABLE READ READ ONLY, réglé par sa toute première
-     *   instruction. Une transaction en lecture seule ne subit jamais
-     *   d'erreur de sérialisation ; elle refuse en plus toute écriture.
-     *   Appelée dans une transaction déjà ouverte (les tests, que
-     *   RefreshDatabase enveloppe chacun dans la sienne), elle en garde le
-     *   niveau : PostgreSQL ne le change qu'en tête de la transaction la
-     *   plus externe, jamais dans un point de sauvegarde ;
-     * - sous SQLite, une transaction lit toujours une même photo.
+     * base, prise à sa première lecture : le niveau par défaut de
+     * PostgreSQL (READ COMMITTED) prend une nouvelle photo à chaque
+     * requête, et la transaction s'ouvre donc en REPEATABLE READ READ ONLY,
+     * réglé par sa toute première instruction. Une transaction en lecture
+     * seule ne subit jamais d'erreur de sérialisation ; elle refuse en plus
+     * toute écriture. Appelée dans une transaction déjà ouverte (les tests,
+     * que RefreshDatabase enveloppe chacun dans la sienne), elle en garde
+     * le niveau : PostgreSQL ne le change qu'en tête de la transaction la
+     * plus externe, jamais dans un point de sauvegarde.
      *
      * @param  Closure(): void  $verification
      */
@@ -238,7 +236,7 @@ class VerificateurIntegrite
     {
         $connexion = DB::connection();
 
-        if ($connexion->getDriverName() !== 'pgsql' || $connexion->transactionLevel() > 0) {
+        if ($connexion->transactionLevel() > 0) {
             $connexion->transaction($verification);
 
             return;
@@ -1224,8 +1222,9 @@ class VerificateurIntegrite
     }
 
     /**
-     * Un montant lu tel quel en base (chaîne de PostgreSQL, nombre de
-     * SQLite), en centimes, ou null s'il n'est pas un nombre lisible.
+     * Un montant lu tel quel en base (la chaîne que rend PostgreSQL pour
+     * une colonne numeric), en centimes, ou null s'il n'est pas un nombre
+     * lisible.
      */
     private static function centimesLus(mixed $montant): ?int
     {

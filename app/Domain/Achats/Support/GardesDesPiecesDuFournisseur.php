@@ -3,7 +3,6 @@
 namespace App\Domain\Achats\Support;
 
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Les gardes par lesquelles la base elle-même tient les pièces du
@@ -21,14 +20,11 @@ use RuntimeException;
  * composites le garantissent (voir la migration
  * create_pieces_fournisseur_table).
  *
- * PostgreSQL : une fonction plpgsql par garde, appelée par un déclencheur
- * BEFORE INSERT, BEFORE UPDATE et BEFORE DELETE ; celle de l'effacement
+ * Une fonction plpgsql par garde, appelée par un déclencheur BEFORE
+ * INSERT, BEFORE UPDATE et BEFORE DELETE ; celle de l'effacement
  * verrouille d'abord, en partage, la ligne du document qu'elle lit, pour
  * qu'une validation simultanée passe tout entière avant ou après
- * l'effacement. SQLite : un déclencheur BEFORE par opération, qui refuse
- * par RAISE(ABORT, ...), l'écriture y étant déjà sérialisée. Seuls
- * PostgreSQL et SQLite sont pris en charge : sur tout autre pilote, la
- * migration échoue au lieu de laisser les pièces sans garde.
+ * l'effacement.
  */
 final class GardesDesPiecesDuFournisseur
 {
@@ -55,65 +51,29 @@ final class GardesDesPiecesDuFournisseur
     public static function poser(): void
     {
         $connexion = DB::connection();
+        $table = self::TABLE;
 
-        $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres(),
-            'sqlite' => self::instructionsSqlite(),
-            default => throw new RuntimeException("Les pièces du fournisseur doivent être gardées par la base : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
-        };
-
-        foreach ($instructions as $instruction) {
-            $connexion->unprepared($instruction);
-        }
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::UN_SEUL_DOCUMENT."() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN IF (NEW.facture_achat_id IS NULL) = (NEW.avoir_fournisseur_id IS NULL) THEN RAISE EXCEPTION '%', ".self::message(self::UN_SEUL_DOCUMENT, self::REFUS_UN_SEUL_DOCUMENT).'; END IF; RETURN NEW; END $$');
+        $connexion->unprepared('CREATE TRIGGER '.self::UN_SEUL_DOCUMENT." BEFORE INSERT ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::UN_SEUL_DOCUMENT.'()');
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::JAMAIS_MODIFIEES."() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION '%', ".self::message(self::JAMAIS_MODIFIEES, self::REFUS_MODIFICATION).'; END $$');
+        $connexion->unprepared('CREATE TRIGGER '.self::JAMAIS_MODIFIEES." BEFORE UPDATE ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::JAMAIS_MODIFIEES.'()');
+        $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_'.self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
+            .'PERFORM 1 FROM factures_achat WHERE id = OLD.facture_achat_id FOR SHARE; '
+            .'IF '.self::DOCUMENT_QUI_N_EST_PAS_UN_BROUILLON." THEN RAISE EXCEPTION '%', ".self::message(self::EFFACEES_D_UN_BROUILLON_SEULEMENT, self::REFUS_EFFACEMENT).'; END IF; RETURN OLD; END $$');
+        $connexion->unprepared('CREATE TRIGGER '.self::EFFACEES_D_UN_BROUILLON_SEULEMENT." BEFORE DELETE ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'()');
     }
 
     /**
-     * Retire les déclencheurs, puis, sous PostgreSQL, leurs fonctions.
+     * Retire les déclencheurs, puis leurs fonctions.
      */
     public static function retirer(): void
     {
         $connexion = DB::connection();
 
         foreach ([self::UN_SEUL_DOCUMENT, self::JAMAIS_MODIFIEES, self::EFFACEES_D_UN_BROUILLON_SEULEMENT] as $garde) {
-            $connexion->unprepared("DROP TRIGGER IF EXISTS {$garde}".($connexion->getDriverName() === 'pgsql' ? ' ON '.self::TABLE : ''));
-
-            if ($connexion->getDriverName() === 'pgsql') {
-                $connexion->unprepared("DROP FUNCTION IF EXISTS garde_{$garde}()");
-            }
+            $connexion->unprepared("DROP TRIGGER IF EXISTS {$garde} ON ".self::TABLE);
+            $connexion->unprepared("DROP FUNCTION IF EXISTS garde_{$garde}()");
         }
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function instructionsPostgres(): array
-    {
-        $table = self::TABLE;
-
-        return [
-            'CREATE OR REPLACE FUNCTION garde_'.self::UN_SEUL_DOCUMENT."() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN IF (NEW.facture_achat_id IS NULL) = (NEW.avoir_fournisseur_id IS NULL) THEN RAISE EXCEPTION '%', ".self::message(self::UN_SEUL_DOCUMENT, self::REFUS_UN_SEUL_DOCUMENT).'; END IF; RETURN NEW; END $$',
-            'CREATE TRIGGER '.self::UN_SEUL_DOCUMENT." BEFORE INSERT ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::UN_SEUL_DOCUMENT.'()',
-            'CREATE OR REPLACE FUNCTION garde_'.self::JAMAIS_MODIFIEES."() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION '%', ".self::message(self::JAMAIS_MODIFIEES, self::REFUS_MODIFICATION).'; END $$',
-            'CREATE TRIGGER '.self::JAMAIS_MODIFIEES." BEFORE UPDATE ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::JAMAIS_MODIFIEES.'()',
-            'CREATE OR REPLACE FUNCTION garde_'.self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
-                .'PERFORM 1 FROM factures_achat WHERE id = OLD.facture_achat_id FOR SHARE; '
-                .'IF '.self::DOCUMENT_QUI_N_EST_PAS_UN_BROUILLON." THEN RAISE EXCEPTION '%', ".self::message(self::EFFACEES_D_UN_BROUILLON_SEULEMENT, self::REFUS_EFFACEMENT).'; END IF; RETURN OLD; END $$',
-            'CREATE TRIGGER '.self::EFFACEES_D_UN_BROUILLON_SEULEMENT." BEFORE DELETE ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_".self::EFFACEES_D_UN_BROUILLON_SEULEMENT.'()',
-        ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function instructionsSqlite(): array
-    {
-        $table = self::TABLE;
-
-        return [
-            'CREATE TRIGGER '.self::UN_SEUL_DOCUMENT." BEFORE INSERT ON {$table} WHEN (NEW.facture_achat_id IS NULL) = (NEW.avoir_fournisseur_id IS NULL) BEGIN SELECT RAISE(ABORT, ".self::message(self::UN_SEUL_DOCUMENT, self::REFUS_UN_SEUL_DOCUMENT).'); END',
-            'CREATE TRIGGER '.self::JAMAIS_MODIFIEES." BEFORE UPDATE ON {$table} BEGIN SELECT RAISE(ABORT, ".self::message(self::JAMAIS_MODIFIEES, self::REFUS_MODIFICATION).'); END',
-            'CREATE TRIGGER '.self::EFFACEES_D_UN_BROUILLON_SEULEMENT." BEFORE DELETE ON {$table} WHEN ".self::DOCUMENT_QUI_N_EST_PAS_UN_BROUILLON.' BEGIN SELECT RAISE(ABORT, '.self::message(self::EFFACEES_D_UN_BROUILLON_SEULEMENT, self::REFUS_EFFACEMENT).'); END',
-        ];
     }
 
     /**

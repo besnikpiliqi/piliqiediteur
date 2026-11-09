@@ -25,8 +25,8 @@ use Tests\TestCase;
  * Les gardes des droits en base (voir GardesDesDroits) : écrite sans
  * passer par l'application, par DB::table() ou une requête brute, une
  * ligne de droits incohérente avec le rôle de société du compte est
- * refusée par la base elle-même, sous PostgreSQL comme sous SQLite ; les
- * transitions que font les actions, dans leur ordre, passent.
+ * refusée par la base elle-même ; les transitions que font les actions,
+ * dans leur ordre, passent.
  */
 class GardesDesDroitsEnBaseTest extends TestCase
 {
@@ -108,6 +108,31 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         $this->assertSame([$magasin->id], Affectation::query()->where('user_id', $deLaSelection->id)->pluck('magasin_id')->all());
         $this->assertSame([null], Affectation::query()->where('user_id', $deTous->id)->pluck('magasin_id')->all());
+    }
+
+    /**
+     * La garde compare une affectation d'administrateur à ses autres
+     * affectations, jamais à elle-même : sa seule affectation passe de
+     * tous les magasins à un seul, puis revient à tous ; à côté d'une
+     * autre affectation de sa sélection, la même modification vers tous
+     * les magasins est refusée.
+     */
+    public function test_la_garde_compare_une_affectation_d_administrateur_a_ses_autres_affectations_jamais_a_elle_meme(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
+        $deTous = $this->administrateur($magasin);
+        $deDeux = $this->administrateur($magasin, [$magasin->id, $autre->id]);
+        $saSeuleAffectation = Affectation::query()->where('user_id', $deTous->id)->sole();
+
+        DB::table('affectations')->where('id', $saSeuleAffectation->id)->update(['magasin_id' => $autre->id]);
+        $versUnSeul = $saSeuleAffectation->fresh()->magasin_id;
+        DB::table('affectations')->where('id', $saSeuleAffectation->id)->update(['magasin_id' => null]);
+        $this->refusee(fn () => DB::table('affectations')->where('user_id', $deDeux->id)->where('magasin_id', $autre->id)->update(['magasin_id' => null]));
+
+        $this->assertSame($autre->id, $versUnSeul);
+        $this->assertNull($saSeuleAffectation->fresh()->magasin_id);
+        $this->assertEqualsCanonicalizing([$magasin->id, $autre->id], Affectation::query()->where('user_id', $deDeux->id)->pluck('magasin_id')->all());
     }
 
     /**

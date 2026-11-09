@@ -44,17 +44,12 @@ class RetourArriereDesMigrationsTest extends TestCase
     }
 
     /**
-     * Les fonctions du schéma courant sous PostgreSQL, extensions
-     * comprises ; SQLite n'en garde aucune.
+     * Les fonctions du schéma courant, extensions comprises.
      *
      * @return list<string>
      */
     private function fonctionsDuSchema(): array
     {
-        if (DB::getDriverName() !== 'pgsql') {
-            return [];
-        }
-
         return array_column(DB::select('select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = current_schema() order by p.proname'), 'proname');
     }
 

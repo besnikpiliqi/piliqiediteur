@@ -51,7 +51,6 @@ class ConnexionsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_des_echecs_simultanes_sur_un_meme_identifiant_sont_tous_comptes(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $saisie = (string) $this->membre($magasin, RoleMagasin::Vendeur)->identifiantDeConnexion();
         $limitation = app(LimitationDesConnexions::class);
@@ -88,7 +87,6 @@ class ConnexionsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_des_connexions_reussies_simultanees_depuis_une_meme_adresse_ne_font_jamais_attendre(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $saisies = array_map(fn (): string => (string) $this->membre($magasin, RoleMagasin::Vendeur)->identifiantDeConnexion(), range(1, self::PROCESSUS));
 
@@ -131,7 +129,6 @@ class ConnexionsConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_connexion_concurrente_d_un_acces_redonne_ne_laisse_aucune_session_valable_avec_l_ancien_mot_de_passe(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);

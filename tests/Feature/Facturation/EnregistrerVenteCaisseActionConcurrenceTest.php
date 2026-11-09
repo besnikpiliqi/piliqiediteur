@@ -69,7 +69,6 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_caisses_qui_vendent_le_meme_panier_au_meme_instant_enregistrent_les_memes_montants(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
@@ -110,7 +109,6 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
 
     public function test_deux_caisses_qui_presentent_le_meme_bon_d_avoir_au_meme_instant_ne_l_imputent_qu_une_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
@@ -150,7 +148,6 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
      */
     public function test_deux_ventes_simultanees_au_meme_client_n_imputent_son_credit_qu_une_fois(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);

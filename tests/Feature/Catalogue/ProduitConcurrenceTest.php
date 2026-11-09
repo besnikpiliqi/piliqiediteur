@@ -27,7 +27,6 @@ class ProduitConcurrenceTest extends TestCase
 
     public function test_la_meme_reference_creee_au_meme_instant_par_deux_membres_est_refusee_au_second(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $magasinId = $magasin->id;

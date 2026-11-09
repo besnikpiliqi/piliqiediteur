@@ -7,7 +7,6 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Les gardes par lesquelles la base elle-même refuse un état des droits
@@ -49,33 +48,24 @@ use RuntimeException;
  *   administrateur ou un membre dans un cabinet (le type d'une société ne
  *   change jamais : lu sans verrou).
  *
- * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE INSERT OR
- * UPDATE par garde. Chaque fonction verrouille d'abord la ligne parente
- * qu'elle lit : la ligne du compte (FOR NO KEY UPDATE) pour une
- * affectation, si bien que deux écritures d'affectations du même compte,
- * ou une affectation et un changement de rôle, se suivent toujours et que
- * la seconde voit la première ; la ligne de l'affectation (FOR SHARE) pour
- * une case ; la ligne du compte (FOR SHARE) pour une autorisation de
- * société. Le FOR KEY SHARE d'une clé étrangère ne suffirait pas : une
- * garde et un changement simultanés passeraient tous les deux. Ces verrous
- * se prennent dans la transaction qui écrit, après ceux qu'elle tient déjà
- * (les registres, puis les comptes, voir JournalDesDroits) : aucun
- * interblocage.
- *
- * PostgreSQL déclenche la garde de users à l'insertion et à la
+ * Chaque garde est une fonction plpgsql et son déclencheur BEFORE INSERT
+ * OR UPDATE ; celui de users ne se déclenche qu'à l'insertion et à la
  * modification de role_societe, email, email_verified_at ou
- * mot_de_passe_est_l_identifiant.
- *
- * SQLite : un déclencheur BEFORE INSERT et un BEFORE UPDATE par garde
- * (BEFORE UPDATE OF role_societe, email, email_verified_at,
- * mot_de_passe_est_l_identifiant pour users), qui refusent par RAISE(ABORT, ...) ; l'écriture y est déjà
- * sérialisée.
+ * mot_de_passe_est_l_identifiant. Chaque fonction verrouille d'abord la
+ * ligne parente qu'elle lit : la ligne du compte (FOR NO KEY UPDATE) pour
+ * une affectation, si bien que deux écritures d'affectations du même
+ * compte, ou une affectation et un changement de rôle, se suivent toujours
+ * et que la seconde voit la première ; la ligne de l'affectation (FOR
+ * SHARE) pour une case ; la ligne du compte (FOR SHARE) pour une
+ * autorisation de société. Le FOR KEY SHARE d'une clé étrangère ne
+ * suffirait pas : une garde et un changement simultanés passeraient tous
+ * les deux. Ces verrous se prennent dans la transaction qui écrit, après
+ * ceux qu'elle tient déjà (les registres, puis les comptes, voir
+ * JournalDesDroits) : aucun interblocage.
  *
  * Elles se posent quand toutes les tables qu'elles lisent existent (voir
  * la migration des autorisations de société) et se retirent avant elles,
- * fonctions comprises, par retirer(). Seuls PostgreSQL et SQLite sont pris
- * en charge : sur tout autre pilote, la migration échoue au lieu de
- * laisser les droits sans garde.
+ * fonctions comprises, par retirer().
  */
 final class GardesDesDroits
 {
@@ -107,56 +97,38 @@ final class GardesDesDroits
     {
         $connexion = DB::connection();
 
-        $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres(),
-            'sqlite' => self::instructionsSqlite(),
-            default => throw new RuntimeException("Les droits doivent être gardés par la base : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
-        };
+        foreach (self::refus() as $garde => $refus) {
+            $controles = implode(' ', array_map(
+                static fn (array $un): string => "IF {$un[0]} THEN RAISE EXCEPTION '%', ".self::message($garde, $un[1]).'; END IF;',
+                $refus,
+            ));
+            $table = self::TABLES[$garde];
+            $quand = $garde === self::ROLES ? 'INSERT OR UPDATE OF '.self::COLONNES_DES_ROLES : 'INSERT OR UPDATE';
 
-        foreach ($instructions as $instruction) {
-            $connexion->unprepared($instruction);
+            $connexion->unprepared("CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN ".self::verrou($garde)." {$controles} RETURN NEW; END \$\$");
+            $connexion->unprepared("CREATE TRIGGER {$garde} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()");
         }
     }
 
     /**
-     * Retire les déclencheurs des gardes, puis, sous PostgreSQL, leurs
-     * fonctions, que les déclencheurs empêcheraient sinon de retirer.
+     * Retire les déclencheurs des gardes, puis leurs fonctions, que les
+     * déclencheurs empêcheraient sinon de retirer.
      */
     public static function retirer(): void
     {
         $connexion = DB::connection();
-        $postgres = $connexion->getDriverName() === 'pgsql';
 
         foreach (self::TABLES as $garde => $table) {
-            if ($postgres) {
-                $connexion->unprepared("DROP TRIGGER IF EXISTS {$garde} ON {$table}");
-                $connexion->unprepared("DROP FUNCTION IF EXISTS garde_{$garde}()");
-
-                continue;
-            }
-
-            foreach (self::declencheursSqlite($garde) as $declencheur) {
-                $connexion->unprepared("DROP TRIGGER IF EXISTS {$declencheur}");
-            }
+            $connexion->unprepared("DROP TRIGGER IF EXISTS {$garde} ON {$table}");
+            $connexion->unprepared("DROP FUNCTION IF EXISTS garde_{$garde}()");
         }
     }
 
     /**
-     * Les noms des déclencheurs d'une garde sous SQLite, un par opération
-     * (voir aussi TestCase::retirerLaGardeDesDroits()).
-     *
-     * @return list<string>
-     */
-    public static function declencheursSqlite(string $garde): array
-    {
-        return ["{$garde}_insert", "{$garde}_update"];
-    }
-
-    /**
-     * Les refus de chaque garde : la condition qui refuse, en SQL commun
-     * aux deux moteurs (NEW désigne la ligne écrite ; sous SQLite, NEW.id
-     * n'est pas encore connu avant l'insertion, d'où la comparaison à
-     * COALESCE(NEW.id, 0)), et son message.
+     * Les refus de chaque garde : la condition qui refuse, en SQL (NEW
+     * désigne la ligne écrite, dont l'identifiant est déjà tiré de sa
+     * séquence quand le déclencheur d'une insertion la lit), et son
+     * message.
      *
      * @return array<string, list<array{0: string, 1: string}>>
      */
@@ -170,7 +142,7 @@ final class GardesDesDroits
         $responsable = "'".RoleMagasin::Responsable->value."'";
         $cocheesParLeProprietaire = self::liste(PermissionRegistry::cocheesParLeProprietaire(TypeDActivite::Commerce));
         $roleDuCompte = 'COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), \'\')';
-        $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> COALESCE(NEW.id, 0)';
+        $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> NEW.id';
         $magasinDeSonIdentifiant = 'COALESCE((SELECT magasin_id FROM identifiants WHERE user_id = NEW.user_id), -1)';
         $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::Collaborateur->value]);
         $collaborateur = "'".RoleSociete::Collaborateur->value."'";
@@ -212,9 +184,9 @@ final class GardesDesDroits
     }
 
     /**
-     * La ligne parente que chaque fonction verrouille avant de lire, sous
-     * PostgreSQL (voir le docblock de la classe) ; aucune pour users, dont
-     * la ligne écrite est déjà verrouillée.
+     * La ligne parente que chaque fonction verrouille avant de lire (voir
+     * le docblock de la classe) ; aucune pour users, dont la ligne écrite
+     * est déjà verrouillée.
      */
     private static function verrou(string $garde): string
     {
@@ -224,51 +196,6 @@ final class GardesDesDroits
             self::AUTORISATIONS_SOCIETE => 'PERFORM 1 FROM users WHERE id = NEW.user_id FOR SHARE;',
             default => '',
         };
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function instructionsPostgres(): array
-    {
-        $instructions = [];
-
-        foreach (self::refus() as $garde => $refus) {
-            $controles = implode(' ', array_map(
-                static fn (array $un): string => "IF {$un[0]} THEN RAISE EXCEPTION '%', ".self::message($garde, $un[1]).'; END IF;',
-                $refus,
-            ));
-            $table = self::TABLES[$garde];
-            $quand = $garde === self::ROLES ? 'INSERT OR UPDATE OF '.self::COLONNES_DES_ROLES : 'INSERT OR UPDATE';
-
-            $instructions[] = "CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN ".self::verrou($garde)." {$controles} RETURN NEW; END \$\$";
-            $instructions[] = "CREATE TRIGGER {$garde} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()";
-        }
-
-        return $instructions;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function instructionsSqlite(): array
-    {
-        $instructions = [];
-
-        foreach (self::refus() as $garde => $refus) {
-            $controles = implode(' ', array_map(
-                static fn (array $un): string => 'SELECT RAISE(ABORT, '.self::message($garde, $un[1]).") WHERE {$un[0]};",
-                $refus,
-            ));
-            $table = self::TABLES[$garde];
-            [$insertion, $modification] = self::declencheursSqlite($garde);
-            $quandModifie = $garde === self::ROLES ? 'UPDATE OF '.self::COLONNES_DES_ROLES : 'UPDATE';
-
-            $instructions[] = "CREATE TRIGGER {$insertion} BEFORE INSERT ON {$table} BEGIN {$controles} END";
-            $instructions[] = "CREATE TRIGGER {$modification} BEFORE {$quandModifie} ON {$table} BEGIN {$controles} END";
-        }
-
-        return $instructions;
     }
 
     /**

@@ -121,8 +121,8 @@ class AjouterPreuveOperationAction
 
     /**
      * La référence telle que la comparent les doublons : sa casse pliée
-     * (pliage simple d'Unicode), en PHP, pour que SQLite et PostgreSQL
-     * comparent de la même façon.
+     * (pliage simple d'Unicode), en PHP, indépendamment de la collation de
+     * la base.
      */
     private static function sansCasse(string $reference): string
     {

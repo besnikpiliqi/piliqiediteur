@@ -311,8 +311,8 @@ class Produit extends Model
      * Clé de doublon d'une référence, que compare l'index unique
      * (magasin_id, reference_normalisee) : la référence sans tenir compte
      * de la casse (« ABC », « abc » ; « ÉCRAN-1 », « écran-1 »), par le
-     * repliement de casse d'Unicode, calculé en PHP pour que SQLite et
-     * PostgreSQL décident pareil. Les accents restent : « ECRAN-1 » et
+     * repliement de casse d'Unicode, calculé en PHP, indépendamment de la
+     * collation de la base. Les accents restent : « ECRAN-1 » et
      * « ÉCRAN-1 » sont deux références.
      */
     public static function normaliserReference(string $reference): string

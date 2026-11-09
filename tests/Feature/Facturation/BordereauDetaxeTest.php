@@ -433,10 +433,6 @@ class BordereauDetaxeTest extends TestCase
      */
     public function test_noter_un_bordereau_ne_verrouille_aucun_bordereau(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('SQLite n\'écrit aucun verrou de ligne : ce test ne tourne que sous PostgreSQL.');
-        }
-
         $this->magasin();
         $ticket = $this->venteEmise('250.00');
         $verrous = [];

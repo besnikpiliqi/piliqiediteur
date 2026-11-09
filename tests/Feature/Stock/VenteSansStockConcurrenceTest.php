@@ -37,7 +37,6 @@ class VenteSansStockConcurrenceTest extends TestCase
 
     public function test_deux_ventes_simultanees_de_la_derniere_unite_sans_autorisation_n_en_laissent_passer_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $premier = $this->membre($magasin, RoleMagasin::Vendeur);
         $second = $this->membre($magasin, RoleMagasin::Vendeur);
@@ -64,7 +63,6 @@ class VenteSansStockConcurrenceTest extends TestCase
 
     public function test_deux_ventes_simultanees_avec_autorisation_passent_toutes_deux_et_le_stock_reste_coherent(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $premier = self::responsableDeTest($magasin);
         $responsable = $this->responsable($magasin);

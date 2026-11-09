@@ -10,15 +10,13 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Normalizer;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Les recherches ignorent la casse et les accents, en base, par le même
- * pliage sur les deux moteurs : une fonction SQL sous PostgreSQL, la
- * fonction PHP enregistrée sur la connexion sous SQLite (voir
- * RechercheSansAccents::plier()). Ces tests passent donc tels quels sur
- * l'un et l'autre.
+ * Les recherches ignorent la casse et les accents, en base, par la
+ * fonction SQL sans_casse_ni_accents() (voir RechercheSansAccents).
  */
 class RechercheSansAccentsTest extends TestCase
 {
@@ -113,15 +111,16 @@ class RechercheSansAccentsTest extends TestCase
     }
 
     /**
-     * Le pliage de la base est celui de plier(), caractère par caractère,
-     * pour toutes les lettres latines, grecques et cyrilliques, la
-     * ponctuation, les symboles et les formes pleine chasse : sous
-     * PostgreSQL, la fonction SQL et la fonction PHP de SQLite donnent le
-     * même résultat, et les recherches trouvent les mêmes fiches sur les
-     * deux moteurs. Le saut de ligne sépare les caractères : il ne se
-     * plie pas, et ne se combine à aucun accent.
+     * Le pliage de la base est, caractère par caractère, celui que
+     * définit Unicode (voir pliageSelonUnicode()), pour toutes les lettres
+     * latines, grecques et cyrilliques, la ponctuation, les symboles et
+     * les formes pleine chasse : la décomposition canonique et la
+     * correspondance simple des minuscules de PostgreSQL, sous la collation
+     * C.UTF-8 de la base, sont celles d'Unicode, et l'expression régulière
+     * des diacritiques n'en laisse aucun. Le saut de ligne sépare les
+     * caractères : il ne se plie pas, et ne se combine à aucun accent.
      */
-    public function test_la_base_plie_chaque_caractere_comme_plier(): void
+    public function test_la_base_plie_chaque_caractere_selon_unicode(): void
     {
         $caracteres = [];
 
@@ -134,13 +133,13 @@ class RechercheSansAccentsTest extends TestCase
         }
 
         $texte = implode("\n", $caracteres);
-        $pliesParPhp = explode("\n", (string) RechercheSansAccents::plier($texte));
+        $pliesSelonUnicode = explode("\n", self::pliageSelonUnicode($texte));
         $pliesParLaBase = explode("\n", DB::selectOne('select '.RechercheSansAccents::FONCTION_SQL.'(?) as pliage', [$texte])->pliage);
 
-        $this->assertCount(count($caracteres), $pliesParPhp);
+        $this->assertCount(count($caracteres), $pliesSelonUnicode);
         $this->assertCount(count($caracteres), $pliesParLaBase);
         $this->assertSame(
-            array_combine(array_keys($caracteres), $pliesParPhp),
+            array_combine(array_keys($caracteres), $pliesSelonUnicode),
             array_combine(array_keys($caracteres), $pliesParLaBase),
         );
     }
@@ -170,5 +169,22 @@ class RechercheSansAccentsTest extends TestCase
 
         $this->assertSame([$remise->id], RechercheSansAccents::appliquer(Produit::query(), '50%', ['nom'])->pluck('id')->all());
         $this->assertSame([$reference->id], RechercheSansAccents::appliquer(Produit::query(), 'a_b', ['reference'])->pluck('id')->all());
+    }
+
+    /**
+     * Le pliage que définit Unicode, calculé par PHP : décomposition
+     * canonique (NFD), diacritiques combinants retirés, minuscules
+     * (correspondance simple d'Unicode), puis lettres sans décomposition
+     * remplacées, celles de RechercheSansAccents::LETTRES_SANS_DECOMPOSITION.
+     */
+    private static function pliageSelonUnicode(string $texte): string
+    {
+        $diacritiques = implode('', array_map(
+            static fn (array $plage): string => sprintf('\\x{%04X}-\\x{%04X}', $plage[0], $plage[1]),
+            RechercheSansAccents::DIACRITIQUES,
+        ));
+        $sansDiacritiques = (string) preg_replace("/[{$diacritiques}]/u", '', (string) Normalizer::normalize($texte, Normalizer::FORM_D));
+
+        return strtr(mb_convert_case($sansDiacritiques, MB_CASE_LOWER_SIMPLE, 'UTF-8'), RechercheSansAccents::LETTRES_SANS_DECOMPOSITION);
     }
 }

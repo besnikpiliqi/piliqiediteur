@@ -72,7 +72,6 @@ class FicheProduitConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_fiche_produit_enregistree_pendant_une_vente_ou_un_achat_passe_avant_ou_apres_sans_interblocage(string $geste, array $saisie, bool $laFicheDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = self::responsableDeTest($magasin);

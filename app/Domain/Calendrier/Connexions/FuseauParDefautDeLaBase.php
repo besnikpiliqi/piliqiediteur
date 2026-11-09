@@ -14,7 +14,7 @@ use RuntimeException;
  * à UTC pour la base courante (ALTER DATABASE), et caisse:diagnostiquer
  * vérifie celui que reçoit vraiment une session (pg_settings.reset_val,
  * jamais SHOW TIMEZONE, qui rend l'UTC que l'application fixe à chaque
- * connexion). SQLite n'a pas de fuseau de session : rien à fixer ni à lire.
+ * connexion).
  *
  * Une session reçoit le premier fuseau fixé parmi, dans cet ordre : les
  * options de sa connexion, le réglage de son rôle dans la base (ALTER
@@ -45,17 +45,13 @@ final class FuseauParDefautDeLaBase
     private const DROIT_INSUFFISANT = '42501';
 
     /**
-     * Fixe à UTC le fuseau par défaut de la base courante, sous PostgreSQL,
-     * sauf s'il l'est déjà ; ne fait rien sous SQLite.
+     * Fixe à UTC le fuseau par défaut de la base courante, sauf s'il l'est
+     * déjà.
      *
      * @throws RuntimeException le rôle de la connexion n'a pas le droit de changer les réglages de la base
      */
     public static function fixerAUtc(Connection $connexion): void
     {
-        if ($connexion->getDriverName() !== 'pgsql') {
-            return;
-        }
-
         $etat = self::etat($connexion);
 
         if (self::estLUtc($etat->fuseau_de_la_base)) {
@@ -85,30 +81,21 @@ final class FuseauParDefautDeLaBase
     }
 
     /**
-     * Retire le fuseau par défaut de la base courante, sous PostgreSQL : le
-     * retour arrière de fixerAUtc().
+     * Retire le fuseau par défaut de la base courante : le retour arrière de
+     * fixerAUtc().
      */
     public static function retirer(Connection $connexion): void
     {
-        if ($connexion->getDriverName() !== 'pgsql') {
-            return;
-        }
-
         $connexion->unprepared("do \$\$ begin execute format('alter database %I reset timezone', current_database()); end \$\$");
     }
 
     /**
-     * Le nom de l'UTC que reçoit une session de cette connexion sous
-     * PostgreSQL ; null sous SQLite.
+     * Le nom de l'UTC que reçoit une session de cette connexion.
      *
      * @throws RuntimeException une session y reçoit un autre fuseau : le message en dit la cause et la commande qui la corrige
      */
-    public static function exigerUtc(Connection $connexion): ?string
+    public static function exigerUtc(Connection $connexion): string
     {
-        if ($connexion->getDriverName() !== 'pgsql') {
-            return null;
-        }
-
         $etat = self::etat($connexion);
 
         if (! self::estLUtc($etat->fuseau)) {

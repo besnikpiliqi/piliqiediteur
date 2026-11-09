@@ -49,7 +49,6 @@ class AdresseDeConnexionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_confirmations_simultanees_de_la_meme_adresse_n_en_posent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $premier = $this->saisirLeCodeCommeUneAutrePersonne($this->inscrireUneSociete(null, 'premiere@exemple.fr'), self::ADRESSE);
         $jetonDuPremier = $this->jetonDeLAdresseEnAttente(self::ADRESSE);
@@ -81,7 +80,6 @@ class AdresseDeConnexionConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_demande_d_adresse_pendant_la_cloture_ne_rend_aucune_adresse_au_compte(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $societe = $this->inscrireUneSociete(null, 'jeanne@exemple.fr');

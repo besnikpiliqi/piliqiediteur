@@ -50,11 +50,7 @@ use LogicException;
  *     l'émission), puis relit la ligne du gagnant, validée entre-temps.
  *
  * Une fois la ligne de séquence garantie existante, lockForUpdate()
- * sérialise tous les incréments suivants (SELECT ... FOR UPDATE). Sous
- * SQLite (développement et tests), lockForUpdate() est un no-op
- * silencieux : la logique reste correcte en mono-processus, mais la
- * garantie contre les accès simultanés ne vaut que sous PostgreSQL, en
- * production.
+ * sérialise tous les incréments suivants (SELECT ... FOR UPDATE).
  *
  * Le même compteur donne aussi un rang sans numéro à écrire (voir
  * rangSuivant()) : la série d'un type de document sans clé de période,

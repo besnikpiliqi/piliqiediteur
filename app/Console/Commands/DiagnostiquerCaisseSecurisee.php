@@ -34,8 +34,8 @@ use ZipArchive;
  *   s'enregistre, confirmation d'une inscription comprise ;
  * - la version du module fiscal ;
  * - le fuseau de l'application, UTC (voir Calendrier::exigerUnFuseauUtc()) ;
- * - sous PostgreSQL, le fuseau par défaut de la base, que les migrations
- *   fixent à UTC ; en échec, sa cause et la commande qui la corrige (voir
+ * - le fuseau par défaut de la base, que les migrations fixent à UTC ; en
+ *   échec, sa cause et la commande qui la corrige (voir
  *   FuseauParDefautDeLaBase).
  */
 #[Signature('caisse:diagnostiquer')]
@@ -53,7 +53,7 @@ class DiagnostiquerCaisseSecurisee extends Command
             'Clé du journal d\'audit' => fn (): string => $this->controlerLaCleDuJournalAudit(),
             'Version du module fiscal' => fn (): string => ModuleFiscal::VERSION,
             'Fuseau de l\'application' => fn (): string => $this->controlerLeFuseauDeLApplication(),
-            'Fuseau par défaut de la base' => fn (): string => FuseauParDefautDeLaBase::exigerUtc(DB::connection()) ?? 'SQLite, sans fuseau de session',
+            'Fuseau par défaut de la base' => fn (): string => FuseauParDefautDeLaBase::exigerUtc(DB::connection()),
         ];
 
         $lignes = [];

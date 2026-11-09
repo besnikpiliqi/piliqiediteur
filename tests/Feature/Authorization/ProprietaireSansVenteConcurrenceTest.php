@@ -49,8 +49,6 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_vente_et_la_transmission_de_la_propriete_au_vendeur_simultanees_ne_signent_jamais_une_vente_du_proprietaire(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
-
         [$transmisAvant, $administrateurAvant, $produitAvant] = $this->magasinDUnAdministrateurQuiVend('Transmis avant');
         $jeton = $this->demanderLaTransmission($this->proprietaireDe(Magasin::query()->findOrFail($transmisAvant)), User::query()->findOrFail($administrateurAvant), self::MOT_DE_PASSE_DU_PROPRIETAIRE);
         $concurrente = null;

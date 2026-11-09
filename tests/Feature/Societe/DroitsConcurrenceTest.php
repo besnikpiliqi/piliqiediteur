@@ -72,7 +72,6 @@ class DroitsConcurrenceTest extends TestCase
      */
     public function test_deux_responsables_modifiant_le_meme_vendeur_se_suivent_et_le_jet_130_reste_coherent(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $premier = $this->responsable($magasin);
         $second = $this->responsable($magasin);
@@ -103,7 +102,6 @@ class DroitsConcurrenceTest extends TestCase
      */
     public function test_deux_creations_simultanees_du_meme_jeton_pour_deux_demandes_n_en_retiennent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $jeton = (string) Str::uuid();
@@ -128,7 +126,6 @@ class DroitsConcurrenceTest extends TestCase
      */
     public function test_un_retrait_des_droits_d_un_responsable_et_sa_modification_d_un_vendeur_simultanes_ne_donnent_jamais_un_droit_retire(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLIENT_VIEW]);
@@ -151,7 +148,6 @@ class DroitsConcurrenceTest extends TestCase
      */
     public function test_un_retrait_de_l_autorisation_de_nommer_et_une_nomination_simultanees_ne_nomment_jamais_apres_le_retrait(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
@@ -195,7 +191,6 @@ class DroitsConcurrenceTest extends TestCase
     #[DataProvider('gestesDeVente')]
     public function test_un_retrait_d_autorisation_et_une_emission_simultanes_dans_le_meme_magasin_ne_laissent_jamais_passer_une_vente_non_autorisee(string $geste, string $autorisation): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
         [$documentId, $compter] = $this->preparerLeGeste($geste, $vendeur);
@@ -221,7 +216,6 @@ class DroitsConcurrenceTest extends TestCase
      */
     public function test_un_retrait_de_valider_et_une_validation_d_achat_simultanes_ne_valident_jamais_apres_le_retrait(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $acheteur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
         $produit = Produit::factory()->create(['suivi_stock' => true]);
@@ -251,7 +245,6 @@ class DroitsConcurrenceTest extends TestCase
      */
     public function test_deux_ventes_sans_stock_dans_deux_magasins_ne_se_bloquent_pas_sur_la_societe(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris']);
         $cableDeParis = self::cableSansStock();

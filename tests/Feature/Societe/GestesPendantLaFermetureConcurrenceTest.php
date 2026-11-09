@@ -164,7 +164,6 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_geste_simultane_a_la_fermeture_du_magasin_passe_avant_elle_ou_est_refuse_apres(string $geste, bool $surLeRegistre, bool $leGesteDAbord, string $verrouDuMagasin): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -207,7 +206,6 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_geste_commence_dans_le_magasin_ferme_est_refuse_avant_sa_reouverture_comme_apres(string $geste, bool $surLeRegistre, bool $leGesteDAbord, string $verrouDuMagasin): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -254,7 +252,6 @@ class GestesPendantLaFermetureConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_geste_qui_attendait_la_suspension_de_son_auteur_est_refuse_sans_rien_ecrire(string $geste): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

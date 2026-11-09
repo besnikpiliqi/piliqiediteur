@@ -34,7 +34,6 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
      */
     public function test_une_retrogradation_et_une_affectation_globale_simultanees_ne_laissent_jamais_une_affectation_globale_a_un_membre(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, [$magasin->id]);
         $ligne = ['societe_id' => $magasin->societe_id, 'user_id' => $administrateur->id, 'magasin_id' => null, 'role' => null, 'created_at' => now()->toDateTimeString(), 'updated_at' => now()->toDateTimeString()];
@@ -62,7 +61,6 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
      */
     public function test_deux_affectations_simultanees_globale_et_par_magasin_d_un_administrateur_n_en_retiennent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, [$magasin->id]);
         DB::table('affectations')->where('user_id', $administrateur->id)->delete();

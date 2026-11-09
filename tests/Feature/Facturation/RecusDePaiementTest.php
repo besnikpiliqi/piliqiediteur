@@ -365,10 +365,6 @@ class RecusDePaiementTest extends TestCase
      */
     public function test_ni_l_encaissement_ni_l_envoi_du_recu_ne_verrouille_une_ligne_en_ajout_seul(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('SQLite n\'écrit aucun verrou de ligne : ce test ne tourne que sous PostgreSQL.');
-        }
-
         Mail::fake();
         $this->magasin();
         $facture = $this->facture(Client::factory()->professionnel()->create(['email' => 'compta@atelier.fr']), 100);

@@ -56,7 +56,6 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_deux_depots_simultanes_ne_depassent_jamais_dix_pieces(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         File::deleteDirectory(storage_path(self::DOSSIER));
         self::disqueDuTest();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

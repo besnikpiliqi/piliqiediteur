@@ -20,8 +20,9 @@ use Tests\TestCase;
  * qu'aux tests en navigateur (décisions de l'éditeur) :
  * Filament Shield et Sanctum, retirés, n'exposent plus ni route ni
  * commande, et rien de ce que lisent les agents ne renvoie à un outil
- * absent du projet. La base, PostgreSQL ou SQLite, trie les textes dans
- * le même ordre. Les aides des tests lisent les PDF de dompdf sans
+ * absent du projet. PostgreSQL est le seul moteur de base de données, et
+ * la base trie les textes dans l'ordre binaire. Les aides des tests
+ * lisent les PDF de dompdf sans
  * dépendre du hasard de leur contenu, aucun test ne dépend du hasard
  * de Faker ni de celui de Str::random(), et aucun commentaire n'empêche un
  * test de tourner.
@@ -136,12 +137,29 @@ class OutillageTest extends TestCase
     }
 
     /**
+     * PostgreSQL est le seul moteur de PILIQI, en production, en
+     * développement et pour les tests (décision de l'éditeur du
+     * 08/11/2026) : la configuration de la base ne déclare que lui, par
+     * défaut, et les tests tournent sur lui (voir aussi
+     * FuseauParDefautDeLaBaseTest, dont la première migration refuse tout
+     * autre moteur).
+     */
+    public function test_postgresql_est_le_seul_moteur_de_la_base(): void
+    {
+        $configuration = require config_path('database.php');
+
+        $this->assertSame(['pgsql'], array_keys($configuration['connections']));
+        $this->assertSame('pgsql', config('database.default'));
+        $this->assertSame('pgsql', DB::connection()->getDriverName());
+    }
+
+    /**
      * PostgreSQL, en collation déterministe C.UTF-8, trie les textes dans
-     * l'ordre binaire, comme SQLite : majuscules d'abord, lettres
-     * accentuées après « z », « . » avant « _ ». Un contenu signé trié en
-     * SQL (les autorisations du journal des événements, voir
-     * Affectation::autorisations()) garde ainsi le même ordre sur les
-     * deux moteurs ; une collation linguistique le changerait.
+     * l'ordre binaire : majuscules d'abord, lettres accentuées après « z »,
+     * « . » avant « _ ». Un contenu signé trié en SQL (les autorisations du
+     * journal des événements, voir Affectation::autorisations()) garde
+     * ainsi toujours le même ordre ; une collation linguistique le
+     * changerait.
      */
     public function test_la_base_trie_les_textes_dans_l_ordre_binaire(): void
     {

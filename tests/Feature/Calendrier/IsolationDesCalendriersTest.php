@@ -141,15 +141,9 @@ class IsolationDesCalendriersTest extends TestCase
      * Un passage horaire où aucune journée n'est due, une caisse
      * personnelle encore ouverte au jour même, ne verrouille aucun registre
      * : une vente n'attend jamais, chaque heure, le verrou de la clôture.
-     * Sous SQLite, qui verrouille toute la base sans requête de verrou,
-     * seul PostgreSQL le montre.
      */
     public function test_un_passage_horaire_sans_journee_due_ne_verrouille_aucun_registre(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('SQLite verrouille toute la base sans requête de verrou de ligne : ce garde ne se lit que sous PostgreSQL.');
-        }
-
         $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-16 18:00'));
         $martinique = $this->magasin(Territoire::Martinique, 'FDF1');
         $paris = $this->magasin(Territoire::Metropole, 'LYON1');

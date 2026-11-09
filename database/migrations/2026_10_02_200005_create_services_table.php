@@ -21,7 +21,7 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->string('nom', Service::LONGUEUR_MAXIMALE_NOM);
             // Clé de doublon calculée en PHP (voir Service::normaliserNom()),
-            // que PostgreSQL et SQLite comparent octet par octet.
+            // que la base compare octet par octet.
             $table->string('nom_normalise', Service::LONGUEUR_MAXIMALE_CLE);
 
             // Le prix de référence TTC et son taux, fixés ensemble par une

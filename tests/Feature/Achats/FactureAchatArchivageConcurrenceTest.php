@@ -45,7 +45,6 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_produit_archive_juste_avant_le_verrou_de_ses_produits_fait_refuser_la_validation(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $fournisseur, $produit] = $this->leMagasinSonFournisseurEtSonProduit();
         $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15']);
         $magasinId = $magasin->id;
@@ -91,7 +90,6 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_l_archivage_du_fournisseur_attend_la_fin_du_geste_qui_lui_rattache_ses_produits(string $geste): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $fournisseur, $produit] = $this->leMagasinSonFournisseurEtSonProduit();
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15']);
         $rattache = $fournisseur;
@@ -147,7 +145,6 @@ class FactureAchatArchivageConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_un_produit_de_la_reception_ne_s_archive_qu_apres_sa_correction(bool $retire): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$magasin, $fournisseur, $produit] = $this->leMagasinSonFournisseurEtSonProduit();
         $coque = Produit::factory()->create(['nom' => 'Coque', 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00']], ['date_facture' => '2026-01-15']));

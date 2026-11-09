@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Support;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use RuntimeException;
 
 /**
  * Les gardes par lesquelles la base elle-même refuse une vente ou un
@@ -36,17 +35,14 @@ use RuntimeException;
  *   qui désigne un original sans en être l'opposé reste un encaissement.
  * Le devis n'a pas d'auteur en base : il n'a pas de garde.
  *
- * Le rôle se lit sur la ligne du compte, sous PostgreSQL verrouillée FOR
- * SHARE, verrou compatible avec celui que la vente tient déjà sur la ligne
- * de son auteur (voir LecteurDesDroits) : une transmission de la propriété,
- * qui verrouille les registres de tous les magasins puis les comptes (voir
+ * Le rôle se lit sur la ligne du compte, verrouillée FOR SHARE, verrou
+ * compatible avec celui que la vente tient déjà sur la ligne de son auteur
+ * (voir LecteurDesDroits) : une transmission de la propriété, qui
+ * verrouille les registres de tous les magasins puis les comptes (voir
  * JournalDesDroits), passe avant ou après, jamais pendant.
  *
- * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE par table.
- * SQLite : un déclencheur BEFORE INSERT (et, pour les factures, BEFORE
- * UPDATE de leur auteur ou de leur numéro), qui refuse par RAISE(ABORT,
- * ...). Seuls PostgreSQL et SQLite sont pris en charge : sur tout autre
- * pilote, la migration échoue au lieu de laisser la vente sans garde.
+ * Une fonction plpgsql et son déclencheur BEFORE INSERT par table (et,
+ * pour les factures, BEFORE UPDATE de leur auteur ou de leur numéro).
  */
 final class GardesDeLaVente
 {
@@ -85,31 +81,39 @@ final class GardesDeLaVente
     ];
 
     /**
-     * Pose la garde de cette table, une fois la table créée.
+     * Pose la garde de cette table, une fois la table créée : sa fonction,
+     * qui lit le rôle de l'auteur, sous le verrou FOR SHARE de sa ligne,
+     * seulement quand la ligne écrite est une vente (à l'ajout, selon la
+     * condition de la table ; à la modification, selon celle de la
+     * modification, jamais OLD lu à l'ajout, où il n'existe pas), et son
+     * déclencheur.
      *
      * @throws InvalidArgumentException quand la table n'est pas gardée
-     * @throws RuntimeException quand le pilote n'est pas pris en charge
      */
     public static function poser(string $table): void
     {
         $garde = self::garde($table);
+        $nom = self::nom($table);
+        $auteur = $garde['auteur'];
+        $quand = $garde['modification'] === null ? 'INSERT' : 'INSERT OR UPDATE OF '.implode(', ', $garde['modification']['colonnes']);
+        $estUneVente = $garde['modification'] === null
+            ? "IF NOT ({$garde['vente']}) THEN RETURN NEW; END IF; "
+            : "IF TG_OP = 'UPDATE' THEN IF NOT ({$garde['modification']['condition']}) THEN RETURN NEW; END IF; "
+                ."ELSIF NOT ({$garde['vente']}) THEN RETURN NEW; END IF; ";
         $connexion = DB::connection();
 
-        $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres($table, $garde),
-            'sqlite' => self::instructionsSqlite($table, $garde),
-            default => throw new RuntimeException("La table {$table} doit refuser une vente au nom du propriétaire : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
-        };
-
-        foreach ($instructions as $instruction) {
-            $connexion->unprepared($instruction);
-        }
+        $connexion->unprepared("CREATE OR REPLACE FUNCTION {$nom}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN "
+            ."IF NEW.{$auteur} IS NULL THEN RETURN NEW; END IF; "
+            .$estUneVente
+            ."PERFORM 1 FROM users WHERE id = NEW.{$auteur} FOR SHARE; "
+            .'IF '.self::auteurQuiNeVendJamais($auteur)." THEN RAISE EXCEPTION '%', ".self::message().'; END IF; '
+            .'RETURN NEW; END $$');
+        $connexion->unprepared("CREATE TRIGGER {$nom} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION {$nom}()");
     }
 
     /**
-     * Retire ce qui reste de la garde une fois sa table supprimée : sous
-     * PostgreSQL, sa fonction ; ses déclencheurs disparaissent avec la
-     * table.
+     * Retire ce qui reste de la garde une fois sa table supprimée : sa
+     * fonction ; ses déclencheurs disparaissent avec la table.
      *
      * @throws InvalidArgumentException quand la table n'est pas gardée
      */
@@ -117,9 +121,7 @@ final class GardesDeLaVente
     {
         self::garde($table);
 
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::connection()->unprepared('DROP FUNCTION IF EXISTS '.self::nom($table).'()');
-        }
+        DB::connection()->unprepared('DROP FUNCTION IF EXISTS '.self::nom($table).'()');
     }
 
     /**
@@ -147,53 +149,6 @@ final class GardesDeLaVente
     private static function auteurQuiNeVendJamais(string $auteur): string
     {
         return "EXISTS (SELECT 1 FROM users WHERE id = NEW.{$auteur} AND role_societe IN ('".RoleSociete::Proprietaire->value."', '".RoleSociete::Collaborateur->value."'))";
-    }
-
-    /**
-     * La fonction lit le rôle de l'auteur, sous le verrou FOR SHARE de sa
-     * ligne, seulement quand la ligne écrite est une vente : à l'ajout,
-     * selon la condition de la table ; à la modification, selon celle de
-     * la modification (jamais OLD lu à l'ajout, où il n'existe pas).
-     *
-     * @param  array{auteur: string, vente: string, modification: array{colonnes: list<string>, condition: string}|null}  $garde
-     * @return list<string>
-     */
-    private static function instructionsPostgres(string $table, array $garde): array
-    {
-        $nom = self::nom($table);
-        $auteur = $garde['auteur'];
-        $quand = $garde['modification'] === null ? 'INSERT' : 'INSERT OR UPDATE OF '.implode(', ', $garde['modification']['colonnes']);
-        $estUneVente = $garde['modification'] === null
-            ? "IF NOT ({$garde['vente']}) THEN RETURN NEW; END IF; "
-            : "IF TG_OP = 'UPDATE' THEN IF NOT ({$garde['modification']['condition']}) THEN RETURN NEW; END IF; "
-                ."ELSIF NOT ({$garde['vente']}) THEN RETURN NEW; END IF; ";
-
-        return [
-            "CREATE OR REPLACE FUNCTION {$nom}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN "
-                ."IF NEW.{$auteur} IS NULL THEN RETURN NEW; END IF; "
-                .$estUneVente
-                ."PERFORM 1 FROM users WHERE id = NEW.{$auteur} FOR SHARE; "
-                .'IF '.self::auteurQuiNeVendJamais($auteur)." THEN RAISE EXCEPTION '%', ".self::message().'; END IF; '
-                .'RETURN NEW; END $$',
-            "CREATE TRIGGER {$nom} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION {$nom}()",
-        ];
-    }
-
-    /**
-     * @param  array{auteur: string, vente: string, modification: array{colonnes: list<string>, condition: string}|null}  $garde
-     * @return list<string>
-     */
-    private static function instructionsSqlite(string $table, array $garde): array
-    {
-        $nom = self::nom($table);
-        $refus = fn (string $condition): string => 'SELECT RAISE(ABORT, '.self::message().") WHERE NEW.{$garde['auteur']} IS NOT NULL AND {$condition} AND ".self::auteurQuiNeVendJamais($garde['auteur']).';';
-        $instructions = ["CREATE TRIGGER {$nom}_insert BEFORE INSERT ON {$table} BEGIN {$refus($garde['vente'])} END"];
-
-        if ($garde['modification'] !== null) {
-            $instructions[] = "CREATE TRIGGER {$nom}_update BEFORE UPDATE OF ".implode(', ', $garde['modification']['colonnes'])." ON {$table} BEGIN {$refus($garde['modification']['condition'])} END";
-        }
-
-        return $instructions;
     }
 
     /**

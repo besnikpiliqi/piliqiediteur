@@ -184,8 +184,7 @@ class IdentifiantsTest extends TestCase
     /**
      * Une valeur déjà prise, tirée pour un compte d'une autre société, est
      * écartée dans un point de sauvegarde : un autre nombre se tire, et la
-     * création va jusqu'au bout, sans interrompre sa transaction (sous
-     * PostgreSQL comme sous SQLite).
+     * création va jusqu'au bout, sans interrompre sa transaction.
      */
     public function test_un_doublon_d_identifiant_est_retire_sans_interrompre_la_creation(): void
     {

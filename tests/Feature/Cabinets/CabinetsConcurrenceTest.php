@@ -78,7 +78,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_deux_acceptations_simultanees_pour_le_meme_siren_ne_creent_qu_une_societe(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $premier = $this->ouvrirUnCabinet();
         $second = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux');
         $siren = SocieteFactory::sirenFictif();
@@ -105,7 +104,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_la_meme_invitation_acceptee_deux_fois_en_meme_temps_ne_cree_qu_une_societe(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $cabinet = $this->ouvrirUnCabinet();
         $siren = SocieteFactory::sirenFictif();
         $jeton = $this->inviterUneEntreprise($cabinet, $siren, 'a@b.test');
@@ -124,7 +122,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_une_fin_de_lien_pendant_un_export_du_journal_passe_tout_entiere_avant_ou_apres(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$cabinet, $magasin, $lien, $collaborateur] = $this->clientConfie();
         $proprietaireId = (int) $this->proprietaireDe($magasin)->getKey();
         $lienId = (int) $lien->getKey();
@@ -156,7 +153,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_une_fin_de_lien_pendant_la_validation_d_un_achat_par_le_cabinet_passe_avant_ou_apres(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [, $magasin, $lien, $collaborateur] = $this->clientConfie(null, [PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_CREATE]);
         $proprietaireId = (int) $this->proprietaireDe($magasin)->getKey();
         $lienId = (int) $lien->getKey();
@@ -176,7 +172,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_deux_invitations_simultanees_du_meme_siren_par_le_meme_cabinet_n_en_creent_qu_une(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $cabinet = $this->ouvrirUnCabinet();
         $proprietaireId = (int) $this->proprietaireDuCabinet($cabinet)->getKey();
@@ -196,7 +191,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_deux_acceptations_simultanees_de_demandes_de_deux_cabinets_ne_laissent_qu_un_lien_actif(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $premier = $this->ouvrirUnCabinet();
         $second = $this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
@@ -220,7 +214,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_confier_un_client_pendant_la_fin_du_lien_ne_laisse_aucun_acces(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $cabinet = $this->ouvrirUnCabinet();
         $client = $this->inscrireUneSociete();
         $lien = $this->lierLeCabinet($cabinet, $client);
@@ -243,7 +236,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_suspendre_un_collaborateur_pendant_qu_il_valide_un_achat_chez_un_client(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         [$cabinet, $magasin, , $collaborateur] = $this->clientConfie(null, [PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_CREATE]);
         app(TenantContext::class)->set($magasin);
         $factureAchat = app(CreerFactureAchatAction::class)->handle($collaborateur, Fournisseur::factory()->create(), [['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 10]], ['date_facture' => '2026-01-15']);
@@ -266,7 +258,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_une_invitation_d_un_siren_pris_et_une_designation_simultanees_ne_creent_qu_une_demande(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
@@ -288,7 +279,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_une_acceptation_et_une_nouvelle_invitation_du_meme_cabinet_a_l_expiration_ne_s_interbloquent_pas(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         $cabinet = $this->ouvrirUnCabinet();
@@ -312,7 +302,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_deux_acceptations_simultanees_a_la_meme_adresse_pour_deux_siren_ne_creent_qu_une_societe(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $cabinet = $this->ouvrirUnCabinet();
         $premier = SocieteFactory::sirenFictif();
         $second = SocieteFactory::sirenFictif();
@@ -339,7 +328,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_le_retrait_de_l_ordre_pendant_une_acceptation_de_demande_ne_s_interbloque_pas_et_n_oublie_aucun_lien(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
         app(TenantContext::class)->clear();
@@ -365,7 +353,6 @@ class CabinetsConcurrenceTest extends TestCase
      */
     public function test_une_acceptation_de_lien_pendant_la_revocation_du_cabinet_ne_laisse_aucun_lien_actif(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
         app(TenantContext::class)->clear();
@@ -390,7 +377,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_une_acceptation_et_un_refus_simultanes_de_la_meme_invitation_ne_laissent_qu_une_issue(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $cabinet = $this->ouvrirUnCabinet();
         $siren = SocieteFactory::sirenFictif();
         $jeton = $this->inviterUneEntreprise($cabinet, $siren, 'a@b.test');
@@ -409,7 +395,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_l_acceptation_d_un_rattachement_et_le_retrait_de_la_demande_simultanes_ne_laissent_qu_une_issue(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $cabinet = $this->ouvrirUnCabinet();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
@@ -432,7 +417,6 @@ class CabinetsConcurrenceTest extends TestCase
 
     public function test_la_cloture_d_une_inscription_pendant_l_acceptation_d_un_rattachement_ne_s_interbloque_pas(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         Mail::fake();
         $cabinet = $this->ouvrirUnCabinet();
         $societe = $this->inscrireUneSociete();
@@ -474,7 +458,6 @@ class CabinetsConcurrenceTest extends TestCase
     #[DataProvider('liensDUneSocieteNonValidee')]
     public function test_la_cloture_d_une_inscription_avec_un_cabinet_pendant_une_transmission_de_la_propriete_ne_s_interbloque_pas(string $avecLeCabinet): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $cabinet = $this->ouvrirUnCabinet();
         $societe = $this->inscrireUneSociete(null, 'inscrite@example.test');

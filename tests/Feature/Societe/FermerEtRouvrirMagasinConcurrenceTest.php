@@ -72,7 +72,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     #[DataProvider('premiers')]
     public function test_une_vente_simultanee_a_la_fermeture_est_faite_avant_ou_refusee_apres(bool $laVenteDAbord): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $this->travelTo(self::aParis('2026-10-05 10:00:00'));
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         self::responsableDeTest($magasin);
@@ -115,7 +114,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_creation_d_achat_qui_attendait_la_fermeture_est_refusee(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $magasinId = $magasin->id;
         $fournisseurId = Fournisseur::factory()->create()->id;
@@ -148,7 +146,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_reouverture_qui_attendait_la_cession_d_un_magasin_ferme_est_refusee(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         self::fermer($magasin->id);
@@ -184,7 +181,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     #[Group('concurrence')]
     public function test_une_reouverture_avant_la_validation_simultanee_a_la_saisie_du_code_met_le_magasin_en_activite(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
         $this->creerLeMagasinDuSiege($societe);
         $boutique = $this->creerLeMagasinDuSiege($societe, 'Boutique', substr(FauxRepertoireSirene::siretDeLaBoutique($societe->siren), 9));
@@ -215,7 +211,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
      */
     public function test_une_validation_d_achat_qui_attendait_la_cession_est_refusee(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0]);
@@ -251,7 +246,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
      */
     public function test_une_correction_d_achat_valide_qui_attendait_la_cession_est_refusee(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0]);
@@ -298,7 +292,6 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
      */
     public function test_un_choix_d_etablissement_principal_qui_attendait_la_cession_est_refuse(): void
     {
-        $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $magasinId = $magasin->id;

@@ -91,26 +91,12 @@ return new class extends Migration
     /**
      * Une fermeture d'office n'a pas d'auteur, toute autre en a un : sans
      * quoi le relevé ne saurait dire qui a fermé la caisse (voir
-     * ClotureCaissePersonnelle::libelleDeFermeture()). Une contrainte CHECK
-     * sous PostgreSQL ; SQLite n'en ajoute pas à une table créée, et la
-     * même condition y est vérifiée par des déclencheurs BEFORE INSERT et
-     * BEFORE UPDATE. L'une et les autres disparaissent avec la table.
+     * ClotureCaissePersonnelle::libelleDeFermeture()). Une contrainte
+     * CHECK, qui disparaît avec la table.
      */
     private function exigerUnAuteurSaufFermetureDOffice(): void
     {
-        $nom = 'ccp_auteur_selon_le_mode';
-
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::statement("ALTER TABLE clotures_caisse_personnelles ADD CONSTRAINT {$nom} CHECK ((mode_fermeture = 'automatique') = (fermee_par IS NULL))");
-
-            return;
-        }
-
-        foreach (['INSERT', 'UPDATE'] as $operation) {
-            DB::unprepared("CREATE TRIGGER {$nom}_".strtolower($operation)." BEFORE {$operation} ON clotures_caisse_personnelles"
-                ." WHEN (NEW.mode_fermeture = 'automatique') <> (NEW.fermee_par IS NULL)"
-                ." BEGIN SELECT RAISE(ABORT, '{$nom} : une fermeture d''office n''a pas d''auteur, toute autre en a un'); END");
-        }
+        DB::statement("ALTER TABLE clotures_caisse_personnelles ADD CONSTRAINT ccp_auteur_selon_le_mode CHECK ((mode_fermeture = 'automatique') = (fermee_par IS NULL))");
     }
 
     public function down(): void

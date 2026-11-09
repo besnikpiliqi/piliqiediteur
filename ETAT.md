@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 18:35 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 20:38 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,19 +43,31 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ```
  M .github/workflows/tests.yml
  M README.md
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
  M app/Domain/Facturation/Services/ImputationDuCredit.php
+ M app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php
+ M app/Domain/Tenancy/Actions/ChangerLeRoleDeSocieteAction.php
+ M app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php
  M app/Domain/Tenancy/Models/Affectation.php
+ M app/Domain/Tenancy/Services/AffectationsDesMembres.php
  M app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
+ M app/Models/User.php
  M psalm.xml
  M tests/Browser/Parcours/PiecesDuFournisseurTest.php
  M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+ M tests/Feature/Authorization/LimitesDesDroitsTest.php
  M tests/Feature/Cabinets/AccepterLInvitationTest.php
+ M tests/Feature/Cabinets/CollaborateursTest.php
  M tests/Feature/Cabinets/InvitationsTest.php
+ M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
  M tests/Feature/EnTetesDeSecuriteTest.php
  M tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
  M tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
+ M tests/Feature/Societe/AdministrateursTest.php
+ M tests/Feature/Societe/AutorisationsDesMembresTest.php
  M tests/Qualite/parties.php
  M tests/Qualite/qualite.php
+ M tests/Qualite/seuils.json
 ?? psalm-temoin.xml
 ?? tests/Feature/Qualite/OutilDeQualiteTest.php
 ?? tests/Qualite/Psalm/

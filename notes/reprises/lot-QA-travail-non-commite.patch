@@ -76,6 +76,28 @@ index b624b16..30141ac 100644
  - *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou) et le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent.
  - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
  - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
+diff --git a/app/Domain/Cabinets/Services/AccesDesCabinets.php b/app/Domain/Cabinets/Services/AccesDesCabinets.php
+index 2b15e2e..47384d4 100644
+--- a/app/Domain/Cabinets/Services/AccesDesCabinets.php
++++ b/app/Domain/Cabinets/Services/AccesDesCabinets.php
+@@ -124,7 +124,7 @@ public function liensAMettreFin(Societe $cabinet, array $etats): Collection
+     {
+         return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
+             ->where('cabinet_id', $cabinet->getKey())
+-            ->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, $etats))
++            ->whereIn('etat', $etats)
+             ->orderBy('id')
+             ->get(['id', 'societe_id', 'cabinet_id', 'etat', 'origine']);
+     }
+@@ -138,7 +138,7 @@ public function liensAMettreFin(Societe $cabinet, array $etats): Collection
+      */
+     public function clientsOuverts(User $compte): array
+     {
+-        return array_map(intval(...), $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all());
++        return $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all();
+     }
+ 
+     /**
 diff --git a/app/Domain/Facturation/Services/ImputationDuCredit.php b/app/Domain/Facturation/Services/ImputationDuCredit.php
 index 2cd316d..9e431b3 100644
 --- a/app/Domain/Facturation/Services/ImputationDuCredit.php
@@ -103,6 +125,79 @@ index 2cd316d..9e431b3 100644
   *
   * Chaque facture reçoit au plus une imputation de chaque avoir, son
   * montant des deux étapes réunies, en centimes. Les factures et les avoirs
+diff --git a/app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php b/app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php
+index 8349916..1586dfd 100644
+--- a/app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php
++++ b/app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php
+@@ -60,15 +60,10 @@ public function handle(User $auteur, Affectation $affectation): void
+                 $avant = $relue->avant_la_nomination;
+ 
+                 if ($avant === null) {
+-                    $magasinId = (int) $relue->magasin_id;
+                     $relue->delete();
+-                    $compteRelu->effacerLesNotificationsDesMagasins([$magasinId]);
+-
+-                    if ($compteRelu->affectationDeMembre() === null) {
+-                        $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
+-                        $compteRelu->effacerToutesSesNotifications();
+-                        $this->sessions->fermer($compteRelu);
+-                    }
++                    $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
++                    $compteRelu->effacerToutesSesNotifications();
++                    $this->sessions->fermer($compteRelu);
+ 
+                     return;
+                 }
+diff --git a/app/Domain/Tenancy/Actions/ChangerLeRoleDeSocieteAction.php b/app/Domain/Tenancy/Actions/ChangerLeRoleDeSocieteAction.php
+index 7f49693..f67385f 100644
+--- a/app/Domain/Tenancy/Actions/ChangerLeRoleDeSocieteAction.php
++++ b/app/Domain/Tenancy/Actions/ChangerLeRoleDeSocieteAction.php
+@@ -43,7 +43,8 @@
+  * avec l'ancien et le nouveau rôle, la date et l'auteur (voir
+  * JournalDesDroits). Dans l'ordre qu'exigent les gardes de la base : les
+  * droits d'avant s'effacent, le rôle change, le magasin de rattachement
+- * s'écrit, puis les droits nouveaux.
++ * s'écrit, puis les droits nouveaux. Les notifications d'un magasin où
++ * ses droits ne valent plus s'effacent de sa cloche.
+  */
+ class ChangerLeRoleDeSocieteAction
+ {
+@@ -133,7 +134,9 @@ private function changer(User $auteur, User $compte, Societe $societe, RoleSocie
+                 [$compteRelu] = $relus;
+                 CreerAdministrateurAction::exigerLeProprietaire($auteurRelu, $societe);
+                 $this->exigerUnChangement($auteurRelu, $compteRelu, $nouveauRole);
++                $avant = $compteRelu->magasinsDeSesDroits();
+                 $ecrire($auteurRelu, $compteRelu);
++                $compteRelu->effacerLesNotificationsDesMagasins(array_values(array_diff($avant, $compteRelu->magasinsDeSesDroits())));
+             });
+         });
+ 
+diff --git a/app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php b/app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php
+index 8bc37a6..e6e61e5 100644
+--- a/app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php
++++ b/app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php
+@@ -19,7 +19,8 @@
+  * Contrôlé sur l'auteur et le compte relus sous les verrous des registres
+  * des magasins touchés et de leurs lignes ; JET 130 dans chacun (tous les
+  * magasins de la société pour un administrateur de tous les magasins),
+- * puis l'entrée d'audit (voir JournalDesDroits).
++ * puis l'entrée d'audit (voir JournalDesDroits). Les notifications d'un
++ * magasin qui sort de sa portée s'effacent de sa cloche.
+  */
+ class ModifierAdministrateurAction
+ {
+@@ -49,9 +50,11 @@ public function modifier(User $auteur, User $administrateur, ?array $magasins, a
+             $this->journalDesDroits->modifier($auteur, ActionAuditee::AdministrateurModifie, [$administrateur], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu, array $relus) use ($societe, $portee): void {
+                 [$administrateurRelu] = $relus;
+                 self::exigerUnAdministrateur($auteurRelu, $administrateurRelu, $societe->getKey());
++                $avant = $administrateurRelu->magasinsDeSesDroits();
+ 
+                 $this->porteeDesAdministrateurs->effacer($administrateurRelu);
+                 $this->porteeDesAdministrateurs->ecrire($administrateurRelu, $portee);
++                $administrateurRelu->effacerLesNotificationsDesMagasins(array_values(array_diff($avant, $administrateurRelu->magasinsDeSesDroits())));
+             });
+         });
+ 
 diff --git a/app/Domain/Tenancy/Models/Affectation.php b/app/Domain/Tenancy/Models/Affectation.php
 index 3b25ba9..8395dae 100644
 --- a/app/Domain/Tenancy/Models/Affectation.php
@@ -132,6 +227,32 @@ index 3b25ba9..8395dae 100644
      /**
       * Les autorisations cochées pour cette affectation, telles que la base
       * les donne, dans l'ordre alphabétique.
+diff --git a/app/Domain/Tenancy/Services/AffectationsDesMembres.php b/app/Domain/Tenancy/Services/AffectationsDesMembres.php
+index d3bc638..efd52e5 100644
+--- a/app/Domain/Tenancy/Services/AffectationsDesMembres.php
++++ b/app/Domain/Tenancy/Services/AffectationsDesMembres.php
+@@ -79,11 +79,9 @@ public function cases(User $auteur, Magasin $magasin, array $demandee, ?Affectat
+             return $this->portee->verifierCochables($auteur, $magasin, $demandees);
+         }
+ 
+-        $gardees = array_values(array_intersect($actuelle?->autorisations() ?? [], $reservees));
+-        $cases = array_values(array_unique([...$this->portee->verifierCochables($auteur, $magasin, array_values(array_diff($demandees, $gardees))), ...$gardees]));
+-        sort($cases);
++        $gardees = array_intersect($actuelle?->autorisations() ?? [], $reservees);
+ 
+-        return $cases;
++        return [...$this->portee->verifierCochables($auteur, $magasin, array_diff($demandees, $gardees)), ...$gardees];
+     }
+ 
+     /**
+@@ -140,6 +138,6 @@ public function prevenirDUneNomination(User $compte, Affectation $affectation, b
+         $magasin = $affectation->magasin()->firstOrFail();
+         $administrateur = User::query()->findOrFail($affectation->nomme_par);
+ 
+-        $magasin->societe->proprietaire?->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
++        $magasin->societe->proprietaire->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
+     }
+ }
 diff --git a/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php b/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
 index 7bb0ccc..6023a68 100644
 --- a/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
@@ -156,6 +277,159 @@ index 7bb0ccc..6023a68 100644
          ."object-src 'none'; "
          ."base-uri 'self'; "
          ."form-action 'self'; "
+diff --git a/app/Models/User.php b/app/Models/User.php
+index 65c96ed..8b3dca2 100644
+--- a/app/Models/User.php
++++ b/app/Models/User.php
+@@ -292,7 +292,7 @@ public function magasinDeSonIdentifiant(): ?Magasin
+      */
+     public function calendrier(): Calendrier
+     {
+-        return ($this->estMembre() ? $this->magasinDeSonIdentifiant()?->calendrier() : null) ?? Calendrier::deParis();
++        return $this->estMembre() ? $this->magasinDeSonIdentifiant()->calendrier() : Calendrier::deParis();
+     }
+ 
+     /**
+@@ -341,7 +341,7 @@ public function aUneAdresseDeConnexion(): bool
+      */
+     public function estProprietaireDuMagasin(Magasin $magasin): bool
+     {
+-        return $this->estProprietaire() && (int) $magasin->societe_id === (int) $this->societe_id;
++        return $this->estProprietaire() && $magasin->societe_id === $this->societe_id;
+     }
+ 
+     public function estAdministrateur(): bool
+@@ -393,7 +393,7 @@ public function estResponsable(): bool
+      */
+     public function libelleDuRoleDeSociete(): string
+     {
+-        $denomination = $this->societe?->raison_sociale;
++        $denomination = $this->societe->raison_sociale;
+ 
+         return match (true) {
+             $this->estProprietaire() && $this->estDUnCabinet() => filled($denomination) ? "Propriétaire du cabinet {$denomination}" : 'Propriétaire du cabinet',
+@@ -417,7 +417,7 @@ public function libelleDuRoleDeSociete(): string
+     public function libelleDuRoleDans(Magasin $magasin): string
+     {
+         $libelle = match (true) {
+-            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role?->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
++            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
+             $this->estDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
+             default => $this->libelleDuRoleDeSociete(),
+         };
+@@ -631,7 +631,7 @@ public function magasinsDeSaPortee(): Builder
+      */
+     public function administreLeMagasin(Magasin $magasin): bool
+     {
+-        return (int) $magasin->societe_id === (int) $this->societe_id
++        return $magasin->societe_id === $this->societe_id
+             && $this->magasinsDeSaPortee()->whereKey($magasin->getKey())->exists();
+     }
+ 
+@@ -643,7 +643,7 @@ public function administreLeMagasin(Magasin $magasin): bool
+     public function estResponsableDe(Magasin $magasin): bool
+     {
+         return $this->estMembre()
+-            && (int) $magasin->societe_id === (int) $this->societe_id
++            && $magasin->societe_id === $this->societe_id
+             && $this->affectations()->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value)->exists();
+     }
+ 
+@@ -662,7 +662,7 @@ public function estResponsableDe(Magasin $magasin): bool
+      */
+     public function autorisationsDans(Magasin $magasin): array
+     {
+-        if (! $this->peutAgir() || ((int) $magasin->societe_id !== (int) $this->societe_id && ! $this->estDUnCabinet())) {
++        if (! $this->peutAgir() || ($magasin->societe_id !== $this->societe_id && ! $this->estDUnCabinet())) {
+             return [];
+         }
+ 
+@@ -737,7 +737,7 @@ public function droitsDans(Magasin $magasin): ?array
+         $compte = self::query()->findOrFail($this->getKey());
+         $duCabinet = $compte->estDUnCabinet();
+ 
+-        if ((int) $magasin->societe_id !== (int) $compte->societe_id && ! $duCabinet) {
++        if ($magasin->societe_id !== $compte->societe_id && ! $duCabinet) {
+             return null;
+         }
+ 
+@@ -778,7 +778,7 @@ public function affectationQuiVautDans(Magasin $magasin): ?Affectation
+         }
+ 
+         return $this->affectationsLues()->first(fn (Affectation $affectation): bool => $affectation->role === null
+-            && ($affectation->magasin_id === null || (int) $affectation->magasin_id === (int) $magasin->getKey()));
++            && ($affectation->magasin_id === null || $affectation->magasin_id === $magasin->getKey()));
+     }
+ 
+     /**
+@@ -788,11 +788,7 @@ public function affectationQuiVautDans(Magasin $magasin): ?Affectation
+      */
+     public function affectationDeMembre(): ?Affectation
+     {
+-        if (! $this->estMembre()) {
+-            return null;
+-        }
+-
+-        return $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->first();
++        return $this->estMembre() ? $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->first() : null;
+     }
+ 
+     /**
+@@ -824,7 +820,7 @@ public function affectationDeMembre(): ?Affectation
+     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
+     {
+         if ($this->estDUnCabinet()) {
+-            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[(int) $magasin->societe_id] ?? null;
++            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[$magasin->societe_id] ?? null;
+         }
+ 
+         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
+@@ -916,10 +912,10 @@ public function peutOuvrir(Magasin $magasin): bool
+         if ($this->estDUnCabinet()) {
+             return $this->peutAgir()
+                 && ! $magasin->est_demonstration
+-                && in_array((int) $magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
++                && in_array($magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
+         }
+ 
+-        if ((int) $magasin->societe_id !== (int) $this->societe_id || ! $this->peutAgir()) {
++        if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir()) {
+             return false;
+         }
+ 
+@@ -970,6 +966,23 @@ public function effacerToutesSesNotifications(): void
+         $this->notifications()->delete();
+     }
+ 
++    /**
++     * Les magasins de sa société où ses droits valent, quel que soit son
++     * statut, par identifiant : ceux de sa portée pour le propriétaire et
++     * un administrateur (voir magasinsDeSaPortee()), celui de son
++     * affectation pour un membre, aucun pour un compte d'un cabinet. Relus
++     * en base : après un changement de ses droits, ceux qui sortent de la
++     * liste s'effacent de sa cloche (voir effacerLesNotificationsDesMagasins()).
++     *
++     * @return list<int>
++     */
++    public function magasinsDeSesDroits(): array
++    {
++        return $this->estMembre()
++            ? $this->affectations()->whereNotNull('magasin_id')->pluck('magasin_id')->all()
++            : $this->magasinsDeSaPortee()->pluck('magasins.id')->all();
++    }
++
+     /**
+      * Efface ses notifications à propos de ces magasins (voir
+      * NotificationDuMagasin) le jour où il n'y a plus accès : il ne voit
+@@ -1041,7 +1054,7 @@ public function canAccessTenant(Model $tenant): bool
+     {
+         return match (true) {
+             $tenant instanceof Magasin => $this->peutOuvrir($tenant),
+-            $tenant instanceof Societe => $tenant->getKey() === (int) $this->societe_id && ($this->peutAdministrer() || $this->ouvreLEspaceDuCabinet()),
++            $tenant instanceof Societe => $tenant->getKey() === $this->societe_id && ($this->peutAdministrer() || $this->ouvreLEspaceDuCabinet()),
+             default => false,
+         };
+     }
 diff --git a/psalm-temoin.xml b/psalm-temoin.xml
 new file mode 100644
 index 0000000..95b89b9
@@ -367,6 +641,36 @@ index 6c26753..2ac7a43 100644
      public function test_la_base_refuse_une_autorisation_de_societe_a_qui_n_est_pas_administrateur(): void
      {
          $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+diff --git a/tests/Feature/Authorization/LimitesDesDroitsTest.php b/tests/Feature/Authorization/LimitesDesDroitsTest.php
+index c268af3..cea4da2 100644
+--- a/tests/Feature/Authorization/LimitesDesDroitsTest.php
++++ b/tests/Feature/Authorization/LimitesDesDroitsTest.php
+@@ -32,6 +32,25 @@ class LimitesDesDroitsTest extends TestCase
+ {
+     use RefreshDatabase;
+ 
++    /**
++     * Retiré de la société, un membre n'a plus d'affectation dans son
++     * magasin : son rôle de magasin ne s'y lit plus, son libellé ne dit que
++     * « Membre », et il n'y a plus aucun droit.
++     */
++    public function test_un_membre_retire_n_a_plus_de_role_dans_son_magasin(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
++        $this->assertSame('Vendeur · Ma Boutique', $vendeur->libelleDuRoleDans($magasin));
++
++        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur);
++        $vendeur->refresh();
++
++        $this->assertNull($vendeur->affectationQuiVautDans($magasin));
++        $this->assertSame('Membre · Ma Boutique', $vendeur->libelleDuRoleDans($magasin));
++        $this->assertSame([], $vendeur->magasinsDeSesDroits());
++    }
++
+     public function test_un_compte_suspendu_ne_voit_plus_ni_les_comptes_de_l_equipe_ni_son_propre_identifiant(): void
+     {
+         $magasin = $this->ouvrirUneSociete();
 diff --git a/tests/Feature/Cabinets/AccepterLInvitationTest.php b/tests/Feature/Cabinets/AccepterLInvitationTest.php
 index ab67907..29f3af3 100644
 --- a/tests/Feature/Cabinets/AccepterLInvitationTest.php
@@ -407,6 +711,34 @@ index ab67907..29f3af3 100644
 +    }
 +
      public function test_l_acceptation_d_une_societe_sans_magasin_ne_verrouille_aucun_registre_et_active_le_lien(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/CollaborateursTest.php b/tests/Feature/Cabinets/CollaborateursTest.php
+index 59a2f3c..66e8223 100644
+--- a/tests/Feature/Cabinets/CollaborateursTest.php
++++ b/tests/Feature/Cabinets/CollaborateursTest.php
+@@ -57,6 +57,23 @@ class CollaborateursTest extends TestCase
+ {
+     use RefreshDatabase;
+ 
++    /**
++     * Son tableau de bord dit au propriétaire d'un cabinet « Propriétaire du
++     * cabinet » suivi de la dénomination du cabinet quand elle est connue,
++     * et seulement « Propriétaire du cabinet » tant qu'elle ne l'est pas.
++     */
++    public function test_le_role_du_proprietaire_d_un_cabinet_nomme_le_cabinet_quand_sa_denomination_est_connue(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $proprietaire = $this->proprietaireDuCabinet($cabinet);
++
++        $this->assertNotEmpty($cabinet->raison_sociale);
++        $this->assertSame('Propriétaire du cabinet '.$cabinet->raison_sociale, $proprietaire->libelleDuRoleDeSociete());
++
++        $cabinet->forceFill(['raison_sociale' => null])->save();
++        $this->assertSame('Propriétaire du cabinet', $proprietaire->refresh()->libelleDuRoleDeSociete());
++    }
++
+     public function test_seul_le_proprietaire_du_cabinet_cree_suspend_reactive_retire_et_reintegre_un_collaborateur(): void
      {
          $cabinet = $this->ouvrirUnCabinet();
 diff --git a/tests/Feature/Cabinets/InvitationsTest.php b/tests/Feature/Cabinets/InvitationsTest.php
@@ -456,6 +788,50 @@ index 2c7fb98..d6d62a9 100644
      public function test_un_mot_de_passe_faux_n_envoie_aucune_invitation(): void
      {
          $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/IsolationDesCabinetsTest.php b/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
+index 3ba2fab..7513c03 100644
+--- a/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
++++ b/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
+@@ -201,6 +201,39 @@ public function test_les_lectures_hors_du_client_courant_filtrent_par_cabinet_et
+         $this->assertTrue(collect($requetes)->contains(fn (string $sql): bool => str_starts_with($sql, 'select "name" from "users"') || str_starts_with($sql, 'select "users"."name" from "users"')));
+     }
+ 
++    /**
++     * Les liens actifs d'un cabinet, que lit son propriétaire pour y mettre
++     * fin quand le cabinet n'est plus vérifié, ne lisent de chaque client
++     * que son identifiant, son SIREN et sa dénomination, d'un coup pour
++     * tous ses clients.
++     */
++    public function test_les_liens_actifs_d_un_cabinet_ne_lisent_du_client_que_son_siren_et_sa_denomination(): void
++    {
++        $liens = app(AccesDesCabinets::class)->liensActifsDuCabinet($this->c1);
++
++        $this->assertSame(
++            [[['id', 'siren', 'raison_sociale'], 'CLIENTE X'], [['id', 'siren', 'raison_sociale'], 'CLIENTE Y']],
++            $liens->map(fn (LienCabinet $lien): array => [array_keys($lien->client->getAttributes()), $lien->client->raison_sociale])->all(),
++        );
++    }
++
++    /**
++     * Un compte retiré d'un cabinet n'a aucun lien ni aucun droit chez ses
++     * clients, même si un client lui restait confié (le retrait efface
++     * d'ordinaire ses clients confiés, voir
++     * ChangerStatutCompteAction::retirerLesDroits()) : rien de ses droits
++     * ne s'inscrit au journal des événements du client.
++     */
++    public function test_un_compte_retire_d_un_cabinet_n_a_aucun_lien_ni_droit_meme_avec_un_client_encore_confie(): void
++    {
++        $this->a->forceFill(['statut' => StatutCompte::Retire])->save();
++        $retire = $this->a->refresh();
++
++        $this->assertSame(0, app(AccesDesCabinets::class)->liensDuCompte($retire)->count());
++        $this->assertSame([], app(AccesDesCabinets::class)->autorisationsParClient($retire));
++        $this->assertNull($retire->droitsDans($this->x));
++    }
++
+     public function test_chaque_modele_d_un_cabinet_ou_d_un_lien_est_isole_par_sa_societe(): void
+     {
+         $this->inviterUneEntreprise($this->c1, SocieteFactory::sirenFictif(), 'a@b.test');
 diff --git a/tests/Feature/EnTetesDeSecuriteTest.php b/tests/Feature/EnTetesDeSecuriteTest.php
 index 94916d5..b4a60f9 100644
 --- a/tests/Feature/EnTetesDeSecuriteTest.php
@@ -955,6 +1331,139 @@ index 0000000..cf6e287
 +        return [(int) $outil->getExitCode(), $outil->getOutput().$outil->getErrorOutput()];
 +    }
 +}
+diff --git a/tests/Feature/Societe/AdministrateursTest.php b/tests/Feature/Societe/AdministrateursTest.php
+index 3a4162e..6378d37 100644
+--- a/tests/Feature/Societe/AdministrateursTest.php
++++ b/tests/Feature/Societe/AdministrateursTest.php
+@@ -13,6 +13,7 @@
+ use App\Domain\Facturation\Enums\StatutFacture;
+ use App\Domain\Facturation\Models\Facture;
+ use App\Domain\Facturation\Models\PanierCaisse;
++use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+ use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
+ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
+@@ -288,6 +289,8 @@ public function test_retirer_un_administrateur_garde_son_role_sans_aucun_droit()
+         $this->assertSame([[], []], [$administrateur->autorisationsDeSociete(), $administrateur->autorisationsDans($magasin)]);
+         $this->assertSame(0, DB::table('autorisations_societe')->where('user_id', $administrateur->id)->count());
+         $this->assertSame(0, Affectation::query()->where('user_id', $administrateur->id)->count());
++        $this->assertFalse($administrateur->administreTousLesMagasins());
++        $this->assertSame([], $administrateur->magasinsDeSaPortee()->pluck('magasins.id')->all());
+     }
+ 
+     /**
+@@ -405,6 +408,33 @@ public function test_retrograder_un_administrateur_ne_lui_laisse_aucun_droit_dan
+         $this->assertSame(0, Affectation::query()->where('user_id', $administrateur->id)->whereNull('magasin_id')->count());
+     }
+ 
++    /**
++     * Les notifications d'un magasin qui sort de la portée d'un
++     * administrateur s'effacent de sa cloche, quand le propriétaire réduit
++     * sa portée comme quand il en fait un membre d'un seul magasin ; celles
++     * des magasins où ses droits valent encore restent.
++     */
++    public function test_les_notifications_d_un_magasin_qui_sort_de_ses_droits_s_effacent(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
++        $troisieme = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'La Troisième']);
++        $proprietaire = $this->proprietaireDe($magasin);
++        $administrateur = $this->administrateur($magasin);
++        $avis = fn (): array => $administrateur->notifications()->get()->map(fn ($notification): int => (int) $notification->data['magasin_id'])->sort()->values()->all();
++
++        foreach ([$magasin, $autre, $troisieme] as $concerne) {
++            $administrateur->notify(new FacturesPasseesEnRetard($concerne, ['FAC-'.$concerne->id]));
++        }
++
++        app(ModifierAdministrateurAction::class)->modifier($proprietaire, $administrateur, [$magasin->id, $autre->id], PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
++        $this->assertSame([$magasin->id, $autre->id], $avis());
++
++        app(ChangerLeRoleDeSocieteAction::class)->versMembre($proprietaire, $administrateur, RoleMagasin::Vendeur, null, $autre->id);
++        $this->assertSame([$autre->id], $avis());
++        $this->assertSame([$autre->id], $administrateur->refresh()->magasinsDeSesDroits());
++    }
++
+     /**
+      * Tous les magasins, ou une sélection d'au moins un magasin : une
+      * sélection vide est refusée, et la base refuse les deux sortes
+@@ -443,6 +473,7 @@ public function test_une_ligne_globale_restee_a_un_administrateur_d_une_selectio
+         $this->assertSame([], $administrateur->autorisationsDans($horsSelection));
+         $this->assertSame([], $administrateur->autorisationsDans($magasin));
+         $this->assertFalse($administrateur->administreTousLesMagasins());
++        $this->assertSame([], $administrateur->magasinsDeSaPortee()->pluck('magasins.id')->all());
+         $this->assertFalse($administrateur->canAccessTenant($horsSelection));
+     }
+ 
+diff --git a/tests/Feature/Societe/AutorisationsDesMembresTest.php b/tests/Feature/Societe/AutorisationsDesMembresTest.php
+index 451763d..f0f1964 100644
+--- a/tests/Feature/Societe/AutorisationsDesMembresTest.php
++++ b/tests/Feature/Societe/AutorisationsDesMembresTest.php
+@@ -17,6 +17,7 @@
+ use App\Domain\Tenancy\Models\Affectation;
+ use App\Domain\Tenancy\Models\Identifiant;
+ use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\AffectationsDesMembres;
+ use App\Domain\Tenancy\Services\PorteeDesDroits;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\EditMembreDuMagasin;
+@@ -31,6 +32,7 @@
+ use Illuminate\Support\Facades\Notification;
+ use InvalidArgumentException;
+ use Livewire\Livewire;
++use LogicException;
+ use Tests\TestCase;
+ 
+ /**
+@@ -550,6 +552,49 @@ public function test_le_proprietaire_peut_cocher_chaque_autorisation_sous_son_li
+         $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $proposees);
+     }
+ 
++    /**
++     * Le téléchargement des documents par période, que seul le propriétaire
++     * coche, reste tel quel quand un responsable change les autres cases
++     * d'un vendeur, même renvoyé avec elles comme l'écran le montre coché ;
++     * un responsable ne le coche jamais à un vendeur qui ne l'a pas.
++     */
++    public function test_un_responsable_qui_renvoie_la_case_que_le_proprietaire_a_cochee_la_garde_sans_pouvoir_la_cocher(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $responsable = $this->responsable($magasin);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
++        $collegue = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
++
++        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
++
++        $this->assertSame([PermissionRegistry::AVOIR_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER], $vendeur->refresh()->affectationDeMembre()->autorisations());
++        $this->assertThrows(
++            fn () => app(ModifierMembreAction::class)->handle($responsable, $collegue, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]),
++            LogicException::class,
++            PorteeDesDroits::REFUS_AU_DELA,
++        );
++        $this->assertSame([PermissionRegistry::FACTURE_VIEW], $collegue->refresh()->affectationDeMembre()->autorisations());
++    }
++
++    /**
++     * Un administrateur autorisé à nommer les responsables qui donne une
++     * case à un responsable s'entend dire qu'un responsable n'en a pas, avant
++     * toute autre raison (une case qu'il ne pourrait pas cocher lui-même) ;
++     * aucun compte n'est créé.
++     */
++    public function test_un_responsable_cree_avec_une_case_est_refuse_parce_qu_un_responsable_n_en_a_pas(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
++
++        $this->assertThrows(
++            fn () => app(CreerMembreAction::class)->handle($administrateur, $magasin, ['name' => 'Chef'], RoleMagasin::Responsable, [PermissionRegistry::PARAMETRES_GERER]),
++            LogicException::class,
++            AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE,
++        );
++        $this->assertFalse(User::query()->where('name', 'Chef')->exists());
++    }
++
+     /**
+      * Suspendre puis réactiver un compte garde ses cases telles quelles.
+      */
 diff --git a/tests/Qualite/Psalm/SaisiesDesEcrans.php b/tests/Qualite/Psalm/SaisiesDesEcrans.php
 new file mode 100644
 index 0000000..f721ffb
@@ -1502,6 +2011,32 @@ index 33d6e4b..4ae1d74 100644
 +
 +    exit(1);
 +}
+diff --git a/tests/Qualite/seuils.json b/tests/Qualite/seuils.json
+index a9e37af..2701ec1 100644
+--- a/tests/Qualite/seuils.json
++++ b/tests/Qualite/seuils.json
+@@ -3,14 +3,14 @@
+         "niveau": 6
+     },
+     "couverture": {
+-        "achats_et_stock": 98.2,
+-        "cabinets": 94.6,
+-        "caisse_securisee": 98.2,
++        "achats_et_stock": 98.3,
++        "cabinets": 95.3,
++        "caisse_securisee": 98.3,
+         "calculs": 100,
+-        "droits_et_isolation": 96.1,
+-        "ecrans_et_socle": 97.5,
+-        "facturation": 97.8,
+-        "pages_publiques": 96.1,
++        "droits_et_isolation": 96.9,
++        "ecrans_et_socle": 97.6,
++        "facturation": 97.9,
++        "pages_publiques": 96.2,
+         "societe": 94.2
+     },
+     "mutation": {
 diff --git a/tests/Unit/RegleDuMotDePasseTest.php b/tests/Unit/RegleDuMotDePasseTest.php
 new file mode 100644
 index 0000000..7156534

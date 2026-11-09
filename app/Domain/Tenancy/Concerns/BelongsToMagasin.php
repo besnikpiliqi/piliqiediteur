@@ -41,6 +41,16 @@ trait BelongsToMagasin
     }
 
     /**
+     * Le magasin d'une fiche se lit toujours en entier, même avant son
+     * enregistrement : les droits le comparent strictement à celui du
+     * magasin actif (voir MagasinPolicy).
+     */
+    public function initializeBelongsToMagasin(): void
+    {
+        $this->mergeCasts(['magasin_id' => 'integer']);
+    }
+
+    /**
      * @return BelongsTo<Magasin, $this>
      */
     public function magasin(): BelongsTo

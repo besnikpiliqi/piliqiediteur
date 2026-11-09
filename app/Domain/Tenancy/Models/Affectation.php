@@ -53,6 +53,10 @@ class Affectation extends Model
     protected $fillable = [];
 
     protected $casts = [
+        'societe_id' => 'integer',
+        'user_id' => 'integer',
+        'magasin_id' => 'integer',
+        'nomme_par' => 'integer',
         'role' => RoleMagasin::class,
         'avant_la_nomination' => 'array',
     ];

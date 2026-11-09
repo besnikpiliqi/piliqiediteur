@@ -866,6 +866,14 @@ class RegularisationDUneFactureTest extends TestCase
      * Le magasin de Lyon d'une société validée, son identité légale
      * complète, magasin actif.
      */
+    public function test_un_avoir_ordinaire_ne_regularise_aucune_facture(): void
+    {
+        [$magasin, $facture, $client] = $this->factureDuMagasinDeLyon();
+        $retour = app(EnregistrerAvoirAction::class)->handle(self::responsableDeTest($magasin), $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+
+        $this->assertThrows(fn () => $retour->factureRegularisee(), LogicException::class, "L'avoir {$retour->numero} n'est pas un avoir de régularisation.");
+    }
+
     private function magasinDeLyon(): Magasin
     {
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON']));

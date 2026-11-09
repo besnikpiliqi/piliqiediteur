@@ -48,6 +48,6 @@ class MenerUnCabinetASonEspace extends Authenticate
     private function viseSonCabinet(Request $request, User $compte): bool
     {
         return $request->routeIs('filament.societe.tenant')
-            || $request->route()?->parameter('tenant') === (string) $compte->societe->uuid;
+            || $request->route('tenant') === $compte->societe->uuid;
     }
 }

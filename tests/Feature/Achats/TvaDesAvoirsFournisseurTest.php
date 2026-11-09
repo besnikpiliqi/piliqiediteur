@@ -217,6 +217,31 @@ class TvaDesAvoirsFournisseurTest extends TestCase
     }
 
     /**
+     * Un avoir qui rend deux lignes d'un même taux (2 câbles à 20,00 € et
+     * un chargeur à 15,00 € HT) additionne leurs HT et leurs TVA dans ce
+     * taux et dans ses totaux : 55,00 € HT et 11,00 € de TVA.
+     */
+    public function test_les_lignes_rendues_d_un_meme_taux_s_additionnent_dans_le_taux_et_les_totaux(): void
+    {
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CABLE-USB', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHARGEUR', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '20.00'],
+            ['produit_id' => $chargeur->id, 'quantite' => 2, 'prix_unitaire_ht' => '15.00'],
+        ], ['date_facture' => '2026-01-15']));
+        [$ligneCable, $ligneChargeur] = $factureAchat->lignes()->orderBy('ordre')->get()->all();
+
+        $avoir = app(EnregistrerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
+            ['ligne_achat_id' => $ligneCable->id, 'quantite' => 2],
+            ['ligne_achat_id' => $ligneChargeur->id, 'quantite' => 1],
+        ], 'Produits défectueux', 'AV-13');
+
+        $this->assertSame([['40.00', null, '8.00', '48.00'], ['15.00', null, '3.00', '18.00']], $this->montantsDesLignes($avoir));
+        $this->assertSame([['20.00', '55.00', '11.00', '11.00', null, null]], $this->montantsDesTaux($avoir));
+        $this->assertSame(['55.00', '11.00', '66.00'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+    }
+
+    /**
      * Une facture d'achat validée de 5 câbles à 20,00 € HT (20 %) : 100,00 €
      * HT et 20,00 € de TVA.
      */

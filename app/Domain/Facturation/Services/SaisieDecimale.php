@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Facturation\Services;
 
 use InvalidArgumentException;
@@ -48,8 +50,7 @@ final class SaisieDecimale
     {
         [$negatif, $entiers, $decimales] = self::lire($saisie);
 
-        $decimales = str_pad($decimales, 3, '0');
-        $centiemes = (int) $entiers * 100 + (int) substr($decimales, 0, 2) + ($decimales[2] >= '5' ? 1 : 0);
+        $centiemes = self::enUnites($entiers, $decimales, 2) + (($decimales[2] ?? '0') >= '5' ? 1 : 0);
 
         if ($centiemes >= self::CENTIEMES_MAXIMUM) {
             throw new InvalidArgumentException('Montant hors limites.');
@@ -76,7 +77,7 @@ final class SaisieDecimale
             throw new InvalidArgumentException(self::REFUS_MONTANT_TROP_PRECIS);
         }
 
-        $centiemes = (int) $entiers * 100 + (int) str_pad(substr($decimales, 0, 2), 2, '0');
+        $centiemes = self::enUnites($entiers, $decimales, 2);
 
         return $negatif ? -$centiemes : $centiemes;
     }
@@ -100,7 +101,7 @@ final class SaisieDecimale
             throw new InvalidArgumentException(self::REFUS_PRIX_D_ACHAT_TROP_PRECIS);
         }
 
-        $millioniemes = (int) $entiers * 1_000_000 + (int) str_pad(substr($decimales, 0, self::DECIMALES_D_UN_PRIX_D_ACHAT), self::DECIMALES_D_UN_PRIX_D_ACHAT, '0');
+        $millioniemes = self::enUnites($entiers, $decimales, self::DECIMALES_D_UN_PRIX_D_ACHAT);
 
         return $negatif ? -$millioniemes : $millioniemes;
     }
@@ -139,7 +140,9 @@ final class SaisieDecimale
             $texte = sprintf('%.6F', $nombre);
         }
 
-        [$entiers, $decimales] = array_pad(explode('.', ltrim($texte, '-')), 2, '');
+        // Le point ajouté donne toujours une partie décimale, vide quand la
+        // saisie n'en écrit pas.
+        [$entiers, $decimales] = explode('.', ltrim($texte, '-').'.');
         $entiers = ltrim($entiers, '0');
 
         // Plus de 12 chiffres dépassent la borne de toute façon, et leur
@@ -149,5 +152,15 @@ final class SaisieDecimale
         }
 
         return [str_starts_with($texte, '-'), $entiers, $decimales];
+    }
+
+    /**
+     * Ces chiffres entiers suivis des $decimales premières décimales,
+     * complétées de zéros, lus d'un bloc : en unités de 10^-$decimales
+     * (« 12 » et « 5 » font 1250 centièmes).
+     */
+    private static function enUnites(string $entiers, string $decimales, int $nombreDeDecimales): int
+    {
+        return (int) ($entiers.str_pad(substr($decimales, 0, $nombreDeDecimales), $nombreDeDecimales, '0'));
     }
 }

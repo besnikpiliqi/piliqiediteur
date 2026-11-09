@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Authorization\PermissionRegistry;
@@ -45,12 +47,12 @@ class DerogationsDePrix
      * Refuse les lignes qui introduisent une dérogation quand le compte n'a
      * pas l'autorisation dans le magasin actif.
      *
-     * @param  iterable<array<string, mixed>>  $lignesAvant  les lignes déjà enregistrées du document, aucune pour un nouveau
+     * @param  array<array-key, array<string, mixed>>  $lignesAvant  les lignes déjà enregistrées du document, aucune pour un nouveau
      * @param  array<array-key, array<string, mixed>>  $lignesApres  les lignes construites à enregistrer (voir ConstructeurLigneDocument)
      *
      * @throws AuthorizationException
      */
-    public function exiger(User $compte, iterable $lignesAvant, array $lignesApres, ContexteDeVente $contexte): void
+    public function exiger(User $compte, array $lignesAvant, array $lignesApres, ContexteDeVente $contexte): void
     {
         $introduites = $this->introduites($lignesAvant, $lignesApres, $contexte);
 
@@ -67,25 +69,23 @@ class DerogationsDePrix
      * catalogue les lignes qu'une personne sans l'autorisation ne pourrait
      * pas enregistrer (voir AjouteDesLignesDeVente::lignesAuxPrixPermis()).
      *
-     * @param  iterable<array<string, mixed>>  $lignesAvant
+     * @param  array<array-key, array<string, mixed>>  $lignesAvant
      * @param  array<array-key, array<string, mixed>>  $lignesApres
      * @return array<array-key, string>
      */
-    public function introduites(iterable $lignesAvant, array $lignesApres, ContexteDeVente $contexte): array
+    public function introduites(array $lignesAvant, array $lignesApres, ContexteDeVente $contexte): array
     {
-        $dejaAccordees = [];
+        // Combien de lignes déjà enregistrées portent chaque dérogation :
+        // chacune n'en couvre qu'une.
+        $dejaAccordees = array_count_values(array_map($this->cle(...), $lignesAvant));
 
-        foreach ($lignesAvant as $ligne) {
-            $cle = $this->cle($ligne);
-            $dejaAccordees[$cle] = ($dejaAccordees[$cle] ?? 0) + 1;
-        }
-
-        $produits = Produit::withTrashed()->whereKey(array_filter(array_column($lignesApres, 'produit_id')))->get()->keyBy('id');
-        $services = Service::query()->whereKey(array_filter(array_column($lignesApres, 'service_id')))->get()->keyBy('id');
+        $produits = Produit::withTrashed()->whereKey(array_column($lignesApres, 'produit_id'))->get()->keyBy('id');
+        $services = Service::query()->whereKey(array_column($lignesApres, 'service_id'))->get()->keyBy('id');
         $introduites = [];
 
         foreach ($lignesApres as $cleDeLigne => $ligne) {
-            $derogation = $this->derogation($ligne, $produits->get((int) $ligne['produit_id']), $services->get((int) $ligne['service_id']), $contexte);
+            $article = $ligne['produit_id'] !== null ? $produits->get($ligne['produit_id']) : $services->get($ligne['service_id']);
+            $derogation = $this->derogation($ligne, $article, $contexte);
 
             if ($derogation === null) {
                 continue;
@@ -93,7 +93,7 @@ class DerogationsDePrix
 
             $cle = $this->cle($ligne);
 
-            if (($dejaAccordees[$cle] ?? 0) > 0) {
+            if (! empty($dejaAccordees[$cle])) {
                 $dejaAccordees[$cle]--;
 
                 continue;
@@ -106,30 +106,33 @@ class DerogationsDePrix
     }
 
     /**
-     * La dérogation que porte la ligne, en une phrase, ou null : ses prix,
-     * son taux et sa remise, écrits comme leurs colonnes, se comparent en
-     * centimes et en centièmes de point.
+     * La dérogation que porte la ligne de ce produit ou de ce service (voir
+     * ConstructeurLigneDocument, qui ne construit que des lignes d'un
+     * article du catalogue), en une phrase, ou null : ses prix, son taux et
+     * sa remise, écrits comme leurs colonnes, se comparent en centimes et
+     * en centièmes de point.
      *
      * @param  array<string, mixed>  $ligne
      */
-    private function derogation(array $ligne, ?Produit $produit, ?Service $service, ContexteDeVente $contexte): ?string
+    private function derogation(array $ligne, Produit|Service $article, ContexteDeVente $contexte): ?string
     {
-        $article = $produit->nom ?? $service->nom ?? (string) ($ligne['description'] ?? '');
         $prix = $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']);
 
-        if ($service !== null && ! $service->aUnPrixDeReference()) {
-            return "Le prix du service « {$article} » n'est pas fixé : demandez à un responsable.";
+        if ($article instanceof Service && ! $article->aUnPrixDeReference()) {
+            return "Le prix du service « {$article->nom} » n'est pas fixé : demandez à un responsable.";
         }
 
-        if ($this->calculateur->enCentiemes($ligne['remise_pourcentage'] ?? 0) !== 0) {
-            return 'Accorder une remise de '.self::pourcentage($ligne['remise_pourcentage'])." % sur « {$article} » ".self::AUTORISATION.'.';
+        if ($this->calculateur->enCentiemes($ligne['remise_pourcentage']) !== 0) {
+            return 'Accorder une remise de '.self::pourcentage($ligne['remise_pourcentage'])." % sur « {$article->nom} » ".self::AUTORISATION.'.';
         }
 
-        if ($produit !== null && $prix !== $this->calculateur->enCentiemes($produit->prix_vente_ttc)) {
-            return "Vendre « {$article} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($produit->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
+        if ($article instanceof Produit) {
+            return $prix === $this->calculateur->enCentiemes($article->prix_vente_ttc)
+                ? null
+                : "Vendre « {$article->nom} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($article->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
         }
 
-        if ($service === null || $service->estASonPrixDeReference($prix, $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']), $contexte)) {
+        if ($article->estASonPrixDeReference($prix, $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']), $contexte)) {
             return null;
         }
 
@@ -137,13 +140,13 @@ class DerogationsDePrix
         // montre : sans TVA hors de la TVA française, où un service vendu à
         // un autre prix que sa référence a pour PU TTC ce prix saisi, sans
         // TVA (voir ConstructeurLigneDocument).
-        $prixDeReference = $service->prixDeReferenceDans($contexte);
+        $prixDeReference = $article->prixDeReferenceDans($contexte);
 
         if ($prix !== $this->calculateur->enCentiemes($prixDeReference)) {
-            return "Vendre « {$article} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
+            return "Vendre « {$article->nom} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
         }
 
-        return "Vendre « {$article} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($service->taux_tva).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';
+        return "Vendre « {$article->nom} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($article->taux_tva).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';
     }
 
     /**
@@ -155,12 +158,12 @@ class DerogationsDePrix
     private function cle(array $ligne): string
     {
         return implode('|', [
-            (int) ($ligne['produit_id'] ?? 0),
-            (int) ($ligne['service_id'] ?? 0),
-            (int) $ligne['quantite'],
+            $ligne['produit_id'],
+            $ligne['service_id'],
+            $ligne['quantite'],
             $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']),
-            $this->calculateur->enCentiemes($ligne['taux_tva_du_prix'] ?? 0),
-            $this->calculateur->enCentiemes($ligne['remise_pourcentage'] ?? 0),
+            $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']),
+            $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
         ]);
     }
 

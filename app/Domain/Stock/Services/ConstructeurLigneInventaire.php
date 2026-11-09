@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Stock\Services;
 
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
@@ -111,7 +113,7 @@ class ConstructeurLigneInventaire
                 $fiche = array_filter($produit->only(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT), fn (mixed $valeur): bool => filled($valeur));
             }
 
-            $suiviStock = (bool) $produit->suivi_stock;
+            $suiviStock = $produit->suivi_stock;
             $valeur = $this->valeurDuStock($quantite, $cout, $suiviStock);
 
             $inventaire->lignes()->create([
@@ -149,7 +151,7 @@ class ConstructeurLigneInventaire
         $valeurDeLInventaire = 0;
 
         foreach ($lignes as $ligne) {
-            $suiviStock = (bool) $ligne->produit->suivi_stock;
+            $suiviStock = $ligne->produit->suivi_stock;
             $valeur = $this->valeurDuStock($ligne->quantite, SaisieDecimale::enMillioniemes($ligne->cout_unitaire_ht), $suiviStock);
 
             $ligne->update(['suivi_stock' => $suiviStock, 'valeur_ht' => $this->calculateur->enDecimal($valeur)]);
@@ -171,9 +173,8 @@ class ConstructeurLigneInventaire
      */
     public function produitJamaisRecu(int|string $produitId): Produit
     {
-        $produit = filter_var($produitId, FILTER_VALIDATE_INT) === false
-            ? null
-            : Produit::withTrashed()->whereKey((int) $produitId)->first();
+        $identifiant = filter_var($produitId, FILTER_VALIDATE_INT);
+        $produit = $identifiant === false ? null : Produit::withTrashed()->whereKey($identifiant)->first();
 
         if ($produit === null) {
             throw new InvalidArgumentException('Ce produit est introuvable dans le magasin.');

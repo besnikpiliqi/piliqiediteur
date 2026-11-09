@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Achats\Services;
 
 use App\Domain\Achats\Enums\SourceFactureAchat;
@@ -136,14 +138,14 @@ class ConstructeurLigneAchat
      */
     public function verrouillerLeRegistreSiUnTauxChange(array $lignes): void
     {
-        foreach ($lignes as $donnees) {
+        $changeUnTaux = collect($lignes)->contains(function (array $donnees): bool {
             $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->find($donnees['produit_id']) : null;
 
-            if ($produit !== null && self::corrigeUnParametreDeConformite($produit, $donnees)) {
-                $this->registre->verrouiller(app(TenantContext::class)->magasin());
+            return $produit !== null && self::corrigeUnParametreDeConformite($produit, $donnees);
+        });
 
-                return;
-            }
+        if ($changeUnTaux) {
+            $this->registre->verrouiller(app(TenantContext::class)->magasin());
         }
     }
 
@@ -213,7 +215,7 @@ class ConstructeurLigneAchat
         $montants->verifier($document);
         $lignesEnregistrees = array_map(
             fn (array $ligne): LigneAchat => $factureAchat->lignes()->create(Arr::except($ligne, ['montant_ht_calcule'])),
-            array_values($document->lignes),
+            $document->lignes,
         );
 
         $this->verifierLesNouveauxProduits($auteur, $lignesEnregistrees, $fichesDejaSaisies);
@@ -364,18 +366,17 @@ class ConstructeurLigneAchat
 
             try {
                 $ligne = $this->prixDeLaLigne(
-                    filled($saisie['prix_unitaire_ht'] ?? null) ? $saisie['prix_unitaire_ht'] : throw new InvalidArgumentException('PU HT à saisir.'),
+                    $saisie['prix_unitaire_ht'] ?? null,
                     $saisie['quantite'] ?? null,
                     filled($saisie['taux_tva'] ?? null) ? $saisie['taux_tva'] : 0,
                     $saisie['remise_pourcentage'] ?? null,
                     $saisie['montant_ht'] ?? null,
                 );
-                $this->chiffrer([$ligne]);
             } catch (InvalidArgumentException) {
                 continue;
             }
 
-            $lignes[$cle] = [...$ligne, 'description' => (string) ($saisie['produit']['nom'] ?? ''), 'reference' => $saisie['produit']['reference'] ?? null];
+            $lignes[$cle] = [...$ligne, 'description' => $saisie['produit']['nom'] ?? '', 'reference' => $saisie['produit']['reference'] ?? null];
         }
 
         try {
@@ -404,7 +405,7 @@ class ConstructeurLigneAchat
      */
     private function chiffrer(array $lignes, array $tvaEcriteParTaux = []): DocumentChiffre
     {
-        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUnAchat(array_values(array_map(
+        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUnAchat(array_map(
             fn (array $ligne): array => [
                 'prix_unitaire_ht' => $this->calculateur->enMillioniemes($ligne['prix_unitaire_ht']),
                 'quantite' => $ligne['quantite'],
@@ -413,7 +414,7 @@ class ConstructeurLigneAchat
                 'montant_ht' => $ligne['montant_ht_saisi'] === null ? null : $this->calculateur->enCentiemes($ligne['montant_ht_saisi']),
             ],
             $lignes,
-        )), $tvaEcriteParTaux), $this->calculateur);
+        ), $tvaEcriteParTaux), $this->calculateur);
     }
 
     /**
@@ -429,29 +430,20 @@ class ConstructeurLigneAchat
      */
     private function prixDeLaLigne(mixed $prixUnitaireHt, mixed $quantite, mixed $tauxTva, mixed $remise, mixed $montantHt): array
     {
-        $prix = SaisieDecimale::enMillioniemes($prixUnitaireHt);
-        $taux = SaisieDecimale::enCentiemes($tauxTva);
-        $remise = filled($remise) ? SaisieDecimale::enCentiemes($remise) : 0;
-
-        if ($prix < 0) {
-            throw new InvalidArgumentException('Un prix unitaire ne peut pas être négatif.');
-        }
-
-        if ($taux < 0 || $taux > 10000) {
-            throw new InvalidArgumentException('Le taux de TVA doit être compris entre 0 et 100 %.');
-        }
-
-        if ($remise < 0 || $remise > 10000) {
-            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-        }
-
-        return [
+        $ligne = [
             'quantite' => QuantiteEntiere::depuisSaisie($quantite),
-            'prix_unitaire_ht' => $this->calculateur->prixDAchatEnDecimal($prix),
-            'taux_tva' => $this->calculateur->enDecimal($taux),
-            'remise_pourcentage' => $this->calculateur->enDecimal($remise),
+            'prix_unitaire_ht' => $this->calculateur->prixDAchatEnDecimal(SaisieDecimale::enMillioniemes($prixUnitaireHt)),
+            'taux_tva' => $this->calculateur->enDecimal(SaisieDecimale::enCentiemes($tauxTva)),
+            'remise_pourcentage' => $this->calculateur->enDecimal(filled($remise) ? SaisieDecimale::enCentiemes($remise) : 0),
             'montant_ht_saisi' => filled($montantHt) ? $this->calculateur->enDecimal(SaisieDecimale::montantAuCentime($montantHt)) : null,
         ];
+
+        // Un PU HT négatif, un taux ou une remise hors de 0-100 %, un HT
+        // écrit négatif : refusés par le calcul de la ligne seule, avant
+        // qu'un barème ne s'y applique ou qu'un produit ne soit corrigé.
+        $this->chiffrer([$ligne]);
+
+        return $ligne;
     }
 
     /**

@@ -9,7 +9,9 @@ use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 /**
@@ -104,5 +106,71 @@ class ConstructeurLigneDocumentTest extends TestCase
 
         $this->assertSame([], $apercu->lignes);
         $this->assertSame('0.00', $apercu->totaux['total_ttc']);
+    }
+
+    /**
+     * Les lignes enregistrées se rangent dans leur ordre, quelles que soient
+     * les clés du formulaire, avec la description et la référence de leur
+     * article ; un identifiant transmis en texte se lit comme un entier ;
+     * un article offert (0 €) se vend, une remise de 100 % aussi.
+     */
+    public function test_les_lignes_enregistrees_se_rangent_dans_leur_ordre_avec_leur_article(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['nom' => 'Cahier', 'reference' => 'CAH-1', 'prix_vente_ttc' => '12.00']);
+        $service = Service::factory()->auPrixDe('30.00')->create(['nom' => 'Pose']);
+
+        $document = app(ConstructeurLigneDocument::class)->construireToutes([
+            'b7' => ['produit_id' => (string) $produit->id, 'quantite' => '2', 'remise_pourcentage' => '100'],
+            'a3' => ['service_id' => (string) $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => '0'],
+        ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
+
+        $this->assertSame([
+            [0, 'Cahier', 'CAH-1', '0.00'],
+            [1, 'Pose', null, '0.00'],
+        ], array_map(fn (array $ligne): array => [$ligne['ordre'], $ligne['description'], $ligne['reference'], $ligne['montant_ttc']], array_values($document->lignes)));
+        $this->assertSame(['20.00' => ['montant_ht' => '0.00', 'montant_tva' => '0.00', 'montant_ttc' => '0.00']], $document->parTaux);
+    }
+
+    /**
+     * Un prix TTC négatif, une remise au-delà de 100 % et un service sans
+     * prix de référence ni prix saisi sont refusés avec leur motif ; un
+     * produit ou un service introuvable dans le magasin, avec son
+     * identifiant.
+     */
+    public function test_une_ligne_impossible_est_refusee_avec_son_motif(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '12.00']);
+        $sansPrix = Service::factory()->create(['nom' => 'Conseil']);
+        $contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+        $construire = fn (array $ligne) => app(ConstructeurLigneDocument::class)->construireToutes([$ligne], $contexte);
+
+        $this->assertThrows(fn () => $construire(['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ttc' => '-0.01']), InvalidArgumentException::class, 'Le PU TTC d\'une ligne ne peut pas être négatif.');
+        $this->assertThrows(fn () => $construire(['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => '100.01']), InvalidArgumentException::class, 'La remise doit être comprise entre 0 et 100 %.');
+        $this->assertThrows(fn () => $construire(['service_id' => $sansPrix->id, 'quantite' => 1]), InvalidArgumentException::class, 'Le prix du service « Conseil » n\'est pas fixé : demandez à un responsable.');
+        $this->assertThrows(fn () => $construire(['produit_id' => $produit->id + 1000, 'quantite' => 1]), fn (ModelNotFoundException $introuvable): bool => $introuvable->getModel() === Produit::class && $introuvable->getIds() === [$produit->id + 1000]);
+        $this->assertThrows(fn () => $construire(['service_id' => $sansPrix->id + 1000, 'quantite' => 1]), fn (ModelNotFoundException $introuvable): bool => $introuvable->getModel() === Service::class && $introuvable->getIds() === [$sansPrix->id + 1000]);
+    }
+
+    /**
+     * L'aperçu écarte une saisie qui n'est pas une ligne, et une ligne dont
+     * les montants ne se calculent pas, même seule (une remise au-delà de
+     * 100 %), sans perdre les autres, rangées dans leur ordre.
+     */
+    public function test_l_apercu_ecarte_ce_qui_n_est_pas_une_ligne_et_garde_les_autres_dans_leur_ordre(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '12.00']);
+
+        $apercu = app(ConstructeurLigneDocument::class)->apercu([
+            'texte' => 'pas une ligne',
+            'premiere' => ['produit_id' => $produit->id, 'quantite' => 1],
+            'remise_impossible' => ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => '150'],
+            'seconde' => ['produit_id' => $produit->id, 'quantite' => 2],
+        ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
+
+        $this->assertSame(['premiere' => 0, 'seconde' => 2], array_map(fn (array $ligne): int => $ligne['ordre'], $apercu->lignes));
+        $this->assertSame('36.00', $apercu->totaux['total_ttc']);
     }
 }

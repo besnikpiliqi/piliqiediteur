@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Catalogue\Models\Produit;
@@ -57,7 +59,7 @@ class ConstructeurLigneDocument
         $lignes = [];
 
         foreach (array_values($lignesDonnees) as $index => $donnees) {
-            $produit = filled($donnees['produit_id'] ?? null) ? $produits->get((int) $donnees['produit_id']) : null;
+            $produit = filled($donnees['produit_id'] ?? null) ? $produits->get($donnees['produit_id']) : null;
 
             if ($produit?->trashed()) {
                 throw new LogicException("Le produit « {$produit->nom} » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.");
@@ -120,7 +122,7 @@ class ConstructeurLigneDocument
      */
     private function chiffrer(array $lignes): DocumentChiffre
     {
-        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUneVente(array_values(array_map(
+        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUneVente(array_map(
             fn (array $ligne): array => [
                 'prix_unitaire_ttc' => $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']),
                 'quantite' => $ligne['quantite'],
@@ -129,7 +131,7 @@ class ConstructeurLigneDocument
                 'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
             ],
             $lignes,
-        ))), $this->calculateur);
+        )), $this->calculateur);
     }
 
     /**
@@ -180,11 +182,11 @@ class ConstructeurLigneDocument
     private function construire(array $donnees, int $ordre, ContexteDeVente $contexte, Collection $produits, Collection $services): array
     {
         $produit = filled($donnees['produit_id'] ?? null)
-            ? ($produits->get((int) $donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [$donnees['produit_id']]))
+            ? ($produits->get($donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [$donnees['produit_id']]))
             : null;
 
         $service = filled($donnees['service_id'] ?? null)
-            ? ($services->get((int) $donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [$donnees['service_id']]))
+            ? ($services->get($donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [$donnees['service_id']]))
             : null;
 
         if ($produit !== null && $service !== null) {
@@ -211,23 +213,21 @@ class ConstructeurLigneDocument
 
         $prixUnitaireTtc = filled($prixSaisi)
             ? SaisieDecimale::enCentiemes($prixSaisi)
-            : $this->calculateur->enCentiemes($produit->prix_vente_ttc ?? $service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."));
+            : $this->calculateur->enCentiemes($produit !== null ? $produit->prix_vente_ttc : ($service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable.")));
 
         if ($prixUnitaireTtc < 0) {
             throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');
         }
 
+        // Une remise hors de 0-100 % est refusée avec les montants (voir
+        // chiffrer()).
         $remise = filled($donnees['remise_pourcentage'] ?? null) ? SaisieDecimale::enCentiemes($donnees['remise_pourcentage']) : 0;
-
-        if ($remise < 0 || $remise > 10000) {
-            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-        }
 
         return [
             'produit_id' => $produit?->id,
             'service_id' => $service?->id,
             'nature' => $produit !== null ? NatureLigne::Bien : NatureLigne::Service,
-            'description' => $produit->nom ?? $service->nom,
+            'description' => $produit !== null ? $produit->nom : $service->nom,
             'reference' => $produit?->reference,
             'quantite' => $quantite,
             'prix_unitaire_ht' => $this->calculateur->enDecimalAuMillionieme($this->calculateur->prixUnitaireHtExact($prixUnitaireTtc, $tauxTvaDuPrix)),
@@ -253,8 +253,8 @@ class ConstructeurLigneDocument
     {
         $identifiants = fn (string $cle): array => collect($lignes)
             ->pluck($cle)
-            ->filter(fn (mixed $identifiant): bool => is_int($identifiant) || (is_string($identifiant) && ctype_digit($identifiant)))
-            ->map(fn (int|string $identifiant): int => (int) $identifiant)
+            ->map(fn (mixed $identifiant): int|false => filter_var($identifiant, FILTER_VALIDATE_INT))
+            ->filter(fn (int|false $identifiant): bool => $identifiant !== false)
             ->unique()
             ->values()
             ->all();

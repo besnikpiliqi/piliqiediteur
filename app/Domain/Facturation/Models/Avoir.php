@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ItemNotFoundException;
+use LogicException;
 
 /**
  * Rattaché à un CLIENT, jamais à une seule facture : un avoir peut
@@ -283,18 +284,20 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * La facture que régularise cet avoir de régularisation, la seule que
-     * corrigent ses lignes, une par ligne de la facture ; aucune pour un
-     * autre avoir.
+     * corrigent ses lignes, une par ligne de la facture ; un autre avoir
+     * n'en régularise aucune.
+     *
+     * @throws LogicException
      */
-    public function factureRegularisee(): ?Facture
+    public function factureRegularisee(): Facture
     {
         if (! $this->estUneRegularisation()) {
-            return null;
+            throw new LogicException("L'avoir {$this->numero} n'est pas un avoir de régularisation.");
         }
 
         return Facture::query()
             ->whereIn('id', LigneFacture::query()->whereIn('id', $this->lignes()->select('ligne_facture_id'))->select('facture_id'))
-            ->first();
+            ->firstOrFail();
     }
 
     /**

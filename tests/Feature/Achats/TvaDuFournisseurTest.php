@@ -67,6 +67,7 @@ class TvaDuFournisseurTest extends TestCase
         $this->assertSame([['20.00', '30.03', '6.01', '6.01', null, null]], $this->montantsDesTaux($factureAchat));
         $this->assertSame(['30.03', '6.01', '36.04', false], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc, $factureAchat->tva_a_verifier]);
         $this->assertSame([], $this->entreesDAudit($this->societe(), ActionAuditee::EcartsDuFournisseurConfirmes));
+        $this->assertSame([], $this->entreesDAudit($this->societe(), ActionAuditee::TvaAVerifierLevee));
     }
 
     /**
@@ -397,6 +398,28 @@ class TvaDuFournisseurTest extends TestCase
      *
      * @return array{produit_id: int, quantite: int, prix_unitaire_ht: string}
      */
+    /**
+     * Une facture à deux taux garde une ligne de TVA par taux, dans
+     * l'ordre où ils apparaissent, chacun confirmé quand il s'écarte de
+     * plus d'un centime par ligne ; le taux qu'une correction fait
+     * disparaître perd sa ligne de TVA.
+     */
+    public function test_chaque_taux_garde_sa_tva_dans_son_ordre_et_le_taux_disparu_s_efface(): void
+    {
+        $coque = $this->ligne('COQUE-1', 1, '10.00');
+        $livre = ['produit_id' => Produit::factory()->create(['nom' => 'Livre', 'reference' => 'LIVRE-1', 'taux_tva' => '5.5', 'suivi_stock' => false])->id, 'quantite' => 1, 'prix_unitaire_ht' => '10.00'];
+
+        $factureAchat = $this->creer([$coque, $livre], $this->tva(['20' => '2.10', '5.5' => '0.65'], confirmation: true));
+
+        $auteur = (int) self::auteur()->id;
+        $this->assertSame([['20.00', '10.00', '2.10', '2.00', '2.10', $auteur], ['5.50', '10.00', '0.65', '0.55', '0.65', $auteur]], $this->montantsDesTaux($factureAchat));
+        $this->assertSame([0, 1], $factureAchat->taux()->orderBy('ordre')->pluck('ordre')->all());
+
+        $corrigee = $this->modifier($factureAchat, [$coque], $this->tva([]));
+
+        $this->assertSame([['20.00', '10.00', '2.00', '2.00', null, null]], $this->montantsDesTaux($corrigee));
+    }
+
     private function ligne(string $reference, int $quantite, string $prixUnitaireHt): array
     {
         $produit = Produit::query()->where('reference', $reference)->first()

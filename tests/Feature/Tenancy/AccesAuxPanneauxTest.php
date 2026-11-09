@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Panel;
@@ -126,6 +127,22 @@ class AccesAuxPanneauxTest extends TestCase
         $reponse = $this->actingAs($membre)->get("/app/{$magasin->uuid}");
 
         $reponse->assertForbidden();
+    }
+
+    /**
+     * Après une connexion ou un mot de passe choisi, chaque compte va à
+     * l'accueil du panneau où il se trouve : celui de l'espace de sa
+     * société quand il s'y connecte.
+     */
+    public function test_apres_la_connexion_chacun_va_a_l_accueil_de_son_panneau(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $societe = $magasin->societe;
+        $this->actingAs($this->proprietaireDe($magasin));
+
+        Filament::setCurrentPanel(Filament::getPanel('societe'));
+        Filament::setTenant($societe);
+        $this->assertSame(Filament::getPanel('societe')->getUrl($societe), MenerUnCompteSansMagasin::accueil());
     }
 
     /**

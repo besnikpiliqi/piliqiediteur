@@ -115,7 +115,7 @@ final class LecteurDesDroits
     {
         $contexte = app(TenantContext::class);
 
-        if (! $contexte->has() || $contexte->id() !== (int) $magasin->getKey()) {
+        if (! $contexte->has() || $contexte->id() !== $magasin->getKey()) {
             throw new LogicException('Une action d\'un magasin ne se contrôle que dans le contexte de ce magasin.');
         }
     }

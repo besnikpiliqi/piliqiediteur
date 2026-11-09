@@ -295,6 +295,33 @@ class ControleDesDroitsTest extends TestCase
     }
 
     /**
+     * Dans l'espace d'une société suspendue, son propriétaire consulte, gère
+     * encore son équipe et son cabinet d'expertise comptable (un accès se
+     * donne et se coupe toujours), et rien d'autre ; révoquée, elle ne lui
+     * laisse que la consultation.
+     */
+    public function test_dans_l_espace_d_une_societe_suspendue_restent_l_equipe_et_le_cabinet_jusqu_a_la_revocation(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $societe = $magasin->societe;
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+        $gestes = fn (): array => [
+            $proprietaire->can('view', $societe->fresh()),
+            $proprietaire->can('suspendreOuReactiver', $vendeur),
+            $proprietaire->can('gererSonCabinet', $societe->fresh()),
+            $proprietaire->can('modifierLesParametres', $societe->fresh()),
+        ];
+
+        $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
+        $this->assertSame([true, true, true, false], $gestes());
+
+        $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
+        $this->assertSame([true, false, false, false], $gestes());
+    }
+
+    /**
      * Un compte qui n'est pas actif n'a aucun droit, propriétaire compris,
      * pas même une consultation.
      */

@@ -182,6 +182,7 @@ class Magasin extends Model implements HasName
     ];
 
     protected $casts = [
+        'societe_id' => 'integer',
         'statut' => StatutMagasin::class,
         'motif_fermeture' => MotifFermeture::class,
         'territoire' => Territoire::class,

@@ -51,6 +51,7 @@ class LienCabinet extends Model
     protected $hidden = ['jeton_hache'];
 
     protected $casts = [
+        'cabinet_id' => 'integer',
         'etat' => EtatDuLien::class,
         'origine' => OrigineDuLien::class,
         'motif_fin' => MotifDeFinDuLien::class,

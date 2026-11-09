@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Achats\Services;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -50,7 +52,7 @@ final readonly class EcartsDUnTaux
      *
      * @return list<array{description: string, reference: string|null, ht_calcule: int, ht_retenu: int}>
      */
-    public function lignesHorsTolerance(): array
+    private function lignesHorsTolerance(): array
     {
         return array_values(array_filter(
             $this->lignes,

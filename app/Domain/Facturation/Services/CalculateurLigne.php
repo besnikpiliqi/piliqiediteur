@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Facturation\Services;
 
 use InvalidArgumentException;
@@ -632,11 +634,8 @@ class CalculateurLigne
 
         $valeurRestanteDixMilliemes = $this->multiplier($coutMoyenDixMilliemes, $stock) - $this->multiplier($coutUnitaireDixMilliemes, $quantite);
 
-        if ($valeurRestanteDixMilliemes < 0) {
-            return 0.0;
-        }
-
-        return $this->diviserArrondi($valeurRestanteDixMilliemes, $reste) / 10000;
+        // La valeur d'un stock ne descend jamais sous 0 €.
+        return $this->diviserArrondi(max(0, $valeurRestanteDixMilliemes), $reste) / 10000;
     }
 
     /**
@@ -757,27 +756,11 @@ class CalculateurLigne
      */
     public function enCentiemes(mixed $valeur): int
     {
-        if (is_int($valeur)) {
-            $centiemes = $this->multiplier($valeur, 100);
-        } elseif (is_string($valeur) && preg_match('/^(-?)(\d+)(?:\.(\d{1,2}))?$/D', $valeur, $morceaux) === 1) {
-            $unites = ltrim($morceaux[2], '0');
-
-            // Plus de 12 chiffres dépassent la borne de toute façon, et
-            // leur conversion en entier saturerait en silence.
-            if (strlen($unites) > 12) {
-                throw new InvalidArgumentException('Montant hors limites.');
-            }
-
-            $centiemes = ($morceaux[1] === '-' ? -1 : 1) * ((int) $unites * 100 + (int) str_pad($morceaux[3] ?? '', 2, '0'));
-        } else {
-            throw new InvalidArgumentException('Montant illisible : une chaîne décimale exacte (deux décimales au plus) ou un entier est attendu.');
+        if (! is_int($valeur)) {
+            return $this->lireUneEcriture($valeur, 2, 'Montant illisible : une chaîne décimale exacte (deux décimales au plus) ou un entier est attendu.');
         }
 
-        if (abs($centiemes) >= self::UNITES_MAXIMUM) {
-            throw new InvalidArgumentException('Montant hors limites.');
-        }
-
-        return $centiemes;
+        return $this->borne($this->multiplier($valeur, 100));
     }
 
     /**
@@ -803,9 +786,9 @@ class CalculateurLigne
      */
     public function enEuros(int $centiemes): string
     {
-        [$unites, $decimales] = explode('.', ltrim($this->enDecimal($centiemes), '-'));
+        [, $decimales] = explode('.', $this->enDecimal($centiemes));
 
-        return ($centiemes < 0 ? '-' : '').number_format((int) $unites, 0, ',', ' ').','.$decimales.' €';
+        return self::ecrireEnEuros($centiemes, 100, $decimales);
     }
 
     /**
@@ -823,19 +806,11 @@ class CalculateurLigne
      */
     public function enMillioniemes(mixed $valeur): int
     {
-        if (is_int($valeur)) {
-            $millioniemes = $this->multiplier($valeur, 1_000_000);
-        } elseif (is_string($valeur) && preg_match('/^(-?)(\d+)(?:\.(\d{1,6}))?$/D', $valeur, $morceaux) === 1) {
-            $unites = ltrim($morceaux[2], '0');
-
-            if (strlen($unites) > 12) {
-                throw new InvalidArgumentException('Montant hors limites.');
-            }
-
-            $millioniemes = ($morceaux[1] === '-' ? -1 : 1) * ((int) $unites * 1_000_000 + (int) str_pad($morceaux[3] ?? '', 6, '0'));
-        } else {
-            throw new InvalidArgumentException('Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
+        if (! is_int($valeur)) {
+            return $this->lireUneEcriture($valeur, 6, 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
         }
+
+        $millioniemes = $this->multiplier($valeur, 1_000_000);
 
         if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
             throw new InvalidArgumentException('Montant hors limites.');
@@ -927,9 +902,9 @@ class CalculateurLigne
      */
     public function prixDAchatAffiche(int $millioniemes): string
     {
-        [$entiers, $decimales] = explode('.', ltrim($this->prixDAchatEnDecimal($millioniemes), '-'));
+        [, $decimales] = explode('.', $this->prixDAchatEnDecimal($millioniemes));
 
-        return ($millioniemes < 0 ? '-' : '').number_format((int) $entiers, 0, ',', ' ').','.$decimales.' €';
+        return self::ecrireEnEuros($millioniemes, 1_000_000, $decimales);
     }
 
     /**
@@ -1218,6 +1193,44 @@ class CalculateurLigne
     }
 
     /**
+     * Une écriture décimale exacte, en unités de 10^-$decimales (voir
+     * enCentiemes() et enMillioniemes()) : des chiffres, $decimales
+     * décimales au plus après un point, un « - » facultatif, aucun espace
+     * ni signe « + » ; ses chiffres se lisent bout à bout, signe compris,
+     * sans calcul ni arrondi (« -12.5 » vaut -1250 centièmes). Douze
+     * chiffres entiers au plus, des zéros de tête ne comptant pas : treize
+     * atteignent la borne de la classe, en centièmes comme en
+     * millionièmes, et un entier plus long saturerait en silence.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function lireUneEcriture(mixed $valeur, int $decimales, string $illisible): int
+    {
+        if (! is_string($valeur) || preg_match('/^(-?)(\d+)(?:\.(\d{1,'.$decimales.'}))?$/D', $valeur, $morceaux) !== 1) {
+            throw new InvalidArgumentException($illisible);
+        }
+
+        $unites = ltrim($morceaux[2], '0');
+
+        if (strlen($unites) > 12) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return (int) ($morceaux[1].$unites.str_pad($morceaux[3] ?? '', $decimales, '0'));
+    }
+
+    /**
+     * Un montant tel qu'un écran l'écrit (voir enEuros() et
+     * prixDAchatAffiche()) : son signe, ses euros entiers, les milliers
+     * séparés par une espace, une virgule, ses décimales telles qu'elles
+     * s'écrivent, puis « € ».
+     */
+    private static function ecrireEnEuros(int $valeur, int $unitesParEuro, string $decimales): string
+    {
+        return ($valeur < 0 ? '-' : '').number_format(intdiv(abs($valeur), $unitesParEuro), 0, ',', ' ').','.$decimales.' €';
+    }
+
+    /**
      * Une valeur entière d'une ligne : jamais un nombre à virgule, que PHP
      * tronquerait en silence (1,5 deviendrait 1), ni une chaîne à
      * interpréter.
@@ -1412,7 +1425,7 @@ class CalculateurLigne
         $quotient = intdiv($numerateur, $denominateur);
 
         if (2 * abs($numerateur % $denominateur) >= $denominateur) {
-            $quotient += $numerateur < 0 ? -1 : 1;
+            $quotient += $numerateur <=> 0;
         }
 
         return $quotient;

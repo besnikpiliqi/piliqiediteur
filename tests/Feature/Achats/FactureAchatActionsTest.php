@@ -319,6 +319,36 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
+     * Les lignes saisies se rangent dans leur ordre, quelles que soient les
+     * clés du formulaire.
+     */
+    public function test_les_lignes_d_achat_se_rangent_dans_leur_ordre_quelles_que_soient_leurs_cles(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            'z9' => ['produit' => ['nom' => 'Livre', 'prix_vente_ttc' => 12, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => '5.00'],
+            'a1' => ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 12, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => '6.00'],
+        ], ['date_facture' => '2026-01-15']);
+
+        $this->assertSame([['Livre', 0], ['Coque', 1]], $factureAchat->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => [$ligne->description, $ligne->ordre])->all());
+    }
+
+    /**
+     * Un nouveau produit dont la fiche ne dit pas de taux prend celui de sa
+     * ligne d'achat, sinon le taux normal du territoire du magasin.
+     */
+    public function test_un_nouveau_produit_sans_taux_prend_celui_de_sa_ligne_sinon_celui_du_magasin(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Livre', 'prix_vente_ttc' => 12], 'quantite' => 1, 'prix_unitaire_ht' => '5.00', 'taux_tva' => '5.5'],
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 12], 'quantite' => 1, 'prix_unitaire_ht' => '5.00'],
+        ], ['date_facture' => '2026-01-15']);
+
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
+
+        $this->assertSame(['Coque' => '20.00', 'Livre' => '5.50'], Produit::query()->orderBy('nom')->pluck('taux_tva', 'nom')->all());
+    }
+
+    /**
      * Le barème part du coût exact : 2,35 € remisés de 15 % coûtent
      * 1,9975 €, sous le palier de 2 € -- 10 € de bénéfice, (1,9975 € +
      * 10 €) x 1,2 = 14,397 € -> 14,40 € TTC, et non le palier suivant

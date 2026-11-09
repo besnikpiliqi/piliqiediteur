@@ -21,7 +21,8 @@ use Symfony\Component\HttpFoundation\Response;
  * sauf cette page elle-même et la déconnexion ; une requête Livewire d'un
  * autre écran, restée ouverte ou forgée, est refusée.
  * Persistant (voir les panneaux) : il se rejoue sur chaque requête
- * Livewire. Un vendeur ou un observateur garde son identifiant pour mot de
+ * Livewire, toujours après SetUpPanel, qui a déjà choisi le panneau
+ * courant. Un vendeur ou un observateur garde son identifiant pour mot de
  * passe tant qu'il le veut.
  */
 class ExigerSonPropreMotDePasse
@@ -46,9 +47,9 @@ class ExigerSonPropreMotDePasse
             return $next($request);
         }
 
-        $panneau = Filament::getCurrentPanel()?->getId() ?? 'app';
+        $panneau = Filament::getCurrentPanel()->getId();
 
-        if (in_array($request->route()?->getName(), ["filament.{$panneau}.choisir-son-mot-de-passe", "filament.{$panneau}.auth.logout"], true)) {
+        if ($request->routeIs("filament.{$panneau}.choisir-son-mot-de-passe", "filament.{$panneau}.auth.logout")) {
             return $next($request);
         }
 

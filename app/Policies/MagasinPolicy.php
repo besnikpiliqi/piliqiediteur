@@ -22,6 +22,6 @@ abstract class MagasinPolicy
     {
         $contexte = app(TenantContext::class);
 
-        return $contexte->has() && (int) $model->getAttribute('magasin_id') === $contexte->id();
+        return $contexte->has() && $model->getAttribute('magasin_id') === $contexte->id();
     }
 }

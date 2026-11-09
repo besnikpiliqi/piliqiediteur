@@ -17,8 +17,9 @@ use Symfony\Component\HttpFoundation\Response;
  * l'espace de leur société, où se créent les magasins (voir
  * EspaceDeLaSociete). Un compte de membre a toujours son magasin, où il va,
  * comme Filament l'y mène : aucun autre compte actif n'est sans magasin,
- * et un état que contrediraient les données ne trouve qu'une page
- * introuvable, comme un magasin qu'il n'ouvre pas. Après
+ * et un compte que les données laisseraient sans magasin va de même à
+ * l'espace de sa société, qui le refuse s'il ne l'ouvre pas (voir
+ * User::canAccessPanel()). Après
  * ExigerSonPropreMotDePasse : un responsable ou un administrateur dont le
  * mot de passe est encore son identifiant choisit d'abord le sien.
  */
@@ -39,8 +40,6 @@ class MenerUnCompteSansMagasin
         if ($compte->magasinsAccessibles()->isNotEmpty()) {
             return $next($request);
         }
-
-        abort_unless($compte->peutAdministrer(), 404);
 
         return redirect()->to(EspaceDeLaSociete::accueil($compte->societe));
     }

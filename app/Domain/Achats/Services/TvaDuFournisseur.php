@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Achats\Services;
 
 use App\Domain\Achats\Exceptions\ConfirmationDesEcartsRequiseException;
@@ -63,14 +65,14 @@ class TvaDuFournisseur
         $ecarts = [];
 
         foreach ($document->parTaux as $taux => $montants) {
-            $lignes = array_filter($document->lignes, fn (array $ligne): bool => $this->calculateur->enDecimal($this->calculateur->enCentiemes((string) $ligne['taux_tva'])) === (string) $taux);
-            $ecarts[(string) $taux] = new EcartsDUnTaux(
-                $this->calculateur->enCentiemes((string) $taux),
+            $lignes = array_filter($document->lignes, fn (array $ligne): bool => $this->calculateur->enDecimal($this->calculateur->enCentiemes($ligne['taux_tva'])) === $taux);
+            $ecarts[$taux] = new EcartsDUnTaux(
+                $this->calculateur->enCentiemes($taux),
                 $this->calculateur->enCentiemes($montants['montant_ht']),
                 $this->calculateur->enCentiemes($montants['montant_tva_calcule']),
                 $this->calculateur->enCentiemes($montants['montant_tva']),
                 array_values(array_map(fn (array $ligne): array => [
-                    'description' => (string) $ligne['description'],
+                    'description' => $ligne['description'],
                     'reference' => $ligne['reference'] ?? null,
                     'ht_calcule' => $this->calculateur->enCentiemes($ligne['montant_ht_calcule']),
                     'ht_retenu' => $this->calculateur->enCentiemes($ligne['montant_ht']),
@@ -110,7 +112,7 @@ class TvaDuFournisseur
     public function retenir(User $compte, FactureAchat|AvoirFournisseur $document, DocumentChiffre $chiffre, MontantsDuFournisseur $montants): void
     {
         $ecarts = $this->ecarts($chiffre);
-        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => (string) $taux->getAttribute('taux_tva'));
+        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
         $nouveaux = array_filter(
             $ecarts,
             fn (EcartsDUnTaux $ecart, string $taux): bool => $ecart->depasseLaTolerance() && $existants->get($taux)?->getAttribute('ecart_confirme_empreinte') !== $ecart->empreinte(),
@@ -165,7 +167,7 @@ class TvaDuFournisseur
      */
     private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, callable $confirmation): void
     {
-        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => (string) $taux->getAttribute('taux_tva'));
+        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
         $ordre = 0;
 
         foreach ($ecarts as $taux => $ecart) {
@@ -202,7 +204,9 @@ class TvaDuFournisseur
 
     /**
      * Pose ou lève la marque « TVA à vérifier », et l'inscrit au journal
-     * d'audit quand elle change.
+     * d'audit quand elle change. Un document qui vient d'être créé n'a pas
+     * encore lu sa marque (null, la base la met à false) : jamais posée,
+     * elle ne se lève pas.
      *
      * @throws JournalAuditNonConfigureException
      */

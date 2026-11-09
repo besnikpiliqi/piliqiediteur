@@ -65,7 +65,7 @@ final class PorteeDesAdministrateurs
         $cases = [];
 
         foreach ($tous ? [0] : $selection->modelKeys() as $magasinId) {
-            $cases[(int) $magasinId] = PermissionRegistry::verifierConnues($memesPartout ? $autorisationsMagasin : ($autorisationsMagasin[$magasinId] ?? []), $societe->type_activite);
+            $cases[$magasinId] = PermissionRegistry::verifierConnues($memesPartout ? $autorisationsMagasin : ($autorisationsMagasin[$magasinId] ?? []), $societe->type_activite);
         }
 
         return ['tous' => $tous, 'magasins' => $selection, 'cases' => $cases, 'societe' => $deSociete];

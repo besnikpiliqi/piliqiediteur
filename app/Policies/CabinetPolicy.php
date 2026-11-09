@@ -23,7 +23,7 @@ class CabinetPolicy
 {
     public function view(User $user, Cabinet $cabinet): bool
     {
-        return $user->peutAgir() && $user->estDUnCabinet() && (int) $user->societe_id === (int) $cabinet->societe_id;
+        return $user->peutAgir() && $user->estDUnCabinet() && $user->societe_id === $cabinet->societe_id;
     }
 
     public function verifierLOrdre(User $user, Cabinet $cabinet): bool

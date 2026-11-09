@@ -27,7 +27,7 @@ class PosteReconnuPolicy
 
     public function view(User $user, PosteReconnu $poste): bool
     {
-        return $this->viewAny($user) && (int) $poste->magasin_id === app(TenantContext::class)->id();
+        return $this->viewAny($user) && $poste->magasin_id === app(TenantContext::class)->id();
     }
 
     public function create(User $user): bool

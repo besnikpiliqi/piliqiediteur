@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Contacts\Models\Client;
@@ -130,17 +132,19 @@ class ImputationDuCredit
         [$regularisations, $autres] = $avoirs->partition(fn (Avoir $avoir): bool => $avoir->estUneRegularisation());
 
         foreach ($regularisations as $avoir) {
-            $rectificative = $avoir->factureRegularisee()?->rectificative()
-                ->whereIn('statut', [...StatutFacture::quiAttendentUnReglement(), StatutFacture::EnAttenteDeRegularisation])
+            // Seule une rectificative qui attend encore cet avoir peut en
+            // recevoir le crédit : émise après lui, elle l'a pris à son
+            // émission (voir EmettreLaFactureRectificativeAction), et son
+            // crédit ne reste jamais à côté d'elle.
+            $rectificative = $avoir->factureRegularisee()->rectificative()
+                ->where('statut', StatutFacture::EnAttenteDeRegularisation)
                 ->lockForUpdate()
                 ->first();
 
             if ($rectificative !== null) {
-                $rectificative = $factures[$rectificative->getKey()] ??= $rectificative;
-                // La rectificative qui attendait cet avoir n'attend aucun
-                // autre règlement : ce qui en reste dû ne compte que pour
-                // lui.
-                $restes[$rectificative->getKey()] ??= $rectificative->resteDuEnCentimes();
+                // Elle n'attend aucun autre règlement : ce qui en reste dû
+                // ne compte que pour lui.
+                $restes[$rectificative->getKey()] = $rectificative->resteDuEnCentimes();
                 $imputer($avoir, $rectificative, PHP_INT_MAX);
             }
         }
@@ -157,7 +161,7 @@ class ImputationDuCredit
 
             foreach ($autres as $avoir) {
                 foreach ($facturesDues as $facture) {
-                    $imputer($avoir, $factures[$facture->getKey()] ??= $facture, PHP_INT_MAX);
+                    $imputer($avoir, $facture, PHP_INT_MAX);
                 }
             }
         }

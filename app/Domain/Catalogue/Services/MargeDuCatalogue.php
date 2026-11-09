@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Catalogue\Services;
 
 use App\Domain\Catalogue\Models\Produit;

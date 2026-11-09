@@ -133,6 +133,7 @@ class AutorisationsDuCabinetTest extends TestCase
         ];
 
         $this->assertSame([], array_values(array_intersect(PermissionRegistry::duCabinet(TypeDActivite::Commerce), $jamais)));
+        $this->assertSame([[], []], array_map(fn (TypeDActivite $type): array => array_values(array_intersect(PermissionRegistry::duCabinet($type), PermissionRegistry::reserveesAuxOperationsCommerciales())), [TypeDActivite::Commerce, TypeDActivite::Services]));
         $this->assertSame([], array_values(array_intersect(PermissionRegistry::duCabinet(TypeDActivite::Services), PermissionRegistry::articles())));
         $this->assertSame([], PermissionRegistry::duCabinet(TypeDActivite::Cabinet));
 

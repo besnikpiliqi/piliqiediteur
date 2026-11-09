@@ -174,7 +174,7 @@ final class ControleDesDroits
 
         $magasin = $contexte->magasin();
 
-        if ((int) $magasin->societe_id !== (int) $user->societe_id) {
+        if ($magasin->societe_id !== $user->societe_id) {
             return false;
         }
 
@@ -208,7 +208,7 @@ final class ControleDesDroits
     private function pourUnCompteDeCabinet(User $user, string $ability, mixed $cible, TenantContext $contexte): ?bool
     {
         if (in_array($ability, AutorisationsSociete::toutes(), true)) {
-            return $contexte->aUneSociete() && ! $contexte->has() && (int) $contexte->societe()->getKey() === (int) $user->societe_id
+            return $contexte->aUneSociete() && ! $contexte->has() && $contexte->societe()->getKey() === $user->societe_id
                 ? $this->autorisationDeSociete($user, $ability, $contexte->societe())
                 : false;
         }
@@ -218,7 +218,7 @@ final class ControleDesDroits
                 return null;
             }
 
-            return (int) $contexte->societe()->getKey() === (int) $user->societe_id
+            return $contexte->societe()->getKey() === $user->societe_id
                 ? $this->dansLEspaceDeLaSociete($user, $ability, $cible, $contexte->societe())
                 : false;
         }
@@ -233,10 +233,9 @@ final class ControleDesDroits
             return false;
         }
 
-        if (! $magasin->peutVendre() && in_array($ability, PermissionRegistry::reserveesAuxOperationsCommerciales(), true)) {
-            return false;
-        }
-
+        // Un cabinet ne reçoit jamais une autorisation réservée aux
+        // opérations commerciales (voir PermissionRegistry::duCabinet()) :
+        // un magasin qui ne vend pas encore ne lui refuse rien de plus.
         if (in_array($ability, PermissionRegistry::toutes(), true)) {
             return in_array($ability, $user->autorisationsDans($magasin), true);
         }
@@ -252,7 +251,7 @@ final class ControleDesDroits
 
     private function autorisationDeSociete(User $user, string $ability, Societe $societe): ?bool
     {
-        if ($societe->getKey() !== (int) $user->societe_id) {
+        if ($societe->getKey() !== $user->societe_id) {
             return false;
         }
 
@@ -265,7 +264,7 @@ final class ControleDesDroits
 
     private function dansLEspaceDeLaSociete(User $user, string $ability, mixed $cible, Societe $societe): ?bool
     {
-        if ($societe->getKey() !== (int) $user->societe_id) {
+        if ($societe->getKey() !== $user->societe_id) {
             return false;
         }
 

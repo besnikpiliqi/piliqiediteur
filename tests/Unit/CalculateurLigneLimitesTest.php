@@ -285,8 +285,12 @@ class CalculateurLigneLimitesTest extends TestCase
 
         $this->assertSame([3.3333, 3.25, 0.6667], [$c->coutUnitaireDuHt(1000, 3), $c->coutUnitaireDuHt(1000, 3, 2.5), $c->coutUnitaireDuHt(200, 3)]);
         $this->assertSame(
-            ['0,1234 €', '1 234,50 €', '-12,50 €', '-0,1234 €', '0,00 €'],
-            array_map($c->prixDAchatAffiche(...), [123400, 1234500000, -12500000, -123400, 0]),
+            ['0,1234 €', '1 234,50 €', '-12,50 €', '-0,1234 €', '0,00 €', '1 000 000,00 €', '999 999,999999 €'],
+            array_map($c->prixDAchatAffiche(...), [123400, 1234500000, -12500000, -123400, 0, 1_000_000_000_000, 999_999_999_999]),
+        );
+        $this->assertSame(
+            ['0.1234', '12.50', '8.333333', '-0.05', '0.00'],
+            array_map($c->prixDAchatEnDecimal(...), [123400, 12500000, 8333333, -50000, 0]),
         );
     }
 
@@ -320,5 +324,45 @@ class CalculateurLigneLimitesTest extends TestCase
         $this->assertSame(-12.5, $c->soustraire(null, '12.50'));
         $this->assertSame(0.01, $c->arrondirAuCentime(0.004999995));
         $this->assertSame(0.0, $c->arrondirAuCentime(0.0049999652));
+    }
+
+    /**
+     * Une écriture décimale se lit chiffre à chiffre : une seule décimale
+     * vaut des dizaines de centimes ou de millionièmes (« 1.5 » vaut 150
+     * centièmes, 1 500 000 millionièmes), le signe vaut pour toute
+     * l'écriture (« -0.05 » vaut -5), douze chiffres entiers passent et
+     * treize atteignent la borne ; un entier se lit en unités entières,
+     * jusqu'à la borne exclue.
+     */
+    public function test_une_ecriture_se_lit_chiffre_a_chiffre_jusqu_a_douze_chiffres_entiers(): void
+    {
+        $c = $this->calculateur();
+
+        $this->assertSame([150, -5, -1250, 0, 99_999_999_999_999], [$c->enCentiemes('1.5'), $c->enCentiemes('-0.05'), $c->enCentiemes('-12.5'), $c->enCentiemes('-0'), $c->enCentiemes('999999999999.99')]);
+        $this->assertSame([1_500_000, -50_000, 999_999_999_999_000_000], [$c->enMillioniemes('1.5'), $c->enMillioniemes('-0.05'), $c->enMillioniemes('999999999999')]);
+        $this->assertSame([99_999_999_999_900, -99_999_999_999_900, 999_999_999_999_000_000], [$c->enCentiemes(999_999_999_999), $c->enCentiemes(-999_999_999_999), $c->enMillioniemes(999_999_999_999)]);
+        $this->assertRefuse(fn () => $c->enCentiemes('1000000000000'), 'Montant hors limites.');
+        $this->assertRefuse(fn () => $c->enCentiemes('-1000000000000.00'), 'Montant hors limites.');
+        $this->assertRefuse(fn () => $c->enMillioniemes('1000000000000'), 'Montant hors limites.');
+        $this->assertRefuse(fn () => $c->enMillioniemes(1_000_000_000_000), 'Montant hors limites.');
+        $this->assertRefuse(fn () => $c->enMillioniemes(-1_000_000_000_000), 'Montant hors limites.');
+        $this->assertRefuse(fn () => $c->enCentiemes("1.50\n"), 'Montant illisible : une chaîne décimale exacte (deux décimales au plus) ou un entier est attendu.');
+        $this->assertRefuse(fn () => $c->enMillioniemes('x1.5'), 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
+    }
+
+    /**
+     * Le dernier article d'un stock qui ne reste valoir rien, ou moins que
+     * rien, garde un coût moyen de 0 € : la valeur d'un stock ne descend
+     * jamais sous 0 €, même pour un seul article restant.
+     */
+    public function test_le_dernier_article_d_un_stock_sans_valeur_restante_vaut_zero(): void
+    {
+        $c = $this->calculateur();
+
+        $this->assertSame([0.0, 0.0, 1.5], [
+            $c->coutMoyenApresUneSortie(2, 0.0, 1, 0.0),
+            $c->coutMoyenApresUneSortie(2, 1.0, 1, 5.0),
+            $c->coutMoyenApresUneSortie(2, 2.0, 1, 2.5),
+        ]);
     }
 }

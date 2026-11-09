@@ -32,7 +32,7 @@ class AffectationPolicy
         $contexte = app(TenantContext::class);
 
         return $this->viewAny($user)
-            && (int) $affectation->magasin_id === $contexte->id()
+            && $affectation->magasin_id === $contexte->id()
             && $affectation->role !== null;
     }
 
@@ -55,7 +55,7 @@ class AffectationPolicy
      */
     public function update(User $user, Affectation $affectation): bool
     {
-        if (! $this->view($user, $affectation) || (int) $affectation->user_id === (int) $user->getKey()) {
+        if (! $this->view($user, $affectation) || $affectation->user_id === $user->getKey()) {
             return false;
         }
 

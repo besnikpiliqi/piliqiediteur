@@ -121,7 +121,7 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
     {
         $contexte = app(TenantContext::class);
 
-        if (! $contexte->has() || (int) $vendeur->societe_id !== (int) $contexte->magasin()->societe_id) {
+        if (! $contexte->has() || $vendeur->societe_id !== $contexte->magasin()->societe_id) {
             return false;
         }
 

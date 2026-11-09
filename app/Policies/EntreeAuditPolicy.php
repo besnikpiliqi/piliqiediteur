@@ -26,7 +26,7 @@ class EntreeAuditPolicy
 
     public function view(User $user, EntreeAudit $entree): bool
     {
-        return $this->viewAny($user) && (int) $entree->societe_id === (int) $user->societe_id;
+        return $this->viewAny($user) && $entree->societe_id === $user->societe_id;
     }
 
     public function create(User $user): bool

@@ -51,7 +51,7 @@ class TenantContext
      */
     public function set(Magasin $magasin): void
     {
-        if ($this->societeExplicite && (int) $magasin->societe_id !== $this->societe->getKey()) {
+        if ($this->societeExplicite && $magasin->societe_id !== $this->societe->getKey()) {
             throw new LogicException('Le magasin d\'une autre société ne s\'ouvre pas dans le contexte de cette société.');
         }
 
@@ -70,7 +70,7 @@ class TenantContext
      */
     public function poserSociete(Societe $societe): void
     {
-        if ($this->magasin !== null && (int) $this->magasin->societe_id !== $societe->getKey()) {
+        if ($this->magasin !== null && $this->magasin->societe_id !== $societe->getKey()) {
             throw new LogicException('Une société ne se pose pas tant que le magasin d\'une autre société est actif.');
         }
 

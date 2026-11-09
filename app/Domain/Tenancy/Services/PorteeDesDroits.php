@@ -97,7 +97,7 @@ final class PorteeDesDroits
     public function gereLEquipeDe(User $auteur, Magasin $magasin): bool
     {
         return $auteur->peutAgir()
-            && (int) $magasin->societe_id === (int) $auteur->societe_id
+            && $magasin->societe_id === $auteur->societe_id
             && ($auteur->estProprietaire() || $auteur->estResponsableDe($magasin));
     }
 
@@ -110,7 +110,7 @@ final class PorteeDesDroits
      */
     public function peutNommerUnResponsable(User $auteur, Magasin $magasin): bool
     {
-        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
+        if (! $this->gereSonEquipe($auteur) || $magasin->societe_id !== $auteur->societe_id) {
             return false;
         }
 
@@ -152,25 +152,21 @@ final class PorteeDesDroits
      */
     public function peutDonnerLeRole(User $auteur, ?User $compte, Magasin $magasin, RoleMagasin $role): bool
     {
-        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id || $magasin->estUneDemonstrationTerminee()) {
+        if (! $this->gereSonEquipe($auteur) || $magasin->societe_id !== $auteur->societe_id || $magasin->estUneDemonstrationTerminee()) {
             return false;
         }
 
         if ($compte !== null && (! $this->estUneCible($auteur, $compte) || ! $compte->estMembre() || $compte->estRetire()
-            || (int) $compte->magasinDeSonIdentifiant()?->getKey() !== (int) $magasin->getKey())) {
+            || $compte->magasinDeSonIdentifiant()?->getKey() !== $magasin->getKey())) {
             return false;
         }
-
-        $actuelle = $compte?->affectationDeMembre();
 
         if ($role === RoleMagasin::Responsable) {
             return $this->peutNommerUnResponsable($auteur, $magasin);
         }
 
-        if ($actuelle?->estDeResponsable()) {
-            return $auteur->estProprietaire();
-        }
-
+        // Un responsable ne devient vendeur ou observateur que par le
+        // propriétaire : gereLeCompte() ne laisse son compte qu'à lui.
         if (! $this->gereLEquipeDe($auteur, $magasin)) {
             return false;
         }
@@ -185,12 +181,9 @@ final class PorteeDesDroits
      */
     public function peutRetirerLAffectation(User $auteur, Affectation $affectation): bool
     {
-        $compte = User::query()->find($affectation->user_id);
+        $compte = User::query()->findOrFail($affectation->user_id);
 
-        return $compte !== null
-            && ! $affectation->estDAdministrateur()
-            && $compte->estMembre()
-            && $this->peutRetirerDeLaSociete($auteur, $compte);
+        return $compte->estMembre() && $this->peutRetirerDeLaSociete($auteur, $compte);
     }
 
     /**
@@ -286,7 +279,7 @@ final class PorteeDesDroits
             && Societe::query()->findOrFail($auteur->societe_id)->estUnCabinetVerifie()
             && $compte->estCollaborateur()
             && ! $compte->estRetire()
-            && (int) $compte->societe_id === (int) $auteur->societe_id;
+            && $compte->societe_id === $auteur->societe_id;
     }
 
     /**
@@ -299,7 +292,7 @@ final class PorteeDesDroits
      */
     public function voitLIdentifiant(User $auteur, User $compte): bool
     {
-        if ((int) $compte->societe_id !== (int) $auteur->societe_id || ! $auteur->peutAgir()) {
+        if ($compte->societe_id !== $auteur->societe_id || ! $auteur->peutAgir()) {
             return false;
         }
 
@@ -327,8 +320,10 @@ final class PorteeDesDroits
      */
     public function peutReintegrer(User $auteur, User $compte, RoleMagasin $role): bool
     {
-        if (! $this->gereSonEquipe($auteur) || ! $compte->estRetire() || ! $compte->estMembre()
-            || (int) $compte->societe_id !== (int) $auteur->societe_id || $compte->is($auteur)) {
+        // Le magasin de l'identifiant d'un compte d'une autre société est
+        // dans sa société, où l'auteur ne donne aucun rôle (voir
+        // peutDonnerLeRole()) ; qui agit n'est jamais un compte retiré.
+        if (! $this->gereSonEquipe($auteur) || ! $compte->estRetire() || ! $compte->estMembre()) {
             return false;
         }
 
@@ -369,23 +364,19 @@ final class PorteeDesDroits
      */
     public function peutAnnulerLaNomination(User $auteur, Affectation $affectation): bool
     {
-        $magasin = $affectation->magasin;
-        $compte = User::query()->find($affectation->user_id);
-
-        if ($compte === null || $affectation->nomme_par === null || ! $affectation->estDeResponsable() || $magasin === null || $compte->is($auteur)) {
+        // Seule l'affectation de responsable d'un membre nommé par un
+        // administrateur garde sa nomination : une autre l'efface (voir
+        // AffectationsDesMembres::affecter()).
+        if ($affectation->nomme_par === null || ! $this->gereSonEquipe($auteur) || $affectation->societe_id !== $auteur->societe_id) {
             return false;
         }
 
-        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
-            return false;
-        }
-
-        if ($affectation->avant_la_nomination === null && ! $this->peutRetirerDeLaSociete($auteur, $compte)) {
+        if ($affectation->avant_la_nomination === null && ! $this->peutRetirerDeLaSociete($auteur, User::query()->findOrFail($affectation->user_id))) {
             return false;
         }
 
         return $auteur->estProprietaire()
-            || ((int) $affectation->nomme_par === (int) $auteur->getKey() && $this->peutNommerUnResponsable($auteur, $magasin));
+            || ($affectation->nomme_par === $auteur->getKey() && $this->peutNommerUnResponsable($auteur, $affectation->magasin));
     }
 
     /**
@@ -460,10 +451,6 @@ final class PorteeDesDroits
             ...($auteur->aLAutorisationDeSociete(AutorisationsSociete::ACCES_REDONNER) ? [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value] : []),
         ];
 
-        if ($roles === []) {
-            return $comptes->whereRaw('1 = 0');
-        }
-
         return $comptes
             ->where('users.role_societe', RoleSociete::Membre->value)
             ->whereIn('users.id', Affectation::query()
@@ -475,7 +462,7 @@ final class PorteeDesDroits
 
     public function voit(User $auteur, User $compte): bool
     {
-        return (int) $compte->societe_id === (int) $auteur->societe_id
+        return $compte->societe_id === $auteur->societe_id
             && $this->comptesVisibles($auteur)->whereKey($compte->getKey())->exists();
     }
 
@@ -511,7 +498,7 @@ final class PorteeDesDroits
     private function estUneCible(User $auteur, User $compte): bool
     {
         return $this->gereSonEquipe($auteur)
-            && (int) $compte->societe_id === (int) $auteur->societe_id
+            && $compte->societe_id === $auteur->societe_id
             && ! $compte->is($auteur)
             && ! $compte->estProprietaire();
     }
@@ -530,10 +517,9 @@ final class PorteeDesDroits
      */
     private function estResponsableDeSaPortee(User $auteur, User $compte): bool
     {
-        if (! $auteur->estAdministrateur() || ! $compte->estMembre()) {
-            return false;
-        }
-
+        // Seul un administrateur autorisé nomme un responsable (voir
+        // peutNommerUnResponsable()), et seul un membre a une affectation
+        // de membre.
         $affectation = $compte->affectationDeMembre();
 
         return $affectation !== null

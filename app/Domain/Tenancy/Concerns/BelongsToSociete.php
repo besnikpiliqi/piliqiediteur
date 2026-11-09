@@ -6,8 +6,6 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Exists;
 
 /**
  * À appliquer sur tout modèle de données propre à une société, qui
@@ -20,9 +18,6 @@ use Illuminate\Validation\Rules\Exists;
  *     création, quelle que soit la valeur reçue : il ne figure jamais dans
  *     $fillable, et un identifiant forcé dans une requête ne rattache
  *     jamais rien à une autre société.
- *
- * Un identifiant choisi dans un formulaire se valide avec
- * regleExisteDansLaSociete(), jamais avec une règle « exists » nue.
  */
 trait BelongsToSociete
 {
@@ -36,25 +31,20 @@ trait BelongsToSociete
     }
 
     /**
+     * La société d'une donnée se lit toujours en entier, même avant son
+     * enregistrement : les droits la comparent strictement à celle du
+     * compte (voir EntreeAuditPolicy).
+     */
+    public function initializeBelongsToSociete(): void
+    {
+        $this->mergeCasts(['societe_id' => 'integer']);
+    }
+
+    /**
      * @return BelongsTo<Societe, $this>
      */
     public function societe(): BelongsTo
     {
         return $this->belongsTo(Societe::class);
-    }
-
-    /**
-     * La règle « exists » d'un identifiant de ce modèle choisi dans un
-     * formulaire : une ligne de la société active. La validation interroge
-     * la table sans passer par SocieteScope : une règle « exists » nue
-     * accepterait l'identifiant d'une autre société, et révélerait
-     * lesquels existent.
-     */
-    public static function regleExisteDansLaSociete(): Exists
-    {
-        $modele = static::query()->getModel();
-
-        return Rule::exists($modele->getTable(), $modele->getKeyName())
-            ->where('societe_id', app(TenantContext::class)->societe()->getKey());
     }
 }

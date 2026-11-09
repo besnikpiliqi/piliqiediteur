@@ -520,6 +520,10 @@ class InventaireOuvertureTest extends TestCase
                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '120'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
                 'Le taux de TVA doit être compris entre 0 et 100 %.',
             ],
+            'coût négatif' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '-0.01']],
+                'Le coût unitaire d\'un produit ne peut pas être négatif.',
+            ],
             'coût manquant' => [
                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '']],
                 'Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.',
@@ -602,7 +606,10 @@ class InventaireOuvertureTest extends TestCase
         ]);
 
         $this->assertSame([['Carnet A5', 0], ['Carnet A4', 1]], $inventaire->lignes()->get()->map(fn ($ligne): array => [$ligne->description, (int) $ligne->ordre])->all());
-        $this->assertSame('20.00', $inventaire->lignes()->first()->nouveau_produit['taux_tva']);
+        $this->assertSame([
+            ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20.00', 'suivi_stock' => true, 'seuil_alerte' => 0],
+            ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90', 'taux_tva' => '20.00', 'suivi_stock' => true, 'seuil_alerte' => 0],
+        ], $inventaire->lignes()->orderBy('ordre')->get()->map(fn ($ligne): array => $ligne->nouveau_produit)->all());
     }
 
     /**

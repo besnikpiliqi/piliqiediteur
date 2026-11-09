@@ -27,7 +27,7 @@ class InvitationCabinetPolicy
 
     public function view(User $user, InvitationCabinet $invitation): bool
     {
-        return $this->viewAny($user) && (int) $invitation->societe_id === (int) $user->societe_id;
+        return $this->viewAny($user) && $invitation->societe_id === $user->societe_id;
     }
 
     public function create(User $user, ?Societe $cabinet = null): bool
@@ -36,7 +36,7 @@ class InvitationCabinetPolicy
 
         return $this->viewAny($user)
             && $this->portee->gereSonEquipe($user)
-            && (int) $cabinet->getKey() === (int) $user->societe_id
+            && $cabinet->getKey() === $user->societe_id
             && $cabinet->estUnCabinetVerifie();
     }
 

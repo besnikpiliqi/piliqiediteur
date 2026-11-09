@@ -55,7 +55,7 @@ class SocietePolicy
 {
     public function view(User $user, Societe $societe): bool
     {
-        return ($user->peutAdministrer() || $user->ouvreLEspaceDuCabinet()) && $user->peutAgir() && (int) $user->societe_id === $societe->getKey();
+        return ($user->peutAdministrer() || $user->ouvreLEspaceDuCabinet()) && $user->peutAgir() && $user->societe_id === $societe->getKey();
     }
 
     /**

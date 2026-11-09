@@ -169,6 +169,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     protected function casts(): array
     {
         return [
+            'societe_id' => 'integer',
             'email_verified_at' => Instant::class,
             'code_du_courrier_saisi_le' => Instant::class,
             'password' => 'hashed',

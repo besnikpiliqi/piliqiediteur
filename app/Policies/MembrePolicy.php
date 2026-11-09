@@ -73,7 +73,9 @@ class MembrePolicy
      */
     public function update(User $user, User $membre): bool
     {
-        if (! $this->view($user, $membre) || $membre->is($user) || $membre->estProprietaire()) {
+        // Un administrateur ne gère que le compte d'un responsable, jamais le
+        // sien ; le propriétaire, tout compte sauf le sien.
+        if (! $this->view($user, $membre) || $membre->estProprietaire()) {
             return false;
         }
 
@@ -142,7 +144,7 @@ class MembrePolicy
         return $this->creerUnAdministrateur($user)
             && $this->portee->gereSonEquipe($user)
             && $administrateur->estAdministrateur()
-            && (int) $administrateur->societe_id === (int) $user->societe_id;
+            && $administrateur->societe_id === $user->societe_id;
     }
 
     /**
@@ -165,7 +167,7 @@ class MembrePolicy
             && ! $user->societe->estClose()
             && ($user->estDUnCabinet() ? $administrateur->estCollaborateur() : $administrateur->estAdministrateur())
             && $administrateur->estActif()
-            && (int) $administrateur->societe_id === (int) $user->societe_id;
+            && $administrateur->societe_id === $user->societe_id;
     }
 
     /**

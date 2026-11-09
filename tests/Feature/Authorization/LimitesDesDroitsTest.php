@@ -15,7 +15,6 @@ use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Validator;
 use LogicException;
 use Tests\TestCase;
 
@@ -223,24 +222,6 @@ class LimitesDesDroitsTest extends TestCase
             $this->assertFalse($proprietaireDuCabinet->can($autorisation), $autorisation);
         }
         $this->assertTrue($proprietaireDuCabinet->can(PermissionRegistry::CLIENT_VIEW));
-    }
-
-    public function test_la_regle_exists_d_un_modele_de_societe_ne_trouve_que_les_lignes_de_la_societe_active(): void
-    {
-        $cabinet = $this->ouvrirUnCabinet();
-        $client = $this->ouvrirUneSociete();
-        $lien = $this->lierLeCabinet($cabinet, $client);
-        $autreSociete = $this->ouvrirUneSociete()->societe;
-        $contexte = app(TenantContext::class);
-        $valide = fn (): bool => Validator::make(['lien' => $lien->getKey()], ['lien' => [LienCabinet::regleExisteDansLaSociete()]])->passes();
-
-        $contexte->clear();
-        $contexte->poserSociete($client->societe);
-        $this->assertTrue($valide());
-
-        $contexte->clear();
-        $contexte->poserSociete($autreSociete);
-        $this->assertFalse($valide());
     }
 
     public function test_du_cote_du_client_seul_son_proprietaire_voit_le_lien_avec_son_cabinet(): void

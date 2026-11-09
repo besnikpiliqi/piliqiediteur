@@ -91,7 +91,7 @@ class LienCabinetPolicy
 
     private function estDuCabinet(User $user, LienCabinet $lien): bool
     {
-        return $user->peutAgir() && $user->estDUnCabinet() && (int) $user->societe_id === (int) $lien->cabinet_id;
+        return $user->peutAgir() && $user->estDUnCabinet() && $user->societe_id === $lien->cabinet_id;
     }
 
     /**
@@ -112,7 +112,7 @@ class LienCabinetPolicy
         $societe = Societe::query()->find($user->societe_id);
 
         return $societe !== null
-            && ($lien === null || (int) $lien->societe_id === (int) $user->societe_id)
+            && ($lien === null || $lien->societe_id === $user->societe_id)
             && app(SocietePolicy::class)->gererSonCabinet($user, $societe);
     }
 }

@@ -230,7 +230,8 @@ class ConstructeurLigneInventaire
 
     /**
      * Le coût unitaire HT saisi, en millionièmes d'euro, tel que saisi, six
-     * décimales au plus, jamais négatif.
+     * décimales au plus ; la ligne refuse un coût négatif à son
+     * enregistrement (voir LigneInventaireOuverture).
      *
      * @throws InvalidArgumentException
      */
@@ -240,13 +241,7 @@ class ConstructeurLigneInventaire
             throw new InvalidArgumentException('Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.');
         }
 
-        $cout = SaisieDecimale::enMillioniemes($saisie);
-
-        if ($cout < 0) {
-            throw new InvalidArgumentException('Le coût unitaire d\'un produit ne peut pas être négatif.');
-        }
-
-        return $cout;
+        return SaisieDecimale::enMillioniemes($saisie);
     }
 
     /**

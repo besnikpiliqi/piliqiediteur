@@ -354,6 +354,22 @@ class InvitationsTest extends TestCase
         $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSeeText(InvitationInvalideException::MESSAGE);
     }
 
+    /**
+     * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
+     * propriétaire peut seulement mettre fin à ses liens (voir
+     * ControleDesDroits) ; l'invitation reste ouverte.
+     */
+    public function test_un_cabinet_suspendu_ne_retire_plus_ses_invitations(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'a@b.test');
+        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
+        $cabinet->forceFill(['statut' => StatutSociete::Suspendue])->save();
+
+        $this->assertThrows(fn () => app(RetirerLInvitationAction::class)->handle($this->proprietaireDuCabinet($cabinet), $invitation), AuthorizationException::class);
+        $this->assertSame(EtatInvitation::Ouverte, $invitation->fresh()->etat);
+    }
+
     public function test_une_invitation_expire_apres_sept_jours(): void
     {
         $this->travelTo(self::aParis('2026-10-12 10:00:00'));

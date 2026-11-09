@@ -151,21 +151,21 @@ class TvaDuFournisseur
      */
     public function proposer(AvoirFournisseur $avoir, DocumentChiffre $chiffre, MontantsDuFournisseur $montants): void
     {
-        $this->enregistrerLesTaux($avoir, $this->ecarts($chiffre), $montants, function (Model $ligne): void {
-            $ligne->forceFill(['ecart_confirme_par' => null, 'ecart_confirme_le' => null, 'ecart_confirme_empreinte' => null]);
-        });
+        $this->enregistrerLesTaux($avoir, $this->ecarts($chiffre), $montants);
     }
 
     /**
      * La TVA de chaque taux, à la place de celle que le document avait :
      * chaque ligne de taux existante se met à jour, une nouvelle s'ajoute,
-     * celle d'un taux disparu s'efface ; $confirmation pose ou retire la
-     * confirmation de chacune avant son enregistrement.
+     * celle d'un taux disparu s'efface ; $confirmation, quand le document
+     * retient ses montants, pose ou retire la confirmation de chacune avant
+     * son enregistrement (un brouillon d'avoir fournisseur n'en reçoit
+     * aucune).
      *
      * @param  array<string, EcartsDUnTaux>  $ecarts
-     * @param  callable(Model, EcartsDUnTaux, string): void  $confirmation
+     * @param  (callable(Model, EcartsDUnTaux, string): void)|null  $confirmation
      */
-    private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, callable $confirmation): void
+    private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, ?callable $confirmation = null): void
     {
         $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
         $ordre = 0;
@@ -179,7 +179,10 @@ class TvaDuFournisseur
                 'montant_tva_saisi' => isset($montants->tvaParTaux[$ecart->taux]) ? $this->calculateur->enDecimal($montants->tvaParTaux[$ecart->taux]) : null,
                 'ordre' => $ordre++,
             ]);
-            $confirmation($ligne, $ecart, $taux);
+            if ($confirmation !== null) {
+                $confirmation($ligne, $ecart, $taux);
+            }
+
             $ligne->save();
         }
 

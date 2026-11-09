@@ -36,7 +36,7 @@ use LogicException;
  * fiche peut être corrigée au passage, tout de suite ; ou un nouveau
  * produit, dont la ligne d'un brouillon garde seulement la fiche
  * (LigneAchat::$nouveau_produit) : il n'est créé qu'à la validation de la
- * facture, rattaché à son fournisseur (voir creerLesNouveauxProduits()).
+ * facture (voir creerLesNouveauxProduits()).
  * Un brouillon supprimé ne laisse ainsi aucun produit derrière lui, et ne
  * consomme aucune référence automatique. Seule la correction d'une
  * facture déjà validée, dont la marchandise est déjà reçue, crée son
@@ -239,9 +239,14 @@ class ConstructeurLigneAchat
      * validée (voir enregistrer()), dans l'ordre de ses lignes. Son prix de
      * vente TTC est celui de sa fiche, sinon celui que le barème actif du
      * magasin prévoit pour son prix d'achat, remise déduite ; sans l'un ni
-     * l'autre, la validation est refusée. Il naît rattaché au fournisseur
-     * de la facture, à son coût réel (voir LigneAchat::coutUnitaireHt()) ;
-     * sa référence, saisie ou générée (voir Produit), est prise à ce
+     * l'autre, la validation est refusée. Son fournisseur et son coût moyen
+     * lui viennent, dans la même transaction, de l'entrée en stock de la
+     * validation (voir IncrementerStockApresValidationFactureAchat) ou de la
+     * correction de la réception (voir
+     * ModifierFactureAchatAction::corrigerLaReception()), comme à tout
+     * produit de la facture : le fournisseur de la facture et son coût réel
+     * (voir LigneAchat::coutUnitaireHt()). Sa référence, saisie ou générée
+     * (voir Produit), est prise à ce
      * moment-là : les références automatiques suivent l'ordre des
      * validations, et une référence saisie qu'un autre produit a prise
      * entre-temps est refusée (voir Produit::verifierQueSaReferenceEstLibre()).
@@ -262,7 +267,6 @@ class ConstructeurLigneAchat
                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
             }
 
-            $produit->forceFill(['fournisseur_id' => $factureAchat->fournisseur_id, 'cmup_ht' => $ligne->coutUnitaireHt()]);
             $this->origine->pendant(OrigineProduit::Achat, fn (): bool => $produit->save());
 
             $ligne->update(['produit_id' => $produit->id, 'reference' => $produit->reference, 'nouveau_produit' => null]);

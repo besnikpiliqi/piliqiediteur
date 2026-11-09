@@ -206,6 +206,18 @@ class CalculateurLigneLimitesTest extends TestCase
     }
 
     /**
+     * Une part d'un demi-centime s'arrondit en s'éloignant de zéro, que
+     * l'écart ajoute ou retire de la TVA : retirer 1 centime de deux lignes
+     * de 1 centime HT qui en portent chacune 1 le retire de la première,
+     * comme en ajouter 1 à deux lignes qui n'en portent pas le donne à la
+     * première (voir le test précédent).
+     */
+    public function test_une_part_negative_d_un_demi_centime_s_arrondit_en_s_eloignant_de_zero(): void
+    {
+        $this->assertSame([0, 1], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 1), self::part(1, 1)], 2000, 1)));
+    }
+
+    /**
      * Un retour au fournisseur ne propose jamais un montant négatif : quand
      * les retours précédents ont déjà rendu plus que la proposition des
      * articles retournés jusqu'ici, ou exactement autant, il propose 0 € ;

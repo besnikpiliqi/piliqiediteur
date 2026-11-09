@@ -3,15 +3,18 @@
         "niveau": 6
     },
     "couverture": {
-        "achats_et_stock": 98,
-        "cabinets": 94,
-        "caisse_securisee": 98,
+        "achats_et_stock": 98.2,
+        "cabinets": 94.6,
+        "caisse_securisee": 98.2,
         "calculs": 100,
-        "droits_et_isolation": 96,
-        "ecrans_et_socle": 97,
-        "facturation": 97,
-        "pages_publiques": 96,
-        "societe": 94
+        "droits_et_isolation": 96.1,
+        "ecrans_et_socle": 97.5,
+        "facturation": 97.8,
+        "pages_publiques": 96.1,
+        "societe": 94.2
     },
-    "mutation": {}
+    "mutation": {
+        "calculs": 99.5,
+        "droits_et_isolation": 99.9
+    }
 }

@@ -175,4 +175,17 @@ class BaremePrixDeVenteTest extends TestCase
             'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.',
         );
     }
+
+    /**
+     * Le barème s'enregistre en tableau (voir castUsing()) et se relit à
+     * l'identique : ses paliers, son bénéfice au-delà et son arrondi au X9.
+     */
+    public function test_le_bareme_s_ecrit_en_tableau_et_se_relit_a_l_identique(): void
+    {
+        $tableau = ['paliers' => [['jusqu_a' => 2.0, 'benefice' => 10.0], ['jusqu_a' => 5.0, 'benefice' => 15.0]], 'benefice_au_dela' => 60.0, 'arrondi_x9' => true];
+        $bareme = new BaremePrixDeVente($tableau['paliers'], 60.0, true);
+
+        $this->assertSame($tableau, $bareme->versTableau());
+        $this->assertEquals($bareme, BaremePrixDeVente::depuisTableau($tableau));
+    }
 }

@@ -272,7 +272,7 @@ final class ControleDesDroits
             return null;
         }
 
-        return (self::porteSurLEquipe($cible) || ($ability === 'gererSonCabinet' && self::porteSur($cible, Societe::class))) && $societe->statut !== StatutSociete::Revoquee ? null : false;
+        return (self::porteSurLEquipe($cible) || $ability === 'gererSonCabinet') && $societe->statut !== StatutSociete::Revoquee ? null : false;
     }
 
     private function estPermisEnLectureSeule(string $ability, mixed $cible, Societe $societe): bool

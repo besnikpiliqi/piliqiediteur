@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 00:05 UTC par pilotage-sync.sh : « Reprise du 09/11 demandée par l'éditeur : chaîne alignée sur PostgreSQL seulement, état du lot QA noté ».
+Mis à jour le 09/11/2026 à 00:12 UTC par pilotage-sync.sh : « Réponses de l'éditeur aux questions du lot AUD (tout en a, Q-AUD6 oui, Q-AUD7 oui) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -79,7 +79,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ## Dernière course de la chaîne
 
-Course `wf_14a12639-401`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_54289edd-a97`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
 QA:implementation

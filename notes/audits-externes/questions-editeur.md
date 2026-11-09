@@ -2,6 +2,8 @@
 
 Cinq questions de règle métier. L'option recommandée est toujours la (a). Sans réponse au début du lot AUD, le lot fait tout le reste et laisse seulement le point concerné. Le détail est dans `rapport-lecture-2026-11-07.md` et `decision-aud.md` (§ 4).
 
+**Réponses de l'éditeur, le 09/11/2026 vers 00 h 10 UTC : « tout en a, Q-AUD6 oui, Q-AUD7 oui ».** Q-AUD1 à Q-AUD5 : option (a), y compris les deux volets de Q-AUD5 ; Q-AUD6 et Q-AUD7 (§ 4 de `decision-aud.md`) : oui. Elles font foi pour le lot AUD.
+
 **Q-AUD1 — Écart dans le stock trouvé par la vérification de chaque nuit** (un stock qui ne correspond plus à ses entrées et sorties, ou un achat validé sans trace au journal d'audit : cela ne peut venir que d'une écriture faite en dehors de PILIQI)
 - (a) recommandé : l'éditeur et le propriétaire de la société sont prévenus ; rien n'est bloqué, le magasin continue de vendre en attendant l'examen.
 - (b) l'éditeur seul est prévenu.

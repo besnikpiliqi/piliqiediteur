@@ -24,18 +24,24 @@
  *   php tests/Qualite/qualite.php configuration-sensibles <destination>
  *       Écrit la configuration d'Infection (infection.json5) limitée aux
  *       parties sensibles : tout app/, moins chaque dossier et chaque
- *       fichier qui n'en est pas. Elle se combine avec --git-diff-lines
- *       (les seules lignes changées, comme la CI), qui ne se combine avec
- *       aucun autre filtre des fichiers.
+ *       fichier qui n'en est pas. Elle se combine avec
+ *       --git-diff-filter=AM (les fichiers entiers ajoutés ou modifiés,
+ *       comme la CI), qui ne se combine avec aucun autre filtre des
+ *       fichiers.
  *   php tests/Qualite/qualite.php sensibles-changes <commit de base>
  *       Les fichiers des parties sensibles ajoutés ou modifiés depuis ce
  *       commit, un par ligne (rien quand aucun ne l'est) : ceux dont la CI
- *       teste les mutants à chaque envoi.
+ *       teste tous les mutants à chaque envoi.
  *   php tests/Qualite/qualite.php flux <rapport-psalm.json>
  *       Aucun chemin d'une donnée venue de l'extérieur jusqu'à une requête
  *       SQL, une page, un fichier, une commande, une redirection ou un
  *       e-mail sans contrôle (analyse des flux de données de Psalm, voir
  *       psalm.xml) : échoue au premier chemin trouvé, ou sans rapport.
+ *   php tests/Qualite/qualite.php flux-temoin <rapport-psalm.json>
+ *       L'analyse du témoin (psalm-temoin.xml) voit exactement les chemins
+ *       que ses lignes marquées « attendu : » annoncent, ni plus ni moins :
+ *       elle suit bien les saisies des écrans Livewire et Filament (voir
+ *       tests/Qualite/Psalm/SaisiesDesEcrans.php).
  *
  * Code de sortie : 0 si tout tient, 1 sinon.
  */
@@ -50,9 +56,33 @@ function seuils(string $fichier = __DIR__.'/seuils.json'): array
     return json_decode((string) file_get_contents($fichier), true, flags: JSON_THROW_ON_ERROR);
 }
 
+/**
+ * Le chemin de ce fichier relatif à la racine du dépôt (« app/... ») : un
+ * chemin absolu (rapport Clover, journal d'Infection) perd la racine du
+ * dépôt, quel que soit le dossier où celui-ci est monté (« /app » d'un
+ * conteneur compris) ; un chemin déjà relatif (diff de git) reste tel
+ * quel. Un fichier hors du dépôt est refusé, jamais rangé dans une partie
+ * au hasard : le rapport vient alors d'un autre dépôt.
+ */
+function relatifAuDepot(string $fichier): string
+{
+    $fichier = str_replace('\\', '/', $fichier);
+    $racine = str_replace('\\', '/', RACINE).'/';
+
+    if (str_starts_with($fichier, $racine)) {
+        return substr($fichier, strlen($racine));
+    }
+
+    if (! str_starts_with($fichier, '/') && preg_match('#^[A-Za-z]:/#', $fichier) !== 1) {
+        return $fichier;
+    }
+
+    throw new RuntimeException("Fichier hors du dépôt {$racine} : {$fichier}. Le rapport doit être lu dans le dépôt qui l'a produit.");
+}
+
 function partieDe(string $fichier): string
 {
-    $relatif = str_starts_with($fichier, 'app/') ? $fichier : ltrim(substr($fichier, (int) strpos($fichier, '/app/')), '/');
+    $relatif = relatifAuDepot($fichier);
 
     foreach (require __DIR__.'/parties.php' as $partie => $chemins) {
         foreach ($chemins as $chemin) {
@@ -67,7 +97,8 @@ function partieDe(string $fichier): string
 
 /**
  * Les lignes exécutables de chaque fichier de app/ et le nombre de tests
- * qui les exécutent, lues dans un rapport Clover.
+ * qui les exécutent, lues dans un rapport Clover produit dans ce dépôt
+ * (voir relatifAuDepot()).
  *
  * @return array<string, array<int, int>> par chemin relatif (« app/... »)
  */
@@ -77,14 +108,12 @@ function lignesDuClover(string $clover): array
     $fichiers = [];
 
     foreach ($xml->xpath('//file') as $fichier) {
-        $nom = (string) $fichier['name'];
-        $position = strpos($nom, '/app/');
+        $relatif = relatifAuDepot((string) $fichier['name']);
 
-        if ($position === false) {
+        if (! str_starts_with($relatif, 'app/')) {
             continue;
         }
 
-        $relatif = substr($nom, $position + 1);
         $fichiers[$relatif] ??= [];
 
         foreach ($fichier->line as $ligne) {
@@ -125,6 +154,14 @@ function couverture(string $clover, ?string $rapport): int
         $texte .= sprintf("| %s | %d | %d | %.1f %% | %s |\n", $partie, $mesure['lignes'], $mesure['couvertes'], $taux, $seuil === null ? 'aucun' : sprintf('%.1f %%', $seuil));
     }
 
+    // Une partie qui a un seuil et dont le rapport ne mesure aucune ligne
+    // (ses fichiers déplacés ou renommés, un rapport partiel) ne tient pas
+    // son seuil : elle ne le perd jamais en silence.
+    foreach (array_diff_key($seuils, $parParties) as $partie => $seuil) {
+        $echec = true;
+        $texte .= sprintf("| %s | 0 | 0 | non mesurée | %.1f %% |\n", $partie, $seuil);
+    }
+
     foreach ($parParties as $partie => $mesure) {
         $texte .= "\n## {$partie}\n\n| Fichier | Lignes | Couverture |\n|---|---:|---:|\n";
 
@@ -138,7 +175,7 @@ function couverture(string $clover, ?string $rapport): int
     }
 
     echo strstr($texte, "\n## ", true) ?: $texte, "\n";
-    echo $echec ? "Échec : une partie est sous son seuil, ou sans seuil, dans tests/Qualite/seuils.json.\n" : "Chaque partie tient son seuil.\n";
+    echo $echec ? "Échec : une partie est sous son seuil, sans seuil dans tests/Qualite/seuils.json, ou non mesurée.\n" : "Chaque partie tient son seuil.\n";
 
     return $echec ? 1 : 0;
 }
@@ -258,7 +295,7 @@ function mutation(string $journal, ?string $rapport): int
         $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
 
         if (! in_array($etat, ['tues', 'delais'], true)) {
-            $parParties[$partie][$etat === 'non_conclus' ? 'non_conclus_liste' : 'liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $ligne, $mutateur);
+            $parParties[$partie][$etat === 'non_conclus' ? 'non_conclus_liste' : 'liste'][] = sprintf('%s:%d %s', relatifAuDepot($fichier), $ligne, $mutateur);
         }
     }
 
@@ -432,6 +469,18 @@ function sensiblesChanges(string $base): int
 }
 
 /**
+ * Un problème d'un rapport de Psalm est-il un chemin de sécurité (une
+ * donnée venue de l'extérieur qui atteint, sans contrôle, une requête SQL,
+ * une page, un fichier, une commande, une redirection ou un e-mail) ?
+ *
+ * @param  array<string, mixed>  $probleme
+ */
+function estUnCheminDeSecurite(array $probleme): bool
+{
+    return ($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted');
+}
+
+/**
  * Psalm ne sert qu'à l'analyse des flux de données (décision de l'éditeur
  * du 07/11/2026, D54) : le contrôle des types est celui de Larastan
  * (phpstan.neon). Seuls ses chemins de sécurité comptent ; un chemin sûr
@@ -447,7 +496,7 @@ function flux(string $rapport): int
 
     $chemins = array_values(array_filter(
         json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR),
-        static fn (array $probleme): bool => ($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted'),
+        estUnCheminDeSecurite(...),
     ));
 
     if ($chemins === []) {
@@ -465,18 +514,97 @@ function flux(string $rapport): int
     return 1;
 }
 
-exit(match ($argv[1] ?? null) {
-    'couverture' => couverture($argv[2], $argv[3] ?? null),
-    'nouveau-code' => nouveauCode($argv[2], $argv[3]),
-    'mutation' => mutation($argv[2], $argv[3] ?? null),
-    'seuils' => seuilsQuiMontent($argv[2]),
-    'sensibles' => sensibles(),
-    'sensibles-changes' => sensiblesChanges($argv[2]),
-    'configuration-sensibles' => configurationSensibles($argv[2]),
-    'flux' => flux($argv[2]),
-    default => (function (): int {
-        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux ...\n");
+/**
+ * Les chemins de sécurité d'un rapport de Psalm, chacun « fichier:ligne
+ * type », triés ; null sans rapport.
+ *
+ * @return list<string>|null
+ */
+function cheminsDuRapport(string $rapport): ?array
+{
+    if (! is_file($rapport)) {
+        return null;
+    }
 
-        return 2;
-    })(),
-});
+    $chemins = [];
+
+    foreach (array_filter(json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR), estUnCheminDeSecurite(...)) as $probleme) {
+        $chemins[] = sprintf('%s:%d %s', relatifAuDepot((string) $probleme['file_name']), $probleme['line_from'], $probleme['type']);
+    }
+
+    sort($chemins);
+
+    return $chemins;
+}
+
+function fluxDuTemoin(string $rapport): int
+{
+    $trouves = cheminsDuRapport($rapport);
+
+    if ($trouves === null) {
+        echo "Aucun rapport de Psalm pour le témoin : {$rapport}. L'analyse n'a pas tourné jusqu'au bout.\n";
+
+        return 1;
+    }
+
+    $attendus = [];
+
+    foreach (glob_recursif(RACINE.'/tests/Qualite/Psalm/Temoin') as $fichier) {
+        foreach (file($fichier) ?: [] as $rang => $ligne) {
+            if (preg_match('#// attendu : (.+)$#', rtrim($ligne), $marque) === 1) {
+                foreach (array_map(trim(...), explode(',', $marque[1])) as $type) {
+                    $attendus[] = sprintf('%s:%d %s', relatifAuDepot($fichier), $rang + 1, $type);
+                }
+            }
+        }
+    }
+
+    sort($attendus);
+    $manquants = array_diff($attendus, $trouves);
+    $enTrop = array_diff($trouves, $attendus);
+
+    if ($attendus !== [] && $manquants === [] && $enTrop === []) {
+        echo 'L\'analyse des flux voit les '.count($attendus)." chemins du témoin, et aucun autre.\n";
+
+        return 0;
+    }
+
+    echo "L'analyse des flux ne voit pas le témoin tel qu'il est marqué :\n";
+
+    foreach ($manquants as $chemin) {
+        echo "  chemin non vu : {$chemin}\n";
+    }
+
+    foreach ($enTrop as $chemin) {
+        echo "  chemin en trop : {$chemin}\n";
+    }
+
+    if ($attendus === []) {
+        echo "  aucune ligne marquée « attendu : » dans tests/Qualite/Psalm/Temoin.\n";
+    }
+
+    return 1;
+}
+
+try {
+    exit(match ($argv[1] ?? null) {
+        'couverture' => couverture($argv[2], $argv[3] ?? null),
+        'nouveau-code' => nouveauCode($argv[2], $argv[3]),
+        'mutation' => mutation($argv[2], $argv[3] ?? null),
+        'seuils' => seuilsQuiMontent($argv[2]),
+        'sensibles' => sensibles(),
+        'sensibles-changes' => sensiblesChanges($argv[2]),
+        'configuration-sensibles' => configurationSensibles($argv[2]),
+        'flux' => flux($argv[2]),
+        'flux-temoin' => fluxDuTemoin($argv[2]),
+        default => (function (): int {
+            fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux|flux-temoin ...\n");
+
+            return 2;
+        })(),
+    });
+} catch (RuntimeException $erreur) {
+    echo 'Échec : ', $erreur->getMessage(), "\n";
+
+    exit(1);
+}

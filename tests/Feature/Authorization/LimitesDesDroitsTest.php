@@ -32,6 +32,25 @@ class LimitesDesDroitsTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Retiré de la société, un membre n'a plus d'affectation dans son
+     * magasin : son rôle de magasin ne s'y lit plus, son libellé ne dit que
+     * « Membre », et il n'y a plus aucun droit.
+     */
+    public function test_un_membre_retire_n_a_plus_de_role_dans_son_magasin(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $this->assertSame('Vendeur · Ma Boutique', $vendeur->libelleDuRoleDans($magasin));
+
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur);
+        $vendeur->refresh();
+
+        $this->assertNull($vendeur->affectationQuiVautDans($magasin));
+        $this->assertSame('Membre · Ma Boutique', $vendeur->libelleDuRoleDans($magasin));
+        $this->assertSame([], $vendeur->magasinsDeSesDroits());
+    }
+
     public function test_un_compte_suspendu_ne_voit_plus_ni_les_comptes_de_l_equipe_ni_son_propre_identifiant(): void
     {
         $magasin = $this->ouvrirUneSociete();

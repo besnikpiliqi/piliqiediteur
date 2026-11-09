@@ -124,7 +124,7 @@ class AccesDesCabinets
     {
         return LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
             ->where('cabinet_id', $cabinet->getKey())
-            ->whereIn('etat', array_map(static fn (EtatDuLien $etat): string => $etat->value, $etats))
+            ->whereIn('etat', $etats)
             ->orderBy('id')
             ->get(['id', 'societe_id', 'cabinet_id', 'etat', 'origine']);
     }
@@ -138,7 +138,7 @@ class AccesDesCabinets
      */
     public function clientsOuverts(User $compte): array
     {
-        return array_map(intval(...), $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all());
+        return $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all();
     }
 
     /**

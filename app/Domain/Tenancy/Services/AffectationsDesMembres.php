@@ -79,11 +79,9 @@ final class AffectationsDesMembres
             return $this->portee->verifierCochables($auteur, $magasin, $demandees);
         }
 
-        $gardees = array_values(array_intersect($actuelle?->autorisations() ?? [], $reservees));
-        $cases = array_values(array_unique([...$this->portee->verifierCochables($auteur, $magasin, array_values(array_diff($demandees, $gardees))), ...$gardees]));
-        sort($cases);
+        $gardees = array_intersect($actuelle?->autorisations() ?? [], $reservees);
 
-        return $cases;
+        return [...$this->portee->verifierCochables($auteur, $magasin, array_diff($demandees, $gardees)), ...$gardees];
     }
 
     /**
@@ -140,6 +138,6 @@ final class AffectationsDesMembres
         $magasin = $affectation->magasin()->firstOrFail();
         $administrateur = User::query()->findOrFail($affectation->nomme_par);
 
-        $magasin->societe->proprietaire?->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
+        $magasin->societe->proprietaire->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
     }
 }

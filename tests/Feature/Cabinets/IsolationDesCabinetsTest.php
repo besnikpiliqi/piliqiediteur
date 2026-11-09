@@ -201,6 +201,39 @@ class IsolationDesCabinetsTest extends TestCase
         $this->assertTrue(collect($requetes)->contains(fn (string $sql): bool => str_starts_with($sql, 'select "name" from "users"') || str_starts_with($sql, 'select "users"."name" from "users"')));
     }
 
+    /**
+     * Les liens actifs d'un cabinet, que lit son propriétaire pour y mettre
+     * fin quand le cabinet n'est plus vérifié, ne lisent de chaque client
+     * que son identifiant, son SIREN et sa dénomination, d'un coup pour
+     * tous ses clients.
+     */
+    public function test_les_liens_actifs_d_un_cabinet_ne_lisent_du_client_que_son_siren_et_sa_denomination(): void
+    {
+        $liens = app(AccesDesCabinets::class)->liensActifsDuCabinet($this->c1);
+
+        $this->assertSame(
+            [[['id', 'siren', 'raison_sociale'], 'CLIENTE X'], [['id', 'siren', 'raison_sociale'], 'CLIENTE Y']],
+            $liens->map(fn (LienCabinet $lien): array => [array_keys($lien->client->getAttributes()), $lien->client->raison_sociale])->all(),
+        );
+    }
+
+    /**
+     * Un compte retiré d'un cabinet n'a aucun lien ni aucun droit chez ses
+     * clients, même si un client lui restait confié (le retrait efface
+     * d'ordinaire ses clients confiés, voir
+     * ChangerStatutCompteAction::retirerLesDroits()) : rien de ses droits
+     * ne s'inscrit au journal des événements du client.
+     */
+    public function test_un_compte_retire_d_un_cabinet_n_a_aucun_lien_ni_droit_meme_avec_un_client_encore_confie(): void
+    {
+        $this->a->forceFill(['statut' => StatutCompte::Retire])->save();
+        $retire = $this->a->refresh();
+
+        $this->assertSame(0, app(AccesDesCabinets::class)->liensDuCompte($retire)->count());
+        $this->assertSame([], app(AccesDesCabinets::class)->autorisationsParClient($retire));
+        $this->assertNull($retire->droitsDans($this->x));
+    }
+
     public function test_chaque_modele_d_un_cabinet_ou_d_un_lien_est_isole_par_sa_societe(): void
     {
         $this->inviterUneEntreprise($this->c1, SocieteFactory::sirenFictif(), 'a@b.test');

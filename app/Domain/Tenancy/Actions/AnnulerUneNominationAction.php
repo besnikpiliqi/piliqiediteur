@@ -60,15 +60,10 @@ class AnnulerUneNominationAction
                 $avant = $relue->avant_la_nomination;
 
                 if ($avant === null) {
-                    $magasinId = (int) $relue->magasin_id;
                     $relue->delete();
-                    $compteRelu->effacerLesNotificationsDesMagasins([$magasinId]);
-
-                    if ($compteRelu->affectationDeMembre() === null) {
-                        $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
-                        $compteRelu->effacerToutesSesNotifications();
-                        $this->sessions->fermer($compteRelu);
-                    }
+                    $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
+                    $compteRelu->effacerToutesSesNotifications();
+                    $this->sessions->fermer($compteRelu);
 
                     return;
                 }

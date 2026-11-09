@@ -33,13 +33,15 @@ use Illuminate\Support\Collection;
  *    le numéro, son bon d'avoir, et ne s'impute d'office que sur les
  *    tickets qu'il corrige. L'avoir de régularisation d'une facture, après
  *    la correction du SIREN de la société, ne règle, avant les autres, que
- *    la facture rectificative de cette facture, déjà émise et encore due,
- *    ou qui l'attendait (voir StatutFacture::EnAttenteDeRegularisation) :
- *    rien d'autre ne règle celle-ci, ni l'étape 2, ni la contre-passation
- *    d'un paiement, qui ne prennent que les factures qui attendent un
- *    règlement. Ce qui reste du crédit de cet avoir est réservé à la
- *    rectificative tant qu'elle manque (voir RegularisationDUneFacture),
- *    et cette imputation n'est jamais un encaissement.
+ *    la facture rectificative de cette facture qui attend cet avoir (voir
+ *    StatutFacture::EnAttenteDeRegularisation) : rien d'autre ne règle
+ *    celle-ci, ni l'étape 2, ni la contre-passation d'un paiement, qui ne
+ *    prennent que les factures qui attendent un règlement. Une
+ *    rectificative émise après l'avoir a pris son crédit à sa propre
+ *    émission (voir EmettreLaFactureRectificativeAction). Ce qui reste du
+ *    crédit de cet avoir est réservé à la rectificative tant qu'elle manque
+ *    (voir RegularisationDUneFacture), et cette imputation n'est jamais un
+ *    encaissement.
  *
  * Chaque facture reçoit au plus une imputation de chaque avoir, son
  * montant des deux étapes réunies, en centimes. Les factures et les avoirs

@@ -292,7 +292,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function calendrier(): Calendrier
     {
-        return ($this->estMembre() ? $this->magasinDeSonIdentifiant()?->calendrier() : null) ?? Calendrier::deParis();
+        return $this->estMembre() ? $this->magasinDeSonIdentifiant()->calendrier() : Calendrier::deParis();
     }
 
     /**
@@ -341,7 +341,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function estProprietaireDuMagasin(Magasin $magasin): bool
     {
-        return $this->estProprietaire() && (int) $magasin->societe_id === (int) $this->societe_id;
+        return $this->estProprietaire() && $magasin->societe_id === $this->societe_id;
     }
 
     public function estAdministrateur(): bool
@@ -393,7 +393,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function libelleDuRoleDeSociete(): string
     {
-        $denomination = $this->societe?->raison_sociale;
+        $denomination = $this->societe->raison_sociale;
 
         return match (true) {
             $this->estProprietaire() && $this->estDUnCabinet() => filled($denomination) ? "Propriétaire du cabinet {$denomination}" : 'Propriétaire du cabinet',
@@ -417,7 +417,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function libelleDuRoleDans(Magasin $magasin): string
     {
         $libelle = match (true) {
-            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role?->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
+            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
             $this->estDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
             default => $this->libelleDuRoleDeSociete(),
         };
@@ -631,7 +631,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function administreLeMagasin(Magasin $magasin): bool
     {
-        return (int) $magasin->societe_id === (int) $this->societe_id
+        return $magasin->societe_id === $this->societe_id
             && $this->magasinsDeSaPortee()->whereKey($magasin->getKey())->exists();
     }
 
@@ -643,7 +643,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function estResponsableDe(Magasin $magasin): bool
     {
         return $this->estMembre()
-            && (int) $magasin->societe_id === (int) $this->societe_id
+            && $magasin->societe_id === $this->societe_id
             && $this->affectations()->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value)->exists();
     }
 
@@ -662,7 +662,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function autorisationsDans(Magasin $magasin): array
     {
-        if (! $this->peutAgir() || ((int) $magasin->societe_id !== (int) $this->societe_id && ! $this->estDUnCabinet())) {
+        if (! $this->peutAgir() || ($magasin->societe_id !== $this->societe_id && ! $this->estDUnCabinet())) {
             return [];
         }
 
@@ -737,7 +737,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         $compte = self::query()->findOrFail($this->getKey());
         $duCabinet = $compte->estDUnCabinet();
 
-        if ((int) $magasin->societe_id !== (int) $compte->societe_id && ! $duCabinet) {
+        if ($magasin->societe_id !== $compte->societe_id && ! $duCabinet) {
             return null;
         }
 
@@ -778,7 +778,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         }
 
         return $this->affectationsLues()->first(fn (Affectation $affectation): bool => $affectation->role === null
-            && ($affectation->magasin_id === null || (int) $affectation->magasin_id === (int) $magasin->getKey()));
+            && ($affectation->magasin_id === null || $affectation->magasin_id === $magasin->getKey()));
     }
 
     /**
@@ -788,11 +788,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function affectationDeMembre(): ?Affectation
     {
-        if (! $this->estMembre()) {
-            return null;
-        }
-
-        return $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->first();
+        return $this->estMembre() ? $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->first() : null;
     }
 
     /**
@@ -824,7 +820,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
     {
         if ($this->estDUnCabinet()) {
-            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[(int) $magasin->societe_id] ?? null;
+            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[$magasin->societe_id] ?? null;
         }
 
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
@@ -916,10 +912,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         if ($this->estDUnCabinet()) {
             return $this->peutAgir()
                 && ! $magasin->est_demonstration
-                && in_array((int) $magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
+                && in_array($magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
         }
 
-        if ((int) $magasin->societe_id !== (int) $this->societe_id || ! $this->peutAgir()) {
+        if ($magasin->societe_id !== $this->societe_id || ! $this->peutAgir()) {
             return false;
         }
 
@@ -968,6 +964,23 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function effacerToutesSesNotifications(): void
     {
         $this->notifications()->delete();
+    }
+
+    /**
+     * Les magasins de sa société où ses droits valent, quel que soit son
+     * statut, par identifiant : ceux de sa portée pour le propriétaire et
+     * un administrateur (voir magasinsDeSaPortee()), celui de son
+     * affectation pour un membre, aucun pour un compte d'un cabinet. Relus
+     * en base : après un changement de ses droits, ceux qui sortent de la
+     * liste s'effacent de sa cloche (voir effacerLesNotificationsDesMagasins()).
+     *
+     * @return list<int>
+     */
+    public function magasinsDeSesDroits(): array
+    {
+        return $this->estMembre()
+            ? $this->affectations()->whereNotNull('magasin_id')->pluck('magasin_id')->all()
+            : $this->magasinsDeSaPortee()->pluck('magasins.id')->all();
     }
 
     /**
@@ -1041,7 +1054,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return match (true) {
             $tenant instanceof Magasin => $this->peutOuvrir($tenant),
-            $tenant instanceof Societe => $tenant->getKey() === (int) $this->societe_id && ($this->peutAdministrer() || $this->ouvreLEspaceDuCabinet()),
+            $tenant instanceof Societe => $tenant->getKey() === $this->societe_id && ($this->peutAdministrer() || $this->ouvreLEspaceDuCabinet()),
             default => false,
         };
     }

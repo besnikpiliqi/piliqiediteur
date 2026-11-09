@@ -34,8 +34,15 @@ use Tests\TestCase;
  *   n'en a reçu, ni plus de HT ni de TVA ;
  * - le stock de chaque produit est la somme de ses mouvements, et la
  *   somme des réceptions moins les retours et les ventes ;
- * - le coût moyen pondéré n'est jamais négatif, et la valeur du stock ne
- *   descend jamais sous 0 €.
+ * - son coût moyen pondéré et la valeur de son stock sont ceux que le
+ *   test recalcule lui-même, en dix-millièmes d'euro, depuis ses entrées et
+ *   ses sorties : chaque ligne d'achat validée entre à son coût réel (PU HT
+ *   moins sa remise), le coût moyen devenant la moyenne du stock en place
+ *   (rien quand il est vide) et de l'entrée, pondérée par leurs quantités ;
+ *   une vente sort au coût moyen, qui ne change pas ; un retour au
+ *   fournisseur sort au coût de sa ligne d'achat, et le coût moyen du
+ *   stock restant se recalcule, sa valeur jamais sous 0 € (CLAUDE.md,
+ *   « Achats et stock »).
  */
 class AchatsEtStockAuHasardTest extends TestCase
 {
@@ -54,6 +61,17 @@ class AchatsEtStockAuHasardTest extends TestCase
 
     private Fournisseur $fournisseur;
 
+    /**
+     * Par rang de produit, le stock et le coût moyen (en dix-millièmes
+     * d'euro) que le test attend, recalculés à chaque geste joué.
+     *
+     * @var array<int, array{stock: int, cmup: int}>
+     */
+    private array $attendus = [];
+
+    /** @var array<int, array{stock: int, cmup: int}> ceux du début de chaque cas */
+    private array $auDepart = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -67,6 +85,8 @@ class AchatsEtStockAuHasardTest extends TestCase
             [['19.90', 20], ['4.50', 5.5], ['89.00', 10]],
         );
         $this->fournisseur = Fournisseur::factory()->create();
+        $this->auDepart = array_map(fn (Produit $produit): array => ['stock' => 0, 'cmup' => self::enDixMilliemes($produit->fresh()->cmup_ht)], $this->produits);
+        $this->attendus = $this->auDepart;
     }
 
     public function test_des_achats_retours_au_fournisseur_et_ventes_au_hasard_gardent_le_stock_coherent(): void
@@ -76,6 +96,8 @@ class AchatsEtStockAuHasardTest extends TestCase
             self::NOMBRE_DE_CAS,
             fn (Tirage $tirage): array => array_map(fn (): array => $this->etape($tirage), range(1, $tirage->entier(1, 6))),
             function (array $etapes): void {
+                $this->attendus = $this->auDepart;
+
                 foreach ($etapes as $etape) {
                     $this->jouer($etape);
                 }
@@ -171,6 +193,7 @@ class AchatsEtStockAuHasardTest extends TestCase
 
         if ($quantite > 0) {
             self::vendreAuComptant($this->responsable, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->getKey(), 'quantite' => $quantite]], ModePaiement::CarteBancaire);
+            $this->attendus[$this->rangDe($produit->getKey())]['stock'] -= $quantite;
         }
     }
 
@@ -189,6 +212,10 @@ class AchatsEtStockAuHasardTest extends TestCase
         ], $lignes), ['date_facture' => '2026-10-14']);
 
         app(ValiderFactureAchatAction::class)->handle($this->responsable, $facture);
+
+        foreach ($lignes as $ligne) {
+            $this->entrer($ligne['produit'], $ligne['quantite'], self::coutDUneLigne($ligne['prix'], $ligne['remise']));
+        }
     }
 
     /**
@@ -216,9 +243,103 @@ class AchatsEtStockAuHasardTest extends TestCase
             }
         }
 
-        if ($selection !== []) {
-            app(EnregistrerAvoirFournisseurAction::class)->handle($this->responsable, $facture, $selection, 'Retour tiré au hasard');
+        if ($selection === []) {
+            return;
         }
+
+        app(EnregistrerAvoirFournisseurAction::class)->handle($this->responsable, $facture, $selection, 'Retour tiré au hasard');
+        $lignesAchetees = $facture->lignes->keyBy('id');
+
+        foreach ($selection as ['ligne_achat_id' => $ligneAchat, 'quantite' => $quantite]) {
+            $achetee = $lignesAchetees[$ligneAchat];
+            $this->sortirAuFournisseur(
+                $this->rangDe($achetee->produit_id),
+                $quantite,
+                self::coutDUneLigne(self::enMillioniemes($achetee->prix_unitaire_ht), self::enDixMilliemes($achetee->remise_pourcentage) / 100),
+            );
+        }
+    }
+
+    /**
+     * Une entrée de $quantite articles au coût $cout (en dix-millièmes
+     * d'euro) : le coût moyen devient la moyenne du stock en place, qui ne
+     * pèse rien quand il est vide ou négatif, et de l'entrée, pondérée par
+     * leurs quantités, arrondie au dix-millième (demi vers le haut).
+     */
+    private function entrer(int $rang, int $quantite, int $cout): void
+    {
+        ['stock' => $stock, 'cmup' => $cmup] = $this->attendus[$rang];
+        $enPlace = max($stock, 0);
+
+        $this->attendus[$rang] = ['stock' => $stock + $quantite, 'cmup' => self::diviserArrondi($enPlace * $cmup + $quantite * $cout, $enPlace + $quantite)];
+    }
+
+    /**
+     * Un retour au fournisseur de $quantite articles, au coût $cout de leur
+     * ligne d'achat : le coût moyen du stock restant est sa valeur, jamais
+     * sous 0 €, divisée par ce qui reste ; sans stock restant, il ne change
+     * pas.
+     */
+    private function sortirAuFournisseur(int $rang, int $quantite, int $cout): void
+    {
+        ['stock' => $stock, 'cmup' => $cmup] = $this->attendus[$rang];
+        $reste = max($stock, 0) - $quantite;
+
+        $this->attendus[$rang] = [
+            'stock' => $stock - $quantite,
+            'cmup' => $reste > 0 ? self::diviserArrondi(max(0, max($stock, 0) * $cmup - $quantite * $cout), $reste) : $cmup,
+        ];
+    }
+
+    /**
+     * Le coût réel d'un article d'une ligne d'achat, en dix-millièmes
+     * d'euro : son PU HT ($prix, en millionièmes d'euro) moins sa remise
+     * ($remise, en centièmes de point), arrondi une fois.
+     */
+    private static function coutDUneLigne(int $prix, int $remise): int
+    {
+        return self::diviserArrondi($prix * (10_000 - $remise), 1_000_000);
+    }
+
+    /**
+     * Une division de deux entiers positifs, arrondie au plus proche, un
+     * demi vers le haut.
+     */
+    private static function diviserArrondi(int $numerateur, int $denominateur): int
+    {
+        return intdiv(2 * $numerateur + $denominateur, 2 * $denominateur);
+    }
+
+    /**
+     * Un montant écrit comme sa colonne (« 12.3400 », jusqu'à quatre
+     * décimales), en dix-millièmes.
+     */
+    private static function enDixMilliemes(string $montant): int
+    {
+        [$entier, $decimales] = explode('.', $montant.'.');
+
+        return (int) $entier * 10_000 + (int) str_pad(substr($decimales, 0, 4), 4, '0');
+    }
+
+    /**
+     * Un PU HT écrit comme sa colonne (« 12.345678 »), en millionièmes.
+     */
+    private static function enMillioniemes(string $montant): int
+    {
+        [$entier, $decimales] = explode('.', $montant.'.');
+
+        return (int) $entier * 1_000_000 + (int) str_pad(substr($decimales, 0, 6), 6, '0');
+    }
+
+    private function rangDe(int $produitId): int
+    {
+        foreach ($this->produits as $rang => $produit) {
+            if ($produit->getKey() === $produitId) {
+                return $rang;
+            }
+        }
+
+        $this->fail("Le produit {$produitId} n'est pas l'un des produits du test.");
     }
 
     private function verifierLesRegles(): void
@@ -240,7 +361,7 @@ class AchatsEtStockAuHasardTest extends TestCase
             $this->assertLessThanOrEqual($centimes($achetee->montant_tva), $retours->sum(fn (LigneAvoirFournisseur $ligne): int => $centimes($ligne->montant_tva)), 'Un avoir fournisseur retourne plus de TVA que la ligne.');
         }
 
-        foreach ($this->produits as $produit) {
+        foreach ($this->produits as $rang => $produit) {
             $produit = $produit->fresh();
             $mouvements = MouvementStock::query()->where('produit_id', $produit->getKey())->get();
             $this->assertSame($mouvements->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite)), (int) $produit->stock_quantite, "Le stock de {$produit->nom} n'est pas la somme de ses mouvements.");
@@ -250,8 +371,14 @@ class AchatsEtStockAuHasardTest extends TestCase
             $vendu = (int) $mouvements->filter(fn (MouvementStock $mouvement): bool => $mouvement->type->value === 'vente')->sum('quantite');
             $this->assertSame($recu - $retourne - $vendu, (int) $produit->stock_quantite, "Le stock de {$produit->nom} n'est pas ses réceptions moins ses retours et ses ventes.");
 
-            $this->assertGreaterThanOrEqual(0.0, (float) $produit->cmup_ht, "Le coût moyen de {$produit->nom} est négatif.");
-            $this->assertGreaterThanOrEqual(0.0, max(0, $produit->stock_quantite) * (float) $produit->cmup_ht, "La valeur du stock de {$produit->nom} descend sous 0 €.");
+            ['stock' => $stock, 'cmup' => $cmup] = $this->attendus[$rang];
+            $this->assertSame($stock, (int) $produit->stock_quantite, "Le stock de {$produit->nom} n'est pas celui de ses entrées et sorties.");
+            $this->assertSame($cmup, self::enDixMilliemes($produit->cmup_ht), "Le coût moyen de {$produit->nom} n'est pas celui de ses entrées et sorties.");
+            $this->assertSame(
+                self::diviserArrondi(max($stock, 0) * $cmup, 100),
+                (int) round($calculateur->valeurAuCoutMoyen($stock, (float) $produit->cmup_ht, (float) $produit->taux_tva)['montant_ht'] * 100),
+                "La valeur HT du stock de {$produit->nom} n'est pas son stock au coût moyen.",
+            );
         }
     }
 }

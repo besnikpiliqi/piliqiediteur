@@ -12,11 +12,13 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -126,6 +128,42 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         $this->assertSame([], $affectationDuResponsable->autorisations());
         $this->assertSame(RoleMagasin::Vendeur, $affectationDuVendeur->fresh()->role);
+    }
+
+    /**
+     * Écrite par le modèle (voir Affectation), une affectation incohérente
+     * avec le rôle de société du compte est refusée avant d'atteindre la
+     * base, avec le message qui dit la règle, comme une case cochée sur
+     * l'affectation d'un responsable ; rien ne change.
+     */
+    public function test_le_modele_refuse_une_affectation_incoherente_avant_la_base(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
+        $administrateur = $this->administrateur($magasin, [$magasin->id]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $responsable = $this->responsable($magasin);
+        $avant = Affectation::query()->orderBy('id')->get(['id', 'user_id', 'magasin_id', 'role'])->toArray();
+
+        foreach ([
+            [$this->proprietaireDe($magasin), $magasin->id, RoleMagasin::Vendeur, 'Le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation.'],
+            [$administrateur, $autre->id, RoleMagasin::Responsable, 'Un administrateur n\'a aucun rôle de magasin.'],
+            [$administrateur, null, null, 'Un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux.'],
+            [$vendeur, $autre->id, null, 'Un membre est affecté à un magasin, avec un rôle de magasin.'],
+            [$vendeur, null, RoleMagasin::Vendeur, 'Un membre est affecté à un magasin, avec un rôle de magasin.'],
+        ] as [$compte, $magasinId, $role, $message]) {
+            $affectation = (new Affectation)->forceFill(['societe_id' => $magasin->societe_id, 'user_id' => $compte->id, 'magasin_id' => $magasinId, 'role' => $role]);
+
+            $this->assertThrows(fn () => $affectation->save(), LogicException::class, $message);
+        }
+
+        $this->assertThrows(
+            fn () => Affectation::query()->where('user_id', $responsable->id)->sole()->cocher([PermissionRegistry::FACTURE_VIEW]),
+            LogicException::class,
+            AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE,
+        );
+        $this->assertSame($avant, Affectation::query()->orderBy('id')->get(['id', 'user_id', 'magasin_id', 'role'])->toArray());
+        $this->assertSame([], Affectation::query()->where('user_id', $responsable->id)->sole()->autorisations());
     }
 
     public function test_la_base_refuse_une_autorisation_de_societe_a_qui_n_est_pas_administrateur(): void

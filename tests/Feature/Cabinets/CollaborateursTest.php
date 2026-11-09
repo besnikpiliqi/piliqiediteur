@@ -57,6 +57,23 @@ class CollaborateursTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Son tableau de bord dit au propriétaire d'un cabinet « Propriétaire du
+     * cabinet » suivi de la dénomination du cabinet quand elle est connue,
+     * et seulement « Propriétaire du cabinet » tant qu'elle ne l'est pas.
+     */
+    public function test_le_role_du_proprietaire_d_un_cabinet_nomme_le_cabinet_quand_sa_denomination_est_connue(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+
+        $this->assertNotEmpty($cabinet->raison_sociale);
+        $this->assertSame('Propriétaire du cabinet '.$cabinet->raison_sociale, $proprietaire->libelleDuRoleDeSociete());
+
+        $cabinet->forceFill(['raison_sociale' => null])->save();
+        $this->assertSame('Propriétaire du cabinet', $proprietaire->refresh()->libelleDuRoleDeSociete());
+    }
+
     public function test_seul_le_proprietaire_du_cabinet_cree_suspend_reactive_retire_et_reintegre_un_collaborateur(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

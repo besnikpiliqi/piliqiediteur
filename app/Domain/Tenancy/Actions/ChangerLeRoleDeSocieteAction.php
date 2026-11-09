@@ -43,7 +43,8 @@ use LogicException;
  * avec l'ancien et le nouveau rôle, la date et l'auteur (voir
  * JournalDesDroits). Dans l'ordre qu'exigent les gardes de la base : les
  * droits d'avant s'effacent, le rôle change, le magasin de rattachement
- * s'écrit, puis les droits nouveaux.
+ * s'écrit, puis les droits nouveaux. Les notifications d'un magasin où
+ * ses droits ne valent plus s'effacent de sa cloche.
  */
 class ChangerLeRoleDeSocieteAction
 {
@@ -133,7 +134,9 @@ class ChangerLeRoleDeSocieteAction
                 [$compteRelu] = $relus;
                 CreerAdministrateurAction::exigerLeProprietaire($auteurRelu, $societe);
                 $this->exigerUnChangement($auteurRelu, $compteRelu, $nouveauRole);
+                $avant = $compteRelu->magasinsDeSesDroits();
                 $ecrire($auteurRelu, $compteRelu);
+                $compteRelu->effacerLesNotificationsDesMagasins(array_values(array_diff($avant, $compteRelu->magasinsDeSesDroits())));
             });
         });
 

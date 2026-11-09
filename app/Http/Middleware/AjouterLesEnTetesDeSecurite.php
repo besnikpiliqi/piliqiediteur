@@ -20,7 +20,10 @@ use Symfony\Component\HttpFoundation\Response;
  * des scripts et des styles écrits dans la page, sans jeton à usage unique
  * (« unsafe-inline »), et l'évaluation des expressions d'Alpine
  * (« unsafe-eval ») ; les images en data: (initiales, icônes) et blob:
- * (aperçu d'un fichier choisi). Un en-tête déjà posé par la réponse
+ * (aperçu d'un fichier choisi), et le travailleur que FilePond crée depuis
+ * une adresse blob: pour dessiner l'aperçu d'une photo déposée (pièce du
+ * fournisseur, justificatif de la vérification de la société), que
+ * script-src n'admettrait pas. Un en-tête déjà posé par la réponse
  * (Referrer-Policy: no-referrer des pages ouvertes par un lien secret) est
  * gardé.
  */
@@ -32,6 +35,7 @@ final class AjouterLesEnTetesDeSecurite
         ."img-src 'self' data: blob:; "
         ."font-src 'self'; "
         ."connect-src 'self'; "
+        ."worker-src 'self' blob:; "
         ."object-src 'none'; "
         ."base-uri 'self'; "
         ."form-action 'self'; "

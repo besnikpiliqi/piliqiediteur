@@ -101,6 +101,42 @@ class InvitationsTest extends TestCase
         $this->assertSame(0, DB::table('invitations_cabinet')->count());
     }
 
+    /**
+     * « Inviter un client », dans l'espace du cabinet, dit ce qu'a fait le
+     * geste : une invitation à un SIREN libre, puis qu'elle est déjà
+     * ouverte ; une demande de rattachement à un SIREN inscrit, puis qu'elle
+     * est déjà en cours ; un geste refusé (le SIREN du cabinet lui-même)
+     * s'affiche, sans rien envoyer de plus.
+     */
+    public function test_inviter_un_client_depuis_l_espace_du_cabinet_dit_ce_que_le_geste_a_fait(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $inscrit = (string) $this->ouvrirUneSociete()->societe->siren;
+        $libre = SocieteFactory::sirenFictif();
+        Mail::fake();
+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
+
+        foreach ([
+            [$libre, ResultatDInvitation::InvitationEnvoyee],
+            [$libre, ResultatDInvitation::InvitationDejaEnvoyee],
+            [$inscrit, ResultatDInvitation::DemandeEnvoyee],
+            [$inscrit, ResultatDInvitation::DemandeDejaEnvoyee],
+        ] as [$siren, $resultat]) {
+            Livewire::test(InvitationsEtDemandes::class)
+                ->callAction('inviter', ['siren' => $siren, 'email' => 'dirigeant@entreprise.test', 'mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
+                ->assertHasNoActionErrors()
+                ->assertNotified($resultat->message('dirigeant@entreprise.test'));
+        }
+
+        Livewire::test(InvitationsEtDemandes::class)
+            ->callAction('inviter', ['siren' => (string) $cabinet->siren, 'email' => 'dirigeant@entreprise.test', 'mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
+            ->assertNotified(InviterUneEntrepriseAction::MESSAGE_SOI_MEME);
+
+        Mail::assertSent(InvitationDuCabinetMail::class, 1);
+        Mail::assertSent(DemandeDeRattachementMail::class, 1);
+        $this->assertSame(1, DB::table('invitations_cabinet')->count());
+    }
+
     public function test_un_mot_de_passe_faux_n_envoie_aucune_invitation(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

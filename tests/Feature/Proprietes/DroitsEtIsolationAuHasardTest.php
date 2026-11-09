@@ -28,13 +28,23 @@ use Tests\TestCase;
  * cochées au hasard, à côté d'une autre société. Pour chacun, ce qui doit
  * toujours tenir tient :
  *
+ * - il n'ouvre que les magasins que son rôle lui donne, calculés depuis
+ *   le cas tiré et non depuis le code vérifié : son magasin pour un
+ *   membre, son magasin ou les deux magasins de sa société pour un
+ *   administrateur, selon sa portée, jamais le magasin de l'autre
+ *   société ;
+ * - ses autorisations dans chaque magasin sont celles que le cas lui
+ *   donne : les cases tirées pour un vendeur, un observateur ou un
+ *   administrateur (à qui le propriétaire peut cocher la vente), toutes
+ *   celles du type d'activité sauf celles que seul le propriétaire coche
+ *   pour un responsable, aucune dans un magasin qu'il n'ouvre pas ;
  * - aucune fiche ni aucun document d'un autre magasin, ou d'une autre
  *   société, ne se lit depuis son magasin, ni ne s'ouvre, ni ne se modifie ;
  * - dans un magasin qu'il n'ouvre pas, il ne voit rien et ne crée rien ;
  * - dans un magasin qu'il ouvre, il voit une liste, et crée une fiche, un
  *   devis ou une facture d'achat, exactement quand la case correspondante
- *   est l'une de ses autorisations dans ce magasin : un rôle ne fait
- *   jamais ce que ses droits refusent.
+ *   est l'une des autorisations que le cas lui donne dans ce magasin : un
+ *   rôle ne fait jamais ce que ses droits refusent.
  */
 class DroitsEtIsolationAuHasardTest extends TestCase
 {
@@ -112,9 +122,12 @@ class DroitsEtIsolationAuHasardTest extends TestCase
                 $compte = $this->compte($cas, $magasin);
                 $this->actingAs($compte);
 
-                foreach ($this->magasins as $autre) {
-                    $ouvre = $compte->peutOuvrir($autre);
-                    $autorisations = $ouvre ? $compte->autorisationsDans($autre) : [];
+                foreach ($this->magasins as $rang => $autre) {
+                    $ouvre = self::ouvreAttendu($cas, $rang);
+                    $autorisations = $ouvre ? self::autorisationsAttendues($cas) : [];
+
+                    $this->assertSame($ouvre, $compte->peutOuvrir($autre), "Le {$cas['role']} du magasin {$cas['magasin']} ".($ouvre ? 'n\'ouvre pas' : 'ouvre')." {$autre->nom}.");
+                    $this->assertSame($autorisations, $compte->autorisationsDans($autre), "Les autorisations du {$cas['role']} dans {$autre->nom} ne sont pas celles que le cas lui donne.");
 
                     app(TenantContext::class)->runAs($autre, function () use ($compte, $autre, $ouvre, $autorisations): void {
                         foreach (self::CASES as $modele => [$voir, $creer]) {
@@ -148,14 +161,51 @@ class DroitsEtIsolationAuHasardTest extends TestCase
     }
 
     /**
+     * Le compte du cas, créé par le propriétaire : un administrateur de tous
+     * les magasins ou de son seul magasin, avec les cases tirées (la vente
+     * comprise, que le propriétaire peut lui cocher) ; un responsable, sans
+     * case ; un vendeur ou un observateur, avec les cases tirées.
+     *
      * @param  array{role: string, autorisations: list<string>, tous_les_magasins: bool}  $cas
      */
     private function compte(array $cas, Magasin $magasin): User
     {
         return match ($cas['role']) {
-            'administrateur' => $this->administrateur($magasin, $cas['tous_les_magasins'] ? null : [$magasin->getKey()], [], array_values(array_intersect($cas['autorisations'], PermissionRegistry::cocheesParLeProprietaire(TypeDActivite::Commerce)))),
+            'administrateur' => $this->administrateur($magasin, $cas['tous_les_magasins'] ? null : [$magasin->getKey()], [], $cas['autorisations']),
             'responsable' => $this->membre($magasin, RoleMagasin::Responsable),
             default => $this->membre($magasin, RoleMagasin::from($cas['role']), $cas['autorisations']),
         };
+    }
+
+    /**
+     * Le compte du cas ouvre-t-il le magasin de ce rang (0 et 1 : ceux de
+     * sa société, 2 : celui de l'autre société) ? Son magasin pour un
+     * membre ; son magasin, ou les deux de sa société s'il a tous les
+     * magasins, pour un administrateur ; jamais celui de l'autre société.
+     *
+     * @param  array{role: string, magasin: int, tous_les_magasins: bool}  $cas
+     */
+    private static function ouvreAttendu(array $cas, int $rang): bool
+    {
+        return $rang === $cas['magasin'] || ($rang !== 2 && $cas['role'] === 'administrateur' && $cas['tous_les_magasins']);
+    }
+
+    /**
+     * Les autorisations que le cas donne au compte dans un magasin qu'il
+     * ouvre, dans l'ordre alphabétique : toutes celles d'un commerce, sauf
+     * celles que seul le propriétaire coche, pour un responsable sans case ;
+     * les cases tirées, toutes d'un commerce, pour tout autre rôle.
+     *
+     * @param  array{role: string, autorisations: list<string>}  $cas
+     * @return list<string>
+     */
+    private static function autorisationsAttendues(array $cas): array
+    {
+        $attendues = $cas['role'] === 'responsable'
+            ? array_values(array_diff(PermissionRegistry::pourLeType(TypeDActivite::Commerce), PermissionRegistry::cocheesParLeProprietaire(TypeDActivite::Commerce)))
+            : $cas['autorisations'];
+        sort($attendues);
+
+        return $attendues;
     }
 }

@@ -82,9 +82,11 @@ jobs:
           fi
 
   # Analyse des flux de données (Psalm et son extension Laravel, installés
-  # à part dans tools/psalm) : aucun chemin d'une donnée venue de
-  # l'extérieur jusqu'à une requête SQL, une page, un fichier, une
-  # commande, une redirection, un autre site ou un e-mail sans contrôle.
+  # à part dans tools/psalm, et les saisies des écrans Livewire et Filament,
+  # tests/Qualite/Psalm) : aucun chemin d'une donnée venue de l'extérieur
+  # jusqu'à une requête SQL, une page, un fichier, une commande, une
+  # redirection, un autre site ou un e-mail sans contrôle ; puis le témoin,
+  # dont l'analyse doit voir exactement les chemins qu'il annonce.
   flux:
     runs-on: ubuntu-latest
 
@@ -119,6 +121,11 @@ jobs:
           mkdir -p storage/qualite
           php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --no-progress --report=storage/qualite/psalm.json || true
           php tests/Qualite/qualite.php flux storage/qualite/psalm.json
+
+      - name: Témoin de l'analyse des flux
+        run: |
+          php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --no-progress --report=storage/qualite/psalm-temoin.json || true
+          php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json
 
   # Sécurité des dépendances : une faille connue d'un paquet du dépôt fait
   # échouer la CI ; elle se corrige par la mise à jour du paquet.
@@ -157,12 +164,14 @@ jobs:
   # (les tests en navigateur passent dans la tâche « tests », sans
   # couverture : Infection ne retrouve pas leurs noms dans le rapport
   # JUnit) : chaque partie tient son seuil, et chaque ligne de app/ ajoutée
-  # ou modifiée par l'envoi est exécutée par un test. Puis
-  # tests de mutation (Infection) des lignes changées par l'envoi dans les
-  # parties sensibles (les calculs, les droits et l'isolation ; la caisse
-  # sécurisée à l'étape 3), chaque partie à son score minimal ; chaque processus
-  # d'Infection a sa base (TEST_TOKEN, LARAVEL_PARALLEL_TESTING). Rapports
-  # gardés en artefact.
+  # ou modifiée par l'envoi est exécutée par un test. Puis tests de
+  # mutation (Infection) des fichiers entiers des parties sensibles (les
+  # calculs, les droits et l'isolation ; la caisse sécurisée à l'étape 3)
+  # ajoutés ou modifiés par l'envoi (décision de l'éditeur du 01/11/2026,
+  # point 2), chaque partie à son score minimal : un test retiré qui
+  # arrêtait les mutants d'une autre méthode d'un fichier changé se voit ;
+  # chaque processus d'Infection a sa base (TEST_TOKEN,
+  # LARAVEL_PARALLEL_TESTING). Rapports gardés en artefact.
   couverture:
     runs-on: ubuntu-latest
 
@@ -248,7 +257,7 @@ jobs:
         run: |
           if [ -n "$(php tests/Qualite/qualite.php sensibles-changes "$BASE")" ]; then
             php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json
-            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-lines --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
+            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-filter=AM --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
             if [ -f storage/qualite/infection.json ]; then
               php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
             fi

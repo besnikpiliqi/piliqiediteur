@@ -10,6 +10,7 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Enums\EtatInvitation;
 use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Cabinets\Exceptions\InvitationInvalideException;
+use App\Domain\Cabinets\Jobs\RendreCaduquesLesInvitationsDuSiren;
 use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
@@ -394,6 +395,29 @@ class AccepterLInvitationTest extends TestCase
         $this->inscrireUneSociete($autreSiren);
         $this->artisan('app:expirer-invitations-cabinets')->assertSuccessful();
         $this->assertSame(EtatInvitation::Caduque, InvitationCabinet::query()->withoutGlobalScopes()->where('siren', $autreSiren)->sole()->etat);
+    }
+
+    /**
+     * Une invitation qui n'est plus ouverte quand le travail la relit sous
+     * son verrou (retirée entre-temps par son cabinet) ne devient pas
+     * caduque : son état reste le sien, rien ne s'inscrit au journal
+     * d'audit du cabinet, et le cabinet n'est pas prévenu.
+     */
+    public function test_une_invitation_deja_close_quand_le_travail_la_relit_ne_devient_pas_caduque(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $siren = SocieteFactory::sirenFictif();
+        $this->inviterUneEntreprise($cabinet, $siren, 'a@b.test');
+        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
+        app(RetirerLInvitationAction::class)->handle($this->proprietaireDuCabinet($cabinet), $invitation);
+        app(TenantContext::class)->clear();
+        $avisAvant = $this->proprietaireDuCabinet($cabinet)->notifications()->count();
+
+        (new RendreCaduquesLesInvitationsDuSiren($siren, 0))->rendreCaduque($invitation->id, $cabinet->id);
+
+        $this->assertSame(EtatInvitation::Retiree, $invitation->fresh()->etat);
+        $this->assertSame([], $this->entreesDAudit($cabinet, ActionAuditee::InvitationCaduque));
+        $this->assertSame($avisAvant, $this->proprietaireDuCabinet($cabinet)->notifications()->count());
     }
 
     public function test_l_acceptation_d_une_societe_sans_magasin_ne_verrouille_aucun_registre_et_active_le_lien(): void

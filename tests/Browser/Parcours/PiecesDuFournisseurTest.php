@@ -31,6 +31,13 @@ use Tests\Browser\Support\Navigation;
 
 const PDF_DU_FOURNISSEUR = "%PDF-1.4\nFacture F-812 du Grossiste du Nord\n%%EOF";
 
+/**
+ * Une vraie photo JPEG (16 × 12 pixels orange), que le navigateur sait
+ * décoder pour son aperçu, écrite ici plutôt que dessinée par l'extension
+ * GD, que la CI n'installe pas pour chaque version de PHP.
+ */
+const PHOTO_DU_FOURNISSEUR = '/9j/4AAQSkZJRgABAQEAYABgAAD//gA7Q1JFQVRPUjogZ2QtanBlZyB2MS4wICh1c2luZyBJSkcgSlBFRyB2ODApLCBxdWFsaXR5ID0gNzUK/9sAQwAIBgYHBgUIBwcHCQkICgwUDQwLCwwZEhMPFB0aHx4dGhwcICQuJyAiLCMcHCg3KSwwMTQ0NB8nOT04MjwuMzQy/9sAQwEJCQkMCwwYDQ0YMiEcITIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy/8AAEQgADAAQAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8Anooor5A+qP/Z';
+
 beforeEach(function () {
     Storage::fake(PiecesDuFournisseur::DISQUE);
     Storage::fake(FileUploadConfiguration::disk());
@@ -46,6 +53,15 @@ function pieceSurLePoste(string $nom, string $contenu): string
     File::put($chemin, $contenu);
 
     return $chemin;
+}
+
+/**
+ * Une photo JPEG de la facture du fournisseur, sur le poste de la
+ * personne, prête à être choisie.
+ */
+function photoSurLePoste(string $nom): string
+{
+    return pieceSurLePoste($nom, base64_decode(PHOTO_DU_FOURNISSEUR, true));
 }
 
 /**
@@ -104,6 +120,33 @@ test('le responsable dépose la facture du fournisseur à la saisie, avec sa dat
     $onglet->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey())->voir('facture-F-812.pdf');
     $fichier = telechargerLaPiece($onglet, 'facture-F-812.pdf');
     expect([$fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe(['facture-F-812.pdf', 'application/pdf', PDF_DU_FOURNISSEUR]);
+});
+
+test('le responsable dépose une photo de la facture du fournisseur : son aperçu s’affiche sans aucune violation de la politique de contenu', function () {
+    $societe = $this->societeComplete();
+    $onglet = $this->seConnecter($societe->responsable)
+        ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/create')
+        ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
+        ->remplir('N° de facture du fournisseur', 'F-813')
+        ->remplir('Date de la facture du fournisseur', '2026-03-09')
+        ->envoyerLeFichier(photoSurLePoste('facture-F-813.jpg'))
+        // FilePond dessine l'aperçu dans un travailleur créé depuis une
+        // adresse blob: (worker-src de la politique de contenu) : sans lui,
+        // aucun aperçu, et la violation ne survient qu'après l'envoi.
+        ->attendreQue("document.querySelectorAll('.filepond--image-preview canvas').length === 1", 'l’aperçu de la photo ne s’affiche pas')
+        ->verifier();
+    expect([$onglet->element('.filepond--item')->count(), $onglet->element('.filepond--image-preview')->count()])->toBe([1, 1]);
+
+    $onglet->cliquerSur('Ajouter un produit')
+        ->choisirDansLaListe('Produit', 'Bougie parfumée')
+        ->remplir('Quantité reçue', '2')
+        ->remplir('Prix d\'achat HT', '5')
+        ->soumettre('Ajouter à la facture')
+        ->soumettre('Créer')
+        ->attendreLaPage('/facture-achats$');
+
+    $piece = app(TenantContext::class)->runAs($societe->magasin, fn () => FactureAchat::query()->where('numero_fournisseur', 'F-813')->sole()->pieces()->sole());
+    expect([$piece->nom_origine, $piece->type_mime])->toBe(['facture-F-813.jpg', 'image/jpeg']);
 });
 
 test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats', function () {

@@ -89,22 +89,9 @@ class Affectation extends Model
         });
     }
 
-    /**
-     * Est-ce l'affectation d'un administrateur (sans rôle de magasin) ?
-     */
-    public function estDAdministrateur(): bool
-    {
-        return $this->role === null;
-    }
-
     public function estDeResponsable(): bool
     {
         return $this->role === RoleMagasin::Responsable;
-    }
-
-    public function estATousLesMagasins(): bool
-    {
-        return $this->magasin_id === null;
     }
 
     /**

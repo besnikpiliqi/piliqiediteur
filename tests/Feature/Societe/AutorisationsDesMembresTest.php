@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\EditMembreDuMagasin;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use InvalidArgumentException;
 use Livewire\Livewire;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -548,6 +550,49 @@ class AutorisationsDesMembresTest extends TestCase
 
         $this->assertCount(count(PermissionRegistry::toutes()), $proposees);
         $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $proposees);
+    }
+
+    /**
+     * Le téléchargement des documents par période, que seul le propriétaire
+     * coche, reste tel quel quand un responsable change les autres cases
+     * d'un vendeur, même renvoyé avec elles comme l'écran le montre coché ;
+     * un responsable ne le coche jamais à un vendeur qui ne l'a pas.
+     */
+    public function test_un_responsable_qui_renvoie_la_case_que_le_proprietaire_a_cochee_la_garde_sans_pouvoir_la_cocher(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsable($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $collegue = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+
+        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+
+        $this->assertSame([PermissionRegistry::AVOIR_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER], $vendeur->refresh()->affectationDeMembre()->autorisations());
+        $this->assertThrows(
+            fn () => app(ModifierMembreAction::class)->handle($responsable, $collegue, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]),
+            LogicException::class,
+            PorteeDesDroits::REFUS_AU_DELA,
+        );
+        $this->assertSame([PermissionRegistry::FACTURE_VIEW], $collegue->refresh()->affectationDeMembre()->autorisations());
+    }
+
+    /**
+     * Un administrateur autorisé à nommer les responsables qui donne une
+     * case à un responsable s'entend dire qu'un responsable n'en a pas, avant
+     * toute autre raison (une case qu'il ne pourrait pas cocher lui-même) ;
+     * aucun compte n'est créé.
+     */
+    public function test_un_responsable_cree_avec_une_case_est_refuse_parce_qu_un_responsable_n_en_a_pas(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
+
+        $this->assertThrows(
+            fn () => app(CreerMembreAction::class)->handle($administrateur, $magasin, ['name' => 'Chef'], RoleMagasin::Responsable, [PermissionRegistry::PARAMETRES_GERER]),
+            LogicException::class,
+            AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE,
+        );
+        $this->assertFalse(User::query()->where('name', 'Chef')->exists());
     }
 
     /**

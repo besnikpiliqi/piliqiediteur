@@ -62,6 +62,7 @@ class EnTetesDeSecuriteTest extends TestCase
         $this->assertSame(["'none'"], $directives['frame-ancestors']);
         $this->assertSame(["'self'"], $directives['connect-src']);
         $this->assertSame(["'self'"], $directives['font-src']);
+        $this->assertSame(["'self'", 'blob:'], $directives['worker-src']);
 
         foreach ($directives as $nom => $sources) {
             foreach ($sources as $source) {

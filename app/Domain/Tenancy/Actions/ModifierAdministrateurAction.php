@@ -19,7 +19,8 @@ use LogicException;
  * Contrôlé sur l'auteur et le compte relus sous les verrous des registres
  * des magasins touchés et de leurs lignes ; JET 130 dans chacun (tous les
  * magasins de la société pour un administrateur de tous les magasins),
- * puis l'entrée d'audit (voir JournalDesDroits).
+ * puis l'entrée d'audit (voir JournalDesDroits). Les notifications d'un
+ * magasin qui sort de sa portée s'effacent de sa cloche.
  */
 class ModifierAdministrateurAction
 {
@@ -49,9 +50,11 @@ class ModifierAdministrateurAction
             $this->journalDesDroits->modifier($auteur, ActionAuditee::AdministrateurModifie, [$administrateur], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu, array $relus) use ($societe, $portee): void {
                 [$administrateurRelu] = $relus;
                 self::exigerUnAdministrateur($auteurRelu, $administrateurRelu, $societe->getKey());
+                $avant = $administrateurRelu->magasinsDeSesDroits();
 
                 $this->porteeDesAdministrateurs->effacer($administrateurRelu);
                 $this->porteeDesAdministrateurs->ecrire($administrateurRelu, $portee);
+                $administrateurRelu->effacerLesNotificationsDesMagasins(array_values(array_diff($avant, $administrateurRelu->magasinsDeSesDroits())));
             });
         });
 

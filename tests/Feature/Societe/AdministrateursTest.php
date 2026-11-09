@@ -13,6 +13,7 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
@@ -288,6 +289,8 @@ class AdministrateursTest extends TestCase
         $this->assertSame([[], []], [$administrateur->autorisationsDeSociete(), $administrateur->autorisationsDans($magasin)]);
         $this->assertSame(0, DB::table('autorisations_societe')->where('user_id', $administrateur->id)->count());
         $this->assertSame(0, Affectation::query()->where('user_id', $administrateur->id)->count());
+        $this->assertFalse($administrateur->administreTousLesMagasins());
+        $this->assertSame([], $administrateur->magasinsDeSaPortee()->pluck('magasins.id')->all());
     }
 
     /**
@@ -406,6 +409,33 @@ class AdministrateursTest extends TestCase
     }
 
     /**
+     * Les notifications d'un magasin qui sort de la portée d'un
+     * administrateur s'effacent de sa cloche, quand le propriétaire réduit
+     * sa portée comme quand il en fait un membre d'un seul magasin ; celles
+     * des magasins où ses droits valent encore restent.
+     */
+    public function test_les_notifications_d_un_magasin_qui_sort_de_ses_droits_s_effacent(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
+        $troisieme = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'La Troisième']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $administrateur = $this->administrateur($magasin);
+        $avis = fn (): array => $administrateur->notifications()->get()->map(fn ($notification): int => (int) $notification->data['magasin_id'])->sort()->values()->all();
+
+        foreach ([$magasin, $autre, $troisieme] as $concerne) {
+            $administrateur->notify(new FacturesPasseesEnRetard($concerne, ['FAC-'.$concerne->id]));
+        }
+
+        app(ModifierAdministrateurAction::class)->modifier($proprietaire, $administrateur, [$magasin->id, $autre->id], PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
+        $this->assertSame([$magasin->id, $autre->id], $avis());
+
+        app(ChangerLeRoleDeSocieteAction::class)->versMembre($proprietaire, $administrateur, RoleMagasin::Vendeur, null, $autre->id);
+        $this->assertSame([$autre->id], $avis());
+        $this->assertSame([$autre->id], $administrateur->refresh()->magasinsDeSesDroits());
+    }
+
+    /**
      * Tous les magasins, ou une sélection d'au moins un magasin : une
      * sélection vide est refusée, et la base refuse les deux sortes
      * d'affectations ensemble (voir GardesDesDroitsEnBaseTest).
@@ -443,6 +473,7 @@ class AdministrateursTest extends TestCase
         $this->assertSame([], $administrateur->autorisationsDans($horsSelection));
         $this->assertSame([], $administrateur->autorisationsDans($magasin));
         $this->assertFalse($administrateur->administreTousLesMagasins());
+        $this->assertSame([], $administrateur->magasinsDeSaPortee()->pluck('magasins.id')->all());
         $this->assertFalse($administrateur->canAccessTenant($horsSelection));
     }
 

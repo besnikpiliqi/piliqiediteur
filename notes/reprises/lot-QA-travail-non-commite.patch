@@ -1,294 +1,1552 @@
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+index f8a6ef8..b02974a 100644
+--- a/.github/workflows/tests.yml
++++ b/.github/workflows/tests.yml
+@@ -82,9 +82,11 @@ jobs:
+           fi
+ 
+   # Analyse des flux de données (Psalm et son extension Laravel, installés
+-  # à part dans tools/psalm) : aucun chemin d'une donnée venue de
+-  # l'extérieur jusqu'à une requête SQL, une page, un fichier, une
+-  # commande, une redirection, un autre site ou un e-mail sans contrôle.
++  # à part dans tools/psalm, et les saisies des écrans Livewire et Filament,
++  # tests/Qualite/Psalm) : aucun chemin d'une donnée venue de l'extérieur
++  # jusqu'à une requête SQL, une page, un fichier, une commande, une
++  # redirection, un autre site ou un e-mail sans contrôle ; puis le témoin,
++  # dont l'analyse doit voir exactement les chemins qu'il annonce.
+   flux:
+     runs-on: ubuntu-latest
+ 
+@@ -120,6 +122,11 @@ jobs:
+           php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --no-progress --report=storage/qualite/psalm.json || true
+           php tests/Qualite/qualite.php flux storage/qualite/psalm.json
+ 
++      - name: Témoin de l'analyse des flux
++        run: |
++          php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --no-progress --report=storage/qualite/psalm-temoin.json || true
++          php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json
++
+   # Sécurité des dépendances : une faille connue d'un paquet du dépôt fait
+   # échouer la CI ; elle se corrige par la mise à jour du paquet.
+   audit:
+@@ -157,12 +164,14 @@ jobs:
+   # (les tests en navigateur passent dans la tâche « tests », sans
+   # couverture : Infection ne retrouve pas leurs noms dans le rapport
+   # JUnit) : chaque partie tient son seuil, et chaque ligne de app/ ajoutée
+-  # ou modifiée par l'envoi est exécutée par un test. Puis
+-  # tests de mutation (Infection) des lignes changées par l'envoi dans les
+-  # parties sensibles (les calculs, les droits et l'isolation ; la caisse
+-  # sécurisée à l'étape 3), chaque partie à son score minimal ; chaque processus
+-  # d'Infection a sa base (TEST_TOKEN, LARAVEL_PARALLEL_TESTING). Rapports
+-  # gardés en artefact.
++  # ou modifiée par l'envoi est exécutée par un test. Puis tests de
++  # mutation (Infection) des fichiers entiers des parties sensibles (les
++  # calculs, les droits et l'isolation ; la caisse sécurisée à l'étape 3)
++  # ajoutés ou modifiés par l'envoi (décision de l'éditeur du 01/11/2026,
++  # point 2), chaque partie à son score minimal : un test retiré qui
++  # arrêtait les mutants d'une autre méthode d'un fichier changé se voit ;
++  # chaque processus d'Infection a sa base (TEST_TOKEN,
++  # LARAVEL_PARALLEL_TESTING). Rapports gardés en artefact.
+   couverture:
+     runs-on: ubuntu-latest
+ 
+@@ -248,7 +257,7 @@ jobs:
+         run: |
+           if [ -n "$(php tests/Qualite/qualite.php sensibles-changes "$BASE")" ]; then
+             php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json
+-            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-lines --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
++            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-filter=AM --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
+             if [ -f storage/qualite/infection.json ]; then
+               php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
+             fi
 diff --git a/README.md b/README.md
-index 673e253..b624b16 100644
+index b624b16..30141ac 100644
 --- a/README.md
 +++ b/README.md
-@@ -100,9 +100,9 @@ ## Tests, commandes et fonctionnement
+@@ -99,9 +99,9 @@ ## Tests, commandes et fonctionnement
+ **Outils de qualité.** Décidés par l'éditeur le 01/11/2026 et le 07/11/2026 ; la CI les passe tous à chaque envoi (tâches « Analyse statique et seuils », « Analyse des flux de données », « Audit des dépendances » et « Couverture et mutation »), toutes sur PostgreSQL quand elles lisent une base. Aucun outil ne garantit un logiciel sans défaut : ils en réduisent le risque. Leurs seuils sont dans `tests/Qualite/seuils.json` et ne font que monter : la CI échoue si un envoi en baisse un (`php tests/Qualite/qualite.php seuils <ancien seuils.json>`), ou si `phpstan.neon` n'analyse pas au niveau qu'il enregistre. Les grandes parties du logiciel (calculs, caisse sécurisée, droits et isolation, cabinets, pages publiques, facturation, achats et stock, société, écrans et socle) sont dans `tests/Qualite/parties.php`.
  
  - *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
- - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`).
--- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test).
-+- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, moins un dixième de point (100 % pour les calculs, entièrement couverts) : une ligne qu'une autre machine n'exécuterait pas, selon un délai ou une concurrence, ne fait pas échouer la CI.
- - *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet, au plus celui des lignes de l'envoi qui l'a enregistré ; la CI le compare, à chaque envoi, au score des seules lignes changées : sur peu de lignes, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil.
--- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou), le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent, et le fournisseur et le coût moyen qu'un nouveau produit reçoit à sa création par un achat validé, que l'entrée en stock de la même validation réécrit.
-+- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou) et le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent.
+-- *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`).
+-- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, moins un dixième de point (100 % pour les calculs, entièrement couverts) : une ligne qu'une autre machine n'exécuterait pas, selon un délai ou une concurrence, ne fait pas échouer la CI.
+-- *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet, au plus celui des lignes de l'envoi qui l'a enregistré ; la CI le compare, à chaque envoi, au score des seules lignes changées : sur peu de lignes, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil.
++- *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
++- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; une partie qui a un seuil sans aucune ligne mesurée fait échouer le contrôle, comme un rapport produit dans un autre dépôt) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, sans autre marge : une partie qui perd une ligne couverte fait échouer la CI. La couverture des branches, que demande aussi la décision du 01/11/2026, n'est pas mesurée : PCOV, que la décision impose, ne mesure que les lignes ; la mesurer demanderait Xdebug (couverture des chemins, bien plus lente) dans une tâche de la CI, question soumise à l'éditeur.
++- *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (les policies, les contrôles et les gardes des droits, la portée des comptes, les droits que lit `User`, l'accès des cabinets à leurs clients et les affectations des membres ; ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-filter=AM --git-diff-base=<commit>` pour les fichiers sensibles ajoutés ou modifiés depuis ce commit, tous leurs mutants, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet ; la CI le compare, à chaque envoi, au score des fichiers sensibles que l'envoi ajoute ou modifie, chacun entier (décision du 01/11/2026, point 2) : un test retiré qui arrêtait les mutants d'une autre méthode d'un fichier changé se voit. Sur peu de fichiers, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil. Un envoi qui change `User.php` ou un fichier de calcul très appelé fait tourner la tâche plus d'une heure.
+ - *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou) et le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent.
  - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
  - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
- - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, et que le tableau de bord et « Les caisses » de l'espace de la société (pour le propriétaire comme pour un administrateur) et le tableau de bord d'un cabinet lisent la base autant de fois avec un magasin ou un client que trois, sous un plafond ; `TempsDeReponseTest` (en navigateur) vérifie que chaque page principale du magasin, le tableau de bord et « Les caisses » de l'espace de la société et le tableau de bord d'un cabinet s'ouvrent sous un plafond de temps. Les droits que le compte connecté lit pendant une requête (ses autorisations dans chaque magasin, ses affectations, et pour un compte d'un cabinet les clients que ses liens lui ouvrent et ce que chacun lui accorde) se lisent une fois par requête et s'oublient à sa fin.
-diff --git a/app/Domain/Achats/Services/ConstructeurLigneAchat.php b/app/Domain/Achats/Services/ConstructeurLigneAchat.php
-index 2e4e1dc..75b0f55 100644
---- a/app/Domain/Achats/Services/ConstructeurLigneAchat.php
-+++ b/app/Domain/Achats/Services/ConstructeurLigneAchat.php
-@@ -36,7 +36,7 @@
-  * fiche peut être corrigée au passage, tout de suite ; ou un nouveau
-  * produit, dont la ligne d'un brouillon garde seulement la fiche
-  * (LigneAchat::$nouveau_produit) : il n'est créé qu'à la validation de la
-- * facture, rattaché à son fournisseur (voir creerLesNouveauxProduits()).
-+ * facture (voir creerLesNouveauxProduits()).
-  * Un brouillon supprimé ne laisse ainsi aucun produit derrière lui, et ne
-  * consomme aucune référence automatique. Seule la correction d'une
-  * facture déjà validée, dont la marchandise est déjà reçue, crée son
-@@ -239,9 +239,14 @@ public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lig
-      * validée (voir enregistrer()), dans l'ordre de ses lignes. Son prix de
-      * vente TTC est celui de sa fiche, sinon celui que le barème actif du
-      * magasin prévoit pour son prix d'achat, remise déduite ; sans l'un ni
--     * l'autre, la validation est refusée. Il naît rattaché au fournisseur
--     * de la facture, à son coût réel (voir LigneAchat::coutUnitaireHt()) ;
--     * sa référence, saisie ou générée (voir Produit), est prise à ce
-+     * l'autre, la validation est refusée. Son fournisseur et son coût moyen
-+     * lui viennent, dans la même transaction, de l'entrée en stock de la
-+     * validation (voir IncrementerStockApresValidationFactureAchat) ou de la
-+     * correction de la réception (voir
-+     * ModifierFactureAchatAction::corrigerLaReception()), comme à tout
-+     * produit de la facture : le fournisseur de la facture et son coût réel
-+     * (voir LigneAchat::coutUnitaireHt()). Sa référence, saisie ou générée
-+     * (voir Produit), est prise à ce
-      * moment-là : les références automatiques suivent l'ordre des
-      * validations, et une référence saisie qu'un autre produit a prise
-      * entre-temps est refusée (voir Produit::verifierQueSaReferenceEstLibre()).
-@@ -262,7 +267,6 @@ public function creerLesNouveauxProduits(FactureAchat $factureAchat): void
-                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
-             }
+diff --git a/app/Domain/Facturation/Services/ImputationDuCredit.php b/app/Domain/Facturation/Services/ImputationDuCredit.php
+index 2cd316d..9e431b3 100644
+--- a/app/Domain/Facturation/Services/ImputationDuCredit.php
++++ b/app/Domain/Facturation/Services/ImputationDuCredit.php
+@@ -33,13 +33,15 @@
+  *    le numéro, son bon d'avoir, et ne s'impute d'office que sur les
+  *    tickets qu'il corrige. L'avoir de régularisation d'une facture, après
+  *    la correction du SIREN de la société, ne règle, avant les autres, que
+- *    la facture rectificative de cette facture, déjà émise et encore due,
+- *    ou qui l'attendait (voir StatutFacture::EnAttenteDeRegularisation) :
+- *    rien d'autre ne règle celle-ci, ni l'étape 2, ni la contre-passation
+- *    d'un paiement, qui ne prennent que les factures qui attendent un
+- *    règlement. Ce qui reste du crédit de cet avoir est réservé à la
+- *    rectificative tant qu'elle manque (voir RegularisationDUneFacture),
+- *    et cette imputation n'est jamais un encaissement.
++ *    la facture rectificative de cette facture qui attend cet avoir (voir
++ *    StatutFacture::EnAttenteDeRegularisation) : rien d'autre ne règle
++ *    celle-ci, ni l'étape 2, ni la contre-passation d'un paiement, qui ne
++ *    prennent que les factures qui attendent un règlement. Une
++ *    rectificative émise après l'avoir a pris son crédit à sa propre
++ *    émission (voir EmettreLaFactureRectificativeAction). Ce qui reste du
++ *    crédit de cet avoir est réservé à la rectificative tant qu'elle manque
++ *    (voir RegularisationDUneFacture), et cette imputation n'est jamais un
++ *    encaissement.
+  *
+  * Chaque facture reçoit au plus une imputation de chaque avoir, son
+  * montant des deux étapes réunies, en centimes. Les factures et les avoirs
+diff --git a/app/Domain/Tenancy/Models/Affectation.php b/app/Domain/Tenancy/Models/Affectation.php
+index 3b25ba9..8395dae 100644
+--- a/app/Domain/Tenancy/Models/Affectation.php
++++ b/app/Domain/Tenancy/Models/Affectation.php
+@@ -89,24 +89,11 @@ protected static function booted(): void
+         });
+     }
  
--            $produit->forceFill(['fournisseur_id' => $factureAchat->fournisseur_id, 'cmup_ht' => $ligne->coutUnitaireHt()]);
-             $this->origine->pendant(OrigineProduit::Achat, fn (): bool => $produit->save());
- 
-             $ligne->update(['produit_id' => $produit->id, 'reference' => $produit->reference, 'nouveau_produit' => null]);
-diff --git a/app/Domain/Achats/Services/TvaDuFournisseur.php b/app/Domain/Achats/Services/TvaDuFournisseur.php
-index 9a758b5..a645116 100644
---- a/app/Domain/Achats/Services/TvaDuFournisseur.php
-+++ b/app/Domain/Achats/Services/TvaDuFournisseur.php
-@@ -151,21 +151,21 @@ public function retenir(User $compte, FactureAchat|AvoirFournisseur $document, D
-      */
-     public function proposer(AvoirFournisseur $avoir, DocumentChiffre $chiffre, MontantsDuFournisseur $montants): void
+-    /**
+-     * Est-ce l'affectation d'un administrateur (sans rôle de magasin) ?
+-     */
+-    public function estDAdministrateur(): bool
+-    {
+-        return $this->role === null;
+-    }
+-
+     public function estDeResponsable(): bool
      {
--        $this->enregistrerLesTaux($avoir, $this->ecarts($chiffre), $montants, function (Model $ligne): void {
--            $ligne->forceFill(['ecart_confirme_par' => null, 'ecart_confirme_le' => null, 'ecart_confirme_empreinte' => null]);
--        });
-+        $this->enregistrerLesTaux($avoir, $this->ecarts($chiffre), $montants);
+         return $this->role === RoleMagasin::Responsable;
+     }
+ 
+-    public function estATousLesMagasins(): bool
+-    {
+-        return $this->magasin_id === null;
+-    }
+-
+     /**
+      * Les autorisations cochées pour cette affectation, telles que la base
+      * les donne, dans l'ordre alphabétique.
+diff --git a/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php b/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
+index 7bb0ccc..6023a68 100644
+--- a/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
++++ b/app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
+@@ -20,7 +20,10 @@
+  * des scripts et des styles écrits dans la page, sans jeton à usage unique
+  * (« unsafe-inline »), et l'évaluation des expressions d'Alpine
+  * (« unsafe-eval ») ; les images en data: (initiales, icônes) et blob:
+- * (aperçu d'un fichier choisi). Un en-tête déjà posé par la réponse
++ * (aperçu d'un fichier choisi), et le travailleur que FilePond crée depuis
++ * une adresse blob: pour dessiner l'aperçu d'une photo déposée (pièce du
++ * fournisseur, justificatif de la vérification de la société), que
++ * script-src n'admettrait pas. Un en-tête déjà posé par la réponse
+  * (Referrer-Policy: no-referrer des pages ouvertes par un lien secret) est
+  * gardé.
+  */
+@@ -32,6 +35,7 @@ final class AjouterLesEnTetesDeSecurite
+         ."img-src 'self' data: blob:; "
+         ."font-src 'self'; "
+         ."connect-src 'self'; "
++        ."worker-src 'self' blob:; "
+         ."object-src 'none'; "
+         ."base-uri 'self'; "
+         ."form-action 'self'; "
+diff --git a/psalm-temoin.xml b/psalm-temoin.xml
+new file mode 100644
+index 0000000..95b89b9
+--- /dev/null
++++ b/psalm-temoin.xml
+@@ -0,0 +1,41 @@
++<?xml version="1.0"?>
++<!--
++    Configuration du témoin (tests/Qualite/Psalm/Temoin) : la même que
++    psalm.xml, sur le seul témoin, dont l'analyse doit voir exactement les
++    chemins qu'il annonce (php tests/Qualite/qualite.php flux-temoin).
++
++    Analyse des flux de données (taint analysis) de Psalm et de son extension
++    Laravel, décidée par l'éditeur le 07/11/2026 (D54) : chaque donnée venue
++    de l'extérieur (formulaire, adresse, en-tête, fichier envoyé, saisie d'un
++    écran Livewire ou Filament, voir tests/Qualite/Psalm/SaisiesDesEcrans.php
++    et tests/Qualite/Psalm/filament.stub) est suivie jusqu'à une requête SQL,
++    une page, un chemin de fichier, une commande, une redirection, une
++    requête vers un autre site ou un e-mail. Psalm ne sert qu'à cela : le
++    contrôle des types est celui de Larastan (phpstan.neon), et seuls les
++    chemins de sécurité font échouer la CI (php tests/Qualite/qualite.php
++    flux). Psalm s'installe à part, dans tools/psalm (voir le README), et se
++    lance depuis la racine du dépôt, avec l'option de l'analyse des flux et
++    le rapport JSON, comme dans la CI (.github/workflows/tests.yml). Un
++    commentaire XML ne contient jamais deux tirets de suite : la commande
++    s'écrit donc dans le README.
++-->
++<psalm
++    errorLevel="8"
++    findUnusedCode="false"
++    findUnusedBaselineEntry="false"
++    cacheDirectory="storage/framework/cache/psalm-temoin"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++    xmlns="https://getpsalm.org/schema/config"
++    xsi:schemaLocation="https://getpsalm.org/schema/config tools/psalm/vendor/vimeo/psalm/config.xsd"
++>
++    <projectFiles>
++        <directory name="tests/Qualite/Psalm/Temoin"/>
++    </projectFiles>
++    <plugins>
++        <pluginClass class="Psalm\LaravelPlugin\Plugin"/>
++        <plugin filename="tests/Qualite/Psalm/SaisiesDesEcrans.php"/>
++    </plugins>
++    <stubs>
++        <file name="tests/Qualite/Psalm/filament.stub"/>
++    </stubs>
++</psalm>
+diff --git a/psalm.xml b/psalm.xml
+index 95f6537..b340fb0 100644
+--- a/psalm.xml
++++ b/psalm.xml
+@@ -2,16 +2,18 @@
+ <!--
+     Analyse des flux de données (taint analysis) de Psalm et de son extension
+     Laravel, décidée par l'éditeur le 07/11/2026 (D54) : chaque donnée venue
+-    de l'extérieur (formulaire, adresse, en-tête, fichier envoyé) est suivie
+-    jusqu'à une requête SQL, une page, un chemin de fichier, une commande,
+-    une redirection, une requête vers un autre site ou un e-mail. Psalm ne
+-    sert qu'à cela : le contrôle des types est celui de Larastan
+-    (phpstan.neon), et seuls les chemins de sécurité font échouer la CI
+-    (php tests/Qualite/qualite.php flux). Psalm s'installe à part, dans
+-    tools/psalm (voir le README), et se lance depuis la racine du dépôt,
+-    avec l'option de l'analyse des flux et le rapport JSON, comme dans la
+-    CI (.github/workflows/tests.yml). Un commentaire XML ne contient jamais
+-    deux tirets de suite : la commande s'écrit donc dans le README.
++    de l'extérieur (formulaire, adresse, en-tête, fichier envoyé, saisie d'un
++    écran Livewire ou Filament, voir tests/Qualite/Psalm/SaisiesDesEcrans.php
++    et tests/Qualite/Psalm/filament.stub) est suivie jusqu'à une requête SQL,
++    une page, un chemin de fichier, une commande, une redirection, une
++    requête vers un autre site ou un e-mail. Psalm ne sert qu'à cela : le
++    contrôle des types est celui de Larastan (phpstan.neon), et seuls les
++    chemins de sécurité font échouer la CI (php tests/Qualite/qualite.php
++    flux). Psalm s'installe à part, dans tools/psalm (voir le README), et se
++    lance depuis la racine du dépôt, avec l'option de l'analyse des flux et
++    le rapport JSON, comme dans la CI (.github/workflows/tests.yml). Un
++    commentaire XML ne contient jamais deux tirets de suite : la commande
++    s'écrit donc dans le README.
+ -->
+ <psalm
+     errorLevel="8"
+@@ -33,5 +35,9 @@
+     </projectFiles>
+     <plugins>
+         <pluginClass class="Psalm\LaravelPlugin\Plugin"/>
++        <plugin filename="tests/Qualite/Psalm/SaisiesDesEcrans.php"/>
+     </plugins>
++    <stubs>
++        <file name="tests/Qualite/Psalm/filament.stub"/>
++    </stubs>
+ </psalm>
+diff --git a/tests/Browser/Parcours/PiecesDuFournisseurTest.php b/tests/Browser/Parcours/PiecesDuFournisseurTest.php
+index c5d7019..3794f06 100644
+--- a/tests/Browser/Parcours/PiecesDuFournisseurTest.php
++++ b/tests/Browser/Parcours/PiecesDuFournisseurTest.php
+@@ -48,6 +48,21 @@ function pieceSurLePoste(string $nom, string $contenu): string
+     return $chemin;
+ }
+ 
++/**
++ * Une photo JPEG de la facture du fournisseur, sur le poste de la
++ * personne, prête à être choisie : une vraie image, que le navigateur sait
++ * décoder pour son aperçu.
++ */
++function photoSurLePoste(string $nom): string
++{
++    $image = imagecreatetruecolor(64, 48);
++    imagefill($image, 0, 0, (int) imagecolorallocate($image, 200, 120, 40));
++    ob_start();
++    imagejpeg($image);
++
++    return pieceSurLePoste($nom, (string) ob_get_clean());
++}
++
+ /**
+  * Une facture d'achat du Grossiste du Nord, de deux bougies, saisie par le
+  * responsable avec ces pièces, validée ou en brouillon.
+@@ -106,6 +121,33 @@ function telechargerLaPiece(Navigation $onglet, string $nom): array
+     expect([$fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe(['facture-F-812.pdf', 'application/pdf', PDF_DU_FOURNISSEUR]);
+ });
+ 
++test('le responsable dépose une photo de la facture du fournisseur : son aperçu s’affiche sans aucune violation de la politique de contenu', function () {
++    $societe = $this->societeComplete();
++    $onglet = $this->seConnecter($societe->responsable)
++        ->aller('/app/'.$societe->magasin->uuid.'/facture-achats/create')
++        ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
++        ->remplir('N° de facture du fournisseur', 'F-813')
++        ->remplir('Date de la facture du fournisseur', '2026-03-09')
++        ->envoyerLeFichier(photoSurLePoste('facture-F-813.jpg'))
++        // FilePond dessine l'aperçu dans un travailleur créé depuis une
++        // adresse blob: (worker-src de la politique de contenu) : sans lui,
++        // aucun aperçu, et la violation ne survient qu'après l'envoi.
++        ->attendreQue("document.querySelectorAll('.filepond--image-preview canvas').length === 1", 'l’aperçu de la photo ne s’affiche pas')
++        ->verifier();
++    expect([$onglet->element('.filepond--item')->count(), $onglet->element('.filepond--image-preview')->count()])->toBe([1, 1]);
++
++    $onglet->cliquerSur('Ajouter un produit')
++        ->choisirDansLaListe('Produit', 'Bougie parfumée')
++        ->remplir('Quantité reçue', '2')
++        ->remplir('Prix d\'achat HT', '5')
++        ->soumettre('Ajouter à la facture')
++        ->soumettre('Créer')
++        ->attendreLaPage('/facture-achats$');
++
++    $piece = app(TenantContext::class)->runAs($societe->magasin, fn () => FactureAchat::query()->where('numero_fournisseur', 'F-813')->sole()->pieces()->sole());
++    expect([$piece->nom_origine, $piece->type_mime])->toBe(['facture-F-813.jpg', 'image/jpeg']);
++});
++
+ test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats', function () {
+     $societe = $this->societeComplete();
+     $comptes = [
+diff --git a/tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php b/tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+index 6c26753..2ac7a43 100644
+--- a/tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
++++ b/tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+@@ -12,11 +12,13 @@
+ use App\Domain\Tenancy\Enums\TypeDActivite;
+ use App\Domain\Tenancy\Models\Affectation;
+ use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\AffectationsDesMembres;
+ use App\Models\User;
+ use Closure;
+ use Illuminate\Database\QueryException;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Support\Facades\DB;
++use LogicException;
+ use Tests\TestCase;
+ 
+ /**
+@@ -128,6 +130,42 @@ public function test_la_base_refuse_une_case_sur_une_affectation_de_responsable(
+         $this->assertSame(RoleMagasin::Vendeur, $affectationDuVendeur->fresh()->role);
+     }
+ 
++    /**
++     * Écrite par le modèle (voir Affectation), une affectation incohérente
++     * avec le rôle de société du compte est refusée avant d'atteindre la
++     * base, avec le message qui dit la règle, comme une case cochée sur
++     * l'affectation d'un responsable ; rien ne change.
++     */
++    public function test_le_modele_refuse_une_affectation_incoherente_avant_la_base(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
++        $administrateur = $this->administrateur($magasin, [$magasin->id]);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $responsable = $this->responsable($magasin);
++        $avant = Affectation::query()->orderBy('id')->get(['id', 'user_id', 'magasin_id', 'role'])->toArray();
++
++        foreach ([
++            [$this->proprietaireDe($magasin), $magasin->id, RoleMagasin::Vendeur, 'Le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation.'],
++            [$administrateur, $autre->id, RoleMagasin::Responsable, 'Un administrateur n\'a aucun rôle de magasin.'],
++            [$administrateur, null, null, 'Un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux.'],
++            [$vendeur, $autre->id, null, 'Un membre est affecté à un magasin, avec un rôle de magasin.'],
++            [$vendeur, null, RoleMagasin::Vendeur, 'Un membre est affecté à un magasin, avec un rôle de magasin.'],
++        ] as [$compte, $magasinId, $role, $message]) {
++            $affectation = (new Affectation)->forceFill(['societe_id' => $magasin->societe_id, 'user_id' => $compte->id, 'magasin_id' => $magasinId, 'role' => $role]);
++
++            $this->assertThrows(fn () => $affectation->save(), LogicException::class, $message);
++        }
++
++        $this->assertThrows(
++            fn () => Affectation::query()->where('user_id', $responsable->id)->sole()->cocher([PermissionRegistry::FACTURE_VIEW]),
++            LogicException::class,
++            AffectationsDesMembres::MESSAGE_RESPONSABLE_SANS_CASE,
++        );
++        $this->assertSame($avant, Affectation::query()->orderBy('id')->get(['id', 'user_id', 'magasin_id', 'role'])->toArray());
++        $this->assertSame([], Affectation::query()->where('user_id', $responsable->id)->sole()->autorisations());
++    }
++
+     public function test_la_base_refuse_une_autorisation_de_societe_a_qui_n_est_pas_administrateur(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+diff --git a/tests/Feature/Cabinets/AccepterLInvitationTest.php b/tests/Feature/Cabinets/AccepterLInvitationTest.php
+index ab67907..29f3af3 100644
+--- a/tests/Feature/Cabinets/AccepterLInvitationTest.php
++++ b/tests/Feature/Cabinets/AccepterLInvitationTest.php
+@@ -10,6 +10,7 @@
+ use App\Domain\Cabinets\Enums\EtatInvitation;
+ use App\Domain\Cabinets\Enums\OrigineDuLien;
+ use App\Domain\Cabinets\Exceptions\InvitationInvalideException;
++use App\Domain\Cabinets\Jobs\RendreCaduquesLesInvitationsDuSiren;
+ use App\Domain\Cabinets\Models\InvitationCabinet;
+ use App\Domain\Cabinets\Models\LienCabinet;
+ use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+@@ -396,6 +397,29 @@ public function test_l_acceptation_rend_caduques_les_invitations_des_autres_cabi
+         $this->assertSame(EtatInvitation::Caduque, InvitationCabinet::query()->withoutGlobalScopes()->where('siren', $autreSiren)->sole()->etat);
+     }
+ 
++    /**
++     * Une invitation qui n'est plus ouverte quand le travail la relit sous
++     * son verrou (retirée entre-temps par son cabinet) ne devient pas
++     * caduque : son état reste le sien, rien ne s'inscrit au journal
++     * d'audit du cabinet, et le cabinet n'est pas prévenu.
++     */
++    public function test_une_invitation_deja_close_quand_le_travail_la_relit_ne_devient_pas_caduque(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $siren = SocieteFactory::sirenFictif();
++        $this->inviterUneEntreprise($cabinet, $siren, 'a@b.test');
++        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
++        app(RetirerLInvitationAction::class)->handle($this->proprietaireDuCabinet($cabinet), $invitation);
++        app(TenantContext::class)->clear();
++        $avisAvant = $this->proprietaireDuCabinet($cabinet)->notifications()->count();
++
++        (new RendreCaduquesLesInvitationsDuSiren($siren, 0))->rendreCaduque($invitation->id, $cabinet->id);
++
++        $this->assertSame(EtatInvitation::Retiree, $invitation->fresh()->etat);
++        $this->assertSame([], $this->entreesDAudit($cabinet, ActionAuditee::InvitationCaduque));
++        $this->assertSame($avisAvant, $this->proprietaireDuCabinet($cabinet)->notifications()->count());
++    }
++
+     public function test_l_acceptation_d_une_societe_sans_magasin_ne_verrouille_aucun_registre_et_active_le_lien(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/InvitationsTest.php b/tests/Feature/Cabinets/InvitationsTest.php
+index 2c7fb98..d6d62a9 100644
+--- a/tests/Feature/Cabinets/InvitationsTest.php
++++ b/tests/Feature/Cabinets/InvitationsTest.php
+@@ -101,6 +101,42 @@ public function test_le_cabinet_n_invite_que_par_un_siren(): void
+         $this->assertSame(0, DB::table('invitations_cabinet')->count());
+     }
+ 
++    /**
++     * « Inviter un client », dans l'espace du cabinet, dit ce qu'a fait le
++     * geste : une invitation à un SIREN libre, puis qu'elle est déjà
++     * ouverte ; une demande de rattachement à un SIREN inscrit, puis qu'elle
++     * est déjà en cours ; un geste refusé (le SIREN du cabinet lui-même)
++     * s'affiche, sans rien envoyer de plus.
++     */
++    public function test_inviter_un_client_depuis_l_espace_du_cabinet_dit_ce_que_le_geste_a_fait(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $inscrit = (string) $this->ouvrirUneSociete()->societe->siren;
++        $libre = SocieteFactory::sirenFictif();
++        Mail::fake();
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++
++        foreach ([
++            [$libre, ResultatDInvitation::InvitationEnvoyee],
++            [$libre, ResultatDInvitation::InvitationDejaEnvoyee],
++            [$inscrit, ResultatDInvitation::DemandeEnvoyee],
++            [$inscrit, ResultatDInvitation::DemandeDejaEnvoyee],
++        ] as [$siren, $resultat]) {
++            Livewire::test(InvitationsEtDemandes::class)
++                ->callAction('inviter', ['siren' => $siren, 'email' => 'dirigeant@entreprise.test', 'mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
++                ->assertHasNoActionErrors()
++                ->assertNotified($resultat->message('dirigeant@entreprise.test'));
++        }
++
++        Livewire::test(InvitationsEtDemandes::class)
++            ->callAction('inviter', ['siren' => (string) $cabinet->siren, 'email' => 'dirigeant@entreprise.test', 'mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
++            ->assertNotified(InviterUneEntrepriseAction::MESSAGE_SOI_MEME);
++
++        Mail::assertSent(InvitationDuCabinetMail::class, 1);
++        Mail::assertSent(DemandeDeRattachementMail::class, 1);
++        $this->assertSame(1, DB::table('invitations_cabinet')->count());
++    }
++
+     public function test_un_mot_de_passe_faux_n_envoie_aucune_invitation(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/EnTetesDeSecuriteTest.php b/tests/Feature/EnTetesDeSecuriteTest.php
+index 94916d5..b4a60f9 100644
+--- a/tests/Feature/EnTetesDeSecuriteTest.php
++++ b/tests/Feature/EnTetesDeSecuriteTest.php
+@@ -62,6 +62,7 @@ public function test_la_politique_de_contenu_ne_permet_aucune_source_tierce_ni_o
+         $this->assertSame(["'none'"], $directives['frame-ancestors']);
+         $this->assertSame(["'self'"], $directives['connect-src']);
+         $this->assertSame(["'self'"], $directives['font-src']);
++        $this->assertSame(["'self'", 'blob:'], $directives['worker-src']);
+ 
+         foreach ($directives as $nom => $sources) {
+             foreach ($sources as $source) {
+diff --git a/tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php b/tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
+index 20e68dd..4ca5d52 100644
+--- a/tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
++++ b/tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
+@@ -34,8 +34,15 @@
+  *   n'en a reçu, ni plus de HT ni de TVA ;
+  * - le stock de chaque produit est la somme de ses mouvements, et la
+  *   somme des réceptions moins les retours et les ventes ;
+- * - le coût moyen pondéré n'est jamais négatif, et la valeur du stock ne
+- *   descend jamais sous 0 €.
++ * - son coût moyen pondéré et la valeur de son stock sont ceux que le
++ *   test recalcule lui-même, en dix-millièmes d'euro, depuis ses entrées et
++ *   ses sorties : chaque ligne d'achat validée entre à son coût réel (PU HT
++ *   moins sa remise), le coût moyen devenant la moyenne du stock en place
++ *   (rien quand il est vide) et de l'entrée, pondérée par leurs quantités ;
++ *   une vente sort au coût moyen, qui ne change pas ; un retour au
++ *   fournisseur sort au coût de sa ligne d'achat, et le coût moyen du
++ *   stock restant se recalcule, sa valeur jamais sous 0 € (CLAUDE.md,
++ *   « Achats et stock »).
+  */
+ class AchatsEtStockAuHasardTest extends TestCase
+ {
+@@ -54,6 +61,17 @@ class AchatsEtStockAuHasardTest extends TestCase
+ 
+     private Fournisseur $fournisseur;
+ 
++    /**
++     * Par rang de produit, le stock et le coût moyen (en dix-millièmes
++     * d'euro) que le test attend, recalculés à chaque geste joué.
++     *
++     * @var array<int, array{stock: int, cmup: int}>
++     */
++    private array $attendus = [];
++
++    /** @var array<int, array{stock: int, cmup: int}> ceux du début de chaque cas */
++    private array $auDepart = [];
++
+     protected function setUp(): void
+     {
+         parent::setUp();
+@@ -67,6 +85,8 @@ protected function setUp(): void
+             [['19.90', 20], ['4.50', 5.5], ['89.00', 10]],
+         );
+         $this->fournisseur = Fournisseur::factory()->create();
++        $this->auDepart = array_map(fn (Produit $produit): array => ['stock' => 0, 'cmup' => self::enDixMilliemes($produit->fresh()->cmup_ht)], $this->produits);
++        $this->attendus = $this->auDepart;
+     }
+ 
+     public function test_des_achats_retours_au_fournisseur_et_ventes_au_hasard_gardent_le_stock_coherent(): void
+@@ -76,6 +96,8 @@ public function test_des_achats_retours_au_fournisseur_et_ventes_au_hasard_garde
+             self::NOMBRE_DE_CAS,
+             fn (Tirage $tirage): array => array_map(fn (): array => $this->etape($tirage), range(1, $tirage->entier(1, 6))),
+             function (array $etapes): void {
++                $this->attendus = $this->auDepart;
++
+                 foreach ($etapes as $etape) {
+                     $this->jouer($etape);
+                 }
+@@ -171,6 +193,7 @@ private function vendre(Produit $produit, int $quantite): void
+ 
+         if ($quantite > 0) {
+             self::vendreAuComptant($this->responsable, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->getKey(), 'quantite' => $quantite]], ModePaiement::CarteBancaire);
++            $this->attendus[$this->rangDe($produit->getKey())]['stock'] -= $quantite;
+         }
+     }
+ 
+@@ -189,6 +212,10 @@ private function acheter(array $lignes): void
+         ], $lignes), ['date_facture' => '2026-10-14']);
+ 
+         app(ValiderFactureAchatAction::class)->handle($this->responsable, $facture);
++
++        foreach ($lignes as $ligne) {
++            $this->entrer($ligne['produit'], $ligne['quantite'], self::coutDUneLigne($ligne['prix'], $ligne['remise']));
++        }
      }
  
      /**
-      * La TVA de chaque taux, à la place de celle que le document avait :
-      * chaque ligne de taux existante se met à jour, une nouvelle s'ajoute,
--     * celle d'un taux disparu s'efface ; $confirmation pose ou retire la
--     * confirmation de chacune avant son enregistrement.
-+     * celle d'un taux disparu s'efface ; $confirmation, quand le document
-+     * retient ses montants, pose ou retire la confirmation de chacune avant
-+     * son enregistrement (un brouillon d'avoir fournisseur n'en reçoit
-+     * aucune).
-      *
-      * @param  array<string, EcartsDUnTaux>  $ecarts
--     * @param  callable(Model, EcartsDUnTaux, string): void  $confirmation
-+     * @param  (callable(Model, EcartsDUnTaux, string): void)|null  $confirmation
+@@ -216,9 +243,103 @@ private function retourner(int $rang, array $pourcents): void
+             }
+         }
+ 
+-        if ($selection !== []) {
+-            app(EnregistrerAvoirFournisseurAction::class)->handle($this->responsable, $facture, $selection, 'Retour tiré au hasard');
++        if ($selection === []) {
++            return;
++        }
++
++        app(EnregistrerAvoirFournisseurAction::class)->handle($this->responsable, $facture, $selection, 'Retour tiré au hasard');
++        $lignesAchetees = $facture->lignes->keyBy('id');
++
++        foreach ($selection as ['ligne_achat_id' => $ligneAchat, 'quantite' => $quantite]) {
++            $achetee = $lignesAchetees[$ligneAchat];
++            $this->sortirAuFournisseur(
++                $this->rangDe($achetee->produit_id),
++                $quantite,
++                self::coutDUneLigne(self::enMillioniemes($achetee->prix_unitaire_ht), self::enDixMilliemes($achetee->remise_pourcentage) / 100),
++            );
++        }
++    }
++
++    /**
++     * Une entrée de $quantite articles au coût $cout (en dix-millièmes
++     * d'euro) : le coût moyen devient la moyenne du stock en place, qui ne
++     * pèse rien quand il est vide ou négatif, et de l'entrée, pondérée par
++     * leurs quantités, arrondie au dix-millième (demi vers le haut).
++     */
++    private function entrer(int $rang, int $quantite, int $cout): void
++    {
++        ['stock' => $stock, 'cmup' => $cmup] = $this->attendus[$rang];
++        $enPlace = max($stock, 0);
++
++        $this->attendus[$rang] = ['stock' => $stock + $quantite, 'cmup' => self::diviserArrondi($enPlace * $cmup + $quantite * $cout, $enPlace + $quantite)];
++    }
++
++    /**
++     * Un retour au fournisseur de $quantite articles, au coût $cout de leur
++     * ligne d'achat : le coût moyen du stock restant est sa valeur, jamais
++     * sous 0 €, divisée par ce qui reste ; sans stock restant, il ne change
++     * pas.
++     */
++    private function sortirAuFournisseur(int $rang, int $quantite, int $cout): void
++    {
++        ['stock' => $stock, 'cmup' => $cmup] = $this->attendus[$rang];
++        $reste = max($stock, 0) - $quantite;
++
++        $this->attendus[$rang] = [
++            'stock' => $stock - $quantite,
++            'cmup' => $reste > 0 ? self::diviserArrondi(max(0, max($stock, 0) * $cmup - $quantite * $cout), $reste) : $cmup,
++        ];
++    }
++
++    /**
++     * Le coût réel d'un article d'une ligne d'achat, en dix-millièmes
++     * d'euro : son PU HT ($prix, en millionièmes d'euro) moins sa remise
++     * ($remise, en centièmes de point), arrondi une fois.
++     */
++    private static function coutDUneLigne(int $prix, int $remise): int
++    {
++        return self::diviserArrondi($prix * (10_000 - $remise), 1_000_000);
++    }
++
++    /**
++     * Une division de deux entiers positifs, arrondie au plus proche, un
++     * demi vers le haut.
++     */
++    private static function diviserArrondi(int $numerateur, int $denominateur): int
++    {
++        return intdiv(2 * $numerateur + $denominateur, 2 * $denominateur);
++    }
++
++    /**
++     * Un montant écrit comme sa colonne (« 12.3400 », jusqu'à quatre
++     * décimales), en dix-millièmes.
++     */
++    private static function enDixMilliemes(string $montant): int
++    {
++        [$entier, $decimales] = explode('.', $montant.'.');
++
++        return (int) $entier * 10_000 + (int) str_pad(substr($decimales, 0, 4), 4, '0');
++    }
++
++    /**
++     * Un PU HT écrit comme sa colonne (« 12.345678 »), en millionièmes.
++     */
++    private static function enMillioniemes(string $montant): int
++    {
++        [$entier, $decimales] = explode('.', $montant.'.');
++
++        return (int) $entier * 1_000_000 + (int) str_pad(substr($decimales, 0, 6), 6, '0');
++    }
++
++    private function rangDe(int $produitId): int
++    {
++        foreach ($this->produits as $rang => $produit) {
++            if ($produit->getKey() === $produitId) {
++                return $rang;
++            }
+         }
++
++        $this->fail("Le produit {$produitId} n'est pas l'un des produits du test.");
+     }
+ 
+     private function verifierLesRegles(): void
+@@ -240,7 +361,7 @@ private function verifierLesRegles(): void
+             $this->assertLessThanOrEqual($centimes($achetee->montant_tva), $retours->sum(fn (LigneAvoirFournisseur $ligne): int => $centimes($ligne->montant_tva)), 'Un avoir fournisseur retourne plus de TVA que la ligne.');
+         }
+ 
+-        foreach ($this->produits as $produit) {
++        foreach ($this->produits as $rang => $produit) {
+             $produit = $produit->fresh();
+             $mouvements = MouvementStock::query()->where('produit_id', $produit->getKey())->get();
+             $this->assertSame($mouvements->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite)), (int) $produit->stock_quantite, "Le stock de {$produit->nom} n'est pas la somme de ses mouvements.");
+@@ -250,8 +371,14 @@ private function verifierLesRegles(): void
+             $vendu = (int) $mouvements->filter(fn (MouvementStock $mouvement): bool => $mouvement->type->value === 'vente')->sum('quantite');
+             $this->assertSame($recu - $retourne - $vendu, (int) $produit->stock_quantite, "Le stock de {$produit->nom} n'est pas ses réceptions moins ses retours et ses ventes.");
+ 
+-            $this->assertGreaterThanOrEqual(0.0, (float) $produit->cmup_ht, "Le coût moyen de {$produit->nom} est négatif.");
+-            $this->assertGreaterThanOrEqual(0.0, max(0, $produit->stock_quantite) * (float) $produit->cmup_ht, "La valeur du stock de {$produit->nom} descend sous 0 €.");
++            ['stock' => $stock, 'cmup' => $cmup] = $this->attendus[$rang];
++            $this->assertSame($stock, (int) $produit->stock_quantite, "Le stock de {$produit->nom} n'est pas celui de ses entrées et sorties.");
++            $this->assertSame($cmup, self::enDixMilliemes($produit->cmup_ht), "Le coût moyen de {$produit->nom} n'est pas celui de ses entrées et sorties.");
++            $this->assertSame(
++                self::diviserArrondi(max($stock, 0) * $cmup, 100),
++                (int) round($calculateur->valeurAuCoutMoyen($stock, (float) $produit->cmup_ht, (float) $produit->taux_tva)['montant_ht'] * 100),
++                "La valeur HT du stock de {$produit->nom} n'est pas son stock au coût moyen.",
++            );
+         }
+     }
+ }
+diff --git a/tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php b/tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
+index b8276ee..bd002f7 100644
+--- a/tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
++++ b/tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
+@@ -28,13 +28,23 @@
+  * cochées au hasard, à côté d'une autre société. Pour chacun, ce qui doit
+  * toujours tenir tient :
+  *
++ * - il n'ouvre que les magasins que son rôle lui donne, calculés depuis
++ *   le cas tiré et non depuis le code vérifié : son magasin pour un
++ *   membre, son magasin ou les deux magasins de sa société pour un
++ *   administrateur, selon sa portée, jamais le magasin de l'autre
++ *   société ;
++ * - ses autorisations dans chaque magasin sont celles que le cas lui
++ *   donne : les cases tirées pour un vendeur, un observateur ou un
++ *   administrateur (à qui le propriétaire peut cocher la vente), toutes
++ *   celles du type d'activité sauf celles que seul le propriétaire coche
++ *   pour un responsable, aucune dans un magasin qu'il n'ouvre pas ;
+  * - aucune fiche ni aucun document d'un autre magasin, ou d'une autre
+  *   société, ne se lit depuis son magasin, ni ne s'ouvre, ni ne se modifie ;
+  * - dans un magasin qu'il n'ouvre pas, il ne voit rien et ne crée rien ;
+  * - dans un magasin qu'il ouvre, il voit une liste, et crée une fiche, un
+  *   devis ou une facture d'achat, exactement quand la case correspondante
+- *   est l'une de ses autorisations dans ce magasin : un rôle ne fait
+- *   jamais ce que ses droits refusent.
++ *   est l'une des autorisations que le cas lui donne dans ce magasin : un
++ *   rôle ne fait jamais ce que ses droits refusent.
+  */
+ class DroitsEtIsolationAuHasardTest extends TestCase
+ {
+@@ -112,9 +122,12 @@ function (array $cas): void {
+                 $compte = $this->compte($cas, $magasin);
+                 $this->actingAs($compte);
+ 
+-                foreach ($this->magasins as $autre) {
+-                    $ouvre = $compte->peutOuvrir($autre);
+-                    $autorisations = $ouvre ? $compte->autorisationsDans($autre) : [];
++                foreach ($this->magasins as $rang => $autre) {
++                    $ouvre = self::ouvreAttendu($cas, $rang);
++                    $autorisations = $ouvre ? self::autorisationsAttendues($cas) : [];
++
++                    $this->assertSame($ouvre, $compte->peutOuvrir($autre), "Le {$cas['role']} du magasin {$cas['magasin']} ".($ouvre ? 'n\'ouvre pas' : 'ouvre')." {$autre->nom}.");
++                    $this->assertSame($autorisations, $compte->autorisationsDans($autre), "Les autorisations du {$cas['role']} dans {$autre->nom} ne sont pas celles que le cas lui donne.");
+ 
+                     app(TenantContext::class)->runAs($autre, function () use ($compte, $autre, $ouvre, $autorisations): void {
+                         foreach (self::CASES as $modele => [$voir, $creer]) {
+@@ -148,14 +161,51 @@ function (array $cas): void {
+     }
+ 
+     /**
++     * Le compte du cas, créé par le propriétaire : un administrateur de tous
++     * les magasins ou de son seul magasin, avec les cases tirées (la vente
++     * comprise, que le propriétaire peut lui cocher) ; un responsable, sans
++     * case ; un vendeur ou un observateur, avec les cases tirées.
++     *
+      * @param  array{role: string, autorisations: list<string>, tous_les_magasins: bool}  $cas
       */
--    private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, callable $confirmation): void
-+    private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, ?callable $confirmation = null): void
+     private function compte(array $cas, Magasin $magasin): User
      {
-         $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
-         $ordre = 0;
-@@ -179,7 +179,10 @@ private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, arr
-                 'montant_tva_saisi' => isset($montants->tvaParTaux[$ecart->taux]) ? $this->calculateur->enDecimal($montants->tvaParTaux[$ecart->taux]) : null,
-                 'ordre' => $ordre++,
-             ]);
--            $confirmation($ligne, $ecart, $taux);
-+            if ($confirmation !== null) {
-+                $confirmation($ligne, $ecart, $taux);
+         return match ($cas['role']) {
+-            'administrateur' => $this->administrateur($magasin, $cas['tous_les_magasins'] ? null : [$magasin->getKey()], [], array_values(array_intersect($cas['autorisations'], PermissionRegistry::cocheesParLeProprietaire(TypeDActivite::Commerce)))),
++            'administrateur' => $this->administrateur($magasin, $cas['tous_les_magasins'] ? null : [$magasin->getKey()], [], $cas['autorisations']),
+             'responsable' => $this->membre($magasin, RoleMagasin::Responsable),
+             default => $this->membre($magasin, RoleMagasin::from($cas['role']), $cas['autorisations']),
+         };
+     }
++
++    /**
++     * Le compte du cas ouvre-t-il le magasin de ce rang (0 et 1 : ceux de
++     * sa société, 2 : celui de l'autre société) ? Son magasin pour un
++     * membre ; son magasin, ou les deux de sa société s'il a tous les
++     * magasins, pour un administrateur ; jamais celui de l'autre société.
++     *
++     * @param  array{role: string, magasin: int, tous_les_magasins: bool}  $cas
++     */
++    private static function ouvreAttendu(array $cas, int $rang): bool
++    {
++        return $rang === $cas['magasin'] || ($rang !== 2 && $cas['role'] === 'administrateur' && $cas['tous_les_magasins']);
++    }
++
++    /**
++     * Les autorisations que le cas donne au compte dans un magasin qu'il
++     * ouvre, dans l'ordre alphabétique : toutes celles d'un commerce, sauf
++     * celles que seul le propriétaire coche, pour un responsable sans case ;
++     * les cases tirées, toutes d'un commerce, pour tout autre rôle.
++     *
++     * @param  array{role: string, autorisations: list<string>}  $cas
++     * @return list<string>
++     */
++    private static function autorisationsAttendues(array $cas): array
++    {
++        $attendues = $cas['role'] === 'responsable'
++            ? array_values(array_diff(PermissionRegistry::pourLeType(TypeDActivite::Commerce), PermissionRegistry::cocheesParLeProprietaire(TypeDActivite::Commerce)))
++            : $cas['autorisations'];
++        sort($attendues);
++
++        return $attendues;
++    }
+ }
+diff --git a/tests/Feature/Qualite/OutilDeQualiteTest.php b/tests/Feature/Qualite/OutilDeQualiteTest.php
+new file mode 100644
+index 0000000..cf6e287
+--- /dev/null
++++ b/tests/Feature/Qualite/OutilDeQualiteTest.php
+@@ -0,0 +1,173 @@
++<?php
++
++namespace Tests\Feature\Qualite;
++
++use Illuminate\Filesystem\Filesystem;
++use PHPUnit\Framework\TestCase;
++use Symfony\Component\Process\Process;
++
++/**
++ * Le contrôle de la couverture de tests/Qualite/qualite.php (décision de
++ * l'éditeur du 01/11/2026, point 1) range chaque fichier d'un rapport
++ * Clover dans sa partie par son chemin relatif à la racine du dépôt, quel
++ * que soit le dossier où le dépôt est monté (« /app » d'un conteneur
++ * compris), refuse un rapport venu d'un autre dépôt, et ne laisse jamais
++ * passer en silence une partie qui a un seuil sans être mesurée ; le
++ * contrôle du témoin de l'analyse des flux exige exactement les chemins
++ * qu'il annonce. Chaque cas
++ * lance l'outil, comme la CI, sur une copie de tests/Qualite placée dans un
++ * dépôt de test nommé « app ».
++ */
++class OutilDeQualiteTest extends TestCase
++{
++    private string $depot;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++
++        $this->depot = sys_get_temp_dir().'/piliqi-qualite-'.getmypid().'/app';
++        $fichiers = new Filesystem;
++        $fichiers->deleteDirectory(dirname($this->depot));
++        $fichiers->ensureDirectoryExists($this->depot.'/tests/Qualite');
++        $this->depot = (string) realpath($this->depot);
++
++        foreach (['qualite.php', 'parties.php'] as $outil) {
++            $fichiers->copy(__DIR__.'/../../Qualite/'.$outil, $this->depot.'/tests/Qualite/'.$outil);
++        }
++
++        $this->ecrire('tests/Qualite/seuils.json', json_encode([
++            'analyse_statique' => ['niveau' => 6],
++            'couverture' => ['calculs' => 100, 'droits_et_isolation' => 50],
++            'mutation' => [],
++        ], JSON_THROW_ON_ERROR));
++    }
++
++    protected function tearDown(): void
++    {
++        (new Filesystem)->deleteDirectory(dirname($this->depot));
++
++        parent::tearDown();
++    }
++
++    public function test_un_depot_monte_sous_app_range_chaque_fichier_dans_sa_partie(): void
++    {
++        $clover = $this->clover([
++            $this->depot.'/app/Domain/Facturation/Services/CalculateurLigne.php' => [10 => 3, 11 => 1],
++            $this->depot.'/app/Policies/FacturePolicy.php' => [20 => 2, 21 => 0],
++        ]);
++
++        [$code, $sortie] = $this->lancer('couverture', $clover);
++
++        $this->assertSame(0, $code, $sortie);
++        $this->assertStringContainsString('| calculs | 2 | 2 | 100.0 % | 100.0 % |', $sortie);
++        $this->assertStringContainsString('| droits_et_isolation | 2 | 1 | 50.0 % | 50.0 % |', $sortie);
++        $this->assertStringNotContainsString('ecrans_et_socle', $sortie);
++    }
++
++    public function test_une_partie_qui_a_un_seuil_sans_aucune_ligne_mesuree_fait_echouer_le_controle(): void
++    {
++        $clover = $this->clover([
++            $this->depot.'/app/Domain/Facturation/Services/CalculateurLigne.php' => [10 => 3],
++        ]);
++
++        [$code, $sortie] = $this->lancer('couverture', $clover);
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('| droits_et_isolation | 0 | 0 | non mesurée | 50.0 % |', $sortie);
++        $this->assertStringContainsString('non mesurée', $sortie);
++    }
++
++    public function test_un_rapport_venu_d_un_autre_depot_est_refuse(): void
++    {
++        $clover = $this->clover([
++            '/ailleurs/app/Domain/Facturation/Services/CalculateurLigne.php' => [10 => 3],
++        ]);
++
++        [$code, $sortie] = $this->lancer('couverture', $clover);
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('Fichier hors du dépôt', $sortie);
++    }
++
++    public function test_le_nouveau_code_d_un_depot_monte_sous_app_retrouve_ses_lignes_changees(): void
++    {
++        $this->ecrire('app/Domain/Exemple.php', "<?php\n\nfunction a(): int\n{\n    return 1;\n}\n");
++        $this->git('init', '--quiet');
++        $this->git('add', '.');
++        $this->git('-c', 'user.name=PILIQI', '-c', 'user.email=test@example.test', 'commit', '--quiet', '-m', 'Base');
++        $this->ecrire('app/Domain/Exemple.php', "<?php\n\nfunction a(): int\n{\n    return 2;\n}\n");
++        $clover = $this->clover([$this->depot.'/app/Domain/Exemple.php' => [5 => 0]]);
++
++        [$code, $sortie] = $this->lancer('nouveau-code', $clover, 'HEAD');
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('app/Domain/Exemple.php:5', $sortie);
++    }
++
++    public function test_le_temoin_de_l_analyse_des_flux_exige_exactement_les_chemins_qu_il_annonce(): void
++    {
++        $this->ecrire('tests/Qualite/Psalm/Temoin/Temoin.php', "<?php\n\necho \$x; // attendu : TaintedHtml, TaintedTextWithQuotes\nDB::select(\$y); // attendu : TaintedSql\n");
++        $chemin = fn (int $ligne, string $type): array => ['file_name' => $this->depot.'/tests/Qualite/Psalm/Temoin/Temoin.php', 'line_from' => $ligne, 'type' => $type, 'message' => '', 'is_security' => true];
++        $tous = [$chemin(3, 'TaintedHtml'), $chemin(3, 'TaintedTextWithQuotes'), $chemin(4, 'TaintedSql')];
++
++        [$code, $sortie] = $this->lancer('flux-temoin', $this->ecrire('psalm-temoin.json', json_encode($tous, JSON_THROW_ON_ERROR)));
++        $this->assertSame(0, $code, $sortie);
++
++        [$code, $sortie] = $this->lancer('flux-temoin', $this->ecrire('psalm-temoin.json', json_encode(array_slice($tous, 0, 2), JSON_THROW_ON_ERROR)));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('chemin non vu : tests/Qualite/Psalm/Temoin/Temoin.php:4 TaintedSql', $sortie);
++
++        [$code, $sortie] = $this->lancer('flux-temoin', $this->ecrire('psalm-temoin.json', json_encode([...$tous, $chemin(2, 'TaintedSql')], JSON_THROW_ON_ERROR)));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('chemin en trop : tests/Qualite/Psalm/Temoin/Temoin.php:2 TaintedSql', $sortie);
++    }
++
++    /**
++     * Un rapport Clover de ces fichiers : par chemin, le nombre de tests
++     * qui exécutent chaque ligne.
++     *
++     * @param  array<string, array<int, int>>  $fichiers
++     */
++    private function clover(array $fichiers): string
++    {
++        $xml = '<?xml version="1.0" encoding="UTF-8"?><coverage><project>';
++
++        foreach ($fichiers as $nom => $lignes) {
++            $xml .= '<file name="'.htmlspecialchars($nom).'">';
++
++            foreach ($lignes as $numero => $nombre) {
++                $xml .= '<line num="'.$numero.'" type="stmt" count="'.$nombre.'"/>';
 +            }
 +
-             $ligne->save();
-         }
- 
-diff --git a/app/Domain/Stock/Services/ConstructeurLigneInventaire.php b/app/Domain/Stock/Services/ConstructeurLigneInventaire.php
-index 1df4652..9c65132 100644
---- a/app/Domain/Stock/Services/ConstructeurLigneInventaire.php
-+++ b/app/Domain/Stock/Services/ConstructeurLigneInventaire.php
-@@ -230,7 +230,8 @@ private function nouveauProduit(array $attributs): Produit
- 
-     /**
-      * Le coût unitaire HT saisi, en millionièmes d'euro, tel que saisi, six
--     * décimales au plus, jamais négatif.
-+     * décimales au plus ; la ligne refuse un coût négatif à son
-+     * enregistrement (voir LigneInventaireOuverture).
-      *
-      * @throws InvalidArgumentException
-      */
-@@ -240,13 +241,7 @@ private function coutUnitaire(mixed $saisie): int
-             throw new InvalidArgumentException('Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.');
-         }
- 
--        $cout = SaisieDecimale::enMillioniemes($saisie);
--
--        if ($cout < 0) {
--            throw new InvalidArgumentException('Le coût unitaire d\'un produit ne peut pas être négatif.');
--        }
--
--        return $cout;
-+        return SaisieDecimale::enMillioniemes($saisie);
-     }
- 
-     /**
-diff --git a/tests/Feature/Stock/InventaireOuvertureTest.php b/tests/Feature/Stock/InventaireOuvertureTest.php
-index d31d681..0842c64 100644
---- a/tests/Feature/Stock/InventaireOuvertureTest.php
-+++ b/tests/Feature/Stock/InventaireOuvertureTest.php
-@@ -520,10 +520,6 @@ public static function lignesRefusees(): array
-                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '120'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
-                 'Le taux de TVA doit être compris entre 0 et 100 %.',
-             ],
--            'coût négatif' => [
--                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '-0.01']],
--                'Le coût unitaire d\'un produit ne peut pas être négatif.',
--            ],
-             'coût manquant' => [
-                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '']],
-                 'Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.',
-diff --git a/tests/Qualite/seuils.json b/tests/Qualite/seuils.json
-index dfa95fd..db20cb6 100644
---- a/tests/Qualite/seuils.json
-+++ b/tests/Qualite/seuils.json
-@@ -3,15 +3,15 @@
-         "niveau": 6
-     },
-     "couverture": {
--        "achats_et_stock": 98,
--        "cabinets": 94,
--        "caisse_securisee": 98,
-+        "achats_et_stock": 98.2,
-+        "cabinets": 94.6,
-+        "caisse_securisee": 98.2,
-         "calculs": 100,
--        "droits_et_isolation": 96,
--        "ecrans_et_socle": 97,
--        "facturation": 97,
--        "pages_publiques": 96,
--        "societe": 94
-+        "droits_et_isolation": 96.1,
-+        "ecrans_et_socle": 97.5,
-+        "facturation": 97.8,
-+        "pages_publiques": 96.1,
-+        "societe": 94.2
-     },
-     "mutation": {}
- }
-diff --git a/tests/Unit/BaremePrixDeVenteTest.php b/tests/Unit/BaremePrixDeVenteTest.php
-index 42ca5a4..d980d83 100644
---- a/tests/Unit/BaremePrixDeVenteTest.php
-+++ b/tests/Unit/BaremePrixDeVenteTest.php
-@@ -175,4 +175,17 @@ public function test_le_bareme_d_un_formulaire_se_lit_en_nombres(): void
-             'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.',
-         );
-     }
++            $xml .= '</file>';
++        }
 +
-+    /**
-+     * Le barème s'enregistre en tableau (voir castUsing()) et se relit à
-+     * l'identique : ses paliers, son bénéfice au-delà et son arrondi au X9.
-+     */
-+    public function test_le_bareme_s_ecrit_en_tableau_et_se_relit_a_l_identique(): void
-+    {
-+        $tableau = ['paliers' => [['jusqu_a' => 2.0, 'benefice' => 10.0], ['jusqu_a' => 5.0, 'benefice' => 15.0]], 'benefice_au_dela' => 60.0, 'arrondi_x9' => true];
-+        $bareme = new BaremePrixDeVente($tableau['paliers'], 60.0, true);
-+
-+        $this->assertSame($tableau, $bareme->versTableau());
-+        $this->assertEquals($bareme, BaremePrixDeVente::depuisTableau($tableau));
-+    }
- }
-diff --git a/tests/Unit/CalculateurLigneLimitesTest.php b/tests/Unit/CalculateurLigneLimitesTest.php
-index 39f693c..97fb8ff 100644
---- a/tests/Unit/CalculateurLigneLimitesTest.php
-+++ b/tests/Unit/CalculateurLigneLimitesTest.php
-@@ -205,6 +205,18 @@ public function test_l_ecart_d_une_tva_retenue_se_reporte_d_une_ligne_a_l_autre(
-         $this->assertSame([4, 0, 7], self::tva($c->repartirUneTvaRetenue([self::part(7, 5), self::part(6, 0), self::part(12, 9)], 2000, 11)));
-     }
- 
-+    /**
-+     * Une part d'un demi-centime s'arrondit en s'éloignant de zéro, que
-+     * l'écart ajoute ou retire de la TVA : retirer 1 centime de deux lignes
-+     * de 1 centime HT qui en portent chacune 1 le retire de la première,
-+     * comme en ajouter 1 à deux lignes qui n'en portent pas le donne à la
-+     * première (voir le test précédent).
-+     */
-+    public function test_une_part_negative_d_un_demi_centime_s_arrondit_en_s_eloignant_de_zero(): void
-+    {
-+        $this->assertSame([0, 1], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 1), self::part(1, 1)], 2000, 1)));
++        return $this->ecrire('clover.xml', $xml.'</project></coverage>');
 +    }
 +
-     /**
-      * Un retour au fournisseur ne propose jamais un montant négatif : quand
-      * les retours précédents ont déjà rendu plus que la proposition des
-diff --git a/tests/Unit/ReglementComptantTest.php b/tests/Unit/ReglementComptantTest.php
++    private function ecrire(string $chemin, string $contenu): string
++    {
++        (new Filesystem)->ensureDirectoryExists(dirname($this->depot.'/'.$chemin));
++        file_put_contents($this->depot.'/'.$chemin, $contenu);
++
++        return $this->depot.'/'.$chemin;
++    }
++
++    private function git(string ...$arguments): void
++    {
++        $git = new Process(['git', '-C', $this->depot, ...$arguments]);
++        $git->mustRun();
++    }
++
++    /**
++     * @return array{0: int, 1: string} le code de sortie et la sortie de l'outil
++     */
++    private function lancer(string ...$arguments): array
++    {
++        $outil = new Process([PHP_BINARY, $this->depot.'/tests/Qualite/qualite.php', ...$arguments], $this->depot);
++        $outil->run();
++
++        return [(int) $outil->getExitCode(), $outil->getOutput().$outil->getErrorOutput()];
++    }
++}
+diff --git a/tests/Qualite/Psalm/SaisiesDesEcrans.php b/tests/Qualite/Psalm/SaisiesDesEcrans.php
 new file mode 100644
-index 0000000..52ddb85
+index 0000000..f721ffb
 --- /dev/null
-+++ b/tests/Unit/ReglementComptantTest.php
-@@ -0,0 +1,71 @@
++++ b/tests/Qualite/Psalm/SaisiesDesEcrans.php
+@@ -0,0 +1,144 @@
++<?php
++
++namespace Tests\Qualite\Psalm;
++
++use PhpParser\Node\Expr\Variable;
++use Psalm\Codebase;
++use Psalm\Internal\Analyzer\ClassLikeAnalyzer;
++use Psalm\Internal\Analyzer\ClosureAnalyzer;
++use Psalm\Internal\Analyzer\StatementsAnalyzer;
++use Psalm\Internal\DataFlow\DataFlowNode;
++use Psalm\Plugin\EventHandler\AddTaintsInterface;
++use Psalm\Plugin\EventHandler\AfterClassLikeAnalysisInterface;
++use Psalm\Plugin\EventHandler\Event\AddRemoveTaintsEvent;
++use Psalm\Plugin\EventHandler\Event\AfterClassLikeAnalysisEvent;
++use Psalm\Storage\ClassLikeStorage;
++
++/**
++ * Les saisies des écrans, sources de l'analyse des flux de données de
++ * Psalm (décision de l'éditeur du 07/11/2026, D54 ; voir psalm.xml) : presque
++ * tout ce qui entre dans PILIQI arrive par un écran Livewire ou Filament,
++ * que l'extension Laravel de Psalm ne suit pas. Une donnée est une saisie
++ * de la personne, comme une donnée de formulaire :
++ *
++ * - chaque propriété publique d'un composant Livewire (Livewire\Component et
++ *   ses sous-classes : pages et ressources de Filament, l'état d'un
++ *   formulaire « $data » compris, propriétés héritées comprises) : le
++ *   navigateur en envoie la valeur à chaque requête. Une propriété
++ *   verrouillée (#[Locked]), que Livewire refuse de recevoir du navigateur,
++ *   n'en est pas une. La source est posée sur la propriété elle-même, et
++ *   non sur chacune de ses lectures, que Psalm ne présente pas toutes aux
++ *   extensions (une propriété dont il connaît déjà le type) ;
++ * - les paramètres « $data » et « $state » d'une fonction anonyme d'un
++ *   écran (une classe d'App\Filament ou un composant Livewire) : Filament y
++ *   injecte, par leur nom, les données saisies dans la fenêtre d'une action
++ *   et l'état d'un champ ;
++ * - l'état d'un formulaire de Filament (getState(), getRawState()) et la
++ *   lecture d'un autre champ ($get) : déclarés dans
++ *   tests/Qualite/Psalm/filament.stub.
++ *
++ * Le témoin tests/Qualite/Psalm/Temoin, que la CI analyse à part, prouve que
++ * chaque chemin d'une de ces saisies vers une requête SQL ou une page se
++ * voit (php tests/Qualite/qualite.php flux-temoin).
++ */
++final class SaisiesDesEcrans implements AddTaintsInterface, AfterClassLikeAnalysisInterface
++{
++    private const COMPOSANT_LIVEWIRE = 'Livewire\Component';
++
++    private const VERROU_LIVEWIRE = 'Livewire\Attributes\Locked';
++
++    private const PARAMETRES_INJECTES = ['data', 'state'];
++
++    public static function afterStatementAnalysis(AfterClassLikeAnalysisEvent $event): ?bool
++    {
++        $codebase = $event->getCodebase();
++        $classe = $event->getClasslikeStorage();
++
++        if ($codebase->taint_flow_graph === null || ! isset($classe->parent_classes[strtolower(self::COMPOSANT_LIVEWIRE)])) {
++            return null;
++        }
++
++        foreach (self::proprietesRecuesDuNavigateur($codebase, $classe) as $propriete) {
++            $codebase->taint_flow_graph->addSource(
++                DataFlowNode::getForPropertyFetch($classe->name.'::$'.$propriete)->setTaints($codebase->getInputTaints()),
++            );
++        }
++
++        return null;
++    }
++
++    public static function addTaints(AddRemoveTaintsEvent $event): int
++    {
++        $expression = $event->getExpr();
++        $contexte = $event->getContext();
++
++        if ($contexte->self === null
++            || ! $expression instanceof Variable
++            || ! is_string($expression->name)
++            || ! in_array($expression->name, self::PARAMETRES_INJECTES, true)
++        ) {
++            return 0;
++        }
++
++        return self::parametreInjecteDUnEcran($event, $contexte->self, $expression->name) ? $event->getCodebase()->getInputTaints() : 0;
++    }
++
++    /**
++     * Les propriétés publiques, non statiques et non verrouillées de ce
++     * composant, héritées comprises.
++     *
++     * @return list<string>
++     */
++    private static function proprietesRecuesDuNavigateur(Codebase $codebase, ClassLikeStorage $classe): array
++    {
++        $recues = [];
++
++        foreach ($classe->declaring_property_ids as $nom => $declarante) {
++            $propriete = $codebase->classlike_storage_provider->get($declarante)->properties[$nom] ?? null;
++
++            if ($propriete === null || $propriete->is_static === true || $propriete->visibility !== ClassLikeAnalyzer::VISIBILITY_PUBLIC) {
++                continue;
++            }
++
++            foreach ($propriete->attributes as $attribut) {
++                if ($attribut->fq_class_name === self::VERROU_LIVEWIRE) {
++                    continue 2;
++                }
++            }
++
++            $recues[] = $nom;
++        }
++
++        return $recues;
++    }
++
++    /**
++     * $data ou $state, paramètre de la fonction anonyme où il se lit, dans
++     * une classe d'App\Filament ou un composant Livewire.
++     */
++    private static function parametreInjecteDUnEcran(AddRemoveTaintsEvent $event, string $classe, string $nom): bool
++    {
++        $codebase = $event->getCodebase();
++        $source = $event->getStatementsSource();
++        $fonction = $source instanceof StatementsAnalyzer ? $source->getSource() : null;
++
++        if (! $fonction instanceof ClosureAnalyzer) {
++            return false;
++        }
++
++        $ecran = str_starts_with($classe, 'App\\Filament\\')
++            || ($codebase->classOrInterfaceExists($classe) && $codebase->classExtends($classe, self::COMPOSANT_LIVEWIRE));
++
++        if (! $ecran) {
++            return false;
++        }
++
++        foreach ($fonction->getFunctionLikeStorage($source)->params as $parametre) {
++            if ($parametre->name === $nom) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++}
+diff --git a/tests/Qualite/Psalm/Temoin/TemoinDesSaisies.php b/tests/Qualite/Psalm/Temoin/TemoinDesSaisies.php
+new file mode 100644
+index 0000000..71c8b9e
+--- /dev/null
++++ b/tests/Qualite/Psalm/Temoin/TemoinDesSaisies.php
+@@ -0,0 +1,85 @@
++<?php
++
++namespace Tests\Qualite\Psalm\Temoin;
++
++use Closure;
++use Filament\Forms\Form;
++use Filament\Forms\Get;
++use Illuminate\Support\Facades\DB;
++use Livewire\Attributes\Locked;
++use Livewire\Component;
++
++/**
++ * Le témoin de l'analyse des flux de données (voir
++ * tests/Qualite/Psalm/SaisiesDesEcrans.php) : chaque ligne marquée
++ * « attendu : » est un chemin d'une saisie d'un écran vers une requête SQL
++ * ou une page, que Psalm doit voir ; aucune autre ligne n'en est un. La CI
++ * l'analyse à part (psalm-temoin.xml) et compare ses chemins à ces marques
++ * (php tests/Qualite/qualite.php flux-temoin). Jamais exécuté, jamais
++ * chargé par l'application.
++ */
++final class TemoinDesSaisies extends Component
++{
++    public string $nom = '';
++
++    /** @var array<string, string> */
++    public array $data = [];
++
++    #[Locked]
++    public string $verrouille = '';
++
++    protected string $interne = '';
++
++    public function proprieteVersUneRequete(): void
++    {
++        DB::statement("DELETE FROM clients WHERE nom = '".$this->nom."'"); // attendu : TaintedSql
++    }
++
++    public function etatDuFormulaireVersUneRequete(): void
++    {
++        DB::statement("DELETE FROM clients WHERE nom = '".$this->data['nom']."'"); // attendu : TaintedSql
++    }
++
++    public function proprieteVersLaPage(): void
++    {
++        echo $this->nom; // attendu : TaintedHtml, TaintedTextWithQuotes
++    }
++
++    public function proprieteRecopieeVersUneRequete(): void
++    {
++        $nom = $this->nom;
++        DB::select('SELECT * FROM clients WHERE nom = '.$nom); // attendu : TaintedSql
++    }
++
++    public function formulaireVersUneRequete(Form $formulaire): void
++    {
++        DB::statement("DELETE FROM clients WHERE nom = '".$formulaire->getState()['nom']."'"); // attendu : TaintedSql
++    }
++
++    public function actionVersUneRequete(): Closure
++    {
++        return function (array $data): void {
++            DB::statement("DELETE FROM clients WHERE nom = '".$data['nom']."'"); // attendu : TaintedSql
++        };
++    }
++
++    public function champVersLaPage(): Closure
++    {
++        return function (Get $get): void {
++            echo $get('nom'); // attendu : TaintedHtml, TaintedTextWithQuotes
++        };
++    }
++
++    public function sansSaisie(): void
++    {
++        DB::statement("DELETE FROM clients WHERE nom = '".$this->verrouille."'");
++        DB::statement("DELETE FROM clients WHERE nom = '".$this->interne."'");
++        DB::table('clients')->where('nom', $this->nom)->delete();
++        echo e($this->nom);
++    }
++
++    public function render(): string
++    {
++        return '<div></div>';
++    }
++}
+diff --git a/tests/Qualite/Psalm/filament.stub b/tests/Qualite/Psalm/filament.stub
+new file mode 100644
+index 0000000..fe0d430
+--- /dev/null
++++ b/tests/Qualite/Psalm/filament.stub
+@@ -0,0 +1,43 @@
++<?php
++
++// Les saisies des formulaires de Filament, sources de l'analyse des flux
++// de données de Psalm (voir tests/Qualite/Psalm/SaisiesDesEcrans.php et
++// psalm.xml) : l'état d'un formulaire et la lecture d'un autre champ sont
++// ce que la personne a saisi. Seules ces méthodes sont redéclarées ; Psalm
++// lit les autres dans Filament.
++
++namespace Filament\Forms\Concerns;
++
++use Closure;
++use Illuminate\Contracts\Support\Arrayable;
++
++trait HasState
++{
++    /**
++     * @return array<string, mixed>
++     *
++     * @psalm-taint-source input
++     */
++    public function getState(bool $shouldCallHooksBefore = true, ?Closure $afterValidate = null): array {}
++
++    /**
++     * @return array<string, mixed>|Arrayable
++     *
++     * @psalm-taint-source input
++     */
++    public function getRawState(): array|Arrayable {}
++}
++
++namespace Filament\Forms;
++
++use Filament\Forms\Components\Component;
++
++class Get
++{
++    public function __construct(protected Component $component) {}
++
++    /**
++     * @psalm-taint-source input
++     */
++    public function __invoke(string|Component $path = '', bool $isAbsolute = false): mixed {}
++}
+diff --git a/tests/Qualite/parties.php b/tests/Qualite/parties.php
+index 453b996..3d08db6 100644
+--- a/tests/Qualite/parties.php
++++ b/tests/Qualite/parties.php
+@@ -58,6 +58,9 @@
+         'app/Domain/Tenancy/Services/TenantContext.php',
+         'app/Domain/Tenancy/Services/PorteeDesDroits.php',
+         'app/Domain/Tenancy/Services/PorteeDesAdministrateurs.php',
++        'app/Domain/Tenancy/Services/AffectationsDesMembres.php',
++        'app/Domain/Cabinets/Services/AccesDesCabinets.php',
++        'app/Models/User.php',
+         'app/Domain/Tenancy/Support/GardesDesDroits.php',
+         'app/Domain/Tenancy/Support/GardesDesTypesDActivite.php',
+         'app/Domain/Cabinets/Support/GardesDesCabinets.php',
+diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
+index 33d6e4b..4ae1d74 100644
+--- a/tests/Qualite/qualite.php
++++ b/tests/Qualite/qualite.php
+@@ -24,18 +24,24 @@
+  *   php tests/Qualite/qualite.php configuration-sensibles <destination>
+  *       Écrit la configuration d'Infection (infection.json5) limitée aux
+  *       parties sensibles : tout app/, moins chaque dossier et chaque
+- *       fichier qui n'en est pas. Elle se combine avec --git-diff-lines
+- *       (les seules lignes changées, comme la CI), qui ne se combine avec
+- *       aucun autre filtre des fichiers.
++ *       fichier qui n'en est pas. Elle se combine avec
++ *       --git-diff-filter=AM (les fichiers entiers ajoutés ou modifiés,
++ *       comme la CI), qui ne se combine avec aucun autre filtre des
++ *       fichiers.
+  *   php tests/Qualite/qualite.php sensibles-changes <commit de base>
+  *       Les fichiers des parties sensibles ajoutés ou modifiés depuis ce
+  *       commit, un par ligne (rien quand aucun ne l'est) : ceux dont la CI
+- *       teste les mutants à chaque envoi.
++ *       teste tous les mutants à chaque envoi.
+  *   php tests/Qualite/qualite.php flux <rapport-psalm.json>
+  *       Aucun chemin d'une donnée venue de l'extérieur jusqu'à une requête
+  *       SQL, une page, un fichier, une commande, une redirection ou un
+  *       e-mail sans contrôle (analyse des flux de données de Psalm, voir
+  *       psalm.xml) : échoue au premier chemin trouvé, ou sans rapport.
++ *   php tests/Qualite/qualite.php flux-temoin <rapport-psalm.json>
++ *       L'analyse du témoin (psalm-temoin.xml) voit exactement les chemins
++ *       que ses lignes marquées « attendu : » annoncent, ni plus ni moins :
++ *       elle suit bien les saisies des écrans Livewire et Filament (voir
++ *       tests/Qualite/Psalm/SaisiesDesEcrans.php).
+  *
+  * Code de sortie : 0 si tout tient, 1 sinon.
+  */
+@@ -50,9 +56,33 @@ function seuils(string $fichier = __DIR__.'/seuils.json'): array
+     return json_decode((string) file_get_contents($fichier), true, flags: JSON_THROW_ON_ERROR);
+ }
+ 
++/**
++ * Le chemin de ce fichier relatif à la racine du dépôt (« app/... ») : un
++ * chemin absolu (rapport Clover, journal d'Infection) perd la racine du
++ * dépôt, quel que soit le dossier où celui-ci est monté (« /app » d'un
++ * conteneur compris) ; un chemin déjà relatif (diff de git) reste tel
++ * quel. Un fichier hors du dépôt est refusé, jamais rangé dans une partie
++ * au hasard : le rapport vient alors d'un autre dépôt.
++ */
++function relatifAuDepot(string $fichier): string
++{
++    $fichier = str_replace('\\', '/', $fichier);
++    $racine = str_replace('\\', '/', RACINE).'/';
++
++    if (str_starts_with($fichier, $racine)) {
++        return substr($fichier, strlen($racine));
++    }
++
++    if (! str_starts_with($fichier, '/') && preg_match('#^[A-Za-z]:/#', $fichier) !== 1) {
++        return $fichier;
++    }
++
++    throw new RuntimeException("Fichier hors du dépôt {$racine} : {$fichier}. Le rapport doit être lu dans le dépôt qui l'a produit.");
++}
++
+ function partieDe(string $fichier): string
+ {
+-    $relatif = str_starts_with($fichier, 'app/') ? $fichier : ltrim(substr($fichier, (int) strpos($fichier, '/app/')), '/');
++    $relatif = relatifAuDepot($fichier);
+ 
+     foreach (require __DIR__.'/parties.php' as $partie => $chemins) {
+         foreach ($chemins as $chemin) {
+@@ -67,7 +97,8 @@ function partieDe(string $fichier): string
+ 
+ /**
+  * Les lignes exécutables de chaque fichier de app/ et le nombre de tests
+- * qui les exécutent, lues dans un rapport Clover.
++ * qui les exécutent, lues dans un rapport Clover produit dans ce dépôt
++ * (voir relatifAuDepot()).
+  *
+  * @return array<string, array<int, int>> par chemin relatif (« app/... »)
+  */
+@@ -77,14 +108,12 @@ function lignesDuClover(string $clover): array
+     $fichiers = [];
+ 
+     foreach ($xml->xpath('//file') as $fichier) {
+-        $nom = (string) $fichier['name'];
+-        $position = strpos($nom, '/app/');
++        $relatif = relatifAuDepot((string) $fichier['name']);
+ 
+-        if ($position === false) {
++        if (! str_starts_with($relatif, 'app/')) {
+             continue;
+         }
+ 
+-        $relatif = substr($nom, $position + 1);
+         $fichiers[$relatif] ??= [];
+ 
+         foreach ($fichier->line as $ligne) {
+@@ -125,6 +154,14 @@ function couverture(string $clover, ?string $rapport): int
+         $texte .= sprintf("| %s | %d | %d | %.1f %% | %s |\n", $partie, $mesure['lignes'], $mesure['couvertes'], $taux, $seuil === null ? 'aucun' : sprintf('%.1f %%', $seuil));
+     }
+ 
++    // Une partie qui a un seuil et dont le rapport ne mesure aucune ligne
++    // (ses fichiers déplacés ou renommés, un rapport partiel) ne tient pas
++    // son seuil : elle ne le perd jamais en silence.
++    foreach (array_diff_key($seuils, $parParties) as $partie => $seuil) {
++        $echec = true;
++        $texte .= sprintf("| %s | 0 | 0 | non mesurée | %.1f %% |\n", $partie, $seuil);
++    }
++
+     foreach ($parParties as $partie => $mesure) {
+         $texte .= "\n## {$partie}\n\n| Fichier | Lignes | Couverture |\n|---|---:|---:|\n";
+ 
+@@ -138,7 +175,7 @@ function couverture(string $clover, ?string $rapport): int
+     }
+ 
+     echo strstr($texte, "\n## ", true) ?: $texte, "\n";
+-    echo $echec ? "Échec : une partie est sous son seuil, ou sans seuil, dans tests/Qualite/seuils.json.\n" : "Chaque partie tient son seuil.\n";
++    echo $echec ? "Échec : une partie est sous son seuil, sans seuil dans tests/Qualite/seuils.json, ou non mesurée.\n" : "Chaque partie tient son seuil.\n";
+ 
+     return $echec ? 1 : 0;
+ }
+@@ -258,7 +295,7 @@ function mutation(string $journal, ?string $rapport): int
+         $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
+ 
+         if (! in_array($etat, ['tues', 'delais'], true)) {
+-            $parParties[$partie][$etat === 'non_conclus' ? 'non_conclus_liste' : 'liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $ligne, $mutateur);
++            $parParties[$partie][$etat === 'non_conclus' ? 'non_conclus_liste' : 'liste'][] = sprintf('%s:%d %s', relatifAuDepot($fichier), $ligne, $mutateur);
+         }
+     }
+ 
+@@ -465,18 +502,99 @@ function flux(string $rapport): int
+     return 1;
+ }
+ 
+-exit(match ($argv[1] ?? null) {
+-    'couverture' => couverture($argv[2], $argv[3] ?? null),
+-    'nouveau-code' => nouveauCode($argv[2], $argv[3]),
+-    'mutation' => mutation($argv[2], $argv[3] ?? null),
+-    'seuils' => seuilsQuiMontent($argv[2]),
+-    'sensibles' => sensibles(),
+-    'sensibles-changes' => sensiblesChanges($argv[2]),
+-    'configuration-sensibles' => configurationSensibles($argv[2]),
+-    'flux' => flux($argv[2]),
+-    default => (function (): int {
+-        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux ...\n");
+-
+-        return 2;
+-    })(),
+-});
++/**
++ * Les chemins de sécurité d'un rapport de Psalm, chacun « fichier:ligne
++ * type », triés ; null sans rapport.
++ *
++ * @return list<string>|null
++ */
++function cheminsDuRapport(string $rapport): ?array
++{
++    if (! is_file($rapport)) {
++        return null;
++    }
++
++    $chemins = [];
++
++    foreach (json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR) as $probleme) {
++        if (($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted')) {
++            $chemins[] = sprintf('%s:%d %s', relatifAuDepot((string) $probleme['file_name']), $probleme['line_from'], $probleme['type']);
++        }
++    }
++
++    sort($chemins);
++
++    return $chemins;
++}
++
++function fluxDuTemoin(string $rapport): int
++{
++    $trouves = cheminsDuRapport($rapport);
++
++    if ($trouves === null) {
++        echo "Aucun rapport de Psalm pour le témoin : {$rapport}. L'analyse n'a pas tourné jusqu'au bout.\n";
++
++        return 1;
++    }
++
++    $attendus = [];
++
++    foreach (glob_recursif(RACINE.'/tests/Qualite/Psalm/Temoin') as $fichier) {
++        foreach (file($fichier) ?: [] as $rang => $ligne) {
++            if (preg_match('#// attendu : (.+)$#', rtrim($ligne), $marque) === 1) {
++                foreach (array_map(trim(...), explode(',', $marque[1])) as $type) {
++                    $attendus[] = sprintf('%s:%d %s', relatifAuDepot($fichier), $rang + 1, $type);
++                }
++            }
++        }
++    }
++
++    sort($attendus);
++    $manquants = array_diff($attendus, $trouves);
++    $enTrop = array_diff($trouves, $attendus);
++
++    if ($attendus !== [] && $manquants === [] && $enTrop === []) {
++        echo 'L\'analyse des flux voit les '.count($attendus)." chemins du témoin, et aucun autre.\n";
++
++        return 0;
++    }
++
++    echo "L'analyse des flux ne voit pas le témoin tel qu'il est marqué :\n";
++
++    foreach ($manquants as $chemin) {
++        echo "  chemin non vu : {$chemin}\n";
++    }
++
++    foreach ($enTrop as $chemin) {
++        echo "  chemin en trop : {$chemin}\n";
++    }
++
++    if ($attendus === []) {
++        echo "  aucune ligne marquée « attendu : » dans tests/Qualite/Psalm/Temoin.\n";
++    }
++
++    return 1;
++}
++
++try {
++    exit(match ($argv[1] ?? null) {
++        'couverture' => couverture($argv[2], $argv[3] ?? null),
++        'nouveau-code' => nouveauCode($argv[2], $argv[3]),
++        'mutation' => mutation($argv[2], $argv[3] ?? null),
++        'seuils' => seuilsQuiMontent($argv[2]),
++        'sensibles' => sensibles(),
++        'sensibles-changes' => sensiblesChanges($argv[2]),
++        'configuration-sensibles' => configurationSensibles($argv[2]),
++        'flux' => flux($argv[2]),
++        'flux-temoin' => fluxDuTemoin($argv[2]),
++        default => (function (): int {
++            fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux|flux-temoin ...\n");
++
++            return 2;
++        })(),
++    });
++} catch (RuntimeException $erreur) {
++    echo 'Échec : ', $erreur->getMessage(), "\n";
++
++    exit(1);
++}
+diff --git a/tests/Unit/RegleDuMotDePasseTest.php b/tests/Unit/RegleDuMotDePasseTest.php
+new file mode 100644
+index 0000000..7156534
+--- /dev/null
++++ b/tests/Unit/RegleDuMotDePasseTest.php
+@@ -0,0 +1,42 @@
 +<?php
 +
 +namespace Tests\Unit;
 +
-+use App\Domain\Facturation\Enums\ModePaiement;
-+use App\Domain\Facturation\Models\Avoir;
-+use App\Domain\Facturation\Services\PartDeReglement;
-+use App\Domain\Facturation\Services\ReglementComptant;
-+use Closure;
-+use LogicException;
++use App\Domain\Tenancy\Support\RegleDuMotDePasse;
++use PHPUnit\Framework\Attributes\DataProvider;
 +use PHPUnit\Framework\TestCase;
 +
 +/**
-+ * Le règlement d'une vente encaissé à son émission (voir
-+ * ReglementComptant), sans base ni application : à la caisse, jamais par
-+ * prélèvement ; hors de la caisse, dans chacun des cinq modes, sans bon
-+ * d'avoir ; jamais deux parts dans le même mode ; et l'écart que l'écran
-+ * de la caisse montre entre les parts et ce qui reste à payer. Un petit
-+ * fichier rapide : Infection y trouve le test qui arrête un mutant de ces
-+ * règles avant son délai (voir le README).
++ * Une suite de chiffres, que refuse la règle du mot de passe (CLAUDE.md,
++ * « Comptes et équipe »), est croissante ou décroissante d'un chiffre à
++ * chaque pas, de bout en bout : des chiffres qui commencent comme une suite
++ * puis s'en écartent, ou qui avancent d'un autre pas, n'en sont pas une.
++ * Sans dépendre d'un identifiant tiré au hasard, qui ne le vérifiait qu'une
++ * fois sur plusieurs.
 + */
-+class ReglementComptantTest extends TestCase
++class RegleDuMotDePasseTest extends TestCase
 +{
-+    public function test_a_la_caisse_le_prelevement_est_refuse_et_hors_de_la_caisse_chaque_mode_regle(): void
++    /**
++     * @return array<string, array{string, list<string>}>
++     */
++    public static function motsDePasse(): array
 +    {
-+        $this->assertRefuse(fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 500), new PartDeReglement(ModePaiement::Prelevement, 100)]), 'Le prélèvement ne règle pas une vente à la caisse.');
-+
-+        $aLaCaisse = new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 500), new PartDeReglement(ModePaiement::CarteBancaire, 250)]);
-+        $horsDeLaCaisse = ReglementComptant::horsDeLaCaisse([new PartDeReglement(ModePaiement::Prelevement, 100), new PartDeReglement(ModePaiement::Virement, 900)]);
-+
-+        $this->assertSame([true, 750], [$aLaCaisse->aLaCaisse, $aLaCaisse->totalDesParts()]);
-+        $this->assertSame([false, 1000, [ModePaiement::Prelevement, ModePaiement::Virement]], [
-+            $horsDeLaCaisse->aLaCaisse,
-+            $horsDeLaCaisse->totalDesParts(),
-+            array_map(fn (PartDeReglement $part): ModePaiement => $part->mode, $horsDeLaCaisse->parts),
-+        ]);
++        return [
++            'suite croissante' => ['23456789', [RegleDuMotDePasse::MESSAGE_SUITE]],
++            'suite décroissante' => ['98765432', [RegleDuMotDePasse::MESSAGE_SUITE]],
++            'suite qui s’interrompt à la fin' => ['12345670', []],
++            'suite qui s’interrompt au milieu' => ['12346789', []],
++            'chiffres de deux en deux' => ['13579135', []],
++            'chiffres et lettres' => ['1234567a', []],
++        ];
 +    }
 +
 +    /**
-+     * Chaque mode ne règle qu'une part ; un bon d'avoir ne règle qu'une
-+     * vente à la caisse, où son numéro se lit en majuscules, sans espaces
-+     * autour, dans l'ordre de la saisie.
++     * @param  list<string>  $reproches
 +     */
-+    public function test_un_mode_ne_regle_qu_une_part_et_un_bon_d_avoir_ne_se_presente_qu_a_la_caisse(): void
++    #[DataProvider('motsDePasse')]
++    public function test_seule_une_suite_de_chiffres_de_bout_en_bout_est_refusee(string $motDePasse, array $reproches): void
 +    {
-+        $this->assertRefuse(fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Cheque, 500), new PartDeReglement(ModePaiement::Cheque, 100)]), 'Chaque mode ne règle qu\'une part du règlement.');
-+        $this->assertRefuse(fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Virement, 500)], ['AV-LYON1-2026-000001'], false), Avoir::BON_D_AVOIR_HORS_DE_LA_CAISSE);
-+
-+        $this->assertSame(['AV-LYON1-2026-000002', 'AV-LYON1-2026-000001'], (new ReglementComptant([], [' av-lyon1-2026-000002 ', 'AV-LYON1-2026-000001']))->bonsDAvoir);
-+    }
-+
-+    public function test_l_ecart_entre_les_parts_et_ce_qui_reste_a_payer_se_dit_en_euros(): void
-+    {
-+        $this->assertSame('Il reste 12,50 € à répartir.', ReglementComptant::ecartEntre(1000, 2250));
-+        $this->assertSame('Les parts dépassent le total de 0,01 €.', ReglementComptant::ecartEntre(2251, 2250));
-+        $this->assertNull(ReglementComptant::ecartEntre(2250, 2250));
-+    }
-+
-+    private function assertRefuse(Closure $reglement, string $message): void
-+    {
-+        try {
-+            $reglement();
-+        } catch (LogicException $refus) {
-+            $this->assertSame($message, $refus->getMessage());
-+
-+            return;
-+        }
-+
-+        $this->fail("Le règlement devait être refusé : {$message}");
++        $this->assertSame($reproches, RegleDuMotDePasse::reproches($motDePasse, null));
 +    }
 +}

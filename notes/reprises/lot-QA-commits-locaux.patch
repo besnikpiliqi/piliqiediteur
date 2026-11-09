@@ -1,7 +1,7 @@
 From 1b34f616b6d0dc52bb4c6b7bf57e18bb63cfcc63 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Sun, 8 Nov 2026 20:19:14 +0000
-Subject: [PATCH 1/3] =?UTF-8?q?Ajoute=20les=20outils=20de=20qualit=C3=A9?=
+Subject: [PATCH 1/4] =?UTF-8?q?Ajoute=20les=20outils=20de=20qualit=C3=A9?=
  =?UTF-8?q?=20et=20met=20la=20CI=20sur=20PostgreSQL=20seulement=20(lot=20Q?=
  =?UTF-8?q?A=201/2)?=
 MIME-Version: 1.0
@@ -15458,7 +15458,7 @@ index 0000000..831abc6
 From 53beb37653c60cd59231fb8b7210137e0c20b503 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 9 Nov 2026 11:00:35 +0000
-Subject: [PATCH 2/3] =?UTF-8?q?Plafonne=20les=20requ=C3=AAtes=20des=20espa?=
+Subject: [PATCH 2/4] =?UTF-8?q?Plafonne=20les=20requ=C3=AAtes=20des=20espa?=
  =?UTF-8?q?ces=20de=20la=20soci=C3=A9t=C3=A9=20et=20du=20cabinet=20et=20li?=
  =?UTF-8?q?mite=20la=20mutation=20aux=20calculs=20et=20aux=20droits=20(lot?=
  =?UTF-8?q?=20QA=202/3)?=
@@ -20432,7 +20432,7 @@ index 0000000..554e193
 From aedb582fd104196b3a420b9e2eaeef1cea6202c5 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 9 Nov 2026 13:07:51 +0000
-Subject: [PATCH 3/3] =?UTF-8?q?Tue=20les=20mutants=20survivants=20des=20ca?=
+Subject: [PATCH 3/4] =?UTF-8?q?Tue=20les=20mutants=20survivants=20des=20ca?=
  =?UTF-8?q?lculs=20et=20des=20droits=20par=20des=20tests=20et=20un=20code?=
  =?UTF-8?q?=20simplifi=C3=A9=20(lot=20QA=203/4)?=
 MIME-Version: 1.0
@@ -23870,6 +23870,432 @@ index a786053..0bdfe0c 100644
 +        );
 +    }
  }
+-- 
+2.43.0
+
+
+From 09225fa79cf8a38eee048fa41e3184f440660764 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 9 Nov 2026 17:00:32 +0000
+Subject: [PATCH 4/4] Enregistre les scores de mutation des calculs et des
+ droits et monte les seuils de couverture (lot QA 4/4)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Passage complet d'Infection sur le commit précédent (couverture par
+  paratest sur PostgreSQL, puis calculs et droits morceau par morceau) :
+  calculs 1 568 mutants arrêtés, 6 survivants, 47 non conclus, MSI
+  99,62 % ; droits et isolation 2 085 arrêtés, 2 survivants, 177 non
+  conclus, MSI 99,90 %. Sur les seules lignes changées depuis 0d37396
+  (approché depuis le même passage) : calculs 225 sur 226 (99,56 %),
+  droits et isolation 188 sur 188. Seuils enregistrés dans
+  tests/Qualite/seuils.json, au plus le plus petit des deux, arrondi au
+  dixième inférieur : calculs 99,5 %, droits et isolation 99,9 %.
+- Couverture des lignes (même passage) : achats et stock 98,3 %,
+  cabinets 94,7 %, caisse sécurisée 98,3 %, calculs 100 %, droits et
+  isolation 96,2 %, écrans et socle 97,6 %, facturation 97,9 %, pages
+  publiques 96,2 %, société 94,3 %. Seuils montés à la mesure arrondie au
+  dixième inférieur, moins un dixième (100 % pour les calculs), règle
+  écrite dans le README ; chaque ligne de app/ changée depuis 0d37396 est
+  exécutée par un test (qualite.php nouveau-code).
+- Survivants du passage, traités par une simplification du code :
+  ConstructeurLigneAchat::creerLesNouveauxProduits() ne donne plus au
+  nouveau produit un fournisseur et un coût moyen que l'entrée en stock
+  de la même validation, ou la correction de la réception, lui donne
+  aussitôt dans la même transaction (mutant équivalent retiré du
+  README) ; TvaDuFournisseur::proposer() n'efface plus une confirmation
+  qu'un brouillon d'avoir fournisseur, tout juste créé, n'a jamais (la
+  confirmation devient facultative dans enregistrerLesTaux()) ;
+  ConstructeurLigneInventaire ne refuse plus lui-même un coût négatif,
+  que la ligne d'inventaire refuse déjà, avec le même message, à son
+  enregistrement (LigneInventaireOuverture) ; dans l'espace d'une
+  société en lecture seule, ControleDesDroits laisse gererSonCabinet aux
+  policies sans vérifier qu'il porte sur une société (seule
+  SocietePolicy le définit).
+- Reste un mutant équivalent connu dans les calculs, max($base, 1) de
+  CalculateurLigne::repartirLEcart() (README).
+- Tests nouveaux, chacun vérifié contre les mutants qu'il doit arrêter :
+  InvitationsTest::test_un_cabinet_suspendu_ne_retire_plus_ses_invitations
+  (le propriétaire d'un cabinet suspendu peut seulement mettre fin à ses
+  liens) ; et, petits et rapides, pour trancher des mutants non conclus :
+  CalculateurLigneLimitesTest::
+  test_une_part_negative_d_un_demi_centime_s_arrondit_en_s_eloignant_de_zero
+  (CalculateurLigne::diviserArrondi()) ; ReglementComptantTest (3 tests,
+  sans base ni application : prélèvement refusé à la caisse, un mode par
+  part, bon d'avoir à la caisse seulement, écart des parts en euros) ;
+  BaremePrixDeVenteTest::test_le_bareme_s_ecrit_en_tableau_et_se_relit_a_l_identique.
+- Test corrigé : InventaireOuvertureTest::lignesRefusees() avait reçu au
+  commit précédent un cas « coût négatif » en double (même clé, même
+  contenu que celui qui y était déjà) ; le doublon est retiré, le cas
+  reste.
+- Tests réécrits par une décision : aucun.
+- Isolation : aucune lecture hors de MagasinScope ou de SocieteScope
+  ajoutée, aucune règle unique ou exists ; la lecture seule d'une
+  société garde les mêmes refus.
+- Les tests de mutation de la caisse sécurisée, du registre et des
+  clôtures restent à l'étape 3 (décision de l'éditeur du 09/11/2026,
+  déjà écrite dans CLAUDE.md).
+- migrate:fresh puis suite complète PostgreSQL : 5 630 tests, 5 625 réussis,
+  5 ignorés, code de sortie 0 ;
+  Larastan niveau 6 sans erreur ; Psalm (flux de données) sans chemin ;
+  composer audit (dépôt et tools/psalm) et npm audit sans faille ; pint.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ README.md                                     |  4 +-
+ .../Services/ConstructeurLigneAchat.php       | 14 ++--
+ .../Achats/Services/TvaDuFournisseur.php      | 19 ++---
+ .../Authorization/ControleDesDroits.php       |  2 +-
+ .../Services/ConstructeurLigneInventaire.php  | 11 +--
+ tests/Feature/Cabinets/InvitationsTest.php    | 16 +++++
+ .../Feature/Stock/InventaireOuvertureTest.php |  4 --
+ tests/Qualite/seuils.json                     | 21 +++---
+ tests/Unit/BaremePrixDeVenteTest.php          | 13 ++++
+ tests/Unit/CalculateurLigneLimitesTest.php    | 12 ++++
+ tests/Unit/ReglementComptantTest.php          | 71 +++++++++++++++++++
+ 11 files changed, 150 insertions(+), 37 deletions(-)
+ create mode 100644 tests/Unit/ReglementComptantTest.php
+
+diff --git a/README.md b/README.md
+index 673e253..b624b16 100644
+--- a/README.md
++++ b/README.md
+@@ -100,9 +100,9 @@ ## Tests, commandes et fonctionnement
+ 
+ - *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
+ - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`).
+-- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test).
++- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, moins un dixième de point (100 % pour les calculs, entièrement couverts) : une ligne qu'une autre machine n'exécuterait pas, selon un délai ou une concurrence, ne fait pas échouer la CI.
+ - *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet, au plus celui des lignes de l'envoi qui l'a enregistré ; la CI le compare, à chaque envoi, au score des seules lignes changées : sur peu de lignes, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil.
+-- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou), le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent, et le fournisseur et le coût moyen qu'un nouveau produit reçoit à sa création par un achat validé, que l'entrée en stock de la même validation réécrit.
++- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou) et le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent.
+ - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
+ - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
+ - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, et que le tableau de bord et « Les caisses » de l'espace de la société (pour le propriétaire comme pour un administrateur) et le tableau de bord d'un cabinet lisent la base autant de fois avec un magasin ou un client que trois, sous un plafond ; `TempsDeReponseTest` (en navigateur) vérifie que chaque page principale du magasin, le tableau de bord et « Les caisses » de l'espace de la société et le tableau de bord d'un cabinet s'ouvrent sous un plafond de temps. Les droits que le compte connecté lit pendant une requête (ses autorisations dans chaque magasin, ses affectations, et pour un compte d'un cabinet les clients que ses liens lui ouvrent et ce que chacun lui accorde) se lisent une fois par requête et s'oublient à sa fin.
+diff --git a/app/Domain/Achats/Services/ConstructeurLigneAchat.php b/app/Domain/Achats/Services/ConstructeurLigneAchat.php
+index 2e4e1dc..75b0f55 100644
+--- a/app/Domain/Achats/Services/ConstructeurLigneAchat.php
++++ b/app/Domain/Achats/Services/ConstructeurLigneAchat.php
+@@ -36,7 +36,7 @@
+  * fiche peut être corrigée au passage, tout de suite ; ou un nouveau
+  * produit, dont la ligne d'un brouillon garde seulement la fiche
+  * (LigneAchat::$nouveau_produit) : il n'est créé qu'à la validation de la
+- * facture, rattaché à son fournisseur (voir creerLesNouveauxProduits()).
++ * facture (voir creerLesNouveauxProduits()).
+  * Un brouillon supprimé ne laisse ainsi aucun produit derrière lui, et ne
+  * consomme aucune référence automatique. Seule la correction d'une
+  * facture déjà validée, dont la marchandise est déjà reçue, crée son
+@@ -239,9 +239,14 @@ public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lig
+      * validée (voir enregistrer()), dans l'ordre de ses lignes. Son prix de
+      * vente TTC est celui de sa fiche, sinon celui que le barème actif du
+      * magasin prévoit pour son prix d'achat, remise déduite ; sans l'un ni
+-     * l'autre, la validation est refusée. Il naît rattaché au fournisseur
+-     * de la facture, à son coût réel (voir LigneAchat::coutUnitaireHt()) ;
+-     * sa référence, saisie ou générée (voir Produit), est prise à ce
++     * l'autre, la validation est refusée. Son fournisseur et son coût moyen
++     * lui viennent, dans la même transaction, de l'entrée en stock de la
++     * validation (voir IncrementerStockApresValidationFactureAchat) ou de la
++     * correction de la réception (voir
++     * ModifierFactureAchatAction::corrigerLaReception()), comme à tout
++     * produit de la facture : le fournisseur de la facture et son coût réel
++     * (voir LigneAchat::coutUnitaireHt()). Sa référence, saisie ou générée
++     * (voir Produit), est prise à ce
+      * moment-là : les références automatiques suivent l'ordre des
+      * validations, et une référence saisie qu'un autre produit a prise
+      * entre-temps est refusée (voir Produit::verifierQueSaReferenceEstLibre()).
+@@ -262,7 +267,6 @@ public function creerLesNouveauxProduits(FactureAchat $factureAchat): void
+                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
+             }
+ 
+-            $produit->forceFill(['fournisseur_id' => $factureAchat->fournisseur_id, 'cmup_ht' => $ligne->coutUnitaireHt()]);
+             $this->origine->pendant(OrigineProduit::Achat, fn (): bool => $produit->save());
+ 
+             $ligne->update(['produit_id' => $produit->id, 'reference' => $produit->reference, 'nouveau_produit' => null]);
+diff --git a/app/Domain/Achats/Services/TvaDuFournisseur.php b/app/Domain/Achats/Services/TvaDuFournisseur.php
+index 9a758b5..a645116 100644
+--- a/app/Domain/Achats/Services/TvaDuFournisseur.php
++++ b/app/Domain/Achats/Services/TvaDuFournisseur.php
+@@ -151,21 +151,21 @@ public function retenir(User $compte, FactureAchat|AvoirFournisseur $document, D
+      */
+     public function proposer(AvoirFournisseur $avoir, DocumentChiffre $chiffre, MontantsDuFournisseur $montants): void
+     {
+-        $this->enregistrerLesTaux($avoir, $this->ecarts($chiffre), $montants, function (Model $ligne): void {
+-            $ligne->forceFill(['ecart_confirme_par' => null, 'ecart_confirme_le' => null, 'ecart_confirme_empreinte' => null]);
+-        });
++        $this->enregistrerLesTaux($avoir, $this->ecarts($chiffre), $montants);
+     }
+ 
+     /**
+      * La TVA de chaque taux, à la place de celle que le document avait :
+      * chaque ligne de taux existante se met à jour, une nouvelle s'ajoute,
+-     * celle d'un taux disparu s'efface ; $confirmation pose ou retire la
+-     * confirmation de chacune avant son enregistrement.
++     * celle d'un taux disparu s'efface ; $confirmation, quand le document
++     * retient ses montants, pose ou retire la confirmation de chacune avant
++     * son enregistrement (un brouillon d'avoir fournisseur n'en reçoit
++     * aucune).
+      *
+      * @param  array<string, EcartsDUnTaux>  $ecarts
+-     * @param  callable(Model, EcartsDUnTaux, string): void  $confirmation
++     * @param  (callable(Model, EcartsDUnTaux, string): void)|null  $confirmation
+      */
+-    private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, callable $confirmation): void
++    private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, ?callable $confirmation = null): void
+     {
+         $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
+         $ordre = 0;
+@@ -179,7 +179,10 @@ private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, arr
+                 'montant_tva_saisi' => isset($montants->tvaParTaux[$ecart->taux]) ? $this->calculateur->enDecimal($montants->tvaParTaux[$ecart->taux]) : null,
+                 'ordre' => $ordre++,
+             ]);
+-            $confirmation($ligne, $ecart, $taux);
++            if ($confirmation !== null) {
++                $confirmation($ligne, $ecart, $taux);
++            }
++
+             $ligne->save();
+         }
+ 
+diff --git a/app/Domain/Authorization/ControleDesDroits.php b/app/Domain/Authorization/ControleDesDroits.php
+index c8191b1..75d71e7 100644
+--- a/app/Domain/Authorization/ControleDesDroits.php
++++ b/app/Domain/Authorization/ControleDesDroits.php
+@@ -272,7 +272,7 @@ private function dansLEspaceDeLaSociete(User $user, string $ability, mixed $cibl
+             return null;
+         }
+ 
+-        return (self::porteSurLEquipe($cible) || ($ability === 'gererSonCabinet' && self::porteSur($cible, Societe::class))) && $societe->statut !== StatutSociete::Revoquee ? null : false;
++        return (self::porteSurLEquipe($cible) || $ability === 'gererSonCabinet') && $societe->statut !== StatutSociete::Revoquee ? null : false;
+     }
+ 
+     private function estPermisEnLectureSeule(string $ability, mixed $cible, Societe $societe): bool
+diff --git a/app/Domain/Stock/Services/ConstructeurLigneInventaire.php b/app/Domain/Stock/Services/ConstructeurLigneInventaire.php
+index 1df4652..9c65132 100644
+--- a/app/Domain/Stock/Services/ConstructeurLigneInventaire.php
++++ b/app/Domain/Stock/Services/ConstructeurLigneInventaire.php
+@@ -230,7 +230,8 @@ private function nouveauProduit(array $attributs): Produit
+ 
+     /**
+      * Le coût unitaire HT saisi, en millionièmes d'euro, tel que saisi, six
+-     * décimales au plus, jamais négatif.
++     * décimales au plus ; la ligne refuse un coût négatif à son
++     * enregistrement (voir LigneInventaireOuverture).
+      *
+      * @throws InvalidArgumentException
+      */
+@@ -240,13 +241,7 @@ private function coutUnitaire(mixed $saisie): int
+             throw new InvalidArgumentException('Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.');
+         }
+ 
+-        $cout = SaisieDecimale::enMillioniemes($saisie);
+-
+-        if ($cout < 0) {
+-            throw new InvalidArgumentException('Le coût unitaire d\'un produit ne peut pas être négatif.');
+-        }
+-
+-        return $cout;
++        return SaisieDecimale::enMillioniemes($saisie);
+     }
+ 
+     /**
+diff --git a/tests/Feature/Cabinets/InvitationsTest.php b/tests/Feature/Cabinets/InvitationsTest.php
+index ebf07b7..2c7fb98 100644
+--- a/tests/Feature/Cabinets/InvitationsTest.php
++++ b/tests/Feature/Cabinets/InvitationsTest.php
+@@ -354,6 +354,22 @@ public function test_le_cabinet_retire_une_invitation_ouverte_et_son_lien_ne_vau
+         $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSeeText(InvitationInvalideException::MESSAGE);
+     }
+ 
++    /**
++     * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
++     * propriétaire peut seulement mettre fin à ses liens (voir
++     * ControleDesDroits) ; l'invitation reste ouverte.
++     */
++    public function test_un_cabinet_suspendu_ne_retire_plus_ses_invitations(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'a@b.test');
++        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
++        $cabinet->forceFill(['statut' => StatutSociete::Suspendue])->save();
++
++        $this->assertThrows(fn () => app(RetirerLInvitationAction::class)->handle($this->proprietaireDuCabinet($cabinet), $invitation), AuthorizationException::class);
++        $this->assertSame(EtatInvitation::Ouverte, $invitation->fresh()->etat);
++    }
++
+     public function test_une_invitation_expire_apres_sept_jours(): void
+     {
+         $this->travelTo(self::aParis('2026-10-12 10:00:00'));
+diff --git a/tests/Feature/Stock/InventaireOuvertureTest.php b/tests/Feature/Stock/InventaireOuvertureTest.php
+index d31d681..0842c64 100644
+--- a/tests/Feature/Stock/InventaireOuvertureTest.php
++++ b/tests/Feature/Stock/InventaireOuvertureTest.php
+@@ -520,10 +520,6 @@ public static function lignesRefusees(): array
+                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '120'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                 'Le taux de TVA doit être compris entre 0 et 100 %.',
+             ],
+-            'coût négatif' => [
+-                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '-0.01']],
+-                'Le coût unitaire d\'un produit ne peut pas être négatif.',
+-            ],
+             'coût manquant' => [
+                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '']],
+                 'Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.',
+diff --git a/tests/Qualite/seuils.json b/tests/Qualite/seuils.json
+index dfa95fd..a9e37af 100644
+--- a/tests/Qualite/seuils.json
++++ b/tests/Qualite/seuils.json
+@@ -3,15 +3,18 @@
+         "niveau": 6
+     },
+     "couverture": {
+-        "achats_et_stock": 98,
+-        "cabinets": 94,
+-        "caisse_securisee": 98,
++        "achats_et_stock": 98.2,
++        "cabinets": 94.6,
++        "caisse_securisee": 98.2,
+         "calculs": 100,
+-        "droits_et_isolation": 96,
+-        "ecrans_et_socle": 97,
+-        "facturation": 97,
+-        "pages_publiques": 96,
+-        "societe": 94
++        "droits_et_isolation": 96.1,
++        "ecrans_et_socle": 97.5,
++        "facturation": 97.8,
++        "pages_publiques": 96.1,
++        "societe": 94.2
+     },
+-    "mutation": {}
++    "mutation": {
++        "calculs": 99.5,
++        "droits_et_isolation": 99.9
++    }
+ }
+diff --git a/tests/Unit/BaremePrixDeVenteTest.php b/tests/Unit/BaremePrixDeVenteTest.php
+index 42ca5a4..d980d83 100644
+--- a/tests/Unit/BaremePrixDeVenteTest.php
++++ b/tests/Unit/BaremePrixDeVenteTest.php
+@@ -175,4 +175,17 @@ public function test_le_bareme_d_un_formulaire_se_lit_en_nombres(): void
+             'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.',
+         );
+     }
++
++    /**
++     * Le barème s'enregistre en tableau (voir castUsing()) et se relit à
++     * l'identique : ses paliers, son bénéfice au-delà et son arrondi au X9.
++     */
++    public function test_le_bareme_s_ecrit_en_tableau_et_se_relit_a_l_identique(): void
++    {
++        $tableau = ['paliers' => [['jusqu_a' => 2.0, 'benefice' => 10.0], ['jusqu_a' => 5.0, 'benefice' => 15.0]], 'benefice_au_dela' => 60.0, 'arrondi_x9' => true];
++        $bareme = new BaremePrixDeVente($tableau['paliers'], 60.0, true);
++
++        $this->assertSame($tableau, $bareme->versTableau());
++        $this->assertEquals($bareme, BaremePrixDeVente::depuisTableau($tableau));
++    }
+ }
+diff --git a/tests/Unit/CalculateurLigneLimitesTest.php b/tests/Unit/CalculateurLigneLimitesTest.php
+index 39f693c..97fb8ff 100644
+--- a/tests/Unit/CalculateurLigneLimitesTest.php
++++ b/tests/Unit/CalculateurLigneLimitesTest.php
+@@ -205,6 +205,18 @@ public function test_l_ecart_d_une_tva_retenue_se_reporte_d_une_ligne_a_l_autre(
+         $this->assertSame([4, 0, 7], self::tva($c->repartirUneTvaRetenue([self::part(7, 5), self::part(6, 0), self::part(12, 9)], 2000, 11)));
+     }
+ 
++    /**
++     * Une part d'un demi-centime s'arrondit en s'éloignant de zéro, que
++     * l'écart ajoute ou retire de la TVA : retirer 1 centime de deux lignes
++     * de 1 centime HT qui en portent chacune 1 le retire de la première,
++     * comme en ajouter 1 à deux lignes qui n'en portent pas le donne à la
++     * première (voir le test précédent).
++     */
++    public function test_une_part_negative_d_un_demi_centime_s_arrondit_en_s_eloignant_de_zero(): void
++    {
++        $this->assertSame([0, 1], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 1), self::part(1, 1)], 2000, 1)));
++    }
++
+     /**
+      * Un retour au fournisseur ne propose jamais un montant négatif : quand
+      * les retours précédents ont déjà rendu plus que la proposition des
+diff --git a/tests/Unit/ReglementComptantTest.php b/tests/Unit/ReglementComptantTest.php
+new file mode 100644
+index 0000000..52ddb85
+--- /dev/null
++++ b/tests/Unit/ReglementComptantTest.php
+@@ -0,0 +1,71 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Facturation\Enums\ModePaiement;
++use App\Domain\Facturation\Models\Avoir;
++use App\Domain\Facturation\Services\PartDeReglement;
++use App\Domain\Facturation\Services\ReglementComptant;
++use Closure;
++use LogicException;
++use PHPUnit\Framework\TestCase;
++
++/**
++ * Le règlement d'une vente encaissé à son émission (voir
++ * ReglementComptant), sans base ni application : à la caisse, jamais par
++ * prélèvement ; hors de la caisse, dans chacun des cinq modes, sans bon
++ * d'avoir ; jamais deux parts dans le même mode ; et l'écart que l'écran
++ * de la caisse montre entre les parts et ce qui reste à payer. Un petit
++ * fichier rapide : Infection y trouve le test qui arrête un mutant de ces
++ * règles avant son délai (voir le README).
++ */
++class ReglementComptantTest extends TestCase
++{
++    public function test_a_la_caisse_le_prelevement_est_refuse_et_hors_de_la_caisse_chaque_mode_regle(): void
++    {
++        $this->assertRefuse(fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 500), new PartDeReglement(ModePaiement::Prelevement, 100)]), 'Le prélèvement ne règle pas une vente à la caisse.');
++
++        $aLaCaisse = new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 500), new PartDeReglement(ModePaiement::CarteBancaire, 250)]);
++        $horsDeLaCaisse = ReglementComptant::horsDeLaCaisse([new PartDeReglement(ModePaiement::Prelevement, 100), new PartDeReglement(ModePaiement::Virement, 900)]);
++
++        $this->assertSame([true, 750], [$aLaCaisse->aLaCaisse, $aLaCaisse->totalDesParts()]);
++        $this->assertSame([false, 1000, [ModePaiement::Prelevement, ModePaiement::Virement]], [
++            $horsDeLaCaisse->aLaCaisse,
++            $horsDeLaCaisse->totalDesParts(),
++            array_map(fn (PartDeReglement $part): ModePaiement => $part->mode, $horsDeLaCaisse->parts),
++        ]);
++    }
++
++    /**
++     * Chaque mode ne règle qu'une part ; un bon d'avoir ne règle qu'une
++     * vente à la caisse, où son numéro se lit en majuscules, sans espaces
++     * autour, dans l'ordre de la saisie.
++     */
++    public function test_un_mode_ne_regle_qu_une_part_et_un_bon_d_avoir_ne_se_presente_qu_a_la_caisse(): void
++    {
++        $this->assertRefuse(fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Cheque, 500), new PartDeReglement(ModePaiement::Cheque, 100)]), 'Chaque mode ne règle qu\'une part du règlement.');
++        $this->assertRefuse(fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Virement, 500)], ['AV-LYON1-2026-000001'], false), Avoir::BON_D_AVOIR_HORS_DE_LA_CAISSE);
++
++        $this->assertSame(['AV-LYON1-2026-000002', 'AV-LYON1-2026-000001'], (new ReglementComptant([], [' av-lyon1-2026-000002 ', 'AV-LYON1-2026-000001']))->bonsDAvoir);
++    }
++
++    public function test_l_ecart_entre_les_parts_et_ce_qui_reste_a_payer_se_dit_en_euros(): void
++    {
++        $this->assertSame('Il reste 12,50 € à répartir.', ReglementComptant::ecartEntre(1000, 2250));
++        $this->assertSame('Les parts dépassent le total de 0,01 €.', ReglementComptant::ecartEntre(2251, 2250));
++        $this->assertNull(ReglementComptant::ecartEntre(2250, 2250));
++    }
++
++    private function assertRefuse(Closure $reglement, string $message): void
++    {
++        try {
++            $reglement();
++        } catch (LogicException $refus) {
++            $this->assertSame($message, $refus->getMessage());
++
++            return;
++        }
++
++        $this->fail("Le règlement devait être refusé : {$message}");
++    }
++}
 -- 
 2.43.0
 

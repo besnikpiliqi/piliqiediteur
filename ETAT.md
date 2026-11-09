@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 16:34 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 18:35 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `0d37396`. Commits locaux pas encore poussés :
 
 ```
+09225fa Enregistre les scores de mutation des calculs et des droits et monte les seuils de couverture (lot QA 4/4)
 aedb582 Tue les mutants survivants des calculs et des droits par des tests et un code simplifié (lot QA 3/4)
 53beb37 Plafonne les requêtes des espaces de la société et du cabinet et limite la mutation aux calculs et aux droits (lot QA 2/3)
 1b34f61 Ajoute les outils de qualité et met la CI sur PostgreSQL seulement (lot QA 1/2)
@@ -40,15 +41,25 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .github/workflows/tests.yml
  M README.md
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Achats/Services/TvaDuFournisseur.php
- M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
- M tests/Feature/Stock/InventaireOuvertureTest.php
- M tests/Qualite/seuils.json
- M tests/Unit/BaremePrixDeVenteTest.php
- M tests/Unit/CalculateurLigneLimitesTest.php
-?? tests/Unit/ReglementComptantTest.php
+ M app/Domain/Facturation/Services/ImputationDuCredit.php
+ M app/Domain/Tenancy/Models/Affectation.php
+ M app/Http/Middleware/AjouterLesEnTetesDeSecurite.php
+ M psalm.xml
+ M tests/Browser/Parcours/PiecesDuFournisseurTest.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+ M tests/Feature/Cabinets/AccepterLInvitationTest.php
+ M tests/Feature/Cabinets/InvitationsTest.php
+ M tests/Feature/EnTetesDeSecuriteTest.php
+ M tests/Feature/Proprietes/AchatsEtStockAuHasardTest.php
+ M tests/Feature/Proprietes/DroitsEtIsolationAuHasardTest.php
+ M tests/Qualite/parties.php
+ M tests/Qualite/qualite.php
+?? psalm-temoin.xml
+?? tests/Feature/Qualite/OutilDeQualiteTest.php
+?? tests/Qualite/Psalm/
+?? tests/Unit/RegleDuMotDePasseTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -59,4 +70,5 @@ Course `wf_54289edd-a97`, étapes commencées (de la plus ancienne à la plus r�
 QA:implementation
 QA:relecture1
 QA:relecture2
+QA:correction
 ```

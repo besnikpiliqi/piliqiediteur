@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 01:32 UTC par pilotage-sync.sh : « Q-CALC2 : option (d) proposée à l'éditeur (sa règle avec une sécurité par taux) ».
+Mis à jour le 09/11/2026 à 02:08 UTC par pilotage-sync.sh : « Point de suivi du 09/11 : travail du lot QA resauvé (47 entrées) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

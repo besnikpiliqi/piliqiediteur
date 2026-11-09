@@ -1,5 +1,5 @@
 diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
-index 2c4b823..af281aa 100644
+index 2c4b823..49baf56 100644
 --- a/.github/workflows/tests.yml
 +++ b/.github/workflows/tests.yml
 @@ -158,8 +158,8 @@ jobs:
@@ -13,7 +13,22 @@ index 2c4b823..af281aa 100644
    # d'Infection a sa base (TEST_TOKEN, LARAVEL_PARALLEL_TESTING). Rapports
    # gardés en artefact.
    couverture:
-@@ -220,8 +220,14 @@ jobs:
+@@ -188,9 +188,11 @@ jobs:
+       DB_DATABASE: piliqi_test
+       DB_USERNAME: piliqi
+       DB_PASSWORD: piliqi
+-      # Le commit d'avant l'envoi, ou la base de la demande de fusion ;
+-      # vide pour une course planifiée.
+-      BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
++      # Le commit d'avant l'envoi (push, ou nouveaux commits d'une demande
++      # de fusion) : seules ses lignes changées se contrôlent ; vide pour une
++      # course planifiée ou l'ouverture d'une demande de fusion, dont la
++      # base contiendrait tout le logiciel.
++      BASE: ${{ github.event.before }}
+ 
+     steps:
+       - name: Checkout code
+@@ -220,8 +222,14 @@ jobs:
        - name: Generate app key
          run: php artisan key:generate
  
@@ -29,7 +44,15 @@ index 2c4b823..af281aa 100644
  
        - name: Seuils de couverture par partie
          run: php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md
-@@ -235,10 +241,12 @@ jobs:
+@@ -230,15 +238,19 @@ jobs:
+         if: env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
+         run: php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml "$BASE"
+ 
++      # À l'envoi seulement : les commits d'une demande de fusion sont ceux
++      # que la course de leur envoi a déjà testés.
+       - name: Tests de mutation des parties sensibles changées
+-        if: env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
++        if: github.event_name == 'push' && env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
          env:
            LARAVEL_PARALLEL_TESTING: 1
          run: |
@@ -47,20 +70,118 @@ index 2c4b823..af281aa 100644
  
        - name: Garder les rapports
 diff --git a/README.md b/README.md
-index 7c1419f..1043b06 100644
+index 7c1419f..16be61b 100644
 --- a/README.md
 +++ b/README.md
-@@ -100,8 +100,8 @@ ## Tests, commandes et fonctionnement
+@@ -100,11 +100,11 @@ ## Tests, commandes et fonctionnement
  
  - *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
  - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`).
 -- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `php artisan test --parallel --testsuite=Unit,Feature --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test).
 -- *Tests de mutation* : Infection, sur les parties sensibles (calculs, caisse sécurisée, droits et isolation). Il lui faut la couverture de la suite : `php artisan test --parallel --testsuite=Unit,Feature --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --threads=max --coverage=storage/qualite/infection --skip-initial-tests $(php tests/Qualite/qualite.php sensibles)` (chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; remplacez `sensibles` par `sensibles-changes <commit>` pour les seuls fichiers des parties sensibles changés depuis ce commit, comme la CI), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, et liste des mutants qu'aucun test n'arrête). Le passage complet se fait aux relances de la campagne de tests et à l'audit final.
 +- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; PCOV ne mesure pas les branches) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test).
-+- *Tests de mutation* : Infection, sur les parties sensibles (calculs, caisse sécurisée, droits et isolation). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, et liste des mutants qu'aucun test n'arrête). Le passage complet se fait aux relances de la campagne de tests et à l'audit final.
++- *Tests de mutation* : Infection, sur les parties sensibles (calculs, caisse sécurisée, droits et isolation). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final.
  - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
  - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
- - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, sous un plafond, et `TempsDeReponseTest` (en navigateur) que chacune s'ouvre sous un plafond de temps.
+-- *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, sous un plafond, et `TempsDeReponseTest` (en navigateur) que chacune s'ouvre sous un plafond de temps.
++- *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, et que le tableau de bord et « Les caisses » de l'espace de la société (pour le propriétaire comme pour un administrateur) et le tableau de bord d'un cabinet lisent la base autant de fois avec un magasin ou un client que trois, sous un plafond ; `TempsDeReponseTest` (en navigateur) vérifie que chaque page principale du magasin s'ouvre sous un plafond de temps. Les droits que le compte connecté lit pendant une requête (ses autorisations dans chaque magasin, ses affectations, et pour un compte d'un cabinet les clients que ses liens lui ouvrent et ce que chacun lui accorde) se lisent une fois par requête et s'oublient à sa fin.
+ - *Tests au hasard* : `tests/Feature/Proprietes` tire au sort, d'une graine écrite dans chaque test, des milliers de combinaisons de ventes, d'avoirs, de paiements, de contre-passations, d'achats, de retours au fournisseur, de clôtures et de comptes, et vérifie à chaque fois les règles qui doivent toujours tenir ; un cas qui échoue est réduit au plus petit cas qui échoue, qu'il faut garder comme test nommé. Ils font partie de la suite.
+ 
+ `caisse:generer-cle` épingle une clé publique de signature fiscale dans `resources/caisse-securisee/cles` et affiche une seule fois la clé privée, à placer dans `CAISSE_SECURISEE_CLE_PRIVEE`. Sans elle, le module fiscal refuse tout ce qu'il doit signer, ouverture de session dans un magasin comprise (voir `php artisan caisse:diagnostiquer`). Une clé générée pour le développement ne se versionne jamais : seules les clés de production de l'éditeur sont épinglées dans le dépôt. Les tests génèrent leur propre clé.
+diff --git a/app/Domain/Cabinets/Services/AccesDesCabinets.php b/app/Domain/Cabinets/Services/AccesDesCabinets.php
+index adaf0c6..2b15e2e 100644
+--- a/app/Domain/Cabinets/Services/AccesDesCabinets.php
++++ b/app/Domain/Cabinets/Services/AccesDesCabinets.php
+@@ -130,13 +130,15 @@ public function liensAMettreFin(Societe $cabinet, array $etats): Collection
+     }
+ 
+     /**
+-     * Ce compte ouvre-t-il ce magasin : un magasin réel d'un client que lui
+-     * ouvrent ses liens (voir liensOuverts()) ?
++     * Les sociétés clientes que lui ouvrent ses liens (voir liensOuverts()),
++     * par identifiant : il ouvre leurs magasins réels (voir
++     * User::peutOuvrir()).
++     *
++     * @return list<int>
+      */
+-    public function ouvre(User $compte, Magasin $magasin): bool
++    public function clientsOuverts(User $compte): array
+     {
+-        return ! $magasin->est_demonstration
+-            && $this->liensOuverts($compte)->where('liens_cabinet.societe_id', $magasin->societe_id)->exists();
++        return array_map(intval(...), $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all());
+     }
+ 
+     /**
+@@ -162,37 +164,46 @@ public function magasinsDuCompte(User $compte): Collection
+     }
+ 
+     /**
+-     * Les autorisations que le compte tient dans ce magasin, sans regarder
+-     * l'état du cabinet : celles que le client accorde au cabinet par le
+-     * lien actif, croisées avec celles qu'un cabinet peut recevoir d'un
+-     * client de ce type (voir PermissionRegistry::duCabinet()), triées ;
+-     * null hors d'un magasin réel, pour un compte retiré, ou sans lien
+-     * actif confié.
++     * Les autorisations que le compte tient chez chaque client de ses liens
++     * (voir liensDuCompte()), sans regarder l'état du cabinet : celles que
++     * le client accorde au cabinet par le lien actif, croisées avec celles
++     * qu'un cabinet peut recevoir d'un client de ce type (voir
++     * PermissionRegistry::duCabinet()), triées, par identifiant de la
++     * société cliente ; elles valent dans chacun de ses magasins réels.
++     * Aucun client pour un compte retiré ou sans lien actif confié. Trois
++     * lectures quel que soit le nombre de clients, chacune filtrée par les
++     * liens du compte.
+      *
+-     * @return list<string>|null
++     * @return array<int, list<string>>
+      */
+-    public function autorisationsEnregistrees(User $compte, Magasin $magasin): ?array
++    public function autorisationsParClient(User $compte): array
+     {
+-        if ($magasin->est_demonstration) {
+-            return null;
+-        }
+-
+-        $lien = $this->liensDuCompte($compte)->where('liens_cabinet.societe_id', $magasin->societe_id)->first(['liens_cabinet.id', 'liens_cabinet.societe_id']);
++        $liens = $this->liensDuCompte($compte)->get(['liens_cabinet.id', 'liens_cabinet.societe_id']);
+ 
+-        if ($lien === null) {
+-            return null;
++        if ($liens->isEmpty()) {
++            return [];
+         }
+ 
++        $clients = array_map(intval(...), $liens->pluck('societe_id')->all());
+         $accordees = DB::table('autorisations_cabinet')
+-            ->where('societe_id', $magasin->societe_id)
+-            ->where('lien_id', $lien->getKey())
++            ->whereIn('societe_id', $clients)
++            ->whereIn('lien_id', $liens->modelKeys())
+             ->orderBy('autorisation')
+-            ->pluck('autorisation')
+-            ->all();
+-        $retenues = array_values(array_intersect($accordees, PermissionRegistry::duCabinet(Societe::query()->findOrFail($magasin->societe_id)->type_activite)));
+-        sort($retenues);
++            ->get(['lien_id', 'autorisation'])
++            ->groupBy('lien_id');
++        $types = Societe::query()->whereKey($clients)->get(['id', 'type_activite'])->keyBy('id');
++        $parClient = [];
++
++        foreach ($liens as $lien) {
++            $retenues = array_values(array_intersect(
++                $accordees->get($lien->getKey(), collect())->pluck('autorisation')->all(),
++                PermissionRegistry::duCabinet($types->get($lien->societe_id)->type_activite),
++            ));
++            sort($retenues);
++            $parClient[(int) $lien->societe_id] = $retenues;
++        }
+ 
+-        return $retenues;
++        return $parClient;
+     }
+ 
+     /**
 diff --git a/app/Domain/Cabinets/Support/GardesDesCabinets.php b/app/Domain/Cabinets/Support/GardesDesCabinets.php
 index 50300eb..03209a9 100644
 --- a/app/Domain/Cabinets/Support/GardesDesCabinets.php
@@ -129,6 +250,102 @@ index 5dd9732..fce2bbd 100644
      }
  
      public function get(Model $model, string $key, mixed $value, array $attributes): ?CarbonImmutable
+diff --git a/app/Domain/Facturation/Services/CaissesDeLaSociete.php b/app/Domain/Facturation/Services/CaissesDeLaSociete.php
+index 17e8acb..6092381 100644
+--- a/app/Domain/Facturation/Services/CaissesDeLaSociete.php
++++ b/app/Domain/Facturation/Services/CaissesDeLaSociete.php
+@@ -6,9 +6,11 @@
+ use App\Domain\Calendrier\Calendrier;
+ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+ use App\Domain\Tenancy\Models\Magasin;
+-use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Scopes\MagasinScope;
+ use App\Models\User;
++use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Collection;
++use Illuminate\Support\Arr;
+ 
+ /**
+  * Les caisses de chaque magasin, à la page « Les caisses » de l'espace
+@@ -21,9 +23,11 @@
+  * un magasin d'une autre société, et seulement ceux où elle voit déjà les
+  * relevés de toute l'équipe (cloture_caisse.view_toutes : toujours pour le
+  * propriétaire, la case cochée pour un administrateur), et dont elle peut
+- * donc ouvrir la page des relevés où mène chaque magasin. Chaque magasin
+- * se lit à son tour comme magasin actif (voir TenantContext::runAs()) :
+- * MagasinScope reste en place, aucune requête ne contourne sa portée.
++ * donc ouvrir la page des relevés où mène chaque magasin. Leurs relevés et
++ * leurs caisses ouvertes se lisent d'un coup, hors de MagasinScope, chaque
++ * requête filtrée explicitement par ces seuls magasins et la journée de
++ * chacun : la page lit la base autant de fois pour un magasin que pour
++ * vingt.
+  *
+  * De chacun, elle ne rend que les relevés de caisse fermés le jour choisi,
+  * ou, sans jour choisi, sa journée en cours, chaque magasin dans son
+@@ -84,33 +88,44 @@ public function magasins(User $compte): Collection
+      * ou, sans jour choisi, sa journée en cours), les noms des vendeurs
+      * dont la caisse est encore ouverte à son jour, et ses relevés fermés
+      * pendant cette journée, de son minuit au suivant, du plus récent au
+-     * plus ancien.
++     * plus ancien (le magasin d'un relevé, lu pour le ranger, ne reste pas
++     * sur le relevé rendu).
+      *
+      * @return list<array{magasin: Magasin, calendrier: Calendrier, journee: string, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>
+      */
+     public function pour(User $compte, ?string $journee): array
+     {
+-        $contexte = app(TenantContext::class);
++        $magasins = $this->magasins($compte)->keyBy(fn (Magasin $magasin): int => (int) $magasin->getKey());
+ 
+-        return $this->magasins($compte)
+-            ->map(function (Magasin $magasin) use ($contexte, $journee): array {
+-                $calendrier = $magasin->calendrier();
+-                $journeeDuMagasin = $journee ?? $calendrier->aujourdhui();
+-                [$debut, $fin] = $calendrier->bornesDuJour($journeeDuMagasin);
++        if ($magasins->isEmpty()) {
++            return [];
++        }
+ 
+-                return $contexte->runAs($magasin, fn (): array => [
+-                    'magasin' => $magasin,
+-                    'calendrier' => $calendrier,
+-                    'journee' => $journeeDuMagasin,
+-                    'caisses_ouvertes' => $this->verificateur->vendeursAvecCaisseOuverte($calendrier->aujourdhui())->pluck('name')->values()->all(),
+-                    'releves' => ClotureCaissePersonnelle::query()
+-                        ->where('cloturee_a', '>=', $debut)
+-                        ->where('cloturee_a', '<', $fin)
+-                        ->orderByDesc('cloturee_a')
+-                        ->orderByDesc('id')
+-                        ->get(self::COLONNES_DU_RELEVE),
+-                ]);
++        $journees = $magasins->map(fn (Magasin $magasin): string => $journee ?? $magasin->calendrier()->aujourdhui());
++        $ouvertes = $this->verificateur->vendeursAvecCaisseOuverteDans($magasins->map(fn (Magasin $magasin): array => [$magasin, $magasin->calendrier()->aujourdhui()])->all());
++        $releves = ClotureCaissePersonnelle::withoutGlobalScope(MagasinScope::class)
++            ->where(function (Builder $duJour) use ($magasins, $journees): void {
++                foreach ($magasins as $id => $magasin) {
++                    [$debut, $fin] = $magasin->calendrier()->bornesDuJour($journees[$id]);
++                    $duJour->orWhere(fn (Builder $duMagasin) => $duMagasin->where('magasin_id', $id)->where('cloturee_a', '>=', $debut)->where('cloturee_a', '<', $fin));
++                }
+             })
++            ->orderByDesc('cloturee_a')
++            ->orderByDesc('id')
++            ->get(['magasin_id', ...self::COLONNES_DU_RELEVE])
++            ->groupBy('magasin_id');
++
++        return $magasins
++            ->map(fn (Magasin $magasin, int $id): array => [
++                'magasin' => $magasin,
++                'calendrier' => $magasin->calendrier(),
++                'journee' => $journees[$id],
++                'caisses_ouvertes' => $ouvertes[$id]->pluck('name')->values()->all(),
++                'releves' => (new Collection($releves->get($id)?->all() ?? []))->each(
++                    fn (ClotureCaissePersonnelle $releve): ClotureCaissePersonnelle => $releve->setRawAttributes(Arr::except($releve->getAttributes(), 'magasin_id'), true),
++                ),
++            ])
++            ->values()
+             ->all();
+     }
+ }
 diff --git a/app/Domain/Facturation/Services/SaisieDecimale.php b/app/Domain/Facturation/Services/SaisieDecimale.php
 index 875cf69..5b04c83 100644
 --- a/app/Domain/Facturation/Services/SaisieDecimale.php
@@ -153,6 +370,103 @@ index 875cf69..5b04c83 100644
          return $negatif ? -$centiemes : $centiemes;
      }
  
+diff --git a/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php b/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
+index 297dde3..a05317d 100644
+--- a/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
++++ b/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Tenancy\Scopes\MagasinScope;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Models\User;
++use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+ use Illuminate\Database\Query\Builder;
+ use Illuminate\Support\Collection;
+ use LogicException;
+@@ -49,23 +50,71 @@ class VerificateurCaissesPersonnelles
+      */
+     public function vendeursAvecCaisseOuverte(string $journee): Collection
+     {
+-        $finDeLaJournee = app(TenantContext::class)->magasin()->calendrier()->bornesDuJour($journee)[1]->subSecond();
+-        $paiementsOuverts = Paiement::query()
+-            ->whereDoesntHave('cloturesCaissePersonnelles')
+-            ->where('recu_le', '<=', $journee);
++        $magasin = app(TenantContext::class)->magasin();
+ 
+-        $vendeurIds = Facture::query()
++        return $this->vendeursAvecCaisseOuverteDans([$magasin->getKey() => [$magasin, $journee]])[$magasin->getKey()];
++    }
++
++    /**
++     * Pour chacun de ces magasins, les vendeurs dont la caisse personnelle
++     * est ouverte au soir de sa journée, dans son calendrier, chacun une
++     * fois, par identifiant : la règle de vendeursAvecCaisseOuverte(), lue
++     * d'un coup pour tous, en quatre requêtes quel que soit leur nombre,
++     * chacune filtrée explicitement par ces magasins et la journée de
++     * chacun (la page « Les caisses » de la société lit ainsi les caisses
++     * ouvertes de chaque magasin de sa portée, voir CaissesDeLaSociete).
++     * Une vente ou un paiement qu'une fermeture a comptés figure dans sa
++     * table de liaison, toujours avec une fermeture de son magasin. Sans
++     * magasin, rien n'est lu : aucune requête sans filtre de magasin.
++     *
++     * @param  array<int, array{Magasin, string}>  $journees  le magasin et sa journée (« AAAA-MM-JJ »), par identifiant du magasin
++     * @return array<int, Collection<int, User>> par identifiant du magasin
++     */
++    public function vendeursAvecCaisseOuverteDans(array $journees): array
++    {
++        if ($journees === []) {
++            return [];
++        }
++
++        $ouverts = fn (string $table, string $liaison, string $cle) => fn (Builder $fermetures) => $fermetures->selectRaw('1')->from($liaison)->whereColumn("{$liaison}.{$cle}", "{$table}.id");
++        $ventesDuSoir = function (EloquentBuilder $ventes) use ($journees): void {
++            foreach ($journees as $id => [$magasin, $journee]) {
++                $ventes->orWhere(fn (EloquentBuilder $duMagasin) => $duMagasin->where('factures.magasin_id', $id)->where('factures.date_emission', '<=', $magasin->calendrier()->bornesDuJour($journee)[1]->subSecond()));
++            }
++        };
++        $paiementsDuSoir = function (EloquentBuilder|Builder $paiements) use ($journees): void {
++            foreach ($journees as $id => [, $journee]) {
++                $paiements->orWhere(fn (EloquentBuilder|Builder $duMagasin) => $duMagasin->where('paiements.magasin_id', $id)->where('paiements.recu_le', '<=', $journee));
++            }
++        };
++
++        $caisses = Facture::withoutGlobalScope(MagasinScope::class)
+             ->emises()
+-            ->whereDoesntHave('cloturesCaissePersonnelles')
+-            ->emisJusquA($finDeLaJournee)
++            ->whereNotExists($ouverts('factures', 'clotures_caisse_personnelles_factures', 'facture_id'))
++            ->where($ventesDuSoir)
+             ->distinct()
+-            ->pluck('cree_par')
+-            ->merge((clone $paiementsOuverts)->whereNull('contre_passe_paiement_id')->distinct()->pluck('cree_par'))
+-            ->merge(Paiement::query()->whereIn('id', (clone $paiementsOuverts)->select('contre_passe_paiement_id'))->distinct()->pluck('cree_par'))
+-            ->filter()
+-            ->unique();
++            ->get(['factures.magasin_id', 'factures.cree_par'])
++            ->toBase()
++            ->merge(Paiement::withoutGlobalScope(MagasinScope::class)
++                ->whereNull('paiements.contre_passe_paiement_id')
++                ->whereNotExists($ouverts('paiements', 'clotures_caisse_personnelles_paiements', 'paiement_id'))
++                ->where($paiementsDuSoir)
++                ->distinct()
++                ->get(['paiements.magasin_id', 'paiements.cree_par']))
++            ->merge(Paiement::withoutGlobalScope(MagasinScope::class)
++                ->whereIn('paiements.id', fn (Builder $contrePassations) => $contrePassations
++                    ->select('paiements.contre_passe_paiement_id')
++                    ->from('paiements')
++                    ->whereNotExists($ouverts('paiements', 'clotures_caisse_personnelles_paiements', 'paiement_id'))
++                    ->where($paiementsDuSoir))
++                ->distinct()
++                ->get(['paiements.magasin_id', 'paiements.cree_par']));
++        $vendeurs = User::query()->whereKey($caisses->pluck('cree_par')->all())->orderBy('id')->get();
+ 
+-        return User::query()->whereKey($vendeurIds->all())->orderBy('id')->get();
++        return array_map(
++            fn (int $id): Collection => $vendeurs->only($caisses->where('magasin_id', $id)->pluck('cree_par')->all()),
++            array_combine(array_keys($journees), array_keys($journees)),
++        );
+     }
+ 
+     /**
 diff --git a/app/Domain/Tenancy/Actions/ChangerSiretAction.php b/app/Domain/Tenancy/Actions/ChangerSiretAction.php
 index 9286124..8b5ab6f 100644
 --- a/app/Domain/Tenancy/Actions/ChangerSiretAction.php
@@ -248,6 +562,159 @@ index 6aa1d60..71dcd9d 100644
 +        return IdentifiantsInsee::siretValide($siret) ? null : self::MESSAGE;
      }
  }
+diff --git a/app/Models/User.php b/app/Models/User.php
+index d00e31e..7c1bc22 100644
+--- a/app/Models/User.php
++++ b/app/Models/User.php
+@@ -128,6 +128,44 @@ class User extends Authenticatable implements FilamentUser, HasTenants
+      */
+     private array $autorisationsParMagasin = [];
+ 
++    /**
++     * Pour un compte d'un cabinet d'expertise comptable, les sociétés
++     * clientes que lui ouvrent ses liens (voir peutOuvrir()), lues une fois
++     * par instance, comme ses autorisations : oubliées à chaque écriture de
++     * droits, à chaque refresh() et à la fin de chaque requête (voir
++     * AppServiceProvider), la fin d'un lien fermant l'accès dès la requête
++     * suivante.
++     *
++     * @var list<int>|null
++     */
++    private ?array $clientsOuverts = null;
++
++    /**
++     * Pour un compte d'un cabinet, les autorisations que chaque client lui
++     * accorde (voir AccesDesCabinets::autorisationsParClient()), lues une
++     * fois par instance et oubliées de même.
++     *
++     * @var array<int, list<string>>|null
++     */
++    private ?array $autorisationsParClient = null;
++
++    /**
++     * Ses affectations, lues une fois par instance pour les écrans (voir
++     * affectationQuiVautDans()), et les autorisations cochées de chacune
++     * (voir autorisationsEnregistreesDans()) : un administrateur de tous
++     * les magasins a la même affectation dans chacun, et une page qui
++     * parcourt les magasins de sa portée ne la relit pas pour chacun.
++     * Oubliées avec ses autorisations.
++     *
++     * @var Collection<int, Affectation>|null
++     */
++    private ?Collection $affectationsLues = null;
++
++    /**
++     * @var array<int, list<string>>
++     */
++    private array $autorisationsParAffectation = [];
++
+     protected function casts(): array
+     {
+         return [
+@@ -673,6 +711,10 @@ public function tientUneCaisseDans(Magasin $magasin): bool
+     public function oublierLesDroits(): void
+     {
+         $this->autorisationsParMagasin = [];
++        $this->clientsOuverts = null;
++        $this->autorisationsParClient = null;
++        $this->affectationsLues = null;
++        $this->autorisationsParAffectation = [];
+         $this->unsetRelation('societe');
+     }
+ 
+@@ -734,9 +776,8 @@ public function affectationQuiVautDans(Magasin $magasin): ?Affectation
+             return null;
+         }
+ 
+-        return $this->affectationsDAdministrateur()
+-            ->where(fn (Builder $affectations) => $affectations->where('magasin_id', $magasin->getKey())->orWhereNull('magasin_id'))
+-            ->first();
++        return $this->affectationsLues()->first(fn (Affectation $affectation): bool => $affectation->role === null
++            && ($affectation->magasin_id === null || (int) $affectation->magasin_id === (int) $magasin->getKey()));
+     }
+ 
+     /**
+@@ -762,7 +803,7 @@ public function affectationDeMembre(): ?Affectation
+      * - un compte d'un cabinet d'expertise comptable, dans un magasin réel
+      *   d'un client lié que son cabinet lui ouvre (son propriétaire, ou un
+      *   collaborateur à qui ce client est confié) : celles que le client
+-     *   accorde au cabinet (voir AccesDesCabinets::autorisationsEnregistrees()),
++     *   accorde au cabinet (voir AccesDesCabinets::autorisationsParClient()),
+      *   sans regarder si le cabinet est vérifié, ce que contrôlent
+      *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
+      * - le propriétaire : toutes sauf celles de la vente (voir
+@@ -782,7 +823,7 @@ public function affectationDeMembre(): ?Affectation
+     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
+     {
+         if ($this->estDUnCabinet()) {
+-            return app(AccesDesCabinets::class)->autorisationsEnregistrees($this, $magasin);
++            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[(int) $magasin->societe_id] ?? null;
+         }
+ 
+         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
+@@ -793,14 +834,15 @@ private function autorisationsEnregistreesDans(Magasin $magasin): ?array
+ 
+         $affectation = $this->affectationQuiVautDans($magasin);
+ 
+-        return match (true) {
+-            $affectation === null => null,
+-            $affectation->role !== RoleMagasin::Responsable => self::trieesDans($affectation->autorisations(), $duType),
+-            default => self::trieesDans([
+-                ...array_diff($duType, PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite)),
+-                ...$affectation->autorisations(),
+-            ], $duType),
+-        };
++        if ($affectation === null) {
++            return null;
++        }
++
++        $cochees = $this->autorisationsParAffectation[$affectation->getKey()] ??= $affectation->autorisations();
++
++        return $affectation->role !== RoleMagasin::Responsable
++            ? self::trieesDans($cochees, $duType)
++            : self::trieesDans([...array_diff($duType, PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite)), ...$cochees], $duType);
+     }
+ 
+     /**
+@@ -836,8 +878,16 @@ private function affectationsDAdministrateur(): HasMany
+      */
+     private function aDesAffectationsDesDeuxSortes(): bool
+     {
+-        return $this->affectations()->whereNull('magasin_id')->exists()
+-            && $this->affectations()->whereNotNull('magasin_id')->exists();
++        return $this->affectationsLues()->whereNull('magasin_id')->isNotEmpty()
++            && $this->affectationsLues()->whereNotNull('magasin_id')->isNotEmpty();
++    }
++
++    /**
++     * @return Collection<int, Affectation>
++     */
++    private function affectationsLues(): Collection
++    {
++        return $this->affectationsLues ??= $this->affectations()->orderBy('id')->get();
+     }
+ 
+     /**
+@@ -855,7 +905,7 @@ public function peutAdministrer(): bool
+      * Peut-il ouvrir ce magasin ? Avec un compte qui peut agir (voir
+      * peutAgir()), un compte d'un cabinet d'expertise comptable vérifié
+      * ouvre les magasins réels d'un client lié qui lui est ouvert (voir
+-     * AccesDesCabinets::ouvre()) ; tout autre compte, un magasin de sa
++     * AccesDesCabinets::clientsOuverts()) ; tout autre compte, un magasin de sa
+      * société : le propriétaire ouvre tous ceux de sa société ; tout autre
+      * compte, ceux où une affectation lui donne des droits (voir
+      * affectationQuiVautDans()).
+@@ -863,7 +913,9 @@ public function peutAdministrer(): bool
+     public function peutOuvrir(Magasin $magasin): bool
+     {
+         if ($this->estDUnCabinet()) {
+-            return $this->peutAgir() && app(AccesDesCabinets::class)->ouvre($this, $magasin);
++            return $this->peutAgir()
++                && ! $magasin->est_demonstration
++                && in_array((int) $magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
+         }
+ 
+         if ((int) $magasin->societe_id !== (int) $this->societe_id || ! $this->peutAgir()) {
 diff --git a/app/Policies/AffectationPolicy.php b/app/Policies/AffectationPolicy.php
 index 54b56de..2e28e15 100644
 --- a/app/Policies/AffectationPolicy.php
@@ -265,6 +732,53 @@ index 54b56de..2e28e15 100644
  
          return $affectation->estDeResponsable()
              ? $user->estProprietaire()
+diff --git a/app/Providers/AppServiceProvider.php b/app/Providers/AppServiceProvider.php
+index 0a690ef..aaa82e9 100644
+--- a/app/Providers/AppServiceProvider.php
++++ b/app/Providers/AppServiceProvider.php
+@@ -82,7 +82,9 @@
+ use Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough;
+ use Illuminate\Database\Eloquent\Relations\Relation;
+ use Illuminate\Mail\Markdown;
++use Illuminate\Foundation\Http\Events\RequestHandled;
+ use Illuminate\Support\Facades\Auth;
++use Illuminate\Support\Facades\Event;
+ use Illuminate\Support\Facades\Gate;
+ use Illuminate\Support\Facades\Validator;
+ use Illuminate\Support\ServiceProvider;
+@@ -129,6 +131,7 @@ public function boot(): void
+     {
+         Calendrier::exigerUnFuseauUtc();
+         $this->interdireLesRequetesCacheesHorsProduction();
++        $this->oublierLesDroitsDuCompteAChaqueRequete();
+ 
+         // Les modèles vivent sous App\Domain\<Domaine>\Models\... plutôt
+         // qu'à plat sous App\Models. La convention par défaut de Laravel
+@@ -199,6 +202,24 @@ private function interdireLesRequetesCacheesHorsProduction(): void
+         Model::preventAccessingMissingAttributes($horsProduction);
+     }
+ 
++    /**
++     * Les droits que le compte connecté a lus pendant une requête (ses
++     * autorisations dans chaque magasin, et pour un compte d'un cabinet les
++     * clients que ses liens lui ouvrent, voir User::oublierLesDroits()) ne
++     * survivent pas à la requête : la suivante les relit en base, même là
++     * où le même objet sert d'une requête à l'autre (un serveur qui garde
++     * l'application en mémoire, les tests), et la fin d'un lien ou un droit
++     * retiré vaut dès la requête suivante.
++     */
++    private function oublierLesDroitsDuCompteAChaqueRequete(): void
++    {
++        Event::listen(RequestHandled::class, static function (): void {
++            if (Auth::hasUser()) {
++                Auth::user()?->oublierLesDroits();
++            }
++        });
++    }
++
+     /**
+      * Un texte qu'une personne a saisi (une raison sociale, un nom, un nom
+      * de magasin) et qu'un gabarit Markdown d'e-mail affiche par {{ }}
 diff --git a/infection.json5 b/infection.json5
 index ab86970..0916746 100644
 --- a/infection.json5
@@ -303,6 +817,70 @@ index a79dbd1..95f6537 100644
  -->
  <psalm
      errorLevel="8"
+diff --git a/tests/Browser/Parcours/TempsDeReponseTest.php b/tests/Browser/Parcours/TempsDeReponseTest.php
+index 14ab680..80af232 100644
+--- a/tests/Browser/Parcours/TempsDeReponseTest.php
++++ b/tests/Browser/Parcours/TempsDeReponseTest.php
+@@ -1,8 +1,9 @@
+ <?php
+ 
+ /*
+- * Le temps de réponse des pages principales du magasin, mesuré dans le
+- * navigateur (décision de l'éditeur du 01/11/2026, point 5) : de la
++ * Le temps de réponse des pages principales du magasin, de l'espace de la
++ * société et de celui d'un cabinet, mesuré dans le navigateur (décision
++ * de l'éditeur du 01/11/2026, point 5) : de la
+  * demande de la page à la fin de son chargement (Navigation Timing,
+  * loadEventEnd), chaque page s'ouvre en moins de PLAFOND_EN_MS, sur un
+  * magasin rempli (voir TestCaseDuNavigateur::remplirLeMagasin()). Le
+@@ -13,6 +14,8 @@
+  * tests (étape 1 bis).
+  */
+ 
++use Tests\Browser\Support\Navigation;
++
+ const PLAFOND_EN_MS = 5000;
+ 
+ test('chaque page principale du magasin s’ouvre pour le responsable en moins du plafond', function () {
+@@ -21,10 +24,34 @@
+     $onglet = $this->seConnecter($societe->responsable);
+ 
+     foreach (['', '/factures', '/caisse', '/clients', '/produits', '/paiements', '/avoirs', '/facture-achats', '/cloture-caisses'] as $page) {
+-        $onglet->aller($magasin.$page);
+-        $duree = $onglet->page()->evaluate('() => performance.getEntriesByType("navigation")[0].loadEventEnd');
++        verifierLeTempsDeLaPage($onglet->aller($magasin.$page), $magasin.$page);
++    }
++});
+ 
+-        expect($duree)->toBeGreaterThan(0)
+-            ->and($duree)->toBeLessThan(PLAFOND_EN_MS, "La page {$magasin}{$page} s'ouvre en {$duree} ms.");
++test('le tableau de bord et les caisses de la société s’ouvrent pour son propriétaire en moins du plafond', function () {
++    $societe = $this->societeComplete();
++    $espace = '/societe/'.$societe->societe->uuid;
++    $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
++
++    foreach (['', '/caisses'] as $page) {
++        verifierLeTempsDeLaPage($onglet->aller($espace.$page), $espace.$page);
+     }
+ });
++
++test('le tableau de bord du cabinet s’ouvre pour son propriétaire en moins du plafond', function () {
++    $societe = $this->societeComplete();
++    $cabinet = '/cabinet/'.$societe->cabinet->uuid;
++
++    verifierLeTempsDeLaPage($this->seConnecter($societe->proprietaireDuCabinet, panneau: 'cabinet')->aller($cabinet), $cabinet);
++});
++
++/**
++ * De la demande de la page à la fin de son chargement (Navigation Timing).
++ */
++function verifierLeTempsDeLaPage(Navigation $onglet, string $adresse): void
++{
++    $duree = $onglet->page()->evaluate('() => performance.getEntriesByType("navigation")[0].loadEventEnd');
++
++    expect($duree)->toBeGreaterThan(0)
++        ->and($duree)->toBeLessThan(PLAFOND_EN_MS, "La page {$adresse} s'ouvre en {$duree} ms.");
++}
 diff --git a/tests/Feature/Achats/ApercuDUnAchatTest.php b/tests/Feature/Achats/ApercuDUnAchatTest.php
 new file mode 100644
 index 0000000..50b81c8
@@ -1080,6 +1658,75 @@ index 095256e..e4dad49 100644
      public function test_le_recapitulatif_lit_les_documents_d_un_magasin_ensemble_quel_que_soit_leur_nombre(): void
      {
          $proprietaire = $this->proprietaireDe($this->magasin);
+diff --git a/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php b/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
+index 73f911a..5570018 100644
+--- a/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
++++ b/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
+@@ -17,11 +17,13 @@
+ use App\Domain\Facturation\Models\Paiement;
+ use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+ use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Enums\Territoire;
+ use App\Domain\Tenancy\Enums\TypeDActivite;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Models\User;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\DB;
+ use Tests\TestCase;
+ 
+ /**
+@@ -301,6 +303,50 @@ public function test_un_encaissement_compte_dans_la_journee_ou_il_est_recu(): vo
+         $this->assertSame([$vendeur->id], $hier->pluck('id')->all());
+     }
+ 
++    /**
++     * Les caisses de plusieurs magasins se lisent d'un coup, chacune au soir
++     * de sa journée et dans son calendrier : le 9 octobre, Jeanne vend à
++     * Paris à 10:00, Paul à Paris à 01:00 le 10 (déjà le lendemain à Paris)
++     * et Luc à Fort-de-France à 20:00 le 9 (déjà le 10 à Paris). Au soir du 9,
++     * Paris a la caisse de Jeanne et la Martinique celle de Luc, chacun dans
++     * son seul magasin ; au soir du 10 à Paris, Paul s'y ajoute ; un
++     * magasin sans vente n'a aucune caisse ouverte ; sans magasin, rien ne
++     * se lit.
++     */
++    public function test_les_caisses_de_plusieurs_magasins_se_lisent_d_un_coup_chacune_a_sa_journee(): void
++    {
++        $this->travelTo(self::aParis('2026-10-09 09:00:00'));
++        $paris = $this->ouvrirUneSociete(['nom' => 'Paris']);
++        $martinique = $this->ouvrirUnAutreMagasinSitue($paris, Territoire::Martinique, ['nom' => 'Fort-de-France', 'code' => 'FDF1']);
++        $vide = $this->ouvrirUnAutreMagasin($paris, ['nom' => 'Lyon', 'code' => 'LYON2']);
++        $jeanne = $this->membre($paris, RoleMagasin::Vendeur, null, ['name' => 'Jeanne']);
++        $paul = $this->membre($paris, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
++        $luc = $this->membre($martinique, RoleMagasin::Vendeur, null, ['name' => 'Luc']);
++        foreach ([[$paris, $jeanne, self::aParis('2026-10-09 10:00:00')], [$paris, $paul, self::aParis('2026-10-10 01:00:00')], [$martinique, $luc, self::enUtc('2026-10-10 00:00:00')]] as [$magasin, $vendeur, $instant]) {
++            $this->travelTo($instant);
++            app(TenantContext::class)->runAs($magasin, function () use ($vendeur): void {
++                $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
++                self::vendreAuComptant($vendeur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
++            });
++        }
++        app(TenantContext::class)->clear();
++        $verificateur = app(VerificateurCaissesPersonnelles::class);
++        $noms = fn (array $caisses): array => array_map(fn ($vendeurs): array => $vendeurs->pluck('name')->all(), $caisses);
++
++        $this->assertSame(
++            [$paris->id => ['Jeanne'], $martinique->id => ['Luc'], $vide->id => []],
++            $noms($verificateur->vendeursAvecCaisseOuverteDans([$paris->id => [$paris, '2026-10-09'], $martinique->id => [$martinique, '2026-10-09'], $vide->id => [$vide, '2026-10-09']])),
++        );
++        $this->assertSame(
++            [$paris->id => ['Jeanne', 'Paul'], $martinique->id => ['Luc']],
++            $noms($verificateur->vendeursAvecCaisseOuverteDans([$paris->id => [$paris, '2026-10-10'], $martinique->id => [$martinique, '2026-10-09']])),
++        );
++        $this->assertSame([$martinique->id => []], $noms($verificateur->vendeursAvecCaisseOuverteDans([$martinique->id => [$martinique, '2026-10-08']])));
++        DB::enableQueryLog();
++        $this->assertSame([], $verificateur->vendeursAvecCaisseOuverteDans([]));
++        $this->assertSame([], DB::getQueryLog(), 'Sans magasin, aucune requête : elle ne serait filtrée par aucun magasin.');
++    }
++
+     private function emettreUnTicketPour(User $vendeur, Client $client): Facture
+     {
+         $this->actingAs($vendeur);
 diff --git a/tests/Feature/Filament/ClientResourceTest.php b/tests/Feature/Filament/ClientResourceTest.php
 index eb887f0..1ced70b 100644
 --- a/tests/Feature/Filament/ClientResourceTest.php
@@ -1193,6 +1840,210 @@ index 1769a7b..4657eff 100644
      /**
       * Un brouillon se supprime depuis la liste comme depuis sa page de
       * modification, avec ses lignes, sans rien créer.
+diff --git a/tests/Feature/Qualite/PlafondsDeRequetesTest.php b/tests/Feature/Qualite/PlafondsDeRequetesTest.php
+index f33b25c..e5117f5 100644
+--- a/tests/Feature/Qualite/PlafondsDeRequetesTest.php
++++ b/tests/Feature/Qualite/PlafondsDeRequetesTest.php
+@@ -9,26 +9,36 @@
+ use App\Domain\Contacts\Models\Client;
+ use App\Domain\Contacts\Models\Fournisseur;
+ use App\Domain\Facturation\Actions\CloturerCaisseAction;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
+ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
++use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+ use App\Domain\Facturation\Enums\ModePaiement;
+ use App\Domain\Facturation\Models\Facture;
+ use App\Domain\Facturation\Services\FacturePdfGenerator;
+ use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
++use App\Filament\Societe\Pages\LesCaisses;
++use App\Filament\Societe\Pages\TableauDeBord;
+ use App\Models\User;
+ use Closure;
++use Filament\Pages\Page;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Support\Facades\DB;
+ use PHPUnit\Framework\Attributes\DataProvider;
+ use Tests\TestCase;
+ 
+ /**
+- * Le nombre de requêtes des pages les plus chargées du magasin (décision
+- * de l'éditeur du 01/11/2026, point 5) : le tableau de bord, les listes
+- * des ventes, des paiements, des avoirs, des clients, des produits, des
+- * factures d'achat et des clôtures, la caisse, et le PDF d'une facture.
+- * Chacune lit la base le même nombre de fois avec deux lignes ou huit (une
+- * requête par ligne serait une requête « N+1 »), sous un plafond qui ne
+- * dépend pas du nombre de lignes.
++ * Le nombre de requêtes des pages les plus chargées (décision de l'éditeur
++ * du 01/11/2026, point 5) : dans le magasin, le tableau de bord, les
++ * listes des ventes, des paiements, des avoirs, des clients, des produits,
++ * des factures d'achat et des clôtures, la caisse, et le PDF d'une
++ * facture ; dans l'espace de la société, le tableau de bord et « Les
++ * caisses » ; dans celui d'un cabinet, le tableau de bord de ses clients.
++ * Chacune lit la base le même nombre de fois avec peu ou beaucoup de
++ * lignes, de magasins ou de clients (une requête par ligne serait une
++ * requête « N+1 »), sous un plafond qui n'en dépend pas.
+  */
+ class PlafondsDeRequetesTest extends TestCase
+ {
+@@ -100,6 +110,110 @@ public function test_le_pdf_d_une_facture_lit_la_base_autant_de_fois_avec_deux_l
+         $this->assertLessThanOrEqual(40, $requetes[20]);
+     }
+ 
++    /**
++     * @return array<string, array{0: class-string<Page>, 1: int}>
++     */
++    public static function pagesDeLaSociete(): array
++    {
++        return [
++            'tableau de bord de la société' => [TableauDeBord::class, 60],
++            'les caisses de la société' => [LesCaisses::class, 60],
++        ];
++    }
++
++    /**
++     * Dans l'espace de la société, le tableau de bord (chaque magasin, avec
++     * ses factures à encaisser) et « Les caisses » (les relevés et les
++     * caisses encore ouvertes de chaque magasin) lisent la base autant de
++     * fois avec un magasin ou trois, pour le propriétaire comme pour un
++     * administrateur de tous les magasins.
++     *
++     * @param  class-string<Page>  $page
++     */
++    #[DataProvider('pagesDeLaSociete')]
++    public function test_une_page_de_la_societe_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois(string $page, int $plafond): void
++    {
++        $societe = $this->magasin->societe;
++        $comptes = ['propriétaire' => $this->proprietaireDe($this->magasin), 'administrateur' => $this->administrateur($this->magasin)];
++        $adresse = $page::getUrl(panel: 'societe', tenant: $societe);
++        $magasins = [$this->magasin];
++        $requetes = [];
++
++        foreach ([1, 3] as $nombre) {
++            while (count($magasins) < $nombre) {
++                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
++            }
++
++            foreach (array_slice($magasins, $nombre === 1 ? 0 : 1) as $magasin) {
++                $this->remplirLaCaisseEtLesFactures($magasin);
++            }
++
++            foreach ($comptes as $role => $compte) {
++                app(TenantContext::class)->clear();
++                $this->flushSession();
++                $this->actingAs($compte);
++                $this->get($adresse)->assertOk();
++                $requetes[$role][$nombre] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee($magasins[$nombre - 1]->nom));
++            }
++        }
++
++        foreach ($requetes as $role => $parNombre) {
++            $this->assertSame($parNombre[1], $parNombre[3], "La page {$page} lit la base une fois de plus par magasin pour le {$role}.");
++            $this->assertLessThanOrEqual($plafond, $parNombre[3], $role);
++        }
++    }
++
++    /**
++     * Le tableau de bord d'un cabinet d'expertise comptable (chaque client
++     * lié, avec les factures à encaisser de ses magasins) lit la base autant
++     * de fois pour son propriétaire avec un client ou trois.
++     */
++    public function test_le_tableau_de_bord_du_cabinet_lit_la_base_autant_de_fois_avec_un_client_ou_trois(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $proprietaire = $this->proprietaireDuCabinet($cabinet);
++        $adresse = TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet);
++        $clients = [$this->magasin];
++        $this->lierLeCabinet($cabinet, $this->magasin);
++        $this->remplirLaCaisseEtLesFactures($this->magasin);
++        $requetes = [];
++
++        foreach ([1, 3] as $nombre) {
++            while (count($clients) < $nombre) {
++                $client = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Cliente '.count($clients), 'raison_sociale' => 'CLIENTE '.count($clients)]));
++                $this->remplirLaCaisseEtLesFactures($client);
++                $this->lierLeCabinet($cabinet, $client);
++                $clients[] = $client;
++            }
++
++            app(TenantContext::class)->clear();
++            $this->actingAs($proprietaire);
++            $this->get($adresse)->assertOk();
++            $requetes[$nombre] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee($clients[$nombre - 1]->societe()->firstOrFail()->raison_sociale));
++        }
++
++        $this->assertSame($requetes[1], $requetes[3], 'Le tableau de bord du cabinet lit la base une fois de plus par client.');
++        $this->assertLessThanOrEqual(60, $requetes[3]);
++    }
++
++    /**
++     * Dans ce magasin, une facture à encaisser, une vente au comptant dont
++     * la caisse est fermée (un relevé), puis une autre qui la laisse
++     * ouverte.
++     */
++    private function remplirLaCaisseEtLesFactures(Magasin $magasin): void
++    {
++        app(TenantContext::class)->runAs($magasin, function () use ($magasin): void {
++            $responsable = self::responsableDeTest($magasin);
++            $produit = Produit::factory()->create(['prix_vente_ttc' => '12.50', 'taux_tva' => 20, 'suivi_stock' => false]);
++            $client = Client::factory()->professionnel()->create();
++            app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]));
++            self::vendreAuComptant($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]);
++            app(FermerSaCaisseAction::class)->handle($responsable, $responsable);
++            self::vendreAuComptant($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 2]]);
++        });
++    }
++
+     /**
+      * Jusqu'à $lignes ventes, paiements, avoirs, clients, produits, factures
+      * d'achat et clôtures dans le magasin, une par jour.
+diff --git a/tests/Feature/Societe/CaissesDeLaSocieteTest.php b/tests/Feature/Societe/CaissesDeLaSocieteTest.php
+index 8aaaab8..65a21ff 100644
+--- a/tests/Feature/Societe/CaissesDeLaSocieteTest.php
++++ b/tests/Feature/Societe/CaissesDeLaSocieteTest.php
+@@ -19,7 +19,9 @@
+ use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
+ use App\Filament\Societe\Pages\LesCaisses;
+ use App\Models\User;
++use Illuminate\Database\Events\QueryExecuted;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\DB;
+ use Livewire\Exceptions\MethodNotFoundException;
+ use Livewire\Livewire;
+ use Tests\TestCase;
+@@ -112,6 +114,30 @@ public function test_la_demonstration_et_les_magasins_d_une_autre_societe_n_y_fi
+             ->assertDontSee([$demonstration->nom, '('.$demonstration->code.')', 'Responsable de test', 'Bordeaux', 'Inès']);
+     }
+ 
++    /**
++     * Sans magasin où il voit les relevés de toute l'équipe, un
++     * administrateur ne reçoit rien, et rien ne se lit des ventes, des
++     * paiements ni des relevés : aucune requête sans filtre de magasin, même
++     * quand des caisses sont ouvertes et des relevés fermés ailleurs.
++     */
++    public function test_sans_magasin_rien_ne_se_lit_des_caisses(): void
++    {
++        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
++        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
++        $paul = $this->vendeurQuiVend($lyon, 'Paul', 12);
++        app(TenantContext::class)->runAs($lyon, fn () => app(FermerSaCaisseAction::class)->handle($paul, $paul));
++        $this->vendeurQuiVend($lyon, 'Jeanne', 30);
++        $aveugle = $this->administrateur($lyon, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES])));
++        app(TenantContext::class)->clear();
++        $lectures = [];
++        DB::listen(function (QueryExecuted $requete) use (&$lectures): void {
++            $lectures[] = $requete->sql;
++        });
++
++        $this->assertSame([], app(CaissesDeLaSociete::class)->pour($aveugle, Calendrier::deParis()->aujourdhui()));
++        $this->assertSame([], array_values(array_filter($lectures, fn (string $sql): bool => preg_match('/from "(factures|paiements|clotures_caisse_personnelles)"/', $sql) === 1)));
++    }
++
+     /**
+      * Exactement les colonnes du relevé que CLAUDE.md déclare : ni
+      * identifiant de compte, ni nom de client, ni document.
 diff --git a/tests/Feature/Societe/ConnexionParIdentifiantTest.php b/tests/Feature/Societe/ConnexionParIdentifiantTest.php
 index dcafc2b..53c06d8 100644
 --- a/tests/Feature/Societe/ConnexionParIdentifiantTest.php
@@ -1390,10 +2241,18 @@ index 5111832..75beeb4 100644
          $this->assertSame([], $responsable->getTenants(Filament::getPanel('societe'))->modelKeys());
          $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
 diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
-index 1eedb1b..6b25686 100644
+index 1eedb1b..9468f2f 100644
 --- a/tests/Qualite/qualite.php
 +++ b/tests/Qualite/qualite.php
-@@ -19,6 +19,12 @@
+@@ -13,12 +13,24 @@
+  *   php tests/Qualite/qualite.php mutation <infection.json> [<rapport.md>]
+  *       Le score de mutation (MSI) de chaque partie sensible dont des
+  *       mutants ont été testés, comparé à son seuil : échoue sous le seuil.
++ *       Le rapport liste aussi les mutants non conclus, lus dans le journal
++ *       texte d'Infection rangé à côté (infection.log).
+  *   php tests/Qualite/qualite.php seuils <ancien seuils.json>
+  *       Aucun seuil ne baisse par rapport à l'ancien fichier, et le niveau
+  *       de l'analyse statique de phpstan.neon est celui de seuils.json.
   *   php tests/Qualite/qualite.php sensibles
   *       Les chemins des parties sensibles, un par ligne, à donner à
   *       Infection comme chemins à muter.
@@ -1403,10 +2262,14 @@ index 1eedb1b..6b25686 100644
 + *       fichier qui n'en est pas. Elle se combine avec --git-diff-lines
 + *       (les seules lignes changées, comme la CI), qui ne se combine avec
 + *       aucun autre filtre des fichiers.
++ *   php tests/Qualite/qualite.php couverture-unitaire-d-abord <dossier coverage-xml>
++ *       Met d'abord, pour chaque ligne du rapport de couverture XML que lit
++ *       Infection, les tests unitaires qui l'exécutent : Infection les
++ *       lance alors avant les tests de base de données.
   *   php tests/Qualite/qualite.php sensibles-changes <commit de base>
   *       Les fichiers des parties sensibles ajoutés ou modifiés depuis ce
   *       commit, un par ligne (rien quand aucun ne l'est) : ceux dont la CI
-@@ -32,7 +38,7 @@
+@@ -32,7 +44,7 @@
   * Code de sortie : 0 si tout tient, 1 sinon.
   */
  
@@ -1415,7 +2278,31 @@ index 1eedb1b..6b25686 100644
  
  /**
   * @return array{analyse_statique: array{niveau: int}, couverture: array<string, float>, mutation: array<string, float>}
-@@ -189,8 +195,16 @@ function nouveauCode(string $clover, string $base): int
+@@ -186,42 +198,94 @@ function nouveauCode(string $clover, string $base): int
+     return 1;
+ }
+ 
++/**
++ * Les mutants non conclus, que le journal JSON d'Infection ne fait que
++ * compter : lus dans la section « Skipped mutants » de son journal texte
++ * (infection.log, à côté de infection.json, voir infection.json5), quand il
++ * existe.
++ *
++ * @return list<array{string, int, string}> fichier, ligne, mutateur
++ */
++function mutantsNonConclus(string $journalTexte): array
++{
++    if (! is_file($journalTexte)) {
++        return [];
++    }
++
++    $section = preg_split('/^Skipped mutants:$/m', (string) file_get_contents($journalTexte))[1] ?? '';
++    $section = preg_split('/^\S[^\n]* mutants:$/m', $section)[0];
++    preg_match_all('/^\d+\) (\S+):(\d+)\s+\[M\] (\S+)/m', $section, $morceaux, PREG_SET_ORDER);
++
++    return array_map(fn (array $morceau): array => [$morceau[1], (int) $morceau[2], $morceau[3]], $morceaux);
++}
++
  function mutation(string $journal, ?string $rapport): int
  {
      $donnees = json_decode((string) file_get_contents($journal), true, flags: JSON_THROW_ON_ERROR);
@@ -1427,27 +2314,52 @@ index 1eedb1b..6b25686 100644
 +        return 1;
 +    }
 +
++    $testsPasses = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => str_contains((string) ($mutant['processOutput'] ?? ''), '"result":"passed"'));
++
++    if ($testsPasses !== []) {
++        echo count($testsPasses)." mutants comptés comme tués ont pourtant passé tous leurs tests : PHPUnit a écrit son résumé pour un agent de code (variables AI_AGENT, CLAUDECODE ou CLAUDE_CODE), qu'Infection ne lit pas. Relancez Infection sans elles (env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE) : voir README.\n";
++
++        return 1;
++    }
++
      $parParties = [];
 -    $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'tues', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
 +    $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'delais', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
++    $mutants = [];
  
      foreach ($etats as $cle => $etat) {
          foreach ($donnees[$cle] ?? [] as $mutant) {
-@@ -198,7 +212,7 @@ function mutation(string $journal, ?string $rapport): int
-             $partie = partieDe($fichier);
-             $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
+-            $fichier = $mutant['mutator']['originalFilePath'];
+-            $partie = partieDe($fichier);
+-            $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
++            $mutants[] = [$etat, $mutant['mutator']['originalFilePath'], $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']];
++        }
++    }
  
 -            if ($etat !== 'tues') {
-+            if (! in_array($etat, ['tues', 'delais'], true)) {
-                 $parParties[$partie]['liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']);
-             }
+-                $parParties[$partie]['liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']);
+-            }
++    foreach (mutantsNonConclus((string) preg_replace('/\.json$/', '.log', $journal)) as $mutant) {
++        $mutants[] = ['non_conclus', ...$mutant];
++    }
++
++    foreach ($mutants as [$etat, $fichier, $ligne, $mutateur]) {
++        $partie = partieDe($fichier);
++        $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
++
++        if (! in_array($etat, ['tues', 'delais'], true)) {
++            $parParties[$partie][$etat === 'non_conclus' ? 'non_conclus_liste' : 'liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $ligne, $mutateur);
          }
-@@ -207,15 +221,15 @@ function mutation(string $journal, ?string $rapport): int
+     }
+ 
      ksort($parParties);
      $seuils = seuils()['mutation'];
      $echec = false;
 -    $texte = "# Score de mutation (MSI) par partie\n\n| Partie | Tués | Survivants | Non couverts | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|\n";
-+    $texte = "# Score de mutation (MSI) par partie\n\nUn mutant dont les tests dépassent le délai d'Infection compte, comme Infection le compte, parmi ceux qu'un test arrête ; la colonne « Délai dépassé » les montre à part.\n\n| Partie | Arrêtés | dont délai dépassé | Survivants | Non couverts | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|---:|\n";
++    $texte = "# Score de mutation (MSI) par partie\n\n"
++        ."Un mutant dont les tests dépassent le délai d'Infection compte, comme Infection le compte, parmi ceux qu'un test arrête ; la colonne « dont délai dépassé » les montre à part. "
++        ."Un mutant « non conclu » est celui dont les tests, tous plus longs que ce délai, n'ont pas fini : Infection l'écarte du score, comme ici, et la liste le montre pour qu'un test plus court le tranche.\n\n"
++        ."| Partie | Arrêtés | dont délai dépassé | Survivants | Non couverts | Non conclus | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|---:|---:|\n";
  
      foreach ($parParties as $partie => $mesure) {
 -        $tues = $mesure['tues'] ?? 0;
@@ -1457,11 +2369,21 @@ index 1eedb1b..6b25686 100644
          $seuil = $seuils[$partie] ?? null;
          $echec = $echec || ($seuil !== null && $msi < $seuil);
 -        $texte .= sprintf("| %s | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
-+        $texte .= sprintf("| %s | %d | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['delais'] ?? 0, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
++        $texte .= sprintf("| %s | %d | %d | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['delais'] ?? 0, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $mesure['non_conclus'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
      }
  
      foreach ($parParties as $partie => $mesure) {
-@@ -290,6 +304,70 @@ function sensibles(): int
+         if (($mesure['liste'] ?? []) !== []) {
+             $texte .= "\n## {$partie} : mutants qu'aucun test n'arrête\n\n- ".implode("\n- ", $mesure['liste'])."\n";
+         }
++
++        if (($mesure['non_conclus_liste'] ?? []) !== []) {
++            $texte .= "\n## {$partie} : mutants non conclus\n\n- ".implode("\n- ", $mesure['non_conclus_liste'])."\n";
++        }
+     }
+ 
+     if ($rapport !== null) {
+@@ -290,6 +354,118 @@ function sensibles(): int
      return 0;
  }
  
@@ -1529,18 +2451,67 @@ index 1eedb1b..6b25686 100644
 +    return 0;
 +}
 +
++/**
++ * Dans le rapport de couverture XML que lit Infection, met d'abord, pour
++ * chaque ligne, les tests unitaires qui l'exécutent. Infection range les
++ * tests d'un mutant par tranches de durée (un huitième de seconde), sans
++ * ordre dans une tranche, et PHPUnit les lance fichier par fichier : le
++ * rapport de PHPUnit les donnant par ordre alphabétique, les tests de
++ * Feature passaient avant ceux de Unit, et un mutant qu'un test unitaire
++ * arrête en quelques millisecondes épuisait le délai d'Infection sur des
++ * tests de base de données (« non conclu »). L'ensemble des tests de
++ * chaque ligne ne change pas, seulement leur ordre. Chaque fichier se
++ * réécrit à part puis prend la place de l'ancien, sans jamais modifier un
++ * fichier partagé par un lien.
++ */
++function couvertureUnitaireDAbord(string $dossier): int
++{
++    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS)) as $fichier) {
++        if (! $fichier->isFile() || ! str_ends_with($fichier->getFilename(), '.php.xml')) {
++            continue;
++        }
++
++        $chemin = $fichier->getPathname();
++        $source = fopen($chemin, 'r') ?: throw new RuntimeException("Rapport illisible : {$chemin}");
++        $copie = $chemin.'.unitaire-d-abord';
++        $cible = fopen($copie, 'w') ?: throw new RuntimeException("Écriture impossible : {$copie}");
++        $unitaires = [];
++        $autres = [];
++
++        while (($ligne = fgets($source)) !== false) {
++            if (str_contains($ligne, '<covered by="')) {
++                str_contains($ligne, 'by="Tests\\Unit\\') ? $unitaires[] = $ligne : $autres[] = $ligne;
++
++                continue;
++            }
++
++            fwrite($cible, implode('', [...$unitaires, ...$autres]).$ligne);
++            $unitaires = [];
++            $autres = [];
++        }
++
++        fwrite($cible, implode('', [...$unitaires, ...$autres]));
++        fclose($source);
++        fclose($cible);
++        rename($copie, $chemin);
++    }
++
++    return 0;
++}
++
  function sensiblesChanges(string $base): int
  {
      $fichiers = explode("\n", trim((string) shell_exec('git -C '.escapeshellarg(RACINE).' diff --name-only --diff-filter=AM --no-color '.escapeshellarg($base).' -- app/')));
-@@ -341,9 +419,10 @@ function flux(string $rapport): int
+@@ -341,9 +517,11 @@ function flux(string $rapport): int
      'seuils' => seuilsQuiMontent($argv[2]),
      'sensibles' => sensibles(),
      'sensibles-changes' => sensiblesChanges($argv[2]),
 +    'configuration-sensibles' => configurationSensibles($argv[2]),
++    'couverture-unitaire-d-abord' => couvertureUnitaireDAbord($argv[2]),
      'flux' => flux($argv[2]),
      default => (function (): int {
 -        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|flux ...\n");
-+        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux ...\n");
++        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|couverture-unitaire-d-abord|flux ...\n");
  
          return 2;
      })(),
@@ -1639,6 +2610,140 @@ index 0000000..ac49f28
 +        $montants = MontantsDuFournisseur::depuisLaSaisie(['taux' => null, 'total_ttc' => '24.00']);
 +
 +        $this->assertSame([[], [], 2400, false], [$montants->tvaParTaux, $montants->baseParTaux, $montants->totalTtc, $montants->confirmation]);
++    }
++}
+diff --git a/tests/Unit/PartDeReglementTest.php b/tests/Unit/PartDeReglementTest.php
+new file mode 100644
+index 0000000..6fa1a04
+--- /dev/null
++++ b/tests/Unit/PartDeReglementTest.php
+@@ -0,0 +1,128 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Facturation\Enums\ModePaiement;
++use App\Domain\Facturation\Services\PartDeReglement;
++use LogicException;
++use PHPUnit\Framework\Attributes\DataProvider;
++use PHPUnit\Framework\TestCase;
++
++/**
++ * Une part d'un règlement en plusieurs modes (points 1 et 23) : un montant
++ * strictement positif, une référence facultative de cent caractères au
++ * plus, un seul mode par part, et chaque bon d'avoir présenté une fois.
++ */
++class PartDeReglementTest extends TestCase
++{
++    /**
++     * @return array<string, array{int}>
++     */
++    public static function montantsQuiNeReglentRien(): array
++    {
++        return [
++            'zéro' => [0],
++            'négatif' => [-1],
++        ];
++    }
++
++    #[DataProvider('montantsQuiNeReglentRien')]
++    public function test_une_part_sans_montant_positif_est_refusee(int $montant): void
++    {
++        $this->expectExceptionObject(new LogicException(PartDeReglement::MONTANT_NON_POSITIF));
++
++        new PartDeReglement(ModePaiement::Especes, $montant);
++    }
++
++    public function test_un_centime_suffit_a_faire_une_part(): void
++    {
++        $part = new PartDeReglement(ModePaiement::CarteBancaire, 1);
++
++        $this->assertSame(['mode' => 'carte_bancaire', 'montant' => 1, 'reference' => null], $part->enTableau());
++    }
++
++    /**
++     * La référence se garde sans les espaces qui l'entourent ; vide, il n'y
++     * en a pas.
++     */
++    public function test_la_reference_se_garde_sans_les_espaces_qui_l_entourent(): void
++    {
++        $this->assertSame('CHQ 123', (new PartDeReglement(ModePaiement::Cheque, 500, '  CHQ 123 '))->reference);
++        $this->assertNull((new PartDeReglement(ModePaiement::Cheque, 500, '   '))->reference);
++        $this->assertNull((new PartDeReglement(ModePaiement::Cheque, 500))->reference);
++    }
++
++    /**
++     * Cent caractères, accents compris (chacun compte pour un, quel que soit
++     * le nombre d'octets qui l'écrivent), et les espaces qui l'entourent ne
++     * comptent pas ; le cent unième est refusé.
++     */
++    public function test_la_reference_compte_cent_caracteres_au_plus(): void
++    {
++        $centAccents = str_repeat('é', PartDeReglement::LONGUEUR_DE_LA_REFERENCE);
++
++        $this->assertSame($centAccents, (new PartDeReglement(ModePaiement::Virement, 500, " {$centAccents} "))->reference);
++
++        $this->expectExceptionObject(new LogicException('La référence d\'une part ne dépasse pas 100 caractères.'));
++
++        new PartDeReglement(ModePaiement::Virement, 500, $centAccents.'x');
++    }
++
++    public function test_le_total_additionne_chaque_part(): void
++    {
++        $this->assertSame(0, PartDeReglement::total([]));
++        $this->assertSame(1234, PartDeReglement::total([
++            new PartDeReglement(ModePaiement::Especes, 1000),
++            new PartDeReglement(ModePaiement::CarteBancaire, 200),
++            new PartDeReglement(ModePaiement::Cheque, 34),
++        ]));
++    }
++
++    public function test_chaque_mode_ne_regle_qu_une_part(): void
++    {
++        PartDeReglement::refuserUnModeEnDouble([
++            new PartDeReglement(ModePaiement::Especes, 1000),
++            new PartDeReglement(ModePaiement::CarteBancaire, 200),
++        ]);
++
++        $this->expectExceptionObject(new LogicException('Chaque mode ne règle qu\'une part du règlement.'));
++
++        PartDeReglement::refuserUnModeEnDouble([
++            new PartDeReglement(ModePaiement::Especes, 1000),
++            new PartDeReglement(ModePaiement::CarteBancaire, 200),
++            new PartDeReglement(ModePaiement::Especes, 300),
++        ]);
++    }
++
++    /**
++     * Chaque numéro de bon se lit comme la recherche d'un bon le lit : sans
++     * les espaces qui l'entourent et en majuscules, accents compris ; la
++     * liste rendue garde leur ordre, numérotée à partir de zéro.
++     */
++    public function test_les_numeros_des_bons_se_lisent_comme_la_recherche_d_un_bon(): void
++    {
++        $this->assertSame(
++            ['AV-LYON1-2026-000001', 'AV-ÉTÉ-2026-000002'],
++            PartDeReglement::numerosDesBons(['premier' => ' av-lyon1-2026-000001 ', 'second' => 'av-été-2026-000002']),
++        );
++        $this->assertSame([], PartDeReglement::numerosDesBons([]));
++    }
++
++    public function test_un_numero_de_bon_vide_est_refuse(): void
++    {
++        $this->expectExceptionObject(new LogicException('Saisissez le n° de chaque bon d\'avoir présenté.'));
++
++        PartDeReglement::numerosDesBons(['AV-LYON1-2026-000001', '  ']);
++    }
++
++    /**
++     * Un même bon, écrit deux fois autrement (casse, espaces, accents), ne se
++     * présente qu'une fois.
++     */
++    public function test_un_meme_bon_ne_se_presente_qu_une_fois(): void
++    {
++        $this->expectExceptionObject(new LogicException(PartDeReglement::BON_EN_DOUBLE));
++
++        PartDeReglement::numerosDesBons(['av-été-2026-000002', ' AV-ÉTÉ-2026-000002']);
 +    }
 +}
 diff --git a/tests/Unit/SaisieDecimaleTest.php b/tests/Unit/SaisieDecimaleTest.php

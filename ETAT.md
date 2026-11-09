@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 22:43 UTC par pilotage-sync.sh : « Après le lot QA ».
+Mis à jour le 09/11/2026 à 22:43 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -51,4 +51,5 @@ QA:correction
 QA:poussee
 QA:fiche
 QA:notes
+PG:implementation
 ```

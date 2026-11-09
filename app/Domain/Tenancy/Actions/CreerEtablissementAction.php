@@ -212,7 +212,7 @@ class CreerEtablissementAction
                     }
 
                     $siret = $societe->siren.$nic;
-                    $refus = (new SiretValide($societe->siren))->refus($siret);
+                    $refus = SiretValide::refus($siret);
 
                     if ($refus === null && ($societe->magasins()->portantLeSiret($siret)->exists() || ($societe->estValidee() && SiretsDesMagasins::estReserve($siret)))) {
                         $refus = SiretsDesMagasins::MESSAGE_SIRET_RESERVE;

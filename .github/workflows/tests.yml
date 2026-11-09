@@ -158,8 +158,9 @@ jobs:
   # couverture : Infection ne retrouve pas leurs noms dans le rapport
   # JUnit) : chaque partie tient son seuil, et chaque ligne de app/ ajoutée
   # ou modifiée par l'envoi est exécutée par un test. Puis
-  # tests de mutation (Infection) des fichiers des parties sensibles
-  # changés par l'envoi, chaque partie à son score minimal ; chaque processus
+  # tests de mutation (Infection) des lignes changées par l'envoi dans les
+  # parties sensibles (les calculs, les droits et l'isolation ; la caisse
+  # sécurisée à l'étape 3), chaque partie à son score minimal ; chaque processus
   # d'Infection a sa base (TEST_TOKEN, LARAVEL_PARALLEL_TESTING). Rapports
   # gardés en artefact.
   couverture:
@@ -188,9 +189,11 @@ jobs:
       DB_DATABASE: piliqi_test
       DB_USERNAME: piliqi
       DB_PASSWORD: piliqi
-      # Le commit d'avant l'envoi, ou la base de la demande de fusion ;
-      # vide pour une course planifiée.
-      BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+      # Le commit d'avant l'envoi (push, ou nouveaux commits d'une demande
+      # de fusion) : seules ses lignes changées se contrôlent ; vide pour une
+      # course planifiée ou l'ouverture d'une demande de fusion, dont la
+      # base contiendrait tout le logiciel.
+      BASE: ${{ github.event.before }}
 
     steps:
       - name: Checkout code
@@ -220,8 +223,14 @@ jobs:
       - name: Generate app key
         run: php artisan key:generate
 
+      # Par paratest, et non par php artisan test : le rapport JUnit de
+      # PHPUnit donne à Infection le fichier de chaque test, celui de Pest
+      # non (Infection ne lancerait alors aucun test et compterait chaque
+      # mutant comme tué).
       - name: Tests avec couverture
-        run: php artisan test --parallel --testsuite=Unit,Feature --coverage-clover=storage/qualite/clover.xml --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml
+        env:
+          LARAVEL_PARALLEL_TESTING: 1
+        run: vendor/bin/paratest --processes=$(nproc) --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml
 
       - name: Seuils de couverture par partie
         run: php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md
@@ -230,15 +239,19 @@ jobs:
         if: env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
         run: php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml "$BASE"
 
+      # À l'envoi seulement : les commits d'une demande de fusion sont ceux
+      # que la course de leur envoi a déjà testés.
       - name: Tests de mutation des parties sensibles changées
-        if: env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
+        if: github.event_name == 'push' && env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
         env:
           LARAVEL_PARALLEL_TESTING: 1
         run: |
-          FICHIERS=$(php tests/Qualite/qualite.php sensibles-changes "$BASE")
-          if [ -n "$FICHIERS" ]; then
-            vendor/bin/infection --threads=max --coverage=storage/qualite/infection --skip-initial-tests --no-progress --ignore-msi-with-no-mutations $FICHIERS
-            php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
+          if [ -n "$(php tests/Qualite/qualite.php sensibles-changes "$BASE")" ]; then
+            php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json
+            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-lines --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
+            if [ -f storage/qualite/infection.json ]; then
+              php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
+            fi
           fi
 
       - name: Garder les rapports

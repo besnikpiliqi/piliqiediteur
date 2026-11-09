@@ -23,13 +23,16 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Http\Middleware\JournaliserOuvertureDeSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use LogicException;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 /**
@@ -279,6 +282,37 @@ class JournalEvenementsTest extends TestCase
         $this->assertGuest();
         $this->assertSame(['260', '80'], $this->codes($magasin));
         Exceptions::assertReported(ModuleFiscalNonConfigureException::class);
+    }
+
+    /**
+     * Hors d'un magasin, sans compte connecté ou sans session, le passage
+     * de la requête ne s'inscrit dans aucun journal, et elle suit son
+     * cours.
+     */
+    public function test_hors_d_un_magasin_sans_compte_ou_sans_session_aucune_ouverture_ne_s_inscrit(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->magasinDe($proprietaire);
+        $requete = function (?User $compte, bool $avecSession = true): Request {
+            $requete = Request::create('/app');
+            $requete->setUserResolver(fn (): ?User => $compte);
+
+            if ($avecSession) {
+                $requete->setLaravelSession(app('session.store'));
+            }
+
+            return $requete;
+        };
+        $passer = fn (Request $requete): string => (string) (new JournaliserOuvertureDeSession)->handle($requete, fn (): Response => response('suite'))->getContent();
+        $contexte = app(TenantContext::class);
+
+        $contexte->clear();
+        $this->assertSame('suite', $passer($requete($proprietaire)));
+
+        $contexte->set($magasin);
+        $this->assertSame('suite', $passer($requete(null)));
+        $this->assertSame('suite', $passer($requete($proprietaire, avecSession: false)));
+        $this->assertSame([], $this->codes($magasin));
     }
 
     public function test_une_deconnexion_sans_magasin_ouvert_n_inscrit_rien(): void

@@ -27,6 +27,8 @@ use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\PosteReconnuResource;
 use App\Filament\App\Resources\PosteReconnuResource\Pages\ListPostesReconnus;
+use App\Filament\Societe\Pages\TableauDeBord;
+use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Hashing\Hasher;
@@ -39,6 +41,7 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -185,6 +188,25 @@ class ConnexionParIdentifiantTest extends TestCase
             $this->assertSame(['bcrypt', (int) config('hashing.bcrypt.rounds')], [password_get_info($hachage->empreintes[0])['algoName'], password_get_info($hachage->empreintes[0])['options']['cost'] ?? null], $cas);
         }
         $this->assertSame([$requetesParCas['adresse inconnue'], $requetesParCas['adresse inconnue']], [$requetesParCas['adresse en attente'], $requetesParCas['adresse d\'une inscription close']]);
+    }
+
+    /**
+     * La connexion du panneau ne cherche un compte que par le fournisseur
+     * des comptes de PILIQI (identifiant, ou adresse de connexion d'un
+     * propriétaire) : une configuration qui mettrait un autre fournisseur
+     * sous la garde est refusée avant toute recherche, sans connecter
+     * personne.
+     */
+    public function test_une_garde_sans_le_fournisseur_des_comptes_est_refusee_avant_toute_recherche(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        config(['auth.providers.users.driver' => 'eloquent']);
+        Auth::forgetGuards();
+        $hachage = $this->compterLesVerifications();
+
+        $this->assertThrows(fn () => $this->seConnecter($proprietaire->email, 'password'), LogicException::class, 'La connexion du panneau passe par une garde de session sur le fournisseur des comptes (voir config/auth.php).');
+        $this->assertSame(0, $hachage->verifications);
+        $this->assertGuest();
     }
 
     public function test_une_saisie_qui_n_a_pas_huit_chiffres_est_signalee_sans_rien_reveler(): void
@@ -459,6 +481,30 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
+     * Le propriétaire retire un poste reconnu depuis la liste des postes du
+     * magasin : le poste est marqué retiré, à son nom, et l'écran le dit ;
+     * un poste déjà retiré ne se retire pas une seconde fois.
+     */
+    public function test_un_poste_se_retire_depuis_la_liste_des_postes_du_magasin(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->reconnaitreUnPoste($magasin);
+        $this->dansLeMagasin($magasin, $proprietaire);
+        $reconnu = PosteReconnu::query()->sole();
+
+        Livewire::test(ListPostesReconnus::class)
+            ->callTableAction('retirer', $reconnu)
+            ->assertHasNoTableActionErrors()
+            ->assertNotified('Le poste est retiré.');
+
+        $reconnu->refresh();
+        $this->assertTrue($reconnu->estRetire());
+        $this->assertSame((int) $proprietaire->id, (int) $reconnu->retire_par);
+        $this->assertThrows(fn () => app(PostesReconnus::class)->retirer($proprietaire, $reconnu), LogicException::class, 'Ce poste est déjà retiré.');
+    }
+
+    /**
      * Un responsable ou un administrateur dont le mot de passe est encore
      * son identifiant choisit le sien à sa première connexion, avant toute
      * autre page, et aucune requête Livewire d'un autre écran ne passe ; un
@@ -515,6 +561,59 @@ class ConnexionParIdentifiantTest extends TestCase
         $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
         $this->assertFalse($vendeur->refresh()->doitChoisirSonMotDePasse());
         $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
+    }
+
+    /**
+     * Dans l'espace de la société comme dans celui des magasins, un
+     * administrateur dont le mot de passe est encore son identifiant va,
+     * de toute page, au choix de son mot de passe, que cet espace ouvre ;
+     * son mot de passe choisi, il revient à l'accueil de cet espace.
+     */
+    public function test_dans_l_espace_de_la_societe_toute_page_mene_au_choix_du_mot_de_passe_qui_s_y_ouvre(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $poste = $this->reconnaitreUnPoste($magasin);
+        $administrateur = app(CreerAdministrateurAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
+        $identifiant = (string) $administrateur->identifiantDeConnexion();
+        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertRedirect(route('filament.societe.choisir-son-mot-de-passe'));
+        $this->get(route('filament.societe.choisir-son-mot-de-passe'))->assertOk();
+
+        Filament::setCurrentPanel(Filament::getPanel('societe'));
+        Filament::setTenant($magasin->societe);
+        Livewire::test(ChoisirSonMotDePasse::class)
+            ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
+            ->call('choisir')
+            ->assertHasNoErrors()
+            ->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe));
+    }
+
+    /**
+     * Tant que le compte doit choisir son mot de passe, la page du choix
+     * s'ouvre, comme la déconnexion ; une fois le mot de passe choisi
+     * depuis une autre session du compte, la session qui en gardait la
+     * marque n'exige plus rien, et l'oublie.
+     */
+    public function test_la_page_du_choix_s_ouvre_et_un_mot_de_passe_choisi_ailleurs_leve_l_exigence_de_la_session(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $poste = $this->reconnaitreUnPoste($magasin);
+        [$responsable, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
+        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+
+        $this->get(route('filament.app.choisir-son-mot-de-passe'))->assertOk();
+        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
+
+        Livewire::test(ChoisirSonMotDePasse::class)
+            ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
+            ->call('choisir')
+            ->assertHasNoErrors();
+        session()->put(ExigerSonPropreMotDePasse::A_LA_CONNEXION, true);
+
+        $this->assertFalse($responsable->refresh()->doitChoisirSonMotDePasse());
+        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
+        $this->assertFalse(session()->has(ExigerSonPropreMotDePasse::A_LA_CONNEXION));
     }
 
     /**

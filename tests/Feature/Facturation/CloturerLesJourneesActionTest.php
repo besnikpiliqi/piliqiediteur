@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -25,8 +26,10 @@ use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Str;
 use LogicException;
+use Mockery\MockInterface;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -225,5 +228,42 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parLeSysteme($autreMagasin, Calendrier::deParis()->aujourdhui()), LogicException::class, 'Les journées d\'un magasin ne se clôturent que depuis ce magasin.');
         $this->assertSame(0, ClotureCaisse::withoutGlobalScopes()->count());
         $this->assertTrue(app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, Calendrier::deParis()->aujourdhui())->isEmpty());
+    }
+
+    /**
+     * Le bouton d'un magasin qui n'a encore rien vendu ne clôture aucune
+     * journée et ne ferme aucune caisse.
+     */
+    public function test_le_bouton_sans_journee_a_cloturer_ne_cloture_ni_ne_ferme_rien(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
+        $magasin = $this->magasin();
+
+        $resultat = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui(), (string) Str::uuid());
+
+        $this->assertSame([[], []], [$resultat['clotures']->all(), $resultat['caisses_fermees']->all()]);
+        $this->assertSame(0, ClotureCaisse::query()->count());
+    }
+
+    /**
+     * Après les clôtures du bouton, un échec de la fermeture d'office des
+     * caisses personnelles ne défait aucune clôture : il est signalé au
+     * journal de l'application, et la clôture automatique les fermera.
+     */
+    public function test_un_echec_de_la_fermeture_d_office_des_caisses_ne_defait_aucune_cloture(): void
+    {
+        $magasin = $this->magasin();
+        $this->travelTo(self::aParis('2026-10-08 10:00:00'));
+        $this->vendreUnTicket();
+        $this->travelTo(self::aParis('2026-10-08 19:00:00'));
+        Exceptions::fake();
+        $this->mock(FermerLesCaissesPersonnellesAction::class, fn (MockInterface $fermeture) => $fermeture->shouldReceive('handle')->once()->andThrow(new RuntimeException('Panne du serveur de base de données.')));
+
+        $resultat = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, Calendrier::deParis()->aujourdhui(), (string) Str::uuid());
+
+        $this->assertSame(['2026-10-08'], $resultat['clotures']->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture)->all());
+        $this->assertSame([], $resultat['caisses_fermees']->all());
+        $this->assertSame(['2026-10-08'], ClotureCaisse::query()->pluck('date_cloture')->all());
+        Exceptions::assertReported(fn (RuntimeException $panne): bool => $panne->getMessage() === 'Panne du serveur de base de données.');
     }
 }

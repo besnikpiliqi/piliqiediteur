@@ -56,6 +56,40 @@ class DevisPolicyTest extends TestCase
     }
 
     /**
+     * Noter le refus du client : qui envoie les devis, jamais
+     * l'observateur ni l'ancien comptable, qui les consultent.
+     */
+    #[DataProvider('roles')]
+    public function test_refuser_un_devis_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutRefuser): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
+        $devis = $this->creerUnDevis();
+
+        $this->assertSame([true, $peutRefuser], [$membre->can('view', $devis), $membre->can('refuser', $devis)]);
+    }
+
+    /**
+     * Convertir un devis crée une facture : qui crée les factures, jamais
+     * le propriétaire, qui ne vend pas, ni un membre qui voit les devis
+     * sans vendre.
+     */
+    public function test_convertir_un_devis_exige_de_creer_les_factures(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $observateur = $this->membre($magasin, RoleMagasin::Observateur);
+        $devis = $this->creerUnDevis();
+
+        $this->assertSame([true, false, false], [
+            $vendeur->can('convertir', $devis),
+            $this->proprietaireDe($magasin)->can('convertir', $devis),
+            $observateur->can('convertir', $devis),
+        ]);
+        $this->assertTrue($this->proprietaireDe($magasin)->can('view', $devis));
+    }
+
+    /**
      * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function rolesQuiModifientLesDevis(): array

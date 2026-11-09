@@ -295,6 +295,7 @@ class TenantIsolationTest extends TestCase
         app(TenantContext::class)->clear();
 
         $this->expectException(TenantContextMissingException::class);
+        $this->expectExceptionMessage("Tentative d'accès au modèle [{$modelClass}] sans contexte magasin résolu.");
         $modelClass::query()->get();
     }
 

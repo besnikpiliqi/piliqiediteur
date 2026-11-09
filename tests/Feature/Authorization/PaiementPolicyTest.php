@@ -54,6 +54,19 @@ class PaiementPolicyTest extends TestCase
     }
 
     /**
+     * Sans l'autorisation de voir les paiements, aucun ne se voit, même avec
+     * la vue des factures de toute l'équipe.
+     */
+    public function test_sans_l_autorisation_de_voir_les_paiements_aucun_ne_se_voit(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $observateur = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
+
+        $this->assertFalse($observateur->can('view', $this->encaisserUnPaiementEnTantQue($vendeur)));
+    }
+
+    /**
      * @return array<string, array{0: RoleMagasin, 1: list<string>|null}>
      */
     public static function rolesQuiContrePassentDOffice(): array

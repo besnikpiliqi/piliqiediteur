@@ -115,7 +115,7 @@ class CalculateurLigne
         $cumuls = [];
         $montants = [];
 
-        foreach (array_values($lignes) as $ligne) {
+        foreach ($lignes as $ligne) {
             $tauxDuPrix = $this->taux($ligne, 'taux_tva_du_prix');
             $taux = $this->tauxFacture($ligne, $tauxDuPrix);
             $ttcAuPrix = $this->montantNetCentimes($this->prix($ligne, 'prix_unitaire_ttc'), $this->quantite($ligne), $this->remise($ligne));
@@ -218,7 +218,7 @@ class CalculateurLigne
         $cumuls = [];
         $montants = [];
 
-        foreach (array_values($lignes) as $ligne) {
+        foreach ($lignes as $ligne) {
             $taux = $this->taux($ligne, 'taux_tva');
             $htCalcule = $this->htDUnAchat($this->prixAuMillionieme($ligne), $this->quantite($ligne), $this->remise($ligne));
             $ht = ($ligne['montant_ht'] ?? null) === null ? $htCalcule : $this->htEcrit($ligne);
@@ -1041,8 +1041,9 @@ class CalculateurLigne
     }
 
     /**
-     * Le PU HT d'une ligne d'achat en millionièmes d'euro : jamais négatif,
-     * dans la borne des prix unitaires.
+     * Le PU HT d'une ligne d'achat en millionièmes d'euro : jamais négatif.
+     * La borne des prix unitaires se contrôle sur le HT de la ligne (voir
+     * htDUnAchat()), où il sert toujours : quantité x PU, au moins le PU.
      *
      * @param  array<string, mixed>  $ligne
      *
@@ -1054,10 +1055,6 @@ class CalculateurLigne
 
         if (! is_int($prix)) {
             throw new InvalidArgumentException(self::NOMBRE_A_VIRGULE);
-        }
-
-        if (abs($prix) >= self::MILLIONIEMES_MAXIMUM) {
-            throw new InvalidArgumentException('Montant hors limites.');
         }
 
         if ($prix < 0) {
@@ -1133,7 +1130,8 @@ class CalculateurLigne
 
         foreach ($rangs as $rang) {
             $cumulHt += $lignes[$rang]['montant_ht'];
-            $part = $base === 0 ? 0 : $this->diviserArrondi($this->multiplier($ecart, $cumulHt), $base);
+            // Une base nulle n'a que des lignes à 0 € HT : aucune part.
+            $part = $this->diviserArrondi($this->multiplier($ecart, $cumulHt), max($base, 1));
             $voulue = $lignes[$rang]['montant_tva'] + $part - $partPrecedente + $report;
             $partPrecedente = $part;
             $tva = max(0, min($lignes[$rang]['montant_ht'], $voulue));
@@ -1142,10 +1140,6 @@ class CalculateurLigne
         }
 
         foreach (array_reverse($rangs) as $rang) {
-            if ($report === 0) {
-                break;
-            }
-
             $tva = max(0, min($lignes[$rang]['montant_ht'], $lignes[$rang]['montant_tva'] + $report));
             $report -= $tva - $lignes[$rang]['montant_tva'];
             $lignes[$rang]['montant_tva'] = $tva;

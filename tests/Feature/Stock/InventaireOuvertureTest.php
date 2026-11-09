@@ -21,6 +21,7 @@ use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Stock\Services\ConstructeurLigneInventaire;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -335,7 +336,8 @@ class InventaireOuvertureTest extends TestCase
     /**
      * Un inventaire d'ouverture et ses produits restent dans leur magasin :
      * depuis un autre magasin de la même société, l'inventaire est
-     * introuvable, et un produit d'un autre magasin ne s'y inventorie pas.
+     * introuvable, même pour le propriétaire, et un produit d'un autre
+     * magasin ne s'y inventorie pas.
      */
     public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
     {
@@ -344,6 +346,7 @@ class InventaireOuvertureTest extends TestCase
         $inventaireDeA = $this->saisir([self::ligneDUnNouveauCarnet()]);
         $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'Boutique B']);
 
+        $this->assertFalse($this->proprietaireDe($magasinA)->can('view', $inventaireDeA));
         $this->assertThrows(fn () => $this->valider($inventaireDeA), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
         $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaireDeA, [self::ligneDUnNouveauCarnet()]), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
         $this->assertThrows(fn () => $this->saisir([['produit_id' => $tasseDeA->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), InvalidArgumentException::class, 'Ce produit est introuvable dans le magasin.');
@@ -453,6 +456,29 @@ class InventaireOuvertureTest extends TestCase
     }
 
     /**
+     * Un produit archivé n'entre pas dans un inventaire d'ouverture : à la
+     * saisie, il est refusé ; archivé entre la saisie et la validation, il
+     * fait refuser toute la validation, sans créer les nouveaux produits des
+     * autres lignes.
+     */
+    public function test_un_produit_archive_n_entre_pas_dans_un_inventaire_d_ouverture(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $archive = Produit::factory()->create(['nom' => 'Lampe', 'taux_tva' => 20]);
+        $archive->delete();
+        $tasse = Produit::factory()->create(['nom' => 'Tasse', 'taux_tva' => 20]);
+        $message = fn (string $nom): string => "Le produit « {$nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de l'inventaire d'ouverture.";
+
+        $this->assertThrows(fn () => $this->saisir([['produit_id' => $archive->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), LogicException::class, $message('Lampe'));
+
+        $brouillon = $this->saisir([self::ligneDUnNouveauCarnet(), ['produit_id' => $tasse->id, 'quantite' => 3, 'cout_unitaire_ht' => '2.00']]);
+        $tasse->delete();
+
+        $this->assertThrows(fn () => $this->valider($brouillon), LogicException::class, $message('Tasse'));
+        $this->assertSame([StatutInventaireOuverture::Brouillon, 0], [$brouillon->fresh()->statut, Produit::query()->where('nom', 'Carnet A5')->count()]);
+    }
+
+    /**
      * @return array<string, array{0: list<array<string, mixed>>, 1: string}>
      */
     public static function lignesRefusees(): array
@@ -477,6 +503,38 @@ class InventaireOuvertureTest extends TestCase
                 [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 0, 'cout_unitaire_ht' => '1.00']],
                 'La quantité doit être un nombre entier d\'articles, au moins 1.',
             ],
+            'aucune ligne' => [[], 'Un inventaire d\'ouverture doit contenir au moins une ligne.'],
+            'produit inconnu' => [
+                [['produit_id' => 'abc', 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Ce produit est introuvable dans le magasin.',
+            ],
+            'nouveau produit sans nom' => [
+                [['produit' => ['prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Chaque nouveau produit d\'un inventaire d\'ouverture doit avoir un nom.',
+            ],
+            'prix de vente négatif' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '-4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Le prix de vente d\'un produit ne peut pas être négatif.',
+            ],
+            'taux de TVA au-delà de 100 %' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '120'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00']],
+                'Le taux de TVA doit être compris entre 0 et 100 %.',
+            ],
+            'coût manquant' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 1, 'cout_unitaire_ht' => '']],
+                'Indiquez le coût unitaire HT de chaque ligne de l\'inventaire d\'ouverture.',
+            ],
+            'ligne au-delà de ce que le logiciel accepte' => [
+                [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 2_000_000_000, 'cout_unitaire_ht' => '999999.00']],
+                'Cette ligne dépasse ce que le logiciel accepte : réduisez sa quantité ou son coût.',
+            ],
+            'inventaire au-delà de ce que le logiciel accepte' => [
+                [
+                    ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 600_000_000, 'cout_unitaire_ht' => '1000.00'],
+                    ['produit' => ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90'], 'quantite' => 600_000_000, 'cout_unitaire_ht' => '1000.00'],
+                ],
+                'Cet inventaire d\'ouverture dépasse ce que le logiciel accepte : répartissez son stock sur plusieurs inventaires.',
+            ],
         ];
     }
 
@@ -491,6 +549,60 @@ class InventaireOuvertureTest extends TestCase
         $this->assertThrows(fn () => $this->saisir($lignes), InvalidArgumentException::class, $message);
 
         $this->assertSame(0, InventaireOuverture::query()->count());
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string}>
+     */
+    public static function lignesAuxBornes(): array
+    {
+        $carnet = ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'];
+
+        return [
+            'prix de vente, taux de TVA et coût nuls' => [['produit' => [...$carnet, 'prix_vente_ttc' => '0', 'taux_tva' => '0'], 'quantite' => 1, 'cout_unitaire_ht' => '0'], '0.00'],
+            'taux de TVA de 100 %' => [['produit' => [...$carnet, 'taux_tva' => '100'], 'quantite' => 1, 'cout_unitaire_ht' => '1.00'], '1.00'],
+            'un demi-centime' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '0.005'], '0.01'],
+            'trois demi-centimes' => [['produit' => $carnet, 'quantite' => 3, 'cout_unitaire_ht' => '0.005'], '0.02'],
+            'sous le demi-centime' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '0.004999'], '0.00'],
+            'la plus grande quantité' => [['produit' => $carnet, 'quantite' => ConstructeurLigneInventaire::QUANTITE_MAXIMUM, 'cout_unitaire_ht' => '0'], '0.00'],
+            'la plus grande valeur' => [['produit' => $carnet, 'quantite' => 1, 'cout_unitaire_ht' => '999999999999.99'], '999999999999.99'],
+        ];
+    }
+
+    /**
+     * Une ligne à ses bornes est acceptée : un prix de vente, un taux de TVA
+     * et un coût nuls, un taux de 100 %, la plus grande quantité et la plus
+     * grande valeur que le logiciel accepte. La valeur d'une ligne
+     * s'arrondit une seule fois au centime le plus proche, un demi-centime
+     * au centime supérieur.
+     *
+     * @param  array<string, mixed>  $ligne
+     */
+    #[DataProvider('lignesAuxBornes')]
+    public function test_une_ligne_a_ses_bornes_est_acceptee(array $ligne, string $valeur): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $this->assertSame($valeur, $this->saisir([$ligne])->valeur_ht);
+    }
+
+    /**
+     * Les lignes se rangent dans l'ordre de la saisie, quelles que soient
+     * leurs clés (celles d'un formulaire), et un taux de TVA ou une
+     * référence laissés vides prennent leur valeur par défaut : le taux du
+     * magasin, une référence générée à la validation.
+     */
+    public function test_les_lignes_se_rangent_dans_leur_ordre_et_un_champ_vide_prend_sa_valeur_par_defaut(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $inventaire = $this->saisir([
+            'premiere-ligne' => ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '', 'reference' => ''], 'quantite' => 1, 'cout_unitaire_ht' => '2.00'],
+            'seconde-ligne' => ['produit' => ['nom' => 'Carnet A4', 'prix_vente_ttc' => '5.90'], 'quantite' => 1, 'cout_unitaire_ht' => '3.00'],
+        ]);
+
+        $this->assertSame([['Carnet A5', 0], ['Carnet A4', 1]], $inventaire->lignes()->get()->map(fn ($ligne): array => [$ligne->description, (int) $ligne->ordre])->all());
+        $this->assertSame('20.00', $inventaire->lignes()->first()->nouveau_produit['taux_tva']);
     }
 
     /**

@@ -23,12 +23,14 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
+use App\Providers\AppServiceProvider;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -267,6 +269,20 @@ class ClientResourceTest extends TestCase
 
         Livewire::test(CreateFacture::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('HÉLENE') === [$helene->id => 'Hélène Martin']);
+    }
+
+    /**
+     * Un choix proposable ne se pose que sur la relation d'une fiche vers
+     * celle qu'elle désigne : un champ sans cette relation est refusé au
+     * lieu de proposer des fiches sans filtre.
+     */
+    public function test_un_choix_proposable_sans_relation_vers_une_fiche_est_refuse(): void
+    {
+        $this->assertThrows(
+            fn () => AppServiceProvider::relationDuChoix(Select::make('client_id')),
+            LogicException::class,
+            'Le choix « client_id » n\'est pas celui d\'une fiche liée (BelongsTo).',
+        );
     }
 
     /**

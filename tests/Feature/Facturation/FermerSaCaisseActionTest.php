@@ -13,6 +13,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
@@ -274,6 +275,27 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame(['especes' => '30.00', 'carte_bancaire' => '45.00'], $cloture->fresh()->encaissements);
         $this->assertSame(75.0, $cloture->fresh()->totalEncaisse());
         $this->assertSame(['30.00', '120.00'], [$cloture->credit_avoir, $cloture->reste_du]);
+    }
+
+    /**
+     * La fermeture d'office d'une caisse qui ne compte plus rien (le
+     * vendeur l'a fermée entre-temps) ne note aucun relevé ; celle d'une
+     * caisse qui compte une vente la ferme, « fermée automatiquement ».
+     */
+    public function test_la_fermeture_d_office_d_une_caisse_deja_fermee_ne_note_rien(): void
+    {
+        $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
+        $this->actingAs($vendeur);
+        $this->emettreUnDocument(Client::factory()->create(), 45);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+
+        $this->assertNull(app(FermerSaCaisseAction::class)->fermerDOffice($vendeur, now()));
+        $this->assertSame(1, ClotureCaissePersonnelle::query()->count());
+
+        $this->emettreUnDocument(Client::factory()->create(), 30);
+        $doffice = app(FermerSaCaisseAction::class)->fermerDOffice($vendeur, now());
+
+        $this->assertSame([ModeFermetureCaisse::Automatique, 1, '30.00'], [$doffice?->mode_fermeture, $doffice?->nombre_ventes, $doffice?->total_ttc]);
     }
 
     public function test_une_seconde_fermeture_immediate_est_a_zero_dans_chaque_rubrique(): void

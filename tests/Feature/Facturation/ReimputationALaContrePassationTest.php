@@ -20,6 +20,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\ImputationDuCredit;
 use App\Domain\Tenancy\Models\Magasin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -295,5 +296,24 @@ class ReimputationALaContrePassationTest extends TestCase
         $this->assertSame([], self::donneesSignees($contrePassation)['credits_imputes']);
         $this->assertSame([StatutFacture::Emise, 100.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    /**
+     * Sans facture qui attende un règlement, le crédit disponible du
+     * client ne s'impute nulle part et aucun avoir n'est relu sous verrou.
+     */
+    public function test_sans_facture_due_le_credit_du_client_ne_s_impute_nulle_part(): void
+    {
+        $this->magasin();
+        $client = Client::factory()->professionnel()->create();
+        $facture = $this->facture($client, 100);
+        $this->payerParVirement($client, $facture);
+        $this->avoirSur($this->facture($client, 30));
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->assertSame([], app(ImputationDuCredit::class)->apresUneContrePassation($client));
+        $this->assertCount(1, DB::getQueryLog(), 'Seules les factures dues du client sont lues.');
+        DB::disableQueryLog();
     }
 }

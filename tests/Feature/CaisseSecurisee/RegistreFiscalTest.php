@@ -18,9 +18,11 @@ use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -378,6 +380,31 @@ class RegistreFiscalTest extends TestCase
             fn (RegistreFiscal $registre) => $registre->verrouiller($autreMagasin),
             LogicException::class,
             'Le registre fiscal ne se verrouille que pour le magasin actif.',
+        );
+    }
+
+    public function test_le_registre_d_un_magasin_d_une_autre_societe_ne_se_verrouille_jamais_avec_ceux_de_la_societe_active(): void
+    {
+        $magasin = $this->magasinActif();
+        $autreMagasin = Magasin::factory()->create();
+
+        $this->assertNotSame((int) $magasin->societe_id, (int) $autreMagasin->societe_id);
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->sousVerrouDesMagasins(new Collection([$magasin, $autreMagasin]), fn (): bool => true),
+            LogicException::class,
+            'Le registre fiscal d\'un magasin ne se verrouille que dans le contexte de sa société.',
+        );
+    }
+
+    public function test_hors_de_sa_societe_le_registre_ne_se_verrouille_que_pour_un_client_du_cabinet(): void
+    {
+        $magasin = Magasin::factory()->create();
+        $cabinet = Societe::factory()->create();
+
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->sousVerrouDesMagasinsDesClients($cabinet, new Collection([$magasin]), fn (): bool => true),
+            LogicException::class,
+            'Le registre fiscal d\'un magasin ne se verrouille, hors de sa société, que pour un client du cabinet.',
         );
     }
 

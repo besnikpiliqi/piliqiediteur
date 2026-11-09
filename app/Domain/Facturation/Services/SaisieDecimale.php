@@ -63,6 +63,8 @@ final class SaisieDecimale
      * la TVA ou la base d'un taux, le total TTC saisi pour contrôle), en
      * centimes : au centime, jamais arrondi en silence -- « 6.005 » est
      * refusé (REFUS_MONTANT_TROP_PRECIS), « 6.0 » et « 6.000 » valent 600.
+     * Sans arrondi, ses douze chiffres entiers au plus (voir lire()) le
+     * laissent sous la borne du calcul.
      *
      * @throws InvalidArgumentException
      */
@@ -75,10 +77,6 @@ final class SaisieDecimale
         }
 
         $centiemes = (int) $entiers * 100 + (int) str_pad(substr($decimales, 0, 2), 2, '0');
-
-        if ($centiemes >= self::CENTIEMES_MAXIMUM) {
-            throw new InvalidArgumentException('Montant hors limites.');
-        }
 
         return $negatif ? -$centiemes : $centiemes;
     }
@@ -124,7 +122,7 @@ final class SaisieDecimale
             default => throw new InvalidArgumentException('Nombre illisible.'),
         };
 
-        if (preg_match('/^-?(\d+(\.\d*)?|\.\d+)$/D', $texte) !== 1) {
+        if (preg_match('/^-?(\d+(\.\d*)?|\.\d+)$/', $texte) !== 1) {
             if (! is_numeric($texte)) {
                 throw new InvalidArgumentException("« {$texte} » n'est pas un nombre.");
             }

@@ -72,6 +72,7 @@ class TerritoireFiscalTest extends TestCase
             'Monaco' => ['MC', '98000', false, false, false, false],
             'New York' => ['US', '10001', true, true, false, false],
             'Belfast, Irlande du Nord' => ['GB', 'BT1 1AA', false, true, true, false],
+            'Belfast, écrit en minuscules avec des espaces' => [' gb ', 'bt1 1aa', false, true, true, false],
             'Londres' => ['GB', 'SW1A 1AA', true, true, false, false],
             'Las Palmas, îles Canaries' => ['ES', '35001', true, true, false, false],
             'Santa Cruz de Tenerife, îles Canaries' => ['ES', '38001', true, true, false, false],

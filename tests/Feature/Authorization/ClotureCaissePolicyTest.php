@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -43,6 +44,31 @@ class ClotureCaissePolicyTest extends TestCase
         $this->assertTrue($comptable->can('view', $clotureDuVendeur));
         $this->assertTrue($collaborateur->can('view', $clotureDuVendeur));
         $this->assertFalse($collaborateur->can('cloturer', ClotureCaisse::class));
+    }
+
+    public function test_une_cloture_d_un_autre_magasin_n_est_jamais_visible_meme_avec_la_vue_totale(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
+        $contexte = app(TenantContext::class);
+        $clotureDAilleurs = $contexte->runAs($autreMagasin, fn (): ClotureCaisse => ClotureCaisse::factory()->create(['date_cloture' => '2026-10-07']));
+
+        $contexte->set($magasin);
+        $this->assertFalse($comptable->can('view', $clotureDAilleurs));
+        $contexte->clear();
+        $this->assertFalse($comptable->can('view', $clotureDAilleurs));
+    }
+
+    public function test_sans_l_autorisation_de_voir_les_clotures_un_membre_ne_voit_pas_meme_celle_qu_il_a_declenchee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_GERER]);
+        $cloture = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-07', 'cree_par' => $vendeur->id]);
+
+        $this->assertNotContains(PermissionRegistry::CLOTURE_CAISSE_VIEW, RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce));
+        $this->assertFalse($vendeur->can('view', $cloture));
+        $this->assertTrue($vendeur->can('cloturer', ClotureCaisse::class));
     }
 
     private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User

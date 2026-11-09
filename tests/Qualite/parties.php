@@ -6,8 +6,10 @@
  * fichier de app/ appartient à la première partie dont un chemin commence
  * le sien (un fichier, un dossier terminé par « / », ou le début d'un nom
  * qui désigne une ressource et ses pages) ; ce qu'aucune ne désigne
- * appartient à « ecrans_et_socle ». Les parties sensibles, dont Infection
- * teste les mutants, sont les trois premières.
+ * appartient à « ecrans_et_socle ». Les trois premières sont les parties
+ * sensibles de la couverture ; Infection teste les mutants des calculs et
+ * des droits et de l'isolation, ceux de la caisse sécurisée à l'étape 3 de
+ * la feuille de route (voir PARTIES_SENSIBLES dans qualite.php).
  */
 
 return [

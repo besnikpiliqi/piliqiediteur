@@ -141,4 +141,38 @@ class BaremePrixDeVenteTest extends TestCase
         $this->assertSame(10.0, $bareme->beneficePour(1));
         $this->assertSame(30.0, $bareme->beneficePour(5));
     }
+
+    /**
+     * Un palier à 0 € ou en dessous n'existe pas, et un bénéfice au-delà
+     * des paliers ne peut pas être négatif, même sans palier.
+     */
+    public function test_un_palier_a_zero_ou_un_benefice_au_dela_negatif_est_refuse(): void
+    {
+        foreach ([fn () => new BaremePrixDeVente([['jusqu_a' => 0.0, 'benefice' => 10.0]], 60, false), fn () => new BaremePrixDeVente([['jusqu_a' => -2.0, 'benefice' => 10.0]], 60, false)] as $bareme) {
+            $this->assertThrows($bareme, InvalidArgumentException::class, 'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.');
+        }
+
+        foreach ([fn () => new BaremePrixDeVente([['jusqu_a' => 2.0, 'benefice' => 10.0]], -1.0, false), fn () => new BaremePrixDeVente([], -1.0, false)] as $bareme) {
+            $this->assertThrows($bareme, InvalidArgumentException::class, 'Un bénéfice du barème ne peut pas être négatif.');
+        }
+    }
+
+    /**
+     * Le barème saisi dans un formulaire, en texte, se lit en nombres :
+     * deux paliers écrits « 2 » et « 2.0 » sont le même prix d'achat, donc
+     * refusés ; un bénéfice au-delà écrit se garde, absent il n'y en a pas.
+     */
+    public function test_le_bareme_d_un_formulaire_se_lit_en_nombres(): void
+    {
+        $bareme = BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2', 'benefice' => '10']], 'benefice_au_dela' => '60', 'arrondi_x9' => true]);
+
+        $this->assertSame([['jusqu_a' => 2.0, 'benefice' => 10.0]], $bareme->paliers);
+        $this->assertSame(60.0, $bareme->beneficeAuDela);
+        $this->assertNull(BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2', 'benefice' => '10']], 'benefice_au_dela' => '', 'arrondi_x9' => false])->beneficeAuDela);
+        $this->assertThrows(
+            fn () => BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2', 'benefice' => '10'], ['jusqu_a' => '2.0', 'benefice' => '15']], 'benefice_au_dela' => null, 'arrondi_x9' => false]),
+            InvalidArgumentException::class,
+            'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.',
+        );
+    }
 }

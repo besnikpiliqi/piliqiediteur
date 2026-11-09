@@ -81,8 +81,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
 use Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
@@ -129,6 +131,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Calendrier::exigerUnFuseauUtc();
         $this->interdireLesRequetesCacheesHorsProduction();
+        $this->oublierLesDroitsDuCompteAChaqueRequete();
 
         // Les modèles vivent sous App\Domain\<Domaine>\Models\... plutôt
         // qu'à plat sous App\Models. La convention par défaut de Laravel
@@ -197,6 +200,24 @@ class AppServiceProvider extends ServiceProvider
 
         Model::preventLazyLoading($horsProduction);
         Model::preventAccessingMissingAttributes($horsProduction);
+    }
+
+    /**
+     * Les droits que le compte connecté a lus pendant une requête (ses
+     * autorisations dans chaque magasin, et pour un compte d'un cabinet les
+     * clients que ses liens lui ouvrent, voir User::oublierLesDroits()) ne
+     * survivent pas à la requête : la suivante les relit en base, même là
+     * où le même objet sert d'une requête à l'autre (un serveur qui garde
+     * l'application en mémoire, les tests), et la fin d'un lien ou un droit
+     * retiré vaut dès la requête suivante.
+     */
+    private function oublierLesDroitsDuCompteAChaqueRequete(): void
+    {
+        Event::listen(RequestHandled::class, static function (): void {
+            if (Auth::hasUser()) {
+                Auth::user()?->oublierLesDroits();
+            }
+        });
     }
 
     /**

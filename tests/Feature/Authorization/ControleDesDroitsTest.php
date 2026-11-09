@@ -15,6 +15,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -247,6 +248,22 @@ class ControleDesDroitsTest extends TestCase
         $this->assertFalse($proprietaire->can(PermissionRegistry::FACTURE_VIEW));
         $this->assertFalse($proprietaire->can('viewAny', Facture::class));
         $this->assertFalse($proprietaire->can('view', $brouillon));
+        $this->assertFalse($proprietaire->can('viewAny', User::class));
+    }
+
+    /**
+     * Dans l'espace d'administration d'une autre société, rien non plus,
+     * pas même la liste de ses comptes.
+     */
+    public function test_le_proprietaire_n_a_aucun_droit_dans_l_espace_d_une_autre_societe(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $autreSociete = $this->ouvrirUneSociete(['nom' => 'Autre Boutique'])->societe;
+        app(TenantContext::class)->clear();
+        app(TenantContext::class)->poserSociete($autreSociete);
+
+        $this->assertFalse($proprietaire->can('viewAny', User::class));
+        $this->assertFalse($proprietaire->can('view', $autreSociete));
     }
 
     /**
@@ -293,6 +310,23 @@ class ControleDesDroitsTest extends TestCase
             $this->assertFalse($compte->can(PermissionRegistry::FACTURE_VIEW));
             $this->assertFalse($compte->can('viewAny', Facture::class));
         }
+    }
+
+    /**
+     * Même sa caisse restée ouverte, un compte suspendu ne la ferme pas
+     * lui-même : la clôture de la journée la fermera d'office.
+     */
+    public function test_un_compte_suspendu_ne_ferme_pas_sa_caisse_restee_ouverte(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]));
+        $this->assertTrue($vendeur->can('fermer', ClotureCaissePersonnelle::class));
+
+        $vendeur->forceFill(['statut' => StatutCompte::Suspendu])->save();
+
+        $this->assertFalse($vendeur->fresh()->can('fermer', ClotureCaissePersonnelle::class));
     }
 
     /**

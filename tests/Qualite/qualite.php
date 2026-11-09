@@ -13,12 +13,20 @@
  *   php tests/Qualite/qualite.php mutation <infection.json> [<rapport.md>]
  *       Le score de mutation (MSI) de chaque partie sensible dont des
  *       mutants ont été testés, comparé à son seuil : échoue sous le seuil.
+ *       Le rapport liste aussi les mutants non conclus, lus dans le journal
+ *       texte d'Infection rangé à côté (infection.log).
  *   php tests/Qualite/qualite.php seuils <ancien seuils.json>
  *       Aucun seuil ne baisse par rapport à l'ancien fichier, et le niveau
  *       de l'analyse statique de phpstan.neon est celui de seuils.json.
  *   php tests/Qualite/qualite.php sensibles
  *       Les chemins des parties sensibles, un par ligne, à donner à
  *       Infection comme chemins à muter.
+ *   php tests/Qualite/qualite.php configuration-sensibles <destination>
+ *       Écrit la configuration d'Infection (infection.json5) limitée aux
+ *       parties sensibles : tout app/, moins chaque dossier et chaque
+ *       fichier qui n'en est pas. Elle se combine avec --git-diff-lines
+ *       (les seules lignes changées, comme la CI), qui ne se combine avec
+ *       aucun autre filtre des fichiers.
  *   php tests/Qualite/qualite.php sensibles-changes <commit de base>
  *       Les fichiers des parties sensibles ajoutés ou modifiés depuis ce
  *       commit, un par ligne (rien quand aucun ne l'est) : ceux dont la CI
@@ -32,7 +40,7 @@
  * Code de sortie : 0 si tout tient, 1 sinon.
  */
 
-const RACINE = __DIR__.'/../..';
+define('RACINE', (string) realpath(__DIR__.'/../..'));
 
 /**
  * @return array{analyse_statique: array{niveau: int}, couverture: array<string, float>, mutation: array<string, float>}
@@ -186,41 +194,98 @@ function nouveauCode(string $clover, string $base): int
     return 1;
 }
 
+/**
+ * Les mutants non conclus, que le journal JSON d'Infection ne fait que
+ * compter : lus dans la section « Skipped mutants » de son journal texte
+ * (infection.log, à côté de infection.json, voir infection.json5), quand il
+ * existe.
+ *
+ * @return list<array{string, int, string}> fichier, ligne, mutateur
+ */
+function mutantsNonConclus(string $journalTexte): array
+{
+    if (! is_file($journalTexte)) {
+        return [];
+    }
+
+    $morceaux = [];
+
+    // Un journal par passage d'Infection ; des passages mis bout à bout
+    // (une partie lancée en plusieurs morceaux) ont chacun leur section.
+    foreach (array_slice(preg_split('/^Skipped mutants:$/m', (string) file_get_contents($journalTexte)) ?: [], 1) as $section) {
+        preg_match_all('/^\d+\) (\S+):(\d+)\s+\[M\] (\S+)/m', preg_split('/^\S[^\n]* mutants:$/m', $section)[0] ?? '', $trouves, PREG_SET_ORDER);
+        $morceaux = [...$morceaux, ...$trouves];
+    }
+
+    return array_map(fn (array $morceau): array => [$morceau[1], (int) $morceau[2], $morceau[3]], $morceaux);
+}
+
 function mutation(string $journal, ?string $rapport): int
 {
     $donnees = json_decode((string) file_get_contents($journal), true, flags: JSON_THROW_ON_ERROR);
+    $sansTest = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => preg_match('/Test file ".*" not found/', (string) ($mutant['processOutput'] ?? '')) === 1);
+
+    if ($sansTest !== []) {
+        echo count($sansTest)." mutants comptés comme tués n'ont lancé aucun test : Infection n'a pas trouvé leurs fichiers dans le rapport JUnit. Ce rapport doit venir de paratest (PHPUnit), pas de php artisan test (Pest) : voir README.\n";
+
+        return 1;
+    }
+
+    $testsPasses = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => str_contains((string) ($mutant['processOutput'] ?? ''), '"result":"passed"'));
+
+    if ($testsPasses !== []) {
+        echo count($testsPasses)." mutants comptés comme tués ont pourtant passé tous leurs tests : PHPUnit a écrit son résumé pour un agent de code (variables AI_AGENT, CLAUDECODE ou CLAUDE_CODE), qu'Infection ne lit pas. Relancez Infection sans elles (env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE) : voir README.\n";
+
+        return 1;
+    }
+
     $parParties = [];
-    $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'tues', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
+    $etats = ['killed' => 'tues', 'escaped' => 'survivants', 'timeouted' => 'delais', 'errored' => 'tues', 'syntaxErrors' => 'tues', 'uncovered' => 'non_couverts'];
+    $mutants = [];
 
     foreach ($etats as $cle => $etat) {
         foreach ($donnees[$cle] ?? [] as $mutant) {
-            $fichier = $mutant['mutator']['originalFilePath'];
-            $partie = partieDe($fichier);
-            $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
+            $mutants[] = [$etat, $mutant['mutator']['originalFilePath'], $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']];
+        }
+    }
 
-            if ($etat !== 'tues') {
-                $parParties[$partie]['liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']);
-            }
+    foreach (mutantsNonConclus((string) preg_replace('/\.json$/', '.log', $journal)) as $mutant) {
+        $mutants[] = ['non_conclus', ...$mutant];
+    }
+
+    foreach ($mutants as [$etat, $fichier, $ligne, $mutateur]) {
+        $partie = partieDe($fichier);
+        $parParties[$partie][$etat] = ($parParties[$partie][$etat] ?? 0) + 1;
+
+        if (! in_array($etat, ['tues', 'delais'], true)) {
+            $parParties[$partie][$etat === 'non_conclus' ? 'non_conclus_liste' : 'liste'][] = sprintf('%s:%d %s', substr($fichier, (int) strpos($fichier, 'app/')), $ligne, $mutateur);
         }
     }
 
     ksort($parParties);
     $seuils = seuils()['mutation'];
     $echec = false;
-    $texte = "# Score de mutation (MSI) par partie\n\n| Partie | Tués | Survivants | Non couverts | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|\n";
+    $texte = "# Score de mutation (MSI) par partie\n\n"
+        ."Un mutant dont les tests dépassent le délai d'Infection compte, comme Infection le compte, parmi ceux qu'un test arrête ; la colonne « dont délai dépassé » les montre à part. "
+        ."Un mutant « non conclu » est celui dont les tests, tous plus longs que ce délai, n'ont pas fini : Infection l'écarte du score, comme ici, et la liste le montre pour qu'un test plus court le tranche.\n\n"
+        ."| Partie | Arrêtés | dont délai dépassé | Survivants | Non couverts | Non conclus | MSI | Seuil |\n|---|---:|---:|---:|---:|---:|---:|---:|\n";
 
     foreach ($parParties as $partie => $mesure) {
-        $tues = $mesure['tues'] ?? 0;
+        $tues = ($mesure['tues'] ?? 0) + ($mesure['delais'] ?? 0);
         $total = $tues + ($mesure['survivants'] ?? 0) + ($mesure['non_couverts'] ?? 0);
         $msi = pourcentage($tues, $total);
         $seuil = $seuils[$partie] ?? null;
         $echec = $echec || ($seuil !== null && $msi < $seuil);
-        $texte .= sprintf("| %s | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
+        $texte .= sprintf("| %s | %d | %d | %d | %d | %d | %.1f %% | %s |\n", $partie, $tues, $mesure['delais'] ?? 0, $mesure['survivants'] ?? 0, $mesure['non_couverts'] ?? 0, $mesure['non_conclus'] ?? 0, $msi, $seuil === null ? '—' : sprintf('%.1f %%', $seuil));
     }
 
     foreach ($parParties as $partie => $mesure) {
         if (($mesure['liste'] ?? []) !== []) {
             $texte .= "\n## {$partie} : mutants qu'aucun test n'arrête\n\n- ".implode("\n- ", $mesure['liste'])."\n";
+        }
+
+        if (($mesure['non_conclus_liste'] ?? []) !== []) {
+            $texte .= "\n## {$partie} : mutants non conclus\n\n- ".implode("\n- ", $mesure['non_conclus_liste'])."\n";
         }
     }
 
@@ -271,10 +336,12 @@ function seuilsQuiMontent(string $ancien): int
 /**
  * Les parties sensibles, dont Infection teste les mutants (décision de
  * l'éditeur du 01/11/2026, point 2) : les calculs des ventes et des
- * achats, la caisse sécurisée (registre et clôtures), les droits et
- * l'isolation.
+ * achats, les droits et l'isolation. Ceux de la caisse sécurisée, du
+ * registre et des clôtures se testeront à l'étape 3 de la feuille de
+ * route, où ce code sera terminé (décision de l'éditeur du 09/11/2026,
+ * « caisse à l'étape 3 ») ; sa couverture garde son seuil.
  */
-const PARTIES_SENSIBLES = ['calculs', 'caisse_securisee', 'droits_et_isolation'];
+const PARTIES_SENSIBLES = ['calculs', 'droits_et_isolation'];
 
 function sensibles(): int
 {
@@ -286,6 +353,70 @@ function sensibles(): int
     }
 
     echo implode("\n", $chemins), "\n";
+
+    return 0;
+}
+
+/**
+ * Les exclusions, relatives à app/, qui ne laissent à Infection que les
+ * fichiers des parties sensibles : un dossier sans aucun fichier sensible
+ * s'exclut entier, un fichier non sensible d'un dossier qui en a s'exclut
+ * seul ; chacune est une expression ancrée sur le chemin entier.
+ *
+ * @return list<string>
+ */
+function exclusionsHorsDesPartiesSensibles(string $dossier = ''): array
+{
+    $exclusions = [];
+
+    foreach (scandir(RACINE.'/app/'.$dossier) ?: [] as $entree) {
+        if ($entree === '.' || $entree === '..') {
+            continue;
+        }
+
+        $relatif = $dossier.$entree;
+
+        if (is_dir(RACINE.'/app/'.$relatif)) {
+            $sensibles = array_filter(
+                array_map(fn (string $fichier): string => substr($fichier, strlen(RACINE) + 1), glob_recursif(RACINE.'/app/'.$relatif)),
+                fn (string $fichier): bool => in_array(partieDe($fichier), PARTIES_SENSIBLES, true),
+            );
+            $exclusions = $sensibles === []
+                ? [...$exclusions, '#^'.preg_quote($relatif.'/', '#').'#']
+                : [...$exclusions, ...exclusionsHorsDesPartiesSensibles($relatif.'/')];
+        } elseif (! in_array(partieDe('app/'.$relatif), PARTIES_SENSIBLES, true)) {
+            $exclusions[] = '#^'.preg_quote($relatif, '#').'$#';
+        }
+    }
+
+    return $exclusions;
+}
+
+/**
+ * @return list<string> les fichiers PHP sous ce dossier, chemins absolus
+ */
+function glob_recursif(string $dossier): array
+{
+    $fichiers = [];
+
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS)) as $fichier) {
+        if ($fichier->isFile() && str_ends_with($fichier->getFilename(), '.php')) {
+            $fichiers[] = $fichier->getPathname();
+        }
+    }
+
+    return $fichiers;
+}
+
+function configurationSensibles(string $destination): int
+{
+    $configuration = json_decode((string) preg_replace('#^\s*//.*$#m', '', (string) file_get_contents(RACINE.'/infection.json5')), true, flags: JSON_THROW_ON_ERROR);
+    $configuration['$schema'] = RACINE.'/vendor/infection/infection/resources/schema.json';
+    $configuration['source'] = ['directories' => [RACINE.'/app'], 'excludes' => exclusionsHorsDesPartiesSensibles()];
+    $configuration['tmpDir'] = RACINE.'/'.$configuration['tmpDir'];
+    $configuration['logs'] = array_map(fn (string $journal): string => RACINE.'/'.$journal, $configuration['logs']);
+    $configuration['phpUnit'] = ['configDir' => RACINE];
+    file_put_contents($destination, json_encode($configuration, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n");
 
     return 0;
 }
@@ -341,9 +472,10 @@ exit(match ($argv[1] ?? null) {
     'seuils' => seuilsQuiMontent($argv[2]),
     'sensibles' => sensibles(),
     'sensibles-changes' => sensiblesChanges($argv[2]),
+    'configuration-sensibles' => configurationSensibles($argv[2]),
     'flux' => flux($argv[2]),
     default => (function (): int {
-        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|flux ...\n");
+        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux ...\n");
 
         return 2;
     })(),

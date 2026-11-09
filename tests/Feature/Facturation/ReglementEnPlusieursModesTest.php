@@ -387,6 +387,8 @@ class ReglementEnPlusieursModesTest extends TestCase
             'même mode deux fois' => [fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 100), new PartDeReglement(ModePaiement::Especes, 100)]), 'Chaque mode ne règle qu\'une part du règlement.'],
             'même bon deux fois' => [fn () => new ReglementComptant([], ['AV-MABOUT-2026-000001', ' av-mabout-2026-000001 ']), PartDeReglement::BON_EN_DOUBLE],
             'prélèvement à la caisse' => [fn () => new ReglementComptant([new PartDeReglement(ModePaiement::Prelevement, 100)]), 'Le prélèvement ne règle pas une vente à la caisse.'],
+            'référence trop longue' => [fn () => new PartDeReglement(ModePaiement::Cheque, 100, str_repeat('7', PartDeReglement::LONGUEUR_DE_LA_REFERENCE + 1)), 'La référence d\'une part ne dépasse pas '.PartDeReglement::LONGUEUR_DE_LA_REFERENCE.' caractères.'],
+            'bon sans numéro' => [fn () => new ReglementComptant([], ['AV-MABOUT-2026-000001', '  ']), 'Saisissez le n° de chaque bon d\'avoir présenté.'],
         ];
     }
 

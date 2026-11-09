@@ -130,6 +130,26 @@ class HorodatageEnUtcTest extends TestCase
     }
 
     /**
+     * Un texte lu en base n'est un instant que sous la forme exacte
+     * « AAAA-MM-JJ HH:MM:SS », à une date et une heure qui existent :
+     * aucun autre format ni aucun débordement n'est corrigé en silence.
+     * Relu, il est cet instant exact, à la seconde pleine, sans rien de
+     * l'heure de la lecture.
+     */
+    public function test_un_texte_lu_en_base_qui_n_est_pas_un_instant_exact_est_refuse(): void
+    {
+        $instant = self::enUtc('2026-10-09 08:00:00');
+        $enBase = Instant::enBase($instant);
+
+        $this->assertSame($enBase, Instant::enBase(Instant::depuisLaBase($enBase)));
+        $this->assertTrue(Instant::depuisLaBase($enBase)->equalTo($instant));
+
+        foreach ([$instant->format('Y-m-d\\TH:i:s\\Z'), $instant->format('Y-m-d H:i'), str_replace('10-09', '02-30', $enBase), str_replace('08:00:00', '24:00:00', $enBase), ''] as $texte) {
+            $this->assertThrows(fn () => Instant::depuisLaBase($texte), InvalidArgumentException::class, "« {$texte} » n'est pas un instant en base « AAAA-MM-JJ HH:MM:SS ».");
+        }
+    }
+
+    /**
      * Un jour civil s'écrit et se relit tel quel, « AAAA-MM-JJ », sur les
      * deux moteurs ; un objet date, qui porte une heure et un fuseau, est
      * refusé.

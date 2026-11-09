@@ -3,7 +3,9 @@
 namespace App\Domain\Calendrier\Casts;
 
 use Carbon\CarbonImmutable;
+use DateTimeImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
@@ -37,19 +39,23 @@ final class Instant implements CastsAttributes
 
     /**
      * L'instant d'un texte lu en base hors d'un modèle (un agrégat, une
-     * lecture par DB::table()), en UTC.
+     * lecture par DB::table()), en UTC. Tout autre texte que
+     * « AAAA-MM-JJ HH:MM:SS » à une date et une heure qui existent est
+     * refusé, jamais corrigé : la lecture native, qui ne lève rien, rend
+     * faux sur un texte illisible, et le format relu écarte un débordement
+     * (« 2026-02-30 »).
      *
      * @throws InvalidArgumentException
      */
     public static function depuisLaBase(string $texte): CarbonImmutable
     {
-        $instant = CarbonImmutable::createFromFormat('!'.self::FORMAT, $texte, 'UTC');
+        $instant = DateTimeImmutable::createFromFormat('!'.self::FORMAT, $texte, new DateTimeZone('UTC'));
 
-        if (! $instant instanceof CarbonImmutable || $instant->format(self::FORMAT) !== $texte) {
+        if ($instant === false || $instant->format(self::FORMAT) !== $texte) {
             throw new InvalidArgumentException("« {$texte} » n'est pas un instant en base « AAAA-MM-JJ HH:MM:SS ».");
         }
 
-        return $instant;
+        return CarbonImmutable::instance($instant);
     }
 
     public function get(Model $model, string $key, mixed $value, array $attributes): ?CarbonImmutable

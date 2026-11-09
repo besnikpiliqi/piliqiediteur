@@ -130,13 +130,15 @@ class AccesDesCabinets
     }
 
     /**
-     * Ce compte ouvre-t-il ce magasin : un magasin réel d'un client que lui
-     * ouvrent ses liens (voir liensOuverts()) ?
+     * Les sociétés clientes que lui ouvrent ses liens (voir liensOuverts()),
+     * par identifiant : il ouvre leurs magasins réels (voir
+     * User::peutOuvrir()).
+     *
+     * @return list<int>
      */
-    public function ouvre(User $compte, Magasin $magasin): bool
+    public function clientsOuverts(User $compte): array
     {
-        return ! $magasin->est_demonstration
-            && $this->liensOuverts($compte)->where('liens_cabinet.societe_id', $magasin->societe_id)->exists();
+        return array_map(intval(...), $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all());
     }
 
     /**
@@ -162,37 +164,46 @@ class AccesDesCabinets
     }
 
     /**
-     * Les autorisations que le compte tient dans ce magasin, sans regarder
-     * l'état du cabinet : celles que le client accorde au cabinet par le
-     * lien actif, croisées avec celles qu'un cabinet peut recevoir d'un
-     * client de ce type (voir PermissionRegistry::duCabinet()), triées ;
-     * null hors d'un magasin réel, pour un compte retiré, ou sans lien
-     * actif confié.
+     * Les autorisations que le compte tient chez chaque client de ses liens
+     * (voir liensDuCompte()), sans regarder l'état du cabinet : celles que
+     * le client accorde au cabinet par le lien actif, croisées avec celles
+     * qu'un cabinet peut recevoir d'un client de ce type (voir
+     * PermissionRegistry::duCabinet()), triées, par identifiant de la
+     * société cliente ; elles valent dans chacun de ses magasins réels.
+     * Aucun client pour un compte retiré ou sans lien actif confié. Trois
+     * lectures quel que soit le nombre de clients, chacune filtrée par les
+     * liens du compte.
      *
-     * @return list<string>|null
+     * @return array<int, list<string>>
      */
-    public function autorisationsEnregistrees(User $compte, Magasin $magasin): ?array
+    public function autorisationsParClient(User $compte): array
     {
-        if ($magasin->est_demonstration) {
-            return null;
+        $liens = $this->liensDuCompte($compte)->get(['liens_cabinet.id', 'liens_cabinet.societe_id']);
+
+        if ($liens->isEmpty()) {
+            return [];
         }
 
-        $lien = $this->liensDuCompte($compte)->where('liens_cabinet.societe_id', $magasin->societe_id)->first(['liens_cabinet.id', 'liens_cabinet.societe_id']);
-
-        if ($lien === null) {
-            return null;
-        }
-
+        $clients = array_map(intval(...), $liens->pluck('societe_id')->all());
         $accordees = DB::table('autorisations_cabinet')
-            ->where('societe_id', $magasin->societe_id)
-            ->where('lien_id', $lien->getKey())
+            ->whereIn('societe_id', $clients)
+            ->whereIn('lien_id', $liens->modelKeys())
             ->orderBy('autorisation')
-            ->pluck('autorisation')
-            ->all();
-        $retenues = array_values(array_intersect($accordees, PermissionRegistry::duCabinet(Societe::query()->findOrFail($magasin->societe_id)->type_activite)));
-        sort($retenues);
+            ->get(['lien_id', 'autorisation'])
+            ->groupBy('lien_id');
+        $types = Societe::query()->whereKey($clients)->get(['id', 'type_activite'])->keyBy('id');
+        $parClient = [];
 
-        return $retenues;
+        foreach ($liens as $lien) {
+            $retenues = array_values(array_intersect(
+                $accordees->get($lien->getKey(), collect())->pluck('autorisation')->all(),
+                PermissionRegistry::duCabinet($types->get($lien->societe_id)->type_activite),
+            ));
+            sort($retenues);
+            $parClient[(int) $lien->societe_id] = $retenues;
+        }
+
+        return $parClient;
     }
 
     /**

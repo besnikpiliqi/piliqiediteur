@@ -121,8 +121,9 @@ class VerificationOrdreTest extends TestCase
     /**
      * Seul le propriétaire du cabinet fait vérifier son inscription : ni un
      * collaborateur, qui voit la page sans le bouton et dont l'action
-     * forgée ne se monte pas, ni le propriétaire d'une autre société, ni un
-     * propriétaire suspendu ; une inscription vérifiée ne se redemande pas.
+     * forgée ne se monte pas, ni le propriétaire d'une autre société ou d'un
+     * autre cabinet, ni un propriétaire suspendu ; une inscription vérifiée
+     * ne se redemande pas.
      */
     public function test_seul_le_proprietaire_du_cabinet_demande_la_verification_de_l_ordre(): void
     {
@@ -137,9 +138,14 @@ class VerificationOrdreTest extends TestCase
         app(TenantContext::class)->clear();
 
         $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($autre, $cabinet, self::DONNEES), AuthorizationException::class, VerifierLOrdreAction::MESSAGE_PROPRIETAIRE_SEUL);
+        $proprietaireDUnAutreCabinet = $this->proprietaireDuCabinet($this->ouvrirUnCabinet(SocieteFactory::sirenFictif(), 'Hélène Roux'));
+        app(TenantContext::class)->clear();
+        $this->assertFalse($proprietaireDUnAutreCabinet->can('verifierLOrdre', $cabinet->cabinet()->sole()));
+        $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($proprietaireDUnAutreCabinet, $cabinet, self::DONNEES), AuthorizationException::class, VerifierLOrdreAction::MESSAGE_PROPRIETAIRE_SEUL);
 
         $proprietaire = $this->proprietaireDuCabinet($cabinet);
         $proprietaire->forceFill(['statut' => StatutCompte::Suspendu])->save();
+        $this->assertFalse($proprietaire->can('verifierLOrdre', $cabinet->cabinet()->sole()));
         $this->assertThrows(fn () => app(VerifierLOrdreAction::class)->handle($proprietaire, $cabinet, self::DONNEES), AuthorizationException::class);
         $this->assertNull($cabinet->cabinet()->sole()->ordre_verifie_le);
 

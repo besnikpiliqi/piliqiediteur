@@ -3,6 +3,8 @@
 namespace Tests\Feature\Cabinets;
 
 use App\Domain\Cabinets\Actions\ConfierDesClientsAction;
+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+use App\Domain\Cabinets\Actions\InviterUneEntrepriseAction;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
 use App\Domain\Cabinets\Models\ClientConfie;
@@ -12,6 +14,7 @@ use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -27,6 +30,7 @@ use Filament\Pages\Dashboard;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Livewire;
 use LogicException;
@@ -248,6 +252,82 @@ class IsolationDesCabinetsTest extends TestCase
             $this->get(InvitationsEtDemandes::getUrl(panel: 'cabinet', tenant: $this->c1))->assertForbidden();
             $this->assertFalse($collaborateur->can('viewAny', InvitationCabinet::class));
             $this->assertFalse($collaborateur->can('view', $invitation));
+            $this->assertFalse($collaborateur->can('retirer', $invitation));
         }
+    }
+
+    /**
+     * Une invitation ouverte se voit et se retire par le propriétaire de son
+     * cabinet, jamais par celui d'un autre cabinet.
+     */
+    public function test_seul_le_proprietaire_du_cabinet_voit_et_retire_ses_invitations(): void
+    {
+        $this->inviterUneEntreprise($this->c1, SocieteFactory::sirenFictif(), 'a@b.test');
+        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->c1->id)->sole();
+        $proprietaire = $this->proprietaireDuCabinet($this->c1);
+        $autreProprietaire = $this->proprietaireDuCabinet($this->c2);
+
+        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
+        $this->assertSame([true, true], [$proprietaire->can('view', $invitation), $proprietaire->can('retirer', $invitation)]);
+
+        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
+        $this->assertSame([false, false], [$autreProprietaire->can('view', $invitation), $autreProprietaire->can('retirer', $invitation)]);
+    }
+
+    /**
+     * Les liens et les demandes d'un cabinet (voir, accepter, retirer,
+     * mettre fin) restent aux gestes de son propriétaire actif : jamais le
+     * propriétaire d'un autre cabinet, ni le sien une fois suspendu.
+     */
+    public function test_un_autre_cabinet_ou_un_proprietaire_suspendu_n_agit_sur_aucun_lien_du_cabinet(): void
+    {
+        $designant = $this->ouvrirUneSociete(['nom' => 'W', 'raison_sociale' => 'CLIENTE W']);
+        $invitee = $this->ouvrirUneSociete(['nom' => 'V', 'raison_sociale' => 'CLIENTE V']);
+        app(TenantContext::class)->clear();
+        Mail::fake();
+        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($designant), $designant->societe, $this->c1);
+        $this->demanderLeRattachement($this->c1, $invitee->societe, 'v@b.test');
+        $demandeDuCabinet = LienCabinet::query()->withoutGlobalScopes()->where('cabinet_id', $this->c1->id)->where('societe_id', $invitee->societe_id)->sole();
+        $proprietaire = $this->proprietaireDuCabinet($this->c1);
+        $autreProprietaire = $this->proprietaireDuCabinet($this->c2);
+        $gestes = fn (User $compte): array => array_map(
+            fn (LienCabinet $lien): array => [$compte->can('view', $lien), $compte->can('accepter', $lien), $compte->can('retirer', $lien), $compte->can('mettreFin', $lien)],
+            ['désignation du client' => $designation, 'demande du cabinet' => $demandeDuCabinet, 'lien actif' => $this->lienY],
+        );
+        $aucun = ['désignation du client' => [false, false, false, false], 'demande du cabinet' => [false, false, false, false], 'lien actif' => [false, false, false, false]];
+
+        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
+        $this->assertSame([
+            'désignation du client' => [true, true, false, false],
+            'demande du cabinet' => [true, false, true, false],
+            'lien actif' => [true, false, false, true],
+        ], $gestes($proprietaire));
+
+        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
+        $this->assertSame($aucun, $gestes($autreProprietaire));
+
+        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
+        $proprietaire->forceFill(['statut' => StatutCompte::Suspendu])->save();
+        $this->assertSame($aucun, $gestes($proprietaire->fresh()));
+    }
+
+    /**
+     * Le propriétaire d'un cabinet n'invite qu'au nom de son cabinet,
+     * jamais au nom d'un autre : rien ne part et aucune invitation ne naît.
+     */
+    public function test_le_proprietaire_d_un_cabinet_n_invite_jamais_au_nom_d_un_autre_cabinet(): void
+    {
+        Mail::fake();
+        $autreProprietaire = $this->proprietaireDuCabinet($this->c2);
+        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
+
+        $this->assertSame([true, false], [$autreProprietaire->can('create', [InvitationCabinet::class, $this->c2]), $autreProprietaire->can('create', [InvitationCabinet::class, $this->c1])]);
+        $this->assertThrows(
+            fn () => app(InviterUneEntrepriseAction::class)->handle($autreProprietaire, $this->c1, SocieteFactory::sirenFictif(), 'a@b.test', self::MOT_DE_PASSE_CHOISI),
+            AuthorizationException::class,
+            InviterUneEntrepriseAction::MESSAGE_PROPRIETAIRE_SEUL,
+        );
+        $this->assertSame(0, InvitationCabinet::query()->withoutGlobalScopes()->count());
+        Mail::assertNothingSent();
     }
 }

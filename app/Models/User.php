@@ -128,6 +128,44 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     private array $autorisationsParMagasin = [];
 
+    /**
+     * Pour un compte d'un cabinet d'expertise comptable, les sociétés
+     * clientes que lui ouvrent ses liens (voir peutOuvrir()), lues une fois
+     * par instance, comme ses autorisations : oubliées à chaque écriture de
+     * droits, à chaque refresh() et à la fin de chaque requête (voir
+     * AppServiceProvider), la fin d'un lien fermant l'accès dès la requête
+     * suivante.
+     *
+     * @var list<int>|null
+     */
+    private ?array $clientsOuverts = null;
+
+    /**
+     * Pour un compte d'un cabinet, les autorisations que chaque client lui
+     * accorde (voir AccesDesCabinets::autorisationsParClient()), lues une
+     * fois par instance et oubliées de même.
+     *
+     * @var array<int, list<string>>|null
+     */
+    private ?array $autorisationsParClient = null;
+
+    /**
+     * Ses affectations, lues une fois par instance pour les écrans (voir
+     * affectationQuiVautDans()), et les autorisations cochées de chacune
+     * (voir autorisationsEnregistreesDans()) : un administrateur de tous
+     * les magasins a la même affectation dans chacun, et une page qui
+     * parcourt les magasins de sa portée ne la relit pas pour chacun.
+     * Oubliées avec ses autorisations.
+     *
+     * @var Collection<int, Affectation>|null
+     */
+    private ?Collection $affectationsLues = null;
+
+    /**
+     * @var array<int, list<string>>
+     */
+    private array $autorisationsParAffectation = [];
+
     protected function casts(): array
     {
         return [
@@ -673,6 +711,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function oublierLesDroits(): void
     {
         $this->autorisationsParMagasin = [];
+        $this->clientsOuverts = null;
+        $this->autorisationsParClient = null;
+        $this->affectationsLues = null;
+        $this->autorisationsParAffectation = [];
         $this->unsetRelation('societe');
     }
 
@@ -734,9 +776,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return null;
         }
 
-        return $this->affectationsDAdministrateur()
-            ->where(fn (Builder $affectations) => $affectations->where('magasin_id', $magasin->getKey())->orWhereNull('magasin_id'))
-            ->first();
+        return $this->affectationsLues()->first(fn (Affectation $affectation): bool => $affectation->role === null
+            && ($affectation->magasin_id === null || (int) $affectation->magasin_id === (int) $magasin->getKey()));
     }
 
     /**
@@ -762,7 +803,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * - un compte d'un cabinet d'expertise comptable, dans un magasin réel
      *   d'un client lié que son cabinet lui ouvre (son propriétaire, ou un
      *   collaborateur à qui ce client est confié) : celles que le client
-     *   accorde au cabinet (voir AccesDesCabinets::autorisationsEnregistrees()),
+     *   accorde au cabinet (voir AccesDesCabinets::autorisationsParClient()),
      *   sans regarder si le cabinet est vérifié, ce que contrôlent
      *   peutOuvrir() et ControleDesDroits, comme la lecture seule ;
      * - le propriétaire : toutes sauf celles de la vente (voir
@@ -782,7 +823,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
     {
         if ($this->estDUnCabinet()) {
-            return app(AccesDesCabinets::class)->autorisationsEnregistrees($this, $magasin);
+            return $magasin->est_demonstration ? null : ($this->autorisationsParClient ??= app(AccesDesCabinets::class)->autorisationsParClient($this))[(int) $magasin->societe_id] ?? null;
         }
 
         $duType = PermissionRegistry::pourLeType($magasin->societe->type_activite);
@@ -793,14 +834,15 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
         $affectation = $this->affectationQuiVautDans($magasin);
 
-        return match (true) {
-            $affectation === null => null,
-            $affectation->role !== RoleMagasin::Responsable => self::trieesDans($affectation->autorisations(), $duType),
-            default => self::trieesDans([
-                ...array_diff($duType, PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite)),
-                ...$affectation->autorisations(),
-            ], $duType),
-        };
+        if ($affectation === null) {
+            return null;
+        }
+
+        $cochees = $this->autorisationsParAffectation[$affectation->getKey()] ??= $affectation->autorisations();
+
+        return $affectation->role !== RoleMagasin::Responsable
+            ? self::trieesDans($cochees, $duType)
+            : self::trieesDans([...array_diff($duType, PermissionRegistry::cocheesParLeProprietaire($magasin->societe->type_activite)), ...$cochees], $duType);
     }
 
     /**
@@ -836,8 +878,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     private function aDesAffectationsDesDeuxSortes(): bool
     {
-        return $this->affectations()->whereNull('magasin_id')->exists()
-            && $this->affectations()->whereNotNull('magasin_id')->exists();
+        return $this->affectationsLues()->whereNull('magasin_id')->isNotEmpty()
+            && $this->affectationsLues()->whereNotNull('magasin_id')->isNotEmpty();
+    }
+
+    /**
+     * @return Collection<int, Affectation>
+     */
+    private function affectationsLues(): Collection
+    {
+        return $this->affectationsLues ??= $this->affectations()->orderBy('id')->get();
     }
 
     /**
@@ -855,7 +905,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * Peut-il ouvrir ce magasin ? Avec un compte qui peut agir (voir
      * peutAgir()), un compte d'un cabinet d'expertise comptable vérifié
      * ouvre les magasins réels d'un client lié qui lui est ouvert (voir
-     * AccesDesCabinets::ouvre()) ; tout autre compte, un magasin de sa
+     * AccesDesCabinets::clientsOuverts()) ; tout autre compte, un magasin de sa
      * société : le propriétaire ouvre tous ceux de sa société ; tout autre
      * compte, ceux où une affectation lui donne des droits (voir
      * affectationQuiVautDans()).
@@ -863,7 +913,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function peutOuvrir(Magasin $magasin): bool
     {
         if ($this->estDUnCabinet()) {
-            return $this->peutAgir() && app(AccesDesCabinets::class)->ouvre($this, $magasin);
+            return $this->peutAgir()
+                && ! $magasin->est_demonstration
+                && in_array((int) $magasin->societe_id, $this->clientsOuverts ??= app(AccesDesCabinets::class)->clientsOuverts($this), true);
         }
 
         if ((int) $magasin->societe_id !== (int) $this->societe_id || ! $this->peutAgir()) {

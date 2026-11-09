@@ -78,6 +78,7 @@ class MembrePolicyTest extends TestCase
         app(TenantContext::class)->poserSociete($magasin->societe);
 
         $this->assertTrue($autorise->can('viewAny', User::class));
+        $this->assertTrue($autorise->can('create', User::class));
         $this->assertTrue($autorise->can('view', $responsable));
         $this->assertTrue($autorise->can('update', $responsable));
         $this->assertTrue($autorise->can('retirerDeLaSociete', $responsable));
@@ -89,14 +90,51 @@ class MembrePolicyTest extends TestCase
         }
 
         $this->assertFalse($sansAutorisation->can('viewAny', User::class));
+        $this->assertFalse($sansAutorisation->can('create', User::class));
         $this->assertFalse($sansAutorisation->can('view', $responsable));
         $this->assertFalse($sansAutorisation->can('view', $responsableAilleurs));
     }
 
     /**
-     * Créer, modifier, suspendre, retirer un administrateur : le
-     * propriétaire seul. Un administrateur, même de tous les magasins et
-     * autorisé à tout, ni un responsable ne les créent ni ne les gèrent.
+     * Un administrateur autorisé à la fois à nommer les responsables et à
+     * redonner l'accès voit aussi les vendeurs de sa portée, mais ne gère
+     * que le compte d'un responsable : d'un vendeur, il ne fait que
+     * redonner l'accès.
+     */
+    public function test_un_administrateur_qui_redonne_l_acces_d_un_vendeur_ne_gere_pas_son_compte(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER, AutorisationsSociete::ACCES_REDONNER]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $responsable = $this->responsable($magasin);
+        app(TenantContext::class)->clear();
+        app(TenantContext::class)->poserSociete($magasin->societe);
+
+        $this->assertSame([true, true, false], [$administrateur->can('view', $vendeur), $administrateur->can('redonnerLAcces', $vendeur), $administrateur->can('update', $vendeur)]);
+        $this->assertTrue($administrateur->can('update', $responsable));
+    }
+
+    /**
+     * Le propriétaire ne voit ni ne gère aucun compte d'une autre société.
+     */
+    public function test_le_proprietaire_ne_voit_ni_ne_gere_un_compte_d_une_autre_societe(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeurDAilleurs = $this->membre($this->ouvrirUneSociete(['nom' => 'Boutique d\'une autre société']), RoleMagasin::Vendeur);
+        $proprietaire = $this->proprietaireDe($magasin);
+        app(TenantContext::class)->clear();
+        app(TenantContext::class)->poserSociete($magasin->societe);
+
+        foreach (['view', 'update', 'suspendreOuReactiver', 'retirerDeLaSociete', 'redonnerLAcces'] as $geste) {
+            $this->assertFalse($proprietaire->can($geste, $vendeurDAilleurs), $geste);
+        }
+    }
+
+    /**
+     * Créer, modifier, suspendre, retirer un administrateur, lui transmettre
+     * la propriété : le propriétaire seul. Un administrateur, même de tous
+     * les magasins et autorisé à tout, ni un responsable ne les créent ni ne
+     * les gèrent.
      */
     public function test_seul_le_proprietaire_cree_et_gere_les_administrateurs(): void
     {
@@ -110,11 +148,13 @@ class MembrePolicyTest extends TestCase
 
         $this->assertTrue($proprietaire->can('creerUnAdministrateur', User::class));
         $this->assertTrue($proprietaire->can('modifierUnAdministrateur', $autreAdministrateur));
+        $this->assertTrue($proprietaire->can('transmettreLaPropriete', $autreAdministrateur));
 
         foreach ([$administrateur, $responsable] as $compte) {
             $this->assertFalse($compte->can('creerUnAdministrateur', User::class), $compte->name);
             $this->assertFalse($compte->can('modifierUnAdministrateur', $autreAdministrateur), $compte->name);
             $this->assertFalse($compte->can('suspendreOuReactiver', $autreAdministrateur), $compte->name);
+            $this->assertFalse($compte->can('transmettreLaPropriete', $autreAdministrateur), $compte->name);
         }
     }
 

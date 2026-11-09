@@ -426,6 +426,24 @@ class RecusDePaiementTest extends TestCase
     }
 
     /**
+     * Le vendeur qui a émis la facture l'envoie, mais ne voit ni n'envoie
+     * le reçu d'un encaissement qu'un autre a fait sur elle, sans « voir
+     * celles de toute l'équipe ».
+     */
+    public function test_le_vendeur_auteur_de_la_facture_n_envoie_pas_le_recu_d_un_encaissement_fait_par_un_autre(): void
+    {
+        $magasin = $this->magasin();
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        app(TenantContext::class)->set($magasin->fresh());
+        $facture = $this->facture(Client::factory()->professionnel()->create(), 100, auteur: $vendeur);
+        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 3000)], auteur: self::responsableDeTest($magasin));
+        $recu = RecuPaiement::query()->sole();
+
+        $this->assertTrue($vendeur->can('envoyer', $facture->fresh()));
+        $this->assertSame([false, false], [$vendeur->can('view', $recu), $vendeur->can('envoyer', $recu)]);
+    }
+
+    /**
      * Sur la fiche de la facture, chaque paiement reçu après l'émission
      * propose son reçu ; le téléchargement donne le PDF du reçu.
      */

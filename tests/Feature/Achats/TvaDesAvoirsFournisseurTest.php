@@ -164,6 +164,22 @@ class TvaDesAvoirsFournisseurTest extends TestCase
     }
 
     /**
+     * La TVA d'un taux auquel l'avoir n'a aucune ligne ne se saisit pas :
+     * rien ne s'enregistre.
+     */
+    public function test_une_tva_ecrite_pour_un_taux_sans_ligne_de_l_avoir_est_refusee(): void
+    {
+        $factureAchat = $this->recevoir(5);
+
+        $this->assertThrows(
+            fn () => $this->retourner($factureAchat, [['quantite' => 1]], MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '5.5', 'montant_tva' => '0.22']]])),
+            InvalidArgumentException::class,
+            'Aucune ligne de la facture n\'est à 5,5 % : sa TVA ne se saisit pas.',
+        );
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+    }
+
+    /**
      * Le brouillon garde ce qu'écrit la note d'avoir (le HT d'une ligne, la
      * TVA d'un taux) ; son émission les retient, et arrête ses montants.
      */

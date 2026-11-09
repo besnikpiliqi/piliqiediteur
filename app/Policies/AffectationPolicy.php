@@ -59,11 +59,7 @@ class AffectationPolicy
             return false;
         }
 
-        $compte = User::query()->find($affectation->user_id);
-
-        if ($compte === null) {
-            return false;
-        }
+        $compte = User::query()->findOrFail($affectation->user_id);
 
         return $affectation->estDeResponsable()
             ? $user->estProprietaire()

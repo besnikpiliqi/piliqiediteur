@@ -9,26 +9,36 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\Societe\Pages\LesCaisses;
+use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Closure;
+use Filament\Pages\Page;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Le nombre de requêtes des pages les plus chargées du magasin (décision
- * de l'éditeur du 01/11/2026, point 5) : le tableau de bord, les listes
- * des ventes, des paiements, des avoirs, des clients, des produits, des
- * factures d'achat et des clôtures, la caisse, et le PDF d'une facture.
- * Chacune lit la base le même nombre de fois avec deux lignes ou huit (une
- * requête par ligne serait une requête « N+1 »), sous un plafond qui ne
- * dépend pas du nombre de lignes.
+ * Le nombre de requêtes des pages les plus chargées (décision de l'éditeur
+ * du 01/11/2026, point 5) : dans le magasin, le tableau de bord, les
+ * listes des ventes, des paiements, des avoirs, des clients, des produits,
+ * des factures d'achat et des clôtures, la caisse, et le PDF d'une
+ * facture ; dans l'espace de la société, le tableau de bord et « Les
+ * caisses » ; dans celui d'un cabinet, le tableau de bord de ses clients.
+ * Chacune lit la base le même nombre de fois avec peu ou beaucoup de
+ * lignes, de magasins ou de clients (une requête par ligne serait une
+ * requête « N+1 »), sous un plafond qui n'en dépend pas.
  */
 class PlafondsDeRequetesTest extends TestCase
 {
@@ -98,6 +108,110 @@ class PlafondsDeRequetesTest extends TestCase
 
         $this->assertSame($requetes[2], $requetes[20], 'Le PDF lit la base une fois de plus par ligne.');
         $this->assertLessThanOrEqual(40, $requetes[20]);
+    }
+
+    /**
+     * @return array<string, array{0: class-string<Page>, 1: int}>
+     */
+    public static function pagesDeLaSociete(): array
+    {
+        return [
+            'tableau de bord de la société' => [TableauDeBord::class, 60],
+            'les caisses de la société' => [LesCaisses::class, 60],
+        ];
+    }
+
+    /**
+     * Dans l'espace de la société, le tableau de bord (chaque magasin, avec
+     * ses factures à encaisser) et « Les caisses » (les relevés et les
+     * caisses encore ouvertes de chaque magasin) lisent la base autant de
+     * fois avec un magasin ou trois, pour le propriétaire comme pour un
+     * administrateur de tous les magasins.
+     *
+     * @param  class-string<Page>  $page
+     */
+    #[DataProvider('pagesDeLaSociete')]
+    public function test_une_page_de_la_societe_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois(string $page, int $plafond): void
+    {
+        $societe = $this->magasin->societe;
+        $comptes = ['propriétaire' => $this->proprietaireDe($this->magasin), 'administrateur' => $this->administrateur($this->magasin)];
+        $adresse = $page::getUrl(panel: 'societe', tenant: $societe);
+        $magasins = [$this->magasin];
+        $requetes = [];
+
+        foreach ([1, 3] as $nombre) {
+            while (count($magasins) < $nombre) {
+                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
+            }
+
+            foreach (array_slice($magasins, $nombre === 1 ? 0 : 1) as $magasin) {
+                $this->remplirLaCaisseEtLesFactures($magasin);
+            }
+
+            foreach ($comptes as $role => $compte) {
+                app(TenantContext::class)->clear();
+                $this->flushSession();
+                $this->actingAs($compte);
+                $this->get($adresse)->assertOk();
+                $requetes[$role][$nombre] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee($magasins[$nombre - 1]->nom));
+            }
+        }
+
+        foreach ($requetes as $role => $parNombre) {
+            $this->assertSame($parNombre[1], $parNombre[3], "La page {$page} lit la base une fois de plus par magasin pour le {$role}.");
+            $this->assertLessThanOrEqual($plafond, $parNombre[3], $role);
+        }
+    }
+
+    /**
+     * Le tableau de bord d'un cabinet d'expertise comptable (chaque client
+     * lié, avec les factures à encaisser de ses magasins) lit la base autant
+     * de fois pour son propriétaire avec un client ou trois.
+     */
+    public function test_le_tableau_de_bord_du_cabinet_lit_la_base_autant_de_fois_avec_un_client_ou_trois(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $adresse = TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet);
+        $clients = [$this->magasin];
+        $this->lierLeCabinet($cabinet, $this->magasin);
+        $this->remplirLaCaisseEtLesFactures($this->magasin);
+        $requetes = [];
+
+        foreach ([1, 3] as $nombre) {
+            while (count($clients) < $nombre) {
+                $client = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Cliente '.count($clients), 'raison_sociale' => 'CLIENTE '.count($clients)]));
+                $this->remplirLaCaisseEtLesFactures($client);
+                $this->lierLeCabinet($cabinet, $client);
+                $clients[] = $client;
+            }
+
+            app(TenantContext::class)->clear();
+            $this->actingAs($proprietaire);
+            $this->get($adresse)->assertOk();
+            $requetes[$nombre] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee($clients[$nombre - 1]->societe()->firstOrFail()->raison_sociale));
+        }
+
+        $this->assertSame($requetes[1], $requetes[3], 'Le tableau de bord du cabinet lit la base une fois de plus par client.');
+        $this->assertLessThanOrEqual(60, $requetes[3]);
+    }
+
+    /**
+     * Dans ce magasin, une facture à encaisser, une vente au comptant dont
+     * la caisse est fermée (un relevé), puis une autre qui la laisse
+     * ouverte.
+     */
+    private function remplirLaCaisseEtLesFactures(Magasin $magasin): void
+    {
+        app(TenantContext::class)->runAs($magasin, function () use ($magasin): void {
+            $responsable = self::responsableDeTest($magasin);
+            $produit = Produit::factory()->create(['prix_vente_ttc' => '12.50', 'taux_tva' => 20, 'suivi_stock' => false]);
+            $client = Client::factory()->professionnel()->create();
+            app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]));
+            self::vendreAuComptant($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]);
+            app(FermerSaCaisseAction::class)->handle($responsable, $responsable);
+            self::vendreAuComptant($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 2]]);
+        });
     }
 
     /**

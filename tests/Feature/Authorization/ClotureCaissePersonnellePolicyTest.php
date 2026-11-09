@@ -5,6 +5,7 @@ namespace Tests\Feature\Authorization;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -44,6 +45,18 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
         $this->assertFalse($collaborateur->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]));
     }
 
+    public function test_un_releve_d_un_autre_magasin_n_est_jamais_visible_meme_avec_la_vue_totale(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable());
+        $contexte = app(TenantContext::class);
+        $releveDAilleurs = $contexte->runAs($autreMagasin, fn (): ClotureCaissePersonnelle => ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $this->membre($autreMagasin, RoleMagasin::Vendeur)->id]));
+
+        $contexte->set($magasin);
+        $this->assertFalse($comptable->can('view', $releveDAilleurs));
+    }
+
     /**
      * R5 : qui peut clôturer la journée (cloture_caisse.gerer) ferme la
      * caisse d'un autre membre ; un vendeur ne ferme que la sienne, et
@@ -61,6 +74,30 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
             $gerant->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]),
             $vendeur->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $autreVendeur]),
             $gerant->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $gerant]),
+        ]);
+    }
+
+    /**
+     * Depuis un magasin, on ne ferme que la caisse d'un compte qui y a des
+     * droits, des ventes ou des encaissements : jamais celle d'un vendeur
+     * d'un autre magasin de la société, ni celle d'un administrateur de
+     * tous les magasins d'une autre société, dont l'affectation vaut pour
+     * chacun des magasins de sa propre société seulement.
+     */
+    public function test_on_ne_ferme_la_caisse_d_un_compte_que_dans_un_magasin_ou_il_tient_sa_caisse(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin);
+        $vendeurDAilleurs = $this->membre($this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']), RoleMagasin::Vendeur);
+        $autreSociete = $this->ouvrirUneSociete(['nom' => 'Boutique d\'une autre société']);
+        $administrateurDAilleurs = $this->administrateur($autreSociete);
+        app(TenantContext::class)->set($magasin);
+        $proprietaire = $this->proprietaireDe($magasin);
+
+        $this->assertSame([true, false, false], [
+            $proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $administrateur]),
+            $proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeurDAilleurs]),
+            $proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $administrateurDAilleurs]),
         ]);
     }
 

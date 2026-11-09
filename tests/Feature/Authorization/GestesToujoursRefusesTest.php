@@ -6,18 +6,24 @@ use App\Models\User;
 use App\Policies\AffectationPolicy;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
+use App\Policies\ClientPolicy;
 use App\Policies\ClotureCaissePersonnellePolicy;
 use App\Policies\ClotureCaissePolicy;
+use App\Policies\DevisPolicy;
+use App\Policies\EnregistrementFiscalPolicy;
 use App\Policies\EntreeAuditPolicy;
 use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
+use App\Policies\FournisseurPolicy;
 use App\Policies\InventaireOuverturePolicy;
 use App\Policies\InvitationCabinetPolicy;
 use App\Policies\MagasinDeLaSocietePolicy;
 use App\Policies\MembrePolicy;
 use App\Policies\PaiementPolicy;
 use App\Policies\PosteReconnuPolicy;
+use App\Policies\ProduitPolicy;
 use App\Policies\RecuPaiementPolicy;
+use App\Policies\ServicePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,7 +37,12 @@ use Tests\TestCase;
  * paiement, une clôture ou un relevé de caisse ne se modifie, ne se
  * supprime, ne se restaure ni ne se duplique ; un magasin et un compte ne
  * se suppriment jamais (CLAUDE.md, « Société ou magasin suspendu, fermé »
- * et « Comptes et équipe ») ; le journal d'audit ne s'écrit pas à la main.
+ * et « Comptes et équipe ») ; une fiche (client, fournisseur, produit,
+ * service) s'archive et ne se supprime jamais pour de bon (« Clients,
+ * produits, fournisseurs ») ; un devis supprimé ne revient pas ; le journal
+ * d'audit et le registre fiscal ne s'écrivent pas à la main ; aucune liste
+ * ne se réordonne à la main. Chaque politique répond elle-même non à
+ * chacun de ces gestes.
  */
 class GestesToujoursRefusesTest extends TestCase
 {
@@ -43,21 +54,27 @@ class GestesToujoursRefusesTest extends TestCase
     public static function gestes(): array
     {
         $gestes = [
-            AffectationPolicy::class => ['update', 'deleteAny', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
+            AffectationPolicy::class => ['update', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
             AvoirFournisseurPolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
             AvoirPolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
+            ClientPolicy::class => ['forceDelete'],
             ClotureCaissePersonnellePolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
             ClotureCaissePolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
-            EntreeAuditPolicy::class => ['create', 'deleteAny'],
+            DevisPolicy::class => ['forceDelete', 'restore'],
+            EnregistrementFiscalPolicy::class => ['create', 'update', 'delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
+            EntreeAuditPolicy::class => ['create', 'update', 'delete', 'deleteAny'],
             FactureAchatPolicy::class => ['forceDelete', 'restore'],
-            FacturePolicy::class => ['restore'],
+            FacturePolicy::class => ['forceDelete', 'restore'],
+            FournisseurPolicy::class => ['forceDelete'],
             InventaireOuverturePolicy::class => ['forceDelete', 'restore'],
             InvitationCabinetPolicy::class => ['delete'],
-            MagasinDeLaSocietePolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
-            MembrePolicy::class => ['deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
-            PaiementPolicy::class => ['delete', 'deleteAny', 'forceDelete', 'restore'],
-            PosteReconnuPolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
+            MagasinDeLaSocietePolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
+            MembrePolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
+            PaiementPolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
+            PosteReconnuPolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
+            ProduitPolicy::class => ['forceDelete'],
             RecuPaiementPolicy::class => ['update', 'delete'],
+            ServicePolicy::class => ['delete'],
         ];
         $cas = [];
 

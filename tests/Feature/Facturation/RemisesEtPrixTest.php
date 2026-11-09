@@ -23,6 +23,7 @@ use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -245,6 +246,28 @@ class RemisesEtPrixTest extends TestCase
         ]);
 
         $this->assertSame([['10.00', 1], ['0.00', 3]], $modifie->lignes->sortBy('ordre')->map(fn (LigneFacture $ligne): array => [$ligne->remise_pourcentage, $ligne->quantite])->values()->all());
+    }
+
+    /**
+     * Une ligne dérogatoire déjà enregistrée ne couvre qu'une ligne : reprise
+     * deux fois, la seconde demande l'autorisation ; deux lignes identiques
+     * déjà accordées le restent toutes les deux ; une nouvelle dérogation
+     * qui suit une ligne reprise est demandée, son pourcentage écrit avec
+     * une virgule.
+     */
+    public function test_chaque_ligne_derogatoire_deja_enregistree_ne_couvre_qu_une_ligne(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $cable = $this->produit('Câble USB', '12.00');
+        $contexte = ContexteDeVente::pour(null, $magasin);
+        $remisee = ['produit_id' => $cable->id, 'service_id' => null, 'quantite' => 1, 'prix_unitaire_ttc' => '12.00', 'taux_tva_du_prix' => '20.00', 'remise_pourcentage' => '10.00'];
+        $autreRemise = [...$remisee, 'remise_pourcentage' => '12.50'];
+        $derogations = app(DerogationsDePrix::class);
+        $demande = fn (string $remise): string => "Accorder une remise de {$remise} % sur « Câble USB » ".DerogationsDePrix::AUTORISATION.'.';
+
+        $this->assertSame([1 => $demande('10')], $derogations->introduites([$remisee], [$remisee, $remisee], $contexte));
+        $this->assertSame([], $derogations->introduites([$remisee, $remisee], [$remisee, $remisee], $contexte));
+        $this->assertSame([1 => $demande('12,5')], $derogations->introduites([$remisee], [$remisee, $autreRemise], $contexte));
     }
 
     public function test_changer_le_produit_ou_la_quantite_d_une_ligne_remisee_exige_l_autorisation(): void

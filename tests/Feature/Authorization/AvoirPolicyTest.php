@@ -104,6 +104,20 @@ class AvoirPolicyTest extends TestCase
     }
 
     /**
+     * Sans « Avoirs : voir », un membre ne voit aucun avoir, même avec
+     * « voir celles de toute l'équipe ».
+     */
+    public function test_sans_la_permission_de_voir_les_avoirs_la_vue_totale_ne_les_montre_pas(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $avoir = $this->emettreUnAvoirEnTantQue($this->vendeurQuiFaitDesAvoirs($magasin, 'paul@example.test'));
+        $sansLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES], ['name' => 'Sans les avoirs', 'email' => 'sans@example.test']);
+        $avecLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::AVOIR_VIEW], ['name' => 'Avec les avoirs', 'email' => 'avec@example.test']);
+
+        $this->assertSame([false, true], [$sansLesAvoirs->can('view', $avoir), $avecLesAvoirs->can('view', $avoir)]);
+    }
+
+    /**
      * Un vendeur qui voit les avoirs et en fait, sans voir les ventes de
      * toute l'équipe.
      */

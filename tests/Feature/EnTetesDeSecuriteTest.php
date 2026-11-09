@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -12,10 +13,13 @@ use Tests\TestCase;
 /**
  * Chaque réponse de PILIQI porte les en-têtes de sécurité (décision de
  * l'éditeur du 07/11/2026, D54) : page, redirection, réponse JSON, erreur ;
- * un fichier téléchargé, voir PiecesDuFournisseurResourceTest.
+ * un fichier téléchargé, voir PiecesDuFournisseurResourceTest. La page du
+ * lien d'inscription lit la base : chaque test a la sienne, migrée.
  */
 class EnTetesDeSecuriteTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
      * @return array<string, array{0: string, 1: string, 2: int}>
      */

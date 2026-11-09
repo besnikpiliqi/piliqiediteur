@@ -9,6 +9,7 @@ use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -130,12 +131,11 @@ final class GardesDesCabinets
      * Les déclencheurs SQLite d'une garde, pour qu'un test les retire comme
      * le ferait un administrateur de la base.
      *
-     * @param  key-of<self::TABLES>  $garde
      * @return list<string>
      */
     public static function declencheursSqlite(string $garde): array
     {
-        [, $colonnes] = self::TABLES[$garde];
+        [, $colonnes] = self::TABLES[$garde] ?? throw new InvalidArgumentException("Garde inconnue : {$garde}.");
 
         return $colonnes === null ? ["{$garde}_insert"] : ["{$garde}_insert", "{$garde}_update"];
     }

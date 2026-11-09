@@ -293,6 +293,23 @@ class PiecesDuFournisseurTest extends TestCase
         app(RetirerUnePieceAction::class)->handle($consultant, $piece);
     }
 
+    public function test_joindre_a_un_avoir_emis_exige_de_creer_les_avoirs_fournisseur(): void
+    {
+        $avoir = $this->retourner(app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([])), []);
+        $consultant = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW]);
+        $retourneur = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]);
+
+        try {
+            app(JoindreDesPiecesAction::class)->handle($consultant, $avoir, [new PieceDeposee('note.pdf', self::PDF)]);
+            $this->fail('Sans le droit de créer les avoirs fournisseur, aucune pièce ne se joint à un avoir.');
+        } catch (AuthorizationException) {
+            $this->assertSame(0, $avoir->pieces()->count());
+        }
+
+        app(JoindreDesPiecesAction::class)->handle($retourneur, $avoir, [new PieceDeposee('note.pdf', self::PDF)]);
+        $this->assertSame(1, $avoir->pieces()->count());
+    }
+
     public function test_le_cabinet_lie_joint_une_piece_s_il_saisit_les_achats_du_client(): void
     {
         $factureAchat = $this->saisir([]);

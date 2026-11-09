@@ -206,6 +206,7 @@ class AccesAuxPanneauxTest extends TestCase
         $this->assertTrue($responsable->canAccessPanel(Filament::getPanel('app')));
         $this->assertSame([true, false], [$responsable->canAccessTenant($lyon), $responsable->canAccessTenant($villeurbanne)]);
         $this->actingAs($responsable)->get("/app/{$lyon->uuid}")->assertOk();
+        $this->get('/app')->assertRedirect("/app/{$lyon->uuid}");
         $this->assertFalse($responsable->canAccessPanel(Filament::getPanel('societe')));
         $this->assertSame([], $responsable->getTenants(Filament::getPanel('societe'))->modelKeys());
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();

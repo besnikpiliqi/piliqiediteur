@@ -274,6 +274,10 @@ class TvaDuFournisseurTest extends TestCase
             'La base à 20 % écrite sur la facture (10,01 €) n\'est pas la somme des HT de ses lignes (10,00 €) : saisissez le HT de chaque ligne tel que la facture l\'écrit.',
             fn () => $this->creer($vingt, MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '20', 'base_ht' => '10.01', 'montant_tva' => '2.00']]]), ['source' => SourceFactureAchat::Api]),
         );
+        $this->assertRefus(
+            'La base à 5,5 % écrite sur la facture (3,00 €) n\'est pas la somme des HT de ses lignes (0,00 €) : saisissez le HT de chaque ligne tel que la facture l\'écrit.',
+            fn () => $this->creer($vingt, MontantsDuFournisseur::depuisLaSaisie(['taux' => [['taux_tva' => '5.5', 'base_ht' => '3.00']]]), ['source' => SourceFactureAchat::Api]),
+        );
 
         $this->assertSame(0, FactureAchat::query()->count());
         $this->assertSame(0, TauxFactureAchat::query()->count());

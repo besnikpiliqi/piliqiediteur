@@ -30,6 +30,7 @@ use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Http\Controllers\RattachementAuCabinetController;
+use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -430,6 +431,41 @@ class LiensAvecUneSocieteInscriteTest extends TestCase
 
         app(MettreFinAuLienAction::class)->handle($this->proprietaireDuCabinet($cabinet), $lien);
         $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
+    }
+
+    /**
+     * Du côté du cabinet, son propriétaire voit ses liens et les demandes
+     * en cours ; un collaborateur, les seuls liens actifs des clients qui
+     * lui sont confiés, jamais une demande. Un lien actif ne s'accepte, ne
+     * se refuse ni ne se retire plus, de part et d'autre : il prend fin.
+     */
+    public function test_du_cote_du_cabinet_un_collaborateur_ne_voit_que_les_liens_de_ses_clients_confies_et_aucune_demande(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $client = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        $lien = $this->lierLeCabinet($cabinet, $client);
+        $autreLien = $this->lierLeCabinet($cabinet, $this->ouvrirUneSociete(['nom' => 'Autre boutique cliente']));
+        $demandeur = $this->ouvrirUneSociete(['nom' => 'Boutique qui demande']);
+        $demande = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($demandeur), $demandeur->societe, $cabinet);
+        $collaborateur = $this->confier($this->collaborateur($cabinet), [$client]);
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $voit = fn (User $compte): array => array_map(fn (LienCabinet $vu): bool => $compte->can('view', $vu), [$lien, $autreLien, $demande]);
+
+        $this->dansLEspaceDuCabinet($cabinet, $proprietaire);
+        $this->assertSame([true, true, true], $voit($proprietaire));
+        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
+        $this->assertSame([true, false, false], $voit($collaborateur));
+
+        foreach ([$proprietaire, $this->proprietaireDe($client)] as $compte) {
+            app(TenantContext::class)->clear();
+            app(TenantContext::class)->poserSociete($compte->societe);
+
+            foreach (['accepter', 'refuser', 'retirer'] as $geste) {
+                $this->assertFalse($compte->can($geste, $lien), $geste);
+            }
+
+            $this->assertTrue($compte->can('mettreFin', $lien));
+        }
     }
 
     public function test_une_societe_invite_son_cabinet_a_creer_son_espace_sans_garder_son_adresse(): void

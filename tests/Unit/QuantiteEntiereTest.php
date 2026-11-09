@@ -15,6 +15,7 @@ class QuantiteEntiereTest extends TestCase
     public static function ecrituresDunEntier(): array
     {
         return [
+            'un seul article' => [1, 1],
             'entier' => [2, 2],
             'texte du formulaire' => ['3', 3],
             'flottant entier' => [4.0, 4],

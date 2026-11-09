@@ -377,6 +377,21 @@ class CloturerCaisseActionTest extends TestCase
         $this->assertSame(0, ClotureCaisse::query()->count());
     }
 
+    /**
+     * Une journée s'écrit AAAA-MM-JJ, à une date qui existe : un instant ou
+     * une date impossible est refusé, et rien ne se clôture.
+     */
+    public function test_une_journee_mal_ecrite_est_refusee(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
+
+        foreach (['2026-02-30', (string) self::aParis('2026-10-09 10:00:00'), '09/10/2026'] as $journee) {
+            $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $journee), LogicException::class, "« {$journee} » n'est pas une journée : une journée s'écrit AAAA-MM-JJ.");
+        }
+
+        $this->assertSame(0, ClotureCaisse::query()->count());
+    }
+
     public function test_une_journee_anterieure_a_la_derniere_journee_cloturee_est_refusee(): void
     {
         $this->travelTo(self::aParis('2026-10-09 19:00:00'));

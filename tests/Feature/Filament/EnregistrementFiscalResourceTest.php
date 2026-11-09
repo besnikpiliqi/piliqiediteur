@@ -28,6 +28,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -468,6 +469,23 @@ class EnregistrementFiscalResourceTest extends TestCase
             ->assertHasActionErrors(['au' => 'after_or_equal'])
             ->assertNoFileDownloaded();
 
+        $this->assertSame([], $this->types());
+    }
+
+    /**
+     * Hors de l'écran, l'action refuse elle-même une période à l'envers ou
+     * une date mal écrite, avant toute inscription au journal.
+     */
+    public function test_l_action_refuse_une_periode_a_l_envers_ou_une_date_mal_ecrite_sans_rien_journaliser(): void
+    {
+        $magasin = $this->connecterProprietaire();
+        app(TenantContext::class)->set($magasin);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $exporter = fn (string $du, string $au) => app(ExporterJournalDesEvenementsAction::class)->handle($proprietaire, $du, $au);
+
+        $this->assertThrows(fn () => $exporter('2026-10-09', '2026-10-08'), InvalidArgumentException::class, 'La période de l\'export se termine au plus tôt le jour où elle commence.');
+        $this->assertThrows(fn () => $exporter('2026-10-09', '2026-02-30'), InvalidArgumentException::class, '« 2026-02-30 » n\'est pas une date de période valide (AAAA-MM-JJ attendu).');
+        $this->assertThrows(fn () => $exporter('9 octobre', '2026-10-09'), InvalidArgumentException::class, '« 9 octobre » n\'est pas une date de période valide (AAAA-MM-JJ attendu).');
         $this->assertSame([], $this->types());
     }
 

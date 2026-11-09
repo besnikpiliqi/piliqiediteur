@@ -546,6 +546,27 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * Ce que la dernière ligne d'un taux ne peut pas recevoir remonte sur
+     * les précédentes : deux lignes de 10,00 € HT, la première proposée
+     * sans TVA, la seconde avec 10,00 € (tout son HT, ce qu'un retour d'une
+     * ligne d'achat ainsi retenue propose), et 15,00 € écrits sur la note
+     * d'avoir. L'écart de 5,00 € donne 2,50 € à chacune ; la seconde, déjà
+     * à son HT, n'en prend rien, et ses 2,50 € reviennent à la première :
+     * 5,00 € + 10,00 €. Aucune ligne ne dépasse son HT, et le taux garde
+     * exactement la TVA écrite.
+     */
+    public function test_ce_que_la_derniere_ligne_ne_peut_recevoir_remonte_sur_les_precedentes(): void
+    {
+        $lignes = $this->calculateur()->repartirUneTvaRetenue([
+            'premiere' => ['taux' => 2000, 'montant_ht' => 1000, 'montant_tva' => 0],
+            'seconde' => ['taux' => 2000, 'montant_ht' => 1000, 'montant_tva' => 1000],
+            'autre taux' => ['taux' => 550, 'montant_ht' => 1000, 'montant_tva' => 55],
+        ], 2000, 1500);
+
+        $this->assertSame(['premiere' => [1000, 500, 1500], 'seconde' => [1000, 1000, 2000], 'autre taux' => [1000, 55, 1055]], array_map(self::triplet(...), $lignes));
+    }
+
+    /**
      * Le HT qu'écrit la note d'avoir du fournisseur remplace la proposition
      * d'un retour, gardée à côté, et la TVA proposée suit ce HT : 2 des 5
      * articles d'une ligne de 100,00 € HT et 20,00 € de TVA, proposés
@@ -1142,6 +1163,16 @@ class CalculateurLigneTest extends TestCase
             'taux négatif (retour au fournisseur)' => [fn (CalculateurLigne $c) => $c->retourDAchat([...self::ligneDAchat(1000, 2, -500), 'montant_ht' => 2000, 'montant_tva' => 0], 1, ['montant_ht' => 0, 'montant_tva' => 0]), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'prix négatif (vente)' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([self::ligneDeVente(-100)]), 'Un prix unitaire ne peut pas être négatif.'],
             'taux facturé qui n\'est pas celui du prix' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([[...self::ligneDeVente(1000), 'taux_tva' => 550]]), 'Une ligne facture le taux que comprend son prix, ou aucun.'],
+            'quantité nulle (vente)' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([self::ligneDeVente(1000, 0)]), 'La quantité doit être un nombre entier d\'articles, au moins 1.'],
+            'prix de vente hors limites' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([self::ligneDeVente(100_000_000_000_000)]), 'Montant hors limites.'],
+            'prix d\'achat à virgule' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([[...self::ligneDAchat(1000), 'prix_unitaire_ht' => 10000000.5]]), 'jamais un nombre à virgule'],
+            'prix d\'achat négatif' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([self::ligneDAchat(-1000)]), 'Un prix unitaire ne peut pas être négatif.'],
+            'prix d\'achat hors limites' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([[...self::ligneDAchat(1000), 'prix_unitaire_ht' => 1_000_000_000_000_000_000]]), 'Montant hors limites.'],
+            'prix d\'achat x quantité au-delà des millionièmes' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([[...self::ligneDAchat(1000, 20), 'prix_unitaire_ht' => 100_000_000_000_000_000]]), 'Montant hors limites.'],
+            'millionièmes d\'un entier hors limites' => [fn (CalculateurLigne $c) => $c->enMillioniemes(1_000_000_000_000), 'Montant hors limites.'],
+            'millionièmes d\'une écriture de treize chiffres' => [fn (CalculateurLigne $c) => $c->enMillioniemes('1000000000000.5'), 'Montant hors limites.'],
+            'décimal au millionième hors limites' => [fn (CalculateurLigne $c) => $c->enDecimalAuMillionieme(1_000_000_000_000_000_000), 'Montant hors limites.'],
+            'prix au centime hors limites' => [fn (CalculateurLigne $c) => $c->prixUnitaireAuCentime(-1_000_000_000_000_000_000), 'Montant hors limites.'],
         ];
     }
 

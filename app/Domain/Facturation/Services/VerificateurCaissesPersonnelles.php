@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -49,23 +50,72 @@ class VerificateurCaissesPersonnelles
      */
     public function vendeursAvecCaisseOuverte(string $journee): Collection
     {
-        $finDeLaJournee = app(TenantContext::class)->magasin()->calendrier()->bornesDuJour($journee)[1]->subSecond();
-        $paiementsOuverts = Paiement::query()
-            ->whereDoesntHave('cloturesCaissePersonnelles')
-            ->where('recu_le', '<=', $journee);
+        $magasin = app(TenantContext::class)->magasin();
 
-        $vendeurIds = Facture::query()
+        return $this->vendeursAvecCaisseOuverteDans([$magasin->getKey() => [$magasin, $journee]])[$magasin->getKey()];
+    }
+
+    /**
+     * Pour chacun de ces magasins, les vendeurs dont la caisse personnelle
+     * est ouverte au soir de sa journée, dans son calendrier, chacun une
+     * fois, par identifiant : la règle de vendeursAvecCaisseOuverte(), lue
+     * d'un coup pour tous, en quatre requêtes quel que soit leur nombre,
+     * chacune filtrée explicitement par ces magasins et la journée de
+     * chacun (la page « Les caisses » de la société lit ainsi les caisses
+     * ouvertes de chaque magasin de sa portée, voir CaissesDeLaSociete).
+     * Une vente ou un paiement qu'une fermeture a comptés figure dans sa
+     * table de liaison, toujours avec une fermeture de son magasin. Sans
+     * magasin, rien n'est lu : aucune requête sans filtre de magasin.
+     *
+     * @param  array<int, array{Magasin, string}>  $journees  le magasin et sa journée (« AAAA-MM-JJ »), par identifiant du magasin
+     * @return array<int, Collection<int, User>> par identifiant du magasin
+     */
+    public function vendeursAvecCaisseOuverteDans(array $journees): array
+    {
+        if ($journees === []) {
+            return [];
+        }
+
+        $ouverts = fn (string $table, string $liaison, string $cle) => fn (Builder $fermetures) => $fermetures->selectRaw('1')->from($liaison)->whereColumn("{$liaison}.{$cle}", "{$table}.id");
+        $ventesDuSoir = function (EloquentBuilder $ventes) use ($journees): void {
+            foreach ($journees as $id => [$magasin, $journee]) {
+                $ventes->orWhere(fn (EloquentBuilder $duMagasin) => $duMagasin->where('factures.magasin_id', $id)->where('factures.date_emission', '<=', $magasin->calendrier()->bornesDuJour($journee)[1]->subSecond()));
+            }
+        };
+        $paiementsDuSoir = function (EloquentBuilder|Builder $paiements) use ($journees): void {
+            foreach ($journees as $id => [, $journee]) {
+                $paiements->orWhere(fn (EloquentBuilder|Builder $duMagasin) => $duMagasin->where('paiements.magasin_id', $id)->where('paiements.recu_le', '<=', $journee));
+            }
+        };
+
+        $caisses = Facture::withoutGlobalScope(MagasinScope::class)
             ->emises()
-            ->whereDoesntHave('cloturesCaissePersonnelles')
-            ->emisJusquA($finDeLaJournee)
+            ->whereNotExists($ouverts('factures', 'clotures_caisse_personnelles_factures', 'facture_id'))
+            ->where($ventesDuSoir)
             ->distinct()
-            ->pluck('cree_par')
-            ->merge((clone $paiementsOuverts)->whereNull('contre_passe_paiement_id')->distinct()->pluck('cree_par'))
-            ->merge(Paiement::query()->whereIn('id', (clone $paiementsOuverts)->select('contre_passe_paiement_id'))->distinct()->pluck('cree_par'))
-            ->filter()
-            ->unique();
+            ->get(['factures.magasin_id', 'factures.cree_par'])
+            ->toBase()
+            ->merge(Paiement::withoutGlobalScope(MagasinScope::class)
+                ->whereNull('paiements.contre_passe_paiement_id')
+                ->whereNotExists($ouverts('paiements', 'clotures_caisse_personnelles_paiements', 'paiement_id'))
+                ->where($paiementsDuSoir)
+                ->distinct()
+                ->get(['paiements.magasin_id', 'paiements.cree_par']))
+            ->merge(Paiement::withoutGlobalScope(MagasinScope::class)
+                ->whereIn('paiements.magasin_id', array_keys($journees))
+                ->whereIn('paiements.id', fn (Builder $contrePassations) => $contrePassations
+                    ->select('paiements.contre_passe_paiement_id')
+                    ->from('paiements')
+                    ->whereNotExists($ouverts('paiements', 'clotures_caisse_personnelles_paiements', 'paiement_id'))
+                    ->where($paiementsDuSoir))
+                ->distinct()
+                ->get(['paiements.magasin_id', 'paiements.cree_par']));
+        $vendeurs = User::query()->whereKey($caisses->pluck('cree_par')->all())->orderBy('id')->get();
 
-        return User::query()->whereKey($vendeurIds->all())->orderBy('id')->get();
+        return array_map(
+            fn (int $id): Collection => $vendeurs->only($caisses->where('magasin_id', $id)->pluck('cree_par')->all()),
+            array_combine(array_keys($journees), array_keys($journees)),
+        );
     }
 
     /**

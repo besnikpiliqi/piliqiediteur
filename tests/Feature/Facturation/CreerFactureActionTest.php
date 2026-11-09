@@ -71,6 +71,19 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame(['Écran iPhone 13', 'Pose écran'], $lignes->pluck('description')->all());
     }
 
+    /**
+     * Une ligne de service vendue sans taux saisi prend celui de sa fiche,
+     * pas le taux par défaut du magasin.
+     */
+    public function test_une_ligne_de_service_prend_le_taux_de_sa_fiche(): void
+    {
+        $reparation = Service::factory()->auPrixDe('10.55', '5.5')->create(['nom' => 'Réparation']);
+
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['service_id' => $reparation->id, 'quantite' => 1]]);
+
+        $this->assertSame(['5.50', '10.55'], [$facture->lignes->sole()->taux_tva, $facture->total_ttc]);
+    }
+
     public function test_une_ligne_sans_produit_ni_service_est_refusee(): void
     {
         $client = Client::factory()->create();

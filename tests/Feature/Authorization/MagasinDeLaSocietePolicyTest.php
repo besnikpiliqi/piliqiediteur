@@ -5,6 +5,7 @@ namespace Tests\Feature\Authorization;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -56,6 +57,66 @@ class MagasinDeLaSocietePolicyTest extends TestCase
             'collaborateur du cabinet lié' => self::gestes(false, false, false),
             'propriétaire d\'une autre société' => self::gestes(false, false, false),
         ], array_map(fn (User $compte): array => self::permis($compte, $magasin), $comptes));
+    }
+
+    /**
+     * Lire les magasins dans l'espace d'administration (la liste, puis un
+     * magasin) : le propriétaire et un administrateur actifs, chacun ceux de
+     * sa portée ; jamais un administrateur suspendu, un responsable ni le
+     * propriétaire d'une autre société.
+     */
+    public function test_seuls_le_proprietaire_et_les_administrateurs_actifs_lisent_les_magasins_de_leur_portee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
+        $suspendu = $this->administrateur($magasin);
+        $suspendu->forceFill(['statut' => StatutCompte::Suspendu])->save();
+        $comptes = [
+            'propriétaire' => $this->proprietaireDe($magasin),
+            'administrateur de ce magasin' => $this->administrateur($magasin, [$magasin->id]),
+            'administrateur d\'un autre magasin' => $this->administrateur($magasin, [$autre->id]),
+            'administrateur suspendu' => $suspendu,
+            'responsable' => $this->responsable($magasin),
+            'propriétaire d\'une autre société' => $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ailleurs'])),
+        ];
+        $this->dansLaSociete($magasin);
+
+        $this->assertSame([
+            'propriétaire' => [true, true],
+            'administrateur de ce magasin' => [true, true],
+            'administrateur d\'un autre magasin' => [true, false],
+            'administrateur suspendu' => [false, false],
+            'responsable' => [false, false],
+            'propriétaire d\'une autre société' => [false, false],
+        ], array_map(fn (User $compte): array => [$compte->fresh()->can('viewAny', Magasin::class), $compte->fresh()->can('view', $magasin)], $comptes));
+    }
+
+    /**
+     * Ouvrir le magasin de démonstration d'une société pas encore validée :
+     * son propriétaire, ou un administrateur de tous les magasins autorisé
+     * à les gérer ; jamais un administrateur d'une sélection de magasins,
+     * même autorisé, ni un administrateur sans cette autorisation, ni un
+     * responsable.
+     */
+    public function test_seul_qui_gere_tous_les_magasins_ouvre_la_demonstration(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $comptes = [
+            'propriétaire' => $this->proprietaireDe($magasin),
+            'administrateur de tous les magasins autorisé' => $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]),
+            'administrateur de tous les magasins sans l\'autorisation' => $this->administrateur($magasin),
+            'administrateur de ce magasin autorisé' => $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]),
+            'responsable' => $this->responsable($magasin),
+        ];
+        $this->dansLaSociete($magasin);
+
+        $this->assertSame([
+            'propriétaire' => true,
+            'administrateur de tous les magasins autorisé' => true,
+            'administrateur de tous les magasins sans l\'autorisation' => false,
+            'administrateur de ce magasin autorisé' => false,
+            'responsable' => false,
+        ], array_map(fn (User $compte): bool => $compte->fresh()->can('ouvrirLaDemonstration', $magasin->societe), $comptes));
     }
 
     public function test_personne_n_agit_sur_le_magasin_de_demonstration(): void

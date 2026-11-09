@@ -243,6 +243,7 @@ class AccesDuCollaborateurChezLeClientTest extends TestCase
 
         foreach ([$collaborateur, $proprietaire] as $compte) {
             $this->assertFalse($compte->fresh()->peutOuvrir($magasin));
+            $this->assertFalse(app(TenantContext::class)->runAs($magasin, fn (): bool => $compte->fresh()->can(PermissionRegistry::FACTURE_VIEW)));
             $this->flushSession();
             $this->actingAs($compte)->get("/app/{$magasin->uuid}")->assertNotFound();
         }

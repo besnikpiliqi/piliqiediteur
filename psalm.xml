@@ -8,8 +8,10 @@
     sert qu'à cela : le contrôle des types est celui de Larastan
     (phpstan.neon), et seuls les chemins de sécurité font échouer la CI
     (php tests/Qualite/qualite.php flux). Psalm s'installe à part, dans
-    tools/psalm (voir le README), et se lance depuis la racine du dépôt :
-    php tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json
+    tools/psalm (voir le README), et se lance depuis la racine du dépôt,
+    avec l'option de l'analyse des flux et le rapport JSON, comme dans la
+    CI (.github/workflows/tests.yml). Un commentaire XML ne contient jamais
+    deux tirets de suite : la commande s'écrit donc dans le README.
 -->
 <psalm
     errorLevel="8"

@@ -125,10 +125,37 @@ class FactureAchatActionsTest extends TestCase
     {
         $fournisseur = Fournisseur::factory()->create();
 
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue, existant ou nouveau.'));
         app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['quantite' => 5],
         ], ['date_facture' => '2026-01-15']);
+    }
+
+    /**
+     * Une facture d'achat sans aucune ligne est refusée, à la création
+     * comme à la correction, et rien ne s'enregistre.
+     */
+    public function test_une_facture_d_achat_sans_ligne_est_refusee(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+
+        $this->assertThrows(
+            fn () => app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [], ['date_facture' => '2026-01-15']),
+            InvalidArgumentException::class,
+            'Une facture d\'achat doit contenir au moins une ligne.',
+        );
+        $this->assertSame(0, FactureAchat::query()->count());
+
+        $brouillon = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
+            ['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => '5.00'],
+        ], ['date_facture' => '2026-01-15']);
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle(self::auteur(), $brouillon, $fournisseur, [], ['date_facture' => '2026-01-15']),
+            InvalidArgumentException::class,
+            'Une facture d\'achat doit contenir au moins une ligne.',
+        );
+        $this->assertSame(1, $brouillon->lignes()->count());
     }
 
     /**
@@ -253,6 +280,42 @@ class FactureAchatActionsTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
 
         $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
+    }
+
+    /**
+     * Un nouveau produit resté sans prix de vente dans le brouillon prend, à
+     * la validation, celui du barème que le magasin a activé entre-temps.
+     */
+    public function test_un_nouveau_produit_sans_prix_au_brouillon_prend_le_bareme_active_avant_sa_validation(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10, 'remise_pourcentage' => 50],
+        ], ['date_facture' => '2026-01-15']);
+        $this->assertNull($factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc'] ?? null);
+
+        app(TenantContext::class)->magasin()->update(['prix_vente_automatique' => true]);
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
+
+        $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
+    }
+
+    /**
+     * Un nouveau produit qui ne suit pas son stock naît lui aussi chez le
+     * fournisseur de la facture, à son coût d'achat, et sa ligne reçoit la
+     * référence que la validation lui donne.
+     */
+    public function test_un_nouveau_produit_sans_suivi_de_stock_nait_chez_le_fournisseur_a_son_cout_avec_sa_reference(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
+            ['produit' => ['nom' => 'Abonnement', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false], 'quantite' => 2, 'prix_unitaire_ht' => '3.50'],
+        ], ['date_facture' => '2026-01-15']);
+
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
+
+        $produit = Produit::query()->sole();
+        $this->assertNotNull($produit->reference);
+        $this->assertSame([$fournisseur->id, '3.5000', $produit->reference], [$produit->fournisseur_id, $produit->cmup_ht, $factureAchat->lignes()->sole()->reference]);
     }
 
     /**

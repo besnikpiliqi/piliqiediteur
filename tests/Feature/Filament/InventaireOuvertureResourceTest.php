@@ -126,6 +126,32 @@ class InventaireOuvertureResourceTest extends TestCase
     }
 
     /**
+     * Le propriétaire corrige un brouillon depuis sa page de modification :
+     * la quantité et la note enregistrées sont celles saisies, la valeur du
+     * stock se recalcule (12 x 2,00 € = 24,00 € HT), et rien n'est créé
+     * avant la validation.
+     */
+    public function test_un_brouillon_se_corrige_depuis_sa_page_de_modification(): void
+    {
+        $this->magasinDuProprietaire();
+        $inventaire = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [
+            ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
+        ]);
+        $page = Livewire::test(EditInventaireOuverture::class, ['record' => $inventaire->getRouteKey()]);
+        $cle = array_key_first($page->get('data.lignes'));
+
+        $page->set("data.lignes.{$cle}.quantite", 12)
+            ->set('data.notes', 'Recompté le soir')
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(InventaireOuvertureResource::getUrl('view', ['record' => $inventaire]));
+
+        $inventaire->refresh();
+        $this->assertSame([StatutInventaireOuverture::Brouillon, '24.00', 'Recompté le soir', 0], [$inventaire->statut, $inventaire->valeur_ht, $inventaire->notes, Produit::query()->count()]);
+        $this->assertSame([12], LigneInventaireOuverture::query()->pluck('quantite')->all());
+    }
+
+    /**
      * Un brouillon se supprime depuis la liste comme depuis sa page de
      * modification, avec ses lignes, sans rien créer.
      */

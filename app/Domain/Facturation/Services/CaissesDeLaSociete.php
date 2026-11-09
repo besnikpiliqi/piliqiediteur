@@ -6,9 +6,11 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 
 /**
  * Les caisses de chaque magasin, à la page « Les caisses » de l'espace
@@ -21,9 +23,11 @@ use Illuminate\Database\Eloquent\Collection;
  * un magasin d'une autre société, et seulement ceux où elle voit déjà les
  * relevés de toute l'équipe (cloture_caisse.view_toutes : toujours pour le
  * propriétaire, la case cochée pour un administrateur), et dont elle peut
- * donc ouvrir la page des relevés où mène chaque magasin. Chaque magasin
- * se lit à son tour comme magasin actif (voir TenantContext::runAs()) :
- * MagasinScope reste en place, aucune requête ne contourne sa portée.
+ * donc ouvrir la page des relevés où mène chaque magasin. Leurs relevés et
+ * leurs caisses ouvertes se lisent d'un coup, hors de MagasinScope, chaque
+ * requête filtrée explicitement par ces seuls magasins et la journée de
+ * chacun : la page lit la base autant de fois pour un magasin que pour
+ * vingt.
  *
  * De chacun, elle ne rend que les relevés de caisse fermés le jour choisi,
  * ou, sans jour choisi, sa journée en cours, chaque magasin dans son
@@ -84,33 +88,44 @@ final class CaissesDeLaSociete
      * ou, sans jour choisi, sa journée en cours), les noms des vendeurs
      * dont la caisse est encore ouverte à son jour, et ses relevés fermés
      * pendant cette journée, de son minuit au suivant, du plus récent au
-     * plus ancien.
+     * plus ancien (le magasin d'un relevé, lu pour le ranger, ne reste pas
+     * sur le relevé rendu).
      *
      * @return list<array{magasin: Magasin, calendrier: Calendrier, journee: string, caisses_ouvertes: list<string>, releves: Collection<int, ClotureCaissePersonnelle>}>
      */
     public function pour(User $compte, ?string $journee): array
     {
-        $contexte = app(TenantContext::class);
+        $magasins = $this->magasins($compte)->keyBy(fn (Magasin $magasin): int => (int) $magasin->getKey());
 
-        return $this->magasins($compte)
-            ->map(function (Magasin $magasin) use ($contexte, $journee): array {
-                $calendrier = $magasin->calendrier();
-                $journeeDuMagasin = $journee ?? $calendrier->aujourdhui();
-                [$debut, $fin] = $calendrier->bornesDuJour($journeeDuMagasin);
+        if ($magasins->isEmpty()) {
+            return [];
+        }
 
-                return $contexte->runAs($magasin, fn (): array => [
-                    'magasin' => $magasin,
-                    'calendrier' => $calendrier,
-                    'journee' => $journeeDuMagasin,
-                    'caisses_ouvertes' => $this->verificateur->vendeursAvecCaisseOuverte($calendrier->aujourdhui())->pluck('name')->values()->all(),
-                    'releves' => ClotureCaissePersonnelle::query()
-                        ->where('cloturee_a', '>=', $debut)
-                        ->where('cloturee_a', '<', $fin)
-                        ->orderByDesc('cloturee_a')
-                        ->orderByDesc('id')
-                        ->get(self::COLONNES_DU_RELEVE),
-                ]);
+        $journees = $magasins->map(fn (Magasin $magasin): string => $journee ?? $magasin->calendrier()->aujourdhui());
+        $ouvertes = $this->verificateur->vendeursAvecCaisseOuverteDans($magasins->map(fn (Magasin $magasin): array => [$magasin, $magasin->calendrier()->aujourdhui()])->all());
+        $releves = ClotureCaissePersonnelle::withoutGlobalScope(MagasinScope::class)
+            ->where(function (Builder $duJour) use ($magasins, $journees): void {
+                foreach ($magasins as $id => $magasin) {
+                    [$debut, $fin] = $magasin->calendrier()->bornesDuJour($journees[$id]);
+                    $duJour->orWhere(fn (Builder $duMagasin) => $duMagasin->where('magasin_id', $id)->where('cloturee_a', '>=', $debut)->where('cloturee_a', '<', $fin));
+                }
             })
+            ->orderByDesc('cloturee_a')
+            ->orderByDesc('id')
+            ->get(['magasin_id', ...self::COLONNES_DU_RELEVE])
+            ->groupBy('magasin_id');
+
+        return $magasins
+            ->map(fn (Magasin $magasin, int $id): array => [
+                'magasin' => $magasin,
+                'calendrier' => $magasin->calendrier(),
+                'journee' => $journees[$id],
+                'caisses_ouvertes' => $ouvertes[$id]->pluck('name')->values()->all(),
+                'releves' => (new Collection($releves->get($id)?->all() ?? []))->each(
+                    fn (ClotureCaissePersonnelle $releve): ClotureCaissePersonnelle => $releve->setRawAttributes(Arr::except($releve->getAttributes(), 'magasin_id'), true),
+                ),
+            ])
+            ->values()
             ->all();
     }
 }

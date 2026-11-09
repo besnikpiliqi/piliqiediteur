@@ -1,10 +1,13 @@
 {
     // Tests de mutation (décision de l'éditeur du 01/11/2026) : Infection
     // modifie le code de petites façons et vérifie qu'un test échoue à
-    // chaque fois. Les parties sensibles (tests/Qualite/parties.php) se
-    // choisissent par --filter (php tests/Qualite/qualite.php sensibles) ;
-    // leur score minimal est dans tests/Qualite/seuils.json et se contrôle
-    // par php tests/Qualite/qualite.php mutation.
+    // chaque fois. Seules les parties sensibles (les calculs, les droits et
+    // l'isolation, voir PARTIES_SENSIBLES dans tests/Qualite/qualite.php)
+    // se testent, par la configuration que tire de celle-ci
+    // php tests/Qualite/qualite.php configuration-sensibles <fichier>, qui
+    // exclut tout autre fichier ; leur score minimal est dans
+    // tests/Qualite/seuils.json et se contrôle par
+    // php tests/Qualite/qualite.php mutation.
     "$schema": "vendor/infection/infection/resources/schema.json",
     "source": {
         "directories": ["app"]

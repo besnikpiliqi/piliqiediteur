@@ -3,14 +3,14 @@
         "niveau": 6
     },
     "couverture": {
-        "achats_et_stock": 97,
+        "achats_et_stock": 98,
         "cabinets": 94,
-        "caisse_securisee": 97,
-        "calculs": 96,
-        "droits_et_isolation": 89,
+        "caisse_securisee": 98,
+        "calculs": 100,
+        "droits_et_isolation": 96,
         "ecrans_et_socle": 97,
         "facturation": 97,
-        "pages_publiques": 95,
+        "pages_publiques": 96,
         "societe": 94
     },
     "mutation": {}

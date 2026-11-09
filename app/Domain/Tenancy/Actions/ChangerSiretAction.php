@@ -205,7 +205,7 @@ class ChangerSiretAction
                     }
 
                     $siret = $societe->siren.$nic;
-                    $refus = (new SiretValide($societe->siren))->refus($siret);
+                    $refus = SiretValide::refus($siret);
 
                     $refus ??= match (true) {
                         $siret === $magasin->siret => self::MESSAGE_MEME_SIRET,

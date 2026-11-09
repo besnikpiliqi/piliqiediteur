@@ -19,7 +19,9 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\Societe\Pages\LesCaisses;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -110,6 +112,30 @@ class CaissesDeLaSocieteTest extends TestCase
         Livewire::test(LesCaisses::class)
             ->assertSee('Lyon')
             ->assertDontSee([$demonstration->nom, '('.$demonstration->code.')', 'Responsable de test', 'Bordeaux', 'Inès']);
+    }
+
+    /**
+     * Sans magasin où il voit les relevés de toute l'équipe, un
+     * administrateur ne reçoit rien, et rien ne se lit des ventes, des
+     * paiements ni des relevés : aucune requête sans filtre de magasin, même
+     * quand des caisses sont ouvertes et des relevés fermés ailleurs.
+     */
+    public function test_sans_magasin_rien_ne_se_lit_des_caisses(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $paul = $this->vendeurQuiVend($lyon, 'Paul', 12);
+        app(TenantContext::class)->runAs($lyon, fn () => app(FermerSaCaisseAction::class)->handle($paul, $paul));
+        $this->vendeurQuiVend($lyon, 'Jeanne', 30);
+        $aveugle = $this->administrateur($lyon, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES])));
+        app(TenantContext::class)->clear();
+        $lectures = [];
+        DB::listen(function (QueryExecuted $requete) use (&$lectures): void {
+            $lectures[] = $requete->sql;
+        });
+
+        $this->assertSame([], app(CaissesDeLaSociete::class)->pour($aveugle, Calendrier::deParis()->aujourdhui()));
+        $this->assertSame([], array_values(array_filter($lectures, fn (string $sql): bool => preg_match('/from "(factures|paiements|clotures_caisse_personnelles)"/', $sql) === 1)));
     }
 
     /**

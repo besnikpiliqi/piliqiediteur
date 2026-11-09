@@ -36,11 +36,17 @@ final readonly class BaremePrixDeVente implements Castable
             throw new InvalidArgumentException('Le barème a au moins un palier, ou un bénéfice au-delà.');
         }
 
-        if (min([...$seuils, 1]) <= 0 || count(array_unique($seuils)) !== count($seuils)) {
+        if (($seuils !== [] && min($seuils) <= 0) || count(array_unique($seuils)) !== count($seuils)) {
             throw new InvalidArgumentException('Chaque palier du barème a son propre prix d\'achat, supérieur à 0.');
         }
 
-        if (min([...array_column($paliers, 'benefice'), $beneficeAuDela ?? 0]) < 0) {
+        $benefices = array_column($paliers, 'benefice');
+
+        if ($beneficeAuDela !== null) {
+            $benefices[] = $beneficeAuDela;
+        }
+
+        if (min($benefices) < 0) {
             throw new InvalidArgumentException('Un bénéfice du barème ne peut pas être négatif.');
         }
     }

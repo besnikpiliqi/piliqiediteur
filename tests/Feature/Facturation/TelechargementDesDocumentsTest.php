@@ -451,6 +451,51 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertSame(1, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($proprietaire, [$this->magasin], ['encaissements:'.$this->magasin->id.':2026-03:'.DocumentTrouve::RELEVE_DE_L_EQUIPE]));
     }
 
+    /**
+     * Un avoir client désigné par le fichier ne compte, au moment de le
+     * servir, que pour qui le voit encore : son auteur, ou qui voit ceux de
+     * toute l'équipe.
+     */
+    public function test_un_avoir_client_ne_compte_que_pour_qui_le_voit_encore(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $cle = 'avoirs:'.$this->magasin->id.':'.$this->documents['avoir']->id;
+        app(ModifierMembreAction::class)->handle($proprietaire, $this->vendeur, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+
+        $this->assertSame(1, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($proprietaire, [$this->magasin], [$cle]));
+        $this->assertSame(1, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($this->vendeur->refresh(), [$this->magasin], [$cle]));
+
+        app(ModifierMembreAction::class)->handle($proprietaire, $this->vendeur, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW, PermissionRegistry::DOCUMENTS_TELECHARGER]);
+        $this->assertSame(0, app(DocumentsDeLaPeriode::class)->nombreEncoreVisibles($this->vendeur->refresh(), [$this->magasin], [$cle]));
+    }
+
+    /**
+     * Le relevé des encaissements du mois ajoute, après les modes, le
+     * crédit d'avoir imputé dans le mois sur les factures que la personne
+     * voit : il ne fait entrer aucun argent et ne se mêle à aucun mode.
+     */
+    public function test_le_releve_des_encaissements_ajoute_le_credit_d_avoir_utilise_dans_le_mois(): void
+    {
+        $facture = $this->documents['facture'];
+        app(TenantContext::class)->runAs($this->magasin, fn (): Avoir => app(EnregistrerAvoirAction::class)->handle(
+            $this->responsable,
+            Client::query()->whereKey($facture->client_id)->sole(),
+            [['ligne_facture_id' => $facture->lignes()->where('quantite', 1)->sole()->id, 'quantite' => 1]],
+            'Thé abîmé',
+        ));
+        $proprietaire = $this->proprietaireDe($this->magasin);
+
+        $csv = app(RecapitulatifDesDocuments::class)->ecrire($proprietaire, $this->trouver($proprietaire, [TypeDeDocumentTelechargeable::Encaissements]), '2026-03-01', '2026-03-31');
+        $lignes = array_map(fn (string $ligne): string => implode(';', str_getcsv($ligne, ';', '"', '')), explode("\r\n", rtrim(substr($csv, 3), "\r\n")));
+
+        $this->assertSame([
+            implode(';', RecapitulatifDesDocuments::COLONNES),
+            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Espèces;;;;18,00;;',
+            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;',
+            'Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Avoir (crédit utilisé);;;;6,33;;',
+        ], $lignes);
+    }
+
     public function test_le_recapitulatif_lit_les_documents_d_un_magasin_ensemble_quel_que_soit_leur_nombre(): void
     {
         $proprietaire = $this->proprietaireDe($this->magasin);

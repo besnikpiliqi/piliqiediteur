@@ -1494,3 +1494,7 @@ oui + Psalm 1, mais tu faise ce que tu vois la meilleurs option
 
 oui + Psalm 1
 
+## 143. 2026-11-09 22:59 UTC
+
+tu peux lire ce lien https://diag-invoice.fr/blog/rejet-br-co-14-total-tva-somme-taux pour comment calculer
+

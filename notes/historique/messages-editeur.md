@@ -1448,3 +1448,15 @@ Et dans la facture que tu m as envoyé il y a apparemment +0.26€ de plus, alor
 
 « (a) » pour garder l’affichage au centime ; et montre moi la meme pdf avec cette decision afin que je compare
 
+## 132. 2026-11-09 09:32 UTC
+
+Envoie moi le pdf quand c'est prêt
+
+## 133. 2026-11-09 09:32 UTC
+
+je vois que tu avance du tout avec QA ???
+
+## 134. 2026-11-09 09:37 UTC
+
+caisse à l'étape 3
+

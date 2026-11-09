@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 01:05 UTC par pilotage-sync.sh : « Q-CALC2 : écart de TVA de la règle du 08/11 sous-estimé, question posée à l'éditeur ; CALC en attente sur la règle ».
+Mis à jour le 09/11/2026 à 01:32 UTC par pilotage-sync.sh : « Q-CALC2 : option (d) proposée à l'éditeur (sa règle avec une sécurité par taux) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

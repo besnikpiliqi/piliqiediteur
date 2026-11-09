@@ -1432,3 +1432,15 @@ Tu me dit tout ce que tu as fait par rapport aux fichiers que je t’ai donné. 
 
 Envoi moi le fichier pdf de 15 lignes
 
+## 128. 2026-11-09 01:19 UTC
+
+Pourquoi vont etre refusé les factures alors eux font quoi ! Il recalcule encore chez eux ou quoi
+
+## 129. 2026-11-09 01:25 UTC
+
+Donc eux ils recalculent alors avec le taux de tva 20% par exemple. Il récupére les prix qu’on envoie et eux calculent par ligne ou au total. Car ce que j’avais compris que eux ils regardent le prix ht payé sur la facture pdf correspond bien la meme prix ht déclarée dans xml? C’est pas comme ça
+
+## 130. 2026-11-09 01:31 UTC
+
+Et dans la facture que tu m as envoyé il y a apparemment +0.26€ de plus, alors sera accepté ou pas . Car comme j’aime bcp p’us
+

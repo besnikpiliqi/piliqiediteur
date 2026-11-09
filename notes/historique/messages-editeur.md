@@ -1460,3 +1460,15 @@ je vois que tu avance du tout avec QA ???
 
 caisse à l'étape 3
 
+## 135. 2026-11-09 09:41 UTC
+
+il fait quoi exactement QA
+
+## 136. 2026-11-09 09:52 UTC
+
+Envoie moi le pdf quand c'est prêt
+
+## 137. 2026-11-09 09:53 UTC
+
+QA:implementation ca veut dire la construction du code c est ca?
+

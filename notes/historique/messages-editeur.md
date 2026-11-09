@@ -1444,3 +1444,7 @@ Donc eux ils recalculent alors avec le taux de tva 20% par exemple. Il récupér
 
 Et dans la facture que tu m as envoyé il y a apparemment +0.26€ de plus, alors sera accepté ou pas . Car comme j’aime bcp p’us
 
+## 131. 2026-11-09 09:19 UTC
+
+« (a) » pour garder l’affichage au centime ; et montre moi la meme pdf avec cette decision afin que je compare
+

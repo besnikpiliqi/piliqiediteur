@@ -44,6 +44,28 @@ Aucun changement dû à la règle de calcul : la règle et l'affichage décidés
 
 - Aucune valeur attendue des ventes ne change : un test existant qui échoue après ce lot révèle une erreur du lot, jamais une valeur à réécrire.
 - Nouveau test aux montants écrits, celui de l'exemple de 15 lignes montré à l'éditeur le 09/11 (PDF de comparaison, `scratchpad/demo-prix-a/`). La facture à un professionnel est chiffrée par `chiffrerUneVente()`, émise, puis lue en PDF, avec ses montants par ligne, par taux et au total, écrits ci-dessous une fois vérifiés par deux recalculs indépendants. Le même panier en ticket à un particulier donne les mêmes montants.
+
+  **Montants vérifiés (09/11/2026 vers 13 h 15 UTC)** : PDF `scratchpad/demo-prix-a/exemple-calcul-des-prix-15-lignes-regle-a.pdf` (SHA-256 `53bb26a9afd074982087798ee1f8361492e29a9a7dcd38aca5b8c44e19ae1e11`), envoyé à l'éditeur avec la première démonstration. Ils sont confirmés de quatre façons : par la vraie classe `CalculateurLigne` (copie validée et classe du dernier commit `53beb37`, 366 valeurs identiques), par deux recalculs indépendants en fractions exactes (un depuis le seul texte de la règle, un par la classe : 237 et 524 contrôles, aucun écart), et à la main par la session. Lignes, dans cet ordre (quantité × PU TTC, remise, taux → PU HT enregistré / affiché ; HT ; TVA ; TTC) :
+
+  | n | Réf. | Qté × PU TTC | Remise | Taux | PU HT enregistré / affiché | HT | TVA | TTC |
+  |---:|---|---|---|---|---|---:|---:|---:|
+  | 1 | CRM-1000 | 2 × 10,00 | | 20 % | 8,333333 / 8,33 | 16,67 | 3,33 | 20,00 |
+  | 2 | SAV-0999 | 1 × 9,99 | | 20 % | 8,325000 / 8,33 | 8,32 | 1,67 | 9,99 |
+  | 3 | SHP-1266 | 3 × 12,66 | | 20 % | 10,550000 / 10,55 | 31,65 | 6,33 | 37,98 |
+  | 4 | BOU-1000 | 100 × 10,00 | | 20 % | 8,333333 / 8,33 | 833,34 | 166,66 | 1 000,00 |
+  | 5 | LIV-1590 | 2 × 15,90 | | 5,5 % | 15,071090 / 15,07 | 30,14 | 1,66 | 31,80 |
+  | 6 | PLT-1850 | 4 × 18,50 | | 10 % | 16,818182 / 16,82 | 67,27 | 6,73 | 74,00 |
+  | 7 | CRM-1000 | 2 × 10,00 | 10 % (2,00) | 20 % | 8,333333 / 8,33 | 15,00 | 3,00 | 18,00 |
+  | 8 | MO-HEURE | 3 × 54,00 | | 20 % | 45,000000 / 45,00 | 135,00 | 27,00 | 162,00 |
+  | 9 | PRF-6500 | 4 × 65,00 | | 20 % | 54,166667 / 54,17 | 216,66 | 43,34 | 260,00 |
+  | 10 | JUS-0135 | 12 × 1,35 | | 5,5 % | 1,279621 / 1,28 | 15,36 | 0,84 | 16,20 |
+  | 11 | SAL-0330 | 7 × 3,30 | | 10 % | 3,000000 / 3,00 | 21,00 | 2,10 | 23,10 |
+  | 12 | STY-0099 | 25 × 0,99 | | 20 % | 0,825000 / 0,83 | 20,63 | 4,12 | 24,75 |
+  | 13 | SAC-14990 | 1 × 149,90 | 5 % (7,495 → 7,50) | 20 % | 124,916667 / 124,92 | 118,66 | 23,74 | 142,40 |
+  | 14 | VEL-124900 | 1 × 1 249,00 | | 20 % | 1 040,833333 / 1 040,83 | 1 040,84 | 208,16 | 1 249,00 |
+  | 15 | SDW-0745 | 3 × 7,45 | | 10 % | 6,772727 / 6,77 | 20,32 | 2,03 | 22,35 |
+
+  Par taux (base HT / TVA / TTC) : 20 % = 2 436,77 / 487,35 / 2 924,12 ; 10 % = 108,59 / 10,86 / 119,45 ; 5,5 % = 45,50 / 2,50 / 48,00. Document : HT 2 590,86 €, TVA 500,71 €, TTC 3 091,57 €. Demi-centimes exacts arrondis au supérieur : HT du cumul à 20 % aux lignes 4 (889,975 → 889,98), 7 (904,975 → 904,98) et 8 (1 039,975 → 1 039,98), et remise de la ligne 13. Le PDF de démonstration imprime « Net à payer » comme la première démonstration ; le vrai PDF de PILIQI n'a que « Total HT », « Total TVA » et « Total TTC » (`totaux.blade.php`) : le test lit les libellés de la vraie vue.
 - Section 4 : les tests de `calculs/sans-virgule-flottante.md`.
 - Suite PostgreSQL au code 0 (D55), tests en navigateur compris, outils de qualité du lot QA verts.
 

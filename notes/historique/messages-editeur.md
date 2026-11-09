@@ -1472,3 +1472,9 @@ Envoie moi le pdf quand c'est prêt
 
 QA:implementation ca veut dire la construction du code c est ca?
 
+## 138. 2026-11-09 10:44 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je vois que tu permetez de faire des ticktes de ventes mais normalement ne doit pas etre possible avant verifie la societe avec courrier "Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : capital social, immatriculation. "
+

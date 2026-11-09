@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 20:47 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 21:18 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -76,11 +76,9 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 
 ## Dernière course de la chaîne
 
-Course `wf_54289edd-a97`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_6c8cb20e-542`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-QA:implementation
-QA:relecture1
-QA:relecture2
-QA:correction
+cahier:relecture1
+cahier:relecture2
 ```

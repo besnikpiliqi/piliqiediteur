@@ -832,14 +832,15 @@ index 54b56de..2e28e15 100644
          return $affectation->estDeResponsable()
              ? $user->estProprietaire()
 diff --git a/app/Providers/AppServiceProvider.php b/app/Providers/AppServiceProvider.php
-index 0a690ef..aaa82e9 100644
+index 0a690ef..c130a98 100644
 --- a/app/Providers/AppServiceProvider.php
 +++ b/app/Providers/AppServiceProvider.php
-@@ -82,7 +82,9 @@
+@@ -81,8 +81,10 @@
+ use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
  use Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough;
  use Illuminate\Database\Eloquent\Relations\Relation;
- use Illuminate\Mail\Markdown;
 +use Illuminate\Foundation\Http\Events\RequestHandled;
+ use Illuminate\Mail\Markdown;
  use Illuminate\Support\Facades\Auth;
 +use Illuminate\Support\Facades\Event;
  use Illuminate\Support\Facades\Gate;
@@ -1371,14 +1372,15 @@ index 0a81b6d..3f83125 100644
       * @return array<string, array{RoleMagasin, list<string>|null, bool}>
       */
 diff --git a/tests/Feature/Authorization/GestesToujoursRefusesTest.php b/tests/Feature/Authorization/GestesToujoursRefusesTest.php
-index 61d47e4..bf51b97 100644
+index 61d47e4..852ce36 100644
 --- a/tests/Feature/Authorization/GestesToujoursRefusesTest.php
 +++ b/tests/Feature/Authorization/GestesToujoursRefusesTest.php
-@@ -7,17 +7,23 @@
+@@ -6,18 +6,24 @@
+ use App\Policies\AffectationPolicy;
  use App\Policies\AvoirFournisseurPolicy;
  use App\Policies\AvoirPolicy;
- use App\Policies\ClotureCaissePersonnellePolicy;
 +use App\Policies\ClientPolicy;
+ use App\Policies\ClotureCaissePersonnellePolicy;
  use App\Policies\ClotureCaissePolicy;
 +use App\Policies\DevisPolicy;
 +use App\Policies\EnregistrementFiscalPolicy;
@@ -1449,10 +1451,10 @@ index 61d47e4..bf51b97 100644
  
 diff --git a/tests/Feature/Authorization/LimitesDesDroitsTest.php b/tests/Feature/Authorization/LimitesDesDroitsTest.php
 new file mode 100644
-index 0000000..696004a
+index 0000000..862023b
 --- /dev/null
 +++ b/tests/Feature/Authorization/LimitesDesDroitsTest.php
-@@ -0,0 +1,201 @@
+@@ -0,0 +1,267 @@
 +<?php
 +
 +namespace Tests\Feature\Authorization;
@@ -1461,8 +1463,11 @@ index 0000000..696004a
 +use App\Domain\Authorization\PermissionRegistry;
 +use App\Domain\Cabinets\Models\LienCabinet;
 +use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
++use App\Domain\Tenancy\Actions\ModifierMembreAction;
 +use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Enums\StatutCompte;
 +use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
++use App\Domain\Tenancy\Models\Affectation;
 +use App\Domain\Tenancy\Services\PorteeDesDroits;
 +use App\Domain\Tenancy\Services\TenantContext;
 +use App\Models\User;
@@ -1472,12 +1477,14 @@ index 0000000..696004a
 +use Tests\TestCase;
 +
 +/**
-+ * Les bords des droits : un compte suspendu ne voit plus rien de son
-+ * équipe ; l'identifiant d'un compte ne se montre jamais hors de sa
-+ * société ; une autorisation de société ne vaut que dans sa propre
-+ * société, pour un compte d'une société comme pour un compte d'un cabinet
-+ * d'expertise comptable ; le contexte du magasin et de la société
-+ * actifs ne mélange jamais deux sociétés.
++ * Les bords des droits : un compte suspendu, propriétaire compris, ne
++ * voit plus rien de son équipe ; l'identifiant d'un compte ne se montre
++ * jamais hors de sa société ; on ne nomme, ne gère, ne réintègre et
++ * n'annule une nomination que dans les limites de sa société et de son
++ * rôle ; une autorisation de société ne vaut que dans sa propre société,
++ * pour un compte d'une société comme pour un compte d'un cabinet
++ * d'expertise comptable ; le contexte du magasin et de la société actifs
++ * ne mélange jamais deux sociétés.
 + */
 +class LimitesDesDroitsTest extends TestCase
 +{
@@ -1500,6 +1507,10 @@ index 0000000..696004a
 +
 +        $this->assertSame(0, $portee->comptesVisibles($administrateur)->count());
 +        $this->assertFalse($portee->voitLIdentifiant($vendeur, $vendeur));
++
++        $proprietaire = $this->proprietaireDe($magasin);
++        $proprietaire->forceFill(['statut' => StatutCompte::Suspendu])->save();
++        $this->assertSame(0, $portee->comptesVisibles($proprietaire)->count());
 +    }
 +
 +    public function test_le_proprietaire_ne_voit_jamais_l_identifiant_d_un_compte_d_une_autre_societe(): void
@@ -1513,6 +1524,63 @@ index 0000000..696004a
 +        $this->assertTrue($portee->voitLIdentifiant($proprietaire, $this->membre($magasin, RoleMagasin::Vendeur)));
 +        $this->assertFalse($portee->voitLIdentifiant($proprietaire, $vendeurDAilleurs));
 +        $this->assertFalse($portee->comptesVisibles($proprietaire)->whereKey($vendeurDAilleurs->getKey())->exists());
++    }
++
++    /**
++     * On ne nomme un responsable que dans un magasin de sa société ; le
++     * propriétaire gère le compte entier d'un membre, responsable compris,
++     * jamais celui d'un administrateur.
++     */
++    public function test_on_ne_nomme_et_ne_gere_que_les_membres_de_sa_societe(): void
++    {
++        $magasin = $this->ouvrirUneSociete();
++        $autreMagasin = $this->ouvrirUneSociete();
++        $proprietaire = $this->proprietaireDe($magasin);
++        $portee = app(PorteeDesDroits::class);
++
++        $this->assertSame([true, false], [$portee->peutNommerUnResponsable($proprietaire, $magasin), $portee->peutNommerUnResponsable($proprietaire, $autreMagasin)]);
++        $this->assertSame([true, true, false], [
++            $portee->gereLeCompte($proprietaire, $this->membre($magasin, RoleMagasin::Vendeur)),
++            $portee->gereLeCompte($proprietaire, $this->responsable($magasin)),
++            $portee->gereLeCompte($proprietaire, $this->administrateur($magasin)),
++        ]);
++    }
++
++    /**
++     * Seul un compte retiré se réintègre : un compte actif, non.
++     */
++    public function test_seul_un_compte_retire_se_reintegre(): void
++    {
++        $magasin = $this->ouvrirUneSociete();
++        $proprietaire = $this->proprietaireDe($magasin);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $portee = app(PorteeDesDroits::class);
++
++        $this->assertFalse($portee->peutReintegrer($proprietaire, $vendeur, RoleMagasin::Vendeur));
++
++        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur);
++
++        $this->assertTrue($portee->peutReintegrer($proprietaire, $vendeur->fresh(), RoleMagasin::Vendeur));
++    }
++
++    /**
++     * Une nomination ne s'annule que si un administrateur l'a faite : le
++     * responsable que le propriétaire a nommé lui-même le reste.
++     */
++    public function test_une_nomination_ne_s_annule_que_si_un_administrateur_l_a_faite(): void
++    {
++        $magasin = $this->ouvrirUneSociete();
++        $proprietaire = $this->proprietaireDe($magasin);
++        $nomme = $this->membre($magasin, RoleMagasin::Vendeur);
++        app(ModifierMembreAction::class)->handle($this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]), $nomme, RoleMagasin::Responsable);
++        $nommeParLeProprietaire = $this->responsable($magasin);
++        $affectationDe = fn (User $compte): Affectation => Affectation::query()->where('user_id', $compte->id)->sole();
++        $portee = app(PorteeDesDroits::class);
++
++        $this->assertSame([true, false], [
++            $portee->peutAnnulerLaNomination($proprietaire, $affectationDe($nomme)),
++            $portee->peutAnnulerLaNomination($proprietaire, $affectationDe($nommeParLeProprietaire)),
++        ]);
 +    }
 +
 +    public function test_une_autorisation_de_societe_est_refusee_dans_le_contexte_d_une_autre_societe(): void
@@ -2029,6 +2097,33 @@ index 0856fd8..cd6b00e 100644
      /**
       * Un jour civil s'écrit et se relit tel quel, « AAAA-MM-JJ », sur les
       * deux moteurs ; un objet date, qui porte une heure et un fuseau, est
+diff --git a/tests/Feature/EnTetesDeSecuriteTest.php b/tests/Feature/EnTetesDeSecuriteTest.php
+index c23ed51..94916d5 100644
+--- a/tests/Feature/EnTetesDeSecuriteTest.php
++++ b/tests/Feature/EnTetesDeSecuriteTest.php
+@@ -3,6 +3,7 @@
+ namespace Tests\Feature;
+ 
+ use App\Http\Middleware\AjouterLesEnTetesDeSecurite;
++use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Http\Request;
+ use Illuminate\Testing\TestResponse;
+ use PHPUnit\Framework\Attributes\DataProvider;
+@@ -12,10 +13,13 @@
+ /**
+  * Chaque réponse de PILIQI porte les en-têtes de sécurité (décision de
+  * l'éditeur du 07/11/2026, D54) : page, redirection, réponse JSON, erreur ;
+- * un fichier téléchargé, voir PiecesDuFournisseurResourceTest.
++ * un fichier téléchargé, voir PiecesDuFournisseurResourceTest. La page du
++ * lien d'inscription lit la base : chaque test a la sienne, migrée.
+  */
+ class EnTetesDeSecuriteTest extends TestCase
+ {
++    use RefreshDatabase;
++
+     /**
+      * @return array<string, array{0: string, 1: string, 2: int}>
+      */
 diff --git a/tests/Feature/Facturation/CloturerCaisseActionTest.php b/tests/Feature/Facturation/CloturerCaisseActionTest.php
 index 81a0e33..937d387 100644
 --- a/tests/Feature/Facturation/CloturerCaisseActionTest.php
@@ -2759,18 +2854,19 @@ index 8aaaab8..65a21ff 100644
       * Exactement les colonnes du relevé que CLAUDE.md déclare : ni
       * identifiant de compte, ni nom de client, ni document.
 diff --git a/tests/Feature/Societe/ConnexionParIdentifiantTest.php b/tests/Feature/Societe/ConnexionParIdentifiantTest.php
-index dcafc2b..53c06d8 100644
+index dcafc2b..8a80855 100644
 --- a/tests/Feature/Societe/ConnexionParIdentifiantTest.php
 +++ b/tests/Feature/Societe/ConnexionParIdentifiantTest.php
-@@ -27,6 +27,7 @@
+@@ -27,6 +27,8 @@
  use App\Filament\App\Resources\FactureResource;
  use App\Filament\App\Resources\PosteReconnuResource;
  use App\Filament\App\Resources\PosteReconnuResource\Pages\ListPostesReconnus;
++use App\Filament\Societe\Pages\TableauDeBord;
 +use App\Http\Middleware\ExigerSonPropreMotDePasse;
  use Filament\Facades\Filament;
  use Illuminate\Auth\Access\AuthorizationException;
  use Illuminate\Contracts\Hashing\Hasher;
-@@ -39,6 +40,7 @@
+@@ -39,6 +41,7 @@
  use Illuminate\Testing\TestResponse;
  use Livewire\Features\SupportTesting\Testable;
  use Livewire\Livewire;
@@ -2778,7 +2874,7 @@ index dcafc2b..53c06d8 100644
  use Tests\TestCase;
  
  /**
-@@ -187,6 +189,25 @@ public function test_une_adresse_en_attente_ou_d_une_inscription_close_coute_com
+@@ -187,6 +190,25 @@ public function test_une_adresse_en_attente_ou_d_une_inscription_close_coute_com
          $this->assertSame([$requetesParCas['adresse inconnue'], $requetesParCas['adresse inconnue']], [$requetesParCas['adresse en attente'], $requetesParCas['adresse d\'une inscription close']]);
      }
  
@@ -2804,7 +2900,7 @@ index dcafc2b..53c06d8 100644
      public function test_une_saisie_qui_n_a_pas_huit_chiffres_est_signalee_sans_rien_reveler(): void
      {
          $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-@@ -458,6 +479,30 @@ public function test_le_mot_de_passe_egal_a_l_identifiant_n_ouvre_le_compte_que_
+@@ -458,6 +480,30 @@ public function test_le_mot_de_passe_egal_a_l_identifiant_n_ouvre_le_compte_que_
          $this->assertSame(2, PosteReconnu::withoutGlobalScopes()->count());
      }
  
@@ -2835,10 +2931,27 @@ index dcafc2b..53c06d8 100644
      /**
       * Un responsable ou un administrateur dont le mot de passe est encore
       * son identifiant choisit le sien à sa première connexion, avant toute
-@@ -517,6 +562,33 @@ public function test_un_responsable_un_administrateur_ou_un_collaborateur_choisi
+@@ -517,6 +563,50 @@ public function test_un_responsable_un_administrateur_ou_un_collaborateur_choisi
          $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
      }
  
++    /**
++     * Dans l'espace de la société comme dans celui des magasins, un
++     * administrateur dont le mot de passe est encore son identifiant va,
++     * de toute page, au choix de son mot de passe, que cet espace ouvre.
++     */
++    public function test_dans_l_espace_de_la_societe_toute_page_mene_au_choix_du_mot_de_passe_qui_s_y_ouvre(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $poste = $this->reconnaitreUnPoste($magasin);
++        $administrateur = app(CreerAdministrateurAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, ['name' => 'Alice Admin'], null, PermissionRegistry::modeleDeLAdministrateur(TypeDActivite::Commerce), []);
++        $identifiant = (string) $administrateur->identifiantDeConnexion();
++        $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
++
++        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertRedirect(route('filament.societe.choisir-son-mot-de-passe'));
++        $this->get(route('filament.societe.choisir-son-mot-de-passe'))->assertOk();
++    }
++
 +    /**
 +     * Tant que le compte doit choisir son mot de passe, la page du choix
 +     * s'ouvre, comme la déconnexion ; une fois le mot de passe choisi
@@ -3206,6 +3319,30 @@ index 1eedb1b..ddad668 100644
  
          return 2;
      })(),
+diff --git a/tests/Qualite/seuils.json b/tests/Qualite/seuils.json
+index fcb1a18..dfa95fd 100644
+--- a/tests/Qualite/seuils.json
++++ b/tests/Qualite/seuils.json
+@@ -3,14 +3,14 @@
+         "niveau": 6
+     },
+     "couverture": {
+-        "achats_et_stock": 97,
++        "achats_et_stock": 98,
+         "cabinets": 94,
+-        "caisse_securisee": 97,
+-        "calculs": 96,
+-        "droits_et_isolation": 89,
++        "caisse_securisee": 98,
++        "calculs": 100,
++        "droits_et_isolation": 96,
+         "ecrans_et_socle": 97,
+         "facturation": 97,
+-        "pages_publiques": 95,
++        "pages_publiques": 96,
+         "societe": 94
+     },
+     "mutation": {}
 diff --git a/tests/Unit/BaremePrixDeVenteTest.php b/tests/Unit/BaremePrixDeVenteTest.php
 index e664b0d..42ca5a4 100644
 --- a/tests/Unit/BaremePrixDeVenteTest.php
@@ -3251,10 +3388,10 @@ index e664b0d..42ca5a4 100644
  }
 diff --git a/tests/Unit/CalculateurLigneLimitesTest.php b/tests/Unit/CalculateurLigneLimitesTest.php
 new file mode 100644
-index 0000000..32c7061
+index 0000000..ead1e30
 --- /dev/null
 +++ b/tests/Unit/CalculateurLigneLimitesTest.php
-@@ -0,0 +1,304 @@
+@@ -0,0 +1,324 @@
 +<?php
 +
 +namespace Tests\Unit;
@@ -3525,6 +3662,26 @@ index 0000000..32c7061
 +        $this->assertSame(219.9, $c->prixTtcArrondi(183.254, 20));
 +        $this->assertSame(20.0, $c->prixTtcArrondi(10.0, 100));
 +        $this->assertRefuse(fn () => $c->valeurAuCoutMoyen(1, 100.0, 101), 'Le taux de TVA doit être compris entre 0 et 100 %.');
++    }
++
++    /**
++     * Le coût unitaire d'une ligne d'achat se tire de son HT écrit : ce HT
++     * ÷ la quantité, moins l'escompte de la facture, au dix-millième
++     * d'euro, arrondi une seule fois (10,00 € HT pour 3 articles font
++     * 3,3333 € chacun, 3,25 € avec 2,5 % d'escompte ; 2,00 € HT pour 3,
++     * 0,6667 €). Un prix d'achat se lit tel qu'il est enregistré, écrit
++     * comme un montant, son signe compris, sans jamais s'arrondir au
++     * centime.
++     */
++    public function test_le_cout_unitaire_et_le_prix_d_un_achat_se_lisent_au_bon_chiffre(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertSame([3.3333, 3.25, 0.6667], [$c->coutUnitaireDuHt(1000, 3), $c->coutUnitaireDuHt(1000, 3, 2.5), $c->coutUnitaireDuHt(200, 3)]);
++        $this->assertSame(
++            ['0,1234 €', '1 234,50 €', '-12,50 €', '-0,1234 €', '0,00 €'],
++            array_map($c->prixDAchatAffiche(...), [123400, 1234500000, -12500000, -123400, 0]),
++        );
 +    }
 +
 +    /**

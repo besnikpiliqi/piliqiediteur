@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 04:10 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 09/11/2026 à 06:19 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -52,7 +52,6 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
  M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
  M app/Domain/Tenancy/Rules/SiretValide.php
- M app/Domain/Tenancy/Services/PorteeDesDroits.php
  M app/Models/User.php
  M app/Policies/AffectationPolicy.php
  M app/Providers/AppServiceProvider.php
@@ -77,6 +76,7 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
  M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
  M tests/Feature/Calendrier/HorodatageEnUtcTest.php
+ M tests/Feature/EnTetesDeSecuriteTest.php
  M tests/Feature/Facturation/CloturerCaisseActionTest.php
  M tests/Feature/Facturation/CloturerLesJourneesActionTest.php
  M tests/Feature/Facturation/FermerSaCaisseActionTest.php
@@ -95,9 +95,9 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
  M tests/Feature/Tenancy/TenantIsolationTest.php
  M tests/Qualite/qualite.php
+ M tests/Qualite/seuils.json
  M tests/Unit/BaremePrixDeVenteTest.php
  M tests/Unit/CalculateurLigneTest.php
- A tests/Unit/MontantsDuFournisseurTest.php
 ```
 
 ## Dernière course de la chaîne

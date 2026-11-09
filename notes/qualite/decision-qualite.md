@@ -49,7 +49,7 @@ Exception approuvée à la règle « aucune dépendance ajoutée » : les outils
    - **A (conseillée)** : à chaque envoi, la mesure des lignes par PCOV, comme aujourd'hui ; une fois par nuit, la mesure des branches de tout le logiciel par Xdebug, par partie, avec des seuils qui ne peuvent que monter (tâche du flux de nuit `audit-quotidien.yml`, écrit par le lot AUD et copié sur `main`, Q-AUD6) ; les envois restent aussi rapides ; si la mesure de nuit ne tient pas dans le temps ou la mémoire de la CI, l'éditeur en reçoit les chiffres avant tout autre choix.
    - **B** : mesurer aussi les branches à chaque envoi, par Xdebug ; plus complet tout de suite, chaque envoi attend la CI bien plus longtemps.
    - **C** : ne pas mesurer les branches ; les tests de mutation des calculs et des droits (et de la caisse à l'étape 3) contrôlent déjà chaque condition plus sévèrement ; les autres parties n'ont que la couverture des lignes.
-3. **État** : en attente. Tant qu'elle l'est, aucun lot ne mesure les branches ni n'en retire l'exigence ; la réponse s'écrit ici, puis dans le complément du lot qui l'applique.
+3. **État** : décidé. Réponse de l'éditeur (09/11/2026 vers 23 h UTC), mot pour mot : « A ». La couverture des lignes (PCOV) reste mesurée à chaque envoi ; la couverture des branches de tout le logiciel est mesurée chaque nuit par Xdebug, par partie, avec des seuils qui ne peuvent que monter. Le lot AUD l'ajoute au flux de nuit `audit-quotidien.yml` (cahier `audits-externes/decision-aud.md`, § 4, note du 09/11) ; la session copie ce flux sur `main` après la poussée d'AUD (Q-AUD6).
 
 ## 11. Question en attente : niveaux de l'analyse statique (posée à l'éditeur le 09/11/2026 vers 20 h 55 UTC)
 

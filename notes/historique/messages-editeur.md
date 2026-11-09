@@ -1498,3 +1498,7 @@ oui + Psalm 1
 
 tu peux lire ce lien https://diag-invoice.fr/blog/rejet-br-co-14-total-tva-somme-taux pour comment calculer
 
+## 144. 2026-11-09 23:18 UTC
+
+exact, A, oui
+

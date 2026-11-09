@@ -60,7 +60,7 @@ index f8a6ef8..b02974a 100644
                php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
              fi
 diff --git a/README.md b/README.md
-index b624b16..b154fb6 100644
+index b624b16..c65878d 100644
 --- a/README.md
 +++ b/README.md
 @@ -99,10 +99,10 @@ ## Tests, commandes et fonctionnement
@@ -72,9 +72,9 @@ index b624b16..b154fb6 100644
 -- *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-lines --git-diff-base=<commit>` pour les seules lignes changées depuis ce commit, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet, au plus celui des lignes de l'envoi qui l'a enregistré ; la CI le compare, à chaque envoi, au score des seules lignes changées : sur peu de lignes, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil.
 -- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou) et le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent.
 +- *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
-+- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; une partie qui a un seuil sans aucune ligne mesurée fait échouer le contrôle, comme un rapport produit dans un autre dépôt) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, sans autre marge : une partie qui perd une ligne couverte fait échouer la CI. La couverture des branches, que demande aussi la décision du 01/11/2026, n'est pas mesurée : PCOV, que la décision impose, ne mesure que les lignes ; la mesurer demanderait Xdebug (couverture des chemins, bien plus lente) dans une tâche de la CI, question soumise à l'éditeur.
++- *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; une partie qui a un seuil sans aucune ligne mesurée fait échouer le contrôle, comme un rapport produit dans un autre dépôt) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, sans autre marge : une partie dont la couverture descend sous ce dixième fait échouer la CI. La couverture des branches, que demande aussi la décision du 01/11/2026, n'est pas mesurée : PCOV, que la décision impose, ne mesure que les lignes ; la mesurer demanderait Xdebug (couverture des chemins, bien plus lente) dans une tâche de la CI, question soumise à l'éditeur.
 +- *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (les policies, les contrôles et les gardes des droits, la portée des comptes, les droits que lit `User`, l'accès des cabinets à leurs clients et les affectations des membres ; ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; ajoutez `--git-diff-filter=AM --git-diff-base=<commit>` pour les fichiers sensibles ajoutés ou modifiés depuis ce commit, tous leurs mutants, comme la CI, ou donnez à la place de la configuration les chemins de quelques fichiers sensibles), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet ; la CI le compare, à chaque envoi, au score des fichiers sensibles que l'envoi ajoute ou modifie, chacun entier (décision du 01/11/2026, point 2) : un test retiré qui arrêtait les mutants d'une autre méthode d'un fichier changé se voit. Sur peu de fichiers, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil. Un envoi qui change `User.php` ou un fichier de calcul très appelé fait tourner la tâche plus d'une heure.
-+- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou) le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent, et, dans `ControleDesDroits::dansLEspaceDeLaSociete()`, le refus d'un geste hors de l'équipe dans une société en lecture seule, que les policies de l'espace de la société font aussi (deux mutants, les seuls survivants des droits et de l'isolation).
++- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) et le référentiel des autorisations s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus : leurs mutants restent non conclus, et leurs tests en base (`*EnBaseTest`) vérifient les gardes elles-mêmes. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou), le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent, et, dans `ControleDesDroits::dansLEspaceDeLaSociete()`, le refus d'un geste hors de l'équipe dans une société en lecture seule, que les policies de l'espace de la société font aussi (deux mutants, les seuls survivants des droits et de l'isolation).
  - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
  - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
  - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, et que le tableau de bord et « Les caisses » de l'espace de la société (pour le propriétaire comme pour un administrateur) et le tableau de bord d'un cabinet lisent la base autant de fois avec un magasin ou un client que trois, sous un plafond ; `TempsDeReponseTest` (en navigateur) vérifie que chaque page principale du magasin, le tableau de bord et « Les caisses » de l'espace de la société et le tableau de bord d'un cabinet s'ouvrent sous un plafond de temps. Les droits que le compte connecté lit pendant une requête (ses autorisations dans chaque magasin, ses affectations, et pour un compte d'un cabinet les clients que ses liens lui ouvrent et ce que chacun lui accorde) se lisent une fois par requête et s'oublient à sa fin.
@@ -523,32 +523,40 @@ index 95f6537..b340fb0 100644
 +    </stubs>
  </psalm>
 diff --git a/tests/Browser/Parcours/PiecesDuFournisseurTest.php b/tests/Browser/Parcours/PiecesDuFournisseurTest.php
-index c5d7019..3794f06 100644
+index c5d7019..d5e10bc 100644
 --- a/tests/Browser/Parcours/PiecesDuFournisseurTest.php
 +++ b/tests/Browser/Parcours/PiecesDuFournisseurTest.php
-@@ -48,6 +48,21 @@ function pieceSurLePoste(string $nom, string $contenu): string
+@@ -31,6 +31,13 @@
+ 
+ const PDF_DU_FOURNISSEUR = "%PDF-1.4\nFacture F-812 du Grossiste du Nord\n%%EOF";
+ 
++/**
++ * Une vraie photo JPEG (16 × 12 pixels orange), que le navigateur sait
++ * décoder pour son aperçu, écrite ici plutôt que dessinée par l'extension
++ * GD, que la CI n'installe pas pour chaque version de PHP.
++ */
++const PHOTO_DU_FOURNISSEUR = '/9j/4AAQSkZJRgABAQEAYABgAAD//gA7Q1JFQVRPUjogZ2QtanBlZyB2MS4wICh1c2luZyBJSkcgSlBFRyB2ODApLCBxdWFsaXR5ID0gNzUK/9sAQwAIBgYHBgUIBwcHCQkICgwUDQwLCwwZEhMPFB0aHx4dGhwcICQuJyAiLCMcHCg3KSwwMTQ0NB8nOT04MjwuMzQy/9sAQwEJCQkMCwwYDQ0YMiEcITIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy/8AAEQgADAAQAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8Anooor5A+qP/Z';
++
+ beforeEach(function () {
+     Storage::fake(PiecesDuFournisseur::DISQUE);
+     Storage::fake(FileUploadConfiguration::disk());
+@@ -48,6 +55,15 @@ function pieceSurLePoste(string $nom, string $contenu): string
      return $chemin;
  }
  
 +/**
 + * Une photo JPEG de la facture du fournisseur, sur le poste de la
-+ * personne, prête à être choisie : une vraie image, que le navigateur sait
-+ * décoder pour son aperçu.
++ * personne, prête à être choisie.
 + */
 +function photoSurLePoste(string $nom): string
 +{
-+    $image = imagecreatetruecolor(64, 48);
-+    imagefill($image, 0, 0, (int) imagecolorallocate($image, 200, 120, 40));
-+    ob_start();
-+    imagejpeg($image);
-+
-+    return pieceSurLePoste($nom, (string) ob_get_clean());
++    return pieceSurLePoste($nom, base64_decode(PHOTO_DU_FOURNISSEUR, true));
 +}
 +
  /**
   * Une facture d'achat du Grossiste du Nord, de deux bougies, saisie par le
   * responsable avec ces pièces, validée ou en brouillon.
-@@ -106,6 +121,33 @@ function telechargerLaPiece(Navigation $onglet, string $nom): array
+@@ -106,6 +122,33 @@ function telechargerLaPiece(Navigation $onglet, string $nom): array
      expect([$fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe(['facture-F-812.pdf', 'application/pdf', PDF_DU_FOURNISSEUR]);
  });
  
@@ -1771,7 +1779,7 @@ index 453b996..3d08db6 100644
          'app/Domain/Tenancy/Support/GardesDesTypesDActivite.php',
          'app/Domain/Cabinets/Support/GardesDesCabinets.php',
 diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
-index 33d6e4b..4ae1d74 100644
+index 33d6e4b..09d1f56 100644
 --- a/tests/Qualite/qualite.php
 +++ b/tests/Qualite/qualite.php
 @@ -24,18 +24,24 @@
@@ -1898,7 +1906,35 @@ index 33d6e4b..4ae1d74 100644
          }
      }
  
-@@ -465,18 +502,99 @@ function flux(string $rapport): int
+@@ -431,6 +468,18 @@ function sensiblesChanges(string $base): int
+     return 0;
+ }
+ 
++/**
++ * Un problème d'un rapport de Psalm est-il un chemin de sécurité (une
++ * donnée venue de l'extérieur qui atteint, sans contrôle, une requête SQL,
++ * une page, un fichier, une commande, une redirection ou un e-mail) ?
++ *
++ * @param  array<string, mixed>  $probleme
++ */
++function estUnCheminDeSecurite(array $probleme): bool
++{
++    return ($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted');
++}
++
+ /**
+  * Psalm ne sert qu'à l'analyse des flux de données (décision de l'éditeur
+  * du 07/11/2026, D54) : le contrôle des types est celui de Larastan
+@@ -447,7 +496,7 @@ function flux(string $rapport): int
+ 
+     $chemins = array_values(array_filter(
+         json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR),
+-        static fn (array $probleme): bool => ($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted'),
++        estUnCheminDeSecurite(...),
+     ));
+ 
+     if ($chemins === []) {
+@@ -465,18 +514,97 @@ function flux(string $rapport): int
      return 1;
  }
  
@@ -1931,10 +1967,8 @@ index 33d6e4b..4ae1d74 100644
 +
 +    $chemins = [];
 +
-+    foreach (json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR) as $probleme) {
-+        if (($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted')) {
-+            $chemins[] = sprintf('%s:%d %s', relatifAuDepot((string) $probleme['file_name']), $probleme['line_from'], $probleme['type']);
-+        }
++    foreach (array_filter(json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR), estUnCheminDeSecurite(...)) as $probleme) {
++        $chemins[] = sprintf('%s:%d %s', relatifAuDepot((string) $probleme['file_name']), $probleme['line_from'], $probleme['type']);
 +    }
 +
 +    sort($chemins);

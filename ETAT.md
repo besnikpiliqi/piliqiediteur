@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 08/11/2026 à 22:24 UTC par pilotage-sync.sh : « Lot CALC : la règle vaut pour toutes les ventes, tickets compris (décision du 08/11 19 h 30), cahier et chaîne alignés ; passation précisée ».
+Mis à jour le 09/11/2026 à 00:05 UTC par pilotage-sync.sh : « Reprise du 09/11 demandée par l'éditeur : chaîne alignée sur PostgreSQL seulement, état du lot QA noté ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

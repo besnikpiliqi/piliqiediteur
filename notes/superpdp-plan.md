@@ -595,6 +595,8 @@ Un événement est toujours rattaché par la connexion du magasin qui a fait l'a
 | vat_break_down (BG-23) | par taux : `taxable_amount = Σ montant_ht`, `tax_amount = Σ montant_tva` (montants enregistrés, voir D1), catégorie S |
 | totals | `sum_invoice_lines_amount = total_without_vat = total_ht` ; `total_vat_amount = {value: total_tva, currency_code}` ; `total_with_vat = total_ttc` ; `paid_amount = montantPaye()` s'il est positif ; `amount_due_for_payment = total_ttc − paid` |
 
+**Prix unitaire de chaque ligne (BT-146), point ajouté le 09/11/2026 après une question de l'éditeur** : `item_net_price` reçoit le PU HT tel qu'il est enregistré, avec ses décimales (jusqu'à six, par exemple 0,825000 pour 0,99 € TTC à 20 %), jamais le prix arrondi au centime que montre le PDF. Ainsi « quantité × prix unitaire » redonne le montant de la ligne (BT-131) au demi-centime près, quelle que soit la quantité (25 stylos : 25 × 0,825 = 20,625, ligne à 20,63 €, alors que 25 × 0,83 = 20,75). À vérifier au bac à sable de SUPER PDP au début de la phase 5 : nombre de décimales accepté pour BT-146, et contrôle éventuel de BT-131 = BT-129 × BT-146 ÷ BT-149 (tolérance) ; s'il accepte moins de décimales, l'écart se signale à l'éditeur avant tout choix. La TVA de chaque taux (BG-23) reste celle des montants enregistrés, à moins d'un centime de « base × taux » avec la règle (a) des ventes (tolérance européenne : 1 € par taux).
+
 **Référence externe** (≤ 36 caractères) : `F{magasin_id}-{facture_id}` ou `A{magasin_id}-{avoir_id}`.
 
 ### Format retenu : Factur-X

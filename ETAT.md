@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 00:12 UTC par pilotage-sync.sh : « Réponses de l'éditeur aux questions du lot AUD (tout en a, Q-AUD6 oui, Q-AUD7 oui) ».
+Mis à jour le 09/11/2026 à 01:05 UTC par pilotage-sync.sh : « Q-CALC2 : écart de TVA de la règle du 08/11 sous-estimé, question posée à l'éditeur ; CALC en attente sur la règle ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -40,20 +40,28 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
 ```
  M .github/workflows/tests.yml
  M README.md
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/Calendrier/Casts/Instant.php
+ M app/Domain/Facturation/Services/CaissesDeLaSociete.php
  M app/Domain/Facturation/Services/SaisieDecimale.php
+ M app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
  M app/Domain/Tenancy/Actions/ChangerSiretAction.php
  M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
  M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
  M app/Domain/Tenancy/Rules/SiretValide.php
+ M app/Models/User.php
  M app/Policies/AffectationPolicy.php
+ M app/Providers/AppServiceProvider.php
  M infection.json5
  M psalm.xml
+ M tests/Browser/Parcours/TempsDeReponseTest.php
+ A tests/Feature/Achats/ApercuDUnAchatTest.php
  M tests/Feature/Achats/FactureAchatActionsTest.php
  M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
  M tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
  M tests/Feature/Authorization/ClotureCaissePolicyTest.php
+ A tests/Feature/Authorization/LimitesDesDroitsTest.php
  M tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
  M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
  M tests/Feature/Calendrier/HorodatageEnUtcTest.php
@@ -63,18 +71,20 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
  M tests/Feature/Facturation/ReimputationALaContrePassationTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
+ M tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
  M tests/Feature/Filament/ClientResourceTest.php
  M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
  M tests/Feature/Filament/InventaireOuvertureResourceTest.php
+ M tests/Feature/Qualite/PlafondsDeRequetesTest.php
+ M tests/Feature/Societe/CaissesDeLaSocieteTest.php
  M tests/Feature/Societe/ConnexionParIdentifiantTest.php
  M tests/Feature/Stock/InventaireOuvertureTest.php
  M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
  M tests/Qualite/qualite.php
  M tests/Unit/CalculateurLigneTest.php
+ A tests/Unit/MontantsDuFournisseurTest.php
+ A tests/Unit/PartDeReglementTest.php
  M tests/Unit/SaisieDecimaleTest.php
-?? tests/Feature/Achats/ApercuDUnAchatTest.php
-?? tests/Feature/Authorization/LimitesDesDroitsTest.php
-?? tests/Unit/MontantsDuFournisseurTest.php
 ```
 
 ## Dernière course de la chaîne

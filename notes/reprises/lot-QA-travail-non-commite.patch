@@ -250,6 +250,30 @@ index 5dd9732..fce2bbd 100644
      }
  
      public function get(Model $model, string $key, mixed $value, array $attributes): ?CarbonImmutable
+diff --git a/app/Domain/Catalogue/Services/BaremePrixDeVente.php b/app/Domain/Catalogue/Services/BaremePrixDeVente.php
+index 64f460f..015cc4b 100644
+--- a/app/Domain/Catalogue/Services/BaremePrixDeVente.php
++++ b/app/Domain/Catalogue/Services/BaremePrixDeVente.php
+@@ -36,11 +36,17 @@ public function __construct(
+             throw new InvalidArgumentException('Le barème a au moins un palier, ou un bénéfice au-delà.');
+         }
+ 
+-        if (min([...$seuils, 1]) <= 0 || count(array_unique($seuils)) !== count($seuils)) {
++        if (($seuils !== [] && min($seuils) <= 0) || count(array_unique($seuils)) !== count($seuils)) {
+             throw new InvalidArgumentException('Chaque palier du barème a son propre prix d\'achat, supérieur à 0.');
+         }
+ 
+-        if (min([...array_column($paliers, 'benefice'), $beneficeAuDela ?? 0]) < 0) {
++        $benefices = array_column($paliers, 'benefice');
++
++        if ($beneficeAuDela !== null) {
++            $benefices[] = $beneficeAuDela;
++        }
++
++        if (min($benefices) < 0) {
+             throw new InvalidArgumentException('Un bénéfice du barème ne peut pas être négatif.');
+         }
+     }
 diff --git a/app/Domain/Facturation/Services/CaissesDeLaSociete.php b/app/Domain/Facturation/Services/CaissesDeLaSociete.php
 index 17e8acb..6092381 100644
 --- a/app/Domain/Facturation/Services/CaissesDeLaSociete.php
@@ -346,8 +370,74 @@ index 17e8acb..6092381 100644
              ->all();
      }
  }
+diff --git a/app/Domain/Facturation/Services/CalculateurLigne.php b/app/Domain/Facturation/Services/CalculateurLigne.php
+index fbaf8af..64fd73a 100644
+--- a/app/Domain/Facturation/Services/CalculateurLigne.php
++++ b/app/Domain/Facturation/Services/CalculateurLigne.php
+@@ -115,7 +115,7 @@ public function chiffrerUneVente(array $lignes): array
+         $cumuls = [];
+         $montants = [];
+ 
+-        foreach (array_values($lignes) as $ligne) {
++        foreach ($lignes as $ligne) {
+             $tauxDuPrix = $this->taux($ligne, 'taux_tva_du_prix');
+             $taux = $this->tauxFacture($ligne, $tauxDuPrix);
+             $ttcAuPrix = $this->montantNetCentimes($this->prix($ligne, 'prix_unitaire_ttc'), $this->quantite($ligne), $this->remise($ligne));
+@@ -218,7 +218,7 @@ public function chiffrerUnAchat(array $lignes, array $tvaEcriteParTaux = []): ar
+         $cumuls = [];
+         $montants = [];
+ 
+-        foreach (array_values($lignes) as $ligne) {
++        foreach ($lignes as $ligne) {
+             $taux = $this->taux($ligne, 'taux_tva');
+             $htCalcule = $this->htDUnAchat($this->prixAuMillionieme($ligne), $this->quantite($ligne), $this->remise($ligne));
+             $ht = ($ligne['montant_ht'] ?? null) === null ? $htCalcule : $this->htEcrit($ligne);
+@@ -1041,8 +1041,9 @@ private function htDUnAchat(int $prixMillioniemes, int $quantite, int $remiseCen
+     }
+ 
+     /**
+-     * Le PU HT d'une ligne d'achat en millionièmes d'euro : jamais négatif,
+-     * dans la borne des prix unitaires.
++     * Le PU HT d'une ligne d'achat en millionièmes d'euro : jamais négatif.
++     * La borne des prix unitaires se contrôle sur le HT de la ligne (voir
++     * htDUnAchat()), où il sert toujours : quantité x PU, au moins le PU.
+      *
+      * @param  array<string, mixed>  $ligne
+      *
+@@ -1056,10 +1057,6 @@ private function prixAuMillionieme(array $ligne): int
+             throw new InvalidArgumentException(self::NOMBRE_A_VIRGULE);
+         }
+ 
+-        if (abs($prix) >= self::MILLIONIEMES_MAXIMUM) {
+-            throw new InvalidArgumentException('Montant hors limites.');
+-        }
+-
+         if ($prix < 0) {
+             throw new InvalidArgumentException('Un prix unitaire ne peut pas être négatif.');
+         }
+@@ -1133,7 +1130,8 @@ private function repartirLEcart(array $lignes, int $taux, int $base, int $ecart)
+ 
+         foreach ($rangs as $rang) {
+             $cumulHt += $lignes[$rang]['montant_ht'];
+-            $part = $base === 0 ? 0 : $this->diviserArrondi($this->multiplier($ecart, $cumulHt), $base);
++            // Une base nulle n'a que des lignes à 0 € HT : aucune part.
++            $part = $this->diviserArrondi($this->multiplier($ecart, $cumulHt), max($base, 1));
+             $voulue = $lignes[$rang]['montant_tva'] + $part - $partPrecedente + $report;
+             $partPrecedente = $part;
+             $tva = max(0, min($lignes[$rang]['montant_ht'], $voulue));
+@@ -1142,10 +1140,6 @@ private function repartirLEcart(array $lignes, int $taux, int $base, int $ecart)
+         }
+ 
+         foreach (array_reverse($rangs) as $rang) {
+-            if ($report === 0) {
+-                break;
+-            }
+-
+             $tva = max(0, min($lignes[$rang]['montant_ht'], $lignes[$rang]['montant_tva'] + $report));
+             $report -= $tva - $lignes[$rang]['montant_tva'];
+             $lignes[$rang]['montant_tva'] = $tva;
 diff --git a/app/Domain/Facturation/Services/SaisieDecimale.php b/app/Domain/Facturation/Services/SaisieDecimale.php
-index 875cf69..5b04c83 100644
+index 875cf69..999f948 100644
 --- a/app/Domain/Facturation/Services/SaisieDecimale.php
 +++ b/app/Domain/Facturation/Services/SaisieDecimale.php
 @@ -63,6 +63,8 @@ public static function enCentiemes(mixed $saisie): int
@@ -370,6 +460,15 @@ index 875cf69..5b04c83 100644
          return $negatif ? -$centiemes : $centiemes;
      }
  
+@@ -124,7 +122,7 @@ private static function lire(mixed $saisie): array
+             default => throw new InvalidArgumentException('Nombre illisible.'),
+         };
+ 
+-        if (preg_match('/^-?(\d+(\.\d*)?|\.\d+)$/D', $texte) !== 1) {
++        if (preg_match('/^-?(\d+(\.\d*)?|\.\d+)$/', $texte) !== 1) {
+             if (! is_numeric($texte)) {
+                 throw new InvalidArgumentException("« {$texte} » n'est pas un nombre.");
+             }
 diff --git a/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php b/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
 index 297dde3..a05317d 100644
 --- a/app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
@@ -981,6 +1080,34 @@ index f08e72f..51bdca9 100644
      /**
       * Un brouillon ne crée aucun produit : sa ligne garde seulement la fiche
       * du nouveau produit, et se calcule comme toute ligne d'achat -- 3 x
+diff --git a/tests/Feature/Achats/PiecesDuFournisseurTest.php b/tests/Feature/Achats/PiecesDuFournisseurTest.php
+index 82bc3fc..dd5da9a 100644
+--- a/tests/Feature/Achats/PiecesDuFournisseurTest.php
++++ b/tests/Feature/Achats/PiecesDuFournisseurTest.php
+@@ -293,6 +293,23 @@ public function test_joindre_exige_de_saisir_les_achats_et_retirer_un_brouillon(
+         app(RetirerUnePieceAction::class)->handle($consultant, $piece);
+     }
+ 
++    public function test_joindre_a_un_avoir_emis_exige_de_creer_les_avoirs_fournisseur(): void
++    {
++        $avoir = $this->retourner(app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([])), []);
++        $consultant = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW]);
++        $retourneur = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]);
++
++        try {
++            app(JoindreDesPiecesAction::class)->handle($consultant, $avoir, [new PieceDeposee('note.pdf', self::PDF)]);
++            $this->fail('Sans le droit de créer les avoirs fournisseur, aucune pièce ne se joint à un avoir.');
++        } catch (AuthorizationException) {
++            $this->assertSame(0, $avoir->pieces()->count());
++        }
++
++        app(JoindreDesPiecesAction::class)->handle($retourneur, $avoir, [new PieceDeposee('note.pdf', self::PDF)]);
++        $this->assertSame(1, $avoir->pieces()->count());
++    }
++
+     public function test_le_cabinet_lie_joint_une_piece_s_il_saisit_les_achats_du_client(): void
+     {
+         $factureAchat = $this->saisir([]);
 diff --git a/tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php b/tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
 index 7fd866d..95e2fe3 100644
 --- a/tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
@@ -1008,8 +1135,33 @@ index 7fd866d..95e2fe3 100644
      /**
       * Le brouillon garde ce qu'écrit la note d'avoir (le HT d'une ligne, la
       * TVA d'un taux) ; son émission les retient, et arrête ses montants.
+diff --git a/tests/Feature/Authorization/AvoirPolicyTest.php b/tests/Feature/Authorization/AvoirPolicyTest.php
+index 3825901..229d417 100644
+--- a/tests/Feature/Authorization/AvoirPolicyTest.php
++++ b/tests/Feature/Authorization/AvoirPolicyTest.php
+@@ -103,6 +103,20 @@ public function test_avec_la_vue_totale_un_membre_voit_les_avoirs_de_toute_l_equ
+         $this->assertTrue($comptable->can('view', $avoirDuVendeur));
+     }
+ 
++    /**
++     * Sans « Avoirs : voir », un membre ne voit aucun avoir, même avec
++     * « voir celles de toute l'équipe ».
++     */
++    public function test_sans_la_permission_de_voir_les_avoirs_la_vue_totale_ne_les_montre_pas(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $avoir = $this->emettreUnAvoirEnTantQue($this->vendeurQuiFaitDesAvoirs($magasin, 'paul@example.test'));
++        $sansLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES], ['name' => 'Sans les avoirs', 'email' => 'sans@example.test']);
++        $avecLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::AVOIR_VIEW], ['name' => 'Avec les avoirs', 'email' => 'avec@example.test']);
++
++        $this->assertSame([false, true], [$sansLesAvoirs->can('view', $avoir), $avecLesAvoirs->can('view', $avoir)]);
++    }
++
+     /**
+      * Un vendeur qui voit les avoirs et en fait, sans voir les ventes de
+      * toute l'équipe.
 diff --git a/tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php b/tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
-index 14ac328..8919b67 100644
+index 14ac328..ba738db 100644
 --- a/tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
 +++ b/tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
 @@ -5,6 +5,7 @@
@@ -1039,6 +1191,37 @@ index 14ac328..8919b67 100644
      /**
       * R5 : qui peut clôturer la journée (cloture_caisse.gerer) ferme la
       * caisse d'un autre membre ; un vendeur ne ferme que la sienne, et
+@@ -64,6 +77,30 @@ public function test_seul_qui_peut_cloturer_la_journee_ferme_la_caisse_d_un_autr
+         ]);
+     }
+ 
++    /**
++     * Depuis un magasin, on ne ferme que la caisse d'un compte qui y a des
++     * droits, des ventes ou des encaissements : jamais celle d'un vendeur
++     * d'un autre magasin de la société, ni celle d'un administrateur de
++     * tous les magasins d'une autre société, dont l'affectation vaut pour
++     * chacun des magasins de sa propre société seulement.
++     */
++    public function test_on_ne_ferme_la_caisse_d_un_compte_que_dans_un_magasin_ou_il_tient_sa_caisse(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $administrateur = $this->administrateur($magasin);
++        $vendeurDAilleurs = $this->membre($this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']), RoleMagasin::Vendeur);
++        $autreSociete = $this->ouvrirUneSociete(['nom' => 'Boutique d\'une autre société']);
++        $administrateurDAilleurs = $this->administrateur($autreSociete);
++        app(TenantContext::class)->set($magasin);
++        $proprietaire = $this->proprietaireDe($magasin);
++
++        $this->assertSame([true, false, false], [
++            $proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $administrateur]),
++            $proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeurDAilleurs]),
++            $proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $administrateurDAilleurs]),
++        ]);
++    }
++
+     /**
+      * @return array<string, array{list<string>, bool}>
+      */
 diff --git a/tests/Feature/Authorization/ClotureCaissePolicyTest.php b/tests/Feature/Authorization/ClotureCaissePolicyTest.php
 index c7b435a..3cbebc0 100644
 --- a/tests/Feature/Authorization/ClotureCaissePolicyTest.php
@@ -1083,12 +1266,193 @@ index c7b435a..3cbebc0 100644
      private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User
      {
          return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::CLOTURE_CAISSE_VIEW], ['name' => $email, 'email' => $email]);
+diff --git a/tests/Feature/Authorization/ControleDesDroitsTest.php b/tests/Feature/Authorization/ControleDesDroitsTest.php
+index 23d3d53..c5371be 100644
+--- a/tests/Feature/Authorization/ControleDesDroitsTest.php
++++ b/tests/Feature/Authorization/ControleDesDroitsTest.php
+@@ -15,6 +15,7 @@
+ use App\Domain\Facturation\Actions\CloturerCaisseAction;
+ use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
+ use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
+ use App\Domain\Facturation\Models\Avoir;
+ use App\Domain\Facturation\Models\ClotureCaisse;
+ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+@@ -247,6 +248,22 @@ public function test_le_proprietaire_n_a_aucun_droit_dans_le_magasin_d_une_autre
+         $this->assertFalse($proprietaire->can(PermissionRegistry::FACTURE_VIEW));
+         $this->assertFalse($proprietaire->can('viewAny', Facture::class));
+         $this->assertFalse($proprietaire->can('view', $brouillon));
++        $this->assertFalse($proprietaire->can('viewAny', User::class));
++    }
++
++    /**
++     * Dans l'espace d'administration d'une autre société, rien non plus,
++     * pas même la liste de ses comptes.
++     */
++    public function test_le_proprietaire_n_a_aucun_droit_dans_l_espace_d_une_autre_societe(): void
++    {
++        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
++        $autreSociete = $this->ouvrirUneSociete(['nom' => 'Autre Boutique'])->societe;
++        app(TenantContext::class)->clear();
++        app(TenantContext::class)->poserSociete($autreSociete);
++
++        $this->assertFalse($proprietaire->can('viewAny', User::class));
++        $this->assertFalse($proprietaire->can('view', $autreSociete));
+     }
+ 
+     /**
+@@ -295,6 +312,23 @@ public function test_un_compte_suspendu_n_a_aucun_droit(): void
+         }
+     }
+ 
++    /**
++     * Même sa caisse restée ouverte, un compte suspendu ne la ferme pas
++     * lui-même : la clôture de la journée la fermera d'office.
++     */
++    public function test_un_compte_suspendu_ne_ferme_pas_sa_caisse_restee_ouverte(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $this->actingAs($vendeur);
++        app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]));
++        $this->assertTrue($vendeur->can('fermer', ClotureCaissePersonnelle::class));
++
++        $vendeur->forceFill(['statut' => StatutCompte::Suspendu])->save();
++
++        $this->assertFalse($vendeur->fresh()->can('fermer', ClotureCaissePersonnelle::class));
++    }
++
+     /**
+      * @return array<string, array{array<string, mixed>}>
+      */
+diff --git a/tests/Feature/Authorization/DevisPolicyTest.php b/tests/Feature/Authorization/DevisPolicyTest.php
+index 0a81b6d..3f83125 100644
+--- a/tests/Feature/Authorization/DevisPolicyTest.php
++++ b/tests/Feature/Authorization/DevisPolicyTest.php
+@@ -55,6 +55,40 @@ public function test_envoyer_un_devis_selon_le_role(RoleMagasin $role, ?array $a
+         $this->assertSame($peutEnvoyer, $membre->can('envoyer', $devis));
+     }
+ 
++    /**
++     * Noter le refus du client : qui envoie les devis, jamais
++     * l'observateur ni l'ancien comptable, qui les consultent.
++     */
++    #[DataProvider('roles')]
++    public function test_refuser_un_devis_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutRefuser): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
++        $devis = $this->creerUnDevis();
++
++        $this->assertSame([true, $peutRefuser], [$membre->can('view', $devis), $membre->can('refuser', $devis)]);
++    }
++
++    /**
++     * Convertir un devis crée une facture : qui crée les factures, jamais
++     * le propriétaire, qui ne vend pas, ni un membre qui voit les devis
++     * sans vendre.
++     */
++    public function test_convertir_un_devis_exige_de_creer_les_factures(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $observateur = $this->membre($magasin, RoleMagasin::Observateur);
++        $devis = $this->creerUnDevis();
++
++        $this->assertSame([true, false, false], [
++            $vendeur->can('convertir', $devis),
++            $this->proprietaireDe($magasin)->can('convertir', $devis),
++            $observateur->can('convertir', $devis),
++        ]);
++        $this->assertTrue($this->proprietaireDe($magasin)->can('view', $devis));
++    }
++
+     /**
+      * @return array<string, array{RoleMagasin, list<string>|null, bool}>
+      */
+diff --git a/tests/Feature/Authorization/GestesToujoursRefusesTest.php b/tests/Feature/Authorization/GestesToujoursRefusesTest.php
+index 61d47e4..bf51b97 100644
+--- a/tests/Feature/Authorization/GestesToujoursRefusesTest.php
++++ b/tests/Feature/Authorization/GestesToujoursRefusesTest.php
+@@ -7,17 +7,23 @@
+ use App\Policies\AvoirFournisseurPolicy;
+ use App\Policies\AvoirPolicy;
+ use App\Policies\ClotureCaissePersonnellePolicy;
++use App\Policies\ClientPolicy;
+ use App\Policies\ClotureCaissePolicy;
++use App\Policies\DevisPolicy;
++use App\Policies\EnregistrementFiscalPolicy;
+ use App\Policies\EntreeAuditPolicy;
+ use App\Policies\FactureAchatPolicy;
+ use App\Policies\FacturePolicy;
++use App\Policies\FournisseurPolicy;
+ use App\Policies\InventaireOuverturePolicy;
+ use App\Policies\InvitationCabinetPolicy;
+ use App\Policies\MagasinDeLaSocietePolicy;
+ use App\Policies\MembrePolicy;
+ use App\Policies\PaiementPolicy;
+ use App\Policies\PosteReconnuPolicy;
++use App\Policies\ProduitPolicy;
+ use App\Policies\RecuPaiementPolicy;
++use App\Policies\ServicePolicy;
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use PHPUnit\Framework\Attributes\DataProvider;
+@@ -31,7 +37,12 @@
+  * paiement, une clôture ou un relevé de caisse ne se modifie, ne se
+  * supprime, ne se restaure ni ne se duplique ; un magasin et un compte ne
+  * se suppriment jamais (CLAUDE.md, « Société ou magasin suspendu, fermé »
+- * et « Comptes et équipe ») ; le journal d'audit ne s'écrit pas à la main.
++ * et « Comptes et équipe ») ; une fiche (client, fournisseur, produit,
++ * service) s'archive et ne se supprime jamais pour de bon (« Clients,
++ * produits, fournisseurs ») ; un devis supprimé ne revient pas ; le journal
++ * d'audit et le registre fiscal ne s'écrivent pas à la main ; aucune liste
++ * ne se réordonne à la main. Chaque politique répond elle-même non à
++ * chacun de ces gestes.
+  */
+ class GestesToujoursRefusesTest extends TestCase
+ {
+@@ -43,21 +54,27 @@ class GestesToujoursRefusesTest extends TestCase
+     public static function gestes(): array
+     {
+         $gestes = [
+-            AffectationPolicy::class => ['update', 'deleteAny', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
++            AffectationPolicy::class => ['update', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
+             AvoirFournisseurPolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
+             AvoirPolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
++            ClientPolicy::class => ['forceDelete'],
+             ClotureCaissePersonnellePolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
+             ClotureCaissePolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
+-            EntreeAuditPolicy::class => ['create', 'deleteAny'],
++            DevisPolicy::class => ['forceDelete', 'restore'],
++            EnregistrementFiscalPolicy::class => ['create', 'update', 'delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
++            EntreeAuditPolicy::class => ['create', 'update', 'delete', 'deleteAny'],
+             FactureAchatPolicy::class => ['forceDelete', 'restore'],
+-            FacturePolicy::class => ['restore'],
++            FacturePolicy::class => ['forceDelete', 'restore'],
++            FournisseurPolicy::class => ['forceDelete'],
+             InventaireOuverturePolicy::class => ['forceDelete', 'restore'],
+             InvitationCabinetPolicy::class => ['delete'],
+-            MagasinDeLaSocietePolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
+-            MembrePolicy::class => ['deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
+-            PaiementPolicy::class => ['delete', 'deleteAny', 'forceDelete', 'restore'],
+-            PosteReconnuPolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate'],
++            MagasinDeLaSocietePolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
++            MembrePolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
++            PaiementPolicy::class => ['update', 'delete', 'deleteAny', 'forceDelete', 'restore'],
++            PosteReconnuPolicy::class => ['delete', 'deleteAny', 'forceDelete', 'forceDeleteAny', 'restore', 'restoreAny', 'replicate', 'reorder'],
++            ProduitPolicy::class => ['forceDelete'],
+             RecuPaiementPolicy::class => ['update', 'delete'],
++            ServicePolicy::class => ['delete'],
+         ];
+         $cas = [];
+ 
 diff --git a/tests/Feature/Authorization/LimitesDesDroitsTest.php b/tests/Feature/Authorization/LimitesDesDroitsTest.php
 new file mode 100644
-index 0000000..9af685c
+index 0000000..696004a
 --- /dev/null
 +++ b/tests/Feature/Authorization/LimitesDesDroitsTest.php
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,201 @@
 +<?php
 +
 +namespace Tests\Feature\Authorization;
@@ -1186,6 +1550,9 @@ index 0000000..9af685c
 +        $contexte->clear();
 +        $contexte->set($client);
 +        $this->assertFalse($proprietaire->can(AutorisationsSociete::PARAMETRES_GERER));
++
++        $contexte->clear();
++        $this->assertFalse($proprietaire->can(AutorisationsSociete::PARAMETRES_GERER));
 +    }
 +
 +    public function test_une_societe_ne_se_pose_pas_tant_que_le_magasin_d_une_autre_societe_est_actif(): void
@@ -1274,19 +1641,256 @@ index 0000000..9af685c
 +
 +        $administrateur = $this->administrateur($client, null, AutorisationsSociete::toutes());
 +        $responsable = $this->responsable($client);
-+        $voit = function (User $compte) use ($lien): bool {
++        $voit = function (User $compte) use ($lien): array {
 +            app(TenantContext::class)->clear();
 +            app(TenantContext::class)->poserSociete($compte->societe);
 +
-+            return $compte->can('view', $lien);
++            return [$compte->can('viewAny', LienCabinet::class), $compte->can('view', $lien)];
 +        };
 +
-+        $this->assertTrue($voit($this->proprietaireDe($client)));
-+        $this->assertFalse($voit($administrateur));
-+        $this->assertFalse($voit($responsable));
-+        $this->assertFalse($voit($this->proprietaireDe($autreMagasin)));
++        $this->assertSame([true, true], $voit($this->proprietaireDe($client)));
++        $this->assertSame([false, false], $voit($administrateur));
++        $this->assertSame([false, false], $voit($responsable));
++        $this->assertSame([true, false], $voit($this->proprietaireDe($autreMagasin)));
 +    }
 +}
+diff --git a/tests/Feature/Authorization/MembrePolicyTest.php b/tests/Feature/Authorization/MembrePolicyTest.php
+index 2a64ace..b4fc025 100644
+--- a/tests/Feature/Authorization/MembrePolicyTest.php
++++ b/tests/Feature/Authorization/MembrePolicyTest.php
+@@ -78,6 +78,7 @@ public function test_un_administrateur_autorise_ne_voit_que_les_responsables_de_
+         app(TenantContext::class)->poserSociete($magasin->societe);
+ 
+         $this->assertTrue($autorise->can('viewAny', User::class));
++        $this->assertTrue($autorise->can('create', User::class));
+         $this->assertTrue($autorise->can('view', $responsable));
+         $this->assertTrue($autorise->can('update', $responsable));
+         $this->assertTrue($autorise->can('retirerDeLaSociete', $responsable));
+@@ -89,14 +90,51 @@ public function test_un_administrateur_autorise_ne_voit_que_les_responsables_de_
+         }
+ 
+         $this->assertFalse($sansAutorisation->can('viewAny', User::class));
++        $this->assertFalse($sansAutorisation->can('create', User::class));
+         $this->assertFalse($sansAutorisation->can('view', $responsable));
+         $this->assertFalse($sansAutorisation->can('view', $responsableAilleurs));
+     }
+ 
+     /**
+-     * Créer, modifier, suspendre, retirer un administrateur : le
+-     * propriétaire seul. Un administrateur, même de tous les magasins et
+-     * autorisé à tout, ni un responsable ne les créent ni ne les gèrent.
++     * Un administrateur autorisé à la fois à nommer les responsables et à
++     * redonner l'accès voit aussi les vendeurs de sa portée, mais ne gère
++     * que le compte d'un responsable : d'un vendeur, il ne fait que
++     * redonner l'accès.
++     */
++    public function test_un_administrateur_qui_redonne_l_acces_d_un_vendeur_ne_gere_pas_son_compte(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER, AutorisationsSociete::ACCES_REDONNER]);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $responsable = $this->responsable($magasin);
++        app(TenantContext::class)->clear();
++        app(TenantContext::class)->poserSociete($magasin->societe);
++
++        $this->assertSame([true, true, false], [$administrateur->can('view', $vendeur), $administrateur->can('redonnerLAcces', $vendeur), $administrateur->can('update', $vendeur)]);
++        $this->assertTrue($administrateur->can('update', $responsable));
++    }
++
++    /**
++     * Le propriétaire ne voit ni ne gère aucun compte d'une autre société.
++     */
++    public function test_le_proprietaire_ne_voit_ni_ne_gere_un_compte_d_une_autre_societe(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $vendeurDAilleurs = $this->membre($this->ouvrirUneSociete(['nom' => 'Boutique d\'une autre société']), RoleMagasin::Vendeur);
++        $proprietaire = $this->proprietaireDe($magasin);
++        app(TenantContext::class)->clear();
++        app(TenantContext::class)->poserSociete($magasin->societe);
++
++        foreach (['view', 'update', 'suspendreOuReactiver', 'retirerDeLaSociete', 'redonnerLAcces'] as $geste) {
++            $this->assertFalse($proprietaire->can($geste, $vendeurDAilleurs), $geste);
++        }
++    }
++
++    /**
++     * Créer, modifier, suspendre, retirer un administrateur, lui transmettre
++     * la propriété : le propriétaire seul. Un administrateur, même de tous
++     * les magasins et autorisé à tout, ni un responsable ne les créent ni ne
++     * les gèrent.
+      */
+     public function test_seul_le_proprietaire_cree_et_gere_les_administrateurs(): void
+     {
+@@ -110,11 +148,13 @@ public function test_seul_le_proprietaire_cree_et_gere_les_administrateurs(): vo
+ 
+         $this->assertTrue($proprietaire->can('creerUnAdministrateur', User::class));
+         $this->assertTrue($proprietaire->can('modifierUnAdministrateur', $autreAdministrateur));
++        $this->assertTrue($proprietaire->can('transmettreLaPropriete', $autreAdministrateur));
+ 
+         foreach ([$administrateur, $responsable] as $compte) {
+             $this->assertFalse($compte->can('creerUnAdministrateur', User::class), $compte->name);
+             $this->assertFalse($compte->can('modifierUnAdministrateur', $autreAdministrateur), $compte->name);
+             $this->assertFalse($compte->can('suspendreOuReactiver', $autreAdministrateur), $compte->name);
++            $this->assertFalse($compte->can('transmettreLaPropriete', $autreAdministrateur), $compte->name);
+         }
+     }
+ 
+diff --git a/tests/Feature/Authorization/PosteReconnuPolicyTest.php b/tests/Feature/Authorization/PosteReconnuPolicyTest.php
+new file mode 100644
+index 0000000..ab36f82
+--- /dev/null
++++ b/tests/Feature/Authorization/PosteReconnuPolicyTest.php
+@@ -0,0 +1,54 @@
++<?php
++
++namespace Tests\Feature\Authorization;
++
++use App\Domain\Tenancy\Enums\RoleMagasin;
++use App\Domain\Tenancy\Models\PosteReconnu;
++use App\Domain\Tenancy\Services\PostesReconnus;
++use App\Domain\Tenancy\Services\TenantContext;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Tests\TestCase;
++
++/**
++ * Les postes reconnus d'un magasin (voir PosteReconnuPolicy) : son
++ * propriétaire et ses responsables les voient, en reconnaissent un et
++ * retirent un poste qui ne l'est pas encore ; personne d'autre, et jamais
++ * le poste d'un autre magasin.
++ */
++class PosteReconnuPolicyTest extends TestCase
++{
++    use RefreshDatabase;
++
++    public function test_seuls_le_proprietaire_et_un_responsable_voient_reconnaissent_et_retirent_les_postes_du_magasin(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $proprietaire = $this->proprietaireDe($magasin);
++        $postes = app(PostesReconnus::class);
++        $posteDAilleurs = $postes->reconnaitre($proprietaire, $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']), 'Caisse de l\'autre boutique', request());
++        app(TenantContext::class)->set($magasin);
++        $poste = $postes->reconnaitre($proprietaire, $magasin, 'Caisse 1', request());
++        $retire = $postes->reconnaitre($proprietaire, $magasin, 'Ancienne caisse', request());
++        $postes->retirer($proprietaire, $retire);
++        $responsable = $this->responsable($magasin);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        app(TenantContext::class)->set($magasin);
++
++        foreach ([$proprietaire, $responsable] as $gerant) {
++            $this->assertSame([true, true, true, true, false, false], [
++                $gerant->can('viewAny', PosteReconnu::class),
++                $gerant->can('view', $poste),
++                $gerant->can('create', PosteReconnu::class),
++                $gerant->can('update', $poste),
++                $gerant->can('update', $retire->fresh()),
++                $gerant->can('view', $posteDAilleurs),
++            ], $gerant->name);
++        }
++
++        $this->assertSame([false, false, false, false], [
++            $vendeur->can('viewAny', PosteReconnu::class),
++            $vendeur->can('view', $poste),
++            $vendeur->can('create', PosteReconnu::class),
++            $vendeur->can('update', $poste),
++        ]);
++    }
++}
+diff --git a/tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php b/tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
+index bf71e89..289cad9 100644
+--- a/tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
++++ b/tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
+@@ -243,6 +243,7 @@ public function test_un_cabinet_qui_n_est_plus_verifie_ou_plus_actif_n_ouvre_plu
+ 
+         foreach ([$collaborateur, $proprietaire] as $compte) {
+             $this->assertFalse($compte->fresh()->peutOuvrir($magasin));
++            $this->assertFalse(app(TenantContext::class)->runAs($magasin, fn (): bool => $compte->fresh()->can(PermissionRegistry::FACTURE_VIEW)));
+             $this->flushSession();
+             $this->actingAs($compte)->get("/app/{$magasin->uuid}")->assertNotFound();
+         }
+diff --git a/tests/Feature/Cabinets/IsolationDesCabinetsTest.php b/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
+index 812578b..b4bdd58 100644
+--- a/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
++++ b/tests/Feature/Cabinets/IsolationDesCabinetsTest.php
+@@ -248,6 +248,25 @@ public function test_un_collaborateur_ne_voit_ni_les_invitations_ni_les_demandes
+             $this->get(InvitationsEtDemandes::getUrl(panel: 'cabinet', tenant: $this->c1))->assertForbidden();
+             $this->assertFalse($collaborateur->can('viewAny', InvitationCabinet::class));
+             $this->assertFalse($collaborateur->can('view', $invitation));
++            $this->assertFalse($collaborateur->can('retirer', $invitation));
+         }
+     }
++
++    /**
++     * Une invitation ouverte se voit et se retire par le propriétaire de son
++     * cabinet, jamais par celui d'un autre cabinet.
++     */
++    public function test_seul_le_proprietaire_du_cabinet_voit_et_retire_ses_invitations(): void
++    {
++        $this->inviterUneEntreprise($this->c1, SocieteFactory::sirenFictif(), 'a@b.test');
++        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $this->c1->id)->sole();
++        $proprietaire = $this->proprietaireDuCabinet($this->c1);
++        $autreProprietaire = $this->proprietaireDuCabinet($this->c2);
++
++        $this->dansLEspaceDuCabinet($this->c1, $proprietaire);
++        $this->assertSame([true, true], [$proprietaire->can('view', $invitation), $proprietaire->can('retirer', $invitation)]);
++
++        $this->dansLEspaceDuCabinet($this->c2, $autreProprietaire);
++        $this->assertSame([false, false], [$autreProprietaire->can('view', $invitation), $autreProprietaire->can('retirer', $invitation)]);
++    }
+ }
+diff --git a/tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php b/tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
+index 69624fb..488df17 100644
+--- a/tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
++++ b/tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
+@@ -30,6 +30,7 @@
+ use App\Filament\Societe\Pages\CabinetComptable;
+ use App\Filament\Societe\Pages\RattachementDUnCabinet;
+ use App\Http\Controllers\RattachementAuCabinetController;
++use App\Models\User;
+ use Database\Factories\SocieteFactory;
+ use Illuminate\Auth\Access\AuthorizationException;
+ use Illuminate\Database\QueryException;
+@@ -432,6 +433,41 @@ public function test_seul_le_proprietaire_du_cabinet_accepte_ou_met_fin_au_lien_
+         $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
+     }
+ 
++    /**
++     * Du côté du cabinet, son propriétaire voit ses liens et les demandes
++     * en cours ; un collaborateur, les seuls liens actifs des clients qui
++     * lui sont confiés, jamais une demande. Un lien actif ne s'accepte, ne
++     * se refuse ni ne se retire plus, de part et d'autre : il prend fin.
++     */
++    public function test_du_cote_du_cabinet_un_collaborateur_ne_voit_que_les_liens_de_ses_clients_confies_et_aucune_demande(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $client = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
++        $lien = $this->lierLeCabinet($cabinet, $client);
++        $autreLien = $this->lierLeCabinet($cabinet, $this->ouvrirUneSociete(['nom' => 'Autre boutique cliente']));
++        $demandeur = $this->ouvrirUneSociete(['nom' => 'Boutique qui demande']);
++        $demande = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($demandeur), $demandeur->societe, $cabinet);
++        $collaborateur = $this->confier($this->collaborateur($cabinet), [$client]);
++        $proprietaire = $this->proprietaireDuCabinet($cabinet);
++        $voit = fn (User $compte): array => array_map(fn (LienCabinet $vu): bool => $compte->can('view', $vu), [$lien, $autreLien, $demande]);
++
++        $this->dansLEspaceDuCabinet($cabinet, $proprietaire);
++        $this->assertSame([true, true, true], $voit($proprietaire));
++        $this->dansLEspaceDuCabinet($cabinet, $collaborateur);
++        $this->assertSame([true, false, false], $voit($collaborateur));
++
++        foreach ([$proprietaire, $this->proprietaireDe($client)] as $compte) {
++            app(TenantContext::class)->clear();
++            app(TenantContext::class)->poserSociete($compte->societe);
++
++            foreach (['accepter', 'refuser', 'retirer'] as $geste) {
++                $this->assertFalse($compte->can($geste, $lien), $geste);
++            }
++
++            $this->assertTrue($compte->can('mettreFin', $lien));
++        }
++    }
++
+     public function test_une_societe_invite_son_cabinet_a_creer_son_espace_sans_garder_son_adresse(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
 diff --git a/tests/Feature/CaisseSecurisee/JournalEvenementsTest.php b/tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
 index 758f8d2..f239517 100644
 --- a/tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
@@ -1395,10 +1999,10 @@ index 783ff5c..eb459d1 100644
      {
          config(['caisse_securisee.cle_privee' => null]);
 diff --git a/tests/Feature/Calendrier/HorodatageEnUtcTest.php b/tests/Feature/Calendrier/HorodatageEnUtcTest.php
-index 0856fd8..9438e07 100644
+index 0856fd8..cd6b00e 100644
 --- a/tests/Feature/Calendrier/HorodatageEnUtcTest.php
 +++ b/tests/Feature/Calendrier/HorodatageEnUtcTest.php
-@@ -129,6 +129,23 @@ public function test_une_chaine_est_refusee_pour_un_instant(): void
+@@ -129,6 +129,26 @@ public function test_une_chaine_est_refusee_pour_un_instant(): void
          $this->assertThrows(fn () => (new DemandeInscription)->forceFill(['expire_le' => '2026-10-09T08:00:00Z']), InvalidArgumentException::class, "L'instant expire_le s'écrit avec une date qui porte son fuseau, jamais avec une chaîne.");
      }
  
@@ -1406,6 +2010,8 @@ index 0856fd8..9438e07 100644
 +     * Un texte lu en base n'est un instant que sous la forme exacte
 +     * « AAAA-MM-JJ HH:MM:SS », à une date et une heure qui existent :
 +     * aucun autre format ni aucun débordement n'est corrigé en silence.
++     * Relu, il est cet instant exact, à la seconde pleine, sans rien de
++     * l'heure de la lecture.
 +     */
 +    public function test_un_texte_lu_en_base_qui_n_est_pas_un_instant_exact_est_refuse(): void
 +    {
@@ -1413,6 +2019,7 @@ index 0856fd8..9438e07 100644
 +        $enBase = Instant::enBase($instant);
 +
 +        $this->assertSame($enBase, Instant::enBase(Instant::depuisLaBase($enBase)));
++        $this->assertTrue(Instant::depuisLaBase($enBase)->equalTo($instant));
 +
 +        foreach ([$instant->format('Y-m-d\\TH:i:s\\Z'), $instant->format('Y-m-d H:i'), str_replace('10-09', '02-30', $enBase), str_replace('08:00:00', '24:00:00', $enBase), ''] as $texte) {
 +            $this->assertThrows(fn () => Instant::depuisLaBase($texte), InvalidArgumentException::class, "« {$texte} » n'est pas un instant en base « AAAA-MM-JJ HH:MM:SS ».");
@@ -1553,6 +2160,35 @@ index 9a60265..0e47e44 100644
      public function test_une_seconde_fermeture_immediate_est_a_zero_dans_chaque_rubrique(): void
      {
          $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
+diff --git a/tests/Feature/Facturation/RecusDePaiementTest.php b/tests/Feature/Facturation/RecusDePaiementTest.php
+index 9aa7a66..e8dedac 100644
+--- a/tests/Feature/Facturation/RecusDePaiementTest.php
++++ b/tests/Feature/Facturation/RecusDePaiementTest.php
+@@ -425,6 +425,24 @@ public function test_le_recu_se_telecharge_par_qui_voit_le_paiement_et_part_chez
+         $this->assertSame([$telecharge, $envoie], [$qui->can('view', $recu), $qui->can('envoyer', $recu)]);
+     }
+ 
++    /**
++     * Le vendeur qui a émis la facture l'envoie, mais ne voit ni n'envoie
++     * le reçu d'un encaissement qu'un autre a fait sur elle, sans « voir
++     * celles de toute l'équipe ».
++     */
++    public function test_le_vendeur_auteur_de_la_facture_n_envoie_pas_le_recu_d_un_encaissement_fait_par_un_autre(): void
++    {
++        $magasin = $this->magasin();
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        app(TenantContext::class)->set($magasin->fresh());
++        $facture = $this->facture(Client::factory()->professionnel()->create(), 100, auteur: $vendeur);
++        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 3000)], auteur: self::responsableDeTest($magasin));
++        $recu = RecuPaiement::query()->sole();
++
++        $this->assertTrue($vendeur->can('envoyer', $facture->fresh()));
++        $this->assertSame([false, false], [$vendeur->can('view', $recu), $vendeur->can('envoyer', $recu)]);
++    }
++
+     /**
+      * Sur la fiche de la facture, chaque paiement reçu après l'émission
+      * propose son reçu ; le téléchargement donne le PDF du reçu.
 diff --git a/tests/Feature/Facturation/ReglementEnPlusieursModesTest.php b/tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
 index b08e73f..6d96b06 100644
 --- a/tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
@@ -1659,7 +2295,7 @@ index 095256e..e4dad49 100644
      {
          $proprietaire = $this->proprietaireDe($this->magasin);
 diff --git a/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php b/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
-index 73f911a..5570018 100644
+index 73f911a..13b265b 100644
 --- a/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
 +++ b/tests/Feature/Facturation/VerificateurCaissesPersonnellesTest.php
 @@ -17,11 +17,13 @@
@@ -1676,7 +2312,57 @@ index 73f911a..5570018 100644
  use Tests\TestCase;
  
  /**
-@@ -301,6 +303,50 @@ public function test_un_encaissement_compte_dans_la_journee_ou_il_est_recu(): vo
+@@ -64,6 +66,21 @@ public function test_un_vendeur_sans_cloture_personnelle_apparait_en_attente():
+         $this->assertTrue($vendeursEnAttente->contains('id', $vendeur->id));
+     }
+ 
++    /**
++     * Un brouillon n'est pas une vente : il n'ouvre pas la caisse.
++     */
++    public function test_un_brouillon_n_ouvre_pas_la_caisse(): void
++    {
++        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
++        $magasin = Magasin::factory()->create();
++        app(TenantContext::class)->set($magasin);
++        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
++        $this->actingAs($vendeur);
++        app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]);
++
++        $this->assertTrue(app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-09')->isEmpty());
++    }
++
+     public function test_un_vendeur_ayant_ferme_sa_caisse_napparait_plus(): void
+     {
+         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+@@ -130,6 +147,27 @@ public function test_une_vente_apres_minuit_a_paris_ouvre_la_caisse_du_lendemain
+         $this->assertTrue($verificateur->vendeursAvecCaisseOuverte('2026-07-15')->contains('id', $vendeur->id));
+     }
+ 
++    /**
++     * La dernière seconde de la journée en est : une vente émise à
++     * 23:59:59 à Paris laisse la caisse ouverte au soir même ; une vente
++     * émise à minuit est du lendemain.
++     */
++    public function test_la_derniere_seconde_de_la_journee_en_est_et_minuit_est_du_lendemain(): void
++    {
++        $magasin = Magasin::factory()->create();
++        app(TenantContext::class)->set($magasin);
++        $tardif = $this->vendeurDeLaPremiereHeure($magasin);
++        $matinal = $this->vendeurDeLaPremiereHeure($magasin);
++        $client = Client::factory()->create();
++        $produit = Produit::factory()->create(['suivi_stock' => false]);
++        $this->travelTo(self::aParis('2026-10-09 23:59:59'));
++        $this->emettreFacturePour($tardif, $client, $produit);
++        $this->travelTo(self::aParis('2026-10-10 00:00:00'));
++        $this->emettreFacturePour($matinal, $client, $produit);
++
++        $this->assertSame([$tardif->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte('2026-10-09')->pluck('id')->all());
++    }
++
+     public function test_aucun_vendeur_en_attente_sans_aucune_vente_ce_jour_la(): void
+     {
+         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+@@ -301,6 +339,78 @@ public function test_un_encaissement_compte_dans_la_journee_ou_il_est_recu(): vo
          $this->assertSame([$vendeur->id], $hier->pluck('id')->all());
      }
  
@@ -1701,10 +2387,7 @@ index 73f911a..5570018 100644
 +        $luc = $this->membre($martinique, RoleMagasin::Vendeur, null, ['name' => 'Luc']);
 +        foreach ([[$paris, $jeanne, self::aParis('2026-10-09 10:00:00')], [$paris, $paul, self::aParis('2026-10-10 01:00:00')], [$martinique, $luc, self::enUtc('2026-10-10 00:00:00')]] as [$magasin, $vendeur, $instant]) {
 +            $this->travelTo($instant);
-+            app(TenantContext::class)->runAs($magasin, function () use ($vendeur): void {
-+                $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-+                self::vendreAuComptant($vendeur, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-+            });
++            app(TenantContext::class)->runAs($magasin, fn (): Facture => $this->emettreUnTicketPour($vendeur, Client::factory()->create()));
 +        }
 +        app(TenantContext::class)->clear();
 +        $verificateur = app(VerificateurCaissesPersonnelles::class);
@@ -1722,6 +2405,37 @@ index 73f911a..5570018 100644
 +        DB::enableQueryLog();
 +        $this->assertSame([], $verificateur->vendeursAvecCaisseOuverteDans([]));
 +        $this->assertSame([], DB::getQueryLog(), 'Sans magasin, aucune requête : elle ne serait filtrée par aucun magasin.');
++    }
++
++    /**
++     * Les encaissements de plusieurs magasins se lisent d'un coup, chacun
++     * dans son magasin : dans chacun, un vendeur a fermé sa caisse après sa
++     * vente, et un collègue encaisse ce ticket le même jour ; seul ce
++     * collègue a sa caisse ouverte, par son seul encaissement.
++     */
++    public function test_les_encaissements_de_plusieurs_magasins_se_lisent_d_un_coup(): void
++    {
++        $this->travelTo(self::aParis('2026-10-09 09:00:00'));
++        $paris = $this->ouvrirUneSociete(['nom' => 'Paris']);
++        $lyon = $this->ouvrirUnAutreMagasin($paris, ['nom' => 'Lyon', 'code' => 'LYON2']);
++
++        foreach ([$paris, $lyon] as $magasin) {
++            $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++            $encaisseur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(TypeDActivite::Commerce), PermissionRegistry::FACTURE_VIEW_TOUTES], ['name' => 'Encaisseur de '.$magasin->nom]);
++            $this->travelTo(self::aParis('2026-10-09 10:00:00'));
++            app(TenantContext::class)->runAs($magasin, function () use ($vendeur, $encaisseur): void {
++                $ticket = $this->emettreUnTicketPour($vendeur, Client::factory()->create());
++                app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
++                $this->actingAs($encaisseur);
++                $this->encaisser($ticket, 12, '2026-10-09');
++            });
++        }
++        app(TenantContext::class)->clear();
++
++        $this->assertSame(
++            [$paris->id => ['Encaisseur de Paris'], $lyon->id => ['Encaisseur de Lyon']],
++            array_map(fn ($vendeurs): array => $vendeurs->pluck('name')->all(), app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverteDans([$paris->id => [$paris, '2026-10-09'], $lyon->id => [$lyon, '2026-10-09']])),
++        );
 +    }
 +
      private function emettreUnTicketPour(User $vendeur, Client $client): Facture
@@ -2156,10 +2870,28 @@ index dcafc2b..53c06d8 100644
       * Un vendeur promu responsable de son magasin alors que son mot de
       * passe est encore son identifiant choisit le sien à sa connexion
 diff --git a/tests/Feature/Stock/InventaireOuvertureTest.php b/tests/Feature/Stock/InventaireOuvertureTest.php
-index dac9cfc..394f632 100644
+index dac9cfc..80b7900 100644
 --- a/tests/Feature/Stock/InventaireOuvertureTest.php
 +++ b/tests/Feature/Stock/InventaireOuvertureTest.php
-@@ -452,6 +452,29 @@ public function test_un_produit_deja_recu_n_est_pas_inventorie_de_nouveau(): voi
+@@ -335,7 +335,8 @@ public function test_un_compte_de_cabinet_consulte_un_inventaire_et_ne_le_saisit
+     /**
+      * Un inventaire d'ouverture et ses produits restent dans leur magasin :
+      * depuis un autre magasin de la même société, l'inventaire est
+-     * introuvable, et un produit d'un autre magasin ne s'y inventorie pas.
++     * introuvable, même pour le propriétaire, et un produit d'un autre
++     * magasin ne s'y inventorie pas.
+      */
+     public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
+     {
+@@ -344,6 +345,7 @@ public function test_un_inventaire_d_un_autre_magasin_est_introuvable(): void
+         $inventaireDeA = $this->saisir([self::ligneDUnNouveauCarnet()]);
+         $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'Boutique B']);
+ 
++        $this->assertFalse($this->proprietaireDe($magasinA)->can('view', $inventaireDeA));
+         $this->assertThrows(fn () => $this->valider($inventaireDeA), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
+         $this->assertThrows(fn () => app(ModifierInventaireOuvertureAction::class)->handle(self::auteur(), $inventaireDeA, [self::ligneDUnNouveauCarnet()]), LogicException::class, InventaireOuverture::REFUS_INTROUVABLE);
+         $this->assertThrows(fn () => $this->saisir([['produit_id' => $tasseDeA->id, 'quantite' => 1, 'cout_unitaire_ht' => '1.00']]), InvalidArgumentException::class, 'Ce produit est introuvable dans le magasin.');
+@@ -452,6 +454,29 @@ public function test_un_produit_deja_recu_n_est_pas_inventorie_de_nouveau(): voi
          $this->assertSame([StatutInventaireOuverture::Brouillon, 0, 5], [$brouillon->fresh()->statut, Produit::query()->where('nom', 'Carnet A5')->count(), $tasse->fresh()->stock_quantite]);
      }
  
@@ -2189,7 +2921,7 @@ index dac9cfc..394f632 100644
      /**
       * @return array<string, array{0: list<array<string, mixed>>, 1: string}>
       */
-@@ -477,6 +500,38 @@ public static function lignesRefusees(): array
+@@ -477,6 +502,38 @@ public static function lignesRefusees(): array
                  [['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90'], 'quantite' => 0, 'cout_unitaire_ht' => '1.00']],
                  'La quantité doit être un nombre entier d\'articles, au moins 1.',
              ],
@@ -2240,11 +2972,23 @@ index 5111832..75beeb4 100644
          $this->assertFalse($responsable->canAccessPanel(Filament::getPanel('societe')));
          $this->assertSame([], $responsable->getTenants(Filament::getPanel('societe'))->modelKeys());
          $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
+diff --git a/tests/Feature/Tenancy/TenantIsolationTest.php b/tests/Feature/Tenancy/TenantIsolationTest.php
+index 4492a30..e9154f5 100644
+--- a/tests/Feature/Tenancy/TenantIsolationTest.php
++++ b/tests/Feature/Tenancy/TenantIsolationTest.php
+@@ -295,6 +295,7 @@ public function test_acces_sans_contexte_tenant_echoue_fermee(string $modelClass
+         app(TenantContext::class)->clear();
+ 
+         $this->expectException(TenantContextMissingException::class);
++        $this->expectExceptionMessage("Tentative d'accès au modèle [{$modelClass}] sans contexte magasin résolu.");
+         $modelClass::query()->get();
+     }
+ 
 diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
-index 1eedb1b..9468f2f 100644
+index 1eedb1b..ddad668 100644
 --- a/tests/Qualite/qualite.php
 +++ b/tests/Qualite/qualite.php
-@@ -13,12 +13,24 @@
+@@ -13,12 +13,20 @@
   *   php tests/Qualite/qualite.php mutation <infection.json> [<rapport.md>]
   *       Le score de mutation (MSI) de chaque partie sensible dont des
   *       mutants ont été testés, comparé à son seuil : échoue sous le seuil.
@@ -2262,14 +3006,10 @@ index 1eedb1b..9468f2f 100644
 + *       fichier qui n'en est pas. Elle se combine avec --git-diff-lines
 + *       (les seules lignes changées, comme la CI), qui ne se combine avec
 + *       aucun autre filtre des fichiers.
-+ *   php tests/Qualite/qualite.php couverture-unitaire-d-abord <dossier coverage-xml>
-+ *       Met d'abord, pour chaque ligne du rapport de couverture XML que lit
-+ *       Infection, les tests unitaires qui l'exécutent : Infection les
-+ *       lance alors avant les tests de base de données.
   *   php tests/Qualite/qualite.php sensibles-changes <commit de base>
   *       Les fichiers des parties sensibles ajoutés ou modifiés depuis ce
   *       commit, un par ligne (rien quand aucun ne l'est) : ceux dont la CI
-@@ -32,7 +44,7 @@
+@@ -32,7 +40,7 @@
   * Code de sortie : 0 si tout tient, 1 sinon.
   */
  
@@ -2278,7 +3018,7 @@ index 1eedb1b..9468f2f 100644
  
  /**
   * @return array{analyse_statique: array{niveau: int}, couverture: array<string, float>, mutation: array<string, float>}
-@@ -186,42 +198,94 @@ function nouveauCode(string $clover, string $base): int
+@@ -186,42 +194,94 @@ function nouveauCode(string $clover, string $base): int
      return 1;
  }
  
@@ -2383,7 +3123,7 @@ index 1eedb1b..9468f2f 100644
      }
  
      if ($rapport !== null) {
-@@ -290,6 +354,118 @@ function sensibles(): int
+@@ -290,6 +350,70 @@ function sensibles(): int
      return 0;
  }
  
@@ -2451,70 +3191,374 @@ index 1eedb1b..9468f2f 100644
 +    return 0;
 +}
 +
-+/**
-+ * Dans le rapport de couverture XML que lit Infection, met d'abord, pour
-+ * chaque ligne, les tests unitaires qui l'exécutent. Infection range les
-+ * tests d'un mutant par tranches de durée (un huitième de seconde), sans
-+ * ordre dans une tranche, et PHPUnit les lance fichier par fichier : le
-+ * rapport de PHPUnit les donnant par ordre alphabétique, les tests de
-+ * Feature passaient avant ceux de Unit, et un mutant qu'un test unitaire
-+ * arrête en quelques millisecondes épuisait le délai d'Infection sur des
-+ * tests de base de données (« non conclu »). L'ensemble des tests de
-+ * chaque ligne ne change pas, seulement leur ordre. Chaque fichier se
-+ * réécrit à part puis prend la place de l'ancien, sans jamais modifier un
-+ * fichier partagé par un lien.
-+ */
-+function couvertureUnitaireDAbord(string $dossier): int
-+{
-+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS)) as $fichier) {
-+        if (! $fichier->isFile() || ! str_ends_with($fichier->getFilename(), '.php.xml')) {
-+            continue;
-+        }
-+
-+        $chemin = $fichier->getPathname();
-+        $source = fopen($chemin, 'r') ?: throw new RuntimeException("Rapport illisible : {$chemin}");
-+        $copie = $chemin.'.unitaire-d-abord';
-+        $cible = fopen($copie, 'w') ?: throw new RuntimeException("Écriture impossible : {$copie}");
-+        $unitaires = [];
-+        $autres = [];
-+
-+        while (($ligne = fgets($source)) !== false) {
-+            if (str_contains($ligne, '<covered by="')) {
-+                str_contains($ligne, 'by="Tests\\Unit\\') ? $unitaires[] = $ligne : $autres[] = $ligne;
-+
-+                continue;
-+            }
-+
-+            fwrite($cible, implode('', [...$unitaires, ...$autres]).$ligne);
-+            $unitaires = [];
-+            $autres = [];
-+        }
-+
-+        fwrite($cible, implode('', [...$unitaires, ...$autres]));
-+        fclose($source);
-+        fclose($cible);
-+        rename($copie, $chemin);
-+    }
-+
-+    return 0;
-+}
-+
  function sensiblesChanges(string $base): int
  {
      $fichiers = explode("\n", trim((string) shell_exec('git -C '.escapeshellarg(RACINE).' diff --name-only --diff-filter=AM --no-color '.escapeshellarg($base).' -- app/')));
-@@ -341,9 +517,11 @@ function flux(string $rapport): int
+@@ -341,9 +465,10 @@ function flux(string $rapport): int
      'seuils' => seuilsQuiMontent($argv[2]),
      'sensibles' => sensibles(),
      'sensibles-changes' => sensiblesChanges($argv[2]),
 +    'configuration-sensibles' => configurationSensibles($argv[2]),
-+    'couverture-unitaire-d-abord' => couvertureUnitaireDAbord($argv[2]),
      'flux' => flux($argv[2]),
      default => (function (): int {
 -        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|flux ...\n");
-+        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|couverture-unitaire-d-abord|flux ...\n");
++        fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux ...\n");
  
          return 2;
      })(),
+diff --git a/tests/Unit/BaremePrixDeVenteTest.php b/tests/Unit/BaremePrixDeVenteTest.php
+index e664b0d..42ca5a4 100644
+--- a/tests/Unit/BaremePrixDeVenteTest.php
++++ b/tests/Unit/BaremePrixDeVenteTest.php
+@@ -141,4 +141,38 @@ public function test_les_paliers_sont_ranges_par_prix_dachat(): void
+         $this->assertSame(10.0, $bareme->beneficePour(1));
+         $this->assertSame(30.0, $bareme->beneficePour(5));
+     }
++
++    /**
++     * Un palier à 0 € ou en dessous n'existe pas, et un bénéfice au-delà
++     * des paliers ne peut pas être négatif, même sans palier.
++     */
++    public function test_un_palier_a_zero_ou_un_benefice_au_dela_negatif_est_refuse(): void
++    {
++        foreach ([fn () => new BaremePrixDeVente([['jusqu_a' => 0.0, 'benefice' => 10.0]], 60, false), fn () => new BaremePrixDeVente([['jusqu_a' => -2.0, 'benefice' => 10.0]], 60, false)] as $bareme) {
++            $this->assertThrows($bareme, InvalidArgumentException::class, 'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.');
++        }
++
++        foreach ([fn () => new BaremePrixDeVente([['jusqu_a' => 2.0, 'benefice' => 10.0]], -1.0, false), fn () => new BaremePrixDeVente([], -1.0, false)] as $bareme) {
++            $this->assertThrows($bareme, InvalidArgumentException::class, 'Un bénéfice du barème ne peut pas être négatif.');
++        }
++    }
++
++    /**
++     * Le barème saisi dans un formulaire, en texte, se lit en nombres :
++     * deux paliers écrits « 2 » et « 2.0 » sont le même prix d'achat, donc
++     * refusés ; un bénéfice au-delà écrit se garde, absent il n'y en a pas.
++     */
++    public function test_le_bareme_d_un_formulaire_se_lit_en_nombres(): void
++    {
++        $bareme = BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2', 'benefice' => '10']], 'benefice_au_dela' => '60', 'arrondi_x9' => true]);
++
++        $this->assertSame([['jusqu_a' => 2.0, 'benefice' => 10.0]], $bareme->paliers);
++        $this->assertSame(60.0, $bareme->beneficeAuDela);
++        $this->assertNull(BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2', 'benefice' => '10']], 'benefice_au_dela' => '', 'arrondi_x9' => false])->beneficeAuDela);
++        $this->assertThrows(
++            fn () => BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2', 'benefice' => '10'], ['jusqu_a' => '2.0', 'benefice' => '15']], 'benefice_au_dela' => null, 'arrondi_x9' => false]),
++            InvalidArgumentException::class,
++            'Chaque palier du barème a son propre prix d\'achat, supérieur à 0.',
++        );
++    }
+ }
+diff --git a/tests/Unit/CalculateurLigneLimitesTest.php b/tests/Unit/CalculateurLigneLimitesTest.php
+new file mode 100644
+index 0000000..32c7061
+--- /dev/null
++++ b/tests/Unit/CalculateurLigneLimitesTest.php
+@@ -0,0 +1,304 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Facturation\Services\CalculateurLigne;
++use Closure;
++use InvalidArgumentException;
++use PHPUnit\Framework\TestCase;
++
++/**
++ * Les cas limites du calcul des montants (voir CalculateurLigne), que les
++ * exemples de CalculateurLigneTest ne touchent pas : la valeur exacte d'une
++ * borne, un montant nul, une TVA écrite qu'aucune facture valable ne porte,
++ * ce que la répartition de l'écart d'une TVA reporte d'une ligne à
++ * l'autre, et les arrondis qui ne tombent juste qu'au bon endroit.
++ */
++class CalculateurLigneLimitesTest extends TestCase
++{
++    private const BORNE_DES_CENTIMES = 100_000_000_000_000;
++
++    private function calculateur(): CalculateurLigne
++    {
++        return new CalculateurLigne;
++    }
++
++    /**
++     * @return array{prix_unitaire_ttc: int, quantite: int, remise_pourcentage: int, taux_tva_du_prix: int, taux_tva: int}
++     */
++    private static function ligneDeVente(int $prixTtc, int $quantite = 1, int $taux = 2000, int $remise = 0): array
++    {
++        return ['prix_unitaire_ttc' => $prixTtc, 'quantite' => $quantite, 'remise_pourcentage' => $remise, 'taux_tva_du_prix' => $taux, 'taux_tva' => $taux];
++    }
++
++    /**
++     * Une ligne d'achat, PU HT en millionièmes d'euro.
++     *
++     * @return array{prix_unitaire_ht: int, quantite: int, remise_pourcentage: int, taux_tva: int}
++     */
++    private static function ligneDAchat(int $prixMillioniemes, int $quantite = 1, int $taux = 2000, int $remise = 0): array
++    {
++        return ['prix_unitaire_ht' => $prixMillioniemes, 'quantite' => $quantite, 'remise_pourcentage' => $remise, 'taux_tva' => $taux];
++    }
++
++    /**
++     * @return array{taux: int, montant_ht: int, montant_tva: int}
++     */
++    private static function part(int $ht, int $tva, int $taux = 2000): array
++    {
++        return ['taux' => $taux, 'montant_ht' => $ht, 'montant_tva' => $tva];
++    }
++
++    /**
++     * Les TVA de ces lignes, dans leur ordre.
++     *
++     * @param  list<array<string, mixed>>  $lignes
++     * @return list<mixed>
++     */
++    private static function tva(array $lignes): array
++    {
++        return array_column($lignes, 'montant_tva');
++    }
++
++    private function assertRefuse(Closure $calcul, string $message): void
++    {
++        try {
++            $calcul();
++        } catch (InvalidArgumentException $refus) {
++            $this->assertSame($message, $refus->getMessage());
++
++            return;
++        }
++
++        $this->fail("Le calcul devait être refusé : {$message}");
++    }
++
++    /**
++     * Chaque borne refuse sa valeur exacte, et pas seulement au-delà : un
++     * montant ou un cumul de 1e14 centimes, un prix d'achat x quantité de
++     * 1e18 millionièmes, un taux lu à la borne (refusé comme montant, avant
++     * d'être lu comme taux), une conversion d'euros qui atteint la borne.
++     * Une remise ramène chaque fois le résultat sous la borne : seul le
++     * contrôle de la valeur exacte le refuse.
++     */
++    public function test_chaque_borne_refuse_sa_valeur_exacte(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertRefuse(fn () => $c->enDecimal(self::BORNE_DES_CENTIMES), 'Montant hors limites.');
++        $this->assertRefuse(fn () => $c->enDecimal(-self::BORNE_DES_CENTIMES), 'Montant hors limites.');
++        $this->assertRefuse(fn () => $c->chiffrerUneVente([self::ligneDeVente(10_000_000_000_000, 10, 2000, 1000)]), 'Montant hors limites.');
++        $this->assertRefuse(fn () => $c->chiffrerUneVente([self::ligneDeVente(50_000_000_000_000), self::ligneDeVente(50_000_000_000_000)]), 'Montant hors limites.');
++        $this->assertRefuse(fn () => $c->chiffrerUneVente([[...self::ligneDeVente(1000), 'taux_tva_du_prix' => self::BORNE_DES_CENTIMES]]), 'Montant hors limites.');
++        $this->assertRefuse(fn () => $c->chiffrerUnAchat([self::ligneDAchat(100_000_000_000_000_000, 10, 2000, 1000)]), 'Montant hors limites.');
++        $this->assertRefuse(fn () => $c->arrondirAuCentime(1e12), 'Montant hors limites.');
++        $this->assertSame(99_999_999_999_999, $c->chiffrerUneVente([self::ligneDeVente(99_999_999_999_999, 1, 0)])['total']['montant_ttc']);
++    }
++
++    /**
++     * Les plus grandes écritures que la borne laisse passer se lisent
++     * entières, et des zéros de tête ne comptent pas dans les douze
++     * chiffres entiers permis ; un prix négatif garde son signe, un retour
++     * à la ligne final n'est pas une écriture exacte, et un taux s'écrit
++     * avec une virgule décimale.
++     */
++    public function test_les_plus_grandes_ecritures_permises_se_lisent_entieres(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertSame(999_999_999_999_999_999, $c->enMillioniemes('999999999999.999999'));
++        $this->assertSame(1_500_000, $c->enMillioniemes('0000000000001.5'));
++        $this->assertSame(150, $c->enCentiemes('0000000000001.50'));
++        $this->assertSame('1000000.000000', $c->enDecimalAuMillionieme(1_000_000_000_000));
++        $this->assertSame('0.000000', $c->enDecimalAuMillionieme(0));
++        $this->assertSame(-12_500_000, $c->enMillioniemes('-12.5'));
++        $this->assertRefuse(fn () => $c->enMillioniemes("1.5\n"), 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
++        $this->assertSame(['5,5 %', '20 %', '0 %'], [CalculateurLigne::tauxEnTexte(550), CalculateurLigne::tauxEnTexte(2000), CalculateurLigne::tauxEnTexte(0)]);
++    }
++
++    /**
++     * Un prix nul (un article offert) se vend et s'achète à 0 € ; un HT
++     * écrit nul se garde ; une ligne d'achat de 0,02 € n'a pas de TVA, sans
++     * que rien ne soit refusé.
++     */
++    public function test_un_montant_nul_se_calcule_sans_refus(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertSame(['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0], $c->chiffrerUneVente([self::ligneDeVente(0, 3)])['total']);
++        $this->assertSame(['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0], $c->chiffrerUnAchat([self::ligneDAchat(0, 3)])['total']);
++        $this->assertSame(['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0], $c->chiffrerUnAchat([[...self::ligneDAchat(5_000_000), 'montant_ht' => 0]])['total']);
++        $this->assertSame(['montant_ht' => 2, 'montant_tva' => 0, 'montant_ttc' => 2], $c->chiffrerUnAchat([self::ligneDAchat(10_000, 2)])['total']);
++    }
++
++    /**
++     * Chaque ligne d'un achat rend, à côté du HT retenu (celui qu'écrit la
++     * facture, sinon la proposition), le HT que le calcul propose : 3 x
++     * 10,01 € font 3 003 centimes proposés et retenus ; 2 x 5,00 € font
++     * 1 000 proposés, et la facture en écrit 990.
++     */
++    public function test_chaque_ligne_d_un_achat_rend_le_ht_propose_a_cote_du_ht_retenu(): void
++    {
++        $achat = $this->calculateur()->chiffrerUnAchat([self::ligneDAchat(10_010_000, 3), [...self::ligneDAchat(5_000_000, 2), 'montant_ht' => 990]]);
++
++        $this->assertSame([
++            ['montant_ht' => 3003, 'montant_tva' => 601, 'montant_ttc' => 3604, 'montant_ht_calcule' => 3003],
++            ['montant_ht' => 990, 'montant_tva' => 198, 'montant_ttc' => 1188, 'montant_ht_calcule' => 1000],
++        ], $achat['lignes']);
++    }
++
++    /**
++     * Une TVA écrite qu'aucune facture valable ne porte est refusée, sur
++     * une facture d'achat comme sur une note d'avoir : négative, non nulle à
++     * 0 %, au-delà de sa base ; égale à sa base, elle est acceptée.
++     */
++    public function test_une_tva_ecrite_impossible_est_refusee_et_une_tva_egale_a_la_base_acceptee(): void
++    {
++        $c = $this->calculateur();
++        $dix = self::ligneDAchat(10_000_000);
++
++        $this->assertRefuse(fn () => $c->chiffrerUnAchat([$dix], [2000 => -1]), 'La TVA à 20 % ne peut pas être négative.');
++        $this->assertRefuse(fn () => $c->chiffrerUnAchat([self::ligneDAchat(10_000_000, 1, 0)], [0 => 5]), CalculateurLigne::REFUS_TVA_A_ZERO);
++        $this->assertRefuse(fn () => $c->chiffrerUnAchat([$dix], [2000 => 1001]), 'La TVA à 20 % (10,01 €) ne peut pas dépasser sa base (10,00 €).');
++        $this->assertSame(1000, $c->chiffrerUnAchat([$dix], [2000 => 1000])['taux'][2000]['montant_tva']);
++
++        $this->assertRefuse(fn () => $c->repartirUneTvaRetenue([self::part(1000, 200)], 2000, -1), 'La TVA à 20 % ne peut pas être négative.');
++        $this->assertRefuse(fn () => $c->repartirUneTvaRetenue([self::part(1000, 0, 0)], 0, 1), CalculateurLigne::REFUS_TVA_A_ZERO);
++        $this->assertRefuse(fn () => $c->repartirUneTvaRetenue([self::part(1000, 200)], 2000, 1001), 'La TVA à 20 % (10,01 €) ne peut pas dépasser sa base (10,00 €).');
++        $this->assertSame([1000], self::tva($c->repartirUneTvaRetenue([self::part(1000, 200)], 2000, 1000)));
++    }
++
++    /**
++     * La TVA proposée d'un taux est la somme de ses lignes : retenue égale à
++     * cette somme, rien ne bouge.
++     */
++    public function test_une_tva_retenue_egale_a_la_somme_des_propositions_ne_change_rien(): void
++    {
++        $this->assertSame([200, 200], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1000, 200), self::part(1000, 200)], 2000, 400)));
++    }
++
++    /**
++     * L'écart d'une TVA retenue se répartit au prorata du HT, par cumul, sans
++     * qu'aucune ligne ne reçoive une TVA négative ni plus grande que son HT :
++     * - deux lignes de 0,01 € HT et 1 centime d'écart : le cumul de la
++     *   première vaut un demi-centime, arrondi à 1 ; la seconde, rien ;
++     * - une ligne à 0 € HT dont la proposition portait 5 centimes les rend ;
++     * - une ligne déjà à son HT (2 centimes) ne reçoit pas sa part (1
++     *   centime), qui passe à la ligne suivante : 2 + 3 ;
++     * - un écart négatif qui mettrait une ligne sous 0 la garde à 0, et le
++     *   reste se retire de la suivante, puis, en remontant, des précédentes ;
++     * - ce que la dernière ligne ne peut pas recevoir remonte d'abord sur
++     *   celle qui la précède : 5 + 6 + 1, et non 6 + 5 + 1.
++     */
++    public function test_l_ecart_d_une_tva_retenue_se_reporte_d_une_ligne_a_l_autre(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertSame([1, 0], self::tva($c->repartirUneTvaRetenue([self::part(1, 0), self::part(1, 0)], 2000, 1)));
++        $this->assertSame([0], self::tva($c->repartirUneTvaRetenue([self::part(0, 5)], 2000, 0)));
++        $this->assertSame([2, 3], self::tva($c->repartirUneTvaRetenue([self::part(2, 2), self::part(10, 0)], 2000, 5)));
++        $this->assertSame([0, 0], self::tva($c->repartirUneTvaRetenue([self::part(10, 0), self::part(10, 2)], 2000, 0)));
++        $this->assertSame([0, 0], self::tva($c->repartirUneTvaRetenue([self::part(10, 5), self::part(10, 0)], 2000, 0)));
++        $this->assertSame([5, 6, 1], self::tva($c->repartirUneTvaRetenue([self::part(10, 0), self::part(10, 0), self::part(1, 1)], 2000, 12)));
++        $this->assertSame([7, 0, 12, 10], self::tva($c->repartirUneTvaRetenue([self::part(8, 0), self::part(0, 0), self::part(12, 2), self::part(10, 8)], 2000, 29)));
++        $this->assertSame([0, 0, 1], self::tva($c->repartirUneTvaRetenue([self::part(10, 0), self::part(10, 0), self::part(10, 5)], 2000, 1)));
++        $this->assertSame([4, 0, 7], self::tva($c->repartirUneTvaRetenue([self::part(7, 5), self::part(6, 0), self::part(12, 9)], 2000, 11)));
++    }
++
++    /**
++     * Un retour au fournisseur ne propose jamais un montant négatif : quand
++     * les retours précédents ont déjà rendu plus que la proposition des
++     * articles retournés jusqu'ici, ou exactement autant, il propose 0 € ;
++     * quand la note d'avoir écrit un autre HT et que la TVA déjà rendue
++     * dépasse celle de tout le HT retenu, ou l'égale, la TVA proposée est
++     * 0 €.
++     */
++    public function test_un_retour_au_fournisseur_ne_propose_jamais_un_montant_negatif(): void
++    {
++        $c = $this->calculateur();
++        $cables = [...self::ligneDAchat(20_000_000, 5), 'montant_ht' => 10000, 'montant_tva' => 2000];
++        $rien = ['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0, 'montant_ht_calcule' => 0];
++
++        $this->assertSame($rien, $c->retourDAchat($cables, 2, ['montant_ht' => 5000, 'montant_tva' => 1000]));
++        $this->assertSame($rien, $c->retourDAchat($cables, 2, ['montant_ht' => 4000, 'montant_tva' => 800]));
++        $this->assertSame(['montant_ht' => 100, 'montant_tva' => 0, 'montant_ttc' => 100, 'montant_ht_calcule' => 3900], $c->retourDAchat($cables, 2, ['montant_ht' => 100, 'montant_tva' => 900], 100));
++        $this->assertSame(['montant_ht' => 100, 'montant_tva' => 0, 'montant_ttc' => 100, 'montant_ht_calcule' => 3900], $c->retourDAchat($cables, 2, ['montant_ht' => 100, 'montant_tva' => 40], 100));
++    }
++
++    /**
++     * Le HT d'une ligne d'achat s'arrondit une fois, au centime le plus
++     * proche, un demi-centime au centime inférieur, quel que soit le
++     * découpage de son calcul : 0,010001 € remisé de 0,01 % fait 0,01 €
++     * (0,99999999 centime), et 0,025 € remisé de 60 % aussi (1 centime
++     * pile) ; de grands prix et de fortes remises tombent sur le centime que
++     * donne le calcul exact.
++     */
++    public function test_le_ht_d_un_achat_s_arrondit_une_fois_au_centime(): void
++    {
++        $c = $this->calculateur();
++        $ht = fn (int $prix, int $quantite, int $remise): int => $c->chiffrerUnAchat([self::ligneDAchat($prix, $quantite, 2000, $remise)])['total']['montant_ht'];
++
++        $this->assertSame(1, $ht(10_001, 1, 1));
++        $this->assertSame(1, $ht(25_000, 1, 6000));
++        $this->assertSame(2_060_369_237, $ht(59_210_095_998, 648, 4630));
++        $this->assertSame(940_371_898, $ht(88_418_129_245, 159, 3311));
++        $this->assertSame(131_204_071, $ht(13_506_364_996, 288, 6627));
++    }
++
++    /**
++     * Le coût net d'un article acheté, son bénéfice, le coût moyen de lots,
++     * la valeur d'un stock et un prix de vente arrondi se calculent au bon
++     * dix-millième et au bon centime, y compris sur de grands montants où un
++     * découpage approché du calcul s'écarterait : 10 000,00 € tout rond,
++     * 7 338 320 113,13 € remisés de 20 % puis escomptés de 9 %, ou 100 €
++     * de coût moyen sur 100 articles (10 000,00 € HT et 2 000,00 € de TVA).
++     */
++    public function test_les_couts_et_les_prix_tombent_au_bon_dix_millieme_et_au_bon_centime(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertSame(10000.0, $c->coutUnitaireNet(10000, 0));
++        $this->assertSame(7044287790.6719, $c->coutUnitaireNet(8911180000.85, 15, 7));
++        $this->assertSame(5993357535.4109, $c->coutUnitaireNet(9035666418.53, 33, 1));
++        $this->assertSame(1576248545.9273, $c->coutUnitaireNet(7005549093.01, 75, 10));
++        $this->assertSame(76774.77, $c->beneficeUnitaire(77416.16, 641.3893));
++        $this->assertSame(3.389, $c->coutMoyenPondere([['quantite' => 41, 'cout_unitaire' => 2.0943], ['quantite' => 14, 'cout_unitaire' => 9.8097], ['quantite' => 21, 'cout_unitaire' => 1.6361]]));
++        $this->assertSame(['montant_ht' => 100.0, 'montant_tva' => 20.0, 'montant_ttc' => 120.0], $c->valeurAuCoutMoyen(1, 100.0, 20));
++        $this->assertSame(['montant_ht' => 10000.0, 'montant_tva' => 2000.0, 'montant_ttc' => 12000.0], $c->valeurAuCoutMoyen(100, 100.0, 20));
++        $this->assertSame(219.9, $c->prixTtcArrondi(183.254, 20));
++        $this->assertSame(20.0, $c->prixTtcArrondi(10.0, 100));
++        $this->assertRefuse(fn () => $c->valeurAuCoutMoyen(1, 100.0, 101), 'Le taux de TVA doit être compris entre 0 et 100 %.');
++    }
++
++    /**
++     * Le coût moyen après une sortie accepte un stock, une quantité et des
++     * coûts nuls : rien ne sort d'un stock vide, une sortie de 0 article
++     * garde le coût moyen, un article offert sort à 0 €, et un stock à 0 €
++     * reste à 0 €.
++     */
++    public function test_le_cout_moyen_apres_une_sortie_accepte_des_valeurs_nulles(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertNull($c->coutMoyenApresUneSortie(0, 6.0, 0, 10.0));
++        $this->assertSame(6.0, $c->coutMoyenApresUneSortie(20, 6.0, 0, 10.0));
++        $this->assertSame(4.0, $c->coutMoyenApresUneSortie(10, 2.0, 5, 0.0));
++        $this->assertSame(0.0, $c->coutMoyenApresUneSortie(10, 0.0, 5, 0.0));
++    }
++
++    /**
++     * Un montant reçu absent compte pour 0 € ; le pré-arrondi à six
++     * décimales d'une conversion en centimes n'arrondit qu'au demi-centime
++     * pile : 0,004999995 € (bruit sous le millionième) vaut 1 centime,
++     * 0,0049999652 € (plus d'un millionième sous le demi-centime) n'en vaut
++     * aucun.
++     */
++    public function test_les_conversions_en_centimes_arrondissent_au_bon_endroit(): void
++    {
++        $c = $this->calculateur();
++
++        $this->assertSame(-12.5, $c->soustraire(null, '12.50'));
++        $this->assertSame(0.01, $c->arrondirAuCentime(0.004999995));
++        $this->assertSame(0.0, $c->arrondirAuCentime(0.0049999652));
++    }
++}
 diff --git a/tests/Unit/CalculateurLigneTest.php b/tests/Unit/CalculateurLigneTest.php
 index caacf15..8d6fb4a 100644
 --- a/tests/Unit/CalculateurLigneTest.php
@@ -2566,10 +3610,10 @@ index caacf15..8d6fb4a 100644
  
 diff --git a/tests/Unit/MontantsDuFournisseurTest.php b/tests/Unit/MontantsDuFournisseurTest.php
 new file mode 100644
-index 0000000..ac49f28
+index 0000000..ea810ce
 --- /dev/null
 +++ b/tests/Unit/MontantsDuFournisseurTest.php
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,52 @@
 +<?php
 +
 +namespace Tests\Unit;
@@ -2610,6 +3654,16 @@ index 0000000..ac49f28
 +        $montants = MontantsDuFournisseur::depuisLaSaisie(['taux' => null, 'total_ttc' => '24.00']);
 +
 +        $this->assertSame([[], [], 2400, false], [$montants->tvaParTaux, $montants->baseParTaux, $montants->totalTtc, $montants->confirmation]);
++    }
++
++    /**
++     * Rien d'écrit : ni TVA, ni base, ni total, et rien de confirmé.
++     */
++    public function test_aucun_montant_ecrit_ne_confirme_rien(): void
++    {
++        $aucun = MontantsDuFournisseur::aucun();
++
++        $this->assertSame([[], [], null, false], [$aucun->tvaParTaux, $aucun->baseParTaux, $aucun->totalTtc, $aucun->confirmation]);
 +    }
 +}
 diff --git a/tests/Unit/PartDeReglementTest.php b/tests/Unit/PartDeReglementTest.php
@@ -2746,11 +3800,31 @@ index 0000000..6fa1a04
 +        PartDeReglement::numerosDesBons(['av-été-2026-000002', ' AV-ÉTÉ-2026-000002']);
 +    }
 +}
+diff --git a/tests/Unit/QuantiteEntiereTest.php b/tests/Unit/QuantiteEntiereTest.php
+index fd3bbf2..a9bd5a2 100644
+--- a/tests/Unit/QuantiteEntiereTest.php
++++ b/tests/Unit/QuantiteEntiereTest.php
+@@ -15,6 +15,7 @@ class QuantiteEntiereTest extends TestCase
+     public static function ecrituresDunEntier(): array
+     {
+         return [
++            'un seul article' => [1, 1],
+             'entier' => [2, 2],
+             'texte du formulaire' => ['3', 3],
+             'flottant entier' => [4.0, 4],
 diff --git a/tests/Unit/SaisieDecimaleTest.php b/tests/Unit/SaisieDecimaleTest.php
-index 6a3c4b0..2f90f74 100644
+index 6a3c4b0..256a477 100644
 --- a/tests/Unit/SaisieDecimaleTest.php
 +++ b/tests/Unit/SaisieDecimaleTest.php
-@@ -53,4 +53,28 @@ public function test_un_nombre_hors_limites_est_refuse_jamais_lu_zero(string $sa
+@@ -3,6 +3,7 @@
+ namespace Tests\Unit;
+ 
+ use App\Domain\Facturation\Services\SaisieDecimale;
++use Closure;
+ use InvalidArgumentException;
+ use PHPUnit\Framework\Attributes\DataProvider;
+ use PHPUnit\Framework\TestCase;
+@@ -53,4 +54,75 @@ public function test_un_nombre_hors_limites_est_refuse_jamais_lu_zero(string $sa
  
          SaisieDecimale::enCentiemes($saisie);
      }
@@ -2778,4 +3852,143 @@ index 6a3c4b0..2f90f74 100644
 +
 +        SaisieDecimale::enCentiemes('999999999999.995');
 +    }
++
++    /**
++     * Un entier compte des unités entières, une partie entière nulle ou
++     * écrite avec des zéros de tête se lit, et des espaces autour d'une
++     * saisie ne changent rien, même pour un prix à six décimales qu'un
++     * flottant ne garderait pas exact. Une valeur qui n'est pas un nombre
++     * est refusée, jamais lue zéro.
++     */
++    public function test_une_saisie_se_lit_exactement_quelle_que_soit_son_ecriture(): void
++    {
++        $this->assertSame(2500, SaisieDecimale::enCentiemes(25));
++        $this->assertSame(5, SaisieDecimale::enCentiemes('0.05'));
++        $this->assertSame(150, SaisieDecimale::enCentiemes('0000000000001.50'));
++        $this->assertSame(123400, SaisieDecimale::enMillioniemes('0.1234'));
++        $this->assertSame(123456789012345678, SaisieDecimale::enMillioniemes(' 123456789012.345678 '));
++        $this->assertThrows(fn () => SaisieDecimale::enCentiemes(null), 'Nombre illisible.');
++        $this->assertThrows(fn () => SaisieDecimale::enCentiemes([]), 'Nombre illisible.');
++    }
++
++    /**
++     * Un montant au centime et un prix d'achat à six décimales se lisent tels
++     * qu'écrits : des zéros après leur dernière décimale ne comptent pas, un
++     * chiffre de plus est refusé, jamais arrondi.
++     */
++    public function test_un_montant_et_un_prix_d_achat_se_lisent_a_leur_derniere_decimale(): void
++    {
++        $this->assertSame(650, SaisieDecimale::montantAuCentime('6.5'));
++        $this->assertSame(50, SaisieDecimale::montantAuCentime('0.50'));
++        $this->assertSame(605, SaisieDecimale::montantAuCentime('6.050'));
++        $this->assertSame(600, SaisieDecimale::montantAuCentime('6.000'));
++        $this->assertSame(123456, SaisieDecimale::enMillioniemes('0.1234560'));
++        $this->assertThrows(fn () => SaisieDecimale::montantAuCentime('6.005'), SaisieDecimale::REFUS_MONTANT_TROP_PRECIS);
++        $this->assertThrows(fn () => SaisieDecimale::enMillioniemes('0.1234567'), SaisieDecimale::REFUS_PRIX_D_ACHAT_TROP_PRECIS);
++    }
++
++    private function assertThrows(Closure $lecture, string $message): void
++    {
++        try {
++            $lecture();
++        } catch (InvalidArgumentException $refus) {
++            $this->assertSame($message, $refus->getMessage());
++
++            return;
++        }
++
++        $this->fail("La saisie devait être refusée : {$message}");
++    }
  }
+diff --git a/tests/Unit/TerritoireFiscalTest.php b/tests/Unit/TerritoireFiscalTest.php
+index 53df197..2729ec7 100644
+--- a/tests/Unit/TerritoireFiscalTest.php
++++ b/tests/Unit/TerritoireFiscalTest.php
+@@ -72,6 +72,7 @@ public static function destinations(): array
+             'Monaco' => ['MC', '98000', false, false, false, false],
+             'New York' => ['US', '10001', true, true, false, false],
+             'Belfast, Irlande du Nord' => ['GB', 'BT1 1AA', false, true, true, false],
++            'Belfast, écrit en minuscules avec des espaces' => [' gb ', 'bt1 1aa', false, true, true, false],
+             'Londres' => ['GB', 'SW1A 1AA', true, true, false, false],
+             'Las Palmas, îles Canaries' => ['ES', '35001', true, true, false, false],
+             'Santa Cruz de Tenerife, îles Canaries' => ['ES', '38001', true, true, false, false],
+diff --git a/tests/Unit/VerificationDesAutorisationsTest.php b/tests/Unit/VerificationDesAutorisationsTest.php
+new file mode 100644
+index 0000000..554e193
+--- /dev/null
++++ b/tests/Unit/VerificationDesAutorisationsTest.php
+@@ -0,0 +1,74 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Authorization\AutorisationsSociete;
++use App\Domain\Authorization\PermissionRegistry;
++use App\Domain\Tenancy\Enums\TypeDActivite;
++use Closure;
++use InvalidArgumentException;
++use PHPUnit\Framework\TestCase;
++
++/**
++ * Les autorisations cochées se vérifient contre leur référentiel : une
++ * autorisation inconnue, ou qui ne s'accorde pas à un cabinet d'expertise
++ * comptable, est refusée, et le refus la nomme (sa clé, son libellé, ou le
++ * type d'une valeur qui n'est pas une clé) ; celles qui sont retenues le
++ * sont sans doublon, dans l'ordre alphabétique. Un client ne propose à son
++ * cabinet que les libellés des autorisations qu'il peut lui accorder, dans
++ * l'ordre du registre.
++ */
++final class VerificationDesAutorisationsTest extends TestCase
++{
++    public function test_une_autorisation_de_societe_inconnue_est_refusee_et_nommee(): void
++    {
++        $this->assertRefus('Autorisation inconnue : societe.tout_faire', fn () => AutorisationsSociete::verifierConnues([AutorisationsSociete::MAGASINS_GERER, 'societe.tout_faire']));
++        $this->assertRefus('Autorisation inconnue : 12', fn () => AutorisationsSociete::verifierConnues([12]));
++        $this->assertRefus('Autorisation inconnue : array', fn () => AutorisationsSociete::verifierConnues([[AutorisationsSociete::MAGASINS_GERER]]));
++
++        $this->assertSame(
++            [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::RESPONSABLES_NOMMER],
++            AutorisationsSociete::verifierConnues([AutorisationsSociete::RESPONSABLES_NOMMER, AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::RESPONSABLES_NOMMER]),
++        );
++    }
++
++    public function test_une_autorisation_qui_ne_s_accorde_pas_a_un_cabinet_est_refusee_et_nommee(): void
++    {
++        $this->assertRefus('Autorisation qui ne s\'accorde pas à un cabinet : Factures : créer', fn () => PermissionRegistry::verifierDuCabinet([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE], TypeDActivite::Commerce));
++        $this->assertRefus('Autorisation qui ne s\'accorde pas à un cabinet : facture.tout_faire', fn () => PermissionRegistry::verifierDuCabinet(['facture.tout_faire'], TypeDActivite::Commerce));
++        $this->assertRefus('Autorisation qui ne s\'accorde pas à un cabinet : int', fn () => PermissionRegistry::verifierDuCabinet([7], TypeDActivite::Commerce));
++
++        $this->assertSame(
++            [PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW],
++            PermissionRegistry::verifierDuCabinet([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::CLIENT_VIEW, PermissionRegistry::FACTURE_VIEW], TypeDActivite::Commerce),
++        );
++    }
++
++    public function test_un_client_ne_propose_a_son_cabinet_que_les_libelles_de_ce_qu_il_peut_lui_accorder(): void
++    {
++        foreach (TypeDActivite::cases() as $type) {
++            if ($type === TypeDActivite::Cabinet) {
++                continue;
++            }
++
++            $libelles = PermissionRegistry::libellesDuCabinet($type);
++            $attendues = array_values(array_intersect(array_keys(PermissionRegistry::libelles()), PermissionRegistry::duCabinet($type)));
++
++            $this->assertSame($attendues, array_keys($libelles), $type->value);
++
++            foreach ($libelles as $autorisation => $libelle) {
++                $this->assertSame($autorisation === PermissionRegistry::PRODUIT_CREATE ? 'Produits : créer ceux d\'une facture d\'achat ou d\'un inventaire d\'ouverture' : PermissionRegistry::libelles()[$autorisation], $libelle, $autorisation);
++            }
++        }
++    }
++
++    private function assertRefus(string $message, Closure $verification): void
++    {
++        try {
++            $verification();
++            $this->fail("Refus attendu : {$message}");
++        } catch (InvalidArgumentException $refus) {
++            $this->assertSame($message, $refus->getMessage());
++        }
++    }
++}

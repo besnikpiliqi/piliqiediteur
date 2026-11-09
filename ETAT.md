@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 02:08 UTC par pilotage-sync.sh : « Point de suivi du 09/11 : travail du lot QA resauvé (47 entrées) ».
+Mis à jour le 09/11/2026 à 04:10 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -43,13 +43,16 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M app/Domain/Cabinets/Services/AccesDesCabinets.php
  M app/Domain/Cabinets/Support/GardesDesCabinets.php
  M app/Domain/Calendrier/Casts/Instant.php
+ M app/Domain/Catalogue/Services/BaremePrixDeVente.php
  M app/Domain/Facturation/Services/CaissesDeLaSociete.php
+ M app/Domain/Facturation/Services/CalculateurLigne.php
  M app/Domain/Facturation/Services/SaisieDecimale.php
  M app/Domain/Facturation/Services/VerificateurCaissesPersonnelles.php
  M app/Domain/Tenancy/Actions/ChangerSiretAction.php
  M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
  M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
  M app/Domain/Tenancy/Rules/SiretValide.php
+ M app/Domain/Tenancy/Services/PorteeDesDroits.php
  M app/Models/User.php
  M app/Policies/AffectationPolicy.php
  M app/Providers/AppServiceProvider.php
@@ -58,16 +61,26 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Browser/Parcours/TempsDeReponseTest.php
  A tests/Feature/Achats/ApercuDUnAchatTest.php
  M tests/Feature/Achats/FactureAchatActionsTest.php
+ M tests/Feature/Achats/PiecesDuFournisseurTest.php
  M tests/Feature/Achats/TvaDesAvoirsFournisseurTest.php
+ M tests/Feature/Authorization/AvoirPolicyTest.php
  M tests/Feature/Authorization/ClotureCaissePersonnellePolicyTest.php
  M tests/Feature/Authorization/ClotureCaissePolicyTest.php
+ M tests/Feature/Authorization/ControleDesDroitsTest.php
+ M tests/Feature/Authorization/DevisPolicyTest.php
+ M tests/Feature/Authorization/GestesToujoursRefusesTest.php
  A tests/Feature/Authorization/LimitesDesDroitsTest.php
+ M tests/Feature/Authorization/MembrePolicyTest.php
+ M tests/Feature/Cabinets/AccesDuCollaborateurChezLeClientTest.php
+ M tests/Feature/Cabinets/IsolationDesCabinetsTest.php
+ M tests/Feature/Cabinets/LiensAvecUneSocieteInscriteTest.php
  M tests/Feature/CaisseSecurisee/JournalEvenementsTest.php
  M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
  M tests/Feature/Calendrier/HorodatageEnUtcTest.php
  M tests/Feature/Facturation/CloturerCaisseActionTest.php
  M tests/Feature/Facturation/CloturerLesJourneesActionTest.php
  M tests/Feature/Facturation/FermerSaCaisseActionTest.php
+ M tests/Feature/Facturation/RecusDePaiementTest.php
  M tests/Feature/Facturation/ReglementEnPlusieursModesTest.php
  M tests/Feature/Facturation/ReimputationALaContrePassationTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
@@ -80,11 +93,11 @@ d232b4f Pose le fuseau UTC de la base avant le test du diagnostic qui le lit
  M tests/Feature/Societe/ConnexionParIdentifiantTest.php
  M tests/Feature/Stock/InventaireOuvertureTest.php
  M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
  M tests/Qualite/qualite.php
+ M tests/Unit/BaremePrixDeVenteTest.php
  M tests/Unit/CalculateurLigneTest.php
  A tests/Unit/MontantsDuFournisseurTest.php
- A tests/Unit/PartDeReglementTest.php
- M tests/Unit/SaisieDecimaleTest.php
 ```
 
 ## Dernière course de la chaîne

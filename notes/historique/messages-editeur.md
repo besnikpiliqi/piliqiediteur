@@ -1478,3 +1478,7 @@ QA:implementation ca veut dire la construction du code c est ca?
 
 je vois que tu permetez de faire des ticktes de ventes mais normalement ne doit pas etre possible avant verifie la societe avec courrier "Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : capital social, immatriculation. "
 
+## 139. 2026-11-09 10:48 UTC
+
+fais-le plus tôt, dans le lot suivant
+

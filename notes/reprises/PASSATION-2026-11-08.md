@@ -44,7 +44,7 @@ Ce fichier est le point d'entrée. Il remplace, pour la reprise, `PASSATION-2026
 ## 3. Ce qui reste à faire, dans l'ordre
 
 1. **QA** (en cours, cahier `notes/qualite/decision-qualite.md`, § 1 à 9) : finir Infection (QA-R4), CI sur PostgreSQL seulement pour PHP 8.3, 8.4 et 8.5 et textes de `CLAUDE.md`, README, `.env.example` (QA-R6), second commit, puis les deux relectures, la correction, la poussée, la fiche et les notes (étapes de la chaîne).
-2. **PG** (`notes/postgresql/decision-pg.md`) : retirer SQLite de partout (D55).
+2. **PG** (`notes/postgresql/decision-pg.md`) : retirer SQLite de partout (D55) ; et le constat C7 de l'éditeur (`navigateur/constats-editeur.md`), avancé dans ce lot le 09/11 vers 10 h 55 UTC.
 3. **CALC** (`notes/calculs/decision-calc.md`, réécrit le 09/11 après Q-CALC2 (a), avec `notes/calculs/sans-virgule-flottante.md`) : aucun nombre à virgule flottante pour un montant, et le test de l'exemple de 15 lignes ; la règle de calcul des ventes ne change pas (§ 4 ci-dessous).
 4. **FI** (`notes/fichiers/decision-fi.md`) : contrôle des fichiers reçus (Q-FI1 = a, Q-FI2 = a), défaut bloquant d'abord (« facture.bat » accepté et rendu sous ce nom).
 5. **AUD** (`notes/audits-externes/decision-aud.md`) : les 45 constats encore présents des audits de l'éditeur (dont le bloquant C24 : ticket Z modifiable par écriture directe), tests externes retenus réécrits ; questions Q-AUD1 à Q-AUD7 répondues le 09/11 vers 00 h 10 UTC (« tout en a, Q-AUD6 oui, Q-AUD7 oui ») ; après la poussée du lot, la session copie sur `main` ses deux fichiers d'audit quotidien et de Dependabot (Q-AUD6, § 4 de `decision-aud.md`).

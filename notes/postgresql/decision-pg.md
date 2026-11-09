@@ -1,4 +1,4 @@
-# Lot PG : PostgreSQL seulement, retrait de SQLite (décision de l'éditeur du 08/11/2026, D55)
+# Lot PG : PostgreSQL seulement, retrait de SQLite (décision de l'éditeur du 08/11/2026, D55) ; constat C7 de l'éditeur (09/11/2026)
 
 ## 1. Le message de l'éditeur, mot pour mot
 
@@ -22,10 +22,11 @@ Lecture retenue (D55, `historique/DIRECTIVES.md`) : PILIQI n'utilise plus que Po
    - puce « Outillage » : « PostgreSQL (17 ou 18) en production, en développement et pour les tests, aucun autre moteur (décision de l'éditeur du 08/11/2026) ; la CI passe la suite complète sur PostgreSQL » à la place de la phrase sur SQLite ; la phrase sur la collation C.UTF-8 garde son sens sans comparer à SQLite (« l'ordre binaire est stable et un contenu signé ne change jamais d'ordre ») ; la grille faketime sur PostgreSQL ;
    - toute autre mention de SQLite (feuille de route, campagne de tests) réécrite ou retirée.
 7. **Chaîne** : plus aucune mention d'une suite SQLite dans ce qui reste à faire (les notes de reprise le diront).
+8. **Constat C7 de l'éditeur, avancé dans ce lot** (demande de l'éditeur du 09/11/2026 vers 10 h 55 UTC : « fais-le plus tôt, dans le lot suivant ») : corrige en entier le constat C7 de `navigateur/constats-editeur.md` (l'encadré « Vos tickets de caisse restent possibles » de la page « Identité » et du tableau de bord de la société, faux avant la validation et en lecture seule), avec tous ses tests, dans un commit à part.
 
 ## 4. Tests attendus
 
-Suite complète PostgreSQL au code 0, tests en navigateur compris, et outils du lot QA verts (analyse statique, couverture, mutation) ; `git grep -i sqlite` ne trouve plus que ce qui doit rester (par exemple un paquet tiers dans `composer.lock`), chaque reste justifié dans le compte rendu ; grille faketime sur PostgreSQL décrite et lancée une fois aux instants de la grille.
+Les tests du constat C7 (section 3, point 8). Suite complète PostgreSQL au code 0, tests en navigateur compris, et outils du lot QA verts (analyse statique, couverture, mutation) ; `git grep -i sqlite` ne trouve plus que ce qui doit rester (par exemple un paquet tiers dans `composer.lock`), chaque reste justifié dans le compte rendu ; grille faketime sur PostgreSQL décrite et lancée une fois aux instants de la grille.
 
 ## 5. Place
 

@@ -12,6 +12,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -178,7 +179,7 @@ class CreerAvoirAction
                 $avoir->lignes()->create($ligne);
             }
 
-            return $avoir->fresh('lignes');
+            return ModeleRelu::de($avoir, 'lignes');
         });
     }
 

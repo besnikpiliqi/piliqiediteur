@@ -12,6 +12,7 @@ use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -89,6 +90,6 @@ class CreerDevisAction
 
         $devis->forceFill($document->totaux)->save();
 
-        return $devis->fresh('lignes');
+        return ModeleRelu::de($devis, 'lignes');
     }
 }

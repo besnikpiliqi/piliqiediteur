@@ -12,6 +12,7 @@ use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +93,6 @@ class CreerFactureAction
 
         $facture->forceFill($document->totaux)->save();
 
-        return $facture->fresh('lignes');
+        return ModeleRelu::de($facture, 'lignes');
     }
 }

@@ -426,8 +426,10 @@ class PanierDeCaisse
     {
         $avant = [];
 
-        foreach ($panier->lignes ?? [] as $cle => $ligne) {
-            $avant[] = [...$this->comparable($ligne), 'prix_arretes' => $panier->prix_arretes[$cle]];
+        if ($panier !== null) {
+            foreach ($panier->lignes as $cle => $ligne) {
+                $avant[] = [...$this->comparable($ligne), 'prix_arretes' => $panier->prix_arretes[$cle]];
+            }
         }
 
         $apres = [];

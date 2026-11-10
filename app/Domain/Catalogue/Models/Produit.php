@@ -19,6 +19,7 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Database\Factories\ProduitFactory;
@@ -330,7 +331,7 @@ class Produit extends Model
     {
         return static::withTrashed()
             ->where('reference_normalisee', self::normaliserReference($reference))
-            ->when($sauf?->exists, fn (Builder $produits) => $produits->whereKeyNot($sauf->getKey()))
+            ->when($sauf?->exists, fn (Builder $produits) => $produits->whereKeyNot(ValeurRequise::de($sauf, 'le produit écarté de la recherche')->getKey()))
             ->exists();
     }
 

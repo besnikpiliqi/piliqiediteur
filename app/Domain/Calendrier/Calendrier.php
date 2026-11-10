@@ -3,6 +3,7 @@
 namespace App\Domain\Calendrier;
 
 use App\Domain\Tenancy\Enums\Territoire;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use DateTimeImmutable;
@@ -128,7 +129,7 @@ final class Calendrier
      */
     public function debutDuJour(string $jour): CarbonImmutable
     {
-        return self::auFuseauDeLApplication(CarbonImmutable::createFromFormat('!Y-m-d', self::exigerUnJour($jour), $this->fuseau));
+        return self::auFuseauDeLApplication(ValeurRequise::de(CarbonImmutable::createFromFormat('!Y-m-d', self::exigerUnJour($jour), $this->fuseau), "le minuit du jour {$jour}"));
     }
 
     /**
@@ -340,7 +341,7 @@ final class Calendrier
      */
     public static function nomDuMois(int $mois): string
     {
-        return ucfirst(CarbonImmutable::create(2000, $mois, 1, 0, 0, 0, 'UTC')->settings(['locale' => 'fr'])->translatedFormat('F'));
+        return ucfirst(ValeurRequise::de(CarbonImmutable::create(2000, $mois, 1, 0, 0, 0, 'UTC'), "le mois {$mois}")->settings(['locale' => 'fr'])->translatedFormat('F'));
     }
 
     /**

@@ -19,6 +19,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -417,13 +418,13 @@ final class DocumentsDeLaPeriode
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('id')
                     ->get(['id', 'numero', 'date_emission', 'client_nom', 'total_ttc'])
-                    ->map(fn (Facture $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $calendrier->jourDe($facture->date_emission), $facture->client_nom, $this->calculateur->enCentiemes($facture->total_ttc)))
+                    ->map(fn (Facture $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $calendrier->jourDe(ValeurRequise::de($facture->date_emission, 'la date d\'émission de la facture émise')), $facture->client_nom, $this->calculateur->enCentiemes($facture->total_ttc)))
                     ->all(),
                 TypeDeDocumentTelechargeable::AvoirsClients => self::siens(Avoir::query()->where('statut', StatutAvoir::Emise), $droits['equipe'], $compte)
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('id')
                     ->get(['id', 'numero', 'date_emission', 'client_nom', 'total_ttc'])
-                    ->map(fn (Avoir $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->client_nom, $this->calculateur->enCentiemes($avoir->total_ttc)))
+                    ->map(fn (Avoir $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe(ValeurRequise::de($avoir->date_emission, 'la date d\'émission de l\'avoir émis')), $avoir->client_nom, $this->calculateur->enCentiemes($avoir->total_ttc)))
                     ->all(),
                 TypeDeDocumentTelechargeable::FacturesAchat => self::achats(FactureAchat::query()->with('fournisseur'), $origine, $pieceManquanteSeulement)
                     ->where('statut', StatutFactureAchat::Validee)
@@ -431,7 +432,7 @@ final class DocumentsDeLaPeriode
                         ->orWhere(fn (Builder $sansDate): Builder => $sansDate->whereNull('date_facture')->where('date_validation', '>=', $debut)->where('date_validation', '<', $fin)))
                     ->orderBy('rang_validation')
                     ->get()
-                    ->map(fn (FactureAchat $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $facture->date_facture ?? $calendrier->jourDe($facture->date_validation), $facture->fournisseur->nom, $this->calculateur->enCentiemes($facture->total_ttc), $facture->source->getLabel(), (bool) $facture->piece_manquante))
+                    ->map(fn (FactureAchat $facture): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $facture->id, (string) $facture->numero, $facture->date_facture ?? $calendrier->jourDe(ValeurRequise::de($facture->date_validation, 'la date de validation de la facture d\'achat validée')), ValeurRequise::de($facture->fournisseur, 'le fournisseur de la facture d\'achat')->nom, $this->calculateur->enCentiemes($facture->total_ttc), $facture->source->getLabel(), (bool) $facture->piece_manquante))
                     ->sortBy(fn (DocumentTrouve $trouve): string => $trouve->jour)
                     ->values()
                     ->all(),
@@ -440,7 +441,7 @@ final class DocumentsDeLaPeriode
                     ->where('date_emission', '>=', $debut)->where('date_emission', '<', $fin)
                     ->orderBy('date_emission')->orderBy('numero')
                     ->get()
-                    ->map(fn (AvoirFournisseur $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe($avoir->date_emission), $avoir->factureAchat->fournisseur->nom, $this->calculateur->enCentiemes($avoir->total_ttc), $avoir->source->getLabel(), (bool) $avoir->piece_manquante))
+                    ->map(fn (AvoirFournisseur $avoir): DocumentTrouve => new DocumentTrouve($type, $magasin->getKey(), $nom, (string) $avoir->id, (string) $avoir->numero, $calendrier->jourDe(ValeurRequise::de($avoir->date_emission, 'la date d\'émission de l\'avoir fournisseur émis')), ValeurRequise::de(ValeurRequise::de($avoir->factureAchat, 'la facture d\'achat de l\'avoir fournisseur')->fournisseur, 'le fournisseur de la facture d\'achat')->nom, $this->calculateur->enCentiemes($avoir->total_ttc), $avoir->source->getLabel(), (bool) $avoir->piece_manquante))
                     ->all(),
                 TypeDeDocumentTelechargeable::Clotures => self::siens(ClotureCaisse::query(), $droits['cloturesDeLEquipe'], $compte)
                     ->whereBetween('date_cloture', [$du, $au])
@@ -467,7 +468,7 @@ final class DocumentsDeLaPeriode
     {
         return array_values($this->paiementsVisibles($compte, $calendrier, $du, $au)
             ->get(['id', 'montant', 'created_at'])
-            ->groupBy(fn (Paiement $paiement): string => substr($calendrier->jourDe($paiement->created_at), 0, 7))
+            ->groupBy(fn (Paiement $paiement): string => substr($calendrier->jourDe(ValeurRequise::de($paiement->created_at, 'la date d\'enregistrement du paiement')), 0, 7))
             ->map(fn (Collection $paiements, string $mois): DocumentTrouve => new DocumentTrouve(
                 TypeDeDocumentTelechargeable::Encaissements,
                 $magasin->getKey(),

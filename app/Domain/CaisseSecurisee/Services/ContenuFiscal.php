@@ -16,6 +16,7 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Support\Collection;
 
 /**
@@ -129,20 +130,20 @@ class ContenuFiscal
                 'paiement_id' => (int) $paiement->contre_passe_paiement_id,
                 'sequence' => $this->sequenceDeLEncaissement((int) $paiement->contre_passe_paiement_id),
             ] : null,
-            'client' => $this->client($paiement->client),
+            'client' => $this->client(ValeurRequise::de($paiement->client, 'le client du paiement')),
             'allocations' => array_values($paiement->allocations->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
                     'facture_id' => (int) $allocation->facture_id,
-                    'numero' => $allocation->facture->numero,
+                    'numero' => ValeurRequise::de($allocation->facture, 'la facture de l\'imputation')->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
                 ->all()),
             'credits_imputes' => array_values($paiement->creditsImputes->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'avoir_id' => (int) $allocation->avoir_id,
-                    'avoir_numero' => $allocation->avoir->numero,
+                    'avoir_numero' => ValeurRequise::de($allocation->avoir, 'l\'avoir de l\'imputation')->numero,
                     'facture_id' => (int) $allocation->facture_id,
-                    'facture_numero' => $allocation->facture->numero,
+                    'facture_numero' => ValeurRequise::de($allocation->facture, 'la facture de l\'imputation')->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
                 ->all()),
@@ -221,8 +222,8 @@ class ContenuFiscal
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
                     'paiement_id' => (int) $allocation->paiement_id,
-                    'mode' => $allocation->paiement->mode_paiement->value,
-                    'reference' => $allocation->paiement->reference,
+                    'mode' => ValeurRequise::de($allocation->paiement, 'le paiement de l\'imputation')->mode_paiement->value,
+                    'reference' => ValeurRequise::de($allocation->paiement, 'le paiement de l\'imputation')->reference,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
                 ->values()
@@ -230,7 +231,7 @@ class ContenuFiscal
             'credits_avoir' => $facture->allocationsAvoir->whereNull('paiement_id')->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'avoir_id' => (int) $allocation->avoir_id,
-                    'numero' => $allocation->avoir->numero,
+                    'numero' => ValeurRequise::de($allocation->avoir, 'l\'avoir de l\'imputation')->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
                 ->values()
@@ -283,7 +284,7 @@ class ContenuFiscal
             'imputations' => $avoir->allocations->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'facture_id' => (int) $allocation->facture_id,
-                    'numero' => $allocation->facture->numero,
+                    'numero' => ValeurRequise::de($allocation->facture, 'la facture de l\'imputation')->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
                 ->values()
@@ -325,8 +326,8 @@ class ContenuFiscal
             'ttc' => $sens * $this->calculateur->enCentiemes($ligne->montant_ttc),
             ...($ligne instanceof LigneAvoir ? ['origine' => [
                 'ligne_facture_id' => (int) $ligne->ligne_facture_id,
-                'facture_id' => (int) $ligne->ligneFacture->facture_id,
-                'numero' => $ligne->ligneFacture->facture->numero,
+                'facture_id' => (int) ValeurRequise::de($ligne->ligneFacture, 'la ligne de facture que corrige la ligne d\'avoir')->facture_id,
+                'numero' => ValeurRequise::de(ValeurRequise::de($ligne->ligneFacture, 'la ligne de facture que corrige la ligne d\'avoir')->facture, 'la facture de la ligne corrigée')->numero,
             ]] : []),
         ]);
 

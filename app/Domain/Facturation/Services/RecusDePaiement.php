@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use LogicException;
@@ -103,7 +104,7 @@ class RecusDePaiement
                 'facture_id' => $factureId,
                 'montant' => $this->calculateur->enDecimal($montants['montant']),
                 'credit' => $this->calculateur->enDecimal($montants['credit']),
-                'reste_du' => $this->calculateur->enDecimal($factures[$factureId]->resteDuEnCentimes()),
+                'reste_du' => $this->calculateur->enDecimal(ValeurRequise::de($factures->get($factureId), 'la facture réglée par le reçu')->resteDuEnCentimes()),
                 'ordre' => $ordre++,
             ]);
         }

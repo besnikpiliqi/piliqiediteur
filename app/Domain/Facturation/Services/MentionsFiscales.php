@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Support\ValeurRequise;
 
 /**
  * Les mentions fiscales qu'imprime un document, dans l'ordre, que les PDF
@@ -73,7 +74,7 @@ class MentionsFiscales
 
         if ($document instanceof Facture && $document->estUneRectificative()) {
             $rectifiee = $document->factureRectifiee()->firstOrFail();
-            $mentions[] = sprintf(self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher($rectifiee->date_emission, 'd/m/Y'));
+            $mentions[] = sprintf(self::RECTIFICATIVE, $rectifiee->numero, $rectifiee->magasin->calendrier()->afficher(ValeurRequise::de($rectifiee->date_emission, 'la date d\'émission de la facture rectifiée'), 'd/m/Y'));
         }
 
         if (! $document instanceof Devis) {

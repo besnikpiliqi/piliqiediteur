@@ -14,6 +14,7 @@ use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\MiseEnPageA4;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
@@ -59,7 +60,8 @@ class FicheDeSaisiePdfGenerator
         $calendrier = $magasin->calendrier();
         $emetteur = Emetteur::duMagasin($magasin);
         $estUneFacture = $document instanceof FactureAchat;
-        $fournisseur = $estUneFacture ? $document->fournisseur : $document->factureAchat->fournisseur;
+        $factureAchat = $document instanceof FactureAchat ? $document : ValeurRequise::de($document->factureAchat, 'la facture d\'achat de l\'avoir fournisseur');
+        $fournisseur = ValeurRequise::de($factureAchat->fournisseur, 'le fournisseur de la facture d\'achat');
         $euros = fn (mixed $montant): string => $this->calculateur->enEuros($this->calculateur->enCentiemes($montant));
 
         return view('achats.fiche-de-saisie', [
@@ -70,9 +72,9 @@ class FicheDeSaisiePdfGenerator
             'details' => array_values(array_filter([
                 $document->numero,
                 filled($document->numero_fournisseur) ? 'N° du fournisseur : '.$document->numero_fournisseur : null,
-                $estUneFacture
+                $document instanceof FactureAchat
                     ? ($document->date_facture === null ? null : 'Facture du '.Calendrier::afficherJour($document->date_facture, 'd/m/Y'))
-                    : 'Émis le '.$calendrier->afficher($document->date_emission, 'd/m/Y').' sur la facture d\'achat '.$document->factureAchat->numero,
+                    : 'Émis le '.$calendrier->afficher(ValeurRequise::de($document->date_emission, 'la date d\'émission de l\'avoir fournisseur'), 'd/m/Y').' sur la facture d\'achat '.$factureAchat->numero,
                 $document->source->getLabel(),
             ])),
             'fournisseur' => array_values(array_filter([$fournisseur->nom, filled($fournisseur->siret) ? 'SIRET '.$fournisseur->siret : null, filled($fournisseur->numero_tva) ? 'N° de TVA '.$fournisseur->numero_tva : null])),

@@ -23,6 +23,7 @@ use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -185,7 +186,7 @@ class ContrePasserPaiementAction
         $this->reimputerLeCreditDisponible($contrePassation);
         $this->recus->clore($recu);
 
-        $contrePassation = $contrePassation->fresh();
+        $contrePassation = ModeleRelu::de($contrePassation);
         $this->registre->enregistrer(ChaineFiscale::Encaissement, 'contre_passation', $this->contenuFiscal->encaissement($contrePassation), $contrePassation);
 
         return $contrePassation;

@@ -17,6 +17,7 @@ use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -138,7 +139,7 @@ class EnregistrerVenteCaisseAction
 
             $this->panierDeCaisse->encaisser($vendeur, $lignes);
 
-            return $facture->fresh('lignes');
+            return ModeleRelu::de($facture, 'lignes');
         });
     }
 

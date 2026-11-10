@@ -42,6 +42,11 @@ use LogicException;
  * se supprime jamais (voir ProtegeLesDonneesValidees). PAS de SoftDeletes
  * ici, volontairement, pour un document fiscal au même titre qu'une
  * facture, dont la loi impose la conservation.
+ *
+ * Sa journée (voir JourCivil) n'est jamais nulle : sa colonne ne l'est pas
+ * en base.
+ *
+ * @property string $date_cloture
  */
 class ClotureCaisse extends Model
 {

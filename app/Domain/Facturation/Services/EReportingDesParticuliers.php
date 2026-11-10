@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -315,7 +316,7 @@ class EReportingDesParticuliers
 
         foreach ($recus as $cle => $montant) {
             [$factureId, $date] = explode('|', $cle);
-            $groupes = $this->groupes($tickets->get((int) $factureId));
+            $groupes = $this->groupes(ValeurRequise::de($tickets->get((int) $factureId), 'le ticket d\'un encaissement de la journée'));
             $services = array_filter($groupes, fn (array $groupe): bool => $groupe['nature'] === NatureLigne::Service && $groupe['taux'] > 0);
 
             if ($montant === 0 || $services === []) {
@@ -502,7 +503,7 @@ class EReportingDesParticuliers
 
         foreach (LigneAvoir::query()->whereIn('avoir_id', $avoirs)->with('ligneFacture')->get() as $ligne) {
             $avoirId = (int) $ligne->avoir_id;
-            $factureId = (int) $ligne->ligneFacture->facture_id;
+            $factureId = (int) ValeurRequise::de($ligne->ligneFacture, 'la ligne de facture que corrige la ligne d\'avoir')->facture_id;
             $corrections[$avoirId][$factureId] = ($corrections[$avoirId][$factureId] ?? 0) + $this->calculateur->enCentiemes($ligne->montant_ttc);
         }
 
@@ -584,8 +585,8 @@ class EReportingDesParticuliers
         return array_values($ticket->lignes
             ->groupBy(fn (LigneFacture $ligne): string => $ligne->nature->value.'|'.$this->calculateur->enCentiemes($ligne->taux_tva))
             ->map(fn (Collection $lignes): array => [
-                'nature' => $lignes->first()->nature,
-                'taux' => $this->calculateur->enCentiemes($lignes->first()->taux_tva),
+                'nature' => ValeurRequise::de($lignes->first(), 'la première ligne d\'un groupe')->nature,
+                'taux' => $this->calculateur->enCentiemes(ValeurRequise::de($lignes->first(), 'la première ligne d\'un groupe')->taux_tva),
                 'ttc' => (int) $lignes->sum(fn (LigneFacture $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)),
             ])
             ->all());

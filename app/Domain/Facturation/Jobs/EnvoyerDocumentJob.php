@@ -23,6 +23,7 @@ use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
 use App\Domain\Tenancy\Concerns\WithTenantContext;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Bus\Queueable;
@@ -219,7 +220,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $lecteur = app(LecteurDesDroits::class);
 
         try {
-            $expediteur = $envoi->envoye_par === null ? null : $lecteur->exigerSousVerrou($envoi->envoyePar, self::autorisationDEnvoyer($classe), $magasin);
+            $expediteur = $envoi->envoye_par === null ? null : $lecteur->exigerSousVerrou(ValeurRequise::de($envoi->envoyePar, 'le compte qui a demandé l\'envoi'), self::autorisationDEnvoyer($classe), $magasin);
             // Un reçu de paiement ne change jamais : sa table est en ajout
             // seul, et le compte de l'application, sans droit de modifier
             // ses lignes, ne peut pas les verrouiller.
@@ -315,7 +316,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
      */
     private function devisModifieDepuisLaDemande(Devis $devis, EnvoiDocument $envoi): bool
     {
-        return $devis->statut === StatutDevis::Brouillon || $devis->date_emission->gt($envoi->created_at);
+        return $devis->statut === StatutDevis::Brouillon || ValeurRequise::de($devis->date_emission, 'la date d\'émission du devis envoyé')->gt(ValeurRequise::de($envoi->created_at, 'la date de la demande d\'envoi'));
     }
 
     /**
@@ -354,6 +355,6 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return collect([$expediteur]);
         }
 
-        return collect([$envoi->magasin->societe->proprietaire]);
+        return collect([ValeurRequise::de($envoi->magasin->societe->proprietaire, 'le propriétaire de la société')]);
     }
 }

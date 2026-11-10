@@ -21,6 +21,8 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
@@ -194,7 +196,7 @@ class ModifierFactureAchatAction
                 $document = $this->constructeurLignes->enregistrer($compte, $factureAchat, $lignes, $montants);
 
                 if ($estValidee) {
-                    $this->corrigerLaReception($factureAchat->fresh('lignes'), $produitsAvant);
+                    $this->corrigerLaReception(ModeleRelu::de($factureAchat, 'lignes'), $produitsAvant);
                 }
 
                 $this->tva->retenir($compte, $factureAchat, $document, $montants);
@@ -205,7 +207,7 @@ class ModifierFactureAchatAction
 
                 $this->pieces->joindre($compte, $factureAchat, $pieces);
 
-                return $factureAchat->fresh('lignes');
+                return ModeleRelu::de($factureAchat, 'lignes');
             });
         });
     }
@@ -242,7 +244,8 @@ class ModifierFactureAchatAction
                 "Correction de la facture d'achat {$factureAchat->numero}",
             );
 
-            $produit->rattacherAuFournisseur($produit->dernierAchatValide()?->factureAchat->fournisseur_id);
+            $dernierAchat = $produit->dernierAchatValide();
+            $produit->rattacherAuFournisseur($dernierAchat === null ? null : ValeurRequise::de($dernierAchat->factureAchat, 'la facture d\'achat du dernier achat validé')->fournisseur_id);
         }
     }
 

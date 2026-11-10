@@ -32,6 +32,7 @@ use JsonException;
 use LogicException;
 use stdClass;
 use TypeError;
+use UnexpectedValueException;
 use ValueError;
 
 /**
@@ -728,12 +729,15 @@ class VerificateurIntegrite
         $this->noterLesImputationsIntrouvables(self::imputationsSignees($alias, $documentId, $donnees));
 
         // La fiche du client d'un paiement, signée telle qu'elle était ce
-        // jour-là, change ensuite : elle ne se compare pas.
+        // jour-là, change ensuite : elle ne se compare pas. Un document qui
+        // ne se relit plus (une valeur requise qui manque en base, voir
+        // ValeurRequise, une valeur illisible) est signalé, et la
+        // vérification continue.
         try {
             $recalcule = $document instanceof Paiement
                 ? Arr::except($this->contenuFiscal->encaissement($document), ['client'])
                 : ['document' => $this->contenuFiscal->blocDocument($document)];
-        } catch (ErrorException|InvalidArgumentException|MathException|ValueError|TypeError $illisible) {
+        } catch (ErrorException|InvalidArgumentException|MathException|UnexpectedValueException|ValueError|TypeError $illisible) {
             $this->rapport->signaler(AnomalieFiscale::defaut('document', "{$libelle} ne se relit plus en base : {$illisible->getMessage()}", $reference));
 
             return;
@@ -778,9 +782,9 @@ class VerificateurIntegrite
         foreach ($imputations as $imputation) {
             $cle = self::cleDImputation($imputation);
 
-            $lisible = $imputation['origine_id'] !== null && $imputation['facture_id'] !== null && ($imputation['origine'] !== 'credit' || $imputation['avoir_id'] !== null);
+            $enBase = self::imputationEnBase($imputation);
 
-            if (isset($this->imputationsIntrouvables[$cle]) || ($lisible && self::allocationsDeLImputation($imputation)->exists())) {
+            if (isset($this->imputationsIntrouvables[$cle]) || ($enBase !== null && self::allocationsDeLImputation($enBase)->exists())) {
                 continue;
             }
 
@@ -1149,6 +1153,27 @@ class VerificateurIntegrite
     private static function tableauxSignes(mixed $liste): array
     {
         return array_values(array_filter(is_array($liste) ? $liste : [], is_array(...)));
+    }
+
+    /**
+     * L'imputation signée, quand elle désigne tout ce qu'il faut pour la
+     * chercher en base : son origine, sa facture et, pour un crédit d'avoir
+     * imputé par un paiement, son avoir ; null sinon (un contenu signé
+     * altéré).
+     *
+     * @param  ImputationSignee  $imputation
+     * @return ImputationEnBase|null
+     */
+    private static function imputationEnBase(array $imputation): ?array
+    {
+        ['origine_id' => $origineId, 'facture_id' => $factureId, 'montant' => $montant] = $imputation;
+
+        return match (true) {
+            $origineId === null, $factureId === null => null,
+            $imputation['origine'] !== 'credit' => ['origine' => $imputation['origine'], 'origine_id' => $origineId, 'facture_id' => $factureId, 'montant' => $montant],
+            $imputation['avoir_id'] === null => null,
+            default => ['origine' => 'credit', 'origine_id' => $origineId, 'avoir_id' => $imputation['avoir_id'], 'facture_id' => $factureId, 'montant' => $montant],
+        };
     }
 
     /**

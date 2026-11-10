@@ -527,9 +527,10 @@ class RegistreFiscal
      * Les événements techniques à inscrire avant le prochain enregistrement
      * du magasin, d'après le dernier, tel que le note la ligne de tête :
      * l'initialisation s'il n'y en a aucun, sinon le changement de version
-     * du module fiscal, puis celui de la clé de signature.
+     * du module fiscal, puis celui de la clé de signature (l'ancienne,
+     * nulle quand la ligne de tête n'en note aucune).
      *
-     * @return list<array{0: CodeEvenement, 1: array<string, string>}>
+     * @return list<array{0: CodeEvenement, 1: array<string, string|null>}>
      */
     private function evenementsAutomatiques(TeteRegistreFiscal $tete): array
     {

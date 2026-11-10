@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Dompdf\Dompdf;
 use Dompdf\FontMetrics;
 
@@ -127,7 +128,7 @@ final readonly class TableauDesReglements
     private static function mots(?string $reference, float $place, FontMetrics $polices): array
     {
         $mots = preg_split('/\s+/u', trim((string) $reference), flags: PREG_SPLIT_NO_EMPTY) ?: [];
-        $police = $polices->getFont('DejaVu Sans');
+        $police = ValeurRequise::de($polices->getFont('DejaVu Sans'), 'la police DejaVu Sans de Dompdf');
 
         return array_map(fn (string $mot): array => [
             'texte' => $mot,

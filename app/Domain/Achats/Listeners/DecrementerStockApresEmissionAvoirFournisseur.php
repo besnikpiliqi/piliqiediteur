@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Listeners;
 
 use App\Domain\Achats\Events\AvoirFournisseurEmis;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Support\ValeurRequise;
 
 /**
  * Symétrique de IncrementerStockApresValidationFactureAchat : un retour au
@@ -22,14 +23,18 @@ class DecrementerStockApresEmissionAvoirFournisseur
     {
         $avoirFournisseur = $event->avoirFournisseur->loadMissing(['factureAchat', 'lignes.produit', 'lignes.ligneAchat.factureAchat']);
 
+        $factureAchat = ValeurRequise::de($avoirFournisseur->factureAchat, 'la facture d\'achat de l\'avoir fournisseur');
+
         foreach ($avoirFournisseur->lignes as $ligne) {
-            if ($ligne->produit->suivi_stock) {
+            $produit = ValeurRequise::de($ligne->produit, 'le produit de la ligne de l\'avoir fournisseur');
+
+            if ($produit->suivi_stock) {
                 $this->stock->retournerAuFournisseur(
-                    produit: $ligne->produit,
+                    produit: $produit,
                     quantite: $ligne->quantite,
-                    coutUnitaireHt: $ligne->ligneAchat->coutUnitaireHt(),
+                    coutUnitaireHt: ValeurRequise::de($ligne->ligneAchat, 'la ligne d\'achat que retourne la ligne de l\'avoir fournisseur')->coutUnitaireHt(),
                     source: $avoirFournisseur,
-                    note: "Avoir fournisseur {$avoirFournisseur->numero} sur facture d'achat {$avoirFournisseur->factureAchat->numero}",
+                    note: "Avoir fournisseur {$avoirFournisseur->numero} sur facture d'achat {$factureAchat->numero}",
                 );
             }
         }

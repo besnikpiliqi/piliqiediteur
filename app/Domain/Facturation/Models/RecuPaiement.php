@@ -34,6 +34,11 @@ use LogicException;
  * et ne modifie jamais le document qu'il règle. Jamais modifié ni supprimé
  * (voir ProtegeLesDonneesValidees et les déclencheurs de la table) ; il
  * part par e-mail comme un document (voir EnvoyerDocumentAction).
+ *
+ * Son jour de réception (voir JourCivil) n'est jamais nul : sa colonne ne
+ * l'est pas en base.
+ *
+ * @property string $recu_le
  */
 class RecuPaiement extends Model implements DocumentEnvoyable
 {

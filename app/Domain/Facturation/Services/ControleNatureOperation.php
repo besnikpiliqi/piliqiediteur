@@ -10,6 +10,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Exceptions\NatureOperationRefuseeException;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Support\Collection;
 
 /**
@@ -78,7 +79,7 @@ class ControleNatureOperation
             throw new NatureOperationRefuseeException($facture->nature_operation, $manquements);
         }
 
-        return $facture->nature_operation->exigeVies() ? $this->consultationDuJour($facture->client, $jour) : null;
+        return $facture->nature_operation->exigeVies() ? $this->consultationDuJour(ValeurRequise::de($facture->client, 'le client de la facture'), $jour) : null;
     }
 
     /**
@@ -96,7 +97,7 @@ class ControleNatureOperation
             return [];
         }
 
-        $client = $facture->client;
+        $client = ValeurRequise::de($facture->client, 'le client de la facture');
         $lignes = $facture->lignes()->with('service')->get();
         $emetteur = Emetteur::duMagasin($facture->magasin);
 

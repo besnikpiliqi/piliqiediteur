@@ -16,6 +16,8 @@ use App\Domain\Facturation\Services\RecusDePaiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -108,14 +110,14 @@ class EncaisserEnPlusieursModesAction
             $this->lecteur->exiger($compte, 'encaisser', $magasin, $facture);
             $bons = $this->bonsDAvoirUtilisables($facture, $bonsDAvoir);
             $this->refuserDesPartsEnTrop($facture, $parts, $bons);
-            $recu = $this->recus->ouvrir($compte, $magasin, NatureRecuPaiement::Encaissement, $facture->client, $recuLe);
+            $recu = $this->recus->ouvrir($compte, $magasin, NatureRecuPaiement::Encaissement, ValeurRequise::de($facture->client, 'le client de la facture'), $recuLe);
 
             foreach ($parts as $rang => $part) {
                 $montant = $this->calculateur->enDecimal($part->montant);
 
                 $this->enregistrerPaiement->handle(
                     $compte,
-                    $facture->client,
+                    ValeurRequise::de($facture->client, 'le client de la facture'),
                     ['mode_paiement' => $part->mode->value, 'montant' => $montant, 'reference' => $part->reference, 'recu_le' => $recuLe],
                     [['facture_id' => $facture->getKey(), 'montant' => $montant]],
                     null,
@@ -126,7 +128,7 @@ class EncaisserEnPlusieursModesAction
 
             $this->recus->clore($recu);
 
-            return $facture->fresh();
+            return ModeleRelu::de($facture);
         }));
     }
 

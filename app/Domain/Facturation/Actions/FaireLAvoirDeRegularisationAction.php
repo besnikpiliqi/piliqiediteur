@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -91,7 +92,7 @@ class FaireLAvoirDeRegularisationAction
 
             $avoir = $this->emettreAvoir->handle($compte, $this->creerAvoir->handle(
                 $compte,
-                $origine->client,
+                ValeurRequise::de($origine->client, 'le client de la facture régularisée'),
                 $this->regularisation->lignesDeLAvoir($origine),
                 sprintf(RegularisationDUneFacture::MOTIF_DE_L_AVOIR, $origine->numero),
                 regularisation: true,

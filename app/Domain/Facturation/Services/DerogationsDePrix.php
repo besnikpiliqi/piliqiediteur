@@ -7,6 +7,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
@@ -85,7 +86,7 @@ class DerogationsDePrix
 
         foreach ($lignesApres as $cleDeLigne => $ligne) {
             $article = $ligne['produit_id'] !== null ? $produits->get($ligne['produit_id']) : $services->get($ligne['service_id']);
-            $derogation = $this->derogation($ligne, $article, $contexte);
+            $derogation = $this->derogation($ligne, ValeurRequise::de($article, 'l\'article du catalogue de la ligne'), $contexte);
 
             if ($derogation === null) {
                 continue;
@@ -140,7 +141,7 @@ class DerogationsDePrix
         // montre : sans TVA hors de la TVA française, où un service vendu à
         // un autre prix que sa référence a pour PU TTC ce prix saisi, sans
         // TVA (voir ConstructeurLigneDocument).
-        $prixDeReference = $article->prixDeReferenceDans($contexte);
+        $prixDeReference = ValeurRequise::de($article->prixDeReferenceDans($contexte), 'le prix de référence du service');
 
         if ($prix !== $this->calculateur->enCentiemes($prixDeReference)) {
             return "Vendre « {$article->nom} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';

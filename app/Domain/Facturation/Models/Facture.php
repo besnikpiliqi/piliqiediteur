@@ -38,6 +38,7 @@ use App\Domain\Facturation\Services\ReglementsALEmission;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
 use Database\Factories\FactureFactory;
@@ -243,7 +244,7 @@ class Facture extends Model implements DocumentEnvoyable
     {
         return $this->estUneRectificative()
             ? $this->factureRectifiee()->firstOrFail()->copieClient()
-            : CopieClient::depuisClient($this->client);
+            : CopieClient::depuisClient(ValeurRequise::de($this->client, 'le client de la facture'));
     }
 
     /**
@@ -683,7 +684,7 @@ class Facture extends Model implements DocumentEnvoyable
             ->sortBy('id')
             ->groupBy('avoir_id')
             ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
-            ->map(fn (Collection $allocations): ?string => $allocations->first()->avoir?->numero)
+            ->map(fn (Collection $allocations): ?string => ValeurRequise::de($allocations->first(), 'la première imputation d\'un avoir')->avoir?->numero)
             ->filter()
             ->all());
     }
@@ -827,7 +828,7 @@ class Facture extends Model implements DocumentEnvoyable
         $derniere = $this->relancesComptees()->latest('created_at')->latest('id')->first();
         $calendrier = $this->magasin->calendrier();
 
-        return $derniere === null ? null : Calendrier::joursEntre($calendrier->jourDe($derniere->created_at), $calendrier->aujourdhui());
+        return $derniere === null ? null : Calendrier::joursEntre($calendrier->jourDe(ValeurRequise::de($derniere->created_at, 'la date de la dernière relance')), $calendrier->aujourdhui());
     }
 
     /**
@@ -841,7 +842,7 @@ class Facture extends Model implements DocumentEnvoyable
         [$document, $accord] = $this->estPourUnProfessionnel() ? ['la facture', 'e'] : ['le ticket de caisse', ''];
 
         return "Sauf erreur de notre part, {$document} {$this->numero} d'un montant de {$euros((float) $this->total_ttc)} TTC, "
-            ."arrivé{$accord} à échéance le ".Calendrier::afficherJour($this->date_echeance, 'd/m/Y').", n'est pas entièrement réglé{$accord} : "
+            ."arrivé{$accord} à échéance le ".Calendrier::afficherJour(ValeurRequise::de($this->date_echeance, 'l\'échéance de la facture en retard'), 'd/m/Y').", n'est pas entièrement réglé{$accord} : "
             ."il reste {$euros($this->montantRestant())} à payer.\n"
             .'Nous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais. '
             ."Si vous l'avez réglé{$accord} entre-temps, merci de ne pas tenir compte de ce message.";

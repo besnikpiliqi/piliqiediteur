@@ -20,6 +20,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -185,7 +186,7 @@ final class RecapitulatifDesDocuments
             case TypeDeDocumentTelechargeable::FacturesAchat:
             case TypeDeDocumentTelechargeable::AvoirsFournisseur:
                 $achat = $document->type === TypeDeDocumentTelechargeable::FacturesAchat ? self::lu($lus['achats'], $document) : self::lu($lus['avoirsFournisseur'], $document);
-                $fournisseur = $achat instanceof FactureAchat ? $achat->fournisseur : $achat->factureAchat->fournisseur;
+                $fournisseur = ValeurRequise::de(($achat instanceof FactureAchat ? $achat : ValeurRequise::de($achat->factureAchat, 'la facture d\'achat de l\'avoir fournisseur'))->fournisseur, 'le fournisseur de la facture d\'achat');
 
                 return array_values($achat->taux->map(fn (TauxFactureAchat|TauxAvoirFournisseur $taux): array => $ligne([
                     'taux' => self::taux($taux->taux_tva),

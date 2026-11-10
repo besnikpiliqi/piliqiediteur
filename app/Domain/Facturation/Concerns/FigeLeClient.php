@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Concerns;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Services\CopieClient;
+use App\Domain\Tenancy\Support\ValeurRequise;
 
 /**
  * Un ticket, une facture ou un avoir émis ne change plus jamais : il garde
@@ -56,17 +57,17 @@ trait FigeLeClient
         }
 
         return new CopieClient(
-            nom: $this->client_nom,
+            nom: ValeurRequise::de($this->client_nom, 'le nom figé du client du document numéroté'),
             adresse: $this->client_adresse,
             complementAdresse: $this->client_complement_adresse,
             codePostal: $this->client_code_postal,
             ville: $this->client_ville,
-            pays: $this->client_pays,
+            pays: ValeurRequise::de($this->client_pays, 'le pays figé du client du document numéroté'),
             siren: $this->client_siren,
             siret: $this->client_siret,
             numeroTva: $this->client_numero_tva,
             identifiantEtranger: $this->client_identifiant_etranger,
-            etabliEnFrance: $this->client_etabli_en_france,
+            etabliEnFrance: ValeurRequise::de($this->client_etabli_en_france, 'l\'établissement en France figé du client du document numéroté'),
         );
     }
 
@@ -80,7 +81,7 @@ trait FigeLeClient
      */
     public function nomDuClient(): ?string
     {
-        return $this->numero === null ? $this->client->nom : $this->client_nom;
+        return $this->numero === null ? ValeurRequise::de($this->client, 'le client du brouillon')->nom : $this->client_nom;
     }
 
     /**

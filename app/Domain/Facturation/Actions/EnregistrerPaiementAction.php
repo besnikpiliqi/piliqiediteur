@@ -26,6 +26,7 @@ use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -205,7 +206,7 @@ class EnregistrerPaiementAction
             $facture->constaterUnReglement();
         }
 
-        $paiement = $paiement->fresh();
+        $paiement = ModeleRelu::de($paiement);
         $this->registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', $this->contenuFiscal->encaissement($paiement), $paiement);
 
         return $paiement;
@@ -292,7 +293,7 @@ class EnregistrerPaiementAction
         }
 
         foreach ($bonsDAvoir as $bon) {
-            $montant = min($bon->creditEnCentimes(), $ticket->fresh()->resteDuEnCentimes());
+            $montant = min($bon->creditEnCentimes(), ModeleRelu::de($ticket)->resteDuEnCentimes());
 
             if ((int) $bon->magasin_id !== (int) $ticket->magasin_id || ! ($bon->client?->estComptoir() ?? false)) {
                 throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);

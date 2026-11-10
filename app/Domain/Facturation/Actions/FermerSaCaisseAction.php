@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -101,7 +102,7 @@ class FermerSaCaisseAction
                 ? $this->lecteur->exigerSousVerrou($auteur, 'fermer', $magasin, ClotureCaissePersonnelle::class)
                 : $this->lecteur->exigerSousVerrou($auteur, 'fermerLaCaisseDe', $magasin, [ClotureCaissePersonnelle::class, $vendeur]);
 
-            return $this->fermer($vendeur, $saPropreCaisse ? ModeFermetureCaisse::Vendeur : ModeFermetureCaisse::Responsable, $compte, CarbonImmutable::now(), memeAZero: true);
+            return ValeurRequise::de($this->fermer($vendeur, $saPropreCaisse ? ModeFermetureCaisse::Vendeur : ModeFermetureCaisse::Responsable, $compte, CarbonImmutable::now(), memeAZero: true), 'le relevé fermé, même à zéro');
         }));
     }
 

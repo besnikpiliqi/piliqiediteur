@@ -11,6 +11,7 @@ use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Services\ConstructeurLigneInventaire;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
@@ -77,7 +78,7 @@ class ModifierInventaireOuvertureAction
 
                 $this->constructeurLignes->enregistrer($inventaire, $lignes);
 
-                return $inventaire->fresh('lignes');
+                return ModeleRelu::de($inventaire, 'lignes');
             });
         });
     }

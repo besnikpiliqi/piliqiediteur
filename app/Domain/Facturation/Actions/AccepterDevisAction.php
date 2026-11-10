@@ -10,6 +10,7 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +61,7 @@ class AccepterDevisAction
             }
 
             if ($devis->validiteDepassee()) {
-                throw new LogicException('La date de validité de ce devis est dépassée ('.Calendrier::afficherJour($devis->date_validite, 'd/m/Y').') : il ne peut plus être accepté.');
+                throw new LogicException('La date de validité de ce devis est dépassée ('.Calendrier::afficherJour(ValeurRequise::de($devis->date_validite, 'la date de validité du devis dépassé'), 'd/m/Y').') : il ne peut plus être accepté.');
             }
 
             $this->lecteur->exiger($compte, 'accepter', $magasin, $devis);

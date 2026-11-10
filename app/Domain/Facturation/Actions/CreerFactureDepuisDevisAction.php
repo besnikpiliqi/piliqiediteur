@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -115,6 +116,6 @@ class CreerFactureDepuisDevisAction
             'total_ttc' => $devis->total_ttc,
         ])->save();
 
-        return $facture->fresh('lignes');
+        return ModeleRelu::de($facture, 'lignes');
     }
 }

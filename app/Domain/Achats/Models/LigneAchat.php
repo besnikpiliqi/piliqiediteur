@@ -7,6 +7,7 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -108,13 +109,13 @@ class LigneAchat extends Model
     public function coutUnitaireHt(): float
     {
         $calculateur = app(CalculateurLigne::class);
-        $escompte = (float) $this->factureAchat->escompte_pourcentage;
+        $escompte = (float) ValeurRequise::de($this->factureAchat, 'la facture d\'achat de la ligne')->escompte_pourcentage;
 
         if ($this->montant_ht_saisi !== null) {
             return $calculateur->coutUnitaireDuHt($calculateur->enCentiemes($this->montant_ht_saisi), $this->quantite, $escompte);
         }
 
-        return $calculateur->coutUnitaireNet($this->prix_unitaire_ht, (float) $this->remise_pourcentage, $escompte);
+        return $calculateur->coutUnitaireNet(ValeurRequise::de($this->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), (float) $this->remise_pourcentage, $escompte);
     }
 
     /**
@@ -205,11 +206,13 @@ class LigneAchat extends Model
         // dont le stock est effectivement suivi (voir StockLedgerService) :
         // pour les autres, stock_quantite reste figé à 0 et ne reflète
         // rien, on se fie alors uniquement au reliquat de la ligne.
-        if (! $this->produit->suivi_stock) {
+        $produit = ValeurRequise::de($this->produit, 'le produit de la ligne d\'achat retournée');
+
+        if (! $produit->suivi_stock) {
             return max(0, $resteSurLaLigne);
         }
 
-        return max(0, min($resteSurLaLigne, $this->produit->stock_quantite));
+        return max(0, min($resteSurLaLigne, $produit->stock_quantite));
     }
 
     /**

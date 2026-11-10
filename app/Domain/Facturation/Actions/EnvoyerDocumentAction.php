@@ -19,6 +19,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -160,7 +161,7 @@ class EnvoyerDocumentAction
      */
     public function relanceAutomatique(Facture $facture): EnvoiDocument
     {
-        $destinataire = $this->destinataireValide((string) $facture->client->email);
+        $destinataire = $this->destinataireValide((string) ValeurRequise::de($facture->client, 'le client de la facture relancée')->email);
 
         return DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, null));
     }

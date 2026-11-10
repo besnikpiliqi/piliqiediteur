@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Dompdf\Dompdf;
 use Dompdf\FontMetrics;
 use Illuminate\Support\Number;
@@ -154,8 +155,8 @@ final readonly class TableauDesLignes
      */
     private static function mesure(array $titres, array $lignes, FontMetrics $polices): self
     {
-        $normale = $polices->getFont('DejaVu Sans');
-        $grasse = $polices->getFont('DejaVu Sans', 'bold');
+        $normale = ValeurRequise::de($polices->getFont('DejaVu Sans'), 'la police DejaVu Sans de Dompdf');
+        $grasse = ValeurRequise::de($polices->getFont('DejaVu Sans', 'bold'), 'la police DejaVu Sans grasse de Dompdf');
         $largeurDuTexte = fn (string $texte): float => $polices->getTextWidth($texte, $normale, self::CORPS);
         $largeurDeColonne = fn (int $rang, array $textes): float => max([
             $polices->getTextWidth(mb_convert_case($titres[$rang]['titre'], MB_CASE_UPPER, 'UTF-8'), $grasse, self::CORPS_DES_TITRES),

@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Listeners;
 
 use App\Domain\Achats\Events\FactureAchatValidee;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Support\ValeurRequise;
 
 /**
  * Découple Achats de Stock, même pattern que
@@ -29,8 +30,9 @@ class IncrementerStockApresValidationFactureAchat
         $factureAchat = $event->factureAchat->loadMissing('lignes.produit');
 
         foreach ($factureAchat->lignes as $ligne) {
-            $this->stock->receptionner($ligne->produit, $ligne->quantite, $ligne->coutUnitaireHt(), $factureAchat, "Réception facture d'achat {$factureAchat->numero}");
-            $ligne->produit->rattacherAuFournisseur($factureAchat->fournisseur_id);
+            $produit = ValeurRequise::de($ligne->produit, 'le produit d\'une ligne d\'une facture d\'achat validée');
+            $this->stock->receptionner($produit, $ligne->quantite, $ligne->coutUnitaireHt(), $factureAchat, "Réception facture d'achat {$factureAchat->numero}");
+            $produit->rattacherAuFournisseur($factureAchat->fournisseur_id);
         }
     }
 }

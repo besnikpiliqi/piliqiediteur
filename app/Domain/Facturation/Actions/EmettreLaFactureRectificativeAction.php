@@ -15,6 +15,8 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -132,7 +134,7 @@ class EmettreLaFactureRectificativeAction
             'livraison_code_postal' => $origine->livraison_code_postal,
             'livraison_ville' => $origine->livraison_ville,
             'livraison_pays' => $origine->livraison_pays,
-            'livraison_date' => $origine->livraison_date ?? $origine->magasin->calendrier()->jourDe($origine->date_emission),
+            'livraison_date' => $origine->livraison_date ?? $origine->magasin->calendrier()->jourDe(ValeurRequise::de($origine->date_emission, 'la date d\'émission de la facture rectifiée')),
             'transport_par' => $origine->transport_par,
             ...$this->calculateur->totaliser($lignes),
         ])->save();
@@ -141,6 +143,6 @@ class EmettreLaFactureRectificativeAction
             $brouillon->lignes()->create($ligne);
         }
 
-        return $brouillon->fresh('lignes');
+        return ModeleRelu::de($brouillon, 'lignes');
     }
 }

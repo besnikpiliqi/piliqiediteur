@@ -15,6 +15,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -106,7 +107,7 @@ class CreerFactureAchatAction
                 $this->pieces->joindre($compte, $factureAchat, $pieces);
                 $this->pieces->marquer($compte, $factureAchat->refresh());
 
-                return $factureAchat->fresh('lignes');
+                return ModeleRelu::de($factureAchat, 'lignes');
             });
         });
     }

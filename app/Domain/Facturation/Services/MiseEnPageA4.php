@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
@@ -62,7 +63,7 @@ final class MiseEnPageA4
 
         $dompdf = $pdf->getDomPDF();
         $canevas = $dompdf->getCanvas();
-        $police = $dompdf->getFontMetrics()->getFont('DejaVu Sans');
+        $police = ValeurRequise::de($dompdf->getFontMetrics()->getFont('DejaVu Sans'), 'la police DejaVu Sans de Dompdf');
         $largeur = $dompdf->getFontMetrics()->getTextWidth('Page 999 sur 999', $police, self::CORPS_DU_NUMERO);
 
         $canevas->page_text(

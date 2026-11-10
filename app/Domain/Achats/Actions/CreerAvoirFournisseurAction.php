@@ -13,6 +13,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
@@ -158,7 +159,7 @@ class CreerAvoirFournisseurAction
             $avoir->forceFill($chiffre->totaux)->save();
             $this->tva->proposer($avoir, $chiffre, $montants);
 
-            return $avoir->fresh('lignes');
+            return ModeleRelu::de($avoir, 'lignes');
         });
     }
 

@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\Emetteur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
@@ -151,7 +152,11 @@ class DocumentMail extends Mailable
     {
         $calculateur = app(CalculateurLigne::class);
         $montant = $calculateur->enEuros(abs($recu->totalEnCentimes()));
-        $documents = $recu->lignes->map(fn (LigneRecuPaiement $ligne): string => "{$ligne->facture->libelleDocument()} {$ligne->facture->numero}")->implode(', ');
+        $documents = $recu->lignes->map(function (LigneRecuPaiement $ligne): string {
+            $facture = ValeurRequise::de($ligne->facture, 'la facture d\'une ligne du reçu');
+
+            return "{$facture->libelleDocument()} {$facture->numero}";
+        })->implode(', ');
 
         return $recu->totalEnCentimes() < 0
             ? "Veuillez trouver ci-joint notre reçu {$recu->numero} de la contre-passation d'un paiement de {$montant} ({$documents}). Ce reçu n'est pas une facture."

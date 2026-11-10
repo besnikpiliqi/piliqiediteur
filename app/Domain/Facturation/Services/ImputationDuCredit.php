@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -131,7 +132,7 @@ class ImputationDuCredit
             }
         }
 
-        [$regularisations, $autres] = $avoirs->partition(fn (Avoir $avoir): bool => $avoir->estUneRegularisation());
+        [$regularisations, $autres] = $avoirs->partition(fn (Avoir $avoir): bool => $avoir->estUneRegularisation())->all();
 
         foreach ($regularisations as $avoir) {
             // Seule une rectificative qui attend encore cet avoir peut en
@@ -188,7 +189,7 @@ class ImputationDuCredit
             ->map(fn (Collection $allocations): int => (int) $allocations->sum(fn (AvoirAllocation $allocation): int => $this->calculateur->enCentiemes($allocation->montant_alloue)));
 
         return $avoir->lignes()->with('ligneFacture')->get()
-            ->groupBy(fn (LigneAvoir $ligne): int => (int) $ligne->ligneFacture->facture_id)
+            ->groupBy(fn (LigneAvoir $ligne): int => (int) ValeurRequise::de($ligne->ligneFacture, 'la ligne de facture que corrige la ligne d\'avoir')->facture_id)
             ->map(fn (Collection $lignes, int $factureId): int => (int) $lignes->sum(fn (LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)) - ($dejaImpute[$factureId] ?? 0))
             ->all();
     }

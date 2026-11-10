@@ -43,7 +43,7 @@ class ChiffreDAffaires
         $factures = Facture::query()
             ->emises()
             ->emisDuAu($calendrier, $du, $au)
-            ->when($vendeur !== null, fn (Builder $query) => $query->where('cree_par', $vendeur->getKey()))
+            ->when($vendeur, fn (Builder $query, User $vendeurChoisi) => $query->where('cree_par', $vendeurChoisi->getKey()))
             ->get(['total_ht', 'total_tva', 'total_ttc']);
 
         [$totauxDesAvoirs, $nombreDAvoirs] = $vendeur === null

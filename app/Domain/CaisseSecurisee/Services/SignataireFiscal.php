@@ -4,6 +4,7 @@ namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Support\ErreursOpenSsl;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Contracts\Config\Repository;
 use OpenSSLAsymmetricKey;
 use RuntimeException;
@@ -114,7 +115,7 @@ class SignataireFiscal
     {
         $this->clePrivee();
 
-        return $this->cleId;
+        return ValeurRequise::de($this->cleId, 'le cle_id de la clé qui signe, lu avec elle');
     }
 
     /**

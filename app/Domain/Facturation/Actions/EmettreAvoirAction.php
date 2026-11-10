@@ -21,6 +21,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -139,7 +140,7 @@ class EmettreAvoirAction
         // de AvoirEmis.
         AvoirEmis::dispatch($avoir);
 
-        $avoir = $avoir->fresh();
+        $avoir = ModeleRelu::de($avoir);
         $contenu = $this->contenuFiscal->document($avoir);
         $enregistrement = $this->registre->enregistrerVente('avoir', $contenu['document']['totaux']['ttc'], $contenu, $avoir);
 

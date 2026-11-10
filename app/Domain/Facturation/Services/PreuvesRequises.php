@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -147,7 +148,7 @@ class PreuvesRequises
      */
     private function attestationAttendue(Facture $facture): string
     {
-        $echeance = Calendrier::jourDuMoisSuivant($facture->livraison_date, 10);
+        $echeance = Calendrier::jourDuMoisSuivant(ValeurRequise::de($facture->livraison_date, 'la date de livraison de la livraison intracommunautaire émise'), 10);
 
         return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.Calendrier::afficherJour($echeance, 'd/m/Y')
             .($echeance < $facture->magasin->calendrier()->aujourdhui() ? ' : délai dépassé' : '');

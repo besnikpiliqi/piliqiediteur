@@ -102,7 +102,7 @@ final class CaissesDeLaSociete
             return [];
         }
 
-        $journees = $magasins->map(fn (Magasin $magasin): string => $journee ?? $magasin->calendrier()->aujourdhui());
+        $journees = $magasins->map(fn (Magasin $magasin): string => $journee ?? $magasin->calendrier()->aujourdhui())->all();
         $ouvertes = $this->verificateur->vendeursAvecCaisseOuverteDans($magasins->map(fn (Magasin $magasin): array => [$magasin, $magasin->calendrier()->aujourdhui()])->all());
         $releves = ClotureCaissePersonnelle::withoutGlobalScope(MagasinScope::class)
             ->where(function (Builder $duJour) use ($magasins, $journees): void {

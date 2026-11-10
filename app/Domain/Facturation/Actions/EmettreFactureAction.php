@@ -38,6 +38,8 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -293,19 +295,19 @@ class EmettreFactureAction
         // de FactureEmise sur pourquoi ce event n'est pas différé.
         FactureEmise::dispatch($facture);
 
-        $facture = $facture->fresh();
+        $facture = ModeleRelu::de($facture);
 
         if ($reglement !== null) {
             $this->encaisserComptant($compte, $facture, $reglement, $instant->jour());
         }
 
-        $facture = $facture->fresh();
+        $facture = ModeleRelu::de($facture);
 
         if ($facture->resteDuEnCentimes() <= 0) {
             $facture->constaterUnReglement();
         }
 
-        $facture = $facture->fresh();
+        $facture = ModeleRelu::de($facture);
         $contenu = $this->contenuFiscal->document($facture);
         $this->registre->enregistrerVente(
             $typeDocument === TypeDocument::Facture ? 'facture' : 'ticket',
@@ -363,7 +365,7 @@ class EmettreFactureAction
         ], $facture);
 
         foreach (Produit::withTrashed()->whereKey(array_map(fn (ManqueDeStock $manque): int => $manque->produitId, $manques))->orderBy('id')->get() as $produit) {
-            StockDevenuNegatif::dispatch($produit, $facture->numero);
+            StockDevenuNegatif::dispatch($produit, ValeurRequise::de($facture->numero, 'le numéro de la facture émise'));
         }
     }
 
@@ -380,7 +382,13 @@ class EmettreFactureAction
     {
         $facture->magasin->verifierSonIdentiteLegale();
 
-        if (! $facture->estUneRectificative() && $facture->client->estEtabliEnFrance() && blank($facture->client->siren)) {
+        if ($facture->estUneRectificative()) {
+            return;
+        }
+
+        $client = ValeurRequise::de($facture->client, 'le client de la facture');
+
+        if ($client->estEtabliEnFrance() && blank($client->siren)) {
             throw new LogicException('Renseignez le SIREN de ce client avant d\'émettre sa facture.');
         }
     }
@@ -401,7 +409,7 @@ class EmettreFactureAction
     private function encaisserComptant(User $compte, Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {
         $this->imputerLesBonsDAvoir($facture, $reglement->bonsDAvoir);
-        $resteDu = $facture->fresh()->resteDuEnCentimes();
+        $resteDu = ModeleRelu::de($facture)->resteDuEnCentimes();
         $ecart = $reglement->totalDesParts() - $resteDu;
 
         if (! $reglement->aLaCaisse && $ecart > 0) {
@@ -417,7 +425,7 @@ class EmettreFactureAction
 
             $this->enregistrerPaiement->handle(
                 $compte,
-                $facture->client,
+                ValeurRequise::de($facture->client, 'le client de la facture'),
                 ['mode_paiement' => $part->mode->value, 'montant' => $montant, 'reference' => $part->reference, 'recu_le' => $recuLe],
                 [['facture_id' => $facture->getKey(), 'montant' => $montant]],
                 aLEmission: true,
@@ -448,7 +456,7 @@ class EmettreFactureAction
                 throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
             }
 
-            $montant = min($bon->creditEnCentimes(), $facture->fresh()->resteDuEnCentimes());
+            $montant = min($bon->creditEnCentimes(), ModeleRelu::de($facture)->resteDuEnCentimes());
 
             if ($montant <= 0) {
                 throw new LogicException(sprintf(Avoir::BON_D_AVOIR_SANS_EMPLOI, $bon->numero));

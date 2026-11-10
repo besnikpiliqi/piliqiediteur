@@ -10,6 +10,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 use Illuminate\Support\Collection;
@@ -84,7 +85,7 @@ class ReleveDesEncaissementsPdfGenerator
             'total' => $euros($this->total($paiements)),
             'credit' => $euros((int) $credit),
             'paiements' => $paiements->map(fn (Paiement $paiement): array => [
-                'jour' => $calendrier->afficher($paiement->created_at, 'd/m/Y'),
+                'jour' => $calendrier->afficher(ValeurRequise::de($paiement->created_at, 'la date d\'enregistrement du paiement'), 'd/m/Y'),
                 'mode' => $paiement->mode_paiement->getLabel().($paiement->estUneContrePassation() ? ' (contre-passation)' : ''),
                 'reference' => $paiement->reference,
                 'documents' => $paiement->allocations->map(fn (PaiementAllocation $allocation): ?string => $allocation->facture?->numero)->filter()->implode(', '),

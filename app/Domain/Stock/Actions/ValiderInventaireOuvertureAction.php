@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -139,7 +140,13 @@ class ValiderInventaireOuvertureAction
         }
 
         Produit::verrouillerPourLeStock($lignes->pluck('produit_id'));
-        $lignes->whereNotNull('produit_id')->each(fn (LigneInventaireOuverture $ligne): Produit => $this->constructeurLignes->produitJamaisRecu($ligne->produit_id));
+
+        foreach ($lignes as $ligne) {
+            if ($ligne->produit_id !== null) {
+                $this->constructeurLignes->produitJamaisRecu($ligne->produit_id);
+            }
+        }
+
         $produitsCrees = $lignes->whereNull('produit_id')->map(fn (LigneInventaireOuverture $ligne): int => $this->creerLeProduit($ligne))->values()->all();
 
         $lignes = $inventaire->lignes()->with('produit')->get();
@@ -154,7 +161,7 @@ class ValiderInventaireOuvertureAction
         ])->save();
 
         foreach ($lignes as $ligne) {
-            $this->stock->entrerALInventaireDOuverture($ligne->produit, $ligne->quantite, $this->calculateur->arrondirAuDixMillieme((float) $ligne->cout_unitaire_ht), $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
+            $this->stock->entrerALInventaireDOuverture(ValeurRequise::de($ligne->produit, 'le produit de la ligne validée'), $ligne->quantite, $this->calculateur->arrondirAuDixMillieme((float) $ligne->cout_unitaire_ht), $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
         }
 
         $this->journalAudit->inscrire(ActionAuditee::InventaireOuvertureValide, $compte, $magasin, null, [
@@ -181,7 +188,7 @@ class ValiderInventaireOuvertureAction
      */
     private function creerLeProduit(LigneInventaireOuverture $ligne): int
     {
-        $produit = (new Produit($ligne->nouveau_produit))->forceFill(['cmup_ht' => $ligne->cout_unitaire_ht]);
+        $produit = (new Produit(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit')))->forceFill(['cmup_ht' => $ligne->cout_unitaire_ht]);
         $this->origine->pendant(OrigineProduit::InventaireOuverture, fn (): bool => $produit->save());
 
         $ligne->update(['produit_id' => $produit->getKey(), 'reference' => $produit->reference, 'nouveau_produit' => null]);

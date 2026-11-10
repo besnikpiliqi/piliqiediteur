@@ -7,6 +7,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -22,6 +23,11 @@ use Illuminate\Database\Eloquent\Model;
  * vérification est celui du calendrier, de minuit à minuit (voir
  * scopeDuJour()). L'instant de la vérification est
  * aussi celui de son enregistrement : la table n'a pas d'autre date.
+ *
+ * Son instant (voir Instant) n'est jamais nul : sa colonne ne l'est pas en
+ * base.
+ *
+ * @property CarbonImmutable $consultee_le
  */
 class ConsultationVies extends Model
 {

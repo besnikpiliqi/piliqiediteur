@@ -15,6 +15,7 @@ use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -96,7 +97,7 @@ class EmettreDevisAction
             }
 
             if ($devis->validiteDepassee()) {
-                throw new LogicException('La date de validité de ce devis est dépassée ('.Calendrier::afficherJour($devis->date_validite, 'd/m/Y').") : changez-la avant de l'envoyer.");
+                throw new LogicException('La date de validité de ce devis est dépassée ('.Calendrier::afficherJour(ValeurRequise::de($devis->date_validite, 'la date de validité du devis dépassé'), 'd/m/Y').") : changez-la avant de l'envoyer.");
             }
 
             ContexteDeVente::refuserSiLeTypeDeClientAChange($devis);

@@ -19,6 +19,7 @@ use App\Domain\Facturation\Services\LignesRetirees;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
@@ -149,6 +150,6 @@ class ModifierFactureAction
 
         $facture->forceFill($document->totaux)->save();
 
-        return $facture->fresh('lignes');
+        return ModeleRelu::de($facture, 'lignes');
     }
 }

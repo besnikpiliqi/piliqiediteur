@@ -9,6 +9,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -114,10 +115,10 @@ class EnregistrementFiscal extends Model
     {
         return $query
             ->when(filled($du), fn (Builder $enregistrements): Builder => $enregistrements->where(
-                'horodatage', '>=', $calendrier->debutDuJour($du),
+                'horodatage', '>=', $calendrier->debutDuJour(ValeurRequise::de($du, 'le premier jour de la période')),
             ))
             ->when(filled($au), fn (Builder $enregistrements): Builder => $enregistrements->where(
-                'horodatage', '<', $calendrier->bornesDuJour($au)[1],
+                'horodatage', '<', $calendrier->bornesDuJour(ValeurRequise::de($au, 'le dernier jour de la période'))[1],
             ));
     }
 

@@ -7,6 +7,7 @@ use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -90,7 +91,7 @@ class BordereauDetaxe extends Model
     private function ttcDesBiensEmportesEnCentimes(): int
     {
         $calculateur = app(CalculateurLigne::class);
-        $biens = $this->facture->lignes()->biensTaxes()
+        $biens = ValeurRequise::de($this->facture, 'la facture du bordereau')->lignes()->biensTaxes()
             ->with(['lignesAvoir' => fn (HasMany $reprises): HasMany => $reprises->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise))])
             ->get();
 

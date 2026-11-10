@@ -19,6 +19,7 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Support\Arr;
@@ -202,7 +203,7 @@ class ConstructeurLigneAchat
         $fichesDejaSaisies = $factureAchat->lignes()
             ->whereNull('produit_id')
             ->get()
-            ->map(fn (LigneAchat $ligne): array => self::ficheComparable($ligne->nouveau_produit))
+            ->map(fn (LigneAchat $ligne): array => self::ficheComparable(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit')))
             ->all();
         $factureAchat->lignes()->delete();
 
@@ -261,10 +262,10 @@ class ConstructeurLigneAchat
     public function creerLesNouveauxProduits(FactureAchat $factureAchat): void
     {
         foreach ($factureAchat->lignes()->whereNull('produit_id')->get() as $ligne) {
-            $produit = new Produit($ligne->nouveau_produit);
+            $produit = new Produit(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit'));
 
             if (blank($produit->prix_vente_ttc)) {
-                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $ligne->prix_unitaire_ht, (float) $ligne->remise_pourcentage, (float) $produit->taux_tva)
+                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, ValeurRequise::de($ligne->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), (float) $ligne->remise_pourcentage, (float) $produit->taux_tva)
                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
             }
 
@@ -481,7 +482,11 @@ class ConstructeurLigneAchat
         // (voir verifierLesNouveauxProduits()).
         if (! $produit->exists) {
             if (blank($produit->prix_vente_ttc)) {
-                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $prix['prix_unitaire_ht'], (float) $prix['remise_pourcentage'], (float) $produit->taux_tva);
+                $prixDuBareme = $this->prixDuBareme($factureAchat->magasin, $prix['prix_unitaire_ht'], (float) $prix['remise_pourcentage'], (float) $produit->taux_tva);
+
+                if ($prixDuBareme !== null) {
+                    $produit->prix_vente_ttc = $prixDuBareme;
+                }
             }
         } elseif ($produit->isDirty()) {
             $this->verifierLeDroitDEnregistrer($auteur, $produit);

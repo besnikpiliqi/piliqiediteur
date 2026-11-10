@@ -12,6 +12,7 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
@@ -151,7 +152,7 @@ class ConstructeurLigneInventaire
         $valeurDeLInventaire = 0;
 
         foreach ($lignes as $ligne) {
-            $suiviStock = $ligne->produit->suivi_stock;
+            $suiviStock = ValeurRequise::de($ligne->produit, 'le produit de la ligne d\'inventaire')->suivi_stock;
             $valeur = $this->valeurDuStock($ligne->quantite, SaisieDecimale::enMillioniemes($ligne->cout_unitaire_ht), $suiviStock);
 
             $ligne->update(['suivi_stock' => $suiviStock, 'valeur_ht' => $this->calculateur->enDecimal($valeur)]);

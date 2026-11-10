@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
@@ -77,7 +78,7 @@ class RecuPaiementPdfGenerator
                 ...$credits->map(fn (AvoirAllocation $allocation): array => [
                     'date' => $date,
                     'mode' => 'Avoir',
-                    'reference' => $allocation->avoir->numero,
+                    'reference' => ValeurRequise::de($allocation->avoir, 'l\'avoir de l\'imputation')->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])->all(),
             ]),
@@ -86,8 +87,8 @@ class RecuPaiementPdfGenerator
                 $credit === 0 ? null : ['libelle' => $credit < 0 ? 'Crédit d\'avoir rendu' : 'Crédit d\'avoir imputé', 'montant' => $this->calculateur->enEuros($credit)],
             ]),
             'documents' => $recu->lignes->map(fn (LigneRecuPaiement $ligne): array => [
-                'numero' => $ligne->facture->numero,
-                'libelle' => $ligne->facture->libelleDocument(),
+                'numero' => ValeurRequise::de($ligne->facture, 'la facture d\'une ligne du reçu')->numero,
+                'libelle' => ValeurRequise::de($ligne->facture, 'la facture d\'une ligne du reçu')->libelleDocument(),
                 'impute' => $this->calculateur->enEuros($this->calculateur->enCentiemes($ligne->montant) + $this->calculateur->enCentiemes($ligne->credit)),
                 'reste_du' => $this->calculateur->enEuros($this->calculateur->enCentiemes($ligne->reste_du)),
             ])->all(),

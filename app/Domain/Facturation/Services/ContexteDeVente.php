@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use LogicException;
 
 /**
@@ -145,7 +146,7 @@ final readonly class ContexteDeVente
      */
     public static function refuserSiLeTypeDeClientAChange(Facture|Devis $document): void
     {
-        $typeActuel = $document->client->type_client;
+        $typeActuel = ValeurRequise::de($document->client, 'le client du document')->type_client;
 
         if ($typeActuel !== $document->type_client) {
             $nouveauType = $typeActuel === TypeClient::Professionnel ? 'professionnel' : 'particulier';

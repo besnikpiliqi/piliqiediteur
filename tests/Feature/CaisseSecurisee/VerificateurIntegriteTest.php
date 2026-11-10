@@ -338,6 +338,26 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
+     * Sous MagasinScope, le client d'un paiement réécrit vers la fiche d'un
+     * autre magasin ne désigne plus aucun client : le contenu du paiement,
+     * qui l'exige (voir ValeurRequise), ne se relit plus ; le paiement est
+     * signalé, et la vérification va jusqu'au bout.
+     */
+    public function test_un_paiement_dont_le_client_est_reecrit_vers_un_autre_magasin_est_signale_sans_interrompre_la_verification(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+        $clientDAilleurs = app(TenantContext::class)->runAs(Magasin::factory()->create(['code' => 'AUTRE']), fn (): Client => Client::factory()->professionnel()->create());
+
+        $this->retirerLeDeclencheur('paiements', 'paiements_ajout_seul_update');
+        DB::table('paiements')->where('magasin_id', $magasin->id)->where('id', $documents['virement']->id)->update(['client_id' => $clientDAilleurs->id]);
+
+        $this->assertSame([
+            [90, "Le paiement (identifiant interne {$documents['virement']->id}) ne se relit plus en base : Une valeur requise manque : le client du paiement."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
      * L'avoir qui corrige la facture cite sa date d'émission : il ne
      * correspond plus non plus à ce qu'il a signé.
      */

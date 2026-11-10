@@ -22,6 +22,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * ProtegeLesDonneesValidees et les déclencheurs de la table). Saisi par
  * erreur, il se corrige par sa contre-passation, un paiement opposé qui
  * le désigne (voir ContrePasserPaiementAction), puis par le bon paiement.
+ *
+ * Son jour de réception (voir JourCivil) n'est jamais nul : sa colonne ne
+ * l'est pas en base.
+ *
+ * @property string $recu_le
  */
 class Paiement extends Model
 {

@@ -1550,3 +1550,7 @@ DB_PASSWORD=[valeur retirée]
 
 mais je crois qu'il utilise .env.testing car c est ici que j ai mis cette base pour les testes ?
 
+## 149. 2026-11-10 12:26 UTC
+
+ok continue
+

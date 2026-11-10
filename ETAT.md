@@ -1,22 +1,23 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 11:36 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 13:27 UTC par pilotage-sync.sh : « Après le lot PG ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `6c7b3d1`. Commits locaux pas encore poussés :
+Tête poussée : `b93aeff`. Commits locaux pas encore poussés :
 
 ```
-d8deaf9 Mute en entier chaque fichier sensible changé par l'envoi (CI, lot PG)
-4e6d832 Prouve chaque protection de la base par un test qui échoue sans elle (lot PG)
-50d39d1 Dit vrai sur les ventes dans l'avis de l'identité incomplète (constat C7)
-ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
-7f4d7ae Résout le verrou de Psalm pour PHP 8.3.16 (CI, analyse des flux)
 ```
 
 Derniers commits poussés :
 
 ```
+b93aeff Relecture du lot PG de la série 8
+d8deaf9 Mute en entier chaque fichier sensible changé par l'envoi (CI, lot PG)
+4e6d832 Prouve chaque protection de la base par un test qui échoue sans elle (lot PG)
+50d39d1 Dit vrai sur les ventes dans l'avis de l'identité incomplète (constat C7)
+ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
+7f4d7ae Résout le verrou de Psalm pour PHP 8.3.16 (CI, analyse des flux)
 6c7b3d1 Relecture du lot QA des outils de qualité
 09225fa Enregistre les scores de mutation des calculs et des droits et monte les seuils de couverture (lot QA 4/4)
 aedb582 Tue les mutants survivants des calculs et des droits par des tests et un code simplifié (lot QA 3/4)
@@ -31,38 +32,11 @@ d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 0afc14c Émet et encaisse d'un geste, ajoute le reçu de paiement et place les règlements à gauche des totaux
 1d3278a Relecture du lot NAV-1 des tests en navigateur
 523e74f Balaye chaque panneau rôle par rôle et ajoute les premiers parcours en navigateur (lot NAV-1 2/2)
-9053757 Outille les tests en navigateur avec Pest 4 et Playwright (lot NAV-1 1/2)
-92fd524 Relecture du lot SL de l’erreur 419 des fenêtres de recherche
-b06c922 Corrige l'erreur 419 des fenêtres de recherche de clients et de produits (lot SL)
-f9b669c Relecture du lot A7b des suites du lot A7
-81de7e8 Complète les tests du lot A7b et indexe le journal d'audit par action
-0d2b6a3 Régularise les factures après une correction de SIREN et corrige le SIREN d'un cabinet (lot A7b)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
- M app/Domain/Facturation/Services/DocumentNumberingService.php
- M app/Domain/Facturation/Support/GardesDeLaVente.php
- M app/Providers/AppServiceProvider.php
- M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
- M infection.json5
- M tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
- M tests/Feature/Authorization/GardesDesCabinetsEnBaseTest.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseConcurrenceTest.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
- M tests/Feature/Authorization/GardesDesTypesDActiviteTest.php
- M tests/Feature/Authorization/ProprietaireSansVenteConcurrenceTest.php
- M tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
- M tests/Feature/Calendrier/FuseauParDefautDeLaBaseTest.php
- M tests/Feature/Facturation/DocumentNumberingServiceTest.php
- M tests/Feature/OutillageTest.php
- M tests/Feature/Recherche/RechercheSansAccentsTest.php
- M tests/Feature/Societe/IdentifiantsTest.php
- M tests/TestCase.php
 ```
 
 ## Dernière course de la chaîne
@@ -81,4 +55,7 @@ PG:implementation
 PG:relecture1
 PG:relecture2
 PG:correction
+PG:poussee
+PG:fiche
+PG:notes
 ```

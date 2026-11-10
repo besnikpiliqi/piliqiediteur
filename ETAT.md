@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 13:40 UTC par pilotage-sync.sh : « Point de suivi 10/11 13:55 UTC : PG poussé, notes sans SQLite, cahier de TY1 publié ».
+Mis à jour le 10/11/2026 à 14:37 UTC par pilotage-sync.sh : « CI du lot PG verte (b93aeff) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b93aeff`. Commits locaux pas encore poussés :
 
 ```
+2c55bad Ajoute le test d'empreinte de la caisse et des PDF (lot TY1 1/n)
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,9 @@ d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M README.md
+ M tests/Feature/Authorization/ControleDesDroitsTest.php
+ M tests/Unit/CalculateurLigneLimitesTest.php
 ```
 
 ## Dernière course de la chaîne

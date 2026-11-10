@@ -16,8 +16,16 @@
  *       Le rapport liste aussi les mutants non conclus, lus dans le journal
  *       texte d'Infection rangé à côté (infection.log).
  *   php tests/Qualite/qualite.php seuils <ancien seuils.json>
- *       Aucun seuil ne baisse par rapport à l'ancien fichier, et le niveau
- *       de l'analyse statique de phpstan.neon est celui de seuils.json.
+ *       Aucun seuil ne baisse par rapport à l'ancien fichier : ni la
+ *       couverture, ni le score de mutation d'une partie, ni l'analyse
+ *       statique (Larastan), que seuils.json enregistre telle que PHPStan
+ *       la règle (niveau, chemins, exclusions, stubs, options, règles
+ *       désactivées) et que phpstan.neon doit suivre exactement, sans rien
+ *       relâcher ni cacher (voir refusDeLAnalyseStatique()). Une clé que
+ *       l'ancien fichier n'a pas compte comme rien d'enregistré. Le PHPStan
+ *       lancé est celui du dépôt (vendor/bin/phpstan), ou celui que nomme
+ *       la variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
+ *       outil, dans un dépôt temporaire).
  *   php tests/Qualite/qualite.php sensibles
  *       Les chemins des parties sensibles, un par ligne, à donner à
  *       Infection comme chemins à muter.
@@ -43,17 +51,73 @@
  *       elle suit bien les saisies des écrans Livewire et Filament (voir
  *       tests/Qualite/Psalm/SaisiesDesEcrans.php).
  *
- * Code de sortie : 0 si tout tient, 1 sinon.
+ * Code de sortie : 0 si tout tient, 1 sinon, 2 pour une commande inconnue
+ * ou incomplète, après son usage.
  */
 
 define('RACINE', (string) realpath(__DIR__.'/../..'));
 
 /**
- * @return array{analyse_statique: array{niveau: int}, couverture: array<string, float>, mutation: array<string, float>}
+ * Les seuils qu'enregistre ce fichier, chaque section relue par la
+ * fonction qui s'en sert : une clé absente vaut « rien d'enregistré ».
+ *
+ * @return array<array-key, mixed>
  */
 function seuils(string $fichier = __DIR__.'/seuils.json'): array
 {
-    return json_decode((string) file_get_contents($fichier), true, flags: JSON_THROW_ON_ERROR);
+    $contenu = file_get_contents($fichier);
+
+    if ($contenu === false) {
+        throw new RuntimeException("Seuils illisibles : {$fichier}.");
+    }
+
+    $seuils = json_decode($contenu, true, flags: JSON_THROW_ON_ERROR);
+
+    if (! is_array($seuils)) {
+        throw new RuntimeException("{$fichier} n'enregistre aucun seuil.");
+    }
+
+    return $seuils;
+}
+
+/**
+ * Une section de seuils : un tableau, vide quand la clé est absente.
+ *
+ * @param  array<array-key, mixed>  $seuils
+ * @return array<array-key, mixed>
+ */
+function section(array $seuils, string $cle): array
+{
+    $section = $seuils[$cle] ?? [];
+
+    if (! is_array($section)) {
+        throw new RuntimeException("La section « {$cle} » de seuils.json n'est pas un tableau.");
+    }
+
+    return $section;
+}
+
+/**
+ * Les seuils d'un outil par partie (couverture, mutation), chacun un
+ * nombre de points de pourcentage, entier ou décimal, tel que seuils.json
+ * l'écrit.
+ *
+ * @param  array<array-key, mixed>  $seuils
+ * @return array<string, int|float>
+ */
+function seuilsParPartie(array $seuils, string $outil): array
+{
+    $parPartie = [];
+
+    foreach (section($seuils, $outil) as $partie => $seuil) {
+        if (! is_string($partie) || ! (is_int($seuil) || is_float($seuil))) {
+            throw new RuntimeException("seuils.json : chaque seuil de « {$outil} » est un nombre, par partie.");
+        }
+
+        $parPartie[$partie] = $seuil;
+    }
+
+    return $parPartie;
 }
 
 /**
@@ -143,7 +207,7 @@ function couverture(string $clover, ?string $rapport): int
     }
 
     ksort($parParties);
-    $seuils = seuils()['couverture'];
+    $seuils = seuilsParPartie(seuils(), 'couverture');
     $echec = false;
     $texte = "# Couverture des lignes par partie\n\n| Partie | Lignes | Couvertes | Couverture | Seuil |\n|---|---:|---:|---:|---:|\n";
 
@@ -300,7 +364,7 @@ function mutation(string $journal, ?string $rapport): int
     }
 
     ksort($parParties);
-    $seuils = seuils()['mutation'];
+    $seuils = seuilsParPartie(seuils(), 'mutation');
     $echec = false;
     $texte = "# Score de mutation (MSI) par partie\n\n"
         ."Un mutant dont les tests dépassent le délai d'Infection compte, comme Infection le compte, parmi ceux qu'un test arrête ; la colonne « dont délai dépassé » les montre à part. "
@@ -339,35 +403,460 @@ function seuilsQuiMontent(string $ancien): int
 {
     $nouveaux = seuils();
     $anciens = seuils($ancien);
-    $baisses = [];
-
-    if ($nouveaux['analyse_statique']['niveau'] < $anciens['analyse_statique']['niveau']) {
-        $baisses[] = "niveau de l'analyse statique : {$anciens['analyse_statique']['niveau']} → {$nouveaux['analyse_statique']['niveau']}";
-    }
+    $refus = [];
 
     foreach (['couverture', 'mutation'] as $outil) {
-        foreach ($anciens[$outil] as $partie => $seuil) {
-            if (($nouveaux[$outil][$partie] ?? -1) < $seuil) {
-                $baisses[] = "{$outil} de {$partie} : {$seuil} → ".($nouveaux[$outil][$partie] ?? 'retiré');
+        $seuilsNouveaux = seuilsParPartie($nouveaux, $outil);
+
+        foreach (seuilsParPartie($anciens, $outil) as $partie => $seuil) {
+            if (($seuilsNouveaux[$partie] ?? -1) < $seuil) {
+                $refus[] = "{$outil} de {$partie} : {$seuil} → ".($seuilsNouveaux[$partie] ?? 'retiré');
             }
         }
     }
 
-    preg_match('/^\s*level:\s*(\d+)\s*$/m', (string) file_get_contents(RACINE.'/phpstan.neon'), $niveau);
+    $refus = [...$refus, ...refusDeLAnalyseStatique(section($nouveaux, 'analyse_statique'), section($anciens, 'analyse_statique'))];
 
-    if ((int) ($niveau[1] ?? -1) !== $nouveaux['analyse_statique']['niveau']) {
-        $baisses[] = 'phpstan.neon analyse au niveau '.($niveau[1] ?? '?').", seuils.json enregistre le niveau {$nouveaux['analyse_statique']['niveau']}";
-    }
-
-    if ($baisses === []) {
-        echo "Aucun seuil ne baisse.\n";
+    if ($refus === []) {
+        echo "Aucun seuil ne baisse, et phpstan.neon règle l'analyse statique comme seuils.json l'enregistre.\n";
 
         return 0;
     }
 
-    echo "Un seuil ne peut que monter :\n  ".implode("\n  ", $baisses)."\n";
+    echo "Un seuil ne peut que monter, et phpstan.neon suit exactement seuils.json :\n  ".implode("\n  ", $refus)."\n";
 
     return 1;
+}
+
+/**
+ * Les seules exclusions de l'analyse statique (cahier de l'analyse
+ * statique, § 4.1, point 7) : le cache de l'amorçage, l'extension et le
+ * stub que Psalm charge seul, et les fichiers témoins de PHPStan, qui
+ * violent exprès des règles.
+ */
+const EXCLUSIONS_PERMISES = ['bootstrap/cache', 'tests/Qualite/Psalm', 'tests/Qualite/Temoins'];
+
+/**
+ * Les seuls stubs de l'analyse statique : les macros que AppServiceProvider
+ * ajoute à Filament (voir MacrosDeclareesTest).
+ */
+const STUBS_PERMIS = ['tests/Qualite/macros.stub'];
+
+/**
+ * Les options de contrôle que phpstan.neon peut activer, liste fermée
+ * (cahier de l'analyse statique, § 4.1, points 4 et 5), chacune avec la
+ * valeur qui contrôle le plus : true, false pour
+ * rememberPossiblyImpureFunctionValues, ou l'une des valeurs permises de
+ * reportUnsafeArrayStringKeyCasting ; parseModelCastsMethod fait lire à
+ * Larastan les casts que déclare la méthode casts() des modèles. Une clé
+ * pointée désigne un paramètre imbriqué.
+ *
+ * @var array<string, bool|list<string>>
+ */
+const OPTIONS_PERMISES = [
+    'checkUninitializedProperties' => true,
+    'checkBenevolentUnionTypes' => true,
+    'checkTooWideReturnTypesInProtectedAndPublicMethods' => true,
+    'reportPossiblyNonexistentGeneralArrayOffset' => true,
+    'reportPossiblyNonexistentConstantArrayOffset' => true,
+    'reportAnyTypeWideningInVarTag' => true,
+    'reportAlwaysTrueInLastCondition' => true,
+    'checkMissingCallableSignature' => true,
+    'checkMissingOverrideMethodAttribute' => true,
+    'checkTooWideThrowTypesInProtectedAndPublicMethods' => true,
+    'checkTooWideParameterOutInProtectedAndPublicMethods' => true,
+    'exceptions.check.throwTypeCovariance' => true,
+    'exceptions.check.tooWideImplicitThrowType' => true,
+    'reportUnsafeArrayStringKeyCasting' => ['detect', 'prevent'],
+    'reportIgnoresWithoutComments' => true,
+    'rememberPossiblyImpureFunctionValues' => false,
+    'checkConfigTypes' => true,
+    'checkUniqueJobUniqueFor' => true,
+    'checkUniqueJobUniqueId' => true,
+    'noBatchedUniqueJob' => true,
+    'checkJobSerializesModels' => true,
+    'checkBatchedJobIsBatchable' => true,
+    'checkBatchableJobChecksCancellation' => true,
+    'checkDispatchInTransactionAfterCommit' => true,
+    'checkModelProperties' => true,
+    'checkModelMethodVisibility' => true,
+    'checkUnusedViews' => true,
+    'checkMissingTranslations' => true,
+    'checkAuthCallsWhenInRequestScope' => true,
+    'noImplicitQueryBuilderCall' => true,
+    'noUnnecessaryEnumerableToArrayCalls' => true,
+    'parseModelCastsMethod' => true,
+];
+
+/**
+ * La seule règle qu'un ensemble de règles active et que phpstan.neon peut
+ * désactiver (cahier de l'analyse statique, § 4.1, point 3).
+ */
+const REGLES_DESACTIVABLES = ['strictRules.dynamicCallOnStaticMethod'];
+
+/**
+ * Les paramètres de PHPStan qui ne règlent pas ce que l'analyse contrôle
+ * (l'environnement de la commande, son cache, ses messages, son
+ * parallélisme), ceux qui se contrôlent à part (niveau, chemins,
+ * exclusions, stubs, et les quatre gardes nommées dans
+ * refusDeLAnalyseStatique()), et ceux qui nomment les fichiers de
+ * configuration lus.
+ */
+const PARAMETRES_HORS_COMPARAISON = [
+    'level', 'usedLevel', 'paths', 'analysedPathsFromConfig', 'excludePaths', 'stubFiles',
+    'ignoreErrors', 'universalObjectCratesClasses', 'treatPhpDocTypesAsCertain', 'reportUnmatchedIgnoredErrors',
+    'additionalConfigFiles', 'allConfigFiles', 'composerAutoloaderProjectPaths', 'currentWorkingDirectory', 'rootDir', 'env', 'sysGetTempDir',
+    'tmpDir', 'resultCachePath', 'resultCacheSkipIfOlderThanDays', 'resultCacheChecksProjectExtensionFilesDependencies', 'cache', 'enableMigrationCache', 'parametersNotInvalidatingCache',
+    'tips', 'tipsOfTheDay', 'editorUrl', 'editorUrlTitle', 'errorFormat', 'internalErrorsCountLimit', 'parallel', 'fixer', 'pro',
+    'cliArgumentsVariablesRegistered', 'cliAutoloadFile', 'generateBaselineFile', 'sourceLocatorPlaygroundMode',
+];
+
+/**
+ * Ce que refuse le contrôle de l'analyse statique (Larastan), d'après ses
+ * paramètres effectifs, que PHPStan lit lui-même dans phpstan.neon
+ * (dump-parameters : aucun lecteur NEON n'existe hors de son phar), et ses
+ * paramètres de référence, ceux que donnent seuls son niveau et les
+ * ensembles de règles que phpstan.neon inclut :
+ *
+ * - seuils.json (section analyse_statique) enregistre exactement ce que
+ *   règle phpstan.neon : son niveau, ses chemins, ses exclusions (celles
+ *   d'EXCLUSIONS_PERMISES seulement), ses stubs (STUBS_PERMIS), ses
+ *   options (OPTIONS_PERMISES, chacune à sa valeur) et ses règles
+ *   désactivées (REGLES_DESACTIVABLES) ;
+ * - phpstan.neon ne s'écarte de la référence que par eux : tout autre
+ *   paramètre changé (un contrôle du niveau relâché, une règle de
+ *   Larastan coupée, une valeur qui en cache) est refusé, comme une
+ *   classe ajoutée à universalObjectCratesClasses, une entrée de
+ *   ignoreErrors, ou treatPhpDocTypesAsCertain et
+ *   reportUnmatchedIgnoredErrors à false ;
+ * - par rapport à l'ancien seuils.json, le niveau ne baisse pas, aucun
+ *   chemin ni aucune option ne disparaît, aucune option ne change de
+ *   valeur, aucune exclusion, aucun stub ni aucune règle désactivée
+ *   n'apparaît ; une clé que l'ancien n'a pas compte comme rien
+ *   d'enregistré ;
+ * - aucun commentaire d'un fichier analysé ne fait taire PHPStan sur une
+ *   ligne (recherche par token_get_all, dans les seuls commentaires).
+ *
+ * @param  array<array-key, mixed>  $enregistre  la section analyse_statique du nouveau seuils.json
+ * @param  array<array-key, mixed>  $ancien  celle de l'ancien
+ * @return list<string>
+ */
+function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
+{
+    $configuration = RACINE.'/phpstan.neon';
+    $effectifs = aplatir(parametresDePhpstan($configuration));
+    $reference = aplatir(parametresDePhpstan(configurationDeReference($effectifs, $configuration)));
+    $refus = [];
+
+    $niveau = $enregistre['niveau'] ?? null;
+    $ancienNiveau = $ancien['niveau'] ?? null;
+
+    if ($effectifs['level'] !== $niveau) {
+        $refus[] = 'phpstan.neon analyse au niveau '.json_encode($effectifs['level']).', seuils.json enregistre le niveau '.json_encode($niveau);
+    }
+
+    if (is_int($niveau) && is_int($ancienNiveau) && $niveau < $ancienNiveau) {
+        $refus[] = "niveau de l'analyse statique : {$ancienNiveau} → {$niveau}";
+    }
+
+    $chemins = cheminsDuDepot(listeDeChaines($effectifs['paths'] ?? [], 'paths'));
+    $exclusions = cheminsDuDepot([...listeDeChaines($effectifs['excludePaths.analyseAndScan'] ?? [], 'excludePaths'), ...listeDeChaines($effectifs['excludePaths.analyse'] ?? [], 'excludePaths')]);
+    $stubs = cheminsDuDepot(array_diff(listeDeChaines($effectifs['stubFiles'] ?? [], 'stubFiles'), listeDeChaines($reference['stubFiles'] ?? [], 'stubFiles')));
+
+    foreach (['chemins' => $chemins, 'exclusions' => $exclusions, 'stubs' => $stubs] as $cle => $valeurs) {
+        $enregistres = listeTriee($enregistre[$cle] ?? [], $cle);
+
+        if ($valeurs !== $enregistres) {
+            $refus[] = "{$cle} : phpstan.neon donne ".json_encode($valeurs, JSON_UNESCAPED_SLASHES).', seuils.json enregistre '.json_encode($enregistres, JSON_UNESCAPED_SLASHES);
+        }
+    }
+
+    foreach (listeTriee($enregistre['exclusions'] ?? [], 'exclusions') as $exclusion) {
+        if (! in_array($exclusion, EXCLUSIONS_PERMISES, true)) {
+            $refus[] = "exclusion non permise : {$exclusion} (seules ".implode(', ', EXCLUSIONS_PERMISES).')';
+        }
+    }
+
+    foreach (listeTriee($enregistre['stubs'] ?? [], 'stubs') as $stub) {
+        if (! in_array($stub, STUBS_PERMIS, true)) {
+            $refus[] = "stub non permis : {$stub} (seul ".implode(', ', STUBS_PERMIS).')';
+        }
+    }
+
+    if (array_key_exists('chemins', $ancien)) {
+        foreach (array_diff(listeTriee($ancien['chemins'], 'chemins'), listeTriee($enregistre['chemins'] ?? [], 'chemins')) as $chemin) {
+            $refus[] = "le chemin {$chemin} n'est plus analysé";
+        }
+    }
+
+    foreach (['exclusions' => 'nouvelle exclusion', 'stubs' => 'nouveau stub', 'regles_desactivees' => 'nouvelle règle désactivée'] as $cle => $libelle) {
+        if (array_key_exists($cle, $ancien)) {
+            foreach (array_diff(listeTriee($enregistre[$cle] ?? [], $cle), listeTriee($ancien[$cle], $cle)) as $apparue) {
+                $refus[] = "{$libelle} : {$apparue}";
+            }
+        }
+    }
+
+    $options = $enregistre['options'] ?? [];
+    $regles = listeTriee($enregistre['regles_desactivees'] ?? [], 'regles_desactivees');
+
+    if (! is_array($options)) {
+        throw new RuntimeException('seuils.json : les options de l\'analyse statique sont un tableau, par paramètre.');
+    }
+
+    foreach ($options as $option => $valeur) {
+        $permise = OPTIONS_PERMISES[$option] ?? null;
+
+        if ($permise === null) {
+            $refus[] = "option non permise : {$option}";
+        } elseif (is_array($permise) ? ! in_array($valeur, $permise, true) : $valeur !== $permise) {
+            $refus[] = "option {$option} : ".json_encode($valeur).' n\'est pas sa valeur stricte ('.json_encode($permise).')';
+        }
+
+        if (($effectifs[$option] ?? null) !== $valeur) {
+            $refus[] = "option {$option} : phpstan.neon donne ".json_encode($effectifs[$option] ?? null).', seuils.json enregistre '.json_encode($valeur);
+        }
+    }
+
+    $anciennesOptions = $ancien['options'] ?? [];
+
+    if (is_array($anciennesOptions)) {
+        foreach ($anciennesOptions as $option => $valeur) {
+            if (! array_key_exists($option, $options)) {
+                $refus[] = "l'option {$option} disparaît";
+            } elseif ($options[$option] !== $valeur) {
+                $refus[] = "l'option {$option} change de valeur : ".json_encode($valeur).' → '.json_encode($options[$option]);
+            }
+        }
+    }
+
+    foreach ($regles as $regle) {
+        if (! in_array($regle, REGLES_DESACTIVABLES, true)) {
+            $refus[] = "règle qui ne se désactive pas : {$regle}";
+        }
+
+        if (($effectifs[$regle] ?? null) !== false) {
+            $refus[] = "règle {$regle} : seuils.json l'enregistre désactivée, phpstan.neon donne ".json_encode($effectifs[$regle] ?? null);
+        }
+    }
+
+    foreach (array_unique([...array_keys($effectifs), ...array_keys($reference)]) as $parametre) {
+        if (in_array(explode('.', $parametre)[0], PARAMETRES_HORS_COMPARAISON, true)) {
+            continue;
+        }
+
+        $valeur = $effectifs[$parametre] ?? null;
+        $valeurDeReference = $reference[$parametre] ?? null;
+
+        if ($valeur === $valeurDeReference
+            || (array_key_exists($parametre, $options) && $options[$parametre] === $valeur)
+            || (in_array($parametre, $regles, true) && $valeur === false)) {
+            continue;
+        }
+
+        $refus[] = "{$parametre} vaut ".json_encode($valeur, JSON_UNESCAPED_SLASHES).' au lieu de '.json_encode($valeurDeReference, JSON_UNESCAPED_SLASHES)
+            .' (ce que donnent le niveau et les ensembles de règles), sans être une option ni une règle désactivée de seuils.json';
+    }
+
+    if (($effectifs['ignoreErrors'] ?? []) !== []) {
+        $refus[] = 'ignoreErrors cache des erreurs : '.json_encode($effectifs['ignoreErrors'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    foreach (array_diff(listeDeChaines($effectifs['universalObjectCratesClasses'] ?? [], 'universalObjectCratesClasses'), listeDeChaines($reference['universalObjectCratesClasses'] ?? [], 'universalObjectCratesClasses')) as $classe) {
+        $refus[] = "universalObjectCratesClasses ajoute {$classe} : ses propriétés ne seraient plus contrôlées";
+    }
+
+    foreach (['treatPhpDocTypesAsCertain', 'reportUnmatchedIgnoredErrors'] as $garde) {
+        if (($effectifs[$garde] ?? null) !== true) {
+            $refus[] = "{$garde} ne passe jamais à false";
+        }
+    }
+
+    foreach (array_diff($chemins, $exclusions) as $chemin) {
+        foreach (consignesQuiFontTairePhpstan($chemin, $exclusions) as $consigne) {
+            $refus[] = "commentaire qui fait taire PHPStan : {$consigne}";
+        }
+    }
+
+    return $refus;
+}
+
+/**
+ * Les paramètres effectifs de PHPStan pour cette configuration, tels que
+ * PHPStan les lit lui-même (dump-parameters), lancé sans les variables qui
+ * lui font écrire un résumé pour un agent de code (AI_AGENT, CLAUDECODE,
+ * CLAUDE_CODE), depuis la racine du dépôt.
+ *
+ * @return array<array-key, mixed>
+ */
+function parametresDePhpstan(string $configuration): array
+{
+    $phpstan = getenv('QUALITE_PHPSTAN');
+    $environnement = array_diff_key(getenv(), array_flip(['AI_AGENT', 'CLAUDECODE', 'CLAUDE_CODE']));
+    $commande = [PHP_BINARY, is_string($phpstan) && $phpstan !== '' ? $phpstan : RACINE.'/vendor/bin/phpstan', 'dump-parameters', '--json', '--memory-limit=1G', '--configuration='.$configuration];
+    $processus = proc_open($commande, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tubes, RACINE, $environnement);
+
+    if ($processus === false) {
+        throw new RuntimeException('PHPStan ne se lance pas.');
+    }
+
+    $sortie = stream_get_contents($tubes[1]);
+    $erreurs = stream_get_contents($tubes[2]);
+    fclose($tubes[1]);
+    fclose($tubes[2]);
+    $code = proc_close($processus);
+
+    if ($sortie === false || $erreurs === false) {
+        throw new RuntimeException("La sortie de PHPStan pour {$configuration} est illisible.");
+    }
+
+    $parametres = json_decode($sortie, true);
+
+    if ($code !== 0 || ! is_array($parametres)) {
+        throw new RuntimeException("PHPStan ne rend pas les paramètres de {$configuration} (code {$code}) : ".trim($erreurs.' '.$sortie));
+    }
+
+    return $parametres;
+}
+
+/**
+ * Une configuration qui inclut les mêmes fichiers que celle-ci (ensembles
+ * de règles et extensions, lus après elle dans allConfigFiles), au même
+ * niveau, sans aucun autre paramètre : ce que PHPStan contrôle d'office à
+ * ce niveau avec ces ensembles de règles. Écrite dans un fichier
+ * temporaire, effacé à la fin de la commande.
+ *
+ * @param  array<string, mixed>  $effectifs  les paramètres effectifs aplatis de cette configuration
+ */
+function configurationDeReference(array $effectifs, string $configuration): string
+{
+    $fichiers = listeDeChaines($effectifs['allConfigFiles'] ?? [], 'allConfigFiles');
+    $rang = array_search(realpath($configuration), $fichiers, true);
+
+    if ($rang === false || ! is_int($effectifs['level'] ?? null)) {
+        throw new RuntimeException("PHPStan ne dit ni le niveau ni les fichiers inclus de {$configuration}.");
+    }
+
+    $neon = "includes:\n";
+
+    foreach (array_slice($fichiers, $rang + 1) as $inclus) {
+        $neon .= "    - '".str_replace("'", "''", $inclus)."'\n";
+    }
+
+    $reference = sys_get_temp_dir().'/piliqi-reference-'.getmypid().'-'.bin2hex(random_bytes(4)).'.neon';
+    file_put_contents($reference, $neon."\nparameters:\n    level: {$effectifs['level']}\n");
+    register_shutdown_function(static fn (): bool => ! is_file($reference) || unlink($reference));
+
+    return $reference;
+}
+
+/**
+ * Les paramètres, chacun sous sa clé pointée (« exceptions.check.tooWideThrowType ») :
+ * un tableau associatif se déplie, une liste reste une valeur.
+ *
+ * @param  array<array-key, mixed>  $parametres
+ * @return array<string, mixed>
+ */
+function aplatir(array $parametres, string $prefixe = ''): array
+{
+    $aplatis = [];
+
+    foreach ($parametres as $cle => $valeur) {
+        $nom = $prefixe.$cle;
+
+        if (is_array($valeur) && $valeur !== [] && ! array_is_list($valeur)) {
+            $aplatis = [...$aplatis, ...aplatir($valeur, $nom.'.')];
+        } else {
+            $aplatis[$nom] = $valeur;
+        }
+    }
+
+    return $aplatis;
+}
+
+/**
+ * @return list<string>
+ */
+function listeDeChaines(mixed $valeurs, string $nom): array
+{
+    if (! is_array($valeurs) || ! array_is_list($valeurs)) {
+        throw new RuntimeException("{$nom} n'est pas une liste.");
+    }
+
+    return array_map(static function (mixed $valeur) use ($nom): string {
+        if (! is_string($valeur)) {
+            throw new RuntimeException("{$nom} ne contient pas que des chaînes.");
+        }
+
+        return $valeur;
+    }, $valeurs);
+}
+
+/**
+ * @return list<string> triée
+ */
+function listeTriee(mixed $valeurs, string $nom): array
+{
+    $liste = listeDeChaines($valeurs, $nom);
+    sort($liste);
+
+    return $liste;
+}
+
+/**
+ * Ces chemins absolus, relatifs à la racine du dépôt, triés.
+ *
+ * @param  array<array-key, string>  $chemins
+ * @return list<string>
+ */
+function cheminsDuDepot(array $chemins): array
+{
+    $relatifs = array_map(relatifAuDepot(...), array_values($chemins));
+    sort($relatifs);
+
+    return $relatifs;
+}
+
+/**
+ * Les commentaires d'un fichier PHP de ce chemin (un fichier ou un
+ * dossier du dépôt), hors des exclusions, qui demandent à PHPStan d'ignorer
+ * une erreur, chacun « fichier:ligne » : la recherche se fait par
+ * token_get_all, dans les seuls commentaires, si bien qu'une chaîne du code
+ * qui cite la consigne (comme celle de cette fonction) n'est pas une
+ * consigne.
+ *
+ * @param  list<string>  $exclusions
+ * @return list<string>
+ */
+function consignesQuiFontTairePhpstan(string $chemin, array $exclusions): array
+{
+    $absolu = RACINE.'/'.$chemin;
+    $fichiers = is_dir($absolu) ? glob_recursif($absolu) : (is_file($absolu) ? [$absolu] : []);
+    $consignes = [];
+
+    foreach ($fichiers as $fichier) {
+        $relatif = relatifAuDepot($fichier);
+
+        foreach ($exclusions as $exclusion) {
+            if ($relatif === $exclusion || str_starts_with($relatif, $exclusion.'/')) {
+                continue 2;
+            }
+        }
+
+        $source = file_get_contents($fichier);
+
+        if ($source === false) {
+            throw new RuntimeException("Fichier illisible : {$relatif}.");
+        }
+
+        foreach (token_get_all($source) as $jeton) {
+            if (is_array($jeton) && in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true) && str_contains($jeton[1], '@phpstan-'.'ignore')) {
+                $consignes[] = "{$relatif}:{$jeton[2]}";
+            }
+        }
+    }
+
+    return $consignes;
 }
 
 /**
@@ -586,24 +1075,68 @@ function fluxDuTemoin(string $rapport): int
     return 1;
 }
 
-try {
-    exit(match ($argv[1] ?? null) {
-        'couverture' => couverture($argv[2], $argv[3] ?? null),
-        'nouveau-code' => nouveauCode($argv[2], $argv[3]),
-        'mutation' => mutation($argv[2], $argv[3] ?? null),
-        'seuils' => seuilsQuiMontent($argv[2]),
-        'sensibles' => sensibles(),
-        'sensibles-changes' => sensiblesChanges($argv[2]),
-        'configuration-sensibles' => configurationSensibles($argv[2]),
-        'flux' => flux($argv[2]),
-        'flux-temoin' => fluxDuTemoin($argv[2]),
-        default => (function (): int {
-            fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux|flux-temoin ...\n");
+/**
+ * Les commandes, chacune avec le nombre d'arguments qu'elle exige et ceux
+ * qu'elle accepte en plus, et leur usage.
+ */
+const COMMANDES = [
+    'couverture' => [1, 1, '<clover.xml> [<rapport.md>]'],
+    'nouveau-code' => [2, 0, '<clover.xml> <commit de base>'],
+    'mutation' => [1, 1, '<infection.json> [<rapport.md>]'],
+    'seuils' => [1, 0, '<ancien seuils.json>'],
+    'sensibles' => [0, 0, ''],
+    'sensibles-changes' => [1, 0, '<commit de base>'],
+    'configuration-sensibles' => [1, 0, '<destination>'],
+    'flux' => [1, 0, '<rapport-psalm.json>'],
+    'flux-temoin' => [1, 0, '<rapport-psalm.json>'],
+];
 
-            return 2;
-        })(),
-    });
-} catch (RuntimeException $erreur) {
+/**
+ * L'usage de l'outil, sur la sortie d'erreur ; code de sortie 2.
+ */
+function usage(): int
+{
+    $lignes = array_map(
+        static fn (string $commande, array $definition): string => rtrim("  php tests/Qualite/qualite.php {$commande} {$definition[2]}"),
+        array_keys(COMMANDES),
+        COMMANDES,
+    );
+    fwrite(STDERR, "Usage :\n".implode("\n", $lignes)."\n");
+
+    return 2;
+}
+
+/**
+ * Lance la commande avec ses arguments, ou écrit l'usage quand elle est
+ * inconnue ou que ses arguments ne sont pas en nombre.
+ *
+ * @param  list<string>  $arguments
+ */
+function lancer(?string $commande, array $arguments): int
+{
+    $definition = COMMANDES[$commande] ?? null;
+
+    if ($commande === null || $definition === null || count($arguments) < $definition[0] || count($arguments) > $definition[0] + $definition[1]) {
+        return usage();
+    }
+
+    return match ($commande) {
+        'couverture' => couverture($arguments[0], $arguments[1] ?? null),
+        'nouveau-code' => nouveauCode($arguments[0], $arguments[1]),
+        'mutation' => mutation($arguments[0], $arguments[1] ?? null),
+        'seuils' => seuilsQuiMontent($arguments[0]),
+        'sensibles' => sensibles(),
+        'sensibles-changes' => sensiblesChanges($arguments[0]),
+        'configuration-sensibles' => configurationSensibles($arguments[0]),
+        'flux' => flux($arguments[0]),
+        'flux-temoin' => fluxDuTemoin($arguments[0]),
+        default => usage(),
+    };
+}
+
+try {
+    exit(lancer($argv[1] ?? null, array_slice($argv, 2)));
+} catch (RuntimeException|JsonException $erreur) {
     echo 'Échec : ', $erreur->getMessage(), "\n";
 
     exit(1);

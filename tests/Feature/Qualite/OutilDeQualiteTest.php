@@ -19,9 +19,13 @@ use Symfony\Component\Yaml\Yaml;
  * nomme depuis la racine du dépôt les fichiers sensibles changés, que la
  * CI donne entiers à Infection, qui les lit tous comme des chemins (la
  * commande de la CI, lue dans son fichier) ; le contrôle du témoin de
- * l'analyse des flux exige exactement les chemins qu'il annonce. Chaque
- * cas de l'outil le lance, comme la CI, sur une copie de tests/Qualite
- * placée dans un dépôt de test nommé « app ».
+ * l'analyse des flux exige exactement les chemins qu'il annonce ; le
+ * contrôle des seuils (décision de l'éditeur du 09/11/2026, cahier de
+ * l'analyse statique, § 4.3) refuse toute baisse d'un seuil et tout
+ * réglage de l'analyse statique que seuils.json n'enregistre pas, lu par
+ * le PHPStan du dépôt, appelé par son chemin absolu. Chaque cas de l'outil
+ * le lance, comme la CI, sur une copie de tests/Qualite placée dans un
+ * dépôt de test nommé « app », avec son phpstan.neon et son psalm.xml.
  */
 class OutilDeQualiteTest extends TestCase
 {
@@ -181,6 +185,276 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringContainsString('chemin en trop : tests/Qualite/Psalm/Temoin/Temoin.php:2 TaintedSql', $sortie);
     }
 
+    public function test_les_seuils_sans_leur_ancien_fichier_ecrivent_l_usage_et_sortent_avec_le_code_2(): void
+    {
+        [$code, $sortie] = $this->lancer('seuils');
+
+        $this->assertSame(2, $code, $sortie);
+        $this->assertStringContainsString('php tests/Qualite/qualite.php seuils <ancien seuils.json>', $sortie);
+    }
+
+    /**
+     * phpstan.neon règle l'analyse exactement comme seuils.json l'enregistre :
+     * rien ne baisse, que l'ancien seuils.json enregistre les mêmes réglages
+     * ou qu'il n'en enregistre aucun (une clé absente ne compte pas).
+     */
+    public function test_une_analyse_reglee_comme_seuils_json_l_enregistre_est_acceptee(): void
+    {
+        $this->depotAnalyse();
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+        $this->assertSame(0, $code, $sortie);
+
+        [$code, $sortie] = $this->lancerLesSeuils(['analyse_statique' => ['niveau' => 6], 'couverture' => [], 'mutation' => []]);
+        $this->assertSame(0, $code, $sortie);
+        $this->assertStringContainsString('Aucun seuil ne baisse', $sortie);
+    }
+
+    public function test_un_niveau_qui_baisse_est_refuse(): void
+    {
+        $this->depotAnalyse(niveau: 6);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString("niveau de l'analyse statique : 7 → 6", $sortie);
+    }
+
+    /**
+     * Les paramètres effectifs que PHPStan lit dans phpstan.neon doivent
+     * être ceux que seuils.json enregistre : un niveau, un chemin, une
+     * exclusion ou une option qui diffère est refusé.
+     */
+    public function test_un_phpstan_neon_qui_ne_regle_pas_l_analyse_comme_seuils_json_est_refuse(): void
+    {
+        $this->depotAnalyse();
+        $this->ecrireLaConfiguration(niveau: 8, chemins: ['app'], exclusions: [], options: "    parseModelCastsMethod: false\n");
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('phpstan.neon analyse au niveau 8, seuils.json enregistre le niveau 7', $sortie);
+        $this->assertStringContainsString('chemins : phpstan.neon donne ["app"], seuils.json enregistre ["app","tests/Qualite"]', $sortie);
+        $this->assertStringContainsString('exclusions : phpstan.neon donne [], seuils.json enregistre ["tests/Qualite/Psalm"]', $sortie);
+        $this->assertStringContainsString('option parseModelCastsMethod : phpstan.neon donne false, seuils.json enregistre true', $sortie);
+    }
+
+    public function test_un_chemin_qui_n_est_plus_analyse_est_refuse(): void
+    {
+        $this->depotAnalyse(chemins: ['app']);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString("le chemin tests/Qualite n'est plus analysé", $sortie);
+    }
+
+    public function test_une_option_qui_disparait_ou_change_de_valeur_est_refusee(): void
+    {
+        $this->depotAnalyse(options: []);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(options: ['parseModelCastsMethod' => true]));
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString("l'option parseModelCastsMethod disparaît", $sortie);
+
+        $this->depotAnalyse();
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(options: ['parseModelCastsMethod' => false]));
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString("l'option parseModelCastsMethod change de valeur : false → true", $sortie);
+
+        $this->depotAnalyse(options: ['reportUnsafeArrayStringKeyCasting' => 'detect']);
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(options: ['reportUnsafeArrayStringKeyCasting' => 'prevent']));
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString("l'option reportUnsafeArrayStringKeyCasting change de valeur : \"prevent\" → \"detect\"", $sortie);
+    }
+
+    /**
+     * Une exclusion, un stub ou une règle désactivée que l'ancien seuils.json
+     * n'enregistrait pas est refusé, même permis.
+     */
+    public function test_une_exclusion_un_stub_ou_une_regle_desactivee_qui_apparait_est_refuse(): void
+    {
+        $this->depotAnalyse(exclusions: ['tests/Qualite/Psalm', 'tests/Qualite/Temoins'], regles: ['strictRules.dynamicCallOnStaticMethod']);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(stubs: [], regles: []));
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('nouvelle exclusion : tests/Qualite/Temoins', $sortie);
+        $this->assertStringContainsString('nouveau stub : tests/Qualite/macros.stub', $sortie);
+        $this->assertStringContainsString('nouvelle règle désactivée : strictRules.dynamicCallOnStaticMethod', $sortie);
+    }
+
+    /**
+     * Seules les exclusions, les options (à leur valeur stricte), les stubs
+     * et la règle désactivée du cahier s'enregistrent.
+     */
+    public function test_une_exclusion_une_option_un_stub_ou_une_regle_hors_du_cahier_est_refuse(): void
+    {
+        $this->depotAnalyse(exclusions: ['tests/Qualite/Psalm', 'app'], options: ['parseModelCastsMethod' => true, 'checkUninitializedProperties' => false, 'inferPrivatePropertyTypeFromConstructor' => true], stubs: ['tests/Qualite/macros.stub', 'tests/Qualite/autre.stub'], regles: ['noModelMake']);
+
+        [$code, $sortie] = $this->lancerLesSeuils(['couverture' => [], 'mutation' => []]);
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('exclusion non permise : app', $sortie);
+        $this->assertStringContainsString('option checkUninitializedProperties : false n\'est pas sa valeur stricte (true)', $sortie);
+        $this->assertStringContainsString('option non permise : inferPrivatePropertyTypeFromConstructor', $sortie);
+        $this->assertStringContainsString('stub non permis : tests/Qualite/autre.stub', $sortie);
+        $this->assertStringContainsString('règle qui ne se désactive pas : noModelMake', $sortie);
+    }
+
+    /**
+     * Un contrôle que le niveau ou un ensemble de règles active, coupé dans
+     * phpstan.neon sans que seuils.json l'enregistre, est refusé : celui du
+     * niveau 6 sur les types manquants, une règle de Larastan.
+     */
+    public function test_un_controle_relache_dans_phpstan_neon_est_refuse(): void
+    {
+        $this->depotAnalyse(neon: "    checkMissingTypehints: false\n    noModelMake: false\n");
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('checkMissingTypehints vaut false au lieu de true', $sortie);
+        $this->assertStringContainsString('noModelMake vaut false au lieu de true', $sortie);
+    }
+
+    public function test_une_erreur_ignoree_ou_une_classe_aux_proprietes_libres_est_refusee(): void
+    {
+        $this->depotAnalyse(neon: "    ignoreErrors:\n        - '#.*#'\n    universalObjectCratesClasses:\n        - App\\Models\\User\n    reportUnmatchedIgnoredErrors: false\n");
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('ignoreErrors cache des erreurs', $sortie);
+        $this->assertStringContainsString('universalObjectCratesClasses ajoute App\\Models\\User', $sortie);
+        $this->assertStringContainsString('reportUnmatchedIgnoredErrors ne passe jamais à false', $sortie);
+    }
+
+    public function test_les_types_des_phpdoc_restent_tenus_pour_certains(): void
+    {
+        $this->depotAnalyse(neon: "    treatPhpDocTypesAsCertain: false\n");
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('treatPhpDocTypesAsCertain ne passe jamais à false', $sortie);
+    }
+
+    /**
+     * Un commentaire d'un fichier analysé qui fait taire PHPStan est refusé,
+     * avec son fichier et sa ligne ; une chaîne qui le cite, et un fichier
+     * exclu, ne le sont pas.
+     */
+    public function test_un_commentaire_qui_fait_taire_phpstan_est_refuse(): void
+    {
+        $consigne = '@phpstan-'.'ignore';
+        $this->depotAnalyse();
+        $this->ecrire('app/Cite.php', "<?php\n\n\$texte = '{$consigne}';\n");
+        $this->ecrire('tests/Qualite/Psalm/Exclu.php', "<?php\n\n// {$consigne}\n");
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+        $this->assertSame(0, $code, $sortie);
+
+        $this->ecrire('app/Tait.php', "<?php\n\n/** {$consigne}-next-line */\n\$a = 1;\n");
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('commentaire qui fait taire PHPStan : app/Tait.php:3', $sortie);
+        $this->assertStringNotContainsString('app/Cite.php', $sortie);
+        $this->assertStringNotContainsString('Exclu.php', $sortie);
+    }
+
+    public function test_un_seuil_de_couverture_ou_de_mutation_qui_baisse_est_refuse(): void
+    {
+        $this->depotAnalyse();
+        $this->ecrire('tests/Qualite/seuils.json', json_encode([
+            'analyse_statique' => $this->seuilsDeLAnalyse()['analyse_statique'],
+            'couverture' => ['calculs' => 99.9],
+            'mutation' => [],
+        ], JSON_THROW_ON_ERROR));
+
+        [$code, $sortie] = $this->lancerLesSeuils([...$this->seuilsDeLAnalyse(), 'couverture' => ['calculs' => 100], 'mutation' => ['droits_et_isolation' => 99.9]]);
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('couverture de calculs : 100 → 99.9', $sortie);
+        $this->assertStringContainsString('mutation de droits_et_isolation : 99.9 → retiré', $sortie);
+    }
+
+    /**
+     * Le dépôt de test réglé pour l'analyse statique : son phpstan.neon,
+     * son psalm.xml, le stub des macros et les dossiers analysés, et son
+     * seuils.json qui enregistre ce réglage, sauf ce que le cas y change
+     * (le phpstan.neon seul).
+     *
+     * @param  list<string>  $chemins
+     * @param  list<string>  $exclusions
+     * @param  array<string, bool|string>  $options
+     * @param  list<string>  $stubs
+     * @param  list<string>  $regles
+     */
+    private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = [], string $neon = ''): void
+    {
+        foreach ([...$chemins, ...$exclusions] as $dossier) {
+            (new Filesystem)->ensureDirectoryExists($this->depot.'/'.$dossier);
+        }
+
+        foreach (['tests/Qualite/macros.stub', 'psalm.xml'] as $fichier) {
+            (new Filesystem)->copy(__DIR__.'/../../../'.$fichier, $this->depot.'/'.$fichier);
+        }
+
+        $this->ecrire('tests/Qualite/autre.stub', "<?php\n");
+        $this->ecrireLaConfiguration($niveau, $chemins, $exclusions, implode('', array_map(
+            fn (string $option, bool|string $valeur): string => "    {$option}: ".(is_bool($valeur) ? ($valeur ? 'true' : 'false') : $valeur)."\n",
+            array_keys($options),
+            $options,
+        )).$neon, $stubs);
+        $this->ecrire('tests/Qualite/seuils.json', json_encode($this->seuilsDeLAnalyse(options: $options, regles: $regles, stubs: $stubs, chemins: $chemins, exclusions: $exclusions, niveau: $niveau), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * @param  list<string>  $chemins
+     * @param  list<string>  $exclusions
+     * @param  list<string>  $stubs
+     */
+    private function ecrireLaConfiguration(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], string $options = "    parseModelCastsMethod: true\n", array $stubs = ['tests/Qualite/macros.stub']): void
+    {
+        $liste = fn (string $cle, array $valeurs): string => $valeurs === [] ? '' : "    {$cle}:\n".implode('', array_map(fn (string $valeur): string => "        - {$valeur}\n", $valeurs));
+
+        $this->ecrire('phpstan.neon', "includes:\n    - ".realpath(__DIR__.'/../../../vendor/larastan/larastan/extension.neon')."\n\nparameters:\n"
+            .$liste('paths', $chemins).$liste('excludePaths', $exclusions)."    level: {$niveau}\n".$liste('stubFiles', $stubs).$options);
+    }
+
+    /**
+     * Les seuils qu'enregistre le dépôt de test : ceux de la couverture et
+     * de la mutation, et le réglage de l'analyse statique.
+     *
+     * @param  list<string>  $chemins
+     * @param  list<string>  $exclusions
+     * @param  array<string, bool|string>  $options
+     * @param  list<string>  $stubs
+     * @param  list<string>  $regles
+     * @return array<string, mixed>
+     */
+    private function seuilsDeLAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = []): array
+    {
+        return [
+            'analyse_statique' => ['niveau' => $niveau, 'chemins' => $chemins, 'exclusions' => $exclusions, 'stubs' => $stubs, 'options' => (object) $options, 'regles_desactivees' => $regles],
+            'couverture' => [],
+            'mutation' => [],
+        ];
+    }
+
+    /**
+     * Lance le contrôle des seuils du dépôt de test contre cet ancien
+     * seuils.json.
+     *
+     * @param  array<string, mixed>  $ancien
+     * @return array{0: int, 1: string}
+     */
+    private function lancerLesSeuils(array $ancien): array
+    {
+        return $this->lancer('seuils', $this->ecrire('ancien.json', json_encode($ancien, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)));
+    }
+
     /**
      * Un rapport Clover de ces fichiers : par chemin, le nombre de tests
      * qui exécutent chaque ligne.
@@ -223,7 +497,8 @@ class OutilDeQualiteTest extends TestCase
      */
     private function lancer(string ...$arguments): array
     {
-        $outil = new Process([PHP_BINARY, $this->depot.'/tests/Qualite/qualite.php', ...$arguments], $this->depot);
+        $outil = new Process([PHP_BINARY, $this->depot.'/tests/Qualite/qualite.php', ...$arguments], $this->depot, ['QUALITE_PHPSTAN' => realpath(__DIR__.'/../../../vendor/bin/phpstan')]);
+        $outil->setTimeout(120);
         $outil->run();
 
         return [(int) $outil->getExitCode(), $outil->getOutput().$outil->getErrorOutput()];

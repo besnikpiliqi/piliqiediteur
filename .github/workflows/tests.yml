@@ -38,10 +38,12 @@ jobs:
         run: vendor/bin/pint --test
 
   # Analyse statique (Larastan) au niveau de phpstan.neon, sans fichier de
-  # référence ; puis aucun seuil de tests/Qualite/seuils.json (niveau de
-  # l'analyse, couverture et score de mutation de chaque partie) ne baisse
-  # par rapport au commit précédent de la branche, ou à la base de la
-  # demande de fusion.
+  # référence ; puis aucun seuil de tests/Qualite/seuils.json (couverture et
+  # score de mutation de chaque partie, réglage de l'analyse statique) ne
+  # baisse par rapport au commit précédent de la branche, ou à la base de
+  # la demande de fusion, et phpstan.neon règle l'analyse exactement comme
+  # seuils.json l'enregistre, sans rien relâcher ni cacher (paramètres lus
+  # par phpstan dump-parameters, voir qualite.php seuils).
   analyse:
     runs-on: ubuntu-latest
 

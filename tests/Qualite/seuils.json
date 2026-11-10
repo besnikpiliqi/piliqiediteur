@@ -1,6 +1,15 @@
 {
     "analyse_statique": {
-        "niveau": 6
+        "niveau": 6,
+        "chemins": [
+            "app"
+        ],
+        "stubs": [
+            "tests/Qualite/macros.stub"
+        ],
+        "options": {
+            "parseModelCastsMethod": true
+        }
     },
     "couverture": {
         "achats_et_stock": 98.3,

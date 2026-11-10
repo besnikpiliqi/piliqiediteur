@@ -696,7 +696,7 @@
    "question": "La fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre ». Faut-il ajouter ces deux boutons sur la fiche ?",
    "qui": "vous",
    "etat": "ouvert",
-   "proposition": "Laissé tel quel en attendant votre avis ; à trancher avant le lot NAV-2.",
+   "proposition": "Ajouter ces deux boutons sur la fiche du brouillon, comme sur la liste des factures ; à trancher avant le lot NAV-2.",
    "bloquant": "lot NAV-2 (écrans de vente)",
    "sources": [
     "notes/pilotage-reprise/README.md:190"
@@ -1024,7 +1024,7 @@
    "question": "Le numéro de la facture du fournisseur est facultatif sur une facture d'achat. L'e-reporting international l'exigera : faut-il le rendre obligatoire ?",
    "qui": "vous",
    "etat": "ouvert",
-   "proposition": "Facultatif aujourd'hui, avec un avertissement pour un avoir fournisseur ; à trancher avant l'étape 2.",
+   "proposition": "Le rendre obligatoire sur une facture d'achat saisie à la main (toute facture porte un numéro) ; aujourd'hui facultatif, avec un avertissement pour un avoir fournisseur ; à trancher avant l'étape 2.",
    "bloquant": "étape 2",
    "sources": [
     "notes/historique/DIRECTIVES.md:515"

@@ -36,6 +36,7 @@ use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -163,7 +164,7 @@ class RevoquerSocieteAction
         }
 
         $revocation = $this->revoquerUneSociete($societe, $editeur);
-        $this->apresLaRevocation($societe->fresh(), $revocation);
+        $this->apresLaRevocation(ModeleRelu::de($societe), $revocation);
 
         return ['sirets' => $revocation['sirets'], 'reprise' => false, 'en_echec' => 0];
     }
@@ -282,7 +283,7 @@ class RevoquerSocieteAction
         }
 
         if ($revocation !== null) {
-            $this->apresLaRevocation($cabinet->fresh(), $revocation);
+            $this->apresLaRevocation(ModeleRelu::de($cabinet), $revocation);
         }
 
         return ['sirets' => [], 'reprise' => $revocation === null, 'en_echec' => $enEchec];

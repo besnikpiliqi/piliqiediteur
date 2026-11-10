@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\UserFactory;
 use Filament\Facades\Filament;
@@ -300,7 +301,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function calendrier(): Calendrier
     {
-        return $this->estMembre() ? $this->magasinDeSonIdentifiant()->calendrier() : Calendrier::deParis();
+        return $this->estMembre() ? ValeurRequise::de($this->magasinDeSonIdentifiant(), 'le magasin de l\'identifiant du membre')->calendrier() : Calendrier::deParis();
     }
 
     /**
@@ -425,12 +426,24 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function libelleDuRoleDans(Magasin $magasin): string
     {
         $libelle = match (true) {
-            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
+            $this->estMembre() => $this->libelleDuRoleDeMembreDans($magasin).' · '.$magasin->nom,
             $this->estDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
             default => $this->libelleDuRoleDeSociete(),
         };
 
         return $magasin->est_demonstration ? "{$libelle} (démonstration)" : $libelle;
+    }
+
+    /**
+     * Le libellé de son rôle de membre dans ce magasin : celui de son
+     * affectation, qui en a toujours un (voir affectationQuiVautDans()),
+     * ou « Membre » sans affectation dans ce magasin.
+     */
+    private function libelleDuRoleDeMembreDans(Magasin $magasin): string
+    {
+        $affectation = $this->affectationQuiVautDans($magasin);
+
+        return $affectation === null ? RoleSociete::Membre->getLabel() : ValeurRequise::de($affectation->role, 'le rôle de l\'affectation d\'un membre')->getLabel();
     }
 
     /**

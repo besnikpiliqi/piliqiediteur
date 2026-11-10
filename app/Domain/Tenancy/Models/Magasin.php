@@ -22,6 +22,7 @@ use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Builder;
@@ -102,6 +103,13 @@ use LogicException;
  * réelle (voir Emetteur::deDemonstration()) : il vend tant que sa société
  * n'est ni validée ni close, n'écrit à aucun client et ne transmet rien
  * (voir peutEcrireAuxClients()), et rien n'en passe aux magasins réels.
+ *
+ * Sa société n'est jamais nulle : societe_id ne l'est jamais en base, sa
+ * clé étrangère vise une société, qu'aucune société ne s'efface (voir
+ * DeclencheursDeProtection::sansSuppression()) et que Societe n'a aucun
+ * scope global.
+ *
+ * @property-read Societe $societe
  */
 class Magasin extends Model implements HasName
 {
@@ -888,7 +896,7 @@ class Magasin extends Model implements HasName
      */
     public function relanceDue(int $niveau, int $joursDeRetard, ?int $joursDepuisLaPrecedente): bool
     {
-        $delais = $this->delais_relance;
+        $delais = ValeurRequise::de($this->delais_relance, 'les délais de relance du magasin');
 
         if ($niveau < 1 || $niveau > count($delais) || $joursDeRetard < $delais[$niveau - 1]) {
             return false;

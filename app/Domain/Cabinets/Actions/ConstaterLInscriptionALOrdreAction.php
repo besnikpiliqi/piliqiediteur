@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Filament\Cabinet\Pages\VerificationDuCabinet;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -63,7 +64,7 @@ class ConstaterLInscriptionALOrdreAction
 
         $devenuVerifie = $this->operateur->pendantLeSysteme(fn (): bool => app(TenantContext::class)->runAsSociete($cabinet, fn (): bool => DB::transaction(function () use ($cabinet, $editeur, $numero, $conseil, $activiteControlee): bool {
             $verification = $cabinet->cabinet()->lockForUpdate()->firstOrFail();
-            $etaitVerifie = $cabinet->fresh()->estUnCabinetVerifie();
+            $etaitVerifie = ModeleRelu::de($cabinet)->estUnCabinetVerifie();
 
             if ($activiteControlee && $verification->aUneAutreActivite()) {
                 throw new LogicException(self::MESSAGE_AUTRE_ACTIVITE);
@@ -97,7 +98,7 @@ class ConstaterLInscriptionALOrdreAction
                 ], $cabinet, $editeur);
             }
 
-            return ! $etaitVerifie && $cabinet->fresh()->estUnCabinetVerifie();
+            return ! $etaitVerifie && ModeleRelu::de($cabinet)->estUnCabinetVerifie();
         })));
 
         $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(

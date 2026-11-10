@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -32,7 +33,7 @@ class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
     public function handle(User $auteur, LienCabinet $lien): void
     {
         self::exigerUneDemande($this->cloreLaDemande($auteur, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, function (?User $auteurRelu, LienCabinet $relu): void {
-            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'retirer', $relu);
+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'retirer', $relu);
         }));
     }
 

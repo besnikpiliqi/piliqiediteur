@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\AlerteEditeur;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Filament\Cabinet\Pages\VerificationDuCabinet;
 use App\Integrations\Ordre\AnnuaireDeLOrdreIndisponibleException;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
@@ -115,7 +116,7 @@ class VerifierLOrdreAction
 
             $this->prevenir($cabinet, 'Inscription à l\'Ordre vérifiée', 'L\'annuaire de l\'Ordre confirme l\'inscription de votre cabinet au tableau.', AvisDuCabinet::SUCCES);
 
-            if ($cabinet->fresh()->estUnCabinetVerifie()) {
+            if (ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
                 PrevenirLesClientsDuCabinet::dispatch((int) $cabinet->getKey(), accesRetabli: true);
             }
 

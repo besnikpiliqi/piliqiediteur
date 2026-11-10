@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -74,7 +75,7 @@ class TelechargerLesDocumentsController
             return $this->indisponible(self::SANS_DROIT, 403);
         }
 
-        return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download($trouve->chemin, $trouve->nomDuFichier(), [
+        return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download(ValeurRequise::de($trouve->chemin, 'le fichier du téléchargement prêt'), $trouve->nomDuFichier(), [
             'Content-Type' => $trouve->format->typeMime(),
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',

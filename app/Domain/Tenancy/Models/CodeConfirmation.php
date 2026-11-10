@@ -7,6 +7,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\MotifCode;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -37,7 +38,12 @@ use LogicException;
  * app:purger-verifications), et la base refuse son effacement avant (voir
  * DeclencheursDeProtection::suppressionApresConservation()).
  *
+ * Son envoi et son échéance (voir Instant) ne sont jamais nuls : leurs
+ * colonnes ne le sont pas en base.
+ *
  * @property array<string, mixed> $destinataire
+ * @property CarbonImmutable $envoye_le
+ * @property CarbonImmutable $expire_le
  */
 class CodeConfirmation extends Model
 {

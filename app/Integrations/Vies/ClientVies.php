@@ -4,6 +4,7 @@ namespace App\Integrations\Vies;
 
 use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -58,7 +59,7 @@ class ClientVies
 
         if (($prefixeDemandeur = TerritoireFiscal::prefixeTvaUe($numeroTvaDemandeur)) !== null) {
             $demande['requesterMemberStateCode'] = $prefixeDemandeur;
-            $demande['requesterNumber'] = substr(NumeroTva::normaliser($numeroTvaDemandeur), 2);
+            $demande['requesterNumber'] = substr(NumeroTva::normaliser(ValeurRequise::de($numeroTvaDemandeur, 'le n° de TVA du demandeur')), 2);
         }
 
         try {

@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -120,7 +121,7 @@ class ReverificationSirene
 
         if ($consultation['resultat'] === ResultatVerification::Negative) {
             Log::warning('Revérification Sirene : écart sur une société validée.', ['societe_id' => $societe->getKey(), 'motif' => $consultation['motif']]);
-            $this->signalerLEcart($societe, $consultation['motif'], negative: true);
+            $this->signalerLEcart($societe, ValeurRequise::de($consultation['motif'], 'le motif de la consultation négative'), negative: true);
         }
 
         if ($societe->estUnCabinet() && $unite !== null && $consultation['resultat'] === ResultatVerification::Concluante && ControleSirene::exerceLesActivitesComptables($unite) === false) {
@@ -211,7 +212,8 @@ class ReverificationSirene
         }
 
         if ($situeAilleurs !== null) {
-            $this->signalerUnAutreTerritoire($situeAilleurs, Territoire::depuisLeRepertoire($etablissement->codeCommune, $etablissement->codePostal));
+            $etablissementLu = ValeurRequise::de($etablissement, 'l\'établissement que le répertoire situe ailleurs');
+            $this->signalerUnAutreTerritoire($situeAilleurs, Territoire::depuisLeRepertoire($etablissementLu->codeCommune, $etablissementLu->codePostal));
         }
     }
 
@@ -277,7 +279,7 @@ class ReverificationSirene
         return VerificationSociete::query()
             ->where('societe_id', $societe->getKey())
             ->where('type', ($magasin === null ? TypeVerification::SireneUnite : TypeVerification::SireneEtablissement)->value)
-            ->when($magasin === null, fn ($requete) => $requete->whereNull('magasin_id'), fn ($requete) => $requete->where('magasin_id', $magasin->getKey()))
+            ->when($magasin, fn ($requete, Magasin $leMagasin) => $requete->where('magasin_id', $leMagasin->getKey()), fn ($requete) => $requete->whereNull('magasin_id'))
             ->orderByDesc('id')
             ->first()
             ?->resultat;

@@ -99,7 +99,7 @@ class CodeMagasin
         return Magasin::query()
             ->where('code', $code)
             ->where('societe_id', $societe->getKey())
-            ->when($saufPour, fn (Builder $requete): Builder => $requete->whereKeyNot($saufPour->getKey()))
+            ->when($saufPour, fn (Builder $requete, Magasin $magasin): Builder => $requete->whereKeyNot($magasin->getKey()))
             ->exists()
             || self::aServiSousCeSiren($societe, $code, (string) $societe->siren);
     }

@@ -29,6 +29,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
@@ -270,7 +271,7 @@ class AccepterLInvitationAction
             return $proprietaire;
         });
 
-        $this->journalDesDroits->modifierLeLien(null, $client->fresh(), [], function (?User $systeme, Societe $clientVerrouille) use ($cabinet, $relue, $type): void {
+        $this->journalDesDroits->modifierLeLien(null, ModeleRelu::de($client), [], function (?User $systeme, Societe $clientVerrouille) use ($cabinet, $relue, $type): void {
             $lien = tap((new LienCabinet)->forceFill([
                 'cabinet_id' => $cabinet->getKey(),
                 'origine' => OrigineDuLien::Invitation,
@@ -282,7 +283,7 @@ class AccepterLInvitationAction
         }, function (Societe $journal, array $liens) use ($cabinet, $client): array {
             return [[ActionAuditee::LienActive, [
                 'cabinet' => IdentiteDansLeJournal::de($cabinet),
-                'client' => IdentiteDansLeJournal::de($client->fresh()),
+                'client' => IdentiteDansLeJournal::de(ModeleRelu::de($client)),
                 'origine' => OrigineDuLien::Invitation->value,
                 'autorisations' => 'par_defaut',
             ], (int) $cabinet->getKey()]];
@@ -290,7 +291,7 @@ class AccepterLInvitationAction
 
         app(TenantContext::class)->runAsSociete($cabinet, function () use ($relue, $client): void {
             $relue->forceFill(['etat' => EtatInvitation::Acceptee, 'close_le' => now()])->save();
-            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::InvitationAcceptee, null, null, null, ['siren' => $relue->siren, 'client' => IdentiteDansLeJournal::de($client->fresh())], $relue));
+            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::InvitationAcceptee, null, null, null, ['siren' => $relue->siren, 'client' => IdentiteDansLeJournal::de(ModeleRelu::de($client))], $relue));
         });
 
         return $proprietaire;

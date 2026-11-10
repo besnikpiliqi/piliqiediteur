@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Models\User;
@@ -64,7 +65,7 @@ class MettreFinAuLienAction
         $motif = (int) $auteur->societe_id === (int) $lien->cabinet_id ? MotifDeFinDuLien::ParLeCabinet : MotifDeFinDuLien::ParLeClient;
 
         $this->terminer($auteur, $lien, $motif, null, function (?User $auteurRelu, LienCabinet $relu): void {
-            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'mettreFin', $relu);
+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'mettreFin', $relu);
         });
     }
 

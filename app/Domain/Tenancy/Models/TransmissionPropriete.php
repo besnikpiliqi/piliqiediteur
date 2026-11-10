@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -20,10 +21,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * demande que désigne l'empreinte de son jeton, et rien d'autre (voir
  * demandeDuLien()).
  *
+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
+ * en base.
+ *
  * @property int $demandee_par
  * @property int $destinataire_id
  * @property string $adresse
  * @property string $jeton_hache
+ * @property CarbonImmutable $expire_le
  */
 class TransmissionPropriete extends Model
 {

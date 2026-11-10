@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use LogicException;
 
 /**
@@ -106,8 +107,9 @@ class LibererLeSiretAction
                 }
 
                 self::verifierQuIlSeLibere($verrouille);
+                $territoire = ValeurRequise::de($verrouille->territoire, 'le territoire du magasin confirmé');
 
-                if ($verrouille->territoire === $lu['territoire']) {
+                if ($territoire === $lu['territoire']) {
                     throw new LogicException(self::MESSAGE_MEME_TERRITOIRE);
                 }
 
@@ -117,14 +119,15 @@ class LibererLeSiretAction
                 $this->journalAudit->inscrire(ActionAuditee::SiretLibere, null, $verrouille, null, [
                     'siret' => $siret,
                     'motif' => self::MOTIF_TERRITOIRE_MAL_LU,
-                    'territoire' => $verrouille->territoire->value,
+                    'territoire' => $territoire->value,
                     'territoire_lu' => $lu['territoire']->value,
                 ], $verrouille, $editeur);
 
                 return $verrouille;
             })));
 
-            $societe->proprietaire?->notify(new AvisDeVerification($societe, 'SIRET de votre magasin libéré', "Le répertoire Sirene situe l'établissement de {$libere->nom} (SIRET {$libere->siret}) {$lu['territoire']->lieu()}, et non {$libere->territoire->lieu()} : l'éditeur a libéré son SIRET. Vous pouvez créer un nouveau magasin sur cet établissement, qui prendra ce territoire, son taux de TVA par défaut et son heure ; {$libere->nom} reste fermé, avec ses documents."));
+            $ancienTerritoire = ValeurRequise::de($libere->territoire, 'le territoire du magasin confirmé');
+            $societe->proprietaire?->notify(new AvisDeVerification($societe, 'SIRET de votre magasin libéré', "Le répertoire Sirene situe l'établissement de {$libere->nom} (SIRET {$libere->siret}) {$lu['territoire']->lieu()}, et non {$ancienTerritoire->lieu()} : l'éditeur a libéré son SIRET. Vous pouvez créer un nouveau magasin sur cet établissement, qui prendra ce territoire, son taux de TVA par défaut et son heure ; {$libere->nom} reste fermé, avec ses documents."));
 
             return $lu['territoire'];
         });

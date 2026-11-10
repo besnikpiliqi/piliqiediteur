@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\ChangementFinExercice;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use InvalidArgumentException;
 
 /**
@@ -127,7 +128,7 @@ class ExercicesDeLaSociete
             return self::exerciceAuMois($changements->first()->ancien_mois ?? (int) $societe->mois_fin_exercice, $jour, null);
         }
 
-        $changement = $changements[$rang];
+        $changement = ValeurRequise::de($changements->get($rang), 'le changement de fin d\'exercice du jour');
 
         if ($jour <= $changement->fin_exercice_en_cours_apres) {
             return [$changement->debut_exercice_en_cours, $changement->fin_exercice_en_cours_apres];

@@ -12,6 +12,7 @@ use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Models\User;
@@ -63,6 +64,7 @@ class AccepterLaDemandeDeLienAction
 
         [$remplace, $ancienAcces] = $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations): array {
             [$demande] = $relus;
+            $auteurRelu = ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou');
             $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'accepter', $demande);
 
             if (! $demande->estUneDemandeValable()) {

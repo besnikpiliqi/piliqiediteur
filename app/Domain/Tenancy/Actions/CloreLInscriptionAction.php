@@ -21,6 +21,8 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -116,7 +118,7 @@ class CloreLInscriptionAction
             return $this->cloreSousVerrou($verrouillee, $motif, $editeur);
         });
 
-        $this->apresLaCloture($societe->fresh(), $motif, $cloture['adresseRetiree'], $cloture['destinataires']);
+        $this->apresLaCloture(ModeleRelu::de($societe), $motif, $cloture['adresseRetiree'], $cloture['destinataires']);
     }
 
     /**
@@ -131,7 +133,7 @@ class CloreLInscriptionAction
         $cloture = $this->sousLesVerrous($societe, function (Societe $verrouillee) use ($limite): ?array {
             $courrierRecent = CodeConfirmation::query()->where('motif', MotifCode::Verification->value)->where('envoye_le', '>', $limite)->exists();
 
-            if (! $verrouillee->attendSonCode() || $courrierRecent || $verrouillee->created_at->greaterThan($limite)) {
+            if (! $verrouillee->attendSonCode() || $courrierRecent || ValeurRequise::de($verrouillee->created_at, 'la date de l\'inscription')->greaterThan($limite)) {
                 return null;
             }
 
@@ -142,7 +144,7 @@ class CloreLInscriptionAction
             return false;
         }
 
-        $this->apresLaCloture($societe->fresh(), MotifCloture::DelaiExpire, $cloture['adresseRetiree'], $cloture['destinataires']);
+        $this->apresLaCloture(ModeleRelu::de($societe), MotifCloture::DelaiExpire, $cloture['adresseRetiree'], $cloture['destinataires']);
 
         return true;
     }

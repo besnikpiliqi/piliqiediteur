@@ -24,7 +24,9 @@ use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Models\User;
 use Carbon\CarbonInterval;
@@ -147,8 +149,8 @@ class InviterUneEntrepriseAction
         }
 
         match ($resultat['resultat']) {
-            ResultatDInvitation::InvitationEnvoyee => DB::afterCommit(fn () => $this->envoi->envoyerLInvitation($resultat['id'], $jeton)),
-            ResultatDInvitation::DemandeEnvoyee => DB::afterCommit(fn () => $this->envoyerLaDemande($resultat['id'], $email, $jeton)),
+            ResultatDInvitation::InvitationEnvoyee => DB::afterCommit(fn () => $this->envoi->envoyerLInvitation(ValeurRequise::de($resultat['id'], 'l\'invitation envoyée'), $jeton)),
+            ResultatDInvitation::DemandeEnvoyee => DB::afterCommit(fn () => $this->envoyerLaDemande(ValeurRequise::de($resultat['id'], 'la demande de lien envoyée'), $email, $jeton)),
             default => null,
         };
 
@@ -275,7 +277,7 @@ class InviterUneEntrepriseAction
         $relu = User::query()->whereKey($auteur->getKey())->first();
 
         if ($relu === null || Gate::forUser($relu)->denies('create', [InvitationCabinet::class, $cabinet])) {
-            if ($relu !== null && $relu->estProprietaire() && (int) $relu->societe_id === (int) $cabinet->getKey() && ! $cabinet->fresh()->estUnCabinetVerifie()) {
+            if ($relu !== null && $relu->estProprietaire() && (int) $relu->societe_id === (int) $cabinet->getKey() && ! ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
                 throw new CabinetNonVerifieException;
             }
 

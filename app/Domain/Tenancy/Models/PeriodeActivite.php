@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\MotifFermeture;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
@@ -17,6 +18,11 @@ use LogicException;
  * figé) se pose, une fois ; elle ne s'efface pas.
  *
  * Sans scope global : toute requête filtre explicitement par magasin.
+ *
+ * Son début (voir Instant) n'est jamais nul : sa colonne ne l'est pas en
+ * base.
+ *
+ * @property CarbonImmutable $debut
  */
 class PeriodeActivite extends Model
 {

@@ -234,9 +234,11 @@ class JournalDesDroits
         return app(TenantContext::class)->runAsSociete($client, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee): mixed {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
                 $magasins = $client->magasinsReels()->orderBy('id')->get();
-                $termine = false;
 
-                $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins, &$termine): mixed {
+                // Le résultat de la modification, dans un tableau d'un élément,
+                // ou null quand la liste des magasins a changé entre sa
+                // lecture et ces verrous : tout reprend alors.
+                $tenu = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins) {
                     $clientVerrouille = Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
 
                     if (array_map(intval(...), $clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
@@ -279,13 +281,11 @@ class JournalDesDroits
                         return $resultat;
                     });
 
-                    $termine = true;
-
-                    return $resultat;
+                    return [$resultat];
                 });
 
-                if ($termine) {
-                    return $resultat;
+                if ($tenu !== null) {
+                    return $tenu[0];
                 }
             }
 

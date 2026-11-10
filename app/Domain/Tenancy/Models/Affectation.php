@@ -46,6 +46,12 @@ use LogicException;
  * lisent avant tout contexte (connexion, choix du magasin). Toute lecture
  * passe par le compte (User::affectations()), ou filtre explicitement par
  * société ou par magasin (voir EquipeDuMagasinResource).
+ *
+ * Son compte n'est jamais nul : user_id ne l'est jamais en base, et sa clé
+ * étrangère (avec la société) vise un compte qui ne s'efface pas tant
+ * qu'elle le vise ; User n'a aucun scope global.
+ *
+ * @property-read User $utilisateur
  */
 class Affectation extends Model
 {

@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\DebitDesEmails;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -112,7 +113,7 @@ class DemanderUneNouvelleAdresseAction
     {
         Mail::to((string) $compte->nouvelle_adresse)->send(new ConfirmationNouvelleAdresseMail(
             rtrim((string) config('app.url'), '/').route('profil.adresse.afficher', ['jeton' => $jeton], absolute: false),
-            Calendrier::deParis()->afficher($compte->nouvelle_adresse_expire_le, 'd/m/Y à H:i'),
+            Calendrier::deParis()->afficher(ValeurRequise::de($compte->nouvelle_adresse_expire_le, 'l\'échéance du lien de la nouvelle adresse'), 'd/m/Y à H:i'),
             premiereAdresse: ! $compte->aUneAdresseDeConnexion(),
         ));
         $this->debit->compter($compte);

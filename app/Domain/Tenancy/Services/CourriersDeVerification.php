@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Collection;
@@ -60,7 +61,7 @@ class CourriersDeVerification
             return null;
         }
 
-        $premier = $courriers->first()->envoye_le ?? $societe->created_at;
+        $premier = ValeurRequise::de($courriers->first()->envoye_le ?? $societe->created_at, 'la date du premier courrier ou de l\'inscription');
 
         return Calendrier::deParis()->decaler($premier, CarbonInterval::days(self::JOURS_AVANT_UN_NOUVEL_ENVOI));
     }
@@ -80,6 +81,6 @@ class CourriersDeVerification
      */
     public function cloturePrevueLe(Societe $societe): CarbonImmutable
     {
-        return Calendrier::deParis()->decaler($this->dernier($societe)->envoye_le ?? $societe->created_at, CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
+        return Calendrier::deParis()->decaler(ValeurRequise::de($this->dernier($societe)->envoye_le ?? $societe->created_at, 'la date du dernier courrier ou de l\'inscription'), CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
     }
 }

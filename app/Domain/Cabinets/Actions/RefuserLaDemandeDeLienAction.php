@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class RefuserLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
     public function handle(User $auteur, LienCabinet $lien): void
     {
         $refusee = self::exigerUneDemande($this->cloreLaDemande($auteur, $lien, EtatDuLien::Refuse, ActionAuditee::LienRefuse, function (?User $auteurRelu, LienCabinet $relu): void {
-            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'refuser', $relu);
+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'refuser', $relu);
         }));
 
         DB::afterCommit(function () use ($refusee): void {

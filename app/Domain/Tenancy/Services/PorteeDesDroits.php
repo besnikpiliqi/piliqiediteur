@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use LogicException;
@@ -376,7 +377,7 @@ final class PorteeDesDroits
         }
 
         return $auteur->estProprietaire()
-            || ($affectation->nomme_par === $auteur->getKey() && $this->peutNommerUnResponsable($auteur, $affectation->magasin));
+            || ($affectation->nomme_par === $auteur->getKey() && $this->peutNommerUnResponsable($auteur, ValeurRequise::de($affectation->magasin, 'le magasin de la nomination')));
     }
 
     /**

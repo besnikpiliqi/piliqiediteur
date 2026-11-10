@@ -22,6 +22,7 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -188,7 +189,7 @@ class ExaminerSirenAction
             'magasin' => (string) $magasin->code,
             'type' => $type,
             'numero' => (string) $document->numero,
-            'date' => $calendrier->jourDe($document->date_emission),
+            'date' => $calendrier->jourDe(ValeurRequise::de($document->date_emission, 'la date d\'émission du document émis')),
             'client' => $document->client_nom,
             'montant_ttc' => $this->calculateur->enCentiemes($document->total_ttc),
             'regle' => $regleEnCentimes,

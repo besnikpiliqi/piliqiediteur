@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Calendrier\Casts\Instant;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -19,7 +20,11 @@ use Illuminate\Database\Eloquent\Model;
  * après son expiration (voir app:purger-demandes-inscription), son code
  * d'activité avec elle.
  *
+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
+ * en base.
+ *
  * @property array{siren: string, type_activite: string, code_activite: string|null, nomenclature_activite: string|null, mot_de_passe: string} $donnees
+ * @property CarbonImmutable $expire_le
  */
 class DemandeInscription extends Model
 {

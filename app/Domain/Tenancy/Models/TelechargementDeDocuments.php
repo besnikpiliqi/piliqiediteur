@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +27,21 @@ use UnexpectedValueException;
  * dans la file d'attente (voir PreparerLeTelechargementDesDocumentsJob),
  * puis servie par son lien, pendant sept jours, à ce seul compte, toujours
  * autorisé à ce moment (voir TelechargerLesDocumentsController).
+ *
+ * Les jours de sa période (voir JourCivil) ne sont jamais nuls : leurs
+ * colonnes ne le sont pas en base.
+ *
+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
+ * en base.
+ *
+ * Son demandeur n'est jamais nul : demande_par ne l'est jamais en base, et
+ * sa clé étrangère vise un compte qui ne s'efface pas tant qu'elle le
+ * vise ; User n'a aucun scope global.
+ *
+ * @property string $du
+ * @property string $au
+ * @property CarbonImmutable $expire_le
+ * @property-read User $demandeur
  */
 class TelechargementDeDocuments extends Model
 {

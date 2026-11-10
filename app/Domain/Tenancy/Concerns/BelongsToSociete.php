@@ -18,6 +18,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *     création, quelle que soit la valeur reçue : il ne figure jamais dans
  *     $fillable, et un identifiant forcé dans une requête ne rattache
  *     jamais rien à une autre société.
+ *
+ * Sa société n'est jamais nulle : societe_id ne l'est jamais dans les
+ * tables de ces modèles, sa clé étrangère vise une société, qu'aucune
+ * société ne s'efface (voir DeclencheursDeProtection::sansSuppression())
+ * et que Societe n'a aucun scope global.
+ *
+ * @property-read Societe $societe
  */
 trait BelongsToSociete
 {

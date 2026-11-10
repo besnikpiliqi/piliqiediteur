@@ -35,9 +35,14 @@ use InvalidArgumentException;
  * ouverte, la demande de rattachement que désigne le lien de son e-mail
  * (voir parSonJeton()).
  *
+ * Son client n'est jamais nul : c'est sa société (societe_id, jamais nul
+ * en base), que sa clé étrangère vise sans jamais la laisser s'effacer,
+ * et Societe n'a aucun scope global (voir BelongsToSociete).
+ *
  * @property int $cabinet_id
  * @property EtatDuLien $etat
  * @property OrigineDuLien $origine
+ * @property-read Societe $client
  */
 class LienCabinet extends Model
 {

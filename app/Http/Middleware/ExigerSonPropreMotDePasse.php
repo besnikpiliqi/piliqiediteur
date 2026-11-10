@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Closure;
 use Filament\Facades\Filament;
@@ -47,7 +48,7 @@ class ExigerSonPropreMotDePasse
             return $next($request);
         }
 
-        $panneau = Filament::getCurrentPanel()->getId();
+        $panneau = ValeurRequise::de(Filament::getCurrentPanel(), 'le panneau de la page')->getId();
 
         if ($request->routeIs("filament.{$panneau}.choisir-son-mot-de-passe", "filament.{$panneau}.auth.logout")) {
             return $next($request);

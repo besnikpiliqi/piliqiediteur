@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -20,8 +21,12 @@ use LogicException;
  * sa durée de conservation passée, par le début de sa chaîne (voir
  * app:purger-journal-audit) ; la base refuse tout le reste.
  *
+ * Son instant (voir Instant) n'est jamais nul : sa colonne ne l'est pas en
+ * base, et JournalAudit le pose avant de calculer son empreinte.
+ *
  * @property array<string, mixed>|null $anciennes_valeurs
  * @property array<string, mixed>|null $nouvelles_valeurs
+ * @property CarbonImmutable $created_at
  */
 class EntreeAudit extends Model
 {

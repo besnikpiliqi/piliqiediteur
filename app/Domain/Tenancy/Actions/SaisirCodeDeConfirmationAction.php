@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\RegistreDesVerifications;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -176,7 +177,7 @@ class SaisirCodeDeConfirmationAction
             throw ValidationException::withMessages(['code' => self::MESSAGE_VALIDATION_IMPOSSIBLE]);
         }
 
-        $societe = $societe->fresh();
+        $societe = ModeleRelu::de($societe);
         $this->validerLaSociete->apresLaValidation($societe, $proprietaire);
 
         if ($jeton !== null) {

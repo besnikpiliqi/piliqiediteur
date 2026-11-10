@@ -20,7 +20,14 @@ use LogicException;
  * (voir ExercicesDeLaSociete), que les clôtures d'exercice de l'étape 3
  * suivront.
  *
+ * Ses jours (voir JourCivil) ne sont jamais nuls : leurs colonnes ne le
+ * sont pas en base.
+ *
  * @property array{operateurs: list<string>, piece: string, utilisateur_systeme: string, hote: string, version_module: string} $operateur
+ * @property string $debut_exercice_en_cours
+ * @property string $fin_exercice_en_cours_avant
+ * @property string $fin_exercice_en_cours_apres
+ * @property string $decision_du
  */
 class ChangementFinExercice extends Model
 {

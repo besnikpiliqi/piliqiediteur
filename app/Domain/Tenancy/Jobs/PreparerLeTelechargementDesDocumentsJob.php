@@ -265,6 +265,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             return $relu;
         });
 
-        $echec?->demandeur->notify(new AvisDuTelechargementDesDocuments($echec));
+        if ($echec !== null) {
+            $echec->demandeur->notify(new AvisDuTelechargementDesDocuments($echec));
+        }
     }
 }

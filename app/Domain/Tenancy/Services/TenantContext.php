@@ -51,7 +51,7 @@ class TenantContext
      */
     public function set(Magasin $magasin): void
     {
-        if ($this->societeExplicite && $magasin->societe_id !== $this->societe->getKey()) {
+        if ($this->societeExplicite && $magasin->societe_id !== $this->societe()->getKey()) {
             throw new LogicException('Le magasin d\'une autre société ne s\'ouvre pas dans le contexte de cette société.');
         }
 

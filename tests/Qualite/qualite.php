@@ -169,9 +169,14 @@ function partieDe(string $fichier): string
 function lignesDuClover(string $clover): array
 {
     $xml = simplexml_load_file($clover) ?: throw new RuntimeException("Rapport Clover illisible : {$clover}");
+    $elements = $xml->xpath('//file');
     $fichiers = [];
 
-    foreach ($xml->xpath('//file') as $fichier) {
+    if (! is_array($elements)) {
+        throw new RuntimeException("Rapport Clover illisible : {$clover}");
+    }
+
+    foreach ($elements as $fichier) {
         $relatif = relatifAuDepot((string) $fichier['name']);
 
         if (! str_starts_with($relatif, 'app/')) {

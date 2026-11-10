@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\EspaceDeLaSociete;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -124,7 +125,7 @@ class ConfirmerInscriptionController
         }
 
         RateLimiter::hit($cle, 86400);
-        Auth::login($societe->proprietaire);
+        Auth::login(ValeurRequise::de($societe->proprietaire, 'le propriétaire de la société inscrite'));
         request()->session()->regenerate();
 
         return redirect()->to(EspaceDeLaSociete::accueil($societe))

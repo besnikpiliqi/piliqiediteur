@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -55,14 +56,16 @@ final class TableauDeBordDesClients
         $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
 
+        $client = fn (LienCabinet $lien): Societe => ValeurRequise::de($clients->get($lien->societe_id), 'le client d\'un lien ouvert');
+
         return array_values($liens
-            ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $clients[$lien->societe_id]->raison_sociale))
-            ->map(function (LienCabinet $lien) use ($clients, $magasins, $suivis, $factures): array {
+            ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $client($lien)->raison_sociale))
+            ->map(function (LienCabinet $lien) use ($client, $magasins, $suivis, $factures): array {
                 $siens = $suivis->where('societe_id', $lien->societe_id)->keys()->all();
 
                 return [
                     'lien' => (string) $lien->uuid,
-                    'client' => $clients[$lien->societe_id],
+                    'client' => $client($lien),
                     'actif_depuis' => $lien->actif_depuis,
                     'magasins' => $magasins->where('societe_id', $lien->societe_id)->count(),
                     'factures' => $siens === [] ? null : Facture::totauxAEncaisser($factures->whereIn('magasin_id', $siens)),

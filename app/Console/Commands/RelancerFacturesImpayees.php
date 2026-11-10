@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -94,7 +95,7 @@ class RelancerFacturesImpayees extends Command
                 $facture->setRelation('magasin', $magasin);
                 $due = $magasin->relanceDue(
                     $facture->niveauDeRelanceAtteint() + 1,
-                    Calendrier::joursEntre($facture->date_echeance, $aujourdhui),
+                    Calendrier::joursEntre(ValeurRequise::de($facture->date_echeance, 'l\'échéance de la facture échue'), $aujourdhui),
                     $facture->joursDepuisLaDerniereRelance(),
                 );
 

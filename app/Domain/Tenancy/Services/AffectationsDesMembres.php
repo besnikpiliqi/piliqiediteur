@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Notifications\ResponsableNommeParUnAdministrateur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use LogicException;
 
@@ -138,6 +139,6 @@ final class AffectationsDesMembres
         $magasin = $affectation->magasin()->firstOrFail();
         $administrateur = User::query()->findOrFail($affectation->nomme_par);
 
-        $magasin->societe->proprietaire->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
+        ValeurRequise::de($magasin->societe->proprietaire, 'le propriétaire de la société')->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
     }
 }

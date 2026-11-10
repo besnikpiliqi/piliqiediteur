@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -87,7 +88,7 @@ class AnnulerCessionAction
             }
 
             $cession = $this->entreeDeLaCession($verrouille);
-            $instant = $cession->created_at;
+            $instant = ValeurRequise::de($cession->created_at, 'l\'instant de la cession au journal d\'audit');
             $sorties = $this->sortiesDeLaDerniereCession($verrouille);
 
             $this->exigerAucuneOperationApres($instant, ValeursLues::entiers($sorties->modelKeys()));

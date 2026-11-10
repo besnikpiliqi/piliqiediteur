@@ -28,6 +28,13 @@ use Illuminate\Validation\Rules\Exists;
  *
  * Un identifiant choisi dans un formulaire se valide avec
  * regleExisteDansLeMagasin(), jamais avec une règle « exists » nue.
+ *
+ * Son magasin n'est jamais nul : magasin_id ne l'est jamais dans les
+ * tables de ces modèles, sa clé étrangère vise un magasin, qu'aucun
+ * magasin ne s'efface (voir DeclencheursDeProtection::sansSuppression())
+ * et que Magasin n'a aucun scope global.
+ *
+ * @property-read Magasin $magasin
  */
 trait BelongsToMagasin
 {

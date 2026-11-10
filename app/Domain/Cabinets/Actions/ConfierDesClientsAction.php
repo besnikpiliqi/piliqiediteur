@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -84,7 +85,7 @@ class ConfierDesClientsAction
 
                 foreach (array_diff($liens, $actuels->pluck('lien_id')->map(fn ($id): int => (int) $id)->all()) as $id) {
                     tap((new ClientConfie)->forceFill(['lien_id' => $id, 'user_id' => $collaborateurRelu->getKey(), 'confie_par' => $auteurRelu->getKey()]))->save();
-                    $changements['ajoutes'][] = (int) $verrouilles->get($id)->societe_id;
+                    $changements['ajoutes'][] = (int) ValeurRequise::de($verrouilles->get($id), 'le lien verrouillé du client confié')->societe_id;
                 }
 
                 $changements['retires'] = array_values(LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all());

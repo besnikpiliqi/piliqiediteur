@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
@@ -114,7 +115,7 @@ class AppPanelProvider extends PanelProvider
             ->tenant(Magasin::class, slugAttribute: 'uuid')
             // Pour un compte d'un cabinet d'expertise comptable, seulement
             // les magasins du client ouvert (voir User::getTenants()).
-            ->tenantMenu(fn (): bool => (auth()->user()?->getTenants(Filament::getCurrentPanel())->count() ?? 0) > 1)
+            ->tenantMenu(fn (): bool => (auth()->user()?->getTenants($panel)->count() ?? 0) > 1)
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,
                 JournaliserOuvertureDeSession::class,
@@ -134,12 +135,12 @@ class AppPanelProvider extends PanelProvider
                 MenuItem::make()
                     ->label('Administration de la société')
                     ->icon('heroicon-o-building-office-2')
-                    ->url(fn (): string => EspaceDeLaSociete::accueil(auth()->user()->societe))
+                    ->url(fn (): string => EspaceDeLaSociete::accueil(CompteConnecte::exiger()->societe))
                     ->visible(fn (): bool => auth()->user()?->peutAdministrer() ?? false),
                 MenuItem::make()
                     ->label('Espace du cabinet')
                     ->icon('heroicon-o-briefcase')
-                    ->url(fn (): string => EspaceDeLaSociete::accueil(auth()->user()->societe))
+                    ->url(fn (): string => EspaceDeLaSociete::accueil(CompteConnecte::exiger()->societe))
                     ->visible(fn (): bool => auth()->user()?->ouvreLEspaceDuCabinet() ?? false),
             ])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')

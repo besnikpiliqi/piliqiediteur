@@ -6,6 +6,7 @@ use App\Domain\Cabinets\Enums\EtatInvitation;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -22,9 +23,13 @@ use Illuminate\Support\Str;
  * désigne le lien de l'e-mail, avant qu'aucune société ne soit ouverte
  * (voir parSonJeton()).
  *
+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
+ * en base.
+ *
  * @property string $siren
  * @property string $email
  * @property EtatInvitation $etat
+ * @property CarbonImmutable $expire_le
  */
 class InvitationCabinet extends Model
 {

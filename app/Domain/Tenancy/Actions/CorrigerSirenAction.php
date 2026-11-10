@@ -28,6 +28,8 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\UniteSirene;
 use Illuminate\Database\Eloquent\Collection;
@@ -207,7 +209,7 @@ class CorrigerSirenAction
                 }
 
                 $this->controleSirene->noterUnite($verrouillee, $unite, editeur: $editeur);
-                $cabinetQuiEtaitVerifie = $verrouillee->estUnCabinet() && $this->remettreAFaireLaVerificationDuCabinet($verrouillee, $unite['unite'], $editeur);
+                $cabinetQuiEtaitVerifie = $verrouillee->estUnCabinet() && $this->remettreAFaireLaVerificationDuCabinet($verrouillee, ValeurRequise::de($unite['unite'], 'l\'unité légale que le répertoire dit concluante'), $editeur);
                 $anciensSirets = [];
                 $nouveauxSirets = [];
 
@@ -343,7 +345,7 @@ class CorrigerSirenAction
      */
     private static function exigerAucuneFactureDepuisLExamen(Collection $magasins, EntreeAudit $examen): void
     {
-        $avant = Instant::depuisLaBase((string) $examen->nouvelles_valeurs['documents_emis_avant']);
+        $avant = Instant::depuisLaBase(ValeursLues::texteDe(ValeurRequise::de($examen->nouvelles_valeurs, 'les valeurs de l\'examen du SIREN'), 'documents_emis_avant'));
 
         foreach ($magasins as $magasin) {
             $emise = app(TenantContext::class)->runAs($magasin, fn (): bool => Facture::query()

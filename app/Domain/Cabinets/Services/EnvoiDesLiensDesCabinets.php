@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use Illuminate\Support\Facades\Mail;
 use SensitiveParameter;
@@ -73,7 +74,7 @@ class EnvoiDesLiensDesCabinets
             $cabinet->getFilamentName(),
             $cabinet->siege_ville,
             $siren,
-            Calendrier::deParis()->afficher($lien->expire_le, 'd/m/Y à H:i'),
+            Calendrier::deParis()->afficher(ValeurRequise::de($lien->expire_le, 'l\'échéance de la demande de lien'), 'd/m/Y à H:i'),
         ));
     }
 

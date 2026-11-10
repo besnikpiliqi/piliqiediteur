@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Notifications\StockDuMagasinCede;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\PeriodesDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -170,7 +171,7 @@ class FermerMagasinAction
         }
 
         if ($resultat['cession'] !== null) {
-            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede($magasin->fresh(), $resultat['cession']['valeur_ht'], $resultat['cession']['produits_en_stock_negatif']));
+            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede(ModeleRelu::de($magasin), $resultat['cession']['valeur_ht'], $resultat['cession']['produits_en_stock_negatif']));
         }
     }
 

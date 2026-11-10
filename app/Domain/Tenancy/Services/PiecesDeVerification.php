@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -74,7 +75,7 @@ class PiecesDeVerification
 
     public function dechiffrer(PieceVerification $piece): string
     {
-        return Crypt::decryptString(Storage::disk(self::DISQUE)->get($piece->chemin));
+        return Crypt::decryptString(ValeurRequise::de(Storage::disk(self::DISQUE)->get(ValeurRequise::de($piece->chemin, 'le fichier de la pièce, pas encore effacée')), 'le contenu chiffré de la pièce'));
     }
 
     /**

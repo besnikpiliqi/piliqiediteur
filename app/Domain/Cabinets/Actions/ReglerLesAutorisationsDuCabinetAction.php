@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -47,7 +48,7 @@ class ReglerLesAutorisationsDuCabinetAction
 
         $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations): void {
             [$relu] = $relus;
-            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'reglerLesAutorisations', $relu);
+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'reglerLesAutorisations', $relu);
 
             if (! $relu->estActif()) {
                 throw new LogicException(self::MESSAGE_LIEN_TERMINE);

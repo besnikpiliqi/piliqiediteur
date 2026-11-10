@@ -2,6 +2,8 @@
 
 namespace App\Domain\Recherche;
 
+use App\Domain\Tenancy\Support\ExpressionDUneColonne;
+use App\Domain\Tenancy\Support\LitteralSql;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -52,7 +54,7 @@ final class RechercheSansAccents
      * typographiques des claviers de téléphone, chacune avec ce qui la
      * remplace une fois le texte en minuscules.
      *
-     * @var array<string, string>
+     * @var array<literal-string, literal-string>
      */
     public const LETTRES_SANS_DECOMPOSITION = [
         'æ' => 'ae',
@@ -123,6 +125,8 @@ final class RechercheSansAccents
      * (replace()) : « Œuvre » devient « oeuvre », « Łódź » devient « lodz ».
      * Tout autre caractère reste tel quel : « ½ », « °C » ou « € » se
      * cherchent comme ils s'écrivent, jamais retirés.
+     *
+     * @return literal-string
      */
     public static function creationDeLaFonction(): string
     {
@@ -133,15 +137,10 @@ final class RechercheSansAccents
         $pliage = "lower(regexp_replace(normalize(texte, NFD), '[{$diacritiques}]', '', 'g'))";
 
         foreach (self::LETTRES_SANS_DECOMPOSITION as $lettre => $remplacement) {
-            $pliage = 'replace('.$pliage.', '.self::litteralSql($lettre).', '.self::litteralSql($remplacement).')';
+            $pliage = 'replace('.$pliage.', '.LitteralSql::de($lettre).', '.LitteralSql::de($remplacement).')';
         }
 
         return 'CREATE OR REPLACE FUNCTION '.self::FONCTION_SQL.'(texte text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$ SELECT '.$pliage.' $$';
-    }
-
-    private static function litteralSql(string $texte): string
-    {
-        return "'".str_replace("'", "''", $texte)."'";
     }
 
     /**
@@ -152,9 +151,10 @@ final class RechercheSansAccents
      */
     private static function contient(Builder $requete, string $colonne, string $motif, string $booleen = 'and'): Builder
     {
-        $fonction = self::FONCTION_SQL;
-        $colonneSql = $requete->getQuery()->getGrammar()->wrap($requete->qualifyColumn($colonne));
-
-        return $requete->whereRaw("{$fonction}({$colonneSql}) like {$fonction}(?) escape '!'", [$motif], $booleen);
+        return $requete->whereRaw(
+            new ExpressionDUneColonne(self::FONCTION_SQL.'('.ExpressionDUneColonne::COLONNE.') like '.self::FONCTION_SQL."(?) escape '!'", $requete->qualifyColumn($colonne)),
+            [$motif],
+            $booleen,
+        );
     }
 }

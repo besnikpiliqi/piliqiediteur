@@ -311,7 +311,7 @@ final class PermissionRegistry
      * sûr. Le téléchargement des documents par période n'en est pas : il ne
      * s'accorde jamais par défaut (voir cocheesParLeProprietaire()).
      *
-     * @return list<string>
+     * @return list<literal-string>
      */
     public static function consultations(): array
     {
@@ -475,7 +475,7 @@ final class PermissionRegistry
      * AffectationsDesMembres::cases()) ; le cabinet lié ne l'a que cochée
      * par le propriétaire du client, jamais par défaut (voir duCabinet()).
      *
-     * @return list<string>
+     * @return list<literal-string>
      */
     public static function cocheesParLeProprietaire(TypeDActivite $type): array
     {
@@ -504,7 +504,7 @@ final class PermissionRegistry
      * consultations()) qui existent dans les magasins de son type (voir
      * pourLeType()), dans l'ordre alphabétique.
      *
-     * @return list<string>
+     * @return list<literal-string>
      */
     public static function parDefautDuCabinet(TypeDActivite $typeDuClient): array
     {
@@ -523,7 +523,7 @@ final class PermissionRegistry
      * vente, les clients, les services, les devis, les avoirs, les envois,
      * les paramètres ni la caisse.
      *
-     * @return list<string>
+     * @return list<literal-string>
      */
     public static function ajoutablesAuCabinet(TypeDActivite $typeDuClient): array
     {
@@ -546,7 +546,7 @@ final class PermissionRegistry
      * alphabétique ; aucune pour un cabinet, qui n'est jamais client. La liste d'un client qui a des articles est celle que la
      * base écrit en toutes lettres (voir GardesDesCabinets).
      *
-     * @return list<string>
+     * @return list<literal-string>
      */
     public static function duCabinet(TypeDActivite $typeDuClient): array
     {

@@ -192,7 +192,7 @@ class CreerEtablissementAction
 
     /**
      * @param  array<string, mixed>  $donnees
-     * @return array{nom: string, code?: string|null, nic: string, email?: string|null}
+     * @return array<string, mixed> les données validées : nom, code, nic et email
      *
      * @throws ValidationException
      */

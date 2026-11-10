@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use stdClass;
 
 /**
  * Les jetons des liens « Mot de passe oublié » du propriétaire, gardés par
@@ -59,7 +60,7 @@ final class JetonsDuLien
 
     private function verifier(?object $ligne, string $jeton): bool
     {
-        if ($ligne === null || ! is_string($ligne->token) || $ligne->created_at === null) {
+        if (! $ligne instanceof stdClass || ! is_string($ligne->token) || $ligne->created_at === null) {
             return false;
         }
 

@@ -129,8 +129,6 @@ class RevoquerSocieteAction
 
     private const ESSAIS_SI_LES_MAGASINS_CHANGENT = 3;
 
-    private const MAGASINS_CHANGES = 'magasins_changes';
-
     public function __construct(
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
@@ -199,15 +197,17 @@ class RevoquerSocieteAction
      */
     private function revoquerUneSociete(Societe $societe, InterventionDeLEditeur $editeur): array
     {
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $editeur): array {
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $editeur) {
             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
                 $magasins = $societe->magasinsReels()->orderBy('id')->get();
 
-                $resultat = $this->operateur->pendantLeSysteme(fn (): array|string => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $editeur): array|string {
+                // null quand les magasins réels ont changé entre leur lecture
+                // et leurs verrous : tout reprend alors.
+                $resultat = $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $editeur) {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
 
                     if (array_map(intval(...), $verrouillee->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
-                        return self::MAGASINS_CHANGES;
+                        return null;
                     }
 
                     if ($verrouillee->statut === StatutSociete::Revoquee) {
@@ -223,7 +223,7 @@ class RevoquerSocieteAction
                     return [...$this->revoquerSousVerrou($verrouillee, $editeur, $magasinsVerrouilles, $preuve), 'magasins' => $fermes];
                 }));
 
-                if ($resultat !== self::MAGASINS_CHANGES) {
+                if ($resultat !== null) {
                     return $resultat;
                 }
             }
@@ -248,7 +248,7 @@ class RevoquerSocieteAction
      */
     private function revoquerUnCabinet(Societe $cabinet, InterventionDeLEditeur $editeur): array
     {
-        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn (): ?array => $this->operateur->pendantLeSysteme(fn (): ?array => DB::transaction(function () use ($cabinet, $editeur): ?array {
+        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->operateur->pendantLeSysteme(fn () => DB::transaction(function () use ($cabinet, $editeur) {
             $verrouille = Societe::query()->whereKey($cabinet->getKey())->lock('for no key update')->firstOrFail();
 
             if ($verrouille->statut === StatutSociete::Revoquee) {

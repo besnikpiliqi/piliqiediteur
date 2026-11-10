@@ -305,11 +305,10 @@ class FermerMagasinAction
         return [
             'valeur_stock_sorti_ht' => number_format($valeur['total_ht'], 2, '.', ''),
             'produits_sortis' => $sorties->count(),
-            'produits_en_stock_negatif' => $produits
+            'produits_en_stock_negatif' => array_values($produits
                 ->filter(fn (Produit $produit): bool => $produit->stock_quantite < 0)
                 ->map(fn (Produit $produit): string => "{$produit->reference} {$produit->nom} ({$produit->stock_quantite})")
-                ->values()
-                ->all(),
+                ->all()),
         ];
     }
 

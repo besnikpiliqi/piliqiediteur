@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -51,10 +52,10 @@ final class TableauDeBordDesClients
         $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->where('est_demonstration', false)->orderBy('id')
             ->get(['id', 'societe_id', 'statut', 'territoire', 'est_demonstration']);
         $suivis = $magasins->filter(fn (Magasin $magasin): bool => $compte->suitLesFacturesAEncaisserDans($magasin))->keyBy('id');
-        $factures = $this->facturesAEncaisser($suivis->keys()->all())
+        $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
 
-        return $liens
+        return array_values($liens
             ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $clients[$lien->societe_id]->raison_sociale))
             ->map(function (LienCabinet $lien) use ($clients, $magasins, $suivis, $factures): array {
                 $siens = $suivis->where('societe_id', $lien->societe_id)->keys()->all();
@@ -67,8 +68,7 @@ final class TableauDeBordDesClients
                     'factures' => $siens === [] ? null : Facture::totauxAEncaisser($factures->whereIn('magasin_id', $siens)),
                 ];
             })
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -102,11 +103,10 @@ class Affectation extends Model
      */
     public function autorisations(): array
     {
-        return DB::table('autorisations_affectations')
+        return ValeursLues::textes(DB::table('autorisations_affectations')
             ->where('affectation_id', $this->getKey())
             ->orderBy('autorisation')
-            ->pluck('autorisation')
-            ->all();
+            ->pluck('autorisation'));
     }
 
     /**

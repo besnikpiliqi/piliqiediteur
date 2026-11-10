@@ -129,7 +129,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 ->orderBy('id')
                 ->get()
                 ->each(fn (Magasin $magasin): Magasin => $magasin->setRelation('societe', $societe));
-            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->selection ?? [], $telechargement->piece_manquante_seulement);
+            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->clesChoisies(), $telechargement->piece_manquante_seulement);
 
             if ($choisis === []) {
                 $this->echouer($telechargement, ArchiveDesDocuments::AUCUN_DOCUMENT);

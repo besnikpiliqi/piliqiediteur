@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -70,7 +71,7 @@ class AccesDesCabinets
     {
         $liens = $this->liensDuCompte($compte);
 
-        return $compte->societe?->estUnCabinetVerifie() === true ? $liens : $liens->whereRaw('1 = 0');
+        return $compte->societe->estUnCabinetVerifie() ? $liens : $liens->whereRaw('1 = 0');
     }
 
     /**
@@ -138,7 +139,7 @@ class AccesDesCabinets
      */
     public function clientsOuverts(User $compte): array
     {
-        return $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all();
+        return ValeursLues::entiers($this->liensOuverts($compte)->pluck('liens_cabinet.societe_id'));
     }
 
     /**

@@ -50,11 +50,11 @@ final class GardesDesIdentifiants
 
         $connexion->unprepared("ALTER TABLE identifiants ADD CONSTRAINT identifiants_forme CHECK (identifiant ~ '^[1-9][0-9]{7}$')");
         $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
-            ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_EFFACEMENT).'; END IF; '
-            ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_ENTRAINEMENT).'; END IF; '
+            ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_EFFACEMENT).'; END IF; '
+            ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_ENTRAINEMENT).'; END IF; '
             ."IF TG_OP = 'UPDATE' THEN "
-            ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_MODIFICATION).'; END IF; '
-            .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
+            ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_MODIFICATION).'; END IF; '
+            .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
             .'END IF; '
             .'RETURN NEW; END $$');
         $connexion->unprepared('CREATE TRIGGER garde_identifiants BEFORE INSERT OR UPDATE OR DELETE ON identifiants FOR EACH ROW EXECUTE FUNCTION garde_identifiants()');
@@ -67,13 +67,5 @@ final class GardesDesIdentifiants
     public static function retirer(): void
     {
         DB::connection()->unprepared('DROP FUNCTION IF EXISTS garde_identifiants()');
-    }
-
-    /**
-     * Un message en littéral SQL (apostrophes doublées).
-     */
-    private static function litteral(string $message): string
-    {
-        return "'".str_replace("'", "''", $message)."'";
     }
 }

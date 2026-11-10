@@ -98,7 +98,7 @@ class JournalDesDroits
      *
      * @param-immediately-invoked-callable  $modification
      *
-     * @param  Closure(User|null, list<User>): TResultat  $modification
+     * @param  ($auteur is null ? Closure(null, list<User>): TResultat : Closure(User, list<User>): TResultat)  $modification
      * @param  (Closure(): void)|null  $verrousAvantLesComptes  d'autres verrous, pris juste après les registres et avant les comptes (les liens des clients confiés, voir ConfierDesClientsAction)
      * @return TResultat
      *
@@ -108,14 +108,16 @@ class JournalDesDroits
      */
     public function modifier(?User $auteur, ActionAuditee $action, array $comptes, iterable $magasinsVises, Closure $modification, ?Closure $verrousAvantLesComptes = null): mixed
     {
-        $vises = collect($magasinsVises)->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all();
+        $vises = array_values(collect($magasinsVises)->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all());
         $ids = array_map(fn (User $compte): int => (int) $compte->getKey(), $comptes);
 
         for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
             $magasins = $this->magasinsTouches($ids, $vises);
-            $termine = false;
 
-            $resultat = $this->sousVerrouDesRegistres($magasins, function () use ($auteur, $action, $ids, $vises, $magasins, $modification, $verrousAvantLesComptes, &$termine): mixed {
+            // Le résultat de la modification, dans un tableau d'un élément,
+            // ou null quand les magasins touchés ont changé entre leur
+            // lecture et leurs verrous : tout reprend alors.
+            $tenu = $this->sousVerrouDesRegistres($magasins, function () use ($auteur, $action, $ids, $vises, $magasins, $modification, $verrousAvantLesComptes) {
                 if ($verrousAvantLesComptes !== null) {
                     $verrousAvantLesComptes();
                 }
@@ -129,28 +131,24 @@ class JournalDesDroits
                     return null;
                 }
 
-                $resultat = $this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $action, $relus, $magasins, $modification): mixed {
+                return [$this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $action, $relus, $magasins, $modification) {
                     $avant = $this->etats($magasins, $relus);
                     $resultat = $modification($auteurRelu, $relus);
-                    $cree = $resultat instanceof User ? $resultat : (is_array($resultat) && ($resultat['compte'] ?? null) instanceof User ? $resultat['compte'] : null);
+                    $cree = self::compteCree($resultat);
                     $apres = $this->etats($magasins, $cree === null ? $relus : [...$relus, $cree]);
 
                     $this->inscrire($auteurRelu, $action, $magasins, $avant, $apres);
 
                     return $resultat;
-                });
-
-                $termine = true;
-
-                return $resultat;
+                })];
             });
 
-            if ($termine) {
+            if ($tenu !== null) {
                 foreach ($comptes as $compte) {
                     $compte->oublierLesDroits();
                 }
 
-                return $resultat;
+                return $tenu[0];
             }
         }
 
@@ -262,21 +260,21 @@ class JournalDesDroits
                     $auteurRelu = $auteur === null ? null : ($comptesVerrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.'));
 
                     $resultat = $this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $clientVerrouille, $relus, $verrouilles, $modification, $entrees, $editeur, $visee, $magasins, $comptesAvant): mixed {
-                        $avant = $this->etats($magasins, $comptesAvant->values()->all());
+                        $avant = $this->etats($magasins, array_values($comptesAvant->all()));
                         $resultat = $modification($auteurRelu, $clientVerrouille, $relus);
                         $liensApres = LienCabinet::query()
                             ->where(fn ($apres) => $apres->whereKey($verrouilles->keys()->all())->orWhere('etat', EtatDuLien::Actif->value))
                             ->orderBy('id')
                             ->get();
                         $comptesApres = $liensApres->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => (int) $compte->getKey());
-                        $apres = $this->etats($magasins, $comptesAvant->union($comptesApres)->sortKeys()->values()->all());
+                        $apres = $this->etats($magasins, array_values($comptesAvant->union($comptesApres)->sortKeys()->all()));
 
                         foreach ($apres as $compteId => $etat) {
                             $this->inscrireLeJet130($magasins, $etat['compte'], $avant[$compteId]['magasins'] ?? [], $etat['magasins']);
                         }
 
-                        $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : $liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has((int) $lien->getKey()))->values()->all();
-                        $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, fn (Societe $journal, array $liens): array => $entrees($journal, $liens, $resultat), $editeur, $visee);
+                        $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : array_values($liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has((int) $lien->getKey()))->all());
+                        $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, $entrees, $resultat, $editeur, $visee);
 
                         return $resultat;
                     });
@@ -398,7 +396,7 @@ class JournalDesDroits
         $etats = [];
 
         foreach ($comptes as $compte) {
-            $relu = User::query()->findOrFail($compte->getKey());
+            $relu = User::query()->whereKey($compte->getKey())->firstOrFail();
             $etats[$relu->getKey()] = [
                 'compte' => $relu,
                 'societe' => [
@@ -482,19 +480,23 @@ class JournalDesDroits
      * n'inscrit sa justification et ses opérateurs qu'au journal de la
      * société qu'elle vise.
      *
+     * @template TResultat
+     *
      * @param  Collection<int, LienCabinet>  $liens
      * @param  list<LienCabinet>  $concernes  les liens dont parlent les entrées, la première étant leur cible
      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $avant
      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $apres
+     * @param  Closure(Societe, list<LienCabinet>, TResultat): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int}>  $entrees  les entrées de chaque journal, d'après ce que la modification a rendu
+     * @param  TResultat  $resultat  ce que la modification a rendu
      */
-    private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, ?InterventionDeLEditeur $editeur, ?Societe $visee): void
+    private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, mixed $resultat, ?InterventionDeLEditeur $editeur, ?Societe $visee): void
     {
         $cabinets = $liens->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
         $journaux = [$client, ...$cabinets->map(fn (int $id): Societe => Societe::query()->findOrFail($id))->all()];
         $duVisiteur = (int) ($auteur->societe_id ?? $client->getKey());
 
         foreach ($journaux as $journal) {
-            foreach ($entrees($journal, $concernes) as [$action, $valeurs, $cabinetId]) {
+            foreach ($entrees($journal, $concernes, $resultat) as [$action, $valeurs, $cabinetId]) {
                 $droitsAvant = [];
                 $droitsApres = [];
 
@@ -581,5 +583,18 @@ class JournalDesDroits
             $operateur = $this->operateur->actuel();
             $operateur === null || (int) $operateur->societe_id === (int) $magasin->societe_id ? $dansSaSociete() : $this->traces->horsDeSaSociete($dansSaSociete);
         }
+    }
+
+    /**
+     * Le compte que la modification a créé, qu'elle le rende seul ou dans
+     * son résultat (« compte ») ; aucun sinon.
+     */
+    private static function compteCree(mixed $resultat): ?User
+    {
+        return match (true) {
+            $resultat instanceof User => $resultat,
+            is_array($resultat) && ($resultat['compte'] ?? null) instanceof User => $resultat['compte'],
+            default => null,
+        };
     }
 }

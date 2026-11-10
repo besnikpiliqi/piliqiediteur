@@ -87,7 +87,7 @@ class ConfierDesClientsAction
                     $changements['ajoutes'][] = (int) $verrouilles->get($id)->societe_id;
                 }
 
-                $changements['retires'] = LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all();
+                $changements['retires'] = array_values(LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all());
             }, function () use ($cabinet, $concernes): void {
                 LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->orderBy('id')->lockForUpdate()->get();
                 $cabinet->cabinet()->sharedLock()->first();

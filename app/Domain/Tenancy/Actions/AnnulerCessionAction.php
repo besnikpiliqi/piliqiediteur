@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use LogicException;
@@ -89,7 +90,7 @@ class AnnulerCessionAction
             $instant = $cession->created_at;
             $sorties = $this->sortiesDeLaDerniereCession($verrouille);
 
-            $this->exigerAucuneOperationApres($instant, $sorties->modelKeys());
+            $this->exigerAucuneOperationApres($instant, ValeursLues::entiers($sorties->modelKeys()));
             $motif = $cession->action === ActionAuditee::MagasinCede
                 ? (MotifFermeture::tryFrom((string) ($cession->anciennes_valeurs['motif'] ?? '')) ?? MotifFermeture::Temporaire)
                 : MotifFermeture::Temporaire;

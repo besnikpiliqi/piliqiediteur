@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Enums\EtatInvitation;
 use App\Domain\Cabinets\Enums\OrigineDuLien;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\LitteralSql;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -122,12 +123,11 @@ final class GardesDesCabinets
      * la modification seulement.
      *
      * @param  key-of<self::TABLES>  $garde
-     * @return list<array{0: string, 1: string, 2: string}>
+     * @return list<array{0: literal-string, 1: literal-string, 2: literal-string}>
      */
     private static function refus(string $garde): array
     {
         $cabinet = "'".TypeDActivite::Cabinet->value."'";
-        $typeDe = static fn (string $colonne): string => "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.{$colonne}), '')";
         $demandes = self::liste(array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::demandes()));
         $avecDesArticles = self::liste(array_map(static fn (TypeDActivite $type): string => $type->value, array_filter(TypeDActivite::cases(), static fn (TypeDActivite $type): bool => $type->aDesArticles())));
         $etatDuLien = "COALESCE((SELECT etat FROM liens_cabinet WHERE id = NEW.lien_id), '')";
@@ -135,15 +135,15 @@ final class GardesDesCabinets
 
         return match ($garde) {
             self::CABINETS => [
-                ["{$typeDe('societe_id')} <> {$cabinet}", 'seul un cabinet d\'expertise comptable a une vérification de cabinet', self::TOUJOURS],
+                [self::typeDe('societe_id')." <> {$cabinet}", 'seul un cabinet d\'expertise comptable a une vérification de cabinet', self::TOUJOURS],
             ],
             self::INVITATIONS => [
-                ["{$typeDe('societe_id')} <> {$cabinet}", 'seul un cabinet d\'expertise comptable invite une entreprise', self::TOUJOURS],
+                [self::typeDe('societe_id')." <> {$cabinet}", 'seul un cabinet d\'expertise comptable invite une entreprise', self::TOUJOURS],
                 ["(NEW.etat = '".EtatInvitation::Ouverte->value."' AND NEW.close_le IS NOT NULL) OR (NEW.etat <> '".EtatInvitation::Ouverte->value."' AND NEW.close_le IS NULL)", 'une invitation close a toujours sa date de fin, une invitation ouverte n\'en a pas', self::TOUJOURS],
             ],
             self::LIENS => [
-                ["{$typeDe('cabinet_id')} <> {$cabinet}", 'un lien ne se fait qu\'avec un cabinet d\'expertise comptable', self::TOUJOURS],
-                ["{$typeDe('societe_id')} = {$cabinet}", 'un cabinet d\'expertise comptable n\'est jamais le client d\'un cabinet', self::TOUJOURS],
+                [self::typeDe('cabinet_id')." <> {$cabinet}", 'un lien ne se fait qu\'avec un cabinet d\'expertise comptable', self::TOUJOURS],
+                [self::typeDe('societe_id')." = {$cabinet}", 'un cabinet d\'expertise comptable n\'est jamais le client d\'un cabinet', self::TOUJOURS],
                 ["NEW.jeton_hache IS NOT NULL AND NEW.etat <> '".EtatDuLien::DemandeParLeCabinet->value."'", 'le jeton d\'un lien ne vaut que pour une demande de rattachement en cours', self::TOUJOURS],
                 ["NEW.etat NOT IN ({$demandes}) AND NOT (NEW.etat = {$actif} AND NEW.origine = '".OrigineDuLien::Invitation->value."')", 'un lien naît d\'une demande, ou actif par une invitation acceptée', self::INSERTION],
                 ['NEW.societe_id <> OLD.societe_id OR NEW.cabinet_id <> OLD.cabinet_id OR NEW.origine <> OLD.origine', 'le client, le cabinet et l\'origine d\'un lien ne changent jamais', self::MODIFICATION],
@@ -151,7 +151,7 @@ final class GardesDesCabinets
             ],
             self::AUTORISATIONS => [
                 ['NEW.autorisation NOT IN ('.self::liste(PermissionRegistry::duCabinet(TypeDActivite::Commerce)).')', 'une autorisation hors de celles d\'un cabinet lié ne s\'accorde jamais', self::TOUJOURS],
-                ["COALESCE((SELECT famille FROM referentiel_autorisations_magasin WHERE cle = NEW.autorisation), '') = '".PermissionRegistry::FAMILLE_ARTICLES."' AND {$typeDe('societe_id')} NOT IN ({$avecDesArticles})", 'une autorisation des articles ne s\'accorde pas chez un client sans articles', self::TOUJOURS],
+                ["COALESCE((SELECT famille FROM referentiel_autorisations_magasin WHERE cle = NEW.autorisation), '') = '".PermissionRegistry::FAMILLE_ARTICLES."' AND ".self::typeDe('societe_id')." NOT IN ({$avecDesArticles})", 'une autorisation des articles ne s\'accorde pas chez un client sans articles', self::TOUJOURS],
                 ["{$etatDuLien} <> {$actif}", 'une autorisation ne s\'accorde que sur un lien actif', self::TOUJOURS],
             ],
             self::CLIENTS_CONFIES => [
@@ -162,9 +162,22 @@ final class GardesDesCabinets
     }
 
     /**
+     * Le type d'activité de la société que désigne cette colonne de la
+     * ligne écrite, ou un texte vide sans société.
+     *
+     * @param  literal-string  $colonne
+     * @return literal-string
+     */
+    private static function typeDe(string $colonne): string
+    {
+        return "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.{$colonne}), '')";
+    }
+
+    /**
      * Ces valeurs, en liste SQL.
      *
-     * @param  array<array-key, string>  $valeurs
+     * @param  array<array-key, literal-string>  $valeurs
+     * @return literal-string
      */
     private static function liste(array $valeurs): string
     {
@@ -173,12 +186,14 @@ final class GardesDesCabinets
 
     /**
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
-     * (apostrophes doublées).
+     * (voir LitteralSql).
      *
      * @param  key-of<self::TABLES>  $garde
+     * @param  literal-string  $raison
+     * @return literal-string
      */
     private static function message(string $garde, string $raison): string
     {
-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
+        return LitteralSql::de("{$garde} : {$raison}");
     }
 }

@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\UserFactory;
 use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
@@ -80,6 +81,13 @@ use Illuminate\Support\Str;
  * propriétaire, confirmée par un lien et unique parmi les propriétaires
  * (voir aUneAdresseDeConnexion()), ou un simple contact pour tout autre
  * compte.
+ *
+ * Sa société n'est jamais nulle : societe_id ne l'est jamais en base, sa
+ * clé étrangère vise une société, qu'aucune société ne s'efface (voir
+ * DeclencheursDeProtection::sansSuppression()) et que Societe n'a aucun
+ * scope global.
+ *
+ * @property-read Societe $societe
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'nouvelle_adresse_jeton_hache', 'jeton_acces_redonne'])]
@@ -356,7 +364,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function estDUnCabinet(): bool
     {
-        return $this->societe?->estUnCabinet() === true;
+        return $this->societe->estUnCabinet();
     }
 
     public function estMembre(): bool
@@ -566,12 +574,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return [];
         }
 
-        return DB::table('autorisations_societe')
+        return ValeursLues::textes(DB::table('autorisations_societe')
             ->where('user_id', $this->getKey())
             ->where('societe_id', $this->societe_id)
             ->orderBy('autorisation')
-            ->pluck('autorisation')
-            ->all();
+            ->pluck('autorisation'));
     }
 
     /**
@@ -734,7 +741,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function droitsDans(Magasin $magasin): ?array
     {
-        $compte = self::query()->findOrFail($this->getKey());
+        $compte = self::query()->whereKey($this->getKey())->firstOrFail();
         $duCabinet = $compte->estDUnCabinet();
 
         if ($magasin->societe_id !== $compte->societe_id && ! $duCabinet) {
@@ -978,9 +985,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function magasinsDeSesDroits(): array
     {
-        return $this->estMembre()
-            ? $this->affectations()->whereNotNull('magasin_id')->pluck('magasin_id')->all()
-            : $this->magasinsDeSaPortee()->pluck('magasins.id')->all();
+        return ValeursLues::entiers($this->estMembre()
+            ? $this->affectations()->whereNotNull('magasin_id')->pluck('magasin_id')
+            : $this->magasinsDeSaPortee()->pluck('magasins.id'));
     }
 
     /**
@@ -1020,9 +1027,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * l'administrer, et son cabinet dans l'espace du cabinet pour un compte
      * actif d'un cabinet d'expertise comptable.
      *
-     * @return array<int, Magasin|Societe>|Collection<int, Magasin>|Collection<int, Societe>
+     * @return Collection<int, Magasin>|Collection<int, Societe>
      */
-    public function getTenants(Panel $panel): array|Collection
+    public function getTenants(Panel $panel): Collection
     {
         return match ($panel->getId()) {
             'app' => $this->estDUnCabinet() ? $this->magasinsDuClientOuvert() : $this->magasinsAccessibles(),

@@ -34,6 +34,7 @@ use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use App\Integrations\Rne\RepresentantRne;
 use App\Integrations\Rne\RneIndisponibleException;
+use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -212,12 +213,12 @@ class AccepterLInvitationAction
      * transaction de l'acceptation.
      *
      * @param  array<string, mixed>  $identite
-     * @param  array<string, mixed>  $consultation
+     * @param  array{resultat: ResultatVerification, unite: UniteSirene|null, motif: string|null}  $consultation  ce qu'a rendu ControleSirene::unite()
      *
      * @throws InvitationInvalideException
      * @throws LogicException
      */
-    private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDActivite $type, array $identite, ?RepresentantRne $representant, string $nom, string $motDePasseHache, array $consultation, mixed $unite): User
+    private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDActivite $type, array $identite, ?RepresentantRne $representant, string $nom, string $motDePasseHache, array $consultation, UniteSirene $unite): User
     {
         Societe::query()->whereKey($cabinet->getKey())->sharedLock()->firstOrFail();
         $relue = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $cabinet->getKey())->whereKey($invitation->getKey())->lockForUpdate()->first();

@@ -2,6 +2,9 @@
 
 namespace App\Integrations\EnvoiRecommande;
 
+use App\Domain\Tenancy\Support\ValeursLues;
+use UnexpectedValueException;
+
 /**
  * L'adresse officielle du siège d'une entreprise, avec sa dénomination et
  * sa source : le registre national des entreprises ou, quand il n'en donne
@@ -50,10 +53,19 @@ final readonly class AdressePostale
     }
 
     /**
-     * @param  array{denomination: string|null, adresse: string, complement_adresse: string|null, code_postal: string, ville: string, source: string}  $donnees  ce qu'a écrit enTableau()
+     * @param  array<array-key, mixed>  $donnees  ce qu'a écrit enTableau(), relu de la base
+     *
+     * @throws UnexpectedValueException un tableau qui n'est pas celui qu'écrit enTableau()
      */
     public static function depuisTableau(array $donnees): self
     {
-        return new self($donnees['denomination'], $donnees['adresse'], $donnees['complement_adresse'], $donnees['code_postal'], $donnees['ville'], $donnees['source']);
+        return new self(
+            ValeursLues::texteOuNulDe($donnees, 'denomination'),
+            ValeursLues::texteDe($donnees, 'adresse'),
+            ValeursLues::texteOuNulDe($donnees, 'complement_adresse'),
+            ValeursLues::texteDe($donnees, 'code_postal'),
+            ValeursLues::texteDe($donnees, 'ville'),
+            ValeursLues::texteDe($donnees, 'source'),
+        );
     }
 }

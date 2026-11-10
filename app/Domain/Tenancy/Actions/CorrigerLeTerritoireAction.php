@@ -89,7 +89,7 @@ class CorrigerLeTerritoireAction
                 throw new LogicException($lu['motif']);
             }
 
-            [$corrige, $ancien] = app(TenantContext::class)->runAs($magasin, fn (): array => $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, function () use ($magasin, $siret, $consultation, $lu, $editeur): array {
+            [$corrige, $ancien] = app(TenantContext::class)->runAs($magasin, fn () => $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrou($magasin, function () use ($magasin, $siret, $consultation, $lu, $editeur) {
                 $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($verrouille->siret !== $siret) {

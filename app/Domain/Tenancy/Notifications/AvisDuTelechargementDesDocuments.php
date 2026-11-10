@@ -5,9 +5,11 @@ namespace App\Domain\Tenancy\Notifications;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Models\User;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification as NotificationFilament;
 use Illuminate\Notifications\Notification;
+use LogicException;
 
 /**
  * Dans la cloche de la personne qui l'a demandé : son téléchargement des
@@ -41,6 +43,7 @@ class AvisDuTelechargementDesDocuments extends Notification
      */
     public function toDatabase(object $notifiable): array
     {
+        $destinataire = $notifiable instanceof User ? $notifiable : throw new LogicException('Seul un compte reçoit l\'avis d\'un téléchargement de documents.');
         $telechargement = $this->telechargement;
         $periode = 'du '.Calendrier::afficherJour((string) $telechargement->du, 'd/m/Y').' au '.Calendrier::afficherJour((string) $telechargement->au, 'd/m/Y');
         $notification = $telechargement->statut === StatutDuTelechargement::Pret
@@ -69,8 +72,8 @@ class AvisDuTelechargementDesDocuments extends Notification
         return [
             ...$notification->getDatabaseMessage(),
             'telechargement_id' => (int) $telechargement->getKey(),
-            'societe_id' => (int) $notifiable->societe_id,
-            ...((int) $telechargement->societe_id === (int) $notifiable->societe_id ? [] : ['client_id' => (int) $telechargement->societe_id]),
+            'societe_id' => (int) $destinataire->societe_id,
+            ...((int) $telechargement->societe_id === (int) $destinataire->societe_id ? [] : ['client_id' => (int) $telechargement->societe_id]),
             ...(count($magasins) === 1 ? ['magasin_id' => (int) $magasins[0]] : []),
         ];
     }

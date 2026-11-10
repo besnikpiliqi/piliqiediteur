@@ -126,14 +126,14 @@ class FermerLaDemonstrationAction
             return;
         }
 
-        $comptes = User::query()
+        $comptes = array_values(User::query()
             ->where('societe_id', $demonstration->societe_id)
             ->where('role_societe', RoleSociete::Membre->value)
             ->where('statut', '<>', StatutCompte::Retire->value)
             ->whereIn('id', Identifiant::query()->where('magasin_id', $demonstration->getKey())->select('user_id'))
             ->orderBy('id')
             ->get()
-            ->all();
+            ->all());
 
         if ($comptes === []) {
             return;

@@ -107,7 +107,7 @@ final class GardesDesTypesDActivite
      * ne refuse donc rien à l'insertion.
      *
      * @param  key-of<self::TABLES>  $garde
-     * @return list<array{0: string, 1: string}>
+     * @return list<array{0: literal-string, 1: literal-string}>
      */
     private static function refus(string $garde): array
     {
@@ -141,6 +141,7 @@ final class GardesDesTypesDActivite
      * Les valeurs de ces types, en liste SQL.
      *
      * @param  array<array-key, TypeDActivite>  $types
+     * @return literal-string
      */
     private static function liste(array $types): string
     {
@@ -149,12 +150,14 @@ final class GardesDesTypesDActivite
 
     /**
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
-     * (apostrophes doublées).
+     * (voir LitteralSql).
      *
      * @param  key-of<self::TABLES>  $garde
+     * @param  literal-string  $raison
+     * @return literal-string
      */
     private static function message(string $garde, string $raison): string
     {
-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
+        return LitteralSql::de("{$garde} : {$raison}");
     }
 }

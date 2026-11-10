@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -203,12 +204,11 @@ class LienCabinet extends Model
      */
     public function autorisations(): array
     {
-        return DB::table('autorisations_cabinet')
+        return ValeursLues::textes(DB::table('autorisations_cabinet')
             ->where('societe_id', $this->societe_id)
             ->where('lien_id', $this->getKey())
             ->orderBy('autorisation')
-            ->pluck('autorisation')
-            ->all();
+            ->pluck('autorisation'));
     }
 
     /**

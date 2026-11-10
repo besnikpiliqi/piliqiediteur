@@ -412,7 +412,7 @@ class SaisirCodeDeConfirmationAction
      */
     private function reprendreLaSociete(Societe $verrouillee, array $nouveauCompte): array
     {
-        $comptes = User::query()->where('societe_id', $verrouillee->getKey())->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get()->all();
+        $comptes = array_values(User::query()->where('societe_id', $verrouillee->getKey())->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get()->all());
         $magasins = Magasin::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->get();
 
         $resultat = $this->journalDesDroits->modifier(null, ActionAuditee::ProprieteReprise, $comptes, $magasins, function (?User $systeme, array $relus) use ($verrouillee, $nouveauCompte): array {

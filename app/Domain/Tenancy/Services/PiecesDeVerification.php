@@ -55,11 +55,10 @@ class PiecesDeVerification
     {
         $disque = Storage::disk(self::DISQUE);
 
-        return collect($disque->directories())
+        return array_values(collect($disque->directories())
             ->filter(fn (string $dossier): bool => str_starts_with($dossier, self::PREFIXE_DES_DOSSIERS_D_EXAMEN))
             ->map(fn (string $dossier): string => $disque->path($dossier))
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Tenancy\Support\EntetesDeConfiance;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 
@@ -38,7 +39,7 @@ class FaireConfianceAuxMandataires extends TrustProxies
         $adresses = $this->proxies();
 
         if ($adresses !== []) {
-            $request->setTrustedProxies($adresses, $this->getTrustedHeaderNames());
+            $request->setTrustedProxies($adresses, EntetesDeConfiance::masque($this->getTrustedHeaderNames()));
         }
     }
 

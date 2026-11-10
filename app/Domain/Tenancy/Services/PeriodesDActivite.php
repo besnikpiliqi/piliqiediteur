@@ -65,11 +65,11 @@ class PeriodesDActivite
     {
         $calendrier = $magasin->calendrier();
 
-        return PeriodeActivite::query()
+        return array_values(PeriodeActivite::query()
             ->where('magasin_id', $magasin->getKey())
             ->orderBy('debut')
             ->get(['debut', 'fin'])
             ->map(fn (PeriodeActivite $periode): array => [$calendrier->jourDe($periode->debut), $periode->fin === null ? null : $calendrier->jourDe($periode->fin)])
-            ->all();
+            ->all());
     }
 }

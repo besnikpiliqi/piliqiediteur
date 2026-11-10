@@ -130,7 +130,7 @@ final class GardesDesDroits
      * séquence quand le déclencheur d'une insertion la lit), et son
      * message.
      *
-     * @return array<string, list<array{0: string, 1: string}>>
+     * @return array<key-of<self::TABLES>, list<array{0: literal-string, 1: literal-string}>>
      */
     private static function refus(): array
     {
@@ -187,6 +187,8 @@ final class GardesDesDroits
      * La ligne parente que chaque fonction verrouille avant de lire (voir
      * le docblock de la classe) ; aucune pour users, dont la ligne écrite
      * est déjà verrouillée.
+     *
+     * @return literal-string
      */
     private static function verrou(string $garde): string
     {
@@ -200,15 +202,20 @@ final class GardesDesDroits
 
     /**
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
-     * (apostrophes doublées).
+     * (voir LitteralSql).
+     *
+     * @param  literal-string  $garde
+     * @param  literal-string  $raison
+     * @return literal-string
      */
     private static function message(string $garde, string $raison): string
     {
-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
+        return LitteralSql::de("{$garde} : {$raison}");
     }
 
     /**
-     * @param  list<string>  $valeurs
+     * @param  list<literal-string>  $valeurs
+     * @return literal-string
      */
     private static function liste(array $valeurs): string
     {

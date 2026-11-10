@@ -91,7 +91,7 @@ final class FicheLue
      */
     private static function modifiables(Model $fiche, ?array $attributs): array
     {
-        return $attributs === null ? $fiche->getFillable() : array_values(array_intersect($fiche->getFillable(), $attributs));
+        return array_values($attributs === null ? $fiche->getFillable() : array_intersect($fiche->getFillable(), $attributs));
     }
 
     /**

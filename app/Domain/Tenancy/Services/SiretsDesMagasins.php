@@ -99,7 +99,7 @@ class SiretsDesMagasins
      */
     public function libererCeuxDeLaSociete(Societe $societe, string $motif): array
     {
-        return SiretMagasin::query()
+        return array_values(SiretMagasin::query()
             ->where('societe_id', $societe->getKey())
             ->whereNull('libere_le')
             ->orderBy('id')
@@ -110,7 +110,7 @@ class SiretsDesMagasins
 
                 return (string) $reservation->siret;
             })
-            ->all();
+            ->all());
     }
 
     /**

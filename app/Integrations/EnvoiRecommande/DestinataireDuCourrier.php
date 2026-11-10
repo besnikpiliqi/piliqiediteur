@@ -2,6 +2,9 @@
 
 namespace App\Integrations\EnvoiRecommande;
 
+use App\Domain\Tenancy\Support\ValeursLues;
+use UnexpectedValueException;
+
 /**
  * Le destinataire d'un courrier recommandé à code : le représentant légal
  * de l'entreprise inscrit au registre national des entreprises, par son
@@ -42,10 +45,12 @@ final readonly class DestinataireDuCourrier
     }
 
     /**
-     * @param  array{nom: string, personne_morale: bool, adresse: array{denomination: string|null, adresse: string, complement_adresse: string|null, code_postal: string, ville: string, source: string}}  $donnees  ce qu'a écrit enTableau()
+     * @param  array<array-key, mixed>  $donnees  ce qu'a écrit enTableau(), relu de la base
+     *
+     * @throws UnexpectedValueException un tableau qui n'est pas celui qu'écrit enTableau()
      */
     public static function depuisTableau(array $donnees): self
     {
-        return new self($donnees['nom'], $donnees['personne_morale'], AdressePostale::depuisTableau($donnees['adresse']));
+        return new self(ValeursLues::texteDe($donnees, 'nom'), ValeursLues::booleenDe($donnees, 'personne_morale'), AdressePostale::depuisTableau(ValeursLues::tableauDe($donnees, 'adresse')));
     }
 }

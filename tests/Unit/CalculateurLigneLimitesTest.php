@@ -218,6 +218,19 @@ class CalculateurLigneLimitesTest extends TestCase
     }
 
     /**
+     * Une ligne de 0,01 € HT dont la proposition portait 3 centimes de TVA
+     * (une note d'avoir qui écrit un HT plus bas que celui des articles
+     * retournés), ramenée à une TVA retenue nulle : la part de sa base d'un
+     * centime retire les 3 centimes, et la ligne n'en garde aucun. Divisée
+     * par une base de 2 centimes, la part n'en retirerait que 2 et la ligne
+     * en garderait 1, au-delà de la TVA retenue.
+     */
+    public function test_la_part_d_une_base_d_un_centime_retire_toute_la_tva_proposee_en_trop(): void
+    {
+        $this->assertSame([0], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 3)], 2000, 0)));
+    }
+
+    /**
      * Un retour au fournisseur ne propose jamais un montant négatif : quand
      * les retours précédents ont déjà rendu plus que la proposition des
      * articles retournés jusqu'ici, ou exactement autant, il propose 0 € ;

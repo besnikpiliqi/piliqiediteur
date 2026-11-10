@@ -5,6 +5,7 @@ namespace Tests\Feature\Authorization;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\ControleDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
@@ -319,6 +320,38 @@ class ControleDesDroitsTest extends TestCase
 
         $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
         $this->assertSame([true, false, false, false], $gestes());
+    }
+
+    /**
+     * Dans l'espace d'une société en lecture seule, le contrôle refuse
+     * lui-même (false, sans laisser répondre la policy) tout geste qui n'est
+     * ni une consultation, ni un geste sur l'équipe, ni la gestion de son
+     * cabinet, et, dans une société révoquée, ces deux gestes-là aussi ; il
+     * laisse répondre les policies (null) pour tout le reste, et pour tout
+     * geste d'une société active.
+     */
+    public function test_dans_l_espace_d_une_societe_en_lecture_seule_le_controle_refuse_lui_meme_ce_qui_n_y_reste_pas_permis(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $societe = $magasin->societe;
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+        $controle = app(ControleDesDroits::class);
+        $reponses = fn (): array => [
+            $controle($proprietaire, 'view', [$societe]),
+            $controle($proprietaire, 'suspendreOuReactiver', [$vendeur]),
+            $controle($proprietaire, 'gererSonCabinet', [$societe]),
+            $controle($proprietaire, 'modifierLesParametres', [$societe]),
+        ];
+
+        $this->assertSame([null, null, null, null], $reponses());
+
+        $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
+        $this->assertSame([null, null, null, false], $reponses());
+
+        $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
+        $this->assertSame([null, false, false, false], $reponses());
     }
 
     /**

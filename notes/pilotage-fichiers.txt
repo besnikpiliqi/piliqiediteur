@@ -187,3 +187,4 @@ a-trancher/onglets23/o3-05-2026-10-p1.md
 a-trancher/onglets23/o3-05-2026-10-p2.md
 a-trancher/onglets23/o3-06-2026-10-p1.md
 a-trancher/onglets23/o3-06-2026-10-p2.md
+a-trancher/releve-avis.js

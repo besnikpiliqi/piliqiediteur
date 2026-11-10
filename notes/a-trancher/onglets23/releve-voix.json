@@ -5047,6 +5047,23 @@
    "refs": [
     "r4-101"
    ]
+  },
+  {
+   "id": "V236",
+   "date_utc": "2026-11-10 23:08 UTC",
+   "date_paris": "11/11/2026",
+   "heure_paris": "00 h 08",
+   "theme": "Façon de travailler",
+   "code": "D59",
+   "titre": "Un onglet à part pour tout ce qui est à faire vérifier par un professionnel",
+   "decision": "Toutes mes questions et demandes à faire vérifier par un professionnel (expert-comptable, juriste ou avocat, administration, prestataire), passées et à venir, sont réunies dans un tableau à part, même celles que vous avez tranchées autrement malgré mon avertissement ; chaque nouvelle s'y ajoute le jour même.",
+   "mots": "pour dans la \"PILIQI — Ce qui reste à trancher\" il faut que tu mette ou qqpart ensemble ou strict à part: donc quand tu m 'as proposé et ce que tu vas me proposer il faut mettre à part meme si moi j'ai repondu autrement malgre que tu m'as dit par exemple il faut voir avec l expert comptable,donc tu me mets tout tes question ou demande pour que je demand l'avis de l expert comptable ou juriste ou etc. car je veux toujour avoir dans un tableaux tout ce genre de question meme si moi j'ai repondu autrement malgre ton avertissement",
+   "statut": "a-appliquer",
+   "statut_detail": "Onglet « À faire vérifier par un professionnel » créé le 11/11 à 00 h 15 ; relevé de tout l'historique en cours, puis chaque nouvelle question de ce genre s'y ajoute le jour même.",
+   "sources": [
+    "pilotage-reprise/notes/historique/messages-editeur.md (message du 10/11 à 23 h 08 UTC)"
+   ],
+   "refs": []
   }
  ],
  "questions": [

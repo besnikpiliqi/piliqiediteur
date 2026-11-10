@@ -65,3 +65,19 @@
   ligne ajoutée à la série du jour), avec son numéro suivant (Q387…) ; la ligne du point T… quitte l'onglet 1 ; la décision va aussi
   dans `historique/DIRECTIVES.md` et, pour un point T…, dans `registre.json`. Une décision qui en change une autre : la nouvelle en haut,
   l'ancienne passe à « Remplacée », avec la date et ce qui la remplace.
+
+## Quatrième onglet : « À faire vérifier par un professionnel » (D59, 10/11/2026 à 23 h 08 UTC)
+
+- Fichier `d4c6de97-7d8b`, corps `9abd6603-2887`, placé en deuxième position (ordre `a05`) ; bloc en attente `mb4cajnjtng.38`
+  (h `6126120d`, rev 1) jusqu'au remplissage. Lien depuis l'onglet 1 : paragraphe `mb4cajnjtng.81484`, juste après les liens vers
+  les onglets 2 et 3.
+- Contenu voulu par l'éditeur : un tableau de TOUTES les questions et demandes que Claude lui a faites (ou lui fera) pour qu'il demande
+  l'avis d'un professionnel (expert-comptable, juriste ou avocat, administration, prestataire), y compris celles qu'il a tranchées
+  autrement malgré l'avertissement ou sans attendre l'avis ; chaque nouvelle question de ce genre s'y ajoute le jour même, même
+  s'il répond aussitôt autrement (elle reste aussi dans l'onglet où elle se range).
+- Relevé lancé le 10/11 à 23 h 30 UTC : workflow `wf_dfbbb6a6-31a` (tâche `wx0e27xzy`, script `releve-avis.js`) : 8 lecteurs
+  (registre de l'onglet 1, relevé des décisions, CLAUDE.md et DIRECTIVES, conversation en deux moitiés, historique d'octobre, notes
+  fiscales, notes société et cabinets), fusion, contrôles d'exhaustivité et de justesse, version finale numérotée P1… dans
+  `scratchpad/a-trancher/avis/final.json`.
+- La décision D59 est la ligne V236 de l'onglet « Vos décisions » (ajoutée le 11/11 à 00 h 08, heure de Paris ; le sous-titre de la
+  semaine est devenu « Du 9 au 11 novembre », le texte d'entrée dit 236 décisions, dont 50 à appliquer).

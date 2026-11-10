@@ -1562,3 +1562,7 @@ Je veux que tu mettes dans une note spéciale pour tout ce que tu m’as dit et 
 
 T’as dit « • Quand vous avez tranché, je range le point dans « Déjà tranché », avec la date et vos mots, et j'applique la décision dans le logiciel. » alors tu mets tout mes décisions que j’ai fait depuis le début et aussi à part tes questions avec mes reponses ( décision) et tu mets à part ce qui reste à faire et surtout ceux qui sont liés expert comptable et ceux pour les api etc
 
+## 152. 2026-11-10 23:08 UTC
+
+pour dans la "PILIQI — Ce qui reste à trancher" il faut que tu mette ou qqpart ensemble ou strict à part: donc quand tu m 'as proposé et ce que tu vas me proposer il faut mettre à part meme si moi j'ai repondu autrement malgre que tu m'as dit par exemple il faut voir avec l expert comptable,donc tu me mets tout tes question ou demande pour que je demand l'avis de l expert comptable ou juriste ou etc. car je veux toujour avoir dans un tableaux tout ce genre de question meme si moi j'ai repondu autrement malgre ton avertissement
+

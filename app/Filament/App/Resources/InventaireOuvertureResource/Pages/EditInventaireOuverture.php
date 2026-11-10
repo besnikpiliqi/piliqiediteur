@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 use App\Domain\Stock\Actions\ModifierInventaireOuvertureAction;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
@@ -44,7 +45,7 @@ class EditInventaireOuverture extends EditRecord
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         return static::executerOuInterrompre(fn (): Model => app(ModifierInventaireOuvertureAction::class)->handle(
-            auth()->user(),
+            CompteConnecte::exiger(),
             $this->record,
             array_values($data['lignes'] ?? []),
             ['notes' => $data['notes'] ?? null],

@@ -6,6 +6,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -74,7 +75,7 @@ class EditDevis extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
-        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(auth()->user(), $this->record, $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(CompteConnecte::exiger(), $this->record, $client, $data['lignes'], [
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

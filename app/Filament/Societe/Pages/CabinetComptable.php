@@ -15,6 +15,7 @@ use App\Domain\Cabinets\Services\RechercheDesCabinets;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Models\User;
@@ -166,7 +167,7 @@ class CabinetComptable extends Page implements HasForms
             ->action(function (): void {
                 static::executerSansCasser(function (): void {
                     $lien = $this->lienActif() ?? throw new LogicException('Votre société n\'a plus de cabinet lié.');
-                    app(ReglerLesAutorisationsDuCabinetAction::class)->handle(auth()->user(), $lien, $this->autorisationsCochees());
+                    app(ReglerLesAutorisationsDuCabinetAction::class)->handle(CompteConnecte::exiger(), $lien, $this->autorisationsCochees());
                     Notification::make()->title('Les autorisations de votre cabinet sont enregistrées.')->success()->send();
                 });
             });
@@ -184,7 +185,7 @@ class CabinetComptable extends Page implements HasForms
             ->action(function (): void {
                 static::executerSansCasser(function (): void {
                     $lien = $this->lienActif() ?? throw new LogicException('Votre société n\'a plus de cabinet lié.');
-                    app(MettreFinAuLienAction::class)->handle(auth()->user(), $lien);
+                    app(MettreFinAuLienAction::class)->handle(CompteConnecte::exiger(), $lien);
                     $this->remplir();
                     Notification::make()->title('Le lien avec votre cabinet a pris fin.')->success()->send();
                 });
@@ -200,7 +201,7 @@ class CabinetComptable extends Page implements HasForms
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
                     $lien = LienCabinet::query()->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
-                    app(RetirerLaDemandeDeLienAction::class)->handle(auth()->user(), $lien);
+                    app(RetirerLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $lien);
                     Notification::make()->title('Votre demande est retirée.')->success()->send();
                 });
             });
@@ -216,7 +217,7 @@ class CabinetComptable extends Page implements HasForms
                 static::executerSansCasser(function () use ($arguments): void {
                     $cabinet = app(RechercheDesCabinets::class)->pour($this->recherche)->firstWhere('uuid', (string) ($arguments['uuid'] ?? ''))
                         ?? throw new LogicException(DesignerUnCabinetAction::MESSAGE_CABINET_NON_LIABLE);
-                    app(DesignerUnCabinetAction::class)->handle(auth()->user(), $this->societe(), Societe::query()->whereKey($cabinet->getKey())->firstOrFail());
+                    app(DesignerUnCabinetAction::class)->handle(CompteConnecte::exiger(), $this->societe(), Societe::query()->whereKey($cabinet->getKey())->firstOrFail());
                     Notification::make()->title('Votre demande est envoyée au cabinet.')->success()->send();
                 });
             });
@@ -233,7 +234,7 @@ class CabinetComptable extends Page implements HasForms
             ])
             ->action(function (array $data): void {
                 static::executerSansCasser(function () use ($data): void {
-                    app(InviterSonCabinetACreerSonEspaceAction::class)->handle(auth()->user(), $this->societe(), (string) $data['email']);
+                    app(InviterSonCabinetACreerSonEspaceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), (string) $data['email']);
                     Notification::make()->title('L\'invitation est envoyée.')->success()->send();
                 });
             });

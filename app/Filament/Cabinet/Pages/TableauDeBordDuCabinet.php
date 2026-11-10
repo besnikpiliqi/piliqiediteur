@@ -10,6 +10,8 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -82,7 +84,7 @@ class TableauDeBordDuCabinet extends Dashboard
         return match (true) {
             $cabinet->estClose() => 'L\'inscription de votre cabinet est close.',
             $cabinet->estUnCabinetVerifie() => 'Votre cabinet est validé, contrôlé 69.20Z et vérifié à l\'Ordre : il peut inviter et lier ses clients.',
-            $cabinet->estValidee() => 'Votre cabinet est validé depuis le '.Calendrier::deParis()->afficher($cabinet->validee_le, 'd/m/Y').' : il invitera et liera ses clients une fois son code d\'activité contrôlé et son inscription à l\'Ordre vérifiée.',
+            $cabinet->estValidee() => 'Votre cabinet est validé depuis le '.Calendrier::deParis()->afficher(ValeurRequise::de($cabinet->validee_le, 'la date de validation du cabinet validé'), 'd/m/Y').' : il invitera et liera ses clients une fois son code d\'activité contrôlé et son inscription à l\'Ordre vérifiée.',
             default => 'Votre cabinet attend le code de son courrier recommandé.',
         };
     }
@@ -99,7 +101,7 @@ class TableauDeBordDuCabinet extends Dashboard
      */
     public function etapes(): array
     {
-        if (! auth()->user()->estProprietaire()) {
+        if (! CompteConnecte::exiger()->estProprietaire()) {
             return [];
         }
 
@@ -129,9 +131,9 @@ class TableauDeBordDuCabinet extends Dashboard
                 'faite' => $verification?->estVerifieALOrdre() ?? false,
                 'etat' => match (true) {
                     $verification === null => 'À demander.',
-                    $verification->estVerifieALOrdre() => 'Vérifiée le '.Calendrier::deParis()->afficher($verification->ordre_verifie_le, 'd/m/Y').'.',
+                    $verification->estVerifieALOrdre() => 'Vérifiée le '.Calendrier::deParis()->afficher(ValeurRequise::de($verification->ordre_verifie_le, 'la date de la vérification à l\'Ordre'), 'd/m/Y').'.',
                     $verification->ordre_retire_le !== null => 'Radiation constatée par l\'éditeur le '.Calendrier::deParis()->afficher($verification->ordre_retire_le, 'd/m/Y').'.',
-                    $verification->attendLEditeur() => 'Demandée le '.Calendrier::deParis()->afficher($verification->ordre_demande_le, 'd/m/Y').' : l\'éditeur la vérifie.',
+                    $verification->attendLEditeur() => 'Demandée le '.Calendrier::deParis()->afficher(ValeurRequise::de($verification->ordre_demande_le, 'la date de la demande de vérification à l\'Ordre'), 'd/m/Y').' : l\'éditeur la vérifie.',
                     $verification->ordre_refuse_le !== null => "Refusée : {$verification->ordre_motif_refus}",
                     default => 'Donnez votre n° d\'inscription au tableau et votre conseil régional.',
                 },
@@ -145,7 +147,7 @@ class TableauDeBordDuCabinet extends Dashboard
             ],
             [
                 'titre' => self::ETAPE_CLIENTS,
-                'faite' => ($clients = app(AccesDesCabinets::class)->liensDuCompte(auth()->user())->count()) > 0,
+                'faite' => ($clients = app(AccesDesCabinets::class)->liensDuCompte(CompteConnecte::exiger())->count()) > 0,
                 'etat' => $clients > 0 ? trans_choice('{1} 1 client lié|[2,*] :count clients liés', $clients) : 'Par leur SIREN, une fois votre cabinet vérifié : chacun accepte et règle ce que votre cabinet peut faire.',
                 'url' => InvitationsEtDemandes::getUrl(),
             ],
@@ -169,7 +171,7 @@ class TableauDeBordDuCabinet extends Dashboard
     protected function getViewData(): array
     {
         $cabinet = $this->cabinet();
-        $compte = auth()->user();
+        $compte = CompteConnecte::exiger();
 
         return [
             'clients' => array_map(
@@ -197,7 +199,7 @@ class TableauDeBordDuCabinet extends Dashboard
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
                     $lien = LienCabinet::query()->duCabinet($this->cabinet())->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
-                    app(MettreFinAuLienAction::class)->handle(auth()->user(), $lien);
+                    app(MettreFinAuLienAction::class)->handle(CompteConnecte::exiger(), $lien);
                     Notification::make()->title('Le lien a pris fin.')->success()->send();
                 });
             });
@@ -221,7 +223,7 @@ class TableauDeBordDuCabinet extends Dashboard
         $cabinet = $this->cabinet();
 
         return match (true) {
-            $cabinet->estValidee() => 'Validé le '.Calendrier::deParis()->afficher($cabinet->validee_le, 'd/m/Y').'.',
+            $cabinet->estValidee() => 'Validé le '.Calendrier::deParis()->afficher(ValeurRequise::de($cabinet->validee_le, 'la date de validation du cabinet validé'), 'd/m/Y').'.',
             $cabinet->estClose() => 'Inscription close.',
             default => 'Le courrier recommandé est parti au représentant légal de votre cabinet, à l\'adresse de son siège : saisissez son code avant le '.Calendrier::deParis()->afficher(app(CourriersDeVerification::class)->cloturePrevueLe($cabinet), 'd/m/Y').'.',
         };

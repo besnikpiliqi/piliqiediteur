@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -102,7 +103,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
 
         static::executerSansCasser(function () use ($donnees): void {
             try {
-                app(ModifierParametresFiscauxSocieteAction::class)->handle(auth()->user(), $this->societe(), $donnees);
+                app(ModifierParametresFiscauxSocieteAction::class)->handle(CompteConnecte::exiger(), $this->societe(), $donnees);
             } catch (ValidationException $refus) {
                 throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }

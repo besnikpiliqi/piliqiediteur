@@ -26,8 +26,10 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
@@ -42,6 +44,8 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
@@ -138,7 +142,7 @@ class FactureResource extends Resource
         $factures = parent::getEloquentQuery();
 
         return $factures
-            ->visiblesPar(auth()->user())
+            ->visiblesPar(CompteConnecte::exiger())
             ->with(['client', 'magasin']);
     }
 
@@ -149,7 +153,7 @@ class FactureResource extends Resource
      */
     public static function getNavigationBadge(): ?string
     {
-        $nombre = Facture::query()->visiblesPar(auth()->user())->preuvesAFournir()->count();
+        $nombre = Facture::query()->visiblesPar(CompteConnecte::exiger())->preuvesAFournir()->count();
 
         return $nombre === 0 ? null : (string) $nombre;
     }
@@ -182,7 +186,7 @@ class FactureResource extends Resource
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
-                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
                     ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 // L'échéance ne se saisit pas : elle se calcule à l'émission,
@@ -331,7 +335,7 @@ class FactureResource extends Resource
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
                             TextEntry::make('recu')
                                 ->label('Reçu')
-                                ->state(fn (PaiementAllocation $record): ?string => $record->paiement->recuPaiement?->numero)
+                                ->state(fn (PaiementAllocation $record): ?string => self::paiementDe($record)->recuPaiement?->numero)
                                 ->placeholder('Imprimé sur le document'),
                             Actions::make([
                                 self::telechargerLeRecu(InfolistAction::make('telecharger_recu')),
@@ -854,14 +858,14 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record))
                     ->action(function (Facture $record, array $data): void {
                         AvoirResource::autoriserLesLignesACrediter($data['lignes']);
-                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(), $record->client, $data['lignes'], $data['motif'], $data['jeton']));
+                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(CompteConnecte::exiger(), ValeurRequise::de($record->client, 'le client de la facture'), $data['lignes'], $data['motif'], $data['jeton']));
                     }),
             ])
             // Seuls les brouillons partent : une facture déjà émise se
             // corrige par un avoir (voir l'action "avoir" ci-dessus).
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(Facture::class, fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(auth()->user(), $facture)),
+                    static::suppressionEnMasse(Facture::class, fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(CompteConnecte::exiger(), $facture)),
                 ]),
             ]);
     }
@@ -886,7 +890,7 @@ class FactureResource extends Resource
     public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
     {
         return $action->using(fn (Facture $record): bool => static::executerOuInterrompre(function () use ($record): bool {
-            app(SupprimerFactureAction::class)->handle(auth()->user(), $record);
+            app(SupprimerFactureAction::class)->handle(CompteConnecte::exiger(), $record);
 
             return true;
         }));
@@ -933,10 +937,10 @@ class FactureResource extends Resource
                     ->maxDate(fn (): string => self::calendrierDuMagasin()->aujourdhui())
                     ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
             ])
-            ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
+            ->visible(fn (Facture $record): bool => CompteConnecte::exiger()->can('encaisser', $record))
             ->action(function (Facture $record, array $data): void {
                 static::executerSansCasser(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(
-                    auth()->user(),
+                    CompteConnecte::exiger(),
                     $record,
                     self::partsPayees($data['parts'] ?? []),
                     self::bonsDesParts($data['parts'] ?? []),
@@ -967,9 +971,9 @@ class FactureResource extends Resource
             ->label('Reçu (PDF)')
             ->icon('heroicon-o-arrow-down-tray')
             ->link()
-            ->visible(fn (PaiementAllocation $record): bool => ($recu = $record->paiement->recuPaiement) !== null && auth()->user()->can('view', $recu))
+            ->visible(fn (PaiementAllocation $record): bool => ($recu = self::paiementDe($record)->recuPaiement) !== null && CompteConnecte::exiger()->can('view', $recu))
             ->action(function (PaiementAllocation $record): ?StreamedResponse {
-                $recu = $record->paiement->recuPaiement;
+                $recu = self::recuDe($record);
                 Gate::authorize('view', $recu);
                 $generateur = app(RecuPaiementPdfGenerator::class);
 
@@ -1007,17 +1011,20 @@ class FactureResource extends Resource
             ->label('Envoyer le reçu')
             ->icon('heroicon-o-envelope')
             ->link()
-            ->modalHeading(fn (PaiementAllocation $record): string => "Envoyer par e-mail : {$record->paiement->recuPaiement->libelleDocument()} {$record->paiement->recuPaiement->numero}")
+            ->modalHeading(fn (PaiementAllocation $record): string => 'Envoyer par e-mail : '.self::recuDe($record)->libelleDocument().' '.self::recuDe($record)->numero)
             ->modalSubmitActionLabel('Envoyer')
             ->visible(function (PaiementAllocation $record): bool {
-                $recu = $record->paiement->recuPaiement;
+                $recu = self::paiementDe($record)->recuPaiement;
 
-                return $recu !== null
-                    && ! $recu->magasin->est_demonstration
-                    && ! ($recu->client->estComptoir() && blank($recu->client->email))
-                    && auth()->user()->can('envoyer', $recu);
+                if ($recu === null) {
+                    return false;
+                }
+
+                return ! $recu->magasin->est_demonstration
+                    && ! (($client = ValeurRequise::de($recu->client, 'le client du reçu'))->estComptoir() && blank($client->email))
+                    && CompteConnecte::exiger()->can('envoyer', $recu);
             })
-            ->fillForm(fn (PaiementAllocation $record): array => ['destinataire' => $record->paiement->recuPaiement->client->email])
+            ->fillForm(fn (PaiementAllocation $record): array => ['destinataire' => ValeurRequise::de(self::recuDe($record)->client, 'le client du reçu')->email])
             ->form([
                 static::champDuJeton(),
                 self::champDestinataire(),
@@ -1029,7 +1036,7 @@ class FactureResource extends Resource
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
             ->action(fn (PaiementAllocation $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record->paiement->recuPaiement, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
+                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), self::recuDe($record), $data['destinataire'], $data['message'] ?? null, $data['jeton']);
 
                 Notification::make()
                     ->title("Envoi à {$envoi->destinataire} programmé")
@@ -1066,7 +1073,7 @@ class FactureResource extends Resource
                 ? static::descriptionDeLAvertissement($arguments)
                 : 'Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
             ->form([self::champDuJeton()])
-            ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
+            ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && CompteConnecte::exiger()->can('emettre', $record))
             ->action(fn (Facture $record, array $data, array $arguments, MountableAction $action) => self::emettreLeBrouillon($record, $data, $arguments, $action, null));
     }
 
@@ -1116,7 +1123,7 @@ class FactureResource extends Resource
                     'Avoir (crédit du client)',
                 ),
             ])
-            ->visible(fn (Facture $record): bool => auth()->user()->can('emettreEtEncaisser', $record))
+            ->visible(fn (Facture $record): bool => CompteConnecte::exiger()->can('emettreEtEncaisser', $record))
             ->action(function (Facture $record, array $data, array $arguments, MountableAction $action): void {
                 static::executerSansCasser(function () use ($record, $data, $arguments, $action): void {
                     $parts = self::partsPayees($data['parts'] ?? []);
@@ -1143,7 +1150,7 @@ class FactureResource extends Resource
             self::verifierLeNumeroTvaSurViesSiBesoin($record);
 
             try {
-                app(EmettreFactureAction::class)->handle(auth()->user(), $record, $reglement, static::confirmationDesArguments($arguments), $data['jeton']);
+                app(EmettreFactureAction::class)->handle(CompteConnecte::exiger(), $record, $reglement, static::confirmationDesArguments($arguments), $data['jeton']);
             } catch (ConfirmationVenteSansStockRequiseException $exception) {
                 $avertissement = $exception;
             }
@@ -1160,10 +1167,10 @@ class FactureResource extends Resource
 
         if ($action instanceof Tables\Actions\Action) {
             $liste = $livewire instanceof ListRecords ? $livewire : throw new LogicException('L\'émission d\'une facture depuis un tableau se fait dans la liste des factures.');
-            $liste->mountedTableActionsArguments[array_key_last($liste->mountedTableActionsArguments)] = $nouveaux;
+            $liste->mountedTableActionsArguments[array_key_last(ValeurRequise::de($liste->mountedTableActionsArguments, 'les arguments des actions ouvertes du tableau'))] = $nouveaux;
         } else {
             $page = $livewire instanceof BasePage ? $livewire : throw new LogicException('L\'émission d\'une facture se fait depuis une page.');
-            $page->mountedActionsArguments[array_key_last($page->mountedActionsArguments)] = $nouveaux;
+            $page->mountedActionsArguments[array_key_last(ValeurRequise::de($page->mountedActionsArguments, 'les arguments des actions ouvertes de la page'))] = $nouveaux;
         }
 
         $action->arguments($nouveaux);
@@ -1180,14 +1187,32 @@ class FactureResource extends Resource
      * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
      * n'est émis, et le refus le dit.
      */
+    /**
+     * Le paiement d'une imputation de la fiche : sa clé étrangère ne
+     * manque jamais (voir ValeurRequise).
+     */
+    private static function paiementDe(PaiementAllocation $allocation): Paiement
+    {
+        return ValeurRequise::de($allocation->paiement, 'le paiement de l\'imputation');
+    }
+
+    /**
+     * Le reçu du paiement d'une imputation, là où l'action n'est visible
+     * que pour un paiement qui en a un.
+     */
+    private static function recuDe(PaiementAllocation $allocation): RecuPaiement
+    {
+        return ValeurRequise::de(self::paiementDe($allocation)->recuPaiement, 'le reçu du paiement');
+    }
+
     private static function verifierLeNumeroTvaSurViesSiBesoin(Facture $facture): void
     {
-        $client = $facture->client;
+        $client = ValeurRequise::de($facture->client, 'le client de la facture');
 
         if ($facture->nature_operation->exigeVies()
             && $client->aUnNumeroTvaVerifiableSurVies()
             && app(ControleNatureOperation::class)->consultationDuJour($client, $facture->magasin->calendrier()->aujourdhui()) === null) {
-            app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $client);
+            app(VerifierNumeroTvaAction::class)->handle(CompteConnecte::exiger(), $client);
         }
     }
 

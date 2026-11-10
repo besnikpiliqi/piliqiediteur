@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -87,7 +88,7 @@ class ViewFacture extends ViewRecord
             ->form([FactureResource::champDuJeton()])
             ->visible(fn (Facture $record): bool => (auth()->user()?->can('create', Avoir::class) ?? false) && app(RegularisationDUneFacture::class)->refusDeLAvoir($record) === null)
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle(auth()->user(), $record, $data['jeton']);
+                $avoir = app(FaireLAvoirDeRegularisationAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']);
 
                 Notification::make()->title("Avoir de régularisation {$avoir->numero} émis.")->success()->send();
                 $this->redirect(AvoirResource::getUrl('view', ['record' => $avoir]));
@@ -116,7 +117,7 @@ class ViewFacture extends ViewRecord
                 && auth()->user()->can(PermissionRegistry::FACTURE_EMETTRE)
                 && app(RegularisationDUneFacture::class)->refusDeLaRectificative($record) === null)
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(auth()->user(), $record, $data['jeton']);
+                $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']);
 
                 Notification::make()->title("Facture rectificative {$rectificative->numero} émise.")->success()->send();
                 $this->redirect(FactureResource::getUrl('view', ['record' => $rectificative]));
@@ -182,7 +183,7 @@ class ViewFacture extends ViewRecord
                 ];
             })
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                app(AjouterPreuveOperationAction::class)->handle(auth()->user(), $record, TypePreuve::from($data['type']), $data['reference'], $data['date_document'] ?? null, $data['emetteur'] ?? null);
+                app(AjouterPreuveOperationAction::class)->handle(CompteConnecte::exiger(), $record, TypePreuve::from($data['type']), $data['reference'], $data['date_document'] ?? null, $data['emetteur'] ?? null);
 
                 Notification::make()->title('Preuve enregistrée.')->success()->send();
             }));
@@ -209,7 +210,7 @@ class ViewFacture extends ViewRecord
                     ->maxLength(30),
             ])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                $bordereau = app(NoterBordereauDetaxeAction::class)->handle(auth()->user(), $record, $data['numero']);
+                $bordereau = app(NoterBordereauDetaxeAction::class)->handle(CompteConnecte::exiger(), $record, $data['numero']);
                 $notification = Notification::make()->title("Bordereau de détaxe n° {$bordereau->numero} noté.");
                 $avertissement = $bordereau->avertissement();
 

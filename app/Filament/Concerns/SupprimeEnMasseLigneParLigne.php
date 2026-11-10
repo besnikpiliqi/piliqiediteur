@@ -8,6 +8,8 @@ use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Closure;
 use Filament\Notifications\Notification;
 use Filament\Tables\Actions\DeleteBulkAction;
@@ -76,7 +78,7 @@ trait SupprimeEnMasseLigneParLigne
                 ->icon('heroicon-m-archive-box')
                 ->modalIcon('heroicon-o-archive-box'),
             Model::class,
-            fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $fiche instanceof Client || $fiche instanceof Fournisseur || $fiche instanceof Produit ? $fiche : throw new LogicException('Seule une fiche de client, de fournisseur ou de produit s\'archive.')),
+            fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(CompteConnecte::exiger(), $fiche instanceof Client || $fiche instanceof Fournisseur || $fiche instanceof Produit ? $fiche : throw new LogicException('Seule une fiche de client, de fournisseur ou de produit s\'archive.')),
             'archivée',
             'archivées',
             'Vous ne pouvez pas l\'archiver.',
@@ -149,7 +151,7 @@ trait SupprimeEnMasseLigneParLigne
      */
     private static function clesEncoreDansLeMagasin(Collection $refusees): array
     {
-        $modele = $refusees->first();
+        $modele = ValeurRequise::de($refusees->first(), 'une ligne refusée');
 
         return array_values($modele->newQuery()->whereKey($refusees->modelKeys())->pluck($modele->getQualifiedKeyName())
             ->map(fn (mixed $cle): string => (string) $cle)

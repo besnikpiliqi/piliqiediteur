@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use Filament\Actions\DeleteAction;
 use Filament\Tables\Actions\RestoreAction;
 use Filament\Tables\Filters\TrashedFilter;
@@ -37,7 +38,7 @@ trait ArchiveLaFiche
             ->modalIcon('heroicon-o-archive-box')
             ->successNotificationTitle($notification)
             ->using(fn (Client|Fournisseur|Produit $record): bool => static::executerOuInterrompre(function () use ($record): bool {
-                app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $record);
+                app(ArchiverUneFicheAction::class)->archiver(CompteConnecte::exiger(), $record);
 
                 return true;
             }));
@@ -61,7 +62,7 @@ trait ArchiveLaFiche
         return RestoreAction::make()
             ->label('Restaurer')
             ->using(fn (Client|Fournisseur|Produit $record): bool => static::executerOuInterrompre(function () use ($record): bool {
-                app(ArchiverUneFicheAction::class)->restaurer(auth()->user(), $record);
+                app(ArchiverUneFicheAction::class)->restaurer(CompteConnecte::exiger(), $record);
 
                 return true;
             }));

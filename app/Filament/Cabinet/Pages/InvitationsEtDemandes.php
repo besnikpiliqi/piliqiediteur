@@ -14,6 +14,7 @@ use App\Domain\Cabinets\Models\InvitationCabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
@@ -92,7 +93,7 @@ class InvitationsEtDemandes extends Page
             ->action(function (array $data): void {
                 static::executerSansCasser(function () use ($data): void {
                     try {
-                        $resultat = app(InviterUneEntrepriseAction::class)->handle(auth()->user(), $this->cabinet(), (string) $data['siren'], (string) $data['email'], (string) $data['mot_de_passe']);
+                        $resultat = app(InviterUneEntrepriseAction::class)->handle(CompteConnecte::exiger(), $this->cabinet(), (string) $data['siren'], (string) $data['email'], (string) $data['mot_de_passe']);
                     } catch (ValidationException $refus) {
                         throw new LogicException((string) collect($refus->errors())->flatten()->first());
                     }
@@ -112,7 +113,7 @@ class InvitationsEtDemandes extends Page
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
                     $invitation = InvitationCabinet::query()->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
-                    app(RetirerLInvitationAction::class)->handle(auth()->user(), $invitation);
+                    app(RetirerLInvitationAction::class)->handle(CompteConnecte::exiger(), $invitation);
                     Notification::make()->title('L\'invitation est retirée.')->success()->send();
                 });
             });
@@ -127,7 +128,7 @@ class InvitationsEtDemandes extends Page
             ->modalDescription('Le lien de l\'e-mail ne sert plus.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    app(RetirerLaDemandeDeLienAction::class)->handle(auth()->user(), $this->demande((string) ($arguments['uuid'] ?? '')));
+                    app(RetirerLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande((string) ($arguments['uuid'] ?? '')));
                     Notification::make()->title('La demande est retirée.')->success()->send();
                 });
             });
@@ -142,7 +143,7 @@ class InvitationsEtDemandes extends Page
             ->modalDescription('Ce client devient votre client, avec les autorisations de consultation par défaut, qu\'il réglera ensuite. Vous le confierez à vos collaborateurs.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    app(AccepterLaDemandeDeLienAction::class)->handle(auth()->user(), $this->demande((string) ($arguments['uuid'] ?? '')));
+                    app(AccepterLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande((string) ($arguments['uuid'] ?? '')));
                     Notification::make()->title('Le lien est actif.')->success()->send();
                 });
             });
@@ -156,7 +157,7 @@ class InvitationsEtDemandes extends Page
             ->requiresConfirmation()
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    app(RefuserLaDemandeDeLienAction::class)->handle(auth()->user(), $this->demande((string) ($arguments['uuid'] ?? '')));
+                    app(RefuserLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande((string) ($arguments['uuid'] ?? '')));
                     Notification::make()->title('La demande est refusée.')->success()->send();
                 });
             });

@@ -8,6 +8,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ExpressionDUneColonne;
 use App\Domain\Tenancy\Support\SensDuTri;
 use App\Filament\App\Resources\ClientResource;
@@ -122,7 +123,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                     ->label('Dernier achat')
                     ->max(['factures' => function (Builder $query): Builder {
                         /** @var Builder<Facture> $query */
-                        return $query->visiblesPar(auth()->user());
+                        return $query->visiblesPar(CompteConnecte::exiger());
                     }], 'date_emission')
                     ->dateTime('d/m/Y')
                     ->placeholder('—')

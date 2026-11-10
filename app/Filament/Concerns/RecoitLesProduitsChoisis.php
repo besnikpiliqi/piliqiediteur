@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Resources\DevisResource;
 use Livewire\Attributes\On;
@@ -23,7 +24,13 @@ trait RecoitLesProduitsChoisis
     #[On(SelecteurDeProduits::EVENEMENT)]
     public function recevoirLesProduitsChoisis(mixed $selection = null): void
     {
-        if (DevisResource::ajouterLesProduitsChoisis($this, $selection) && end($this->mountedFormComponentActions) === 'ajouterUnProduit') {
+        if (! DevisResource::ajouterLesProduitsChoisis($this, $selection)) {
+            return;
+        }
+
+        $actions = ValeurRequise::de($this->mountedFormComponentActions, 'les actions ouvertes du formulaire');
+
+        if (end($actions) === 'ajouterUnProduit') {
             $this->unmountFormComponentAction();
         }
     }

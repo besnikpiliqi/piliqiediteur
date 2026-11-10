@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
 use App\Filament\Societe\Resources\MembreResource\Pages;
@@ -151,7 +152,7 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
                 TextEntry::make('derniere_connexion_le')
                     ->label('Dernière connexion')
-                    ->formatStateUsing(fn (User $record): string => $record->calendrier()->afficherHorsDuMagasin($record->derniere_connexion_le, 'd/m/Y à H:i'))
+                    ->formatStateUsing(fn (User $record): string => $record->calendrier()->afficherHorsDuMagasin(ValeurRequise::de($record->derniere_connexion_le, 'la date de la dernière connexion'), 'd/m/Y à H:i'))
                     ->placeholder('Jamais connecté'),
                 TextEntry::make('acces_redonne')
                     ->label('Accès redonné')
@@ -262,7 +263,7 @@ class MembreResource extends RessourceDuPanneauSociete
             ->get()
             ->map(fn (Affectation $affectation): array => [
                 'affectation' => (int) $affectation->getKey(),
-                'magasin' => $affectation->magasin->nom,
+                'magasin' => ValeurRequise::de($affectation->magasin, 'le magasin d\'une affectation à un magasin')->nom,
                 'role' => $affectation->role?->getLabel() ?? 'Administrateur',
                 'autorisations' => $auteur->estProprietaire() && $affectation->role !== RoleMagasin::Responsable
                     ? array_map(fn (string $cle): string => PermissionRegistry::libelles()[$cle], $affectation->autorisations())

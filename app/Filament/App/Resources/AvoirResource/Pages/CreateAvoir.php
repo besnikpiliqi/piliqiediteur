@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\AvoirResource\Pages;
 
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -57,7 +58,7 @@ class CreateAvoir extends CreateRecord
     {
         AvoirResource::autoriserLesLignesACrediter($data['lignes']);
 
-        return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(),
+        return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(CompteConnecte::exiger(),
             AvoirResource::clientDuPremierDocument($data['lignes']),
             $data['lignes'],
             $data['motif'],

@@ -12,6 +12,7 @@ use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Services\ConstructeurLigneInventaire;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -284,10 +285,10 @@ class InventaireOuvertureResource extends Resource
             ->modalHeading('Valider l\'inventaire d\'ouverture')
             ->modalDescription('Les nouveaux produits seront créés, leur stock entrera au coût saisi et l\'inventaire recevra son numéro définitif. Cette action est irréversible.')
             ->form([self::champDuJeton()])
-            ->visible(fn (InventaireOuverture $record): bool => $record->statut === StatutInventaireOuverture::Brouillon && auth()->user()->can('valider', $record))
+            ->visible(fn (InventaireOuverture $record): bool => $record->statut === StatutInventaireOuverture::Brouillon && CompteConnecte::exiger()->can('valider', $record))
             ->action(function (InventaireOuverture $record, array $data, MountableAction $action): void {
                 static::executerSansCasser(function () use ($record, $data, $action): void {
-                    $inventaire = app(ValiderInventaireOuvertureAction::class)->handle(auth()->user(), $record, $data['jeton']);
+                    $inventaire = app(ValiderInventaireOuvertureAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']);
 
                     Notification::make()->title("Inventaire d'ouverture {$inventaire->numero} validé.")->success()->send();
                     $action->redirect(self::getUrl('view', ['record' => $inventaire]));
@@ -313,7 +314,7 @@ class InventaireOuvertureResource extends Resource
     public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
     {
         return $action->using(fn (InventaireOuverture $record): bool => static::executerOuInterrompre(function () use ($record): bool {
-            app(SupprimerInventaireOuvertureAction::class)->handle(auth()->user(), $record);
+            app(SupprimerInventaireOuvertureAction::class)->handle(CompteConnecte::exiger(), $record);
 
             return true;
         }));

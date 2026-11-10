@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\CollaborateurResource\Pages;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
 use App\Filament\Concerns\GereLesComptes;
@@ -116,7 +117,7 @@ class CollaborateurResource extends RessourceDuPanneauCabinet
                     ->placeholder('Aucun'),
                 TextEntry::make('derniere_connexion_le')
                     ->label('Dernière connexion')
-                    ->formatStateUsing(fn (User $record): string => $record->calendrier()->afficherHorsDuMagasin($record->derniere_connexion_le, 'd/m/Y à H:i'))
+                    ->formatStateUsing(fn (User $record): string => $record->calendrier()->afficherHorsDuMagasin(ValeurRequise::de($record->derniere_connexion_le, 'la date de la dernière connexion'), 'd/m/Y à H:i'))
                     ->placeholder('Jamais connecté'),
             ])->columns(2),
         ]);

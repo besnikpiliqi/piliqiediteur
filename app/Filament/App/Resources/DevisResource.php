@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\SupprimerDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
@@ -73,7 +74,7 @@ class DevisResource extends Resource
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
-                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
                     ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
@@ -179,8 +180,8 @@ class DevisResource extends Resource
                         ? 'Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.'
                         : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
                     ->form([self::champDuJeton()])
-                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && auth()->user()->can('envoyer', $record))
-                    ->action(fn (Devis $record, array $data) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(auth()->user(), $record, $data['jeton']))),
+                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && CompteConnecte::exiger()->can('envoyer', $record))
+                    ->action(fn (Devis $record, array $data) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']))),
                 // Masquée une fois la date de validité dépassée (voir
                 // DevisPolicy::accepter()).
                 Tables\Actions\Action::make('accepter')
@@ -188,15 +189,15 @@ class DevisResource extends Resource
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && auth()->user()->can('accepter', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(AccepterDevisAction::class)->handle(auth()->user(), $record))),
+                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && CompteConnecte::exiger()->can('accepter', $record))
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(AccepterDevisAction::class)->handle(CompteConnecte::exiger(), $record))),
                 Tables\Actions\Action::make('refuser')
                     ->label('Refuser')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && auth()->user()->can('refuser', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(RefuserDevisAction::class)->handle(auth()->user(), $record))),
+                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && CompteConnecte::exiger()->can('refuser', $record))
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(RefuserDevisAction::class)->handle(CompteConnecte::exiger(), $record))),
                 Tables\Actions\Action::make('convertir')
                     ->label('Convertir en facture')
                     ->icon('heroicon-o-document-currency-euro')
@@ -205,12 +206,12 @@ class DevisResource extends Resource
                     ->modalDescription('Une nouvelle facture brouillon sera créée avec les mêmes lignes que ce devis.')
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Accepte
                         && $record->factures()->doesntExist()
-                        && auth()->user()->can('convertir', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(CreerFactureDepuisDevisAction::class)->handle(auth()->user(), $record))),
+                        && CompteConnecte::exiger()->can('convertir', $record))
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(CreerFactureDepuisDevisAction::class)->handle(CompteConnecte::exiger(), $record))),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(Devis::class, fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(auth()->user(), $devis)),
+                    static::suppressionEnMasse(Devis::class, fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(CompteConnecte::exiger(), $devis)),
                 ]),
             ]);
     }
@@ -228,7 +229,7 @@ class DevisResource extends Resource
     public static function actionSupprimer(DeleteAction $action): DeleteAction
     {
         return $action->using(fn (Devis $record): bool => static::executerOuInterrompre(function () use ($record): bool {
-            app(SupprimerDevisAction::class)->handle(auth()->user(), $record);
+            app(SupprimerDevisAction::class)->handle(CompteConnecte::exiger(), $record);
 
             return true;
         }));

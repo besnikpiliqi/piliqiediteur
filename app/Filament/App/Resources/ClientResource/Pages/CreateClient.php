@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ClientResource\Pages;
 
 use App\Domain\Contacts\Actions\CreerUneFicheAction;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -23,6 +24,6 @@ class CreateClient extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        return static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(auth()->user(), Client::class, $data));
+        return static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Client::class, $data));
     }
 }

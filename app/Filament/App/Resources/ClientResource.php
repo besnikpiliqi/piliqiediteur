@@ -13,6 +13,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
@@ -282,7 +283,7 @@ class ClientResource extends Resource
      */
     public static function creerUnClient(array $data): int
     {
-        return static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(auth()->user(), Client::class, $data))->getKey();
+        return static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Client::class, $data))->getKey();
     }
 
     /**
@@ -385,7 +386,7 @@ class ClientResource extends Resource
             ->visible(fn (Client $record): bool => $record->aUnNumeroTvaVerifiableSurVies())
             ->authorize('update')
             ->action(fn (Client $record) => static::executerSansCasser(
-                fn () => self::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $record)),
+                fn () => self::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle(CompteConnecte::exiger(), $record)),
             ));
     }
 

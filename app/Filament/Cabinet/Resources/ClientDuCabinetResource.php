@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
@@ -136,7 +137,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                 CheckboxList::make('collaborateurs')
                     ->label('Collaborateurs qui suivent ce client')
                     ->options(fn (): array => User::query()
-                        ->where('societe_id', auth()->user()->societe_id)
+                        ->where('societe_id', CompteConnecte::exiger()->societe_id)
                         ->where('role_societe', RoleSociete::Collaborateur->value)
                         ->where('statut', '<>', StatutCompte::Retire->value)
                         ->orderBy('name')
@@ -147,7 +148,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             ->action(function (array $data, LienCabinet $record): void {
                 static::executerSansCasser(function () use ($data, $record): void {
                     $voulus = array_map(intval(...), $data['collaborateurs'] ?? []);
-                    $collaborateurs = User::query()->where('societe_id', auth()->user()->societe_id)->where('role_societe', RoleSociete::Collaborateur->value)->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get();
+                    $collaborateurs = User::query()->where('societe_id', CompteConnecte::exiger()->societe_id)->where('role_societe', RoleSociete::Collaborateur->value)->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get();
 
                     foreach ($collaborateurs as $collaborateur) {
                         $siens = ClientConfie::query()->where('user_id', $collaborateur->getKey())->pluck('lien_id')->map(fn ($id): int => (int) $id)->all();
@@ -156,7 +157,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
                             : array_values(array_diff($siens, [(int) $record->getKey()]));
 
                         if ($apres !== $siens) {
-                            app(ConfierDesClientsAction::class)->handle(auth()->user(), $collaborateur, $apres);
+                            app(ConfierDesClientsAction::class)->handle(CompteConnecte::exiger(), $collaborateur, $apres);
                         }
                     }
 
@@ -191,7 +192,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
     public static function mettreFin(LienCabinet $lien): void
     {
         static::executerSansCasser(function () use ($lien): void {
-            app(MettreFinAuLienAction::class)->handle(auth()->user(), $lien);
+            app(MettreFinAuLienAction::class)->handle(CompteConnecte::exiger(), $lien);
             Notification::make()->title('Le lien avec ce client a pris fin.')->success()->send();
         });
     }

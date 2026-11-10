@@ -5,6 +5,7 @@ namespace App\Filament\Societe\Pages;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
@@ -184,7 +185,7 @@ class IdentiteSociete extends Page implements HasForms
 
         static::executerSansCasser(function () use ($donnees): void {
             try {
-                app(ModifierIdentiteSocieteAction::class)->handle(auth()->user(), $this->societe(), $donnees);
+                app(ModifierIdentiteSocieteAction::class)->handle(CompteConnecte::exiger(), $this->societe(), $donnees);
             } catch (ValidationException $refus) {
                 throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }

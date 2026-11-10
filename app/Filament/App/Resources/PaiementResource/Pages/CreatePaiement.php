@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\PaiementResource\Pages;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\PaiementResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -59,7 +60,7 @@ class CreatePaiement extends CreateRecord
         // via maxValue() : ce garde-fou ne se déclenche qu'en cas de
         // changement du solde entre l'affichage du formulaire et sa
         // soumission (ex : un autre paiement ou avoir appliqué entre-temps).
-        return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle(auth()->user(), $client, [
+        return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle(CompteConnecte::exiger(), $client, [
             'mode_paiement' => $data['mode_paiement'],
             'montant' => $data['montant'],
             'reference' => $data['reference'] ?? null,

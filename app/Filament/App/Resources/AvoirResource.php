@@ -12,6 +12,8 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -105,7 +107,7 @@ class AvoirResource extends Resource
         /** @var Builder<Avoir> $avoirs */
         $avoirs = parent::getEloquentQuery();
 
-        return $avoirs->with(['client', 'magasin', 'lignes.ligneFacture.facture'])->visiblesPar(auth()->user());
+        return $avoirs->with(['client', 'magasin', 'lignes.ligneFacture.facture'])->visiblesPar(CompteConnecte::exiger());
     }
 
     public static function form(Form $form): Form
@@ -210,7 +212,12 @@ class AvoirResource extends Resource
         }
 
         $lignes = is_array($lignes) ? $lignes : [];
-        $document = Facture::query()->emises()->visiblesPar(auth()->user())->deNumero($numero)->with('lignes')->first();
+        $document = Facture::query()->emises()->visiblesPar(CompteConnecte::exiger())->deNumero($numero)->with('lignes')->first();
+
+        if ($document === null) {
+            throw new InvalidArgumentException(self::DOCUMENT_INTROUVABLE);
+        }
+
         $refus = self::refusDuDocument($document, self::documentsDeLAvoir($lignes));
 
         if ($refus !== null) {
@@ -233,12 +240,8 @@ class AvoirResource extends Resource
      *
      * @param  list<Facture>  $documents
      */
-    private static function refusDuDocument(?Facture $document, array $documents): ?string
+    private static function refusDuDocument(Facture $document, array $documents): ?string
     {
-        if ($document === null) {
-            return self::DOCUMENT_INTROUVABLE;
-        }
-
         $designation = self::designation($document);
         [$credite, $pronom, $autre] = $document->serie() === TypeDocument::TicketCaisse ? ['crédité', 'il', 'celui'] : ['créditée', 'elle', 'celle'];
         $premier = $documents[0] ?? null;
@@ -270,11 +273,13 @@ class AvoirResource extends Resource
      */
     private static function lignesARendre(Facture $document): array
     {
+        $numero = ValeurRequise::de($document->numero, 'le numéro du document émis');
+
         return $document->lignes
             ->filter(fn (LigneFacture $ligne): bool => $ligne->quantiteCreditableRestante() > 0)
             ->mapWithKeys(fn (LigneFacture $ligne): array => [(string) Str::uuid() => [
                 'ligne_facture_id' => $ligne->id,
-                'facture_numero' => $document->numero,
+                'facture_numero' => $numero,
                 'description' => $ligne->description,
                 'quantite' => $ligne->quantiteCreditableRestante(),
             ]])
@@ -299,7 +304,7 @@ class AvoirResource extends Resource
 
         $lignesVues = LigneFacture::query()
             ->whereKey($identifiants->all())
-            ->whereHas('facture', fn (Builder $query) => $query->emises()->visiblesPar(auth()->user()))
+            ->whereHas('facture', fn (Builder $query) => $query->emises()->visiblesPar(CompteConnecte::exiger()))
             ->with('facture.client')
             ->get()
             ->keyBy('id');
@@ -344,7 +349,7 @@ class AvoirResource extends Resource
         $designations = collect($documents)->map(function (Facture $document): string {
             $type = $document->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture';
 
-            return $type.' '.$document->numero.' du '.self::calendrierDuMagasin()->afficher($document->date_emission, 'd/m/Y à H \\h i');
+            return $type.' '.$document->numero.' du '.self::calendrierDuMagasin()->afficher(ValeurRequise::de($document->date_emission, 'la date d\'émission du document émis'), 'd/m/Y à H \\h i');
         });
 
         return collect([Avoir::documentQuiDonneLeClient($documents)->nomDuClient(), $designations->implode(', ')])->filter()->implode(' — ');
@@ -367,7 +372,7 @@ class AvoirResource extends Resource
             throw new InvalidArgumentException('Cette ligne de facture est introuvable.');
         }
 
-        return $premiere->facture->client;
+        return ValeurRequise::de(ValeurRequise::de($premiere->facture, 'la facture de la ligne')->client, 'le client de la facture');
     }
 
     /**
@@ -388,7 +393,7 @@ class AvoirResource extends Resource
     {
         return $facture->statut !== StatutFacture::Brouillon
             && $facture->possedeDesLignesCreditables()
-            && auth()->user()->can(PermissionRegistry::AVOIR_CREER)
+            && CompteConnecte::exiger()->can(PermissionRegistry::AVOIR_CREER)
             && app(RegularisationDUneFacture::class)->refusDUnAvoirOrdinaire($facture) === null;
     }
 
@@ -405,7 +410,7 @@ class AvoirResource extends Resource
     {
         return static::canAccess()
             && static::canCreate()
-            && (auth()->user()->can(PermissionRegistry::FACTURE_VIEW) || auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES));
+            && (CompteConnecte::exiger()->can(PermissionRegistry::FACTURE_VIEW) || CompteConnecte::exiger()->can(PermissionRegistry::FACTURE_VIEW_TOUTES));
     }
 
     /**
@@ -528,7 +533,7 @@ class AvoirResource extends Resource
         $identifiant = filter_var($ligneFactureId, FILTER_VALIDATE_INT);
 
         return $identifiant === false ? null : LigneFacture::query()
-            ->whereHas('facture', fn (Builder $query) => $query->visiblesPar(auth()->user()))
+            ->whereHas('facture', fn (Builder $query) => $query->visiblesPar(CompteConnecte::exiger()))
             ->find($identifiant);
     }
 

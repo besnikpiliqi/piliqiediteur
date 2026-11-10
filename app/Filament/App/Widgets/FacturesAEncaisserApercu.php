@@ -5,6 +5,7 @@ namespace App\Filament\App\Widgets;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\FactureResource;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -68,7 +69,7 @@ class FacturesAEncaisserApercu extends Widget
     {
         $factures = Facture::query()
             ->aEncaisser()
-            ->visiblesPar(auth()->user())
+            ->visiblesPar(CompteConnecte::exiger())
             ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue'])
             ->withExists(['allocationsPaiement as paiement_contre_passe' => fn (Builder $allocations): Builder => $allocations
                 ->whereHas('paiement', fn (Builder $paiements): Builder => $paiements->whereNotNull('contre_passe_paiement_id'))])

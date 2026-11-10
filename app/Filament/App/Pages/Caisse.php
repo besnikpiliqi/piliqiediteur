@@ -22,6 +22,8 @@ use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
@@ -175,7 +177,7 @@ class Caisse extends Page implements HasForms
      */
     public function mount(): void
     {
-        $panier = app(PanierDeCaisse::class)->enCours(auth()->user());
+        $panier = app(PanierDeCaisse::class)->enCours(CompteConnecte::exiger());
 
         $this->jetonDeLaVente = $panier->jeton ?? (string) Str::uuid();
         $this->remplirFormulaire($panier);
@@ -216,7 +218,7 @@ class Caisse extends Page implements HasForms
         } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
             static::notifierLeRefus($refus);
 
-            $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(auth()->user()), $this->data['parts'] ?? null);
+            $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(CompteConnecte::exiger()), $this->data['parts'] ?? null);
         }
 
         $this->suivreLeResteAPayer();
@@ -261,7 +263,7 @@ class Caisse extends Page implements HasForms
      */
     private function enregistrerLePanier(): void
     {
-        $panier = app(PanierDeCaisse::class)->enregistrer(auth()->user(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+        $panier = app(PanierDeCaisse::class)->enregistrer(CompteConnecte::exiger(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
 
         if ($panier !== null) {
             $this->jetonDeLaVente = $panier->jeton;
@@ -287,7 +289,7 @@ class Caisse extends Page implements HasForms
      */
     public function derniereVenteEnregistree(): ?string
     {
-        $facture = app(ActionsUniques::class)->dernierResultat(ActionsUniques::VENDRE_A_LA_CAISSE, auth()->user());
+        $facture = app(ActionsUniques::class)->dernierResultat(ActionsUniques::VENDRE_A_LA_CAISSE, CompteConnecte::exiger());
 
         if (! $facture instanceof Facture) {
             return null;
@@ -400,7 +402,7 @@ class Caisse extends Page implements HasForms
                         ->model(Client::class)
                         ->schema(ClientResource::creationRapideSchema()))
                     ->createOptionModalHeading('Nouveau client')
-                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
                     ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
                     ->afterStateUpdated(fn (mixed $state) => $this->preselectionnerLeModePrefere($state))
                     ->required(),
@@ -451,7 +453,7 @@ class Caisse extends Page implements HasForms
                 ->visible(fn (): bool => $this->lignesRenseignees() !== [])
                 ->action(function (): void {
                     try {
-                        app(PanierDeCaisse::class)->abandonner(auth()->user(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+                        app(PanierDeCaisse::class)->abandonner(CompteConnecte::exiger(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
                     } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
@@ -497,7 +499,7 @@ class Caisse extends Page implements HasForms
                 }
 
                 $nouveaux = static::argumentsDeLAvertissement($avertissement);
-                $this->mountedActionsArguments[array_key_last($this->mountedActionsArguments)] = $nouveaux;
+                $this->mountedActionsArguments[array_key_last(ValeurRequise::de($this->mountedActionsArguments, 'les arguments des actions ouvertes de la page'))] = $nouveaux;
                 $action->arguments($nouveaux);
                 $action->halt();
             });
@@ -603,7 +605,7 @@ class Caisse extends Page implements HasForms
         try {
             $this->enregistrerLePanier();
             $facture = app(EnregistrerVenteCaisseAction::class)->handle(
-                auth()->user(),
+                CompteConnecte::exiger(),
                 $client,
                 $data['lignes'],
                 new ReglementComptant(self::partsPayees($data['parts'] ?? []), self::bonsDesParts($data['parts'] ?? [])),
@@ -642,10 +644,14 @@ class Caisse extends Page implements HasForms
         $calculateur = app(CalculateurLigne::class);
         $parts = [
             ...$facture->allocationsPaiement()->with('paiement')->get()->map(
-                fn (PaiementAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).' '.$allocation->paiement->mode_paiement->dansUnePhrase(),
+                fn (PaiementAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).' '.ValeurRequise::de($allocation->paiement, 'le paiement de l\'imputation')->mode_paiement->dansUnePhrase(),
             ),
             ...$facture->allocationsAvoir()->with('avoir.client')->get()->map(
-                fn (AvoirAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).(($allocation->avoir->client?->estComptoir() ?? false) ? ' du bon d\'avoir ' : ' du crédit d\'avoir ').$allocation->avoir->numero,
+                function (AvoirAllocation $allocation) use ($calculateur): string {
+                    $avoir = ValeurRequise::de($allocation->avoir, 'l\'avoir de l\'imputation');
+
+                    return self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).(($avoir->client?->estComptoir() ?? false) ? ' du bon d\'avoir ' : ' du crédit d\'avoir ').$avoir->numero;
+                },
             ),
         ];
 

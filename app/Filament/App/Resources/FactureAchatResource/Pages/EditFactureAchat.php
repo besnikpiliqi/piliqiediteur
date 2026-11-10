@@ -7,6 +7,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -55,7 +56,7 @@ class EditFactureAchat extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $fournisseur = Fournisseur::withTrashed()->whereKey(ValeursLues::cle($data['fournisseur_id']))->firstOrFail();
 
-        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(auth()->user(), $this->record, $fournisseur, array_values($data['lignes']), [
+        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(CompteConnecte::exiger(), $this->record, $fournisseur, array_values($data['lignes']), [
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
             'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,

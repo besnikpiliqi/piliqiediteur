@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -28,7 +29,7 @@ class VentesEnAttenteApercu extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
+        return CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
     }
 
     protected function getStats(): array

@@ -13,6 +13,8 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -92,7 +94,7 @@ class TableauDeBord extends Dashboard
 
         return match (true) {
             $societe->estClose() => 'L\'inscription de votre société est close.',
-            $societe->estValidee() => 'Votre société est validée depuis le '.Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y').'.',
+            $societe->estValidee() => 'Votre société est validée depuis le '.Calendrier::deParis()->afficher(ValeurRequise::de($societe->validee_le, 'la date de validation de la société validée'), 'd/m/Y').'.',
             default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : '
                 .($societe->aDesArticles() ? 'catalogue, équipe, paramètres et achats' : 'catalogue, équipe et paramètres')
                 .', et vous essayer dans le magasin de démonstration.',
@@ -118,7 +120,7 @@ class TableauDeBord extends Dashboard
      */
     public function etapes(): array
     {
-        $compte = auth()->user();
+        $compte = CompteConnecte::exiger();
 
         if (! $compte->estProprietaire()) {
             return [];
@@ -205,7 +207,7 @@ class TableauDeBord extends Dashboard
      */
     public function magasins(): Collection
     {
-        return auth()->user()->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('nom')->orderBy('id')->get();
+        return CompteConnecte::exiger()->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('nom')->orderBy('id')->get();
     }
 
     /**
@@ -219,7 +221,7 @@ class TableauDeBord extends Dashboard
      */
     public function facturesAEncaisser(): array
     {
-        return app(FacturesAEncaisserDeLaSociete::class)->pour(auth()->user());
+        return app(FacturesAEncaisserDeLaSociete::class)->pour(CompteConnecte::exiger());
     }
 
     /**
@@ -230,7 +232,7 @@ class TableauDeBord extends Dashboard
      */
     public function peutNommerUnResponsable(): bool
     {
-        $compte = auth()->user();
+        $compte = CompteConnecte::exiger();
 
         return $compte->estAdministrateur() && $compte->can(AutorisationsSociete::RESPONSABLES_NOMMER);
     }
@@ -240,7 +242,7 @@ class TableauDeBord extends Dashboard
      */
     public function demonstration(): ?Magasin
     {
-        return auth()->user()->administreTousLesMagasins() ? $this->societe()->demonstration()->first() : null;
+        return CompteConnecte::exiger()->administreTousLesMagasins() ? $this->societe()->demonstration()->first() : null;
     }
 
     /**
@@ -259,7 +261,7 @@ class TableauDeBord extends Dashboard
             ->action(function () {
                 $demonstration = null;
                 static::executerSansCasser(function () use (&$demonstration): void {
-                    $demonstration = app(OuvrirLaDemonstrationAction::class)->handle(auth()->user(), $this->societe());
+                    $demonstration = app(OuvrirLaDemonstrationAction::class)->handle(CompteConnecte::exiger(), $this->societe());
                 });
 
                 return $demonstration === null ? null : redirect()->to(Dashboard::getUrl(panel: 'app', tenant: $demonstration));
@@ -276,7 +278,7 @@ class TableauDeBord extends Dashboard
         $courriers = app(CourriersDeVerification::class);
 
         return match (true) {
-            $societe->estValidee() => 'Validée le '.Calendrier::deParis()->afficher($societe->validee_le, 'd/m/Y').'.',
+            $societe->estValidee() => 'Validée le '.Calendrier::deParis()->afficher(ValeurRequise::de($societe->validee_le, 'la date de validation de la société validée'), 'd/m/Y').'.',
             $societe->estClose() => 'Inscription close.',
             default => 'Le courrier recommandé est parti au représentant légal de votre entreprise, à l\'adresse de son siège : saisissez son code avant le '.Calendrier::deParis()->afficher($courriers->cloturePrevueLe($societe), 'd/m/Y').'.',
         };

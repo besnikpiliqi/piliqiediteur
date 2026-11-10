@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -42,7 +43,7 @@ class EditMembreDuMagasin extends EditRecord
     {
         /** @var Affectation $record */
         return static::executerOuInterrompre(function () use ($record, $data): Affectation {
-            app(ModifierMembreAction::class)->handle(auth()->user(), $record->utilisateur, $data['role'], EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
+            app(ModifierMembreAction::class)->handle(CompteConnecte::exiger(), $record->utilisateur, $data['role'], EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
 
             return $record->refresh();
         });

@@ -6,6 +6,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Widgets\CaissesOuvertesDeLEquipeApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -67,10 +69,10 @@ class ListClotureCaissePersonnelles extends ListRecords
                 ->icon('heroicon-o-lock-closed')
                 ->color('primary')
                 ->requiresConfirmation()
-                ->modalDescription(fn (): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(auth()->user()), 'votre'))
+                ->modalDescription(fn (): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(CompteConnecte::exiger()), 'votre'))
                 ->form([self::champDuJeton()])
-                ->visible(fn () => auth()->user()->can('fermer', ClotureCaissePersonnelle::class))
-                ->action(fn (array $data) => static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(auth()->user(), auth()->user(), $data['jeton']))),
+                ->visible(fn () => CompteConnecte::exiger()->can('fermer', ClotureCaissePersonnelle::class))
+                ->action(fn (array $data) => static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), CompteConnecte::exiger(), $data['jeton']))),
             Actions\Action::make('fermer_la_caisse_d_un_vendeur')
                 ->label('Fermer la caisse d\'un vendeur')
                 ->icon('heroicon-o-user-minus')
@@ -87,11 +89,11 @@ class ListClotureCaissePersonnelles extends ListRecords
                     Placeholder::make('releve')
                         ->hiddenLabel()
                         ->visible(fn (Get $get): bool => self::vendeurChoisi($get('vendeur_id')) !== null)
-                        ->content(fn (Get $get): HtmlString|string => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
-                            ? self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(self::vendeurChoisi($get('vendeur_id'))), 'sa')
+                        ->content(fn (Get $get): HtmlString|string => CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
+                            ? self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(ValeurRequise::de(self::vendeurChoisi($get('vendeur_id')), 'le vendeur choisi, dont la caisse est ouverte')), 'sa')
                             : 'Sa caisse sera fermée jusqu\'à maintenant. Son relevé ne vous sera pas montré : seuls le vendeur et qui voit les relevés de toute l\'équipe le consultent.'),
                 ])
-                ->visible(fn (): bool => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER))
+                ->visible(fn (): bool => CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_GERER))
                 ->action(function (array $data): void {
                     $vendeur = self::vendeurChoisi($data['vendeur_id'] ?? null);
 
@@ -102,7 +104,7 @@ class ListClotureCaissePersonnelles extends ListRecords
                     }
 
                     static::executerSansCasser(function () use ($vendeur, $data): void {
-                        $releve = app(FermerSaCaisseAction::class)->handle(auth()->user(), $vendeur, $data['jeton']);
+                        $releve = app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), $vendeur, $data['jeton']);
 
                         Notification::make()->title("Caisse de {$releve->vendeur_nom} fermée")->success()->send();
                     });

@@ -8,6 +8,8 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
@@ -69,7 +71,7 @@ class ClotureCaisseResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        if (! auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
+        if (! CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
             $query->where('cree_par', auth()->id());
         }
 
@@ -185,20 +187,20 @@ class ClotureCaisseResource extends Resource
             // « Vendeurs ») : chaque numéro ouvre sa fiche ; les autres ne
             // se comptent qu'en nombre et en total.
             InfolistSection::make('Ventes agrégées')->schema([
-                self::detailDesDocuments('tickets', fn (ClotureCaisse $record): array => self::documentsVisibles($record->factures(), $record->factures()->visiblesPar(auth()->user()))['visibles']),
+                self::detailDesDocuments('tickets', fn (ClotureCaisse $record): array => self::documentsVisibles($record->factures(), $record->factures()->visiblesPar(CompteConnecte::exiger()))['visibles']),
                 TextEntry::make('autres_tickets')
                     ->label('Autres tickets de l\'équipe')
-                    ->state(fn (ClotureCaisse $record): ?string => self::documentsVisibles($record->factures(), $record->factures()->visiblesPar(auth()->user()))['autres'])
+                    ->state(fn (ClotureCaisse $record): ?string => self::documentsVisibles($record->factures(), $record->factures()->visiblesPar(CompteConnecte::exiger()))['autres'])
                     ->visible(fn (?string $state): bool => $state !== null),
             ]),
 
             InfolistSection::make('Avoirs déduits')
                 ->visible(fn (ClotureCaisse $record) => $record->avoirs()->exists())
                 ->schema([
-                    self::detailDesDocuments('avoirs', fn (ClotureCaisse $record): array => self::documentsVisibles($record->avoirs(), $record->avoirs()->visiblesPar(auth()->user()))['visibles']),
+                    self::detailDesDocuments('avoirs', fn (ClotureCaisse $record): array => self::documentsVisibles($record->avoirs(), $record->avoirs()->visiblesPar(CompteConnecte::exiger()))['visibles']),
                     TextEntry::make('autres_avoirs')
                         ->label('Autres avoirs de l\'équipe')
-                        ->state(fn (ClotureCaisse $record): ?string => self::documentsVisibles($record->avoirs(), $record->avoirs()->visiblesPar(auth()->user()))['autres'])
+                        ->state(fn (ClotureCaisse $record): ?string => self::documentsVisibles($record->avoirs(), $record->avoirs()->visiblesPar(CompteConnecte::exiger()))['autres'])
                         ->visible(fn (?string $state): bool => $state !== null),
                 ]),
         ]);
@@ -247,12 +249,15 @@ class ClotureCaisseResource extends Resource
         $sens = $estUnAvoir ? -1 : 1;
         $montant = fn (Facture|Avoir $document, string $colonne): string => $calculateur->enEuros($sens * $calculateur->enCentiemes($document->{$colonne}));
         $idsVisibles = $visibles->pluck('id')->all();
-        [$vus, $autres] = $tous->orderBy('numero')->get()->partition(fn (Facture|Avoir $document): bool => in_array($document->getKey(), $idsVisibles, true));
+        $documents = $tous->orderBy('numero')->get();
+        $estVu = fn (Facture|Avoir $document): bool => in_array($document->getKey(), $idsVisibles, true);
+        $vus = $documents->filter($estVu);
+        $autres = $documents->reject($estVu);
         $nature = $estUnAvoir ? 'avoir' : 'ticket';
 
         return [
             'visibles' => array_values($vus->map(fn (Facture|Avoir $document): array => [
-                'numero' => $document->numero,
+                'numero' => ValeurRequise::de($document->numero, 'le numéro d\'un document de la clôture'),
                 'url' => $estUnAvoir ? AvoirResource::getUrl('view', ['record' => $document]) : FactureResource::getUrl('view', ['record' => $document]),
                 'client_nom' => $document->client_nom,
                 'ht' => $montant($document, 'total_ht'),

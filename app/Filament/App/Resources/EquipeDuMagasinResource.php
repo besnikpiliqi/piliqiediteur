@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
@@ -192,7 +193,7 @@ class EquipeDuMagasinResource extends Resource
                         ...static::champsDuMotDePasseChoisi(fn (Get $get): bool => $get('mode') === 'present'),
                     ] : [])
                     ->requiresConfirmation(fn (Affectation $record): bool => ! $record->utilisateur->mot_de_passe_est_l_identifiant)
-                    ->visible(fn (Affectation $record): bool => ! $record->estDeResponsable() && app(PorteeDesDroits::class)->peutDonnerLeRole(static::auteur(), $record->utilisateur, $record->magasin, RoleMagasin::Responsable))
+                    ->visible(fn (Affectation $record): bool => ! $record->estDeResponsable() && app(PorteeDesDroits::class)->peutDonnerLeRole(static::auteur(), $record->utilisateur, ValeurRequise::de($record->magasin, 'le magasin du membre'), RoleMagasin::Responsable))
                     ->action(function (Affectation $record, array $data, Form $form): void {
                         $compte = $record->utilisateur;
                         $enPresence = ($data['mode'] ?? null) === 'present';

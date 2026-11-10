@@ -22,6 +22,8 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
@@ -797,7 +799,7 @@ trait AjouteDesLignesDeVente
     public static function ajouterLesProduitsChoisis(HasForms $livewire, mixed $selection): bool
     {
         /** @var Repeater $repeteur */
-        $repeteur = $livewire->getForm('form')->getComponent('data.lignes');
+        $repeteur = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
 
         try {
             $choisis = self::produitsChoisis($selection);
@@ -1050,7 +1052,7 @@ trait AjouteDesLignesDeVente
 
         if ($nouveauService !== '') {
             try {
-                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(auth()->user(), $nouveauService, $data['prix_ttc'] ?? null, $data['taux_tva'] ?? null);
+                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(CompteConnecte::exiger(), $nouveauService, $data['prix_ttc'] ?? null, $data['taux_tva'] ?? null);
             } catch (LogicException|AuthorizationException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
@@ -1112,7 +1114,7 @@ trait AjouteDesLignesDeVente
     private static function ajouterUneLigne(HasForms $livewire, array $valeurs): void
     {
         /** @var Repeater $lignes */
-        $lignes = $livewire->getForm('form')->getComponent('data.lignes');
+        $lignes = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
 
         $uuid = $lignes->generateUuid();
 

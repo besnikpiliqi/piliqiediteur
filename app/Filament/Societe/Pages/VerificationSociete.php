@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Models\VerificationSociete as LigneDeVerification;
 use App\Domain\Tenancy\Services\CourrierDeCode;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\ReverificationSirene;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Integrations\EnvoiRecommande\DestinataireDuCourrier;
 use Carbon\CarbonImmutable;
@@ -186,7 +187,7 @@ class VerificationSociete extends Page
             ->requiresConfirmation()
             ->modalDescription('Un nouveau courrier recommandé, avec un nouveau code, partira au représentant légal de votre entreprise, à l\'adresse officielle de son siège ; le code du premier courrier ne vaudra plus. Un seul nouveau courrier peut être demandé.')
             ->action(fn () => static::executerSansCasser(function (): void {
-                app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi(auth()->user(), $this->societe());
+                app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi(CompteConnecte::exiger(), $this->societe());
                 Notification::make()->title('Le nouveau courrier est parti.')->success()->send();
             }));
     }
@@ -209,7 +210,7 @@ class VerificationSociete extends Page
 
                 try {
                     static::executerSansCasser(function () use ($data, $fichier): void {
-                        app(DeposerUnePieceAction::class)->handle(auth()->user(), $this->societe(), TypePiece::from($data['type']), (string) $fichier->get());
+                        app(DeposerUnePieceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), TypePiece::from($data['type']), (string) $fichier->get());
                         Notification::make()->title('Pièce déposée : l\'éditeur est prévenu.')->success()->send();
                     });
                 } finally {

@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\AvoirResource\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\AvoirResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
@@ -16,7 +17,7 @@ class ListAvoirs extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->label('Nouvel avoir')
-                ->visible(fn () => auth()->user()->can(PermissionRegistry::AVOIR_CREER)),
+                ->visible(fn () => CompteConnecte::exiger()->can(PermissionRegistry::AVOIR_CREER)),
         ];
     }
 }

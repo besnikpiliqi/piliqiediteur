@@ -12,6 +12,8 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
@@ -72,7 +74,7 @@ class PaiementResource extends Resource
     {
         $query = parent::getEloquentQuery()->with(['allocations.facture', 'contrePassation']);
 
-        if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
+        if (! CompteConnecte::exiger()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
             $query->where('cree_par', auth()->id());
         }
 
@@ -159,7 +161,7 @@ class PaiementResource extends Resource
                                     }
 
                                     return Facture::query()
-                                        ->visiblesPar(auth()->user())
+                                        ->visiblesPar(CompteConnecte::exiger())
                                         ->where('client_id', $clientId)
                                         ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
                                         ->get()
@@ -217,7 +219,7 @@ class PaiementResource extends Resource
     {
         $identifiant = filter_var($factureId, FILTER_VALIDATE_INT);
 
-        return $identifiant === false ? null : Facture::query()->visiblesPar(auth()->user())->find($identifiant);
+        return $identifiant === false ? null : Facture::query()->visiblesPar(CompteConnecte::exiger())->find($identifiant);
     }
 
     /**
@@ -277,7 +279,7 @@ class PaiementResource extends Resource
     {
         $calculateur = app(CalculateurLigne::class);
         $bons = $paiement->creditsImputes()->with('avoir')->orderBy('id')->get()
-            ->map(fn (AvoirAllocation $credit): string => sprintf('%s (%s)', $credit->avoir->numero, $calculateur->enEuros($calculateur->enCentiemes($credit->montant_alloue))));
+            ->map(fn (AvoirAllocation $credit): string => sprintf('%s (%s)', ValeurRequise::de($credit->avoir, 'l\'avoir de l\'imputation')->numero, $calculateur->enEuros($calculateur->enCentiemes($credit->montant_alloue))));
         $phrases = [sprintf(
             'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues.',
             self::enEuros((float) $paiement->montant),
@@ -345,8 +347,8 @@ class PaiementResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->modalDescription(fn (Paiement $record): string => self::descriptionDeLaContrePassation($record))
-                    ->visible(fn (Paiement $record): bool => auth()->user()->can('contrePasser', $record))
-                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(auth()->user(), $record, $data['motif'], $data['jeton']))),
+                    ->visible(fn (Paiement $record): bool => CompteConnecte::exiger()->can('contrePasser', $record))
+                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(CompteConnecte::exiger(), $record, $data['motif'], $data['jeton']))),
             ])
             ->bulkActions([]);
     }

@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Placeholder;
@@ -67,7 +68,7 @@ class ParametresPrixDeVente extends Page implements HasForms
     {
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
-            ...$magasin->bareme_prix_vente->versTableau(),
+            ...ValeurRequise::de($magasin->bareme_prix_vente, 'le barème des prix de vente du magasin')->versTableau(),
             'essai_taux_tva' => $magasin->tauxTvaParDefaut(),
         ]);
     }
@@ -88,7 +89,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                         return;
                     }
 
-                    foreach ($this->parametresTelsQueLus()->bareme_prix_vente->versTableau() as $champ => $valeur) {
+                    foreach (ValeurRequise::de($this->parametresTelsQueLus()->bareme_prix_vente, 'le barème des prix de vente du magasin')->versTableau() as $champ => $valeur) {
                         $set($champ, $valeur);
                     }
 

@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Concerns\TelechargeLesDocumentsParPeriode;
 use App\Models\User;
 use Filament\Pages\Page;
@@ -88,7 +89,7 @@ class TelechargerLesDocuments extends Page
     private function clientsProposes(): Collection
     {
         return $this->magasinsParClient()
-            ->map(fn (Collection $magasins): Societe => $magasins->first()->societe)
+            ->map(fn (Collection $magasins): Societe => ValeurRequise::de($magasins->first(), 'le premier magasin d\'un client')->societe)
             ->sortBy(fn (Societe $client): string => mb_strtolower($client->raison_sociale ?? ''))
             ->values();
     }

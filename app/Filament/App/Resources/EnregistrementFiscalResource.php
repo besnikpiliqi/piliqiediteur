@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Forms\Components\DatePicker;
@@ -81,7 +82,7 @@ class EnregistrementFiscalResource extends Resource
             InfolistSection::make('Trace technique')
                 ->description(fn (): string => 'Hors du contenu signé, effacée '.config('conservation.traces_en_mois').' mois après l\'événement.')
                 ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement
-                    && auth()->user()->estProprietaireDuMagasin(app(TenantContext::class)->magasin()))
+                    && CompteConnecte::exiger()->estProprietaireDuMagasin(app(TenantContext::class)->magasin()))
                 ->schema([
                     TextEntry::make('trace.ip')->label('Adresse IP')
                         ->placeholder('Aucune (traitement automatique, ou trace effacée)'),

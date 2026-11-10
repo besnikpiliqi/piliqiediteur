@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\ProduitResource\Widgets;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Number;
@@ -47,7 +48,7 @@ class ValeurStockApercu extends BaseWidget
 {
     public static function canView(): bool
     {
-        return auth()->user()->can(PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK);
+        return CompteConnecte::exiger()->can(PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK);
     }
 
     protected function getStats(): array

@@ -4,7 +4,9 @@ namespace App\Filament\Concerns;
 
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ModeleRelu;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -62,8 +64,8 @@ trait EnregistreLesParametresDuMagasin
      */
     protected function lireLesParametres(): Magasin
     {
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant()->fresh();
+        $actif = Filament::getTenant();
+        $magasin = ModeleRelu::de($actif instanceof Magasin ? $actif : throw new LogicException('Les paramètres d\'un magasin se règlent dans ce magasin.'));
         $this->parametresLus = FicheLue::de($magasin, ModifierLesParametresDuMagasinAction::parametresDe(static::autorisationDeLaPage()))->valeurs();
 
         return $magasin;
@@ -94,7 +96,7 @@ trait EnregistreLesParametresDuMagasin
     protected function enregistrerLesParametres(array $saisie, string $annonce): ?Magasin
     {
         try {
-            $corrections = app(ModifierLesParametresDuMagasinAction::class)->handle(auth()->user(), static::autorisationDeLaPage(), $this->parametresLus, $saisie);
+            $corrections = app(ModifierLesParametresDuMagasinAction::class)->handle(CompteConnecte::exiger(), static::autorisationDeLaPage(), $this->parametresLus, $saisie);
         } catch (LogicException|AuthorizationException $refus) {
             static::notifierLeRefus($refus);
 

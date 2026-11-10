@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -135,7 +136,7 @@ class ServiceResource extends Resource
         return function (string $attribute, mixed $value, Closure $fail) use ($record): void {
             $doublon = Service::query()
                 ->where('nom_normalise', Service::normaliserNom((string) $value))
-                ->when($record !== null, fn ($query) => $query->whereKeyNot($record->getKey()))
+                ->when($record, fn ($query, Service $service) => $query->whereKeyNot($service->getKey()))
                 ->first();
 
             if ($doublon === null) {
@@ -189,7 +190,7 @@ class ServiceResource extends Resource
                 return $data;
             })
             ->using(fn (Service $record, array $data, ManageServices $livewire): Service => static::executerOuInterrompre(
-                fn (): Service => app(ModifierUneFicheAction::class)->handle(auth()->user(), $record, $livewire->fichesLues[$record->getKey()] ?? [], $data),
+                fn (): Service => app(ModifierUneFicheAction::class)->handle(CompteConnecte::exiger(), $record, $livewire->fichesLues[$record->getKey()] ?? [], $data),
             ));
     }
 

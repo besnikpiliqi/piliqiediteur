@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Resources\Pages\CreateRecord;
@@ -22,7 +23,7 @@ class CreateInventaireOuverture extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         return static::executerOuInterrompre(fn (): Model => app(CreerInventaireOuvertureAction::class)->handle(
-            auth()->user(),
+            CompteConnecte::exiger(),
             array_values($data['lignes'] ?? []),
             ['notes' => $data['notes'] ?? null],
         ));

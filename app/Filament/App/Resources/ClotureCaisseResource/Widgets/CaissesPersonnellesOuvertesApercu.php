@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -27,7 +28,7 @@ class CaissesPersonnellesOuvertesApercu extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
+        return CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
     }
 
     protected function getStats(): array

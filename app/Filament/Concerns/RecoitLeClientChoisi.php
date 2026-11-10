@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Livewire\SelecteurDeClients;
 use App\Filament\App\Resources\ClientResource;
 use Filament\Forms\Components\Select;
@@ -36,11 +37,13 @@ trait RecoitLeClientChoisi
         }
 
         /** @var Select $champ */
-        $champ = $this->getForm('form')->getComponent('data.client_id');
+        $champ = ValeurRequise::de($this->getForm('form'), 'le formulaire de la page')->getComponent('data.client_id');
         $champ->state($client->getKey());
         $champ->callAfterStateUpdated();
 
-        if (end($this->mountedFormComponentActions) === 'chercherUnClient') {
+        $actions = ValeurRequise::de($this->mountedFormComponentActions, 'les actions ouvertes du formulaire');
+
+        if (end($actions) === 'chercherUnClient') {
             $this->unmountFormComponentAction();
         }
     }

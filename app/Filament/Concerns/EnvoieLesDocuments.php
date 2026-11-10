@@ -13,6 +13,8 @@ use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -102,8 +104,8 @@ trait EnvoieLesDocuments
                 ? 'Ce devis reçoit son numéro en partant : il ne sera plus un brouillon.'
                 : null)
             ->modalSubmitActionLabel('Envoyer')
-            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
-            ->fillForm(fn (Facture|Avoir|Devis|RecuPaiement $record): array => ['destinataire' => $record->client->email])
+            ->visible(fn (Facture|Avoir|Devis|RecuPaiement $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->fillForm(fn (Facture|Avoir|Devis|RecuPaiement $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client du document envoyé')->email])
             ->form([
                 static::champDuJeton(),
                 self::champDestinataire(),
@@ -115,7 +117,7 @@ trait EnvoieLesDocuments
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
             ->action(fn (Facture|Avoir|Devis|RecuPaiement $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
+                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), $record, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
 
                 self::confirmerLEnvoi($envoi, $record);
             }));
@@ -139,11 +141,11 @@ trait EnvoieLesDocuments
             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
             ->modalSubmitActionLabel('Relancer')
-            ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
-            ->fillForm(fn (Facture $record): array => ['destinataire' => $record->client->email])
+            ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && CompteConnecte::exiger()->can('envoyer', $record))
+            ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
             ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->relancer(auth()->user(), $record, $data['destinataire'], $data['jeton']);
+                $envoi = app(EnvoyerDocumentAction::class)->relancer(CompteConnecte::exiger(), $record, $data['destinataire'], $data['jeton']);
 
                 self::confirmerLEnvoi($envoi, $record);
             }));

@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -210,7 +211,7 @@ class CreerMagasin extends CreateRecord
 
         return static::executerOuInterrompre(function () use ($data): Magasin {
             try {
-                return app(CreerEtablissementAction::class)->handle(auth()->user(), $this->societe(), [
+                return app(CreerEtablissementAction::class)->handle(CompteConnecte::exiger(), $this->societe(), [
                     'nom' => $data['nom'],
                     'code' => $data['code'] ?? null,
                     'nic' => $data['nic'],

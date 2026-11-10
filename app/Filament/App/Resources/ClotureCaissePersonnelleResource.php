@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 use App\Models\User;
 use Filament\Resources\Resource;
@@ -85,7 +86,7 @@ class ClotureCaissePersonnelleResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        if (! auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
+        if (! CompteConnecte::exiger()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
             $query->where('vendeur_id', auth()->id());
         }
 

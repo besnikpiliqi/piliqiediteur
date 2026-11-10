@@ -272,7 +272,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
             return;
         }
 
-        $this->selection[] = ['produit_id' => $produit->getKey(), 'quantite' => 1];
+        $this->selection[] = ['produit_id' => $identifiant, 'quantite' => 1];
     }
 
     /**
@@ -343,11 +343,17 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
     public function produitsSelectionnes(): array
     {
         $produits = Produit::query()->whereKey(array_column($this->selection, 'produit_id'))->get()->keyBy('id');
+        $choisis = [];
 
-        return array_values(array_filter(array_map(
-            fn (array $choix): ?array => $produits->has($choix['produit_id']) ? ['produit' => $produits->get($choix['produit_id']), 'quantite' => $choix['quantite']] : null,
-            $this->selection,
-        )));
+        foreach ($this->selection as $choix) {
+            $produit = $produits->get($choix['produit_id']);
+
+            if ($produit !== null) {
+                $choisis[] = ['produit' => $produit, 'quantite' => $choix['quantite']];
+            }
+        }
+
+        return $choisis;
     }
 
     /**

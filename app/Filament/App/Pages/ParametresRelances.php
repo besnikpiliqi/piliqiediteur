@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -75,7 +76,7 @@ class ParametresRelances extends Page implements HasForms
                 // valait.
                 ->afterStateUpdated(function (bool $state, Set $set): void {
                     if (! $state) {
-                        $set('delais', self::elementsDuRepeteur($this->parametresTelsQueLus()->delais_relance));
+                        $set('delais', self::elementsDuRepeteur(ValeurRequise::de($this->parametresTelsQueLus()->delais_relance, 'les délais de relance du magasin')));
                     }
                 }),
             Section::make('Délais de relance')

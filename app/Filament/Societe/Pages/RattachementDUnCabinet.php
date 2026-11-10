@@ -10,6 +10,7 @@ use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -166,7 +167,7 @@ class RattachementDUnCabinet extends Page
             ->visible(fn (): bool => $this->demande() !== null)
             ->action(function (): void {
                 static::executerSansCasser(function (): void {
-                    app(RefuserLaDemandeDeLienAction::class)->handle(auth()->user(), $this->demande() ?? throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE));
+                    app(RefuserLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande() ?? throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE));
                     Notification::make()->title('Vous avez refusé cette demande.')->success()->send();
                     $this->redirect(CabinetComptable::getUrl());
                 });
@@ -179,7 +180,7 @@ class RattachementDUnCabinet extends Page
     private function accepter(?array $autorisations): void
     {
         static::executerSansCasser(function () use ($autorisations): void {
-            app(AccepterLaDemandeDeLienAction::class)->handle(auth()->user(), $this->demande() ?? throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE), $autorisations);
+            app(AccepterLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande() ?? throw new LogicException(AccepterLaDemandeDeLienAction::MESSAGE_PLUS_VALABLE), $autorisations);
             Notification::make()->title('Ce cabinet est désormais votre cabinet.')->success()->send();
             $this->redirect(CabinetComptable::getUrl());
         });

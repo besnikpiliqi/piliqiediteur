@@ -18,7 +18,9 @@ use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use Closure;
@@ -494,7 +496,7 @@ trait AjouteDesLignesDAchat
             ->form(self::formulaireDeLigne())
             ->action(function (array $data, HasForms $livewire): void {
                 /** @var Repeater $lignes */
-                $lignes = $livewire->getForm('form')->getComponent('data.lignes');
+                $lignes = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
 
                 $lignes->state([...($lignes->getState() ?? []), $lignes->generateUuid() => self::ligneDepuisLeFormulaire($data)]);
                 $lignes->callAfterStateUpdated();
@@ -538,7 +540,7 @@ trait AjouteDesLignesDAchat
         // la refuse ensuite avec un message (voir ConstructeurLigneAchat).
         $produitSelectionne = fn (Get $get): ?Produit => filled($get('produit_id')) ? Produit::withTrashed()->whereKey(ValeursLues::cle($get('produit_id')))->first() : null;
         $produitChoisi = fn (Get $get): bool => $get('origine') === self::NOUVEAU_PRODUIT || filled($get('produit_id'));
-        $ficheNonModifiable = fn (Get $get): bool => ($produit = $produitSelectionne($get)) !== null && ! auth()->user()->can('update', $produit);
+        $ficheNonModifiable = fn (Get $get): bool => ($produit = $produitSelectionne($get)) !== null && ! CompteConnecte::exiger()->can('update', $produit);
         $figeParSonFournisseur = fn (Get $get): bool => $produitSelectionne($get)?->vientDUneFactureAchatApi() ?? false;
         $identificationNonModifiable = fn (Get $get): bool => $ficheNonModifiable($get) || $figeParSonFournisseur($get);
 
@@ -554,7 +556,7 @@ trait AjouteDesLignesDAchat
                     ->inline()
                     ->default(self::PRODUIT_EXISTANT)
                     ->required()
-                    ->visible(fn (): bool => auth()->user()->can(PermissionRegistry::PRODUIT_CREATE))
+                    ->visible(fn (): bool => CompteConnecte::exiger()->can(PermissionRegistry::PRODUIT_CREATE))
                     ->live()
                     ->columnSpanFull()
                     // Changer d'avis repart d'une fiche vierge : un nouveau
@@ -868,7 +870,7 @@ trait AjouteDesLignesDAchat
         return [
             'produit_id' => $ligne->produit_id,
             'fiche_lue' => $ligne->produit === null ? null : FicheLue::de($ligne->produit)->valeurs(),
-            'produit' => self::valeursDuProduit($ligne->produit ?? new Produit($ligne->nouveau_produit)),
+            'produit' => self::valeursDuProduit($ligne->produit ?? new Produit(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit'))),
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),

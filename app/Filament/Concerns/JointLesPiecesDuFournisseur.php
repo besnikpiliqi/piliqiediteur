@@ -11,6 +11,7 @@ use App\Domain\Achats\Models\PieceDuFournisseur;
 use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -167,11 +168,11 @@ trait JointLesPiecesDuFournisseur
             ->modalHeading('Ajouter des pièces du fournisseur')
             ->form([self::champDesPieces('Pièces du fournisseur', 'La vraie facture ou la vraie note d\'avoir du fournisseur, en PDF ou en photo (JPEG, PNG), 10 Mo au plus par fichier.')->required()])
             ->modalSubmitActionLabel('Joindre')
-            ->visible(fn (FactureAchat|AvoirFournisseur $record): bool => auth()->user()->can('joindreUnePiece', $record))
+            ->visible(fn (FactureAchat|AvoirFournisseur $record): bool => CompteConnecte::exiger()->can('joindreUnePiece', $record))
             ->action(function (FactureAchat|AvoirFournisseur $record, array $data): void {
                 try {
                     static::executerSansCasser(function () use ($record, $data): void {
-                        $jointes = app(JoindreDesPiecesAction::class)->handle(auth()->user(), $record, PieceDeposee::lire($data['pieces'] ?? []));
+                        $jointes = app(JoindreDesPiecesAction::class)->handle(CompteConnecte::exiger(), $record, PieceDeposee::lire($data['pieces'] ?? []));
                         $record->refresh();
                         Notification::make()->title(count($jointes) > 1 ? count($jointes).' pièces jointes.' : 'Pièce jointe.')->success()->send();
                     });
@@ -197,7 +198,7 @@ trait JointLesPiecesDuFournisseur
             ->modalSubmitActionLabel('Retirer')
             ->visible(fn (FactureAchat $record): bool => self::aDesPiecesARetirer($record))
             ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                app(RetirerUnePieceAction::class)->handle(auth()->user(), self::pieceChoisie($record, $data['piece']));
+                app(RetirerUnePieceAction::class)->handle(CompteConnecte::exiger(), self::pieceChoisie($record, $data['piece']));
                 $record->refresh();
                 Notification::make()->title('Pièce retirée.')->success()->send();
             }));
@@ -224,7 +225,7 @@ trait JointLesPiecesDuFournisseur
                 try {
                     static::executerSansCasser(function () use ($record, $data): void {
                         [$remplacante] = PieceDeposee::lire($data['pieces'] ?? []) + [null];
-                        app(RetirerUnePieceAction::class)->handle(auth()->user(), self::pieceChoisie($record, $data['piece']), $remplacante);
+                        app(RetirerUnePieceAction::class)->handle(CompteConnecte::exiger(), self::pieceChoisie($record, $data['piece']), $remplacante);
                         $record->refresh();
                         Notification::make()->title('Pièce remplacée.')->success()->send();
                     });
@@ -236,7 +237,7 @@ trait JointLesPiecesDuFournisseur
 
     private static function aDesPiecesARetirer(FactureAchat $record): bool
     {
-        return $record->statut === StatutFactureAchat::Brouillon && auth()->user()->can('retirerUnePiece', $record) && $record->pieces()->exists();
+        return $record->statut === StatutFactureAchat::Brouillon && CompteConnecte::exiger()->can('retirerUnePiece', $record) && $record->pieces()->exists();
     }
 
     private static function choixDeLaPiece(FactureAchat $record): Select

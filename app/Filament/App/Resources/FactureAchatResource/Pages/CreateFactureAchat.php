@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -29,7 +30,7 @@ class CreateFactureAchat extends CreateRecord
         $factureAchat = static::executerOuInterrompre(function () use ($data) {
             $fournisseur = Fournisseur::query()->whereKey(ValeursLues::cle($data['fournisseur_id']))->firstOrFail();
 
-            return app(CreerFactureAchatAction::class)->handle(auth()->user(), $fournisseur, array_values($data['lignes']), [
+            return app(CreerFactureAchatAction::class)->handle(CompteConnecte::exiger(), $fournisseur, array_values($data['lignes']), [
                 'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
                 'date_facture' => $data['date_facture'] ?? null,
                 'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,

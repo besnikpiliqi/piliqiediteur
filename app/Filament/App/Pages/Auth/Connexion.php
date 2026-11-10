@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Services\LimitationDesConnexions;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
@@ -121,7 +122,7 @@ class Connexion extends Login
         $admis = Filament::auth()->attempt($identifiants, ($donnees['remember'] ?? false) === true && $compte?->estProprietaire() === true);
         $connecte = $admis ? Filament::auth()->user() : null;
 
-        if ($connecte !== null && ! $connecte->canAccessPanel(Filament::getCurrentPanel())) {
+        if ($connecte !== null && ! $connecte->canAccessPanel(ValeurRequise::de(Filament::getCurrentPanel(), 'le panneau de la page de connexion'))) {
             Filament::auth()->logout();
             $connecte = null;
         }

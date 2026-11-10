@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use Filament\Actions\Action;
 use Filament\Pages\Dashboard;
@@ -96,6 +97,6 @@ class FicheDuClient extends ViewRecord
      */
     public function collaborateurs(): array
     {
-        return auth()->user()->estProprietaire() ? ClientDuCabinetResource::collaborateursConfies($this->lien()) : [];
+        return CompteConnecte::exiger()->estProprietaire() ? ClientDuCabinetResource::collaborateursConfies($this->lien()) : [];
     }
 }

@@ -11,6 +11,8 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Models\User;
 use Closure;
@@ -73,7 +75,7 @@ class FicheDuCollaborateur extends ViewRecord
             ])
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    app(ConfierDesClientsAction::class)->handle(auth()->user(), $this->compte(), array_values(array_map(intval(...), $data['liens'] ?? [])));
+                    app(ConfierDesClientsAction::class)->handle(CompteConnecte::exiger(), $this->compte(), array_values(array_map(intval(...), $data['liens'] ?? [])));
                     Notification::make()->title('Les clients confiés sont enregistrés.')->success()->send();
                 });
             });
@@ -87,11 +89,15 @@ class FicheDuCollaborateur extends ViewRecord
      */
     private static function clientsLies(): array
     {
-        $liens = app(AccesDesCabinets::class)->liensOuverts(auth()->user())->get(['liens_cabinet.id', 'liens_cabinet.societe_id']);
+        $liens = app(AccesDesCabinets::class)->liensOuverts(CompteConnecte::exiger())->get(['liens_cabinet.id', 'liens_cabinet.societe_id']);
         $clients = Societe::query()->whereKey($liens->pluck('societe_id')->all())->get(['id', 'siren', 'raison_sociale'])->keyBy('id');
 
         return $liens
-            ->mapWithKeys(fn (LienCabinet $lien): array => [(int) $lien->getKey() => ($clients[$lien->societe_id]->raison_sociale ?? 'Sans dénomination').' · SIREN '.$clients[$lien->societe_id]->siren])
+            ->mapWithKeys(function (LienCabinet $lien) use ($clients): array {
+                $client = ValeurRequise::de($clients->get($lien->societe_id), 'le client d\'un lien ouvert');
+
+                return [(int) $lien->getKey() => ($client->raison_sociale ?? 'Sans dénomination').' · SIREN '.$client->siren];
+            })
             ->sort()
             ->all();
     }
@@ -116,7 +122,7 @@ class FicheDuCollaborateur extends ViewRecord
             ])
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle(auth()->user(), $this->compte(), $data['mot_de_passe']);
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle(CompteConnecte::exiger(), $this->compte(), $data['mot_de_passe']);
                     Notification::make()->title('Un lien a été envoyé à l\'adresse de ce collaborateur : la propriété ne passera que quand il l\'aura suivi.')->success()->send();
                 });
             });
@@ -132,7 +138,7 @@ class FicheDuCollaborateur extends ViewRecord
             ->visible(fn (): bool => (auth()->user()?->can('transmettreLaPropriete', $this->compte()) ?? false) && $this->transmissionEnAttente() !== null)
             ->action(function (): void {
                 $this->agir(function (): void {
-                    app(DemanderLaTransmissionDeLaProprieteAction::class)->renvoyerLeLien(auth()->user(), $this->compte());
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->renvoyerLeLien(CompteConnecte::exiger(), $this->compte());
                     Notification::make()->title('Un nouveau lien a été envoyé à l\'adresse de ce collaborateur.')->success()->send();
                 });
             });
@@ -149,7 +155,7 @@ class FicheDuCollaborateur extends ViewRecord
             ->visible(fn (): bool => (auth()->user()?->estProprietaire() ?? false) && $this->transmissionEnAttente() !== null)
             ->action(function (): void {
                 $this->agir(function (): void {
-                    app(AnnulerLaTransmissionDeLaProprieteAction::class)->handle(auth()->user(), $this->compte());
+                    app(AnnulerLaTransmissionDeLaProprieteAction::class)->handle(CompteConnecte::exiger(), $this->compte());
                     Notification::make()->title('La transmission de la propriété est annulée.')->success()->send();
                 });
             });
@@ -168,7 +174,7 @@ class FicheDuCollaborateur extends ViewRecord
             ->modalDescription('Il retrouve son compte, sans aucun client confié.')
             ->visible(fn (): bool => $this->compte()->estRetire() && (auth()->user()?->can('creerUnCollaborateur', User::class) ?? false))
             ->action(function (): void {
-                $this->agir(fn () => app(ChangerStatutCompteAction::class)->reintegrerLeCollaborateur(auth()->user(), $this->compte()));
+                $this->agir(fn () => app(ChangerStatutCompteAction::class)->reintegrerLeCollaborateur(CompteConnecte::exiger(), $this->compte()));
             });
     }
 

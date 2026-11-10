@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\Locked;
@@ -60,7 +61,7 @@ trait EnregistreLesCorrectionsDeLaFiche
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $enregistree = static::executerOuInterrompre(fn (): Model => app(ModifierUneFicheAction::class)->handle(auth()->user(), $this->record, $this->ficheLue, $data));
+        $enregistree = static::executerOuInterrompre(fn (): Model => app(ModifierUneFicheAction::class)->handle(CompteConnecte::exiger(), $this->record, $this->ficheLue, $data));
         $this->ficheLue = FicheLue::de($enregistree)->valeurs();
 
         return $enregistree;

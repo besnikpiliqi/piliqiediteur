@@ -13,7 +13,7 @@ parameters:
         - bootstrap/cache
         - tests/Qualite/Psalm
         - tests/Qualite/Temoins (?)
-    level: 7
+    level: 8
     tmpDir: storage/framework/cache/phpstan
     parseModelCastsMethod: true
     stubFiles:

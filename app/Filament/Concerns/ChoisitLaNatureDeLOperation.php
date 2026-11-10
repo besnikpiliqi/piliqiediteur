@@ -12,6 +12,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
@@ -331,7 +332,7 @@ trait ChoisitLaNatureDeLOperation
             return null;
         }
 
-        return [$calculateur->enDecimal($sansTvaApres ? $prixSansTva : $prixDeReference), $service->taux_tva];
+        return [$calculateur->enDecimal($sansTvaApres ? $prixSansTva : $prixDeReference), ValeurRequise::de($service->taux_tva, 'le taux de TVA du prix de référence du service')];
     }
 
     /**

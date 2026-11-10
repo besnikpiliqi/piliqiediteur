@@ -25,6 +25,8 @@ use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
@@ -34,6 +36,7 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use Carbon\CarbonImmutable;
 use Closure;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
@@ -207,7 +210,7 @@ class FactureAchatResource extends Resource
                             TextEntry::make('numero')
                                 ->label('Numéro')
                                 ->state(fn (AvoirFournisseur $record) => $record->numero)
-                                ->url(fn (AvoirFournisseur $record): ?string => auth()->user()->can('view', $record) ? AvoirFournisseurResource::getUrl('view', ['record' => $record]) : null)
+                                ->url(fn (AvoirFournisseur $record): ?string => CompteConnecte::exiger()->can('view', $record) ? AvoirFournisseurResource::getUrl('view', ['record' => $record]) : null)
                                 ->color('primary'),
                             TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->state(fn (AvoirFournisseur $record) => $record->numero_fournisseur)->placeholder('—'),
                             TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
@@ -274,13 +277,13 @@ class FactureAchatResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
                     ->form([self::champDuJeton()])
-                    ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && auth()->user()->can('valider', $record))
-                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(auth()->user(), $record, $data['jeton']))),
+                    ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && CompteConnecte::exiger()->can('valider', $record))
+                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']))),
                 self::creerUnAvoirFournisseur(Tables\Actions\Action::make('avoir_fournisseur')),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(FactureAchat::class, fn (FactureAchat $factureAchat) => app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $factureAchat)),
+                    static::suppressionEnMasse(FactureAchat::class, fn (FactureAchat $factureAchat) => app(SupprimerFactureAchatAction::class)->handle(CompteConnecte::exiger(), $factureAchat)),
                 ]),
             ]);
     }
@@ -333,7 +336,7 @@ class FactureAchatResource extends Resource
                 TextEntry::make('ecart_confirme')
                     ->label('Écart')
                     ->state(fn (TauxFactureAchat|TauxAvoirFournisseur $record): ?string => $record->ecartConfirme()
-                        ? 'Confirmé par '.($record->ecart_confirme_par_nom ?? '—').' le '.self::calendrierDuMagasin()->afficher($record->ecart_confirme_le, 'd/m/Y')
+                        ? 'Confirmé par '.($record->ecart_confirme_par_nom ?? '—').' le '.self::calendrierDuMagasin()->afficher(ValeurRequise::de($record->ecart_confirme_le, 'la date de la confirmation de l\'écart'), 'd/m/Y')
                         : null)
                     ->placeholder('Dans la tolérance'),
             ])
@@ -387,7 +390,7 @@ class FactureAchatResource extends Resource
     public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
     {
         return $action->using(fn (FactureAchat $record): bool => static::executerOuInterrompre(function () use ($record): bool {
-            app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $record);
+            app(SupprimerFactureAchatAction::class)->handle(CompteConnecte::exiger(), $record);
 
             return true;
         }));
@@ -459,17 +462,35 @@ class FactureAchatResource extends Resource
             ->whereHas('avoirFournisseur', fn (Builder $avoir): Builder => $avoir->where('statut', StatutAvoirFournisseur::Emise))
             ->with('avoirFournisseur')
             ->get()
-            ->sortBy(fn (LigneAvoirFournisseur $retour): array => [$retour->avoirFournisseur->date_emission->getTimestamp(), $retour->avoirFournisseur->numero])
+            ->sortBy(fn (LigneAvoirFournisseur $retour): array => [self::emissionDuRetour($retour)->getTimestamp(), self::avoirDuRetour($retour)->numero])
             ->map(function (LigneAvoirFournisseur $retour): string {
-                $avoir = $retour->avoirFournisseur;
+                $avoir = self::avoirDuRetour($retour);
                 $numero = auth()->user()?->can('view', $avoir)
                     ? '<a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>'
                     : e($avoir->numero);
 
-                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.self::calendrierDuMagasin()->afficher($avoir->date_emission, 'd/m/Y').')')))->toHtml();
+                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.self::calendrierDuMagasin()->afficher(self::emissionDuRetour($retour), 'd/m/Y').')')))->toHtml();
             });
 
         return $retours->isEmpty() ? null : new HtmlString($retours->implode('<br>'));
+    }
+
+    /**
+     * L'avoir émis d'un retour, que la requête de retoursDeLaLigne() exige
+     * (whereHas) : il ne manque jamais.
+     */
+    private static function avoirDuRetour(LigneAvoirFournisseur $retour): AvoirFournisseur
+    {
+        return ValeurRequise::de($retour->avoirFournisseur, 'l\'avoir fournisseur d\'un retour');
+    }
+
+    /**
+     * L'instant d'émission de l'avoir d'un retour, qu'un avoir émis a
+     * toujours.
+     */
+    private static function emissionDuRetour(LigneAvoirFournisseur $retour): CarbonImmutable
+    {
+        return ValeurRequise::de(self::avoirDuRetour($retour)->date_emission, 'la date d\'émission de l\'avoir fournisseur émis');
     }
 
     /**
@@ -494,7 +515,7 @@ class FactureAchatResource extends Resource
      */
     private static function peutCreerUnAvoirFournisseur(?Model $record): bool
     {
-        $utilisateur = auth()->user();
+        $utilisateur = CompteConnecte::exiger();
         $factureAchat = self::factureDuRetour($record);
 
         if (! $utilisateur->can('create', AvoirFournisseur::class)
@@ -504,7 +525,7 @@ class FactureAchatResource extends Resource
 
         return match (true) {
             $record instanceof FactureAchat => $record->statut === StatutFactureAchat::Validee && $record->possedeDesLignesRetournables(),
-            $record instanceof LigneAchat => $record->factureAchat->statut === StatutFactureAchat::Validee && $record->quantiteRetournableRestante() > 0,
+            $record instanceof LigneAchat => ValeurRequise::de($record->factureAchat, 'la facture d\'achat de la ligne')->statut === StatutFactureAchat::Validee && $record->quantiteRetournableRestante() > 0,
             default => true,
         };
     }
@@ -760,7 +781,7 @@ class FactureAchatResource extends Resource
     {
         $factureAchat = self::factureDuRetour($record) ?? FactureAchat::query()->whereKey(ValeursLues::cle($data['facture_achat_id']))->firstOrFail();
         $avoir = app(EnregistrerAvoirFournisseurAction::class)->handle(
-            auth()->user(),
+            CompteConnecte::exiger(),
             $factureAchat,
             array_values($data['lignes'] ?? []),
             $data['motif'],
@@ -823,7 +844,7 @@ class FactureAchatResource extends Resource
 
     private static function libelleDeLaFactureAchat(FactureAchat $facture): string
     {
-        return $facture->numero.' — '.$facture->fournisseur->nom.(filled($facture->numero_fournisseur) ? " (n° {$facture->numero_fournisseur})" : '');
+        return $facture->numero.' — '.ValeurRequise::de($facture->fournisseur, 'le fournisseur de la facture d\'achat')->nom.(filled($facture->numero_fournisseur) ? " (n° {$facture->numero_fournisseur})" : '');
     }
 
     /**
@@ -856,9 +877,10 @@ class FactureAchatResource extends Resource
             }
 
             $quantite = $ligne->quantiteRetournableRestante();
+            $produit = ValeurRequise::de($ligne->produit, 'le produit de la ligne d\'une facture d\'achat validée');
 
-            if ($ligne->produit->suivi_stock) {
-                $stockRestant[$ligne->produit_id] ??= max(0, $ligne->produit->stock_quantite);
+            if ($produit->suivi_stock) {
+                $stockRestant[$ligne->produit_id] ??= max(0, $produit->stock_quantite);
                 $quantite = min($quantite, $stockRestant[$ligne->produit_id]);
                 $stockRestant[$ligne->produit_id] -= $quantite;
             }

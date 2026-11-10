@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\FournisseurResource\Pages;
 
 use App\Domain\Contacts\Actions\CreerUneFicheAction;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -23,6 +24,6 @@ class CreateFournisseur extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        return static::executerOuInterrompre(fn (): Fournisseur => app(CreerUneFicheAction::class)->handle(auth()->user(), Fournisseur::class, $data));
+        return static::executerOuInterrompre(fn (): Fournisseur => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Fournisseur::class, $data));
     }
 }

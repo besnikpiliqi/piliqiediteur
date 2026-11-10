@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Services\PostesReconnus;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\App\Resources\PosteReconnuResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
@@ -59,7 +60,7 @@ class PosteReconnuResource extends Resource
                 Tables\Columns\TextColumn::make('created_at')->label('Le')->dateTime('d/m/Y à H:i'),
                 Tables\Columns\TextColumn::make('retire_le')
                     ->label('Retiré')
-                    ->state(fn (PosteReconnu $record): ?string => $record->estRetire() ? 'Le '.self::calendrierDuMagasin()->afficher($record->retire_le, 'd/m/Y à H:i').' par '.$record->retire_par_nom : null)
+                    ->state(fn (PosteReconnu $record): ?string => $record->estRetire() ? 'Le '.self::calendrierDuMagasin()->afficher(ValeurRequise::de($record->retire_le, 'la date du retrait du poste'), 'd/m/Y à H:i').' par '.$record->retire_par_nom : null)
                     ->placeholder('—'),
             ])
             ->actions([

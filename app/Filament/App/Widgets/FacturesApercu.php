@@ -5,6 +5,7 @@ namespace App\Filament\App\Widgets;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\ChiffreDAffaires;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -27,7 +28,7 @@ class FacturesApercu extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()->can(PermissionRegistry::FACTURE_VIEW);
+        return CompteConnecte::exiger()->can(PermissionRegistry::FACTURE_VIEW);
     }
 
     protected function getHeading(): string
@@ -48,7 +49,7 @@ class FacturesApercu extends BaseWidget
 
     private function voitLesVentesDeToutLEquipe(): bool
     {
-        return auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES);
+        return CompteConnecte::exiger()->can(PermissionRegistry::FACTURE_VIEW_TOUTES);
     }
 
     /**

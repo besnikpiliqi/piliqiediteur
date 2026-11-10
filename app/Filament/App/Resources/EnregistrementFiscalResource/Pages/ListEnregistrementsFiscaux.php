@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
@@ -70,7 +71,7 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ->action(function (array $data): void {
                     try {
                         $rapport = app(VerifierIntegriteAction::class)->handle(
-                            auth()->user(),
+                            CompteConnecte::exiger(),
                             app(TenantContext::class)->magasin(),
                             (bool) ($data['complet'] ?? false),
                         );
@@ -95,7 +96,7 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ->authorize(static fn (): bool => EnregistrementFiscalResource::canViewAny())
                 ->action(function (array $data): ?StreamedResponse {
                     try {
-                        $ecrire = app(ExporterJournalDesEvenementsAction::class)->handle(auth()->user(), $data['du'], $data['au']);
+                        $ecrire = app(ExporterJournalDesEvenementsAction::class)->handle(CompteConnecte::exiger(), $data['du'], $data['au']);
                     } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 

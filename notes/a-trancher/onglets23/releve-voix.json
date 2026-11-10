@@ -5064,6 +5064,23 @@
     "pilotage-reprise/notes/historique/messages-editeur.md (message du 10/11 à 23 h 08 UTC)"
    ],
    "refs": []
+  },
+  {
+   "id": "V237",
+   "date_utc": "2026-11-10 23:56 UTC",
+   "date_paris": "11/11/2026",
+   "heure_paris": "00 h 56",
+   "theme": "Façon de travailler",
+   "code": "D60",
+   "titre": "« Le plus urgent » en tableau, prêt à recevoir votre réponse",
+   "decision": "Les points les plus urgents sont dans un tableau comme celui de « Mes questions et vos réponses », avec une colonne « Votre réponse » vide, prête à remplir, sans rien chercher ni copier ; chaque question que je vous pose dans le document a toujours sa case de réponse vide.",
+   "mots": "il faut que tu mettes tout les \"Le plus urgent\" de la fiche dans un tableux pret à ecrire ma reponse. tu mets comme dans \"mes question et vosreponses\" dans le tableaux pret à remplir ma reponse car comme tu as fait mtn il aller chercher et copier et ajouter la colonne, c'est pas pratique comme ca.",
+   "statut": "appliquee",
+   "statut_detail": "Fait le 11/11 vers 01 h 00 : « Le plus urgent », dans l'onglet « Ce qui reste à trancher », est un tableau de 10 points avec la colonne « Votre réponse » vide.",
+   "sources": [
+    "pilotage-reprise/notes/historique/messages-editeur.md (message du 10/11 à 23 h 56 UTC)"
+   ],
+   "refs": []
   }
  ],
  "questions": [

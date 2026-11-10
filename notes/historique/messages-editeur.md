@@ -1574,3 +1574,7 @@ pour dans la "PILIQI — Ce qui reste à trancher" il faut que tu mette ou qqpar
 
 est ce que tu peux voir "T42 : ajouter « Modifier » et « Émettre » sur la fiche d’une facture en brouillon, comme sur la liste." comment j'ai mis dans la fiche
 
+## 155. 2026-11-10 23:56 UTC
+
+il faut que tu mettes tout les "Le plus urgent" de la fiche dans un tableux pret à ecrire ma reponse. tu mets comme dans "mes question et vosreponses" dans le tableaux pret à remplir ma reponse car comme tu as fait mtn il aller chercher et copier et ajouter la colonne, c'est pas pratique comme ca.
+

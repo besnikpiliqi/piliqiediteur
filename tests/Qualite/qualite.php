@@ -23,15 +23,15 @@
  *       Infection comme chemins à muter.
  *   php tests/Qualite/qualite.php configuration-sensibles <destination>
  *       Écrit la configuration d'Infection (infection.json5) limitée aux
- *       parties sensibles : tout app/, moins chaque dossier et chaque
- *       fichier qui n'en est pas. Elle se combine avec
- *       --git-diff-filter=AM (les fichiers entiers ajoutés ou modifiés,
- *       comme la CI), qui ne se combine avec aucun autre filtre des
- *       fichiers.
+ *       parties sensibles, pour leur passage complet : tout app/, moins
+ *       chaque dossier et chaque fichier qui n'en est pas.
  *   php tests/Qualite/qualite.php sensibles-changes <commit de base>
- *       Les fichiers des parties sensibles ajoutés ou modifiés depuis ce
- *       commit, un par ligne (rien quand aucun ne l'est) : ceux dont la CI
- *       teste tous les mutants à chaque envoi.
+ *       Les fichiers des parties sensibles ajoutés, modifiés ou renommés
+ *       depuis ce commit, un par ligne, depuis la racine du dépôt (rien
+ *       quand aucun ne l'est) : la CI les donne à Infection comme chemins,
+ *       et il teste tous leurs mutants à chaque envoi. Un filtre de git
+ *       (--git-diff-filter, --git-diff-lines) ne les remplace pas :
+ *       Infection ne mute alors que les lignes changées de chaque fichier.
  *   php tests/Qualite/qualite.php flux <rapport-psalm.json>
  *       Aucun chemin d'une donnée venue de l'extérieur jusqu'à une requête
  *       SQL, une page, un fichier, une commande, une redirection ou un
@@ -460,7 +460,7 @@ function configurationSensibles(string $destination): int
 
 function sensiblesChanges(string $base): int
 {
-    $fichiers = explode("\n", trim((string) shell_exec('git -C '.escapeshellarg(RACINE).' diff --name-only --diff-filter=AM --no-color '.escapeshellarg($base).' -- app/')));
+    $fichiers = explode("\n", trim((string) shell_exec('git -C '.escapeshellarg(RACINE).' diff --name-only --no-renames --diff-filter=AM --no-color '.escapeshellarg($base).' -- app/')));
     $changes = array_filter($fichiers, fn (string $fichier): bool => $fichier !== '' && in_array(partieDe($fichier), PARTIES_SENSIBLES, true));
 
     echo $changes === [] ? '' : implode("\n", $changes)."\n";

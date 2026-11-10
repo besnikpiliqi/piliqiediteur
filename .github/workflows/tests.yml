@@ -249,15 +249,21 @@ jobs:
         run: php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml "$BASE"
 
       # À l'envoi seulement : les commits d'une demande de fusion sont ceux
-      # que la course de leur envoi a déjà testés.
+      # que la course de leur envoi a déjà testés. Infection reçoit les
+      # chemins des fichiers sensibles changés, et non un filtre de git
+      # (--git-diff-filter, --git-diff-lines), avec lequel il ne muterait que
+      # les lignes changées de chaque fichier. Les chemins viennent après
+      # « -- » : --ignore-msi-with-no-mutations, qui accepte une valeur,
+      # prendrait sinon le premier pour la sienne, et Infection ne muterait
+      # pas ce fichier.
       - name: Tests de mutation des parties sensibles changées
         if: github.event_name == 'push' && env.BASE != '' && env.BASE != '0000000000000000000000000000000000000000'
         env:
           LARAVEL_PARALLEL_TESTING: 1
         run: |
-          if [ -n "$(php tests/Qualite/qualite.php sensibles-changes "$BASE")" ]; then
-            php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json
-            vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --git-diff-filter=AM --git-diff-base="$BASE" --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations
+          fichiers=$(php tests/Qualite/qualite.php sensibles-changes "$BASE")
+          if [ -n "$fichiers" ]; then
+            vendor/bin/infection --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --no-progress --ignore-msi-with-no-mutations -- $fichiers
             if [ -f storage/qualite/infection.json ]; then
               php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md
             fi

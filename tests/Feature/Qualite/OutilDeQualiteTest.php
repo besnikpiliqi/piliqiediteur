@@ -3,8 +3,11 @@
 namespace Tests\Feature\Qualite;
 
 use Illuminate\Filesystem\Filesystem;
+use Infection\Command\RunCommand;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Input\StringInput;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Le contrôle de la couverture de tests/Qualite/qualite.php (décision de
@@ -12,11 +15,13 @@ use Symfony\Component\Process\Process;
  * Clover dans sa partie par son chemin relatif à la racine du dépôt, quel
  * que soit le dossier où le dépôt est monté (« /app » d'un conteneur
  * compris), refuse un rapport venu d'un autre dépôt, et ne laisse jamais
- * passer en silence une partie qui a un seuil sans être mesurée ; le
- * contrôle du témoin de l'analyse des flux exige exactement les chemins
- * qu'il annonce. Chaque cas
- * lance l'outil, comme la CI, sur une copie de tests/Qualite placée dans un
- * dépôt de test nommé « app ».
+ * passer en silence une partie qui a un seuil sans être mesurée ; il
+ * nomme depuis la racine du dépôt les fichiers sensibles changés, que la
+ * CI donne entiers à Infection, qui les lit tous comme des chemins (la
+ * commande de la CI, lue dans son fichier) ; le contrôle du témoin de
+ * l'analyse des flux exige exactement les chemins qu'il annonce. Chaque
+ * cas de l'outil le lance, comme la CI, sur une copie de tests/Qualite
+ * placée dans un dépôt de test nommé « app ».
  */
 class OutilDeQualiteTest extends TestCase
 {
@@ -103,6 +108,59 @@ class OutilDeQualiteTest extends TestCase
 
         $this->assertSame(1, $code, $sortie);
         $this->assertStringContainsString('app/Domain/Exemple.php:5', $sortie);
+    }
+
+    /**
+     * La CI donne à Infection, comme chemins, les fichiers des parties
+     * sensibles que l'envoi ajoute, modifie ou renomme, pour qu'il mute
+     * chacun en entier (avec un filtre de git, il ne muterait que leurs
+     * lignes changées) : chacun nommé depuis la racine du dépôt, jamais un
+     * fichier d'une autre partie ni un fichier retiré.
+     */
+    public function test_les_fichiers_sensibles_changes_se_nomment_depuis_la_racine_du_depot(): void
+    {
+        foreach (['app/Domain/Facturation/Services/CalculateurLigne.php', 'app/Policies/FacturePolicy.php', 'app/Policies/DevisPolicy.php', 'app/Domain/Exemple.php'] as $fichier) {
+            $this->ecrire($fichier, "<?php\n\n// avant l'envoi\n");
+        }
+        $this->git('init', '--quiet');
+        $this->git('add', '.');
+        $this->git('-c', 'user.name=PILIQI', '-c', 'user.email=test@example.test', 'commit', '--quiet', '-m', 'Base');
+        $this->ecrire('app/Domain/Facturation/Services/CalculateurLigne.php', "<?php\n\n// modifié\n");
+        $this->ecrire('app/Domain/Exemple.php', "<?php\n\n// modifié\n");
+        $this->ecrire('app/Models/User.php', "<?php\n\n// ajouté\n");
+        $this->git('mv', 'app/Policies/FacturePolicy.php', 'app/Policies/FacturesPolicy.php');
+        $this->git('rm', '--quiet', 'app/Policies/DevisPolicy.php');
+        $this->git('add', '.');
+        $this->git('-c', 'user.name=PILIQI', '-c', 'user.email=test@example.test', 'commit', '--quiet', '-m', 'Envoi');
+
+        [$code, $sortie] = $this->lancer('sensibles-changes', 'HEAD~1');
+
+        $this->assertSame(0, $code, $sortie);
+        $this->assertSame("app/Domain/Facturation/Services/CalculateurLigne.php\napp/Models/User.php\napp/Policies/FacturesPolicy.php\n", $sortie);
+    }
+
+    /**
+     * La tâche de mutation de la CI donne ces fichiers à Infection, qui les
+     * lit tous comme les chemins à muter : aucun filtre de git
+     * (--git-diff-filter, --git-diff-lines), avec lequel il ne muterait que
+     * leurs lignes changées, et aucun chemin pris pour la valeur d'une option
+     * qui en accepte une (--ignore-msi-with-no-mutations avalait le premier
+     * quand les chemins le suivaient sans « -- »).
+     */
+    public function test_la_ci_donne_a_infection_les_chemins_des_fichiers_sensibles_changes(): void
+    {
+        $ci = Yaml::parseFile(__DIR__.'/../../../.github/workflows/tests.yml');
+        $etape = array_values(array_filter($ci['jobs']['couverture']['steps'], fn (array $etape): bool => ($etape['name'] ?? '') === 'Tests de mutation des parties sensibles changées'))[0];
+        preg_match('#vendor/bin/infection (.+)$#m', $etape['run'], $commande);
+        $fichiers = ['app/Domain/Facturation/Services/CalculateurLigne.php', 'app/Models/User.php', 'app/Policies/FacturePolicy.php'];
+
+        $arguments = new StringInput(str_replace('$fichiers', implode(' ', $fichiers), $commande[1]));
+        $arguments->bind((new RunCommand)->getDefinition());
+
+        $this->assertStringContainsString('fichiers=$(php tests/Qualite/qualite.php sensibles-changes "$BASE")', $etape['run']);
+        $this->assertSame($fichiers, $arguments->getArgument('paths'));
+        $this->assertNull($arguments->getOption('git-diff-filter'));
+        $this->assertFalse($arguments->getOption('git-diff-lines'));
     }
 
     public function test_le_temoin_de_l_analyse_des_flux_exige_exactement_les_chemins_qu_il_annonce(): void

@@ -669,27 +669,6 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les numéros des avoirs dont le crédit reste imputé sur cette facture,
-     * chacun une fois, du premier imputé au dernier : un avoir peut s'y
-     * imputer plusieurs fois (à son émission, puis par un paiement), et le
-     * crédit qu'une contre-passation a rendu à son avoir n'y compte plus.
-     *
-     * @return list<string>
-     */
-    public function numerosDesAvoirsImputes(): array
-    {
-        $calculateur = app(CalculateurLigne::class);
-
-        return array_values($this->allocationsAvoir
-            ->sortBy('id')
-            ->groupBy('avoir_id')
-            ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
-            ->map(fn (Collection $allocations): ?string => ValeurRequise::de($allocations->first(), 'la première imputation d\'un avoir')->avoir?->numero)
-            ->filter()
-            ->all());
-    }
-
-    /**
      * Ce qui a réglé la facture à son émission, relu dans son contenu
      * signé, que son PDF imprime (Q5) ; rien pour un brouillon. Ce qu'elle
      * reçoit ensuite se lit dans ses imputations (voir montantPaye() et

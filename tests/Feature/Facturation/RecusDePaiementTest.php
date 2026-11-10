@@ -459,6 +459,33 @@ class RecusDePaiementTest extends TestCase
     }
 
     /**
+     * Sur la fiche de la facture, « Envoyer le reçu » d'un encaissement
+     * l'envoie à l'adresse du client, préremplie, avec le message saisi :
+     * l'écran dit l'envoi programmé, et l'e-mail part avec le PDF du reçu.
+     */
+    public function test_la_fiche_de_la_facture_envoie_le_recu_d_un_encaissement_au_client(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasin();
+        $facture = $this->facture(Client::factory()->professionnel()->create(['email' => 'compta@atelier.fr']), 100);
+        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 3000)]);
+        $this->actingAs(self::auteur());
+        Filament::setTenant($magasin);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertInfolistActionVisible('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu')
+            ->callInfolistAction('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu', ['message' => 'Merci pour votre règlement.'])
+            ->assertHasNoInfolistActionErrors()
+            ->assertNotified('Envoi à compta@atelier.fr programmé');
+
+        $envoi = EnvoiDocument::query()->sole();
+        $this->assertSame(['recu_paiement', RecuPaiement::query()->sole()->id, 'compta@atelier.fr', StatutEnvoi::Envoye], [$envoi->document_type, (int) $envoi->document_id, $envoi->destinataire, $envoi->statut]);
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('compta@atelier.fr')
+            && $mail->attachments()[0]->as === 'recu-RP-LYON1-2026-000001.pdf'
+            && str_contains($mail->render(), 'Merci pour votre règlement.'));
+    }
+
+    /**
      * Le client comptoir sans adresse ne reçoit jamais de reçu par e-mail :
      * l'action ne se propose pas.
      */

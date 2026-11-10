@@ -16,6 +16,8 @@ use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
@@ -63,6 +65,7 @@ use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\FicheLue;
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
@@ -454,6 +457,49 @@ class TenantIsolationTest extends TestCase
 
         $this->assertSame(0, PreuveOperation::query()->withoutGlobalScope(MagasinScope::class)->count());
         $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
+    }
+
+    /**
+     * Les fiches que corrige ModifierUneFicheAction.
+     *
+     * @return array<string, array{0: class-string<Client|Fournisseur|Produit|Service>}>
+     */
+    public static function fichesModifiables(): array
+    {
+        return [
+            'client' => [Client::class],
+            'fournisseur' => [Fournisseur::class],
+            'produit' => [Produit::class],
+            'service' => [Service::class],
+        ];
+    }
+
+    /**
+     * Une fiche se corrige dans le magasin qui l'a créée : depuis un autre
+     * magasin de la même société, l'action qui enregistre la correction ne
+     * la retrouve pas sous son verrou, même quand on la lui passe, le dit,
+     * et la fiche reste telle qu'elle était.
+     *
+     * @param  class-string<Client|Fournisseur|Produit|Service>  $modelClass
+     */
+    #[DataProvider('fichesModifiables')]
+    public function test_un_magasin_de_la_meme_societe_ne_corrige_pas_la_fiche_d_un_autre(string $modelClass): void
+    {
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $fiche = $modelClass::factory()->create(['nom' => 'Nom d\'origine']);
+        $lue = FicheLue::de($fiche)->valeurs();
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(
+            fn () => app(ModifierUneFicheAction::class)->handle(self::auteur(), $fiche, $lue, ['nom' => 'Nom corrigé']),
+            LogicException::class,
+            ArchiverUneFicheAction::REFUS_INTROUVABLE,
+        );
+
+        $contexte->set($this->magasinA);
+        $this->assertSame('Nom d\'origine', $fiche->fresh()?->getAttribute('nom'));
     }
 
     /**

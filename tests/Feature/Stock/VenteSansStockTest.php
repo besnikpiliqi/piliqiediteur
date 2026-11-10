@@ -34,6 +34,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Widgets\StockNegatifApercu;
 use App\Models\User;
@@ -254,6 +255,31 @@ class VenteSansStockTest extends TestCase
         $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
 
         $liste->callMountedTableAction();
+
+        $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Depuis la fiche d'un brouillon, « Émettre » une vente au-delà du
+     * stock garde sa fenêtre ouverte avec l'avertissement ; confirmé, il
+     * émet.
+     */
+    public function test_la_fiche_d_un_brouillon_avertit_avant_d_emettre_une_vente_sans_stock(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $cable = $this->produit('Câble USB', 1);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->callAction('emettre')
+            ->assertActionMounted('emettre')
+            ->assertSee('Le stock de Câble USB passera à −2.');
+        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
+
+        $fiche->callMountedAction();
 
         $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
     }

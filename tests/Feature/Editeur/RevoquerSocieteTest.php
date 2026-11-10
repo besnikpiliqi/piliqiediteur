@@ -48,7 +48,9 @@ use App\Domain\Tenancy\Services\VerificateurJournalAudit;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\Societe\Resources\JournalAuditResource;
 use App\Models\User;
+use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\ChannelManager;
@@ -163,6 +165,42 @@ class RevoquerSocieteTest extends TestCase
         $this->assertSame(['sirets_liberes' => [$magasin->siret], 'statut' => 'revoquee'], $entree->nouvelles_valeurs);
         $this->assertSame(1, User::query()->where('societe_id', $societe->id)->where('role_societe', RoleSociete::Proprietaire->value)->where('statut', StatutCompte::Actif->value)->count());
         $this->assertContains('Votre société est révoquée', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+    }
+
+    /**
+     * Un magasin que la société crée pendant sa révocation, entre la
+     * lecture de ses magasins réels et leurs verrous, n'y échappe pas : la
+     * révocation reprend sur tous ses magasins, et le nouveau se ferme,
+     * motif « révocation de la société », et libère son SIRET comme
+     * l'autre.
+     */
+    public function test_un_magasin_cree_pendant_la_revocation_est_revoque_avec_les_autres(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
+        $societe = $magasin->societe;
+        $this->prouverLaRemiseDuCourrierDeRevocation($societe);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $nouveau = null;
+        $cree = false;
+        DB::listen(function (QueryExecuted $requete) use ($societe, $proprietaire, &$nouveau, &$cree): void {
+            if ($cree || ! str_contains($requete->sql, 'from "magasins"') || str_contains($requete->sql, ' for ')) {
+                return;
+            }
+
+            $cree = true;
+            $nouveau = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Ouvert pendant la révocation', 'code' => null, 'email' => null, 'nic' => MagasinFactory::nicLibre($societe)]);
+        });
+
+        $revocation = app(RevoquerSocieteAction::class)->handle($societe->fresh(), $this->editeur());
+
+        $this->assertInstanceOf(Magasin::class, $nouveau);
+        $this->assertEqualsCanonicalizing([(string) $magasin->siret, (string) $nouveau->siret], $revocation['sirets']);
+        $this->assertSame(StatutSociete::Revoquee, $societe->fresh()->statut);
+        foreach ([$magasin, $nouveau] as $revoque) {
+            $this->assertFalse(SiretsDesMagasins::estReserve((string) $revoque->siret), $revoque->nom);
+            $periode = app(TenantContext::class)->runAs($revoque->fresh(), fn (): PeriodeActivite => PeriodeActivite::query()->where('magasin_id', $revoque->id)->sole());
+            $this->assertSame(MotifFermeture::RevocationSociete, $periode->motif_fin, $revoque->nom);
+        }
     }
 
     /**

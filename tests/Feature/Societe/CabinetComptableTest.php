@@ -5,16 +5,20 @@ namespace Tests\Feature\Societe;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
 use App\Domain\Cabinets\Enums\EtatDuLien;
+use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use Database\Factories\SocieteFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -79,6 +83,31 @@ class CabinetComptableTest extends TestCase
         Livewire::test(CabinetComptable::class)->callAction('mettreFin');
         $this->assertSame(EtatDuLien::Termine, $designation->fresh()->etat);
         $this->assertNotNull($page);
+    }
+
+    /**
+     * Depuis la page, le propriétaire retire la demande de lien qu'il a
+     * adressée à un cabinet, puis invite son expert-comptable, qui n'a pas
+     * encore d'espace, à en créer un : chaque geste le dit.
+     */
+    public function test_la_page_retire_une_demande_de_lien_et_invite_l_expert_a_creer_son_espace(): void
+    {
+        Mail::fake();
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        app(TenantContext::class)->clear();
+        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        Livewire::test(CabinetComptable::class)
+            ->callAction('retirerLaDemande', arguments: ['uuid' => $designation->uuid])
+            ->assertNotified('Votre demande est retirée.')
+            ->callAction('inviterSonExpert', ['email' => 'expert@cabinet.test'])
+            ->assertHasNoActionErrors()
+            ->assertNotified('L\'invitation est envoyée.');
+
+        $this->assertSame(EtatDuLien::Retire, $designation->fresh()->etat);
+        Mail::assertSent(InvitationACreerUnEspaceMail::class, fn (InvitationACreerUnEspaceMail $mail): bool => $mail->hasTo('expert@cabinet.test'));
     }
 
     public function test_la_page_ne_propose_que_les_autorisations_du_cabinet_en_deux_groupes(): void

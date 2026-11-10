@@ -391,6 +391,32 @@ class InvitationsTest extends TestCase
     }
 
     /**
+     * « Retirer », dans l'espace du cabinet : son propriétaire retire une
+     * invitation ouverte et une demande de rattachement en cours, chacune
+     * le dit, et leurs liens ne servent plus.
+     */
+    public function test_le_proprietaire_du_cabinet_retire_une_invitation_et_une_demande_depuis_son_espace(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $inscrite = $this->ouvrirUneSociete(['nom' => 'Boutique inscrite'])->societe;
+        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@libre.test');
+        $this->demanderLeRattachement($cabinet, $inscrite, 'dirigeant@inscrite.test');
+        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
+        $demande = LienCabinet::query()->withoutGlobalScopes()->sole();
+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
+
+        Livewire::test(InvitationsEtDemandes::class)
+            ->callAction('retirerLInvitation', arguments: ['uuid' => $invitation->uuid])
+            ->assertNotified('L\'invitation est retirée.')
+            ->callAction('retirerLaDemande', arguments: ['uuid' => $demande->uuid])
+            ->assertNotified('La demande est retirée.');
+
+        $this->assertSame([EtatInvitation::Retiree, EtatDuLien::Retire], [$invitation->fresh()->etat, $demande->fresh()->etat]);
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::InvitationRetiree));
+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));
+    }
+
+    /**
      * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
      * propriétaire peut seulement mettre fin à ses liens (voir
      * ControleDesDroits) ; l'invitation reste ouverte.

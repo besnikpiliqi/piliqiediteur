@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
@@ -386,6 +387,34 @@ class CollaborateursTest extends TestCase
         $this->assertSame([RoleSociete::Proprietaire, 'paul@cabinet.test'], [$collaborateur->fresh()->role_societe, $collaborateur->fresh()->email]);
         $this->assertNotNull($collaborateur->fresh()->email_verified_at);
         $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::ProprieteTransferee));
+    }
+
+    /**
+     * Depuis la fiche du collaborateur, le propriétaire du cabinet demande
+     * la transmission de la propriété en redonnant son mot de passe,
+     * renvoie le lien, qui remplace le précédent, puis annule : chaque geste
+     * le dit, et rien n'a changé dans le cabinet.
+     */
+    public function test_la_fiche_du_collaborateur_transmet_la_propriete_renvoie_le_lien_et_annule_la_transmission(): void
+    {
+        Mail::fake();
+        $cabinet = $this->ouvrirUnCabinet();
+        $collaborateur = $this->renseignerSonAdresse($this->collaborateur($cabinet), 'paul@cabinet.test');
+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
+
+        $fiche = Livewire::test(FicheDuCollaborateur::class, ['record' => $collaborateur->getRouteKey()])
+            ->callAction('transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Un lien a été envoyé à l\'adresse de ce collaborateur : la propriété ne passera que quand il l\'aura suivi.');
+        $premier = $this->jetonDuDernierLienDeTransmission();
+
+        $fiche->callAction('renvoyerLeLienDeTransmission')->assertNotified('Un nouveau lien a été envoyé à l\'adresse de ce collaborateur.');
+        Mail::assertSent(TransmissionDeLaProprieteMail::class, 2);
+        $this->assertNotSame($premier, $this->jetonDuDernierLienDeTransmission());
+
+        $fiche->callAction('annulerLaTransmission')->assertNotified('La transmission de la propriété est annulée.');
+        $this->assertNotNull(TransmissionPropriete::query()->where('destinataire_id', $collaborateur->id)->sole()->annulee_le);
+        $this->assertSame([RoleSociete::Collaborateur, RoleSociete::Proprietaire], [$collaborateur->fresh()->role_societe, $this->proprietaireDuCabinet($cabinet)->role_societe]);
     }
 
     public function test_l_ancien_proprietaire_du_cabinet_devient_collaborateur_avec_tous_les_clients_confies(): void

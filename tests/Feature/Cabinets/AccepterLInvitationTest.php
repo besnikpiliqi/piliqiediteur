@@ -250,6 +250,32 @@ class AccepterLInvitationTest extends TestCase
     }
 
     /**
+     * Un formulaire d'acceptation que la validation refuse se réaffiche,
+     * avec son erreur et le type d'activité choisi, sans rien créer ni
+     * connecter personne : l'invitation reste ouverte.
+     */
+    public function test_un_formulaire_d_acceptation_refuse_se_reaffiche_avec_son_erreur_et_le_type_choisi(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $jeton = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test');
+        $societes = Societe::query()->count();
+
+        $this->post(route('cabinets.invitation.accepter', ['jeton' => $jeton]), [
+            'password' => self::MOT_DE_PASSE_CHOISI,
+            'password_confirmation' => 'un-autre-mot-de-passe',
+            'type_activite' => TypeDActivite::Services->value,
+            'choix_definitif' => '1',
+        ])
+            ->assertOk()
+            ->assertSeeText('La confirmation du champ mot de passe ne correspond pas.')
+            ->assertSee('value="'.TypeDActivite::Services->value.'" checked', false);
+
+        $this->assertGuest();
+        $this->assertSame($societes, Societe::query()->count());
+        $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function codesLus(): array

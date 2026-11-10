@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
 use App\Filament\Societe\Pages\CabinetComptable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,6 +59,26 @@ class FinDuLienTest extends TestCase
 
         $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
         $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+    }
+
+    /**
+     * « Mettre fin au lien », dans la liste des clients du cabinet : son
+     * propriétaire met fin au lien, l'écran le dit, et le cabinet n'ouvre
+     * plus le client.
+     */
+    public function test_le_proprietaire_du_cabinet_met_fin_au_lien_depuis_la_liste_de_ses_clients(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin);
+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
+
+        Livewire::test(ListClientsDuCabinet::class)
+            ->callTableAction('mettreFin', $lien)
+            ->assertNotified('Le lien avec ce client a pris fin.');
+
+        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
+        $this->assertFalse($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
     }
 
     public function test_une_session_ouverte_perd_l_acces_au_client_des_sa_requete_suivante(): void

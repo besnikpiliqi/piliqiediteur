@@ -1,12 +1,14 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 18:25 UTC par pilotage-sync.sh : « D58 : note D57 en trois onglets ; workflow des décisions lancé ».
+Mis à jour le 10/11/2026 à 19:46 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b93aeff`. Commits locaux pas encore poussés :
 
 ```
+97c16bc Type les écrans, les commandes et la configuration, et passe Larastan au niveau 7 (lot TY1 8/n)
+430539c Type les ventes, les achats, la caisse et le stock (Larastan niveau 7, lot TY1 7/n)
 0e5cf71 Type les lectures des droits, de la société et des cabinets (Larastan niveau 7, lot TY1 6/n)
 8b3b731 Étend l'analyse statique à tout le code de l'application hors des tests (lot TY1 5/n)
 6fcefd0 Lit comme absent un témoin de poste envoyé en tableau, au lieu d'une erreur 500 (lot TY1 4/n)
@@ -43,60 +45,66 @@ d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Achats/Services/TvaDuFournisseur.php
- M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
- M app/Domain/CaisseSecurisee/Services/ContenuFiscal.php
- M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
- M app/Domain/CaisseSecurisee/Services/SignataireFiscal.php
- M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
- M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
- M app/Domain/Calendrier/Calendrier.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Contacts/Actions/CreerUneFicheAction.php
- M app/Domain/Contacts/Actions/ModifierUneFicheAction.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/CloturerLesJourneesAction.php
- M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
- M app/Domain/Facturation/Actions/EmettreAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreDevisAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
- M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
- M app/Domain/Facturation/Actions/EnregistrerAvoirAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/EnregistrerVenteCaisseAction.php
- M app/Domain/Facturation/Actions/EnvoyerDocumentAction.php
- M app/Domain/Facturation/Actions/FaireLAvoirDeRegularisationAction.php
- M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
- M app/Domain/Facturation/Actions/ModifierFactureAction.php
- M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
- M app/Domain/Facturation/Enums/TypeDeDocumentTelechargeable.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/ClotureCaisse.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/ArchiveDesDocuments.php
- M app/Domain/Facturation/Services/CaissesDeLaSociete.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/ConstructeurLigneDocument.php
- M app/Domain/Facturation/Services/DocumentChiffre.php
- M app/Domain/Facturation/Services/DocumentsDeLaPeriode.php
- M app/Domain/Facturation/Services/EReportingDesParticuliers.php
- M app/Domain/Facturation/Services/RecapitulatifDeCloture.php
- M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
- M app/Domain/Facturation/Services/RegularisationDUneFacture.php
- M app/Domain/Facturation/Services/TableauDesLignes.php
- M app/Domain/Facturation/Support/GardesDeLaVente.php
- M app/Domain/Stock/Actions/ValiderInventaireOuvertureAction.php
- M app/Domain/Stock/Listeners/NotifierLeStockNegatif.php
- M app/Domain/Stock/Listeners/NotifierLeStockSousLeSeuilDAlerte.php
- M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
- M app/Domain/Stock/Services/VerificateurDeStock.php
- M app/Domain/Tenancy/Services/ActionsUniques.php
-?? tests/Unit/DocumentChiffreTest.php
+M  app/Console/Commands/RelancerFacturesImpayees.php
+M  app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
+M  app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
+M  app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+M  app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
+M  app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
+M  app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
+M  app/Domain/Cabinets/Actions/RefuserLaDemandeDeLienAction.php
+M  app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
+M  app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
+M  app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
+M  app/Domain/Cabinets/Models/InvitationCabinet.php
+M  app/Domain/Cabinets/Models/LienCabinet.php
+M  app/Domain/Cabinets/Services/AccesDesCabinets.php
+M  app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
+M  app/Domain/Cabinets/Services/TableauDeBordDesClients.php
+M  app/Domain/Tenancy/Actions/AnnulerCessionAction.php
+M  app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
+M  app/Domain/Tenancy/Actions/CorrigerSirenAction.php
+M  app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
+M  app/Domain/Tenancy/Actions/ExaminerSirenAction.php
+M  app/Domain/Tenancy/Actions/FermerMagasinAction.php
+M  app/Domain/Tenancy/Actions/LibererLeSiretAction.php
+M  app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
+M  app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
+M  app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+M  app/Domain/Tenancy/Concerns/BelongsToSociete.php
+M  app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
+M  app/Domain/Tenancy/Models/Affectation.php
+M  app/Domain/Tenancy/Models/ChangementFinExercice.php
+M  app/Domain/Tenancy/Models/CodeConfirmation.php
+M  app/Domain/Tenancy/Models/DemandeInscription.php
+M  app/Domain/Tenancy/Models/EntreeAudit.php
+M  app/Domain/Tenancy/Models/Magasin.php
+M  app/Domain/Tenancy/Models/PeriodeActivite.php
+M  app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+M  app/Domain/Tenancy/Models/TransmissionPropriete.php
+M  app/Domain/Tenancy/Services/AffectationsDesMembres.php
+M  app/Domain/Tenancy/Services/CodeMagasin.php
+M  app/Domain/Tenancy/Services/CourriersDeVerification.php
+M  app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
+M  app/Domain/Tenancy/Services/JournalDesDroits.php
+M  app/Domain/Tenancy/Services/PiecesDeVerification.php
+M  app/Domain/Tenancy/Services/PorteeDesDroits.php
+M  app/Domain/Tenancy/Services/ReverificationSirene.php
+M  app/Domain/Tenancy/Services/SuiviDesConnexions.php
+M  app/Domain/Tenancy/Services/TenantContext.php
+A  app/Domain/Tenancy/Support/CompteConnecte.php
+A  app/Domain/Tenancy/Support/ModeleRelu.php
+A  app/Domain/Tenancy/Support/ValeurRequise.php
+M  app/Http/Controllers/ConfirmerInscriptionController.php
+M  app/Http/Controllers/TelechargerLesDocumentsController.php
+M  app/Http/Middleware/ExigerSonPropreMotDePasse.php
+M  app/Integrations/Vies/ClientVies.php
+M  app/Models/User.php
+M  app/Providers/Filament/AppPanelProvider.php
+A  tests/Feature/Tenancy/CompteConnecteTest.php
+A  tests/Feature/Tenancy/ModeleReluTest.php
+M  tests/Qualite/qualite.php
+A  tests/Unit/ValeurRequiseTest.php
 ```
 
 ## Dernière course de la chaîne

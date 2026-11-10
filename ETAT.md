@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 13:27 UTC par pilotage-sync.sh : « Après le lot PG ».
+Mis à jour le 10/11/2026 à 13:40 UTC par pilotage-sync.sh : « Point de suivi 10/11 13:55 UTC : PG poussé, notes sans SQLite, cahier de TY1 publié ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -58,4 +58,5 @@ PG:correction
 PG:poussee
 PG:fiche
 PG:notes
+TY1:implementation
 ```

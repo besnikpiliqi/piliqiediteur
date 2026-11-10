@@ -77,6 +77,8 @@ bacon/bacon-qr-code 3.1.1, barryvdh/laravel-dompdf 3.1.2, filament/filament 3.3.
 
 ### CI (`.github/workflows/tests.yml`)
 
+> Relevé du 26/10/2026, périmé. Depuis le lot PG (`b93aeff`, 10/11/2026), la CI passe la suite complète sur PostgreSQL 17 et 18 avec PHP 8.3, 8.4 et 8.5, sans SQLite (extensions `pdo_sqlite` et `sqlite3` désactivées), avec Pint, Larastan et ses seuils, Psalm (analyse des flux et son témoin), l'audit des dépendances, la couverture et la mutation : `.github/workflows/tests.yml` du dépôt fait foi.
+
 - Pint (`vendor/bin/pint --test`) sur PHP 8.3.
 - Suite complète sur SQLite avec PHP 8.3, 8.4 et 8.5 (`php artisan test --parallel`).
 - Suite complète sur PostgreSQL 17 (image `postgres:17`, `POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8`, rôle `piliqi` LOGIN CREATEDB, base `piliqi_test`), PHP 8.3.
@@ -84,7 +86,7 @@ bacon/bacon-qr-code 3.1.1, barryvdh/laravel-dompdf 3.1.2, filament/filament 3.3.
 
 ### Restes de l'ancien conteneur à ne pas refaire
 
-- `mariadb-server` 10.11, installé le 10/10 pour comparer les moteurs (arrêté) : `CLAUDE.md` interdit tout autre moteur que PostgreSQL et SQLite.
+- `mariadb-server` 10.11, installé le 10/10 pour comparer les moteurs (arrêté) : `CLAUDE.md` interdit tout autre moteur que PostgreSQL, seul moteur depuis la décision de l'éditeur du 08/11/2026 (D55).
 - Un cluster d'essai fait par `initdb` dans `/var/tmp/campagne-piliqi/pg` (port 55432, authentification `trust`), pour la mesure de capacité du 10/10.
 - Les rôles `relecteur`, `relecteur_ce84` et les bases `relecture_*`, `instables_pg*`, `piliqi_banc*`, faits pour des relectures et des mesures.
 - Les copies de travail du code dans le dossier temporaire de la session (`banc`, `wt`, `campagne`…).
@@ -302,19 +304,17 @@ Ne pas lancer `php artisan caisse:generer-cle` dans l'arbre de travail : il écr
 
 ## 6. Premiers essais, puis les suites
 
-Deux tests ciblés, un par moteur, avant toute chaîne :
+Un test ciblé sur PostgreSQL, seul moteur depuis le lot PG (D55), avant toute chaîne ; `phpunit.xml` vise la base de test `piliqi_test` et seul le mot de passe vient de l'environnement :
 
 ```bash
-cd /home/user/piliqiediteur
-php artisan test --compact tests/Unit/CalculateurLigneTest.php; echo $?
-bash -lc 'cd /home/user/piliqiediteur && DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=piliqi_test DB_USERNAME=piliqi DB_PASSWORD="$PILIQI_PG_MOT_DE_PASSE" php artisan test --compact tests/Feature/Recherche/RechercheSansAccentsTest.php'; echo $?
+bash -lc 'cd /home/user/piliqiediteur && DB_PASSWORD="$PILIQI_PG_MOT_DE_PASSE" php artisan test --compact tests/Feature/Recherche/RechercheSansAccentsTest.php'; echo $?
 ```
 
-Les suites complètes (protocole de `CLAUDE.md`) se lancent sous `bash -lc` pour lire le mot de passe, et le code de sortie se contrôle juste après (`echo $?`). Dans cet environnement, le résumé de PHPUnit sort en une ligne JSON (`{"tool":"paratest","result":"passed",…}`, laravel/pao). Ordres de grandeur dans l'ancien conteneur, avec 4 processus, le 25/10 : SQLite environ 4 min 30 (4 517 tests, dont 356 sautés parce qu'ils ne valent que pour PostgreSQL), PostgreSQL environ 11 minutes (4 517 tests, 4 sautés). La grille faketime du README du dépôt (17 instants depuis le lot T3, poussé le 26/10/2026 ; 12 avant ; ce paragraphe du README fait foi) se lance avant un commit qui touche aux dates : `TZ=UTC NO_FAKE_STAT=1 faketime -f "@$t" …`, et, sous PostgreSQL, avec en plus les variables de connexion et `FAKETIME_DONT_RESET=1`.
+Les suites complètes (protocole de `CLAUDE.md`) se lancent sous `bash -lc` pour lire le mot de passe, et le code de sortie se contrôle juste après (`echo $?`). Dans cet environnement, le résumé de PHPUnit sort en une ligne JSON (`{"tool":"paratest","result":"passed",…}`, laravel/pao). Ordres de grandeur dans l'ancien conteneur, avec 4 processus, le 25/10 : SQLite environ 4 min 30 (4 517 tests, dont 356 sautés parce qu'ils ne valent que pour PostgreSQL), PostgreSQL environ 11 minutes (4 517 tests, 4 sautés). SQLite ne se lance plus depuis le lot PG (D55) ; au lot PG, la suite PostgreSQL comptait 5 701 tests, tests en navigateur compris. La grille faketime du README du dépôt (17 instants depuis le lot T3, poussé le 26/10/2026 ; 12 avant ; ce paragraphe du README fait foi) se lance avant un commit qui touche aux dates : `TZ=UTC NO_FAKE_STAT=1 faketime -f "@$t" …`, et, sous PostgreSQL, avec en plus les variables de connexion et `FAKETIME_DONT_RESET=1`.
 
 ## 7. Pièges connus
 
-1. **Collation.** Les bases des tests parallèles se créent depuis `template1` : tout le cluster doit être en C.UTF-8 (ordre binaire, comme SQLite et comme la CI), pas seulement `piliqi_test`. Contrôler `template1` (encodage, collation et ctype), jamais seulement `piliqi_test`. Ne jamais supprimer un cluster ou une base qui contient des données.
+1. **Collation.** Les bases des tests parallèles se créent depuis `template1` : tout le cluster doit être en C.UTF-8 (ordre binaire, comme la CI), pas seulement `piliqi_test`. Contrôler `template1` (encodage, collation et ctype), jamais seulement `piliqi_test`. Ne jamais supprimer un cluster ou une base qui contient des données.
 2. **Rôle des tests.** LOGIN et CREATEDB (bases `piliqi_test_test_N` des processus parallèles), jamais superutilisateur, comme en CI.
 3. **Mot de passe.** L'outil Bash de Claude Code ne lit pas `~/.profile` : toute commande qui en a besoin passe par `bash -lc '…'`. Une ligne dans `~/.bashrc` seule ne sert à rien : ce fichier s'arrête dès le début quand le shell n'est pas interactif. Si un `~/.bash_profile` ou un `~/.bash_login` apparaît, bash -l ne lit plus `~/.profile` (le script le signale). La valeur ne s'affiche jamais, ne va ni dans le dépôt ni dans les notes ; `pilotage-sync.sh` refuse de pousser les notes s'il la trouve dans un fichier.
 4. **Redémarrage du conteneur.** PostgreSQL ne redémarre pas tout seul. Au début de chaque reprise (après une limite d'usage, une pause ou une interruption longue) : `service postgresql status`, puis `service postgresql start` s'il est arrêté. Redémarrages notés dans `notes/etat-chaines.md` : 18/10 (deux fois), 19/10 (deux fois), 24/10 ; la session a aussi relancé PostgreSQL les 10, 11, 12, 17 et 25 octobre. Un redémarrage garde le travail non commité dans l'arbre mais coupe les agents en cours (fiche de reprise § 5). `bash installer-session.sh --verifier` dit aussi si le serveur est arrêté.
@@ -326,7 +326,7 @@ Les suites complètes (protocole de `CLAUDE.md`) se lancent sous `bash -lc` pour
 10. **Version de PostgreSQL.** 16 en local (accepté pour les tests locaux), 17 en CI, 17 ou 18 en production. Une différence de comportement entre versions se voit en CI : vérifier la CI de chaque tête poussée (fiche de reprise § 5).
 11. **memory_limit.** PHP en ligne de commande était sans limite (`-1`). Si une nouvelle image en fixe une, des processus de la suite parallèle peuvent mourir : le script le signale en `[attention]`.
 12. **Script d'installation du cloud.** Il ne voit pas les variables de l'environnement, part du dossier au-dessus du dépôt, ne lit le dépôt privé que s'il est ajouté sous « Repositories » et a besoin du réseau vers apt, Packagist et GitHub (section 4). Il trouve l'arbre sur `main`, qui ne contient que le commit initial : d'où l'extraction de la branche de travail avant `installer-session.sh`.
-13. **Moteurs.** Ne pas réinstaller MariaDB ni aucun autre moteur : PostgreSQL et SQLite seulement (`CLAUDE.md`, puce « Outillage »).
+13. **Moteurs.** Ne pas réinstaller MariaDB ni aucun autre moteur : PostgreSQL seulement (`CLAUDE.md`, puce « Outillage » ; décision de l'éditeur du 08/11/2026, D55). Depuis le lot PG, PILIQI refuse à l'ouverture de sa connexion toute base d'un autre pilote. Le paquet `php8.3-sqlite3`, que `installer-session.sh` installe et contrôle encore, est gardé sans servir : sa présence ne change rien, et la CI désactive `pdo_sqlite` et `sqlite3`.
 14. **Valeurs secrètes.** Ne jamais demander à l'éditeur de coller une clé, un jeton ou un mot de passe dans la conversation ; les identifiants passent seulement par les variables de l'environnement (fiche de reprise § 3).
 15. **Contrôle des valeurs secrètes de `pilotage-sync.sh`.** Corrigé le 26/10/2026 (commit `122acac` de la branche de reprise) : la commande est `grep -rlF --exclude-dir=.git -- "$val" "$W"` (avant, `--exclude-dir=.git` placé après `--` était pris pour un fichier, et le contrôle ne trouvait jamais rien). Une valeur écrite dans `.github/workflows/tests.yml` du dépôt (le mot de passe public de la base de test de la CI, qui était aussi celui de l'ancien conteneur, un mot court qui figure partout dans les notes) n'est pas comptée comme un secret. Dans un conteneur neuf, le mot de passe tiré au hasard par `installer-session.sh` est contrôlé normalement. Depuis le 26/10/2026, la liste des variables contrôlées comprend aussi `RECOMMANDE_CLE`, `RECOMMANDE_SECRET_RAPPEL` et `JOURNAL_AUDIT_CLES_PRECEDENTES`, et le script ne bloque plus quand aucune course n'a encore tourné.
 

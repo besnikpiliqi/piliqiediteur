@@ -26,3 +26,12 @@
 7. **§ 6, « Reste dans la chaîne », TY1** : le lot TY1 doit traiter ce que `etat-chaines.md` dit noté pour lui (durée de « Couverture et mutation », § 3.3 de `decision-statique.md`) ; sans le cahier publié (point 1), rien de cela n'arrive à une autre session.
 8. **CI de `b93aeff`** : en cours au moment de cette relecture (courses 214 et 215) ; la session doit la vérifier avant de dire PG fini à l'éditeur. La tâche de mutation mute désormais en entier chaque fichier sensible changé (`d8deaf9`) : la durée vers la limite de 6 h d'une tâche GitHub est à surveiller (« laisses » de QA).
 9. **Compte rendu de PG à l'éditeur** : la fiche ne connaît pas les « laisses » de PG (non relevées ici faute du résultat de la course) ; la session les ajoute à la puce PG du § 6 après lecture du `result` de `PG:implementation` et `PG:correction`. Le geste « `.env` sur PostgreSQL » écrit dans la puce PG pour le PC de l'éditeur est déduit des commits (`.env.example` et `config/database.php` sur PostgreSQL, toute autre base refusée) ; à confirmer selon son `.env` actuel.
+
+## Traité par la session (10/11/2026, vers 13 h 55 UTC)
+
+- Point 1 : `qualite/decision-statique.md` ajouté à `pilotage-fichiers.txt` (relu avant : ni adresse, ni numéro, ni valeur secrète). Les autres fichiers que citent les compléments de `serie8-lots.js` sont publiés ; seul `qa3/calculs7.json`, cité par le lot QA (fini), n'existe pas dans les notes.
+- Point 2 : README.md, § 0 point 2, § 2 « voie la plus sûre », § 2 description de `REGLES`, § 5 « Durées » et § 6 « Audit final » réécrits pour PostgreSQL seul (D55) ; la citation de l'éditeur est gardée telle quelle.
+- Point 3 : `installation/ENVIRONNEMENT.md` : § 6, un seul test ciblé sur PostgreSQL (`DB_PASSWORD` seul, `phpunit.xml` porte le reste) ; § 2, relevé de la CI marqué périmé avec la CI actuelle ; § 7 points 1 et 13 sans SQLite ; `php8.3-sqlite3` gardé par `installer-session.sh`, et dit sans effet.
+- Point 9 : laisses de PG ajoutées à la puce PG du § 6 ; gestes du PC de l'éditeur adaptés à son poste (déjà sur PostgreSQL, base `piliqi_editeur`).
+- Point 8 : CI de `b93aeff` relevée à 13 h 40 UTC : Pint, « Analyse statique et seuils », « Analyse des flux de données » (rouge sur `6c7b3d1`, verte ici) et « Audit des dépendances » verts ; les six suites (PHP 8.3, 8.4 et 8.5 sur PostgreSQL 17 et 18) et « Couverture et mutation » en cours.
+- Points 4 à 7 : sans suite immédiate (ETAT.md régénéré par `PG:notes` ; correctifs de PG inutiles une fois poussé ; encadrés historiques laissés tels quels).

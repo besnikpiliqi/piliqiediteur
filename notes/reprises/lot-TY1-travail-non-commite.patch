@@ -1,88 +1,1976 @@
-diff --git a/README.md b/README.md
-index 71c047c..d817cf9 100644
---- a/README.md
-+++ b/README.md
-@@ -119,7 +119,7 @@ ## Tests, commandes et fonctionnement
- - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). Leur verrou, `tools/psalm/composer.lock`, est résolu pour PHP 8.3.16 (`config.platform.php` de `tools/psalm/composer.json`), la plus basse version que Psalm accepte pour le PHP du logiciel : il s'installe ainsi sous chaque version de PHP de la CI (8.3, 8.4 et 8.5), et une mise à jour de ses paquets (`composer update --working-dir=tools/psalm`) ne retient jamais un paquet qui exige un PHP plus récent. Avec un PHP 8.3 plus ancien que 8.3.16, lancez Psalm avec PHP 8.4 (`php8.4` à la place de `php` dans les commandes qui suivent). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
- - *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; une partie qui a un seuil sans aucune ligne mesurée fait échouer le contrôle, comme un rapport produit dans un autre dépôt) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, sans autre marge : une partie dont la couverture descend sous ce dixième fait échouer la CI. La couverture des branches, que demande aussi la décision du 01/11/2026, n'est pas mesurée : PCOV, que la décision impose, ne mesure que les lignes ; la mesurer demanderait Xdebug (couverture des chemins, bien plus lente) dans une tâche de la CI, question soumise à l'éditeur.
- - *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (les policies, les contrôles et les gardes des droits, la portée des comptes, les droits que lit `User`, l'accès des cabinets à leurs clients et les affectations des membres ; ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; pour les seuls fichiers sensibles ajoutés, modifiés ou renommés depuis un commit, tous leurs mutants, comme la CI, donnez à la place de la configuration leurs chemins, `-- $(php tests/Qualite/qualite.php sensibles-changes <commit>)`, ou ceux de quelques fichiers sensibles, après `--` : une option qui accepte une valeur, comme `--ignore-msi-with-no-mutations`, prendrait sinon le premier chemin pour la sienne, et ce fichier ne serait pas muté ; un filtre de git, `--git-diff-filter` ou `--git-diff-lines`, ne remplace pas ces chemins : Infection ne mute alors que les lignes changées de chaque fichier), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet ; la CI le compare, à chaque envoi, au score des fichiers sensibles que l'envoi ajoute ou modifie, chacun entier (décision du 01/11/2026, point 2) : un test retiré qui arrêtait les mutants d'une autre méthode d'un fichier changé se voit. Sur peu de fichiers, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil. Un envoi qui change `User.php` ou un fichier de calcul très appelé fait tourner la tâche plus d'une heure.
--- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus, qui ne vérifie rien d'elles : leurs tests (`GardesDesDroitsEnBaseTest`, `GardesDesCabinetsEnBaseTest`, `GardesDesTypesDActiviteTest`) lisent donc d'abord au catalogue de PostgreSQL chaque garde telle que les migrations l'ont posée, puis la reposent avant chaque test par le code de sa classe, celui qu'appellent les migrations (`retirer()` puis `poser()`, dans la transaction du test) ; un test de chaque fichier vérifie que les migrations posent chaque garde telle que `poser()` l'écrit, et les autres vérifient chaque refus par son message exact. Le verrou de chaque garde des droits a son test de concurrence (`GardesDesDroitsEnBaseConcurrenceTest`), qui rejoue les migrations : Infection éprouve ainsi leur code par les tests qui vérifient ce qu'elles refusent. Le référentiel des autorisations, écrit lui aussi pendant les migrations, garde des mutants non conclus. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou), le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent, et, dans `ControleDesDroits::dansLEspaceDeLaSociete()`, le refus d'un geste hors de l'équipe dans une société en lecture seule, que les policies de l'espace de la société font aussi (deux mutants, les seuls survivants des droits et de l'isolation).
-+- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus, qui ne vérifie rien d'elles : leurs tests (`GardesDesDroitsEnBaseTest`, `GardesDesCabinetsEnBaseTest`, `GardesDesTypesDActiviteTest`) lisent donc d'abord au catalogue de PostgreSQL chaque garde telle que les migrations l'ont posée, puis la reposent avant chaque test par le code de sa classe, celui qu'appellent les migrations (`retirer()` puis `poser()`, dans la transaction du test) ; un test de chaque fichier vérifie que les migrations posent chaque garde telle que `poser()` l'écrit, et les autres vérifient chaque refus par son message exact. Le verrou de chaque garde des droits a son test de concurrence (`GardesDesDroitsEnBaseConcurrenceTest`), qui rejoue les migrations : Infection éprouve ainsi leur code par les tests qui vérifient ce qu'elles refusent. Le référentiel des autorisations, écrit lui aussi pendant les migrations, garde des mutants non conclus. Aucun mutant survivant n'est connu dans ces deux parties : un mutant qu'un parcours ordinaire ne distingue pas s'arrête par un test qui appelle directement son code, comme `CalculateurLigneLimitesTest` pour la part d'une base d'un centime dans `CalculateurLigne::repartirLEcart()`, et `ControleDesDroitsTest` pour ce que `ControleDesDroits::dansLEspaceDeLaSociete()` refuse lui-même dans une société en lecture seule, avant les policies de l'espace de la société.
- - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
- - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
- - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, et que le tableau de bord et « Les caisses » de l'espace de la société (pour le propriétaire comme pour un administrateur) et le tableau de bord d'un cabinet lisent la base autant de fois avec un magasin ou un client que trois, sous un plafond ; `TempsDeReponseTest` (en navigateur) vérifie que chaque page principale du magasin, le tableau de bord et « Les caisses » de l'espace de la société et le tableau de bord d'un cabinet s'ouvrent sous un plafond de temps. Les droits que le compte connecté lit pendant une requête (ses autorisations dans chaque magasin, ses affectations, et pour un compte d'un cabinet les clients que ses liens lui ouvrent et ce que chacun lui accorde) se lisent une fois par requête et s'oublient à sa fin.
-diff --git a/tests/Feature/Authorization/ControleDesDroitsTest.php b/tests/Feature/Authorization/ControleDesDroitsTest.php
-index 22ba8f1..09e16e4 100644
---- a/tests/Feature/Authorization/ControleDesDroitsTest.php
-+++ b/tests/Feature/Authorization/ControleDesDroitsTest.php
-@@ -5,6 +5,7 @@
- use App\Domain\Achats\Models\AvoirFournisseur;
- use App\Domain\Achats\Models\FactureAchat;
- use App\Domain\Authorization\AutorisationsSociete;
-+use App\Domain\Authorization\ControleDesDroits;
- use App\Domain\Authorization\PermissionRegistry;
- use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+diff --git a/app/Domain/Authorization/PermissionRegistry.php b/app/Domain/Authorization/PermissionRegistry.php
+index 51bcd3f..f47cad3 100644
+--- a/app/Domain/Authorization/PermissionRegistry.php
++++ b/app/Domain/Authorization/PermissionRegistry.php
+@@ -311,7 +311,7 @@ public static function toutes(): array
+      * sûr. Le téléchargement des documents par période n'en est pas : il ne
+      * s'accorde jamais par défaut (voir cocheesParLeProprietaire()).
+      *
+-     * @return list<string>
++     * @return list<literal-string>
+      */
+     public static function consultations(): array
+     {
+@@ -475,7 +475,7 @@ public static function duProprietaire(TypeDActivite $type): array
+      * AffectationsDesMembres::cases()) ; le cabinet lié ne l'a que cochée
+      * par le propriétaire du client, jamais par défaut (voir duCabinet()).
+      *
+-     * @return list<string>
++     * @return list<literal-string>
+      */
+     public static function cocheesParLeProprietaire(TypeDActivite $type): array
+     {
+@@ -504,7 +504,7 @@ public static function modeleDeLAdministrateur(TypeDActivite $type): array
+      * consultations()) qui existent dans les magasins de son type (voir
+      * pourLeType()), dans l'ordre alphabétique.
+      *
+-     * @return list<string>
++     * @return list<literal-string>
+      */
+     public static function parDefautDuCabinet(TypeDActivite $typeDuClient): array
+     {
+@@ -523,7 +523,7 @@ public static function parDefautDuCabinet(TypeDActivite $typeDuClient): array
+      * vente, les clients, les services, les devis, les avoirs, les envois,
+      * les paramètres ni la caisse.
+      *
+-     * @return list<string>
++     * @return list<literal-string>
+      */
+     public static function ajoutablesAuCabinet(TypeDActivite $typeDuClient): array
+     {
+@@ -546,7 +546,7 @@ public static function ajoutablesAuCabinet(TypeDActivite $typeDuClient): array
+      * alphabétique ; aucune pour un cabinet, qui n'est jamais client. La liste d'un client qui a des articles est celle que la
+      * base écrit en toutes lettres (voir GardesDesCabinets).
+      *
+-     * @return list<string>
++     * @return list<literal-string>
+      */
+     public static function duCabinet(TypeDActivite $typeDuClient): array
+     {
+diff --git a/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php b/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
+index 3d69f8c..ced19e8 100644
+--- a/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
++++ b/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
+@@ -34,6 +34,7 @@
+ use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
+ use App\Integrations\Rne\RepresentantRne;
+ use App\Integrations\Rne\RneIndisponibleException;
++use App\Integrations\Sirene\UniteSirene;
+ use App\Models\User;
+ use Illuminate\Database\UniqueConstraintViolationException;
+ use Illuminate\Support\Facades\DB;
+@@ -212,12 +213,12 @@ private function valider(array $donnees): TypeDActivite
+      * transaction de l'acceptation.
+      *
+      * @param  array<string, mixed>  $identite
+-     * @param  array<string, mixed>  $consultation
++     * @param  array{resultat: ResultatVerification, unite: UniteSirene|null, motif: string|null}  $consultation  ce qu'a rendu ControleSirene::unite()
+      *
+      * @throws InvitationInvalideException
+      * @throws LogicException
+      */
+-    private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDActivite $type, array $identite, ?RepresentantRne $representant, string $nom, string $motDePasseHache, array $consultation, mixed $unite): User
++    private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDActivite $type, array $identite, ?RepresentantRne $representant, string $nom, string $motDePasseHache, array $consultation, UniteSirene $unite): User
+     {
+         Societe::query()->whereKey($cabinet->getKey())->sharedLock()->firstOrFail();
+         $relue = InvitationCabinet::query()->withoutGlobalScopes()->where('societe_id', $cabinet->getKey())->whereKey($invitation->getKey())->lockForUpdate()->first();
+diff --git a/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php b/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+index fbc98c3..0a069a6 100644
+--- a/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
++++ b/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+@@ -87,7 +87,7 @@ public function handle(User $auteur, User $collaborateur, array $liens): void
+                     $changements['ajoutes'][] = (int) $verrouilles->get($id)->societe_id;
+                 }
+ 
+-                $changements['retires'] = LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all();
++                $changements['retires'] = array_values(LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all());
+             }, function () use ($cabinet, $concernes): void {
+                 LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->orderBy('id')->lockForUpdate()->get();
+                 $cabinet->cabinet()->sharedLock()->first();
+diff --git a/app/Domain/Cabinets/Models/LienCabinet.php b/app/Domain/Cabinets/Models/LienCabinet.php
+index 8725f77..58127d0 100644
+--- a/app/Domain/Cabinets/Models/LienCabinet.php
++++ b/app/Domain/Cabinets/Models/LienCabinet.php
+@@ -11,6 +11,7 @@
+ use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Scopes\SocieteScope;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonImmutable;
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Model;
+@@ -203,12 +204,11 @@ public function scopeCloseApres(Builder $requete, CarbonImmutable $instant): voi
+      */
+     public function autorisations(): array
+     {
+-        return DB::table('autorisations_cabinet')
++        return ValeursLues::textes(DB::table('autorisations_cabinet')
+             ->where('societe_id', $this->societe_id)
+             ->where('lien_id', $this->getKey())
+             ->orderBy('autorisation')
+-            ->pluck('autorisation')
+-            ->all();
++            ->pluck('autorisation'));
+     }
+ 
+     /**
+diff --git a/app/Domain/Cabinets/Services/AccesDesCabinets.php b/app/Domain/Cabinets/Services/AccesDesCabinets.php
+index 47384d4..87f889d 100644
+--- a/app/Domain/Cabinets/Services/AccesDesCabinets.php
++++ b/app/Domain/Cabinets/Services/AccesDesCabinets.php
+@@ -9,6 +9,7 @@
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Scopes\SocieteScope;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Collection;
+@@ -70,7 +71,7 @@ public function liensOuverts(User $compte): Builder
+     {
+         $liens = $this->liensDuCompte($compte);
+ 
+-        return $compte->societe?->estUnCabinetVerifie() === true ? $liens : $liens->whereRaw('1 = 0');
++        return $compte->societe->estUnCabinetVerifie() ? $liens : $liens->whereRaw('1 = 0');
+     }
+ 
+     /**
+@@ -138,7 +139,7 @@ public function liensAMettreFin(Societe $cabinet, array $etats): Collection
+      */
+     public function clientsOuverts(User $compte): array
+     {
+-        return $this->liensOuverts($compte)->pluck('liens_cabinet.societe_id')->all();
++        return ValeursLues::entiers($this->liensOuverts($compte)->pluck('liens_cabinet.societe_id'));
+     }
+ 
+     /**
+diff --git a/app/Domain/Cabinets/Services/TableauDeBordDesClients.php b/app/Domain/Cabinets/Services/TableauDeBordDesClients.php
+index 4286d01..685f2b3 100644
+--- a/app/Domain/Cabinets/Services/TableauDeBordDesClients.php
++++ b/app/Domain/Cabinets/Services/TableauDeBordDesClients.php
+@@ -7,6 +7,7 @@
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Scopes\MagasinScope;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Collection;
+ use Illuminate\Database\Eloquent\Relations\HasMany;
+@@ -51,10 +52,10 @@ public function pour(User $compte): array
+         $magasins = Magasin::query()->whereIn('societe_id', $clients->keys()->all())->where('est_demonstration', false)->orderBy('id')
+             ->get(['id', 'societe_id', 'statut', 'territoire', 'est_demonstration']);
+         $suivis = $magasins->filter(fn (Magasin $magasin): bool => $compte->suitLesFacturesAEncaisserDans($magasin))->keyBy('id');
+-        $factures = $this->facturesAEncaisser($suivis->keys()->all())
++        $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
+             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
+ 
+-        return $liens
++        return array_values($liens
+             ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $clients[$lien->societe_id]->raison_sociale))
+             ->map(function (LienCabinet $lien) use ($clients, $magasins, $suivis, $factures): array {
+                 $siens = $suivis->where('societe_id', $lien->societe_id)->keys()->all();
+@@ -67,8 +68,7 @@ public function pour(User $compte): array
+                     'factures' => $siens === [] ? null : Facture::totauxAEncaisser($factures->whereIn('magasin_id', $siens)),
+                 ];
+             })
+-            ->values()
+-            ->all();
++            ->all());
+     }
+ 
+     /**
+diff --git a/app/Domain/Cabinets/Support/GardesDesCabinets.php b/app/Domain/Cabinets/Support/GardesDesCabinets.php
+index 8b0f07f..97e36bd 100644
+--- a/app/Domain/Cabinets/Support/GardesDesCabinets.php
++++ b/app/Domain/Cabinets/Support/GardesDesCabinets.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Cabinets\Enums\OrigineDuLien;
+ use App\Domain\Tenancy\Enums\RoleSociete;
+ use App\Domain\Tenancy\Enums\TypeDActivite;
++use App\Domain\Tenancy\Support\LitteralSql;
+ use Illuminate\Support\Facades\DB;
+ 
+ /**
+@@ -122,12 +123,11 @@ public static function retirer(string $garde): void
+      * la modification seulement.
+      *
+      * @param  key-of<self::TABLES>  $garde
+-     * @return list<array{0: string, 1: string, 2: string}>
++     * @return list<array{0: literal-string, 1: literal-string, 2: literal-string}>
+      */
+     private static function refus(string $garde): array
+     {
+         $cabinet = "'".TypeDActivite::Cabinet->value."'";
+-        $typeDe = static fn (string $colonne): string => "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.{$colonne}), '')";
+         $demandes = self::liste(array_map(static fn (EtatDuLien $etat): string => $etat->value, EtatDuLien::demandes()));
+         $avecDesArticles = self::liste(array_map(static fn (TypeDActivite $type): string => $type->value, array_filter(TypeDActivite::cases(), static fn (TypeDActivite $type): bool => $type->aDesArticles())));
+         $etatDuLien = "COALESCE((SELECT etat FROM liens_cabinet WHERE id = NEW.lien_id), '')";
+@@ -135,15 +135,15 @@ private static function refus(string $garde): array
+ 
+         return match ($garde) {
+             self::CABINETS => [
+-                ["{$typeDe('societe_id')} <> {$cabinet}", 'seul un cabinet d\'expertise comptable a une vérification de cabinet', self::TOUJOURS],
++                [self::typeDe('societe_id')." <> {$cabinet}", 'seul un cabinet d\'expertise comptable a une vérification de cabinet', self::TOUJOURS],
+             ],
+             self::INVITATIONS => [
+-                ["{$typeDe('societe_id')} <> {$cabinet}", 'seul un cabinet d\'expertise comptable invite une entreprise', self::TOUJOURS],
++                [self::typeDe('societe_id')." <> {$cabinet}", 'seul un cabinet d\'expertise comptable invite une entreprise', self::TOUJOURS],
+                 ["(NEW.etat = '".EtatInvitation::Ouverte->value."' AND NEW.close_le IS NOT NULL) OR (NEW.etat <> '".EtatInvitation::Ouverte->value."' AND NEW.close_le IS NULL)", 'une invitation close a toujours sa date de fin, une invitation ouverte n\'en a pas', self::TOUJOURS],
+             ],
+             self::LIENS => [
+-                ["{$typeDe('cabinet_id')} <> {$cabinet}", 'un lien ne se fait qu\'avec un cabinet d\'expertise comptable', self::TOUJOURS],
+-                ["{$typeDe('societe_id')} = {$cabinet}", 'un cabinet d\'expertise comptable n\'est jamais le client d\'un cabinet', self::TOUJOURS],
++                [self::typeDe('cabinet_id')." <> {$cabinet}", 'un lien ne se fait qu\'avec un cabinet d\'expertise comptable', self::TOUJOURS],
++                [self::typeDe('societe_id')." = {$cabinet}", 'un cabinet d\'expertise comptable n\'est jamais le client d\'un cabinet', self::TOUJOURS],
+                 ["NEW.jeton_hache IS NOT NULL AND NEW.etat <> '".EtatDuLien::DemandeParLeCabinet->value."'", 'le jeton d\'un lien ne vaut que pour une demande de rattachement en cours', self::TOUJOURS],
+                 ["NEW.etat NOT IN ({$demandes}) AND NOT (NEW.etat = {$actif} AND NEW.origine = '".OrigineDuLien::Invitation->value."')", 'un lien naît d\'une demande, ou actif par une invitation acceptée', self::INSERTION],
+                 ['NEW.societe_id <> OLD.societe_id OR NEW.cabinet_id <> OLD.cabinet_id OR NEW.origine <> OLD.origine', 'le client, le cabinet et l\'origine d\'un lien ne changent jamais', self::MODIFICATION],
+@@ -151,7 +151,7 @@ private static function refus(string $garde): array
+             ],
+             self::AUTORISATIONS => [
+                 ['NEW.autorisation NOT IN ('.self::liste(PermissionRegistry::duCabinet(TypeDActivite::Commerce)).')', 'une autorisation hors de celles d\'un cabinet lié ne s\'accorde jamais', self::TOUJOURS],
+-                ["COALESCE((SELECT famille FROM referentiel_autorisations_magasin WHERE cle = NEW.autorisation), '') = '".PermissionRegistry::FAMILLE_ARTICLES."' AND {$typeDe('societe_id')} NOT IN ({$avecDesArticles})", 'une autorisation des articles ne s\'accorde pas chez un client sans articles', self::TOUJOURS],
++                ["COALESCE((SELECT famille FROM referentiel_autorisations_magasin WHERE cle = NEW.autorisation), '') = '".PermissionRegistry::FAMILLE_ARTICLES."' AND ".self::typeDe('societe_id')." NOT IN ({$avecDesArticles})", 'une autorisation des articles ne s\'accorde pas chez un client sans articles', self::TOUJOURS],
+                 ["{$etatDuLien} <> {$actif}", 'une autorisation ne s\'accorde que sur un lien actif', self::TOUJOURS],
+             ],
+             self::CLIENTS_CONFIES => [
+@@ -161,10 +161,23 @@ private static function refus(string $garde): array
+         };
+     }
+ 
++    /**
++     * Le type d'activité de la société que désigne cette colonne de la
++     * ligne écrite, ou un texte vide sans société.
++     *
++     * @param  literal-string  $colonne
++     * @return literal-string
++     */
++    private static function typeDe(string $colonne): string
++    {
++        return "COALESCE((SELECT type_activite FROM societes WHERE id = NEW.{$colonne}), '')";
++    }
++
+     /**
+      * Ces valeurs, en liste SQL.
+      *
+-     * @param  array<array-key, string>  $valeurs
++     * @param  array<array-key, literal-string>  $valeurs
++     * @return literal-string
+      */
+     private static function liste(array $valeurs): string
+     {
+@@ -173,12 +186,14 @@ private static function liste(array $valeurs): string
+ 
+     /**
+      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
+-     * (apostrophes doublées).
++     * (voir LitteralSql).
+      *
+      * @param  key-of<self::TABLES>  $garde
++     * @param  literal-string  $raison
++     * @return literal-string
+      */
+     private static function message(string $garde, string $raison): string
+     {
+-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
++        return LitteralSql::de("{$garde} : {$raison}");
+     }
+ }
+diff --git a/app/Domain/Recherche/RechercheSansAccents.php b/app/Domain/Recherche/RechercheSansAccents.php
+index 9013745..8a64e72 100644
+--- a/app/Domain/Recherche/RechercheSansAccents.php
++++ b/app/Domain/Recherche/RechercheSansAccents.php
+@@ -2,6 +2,8 @@
+ 
+ namespace App\Domain\Recherche;
+ 
++use App\Domain\Tenancy\Support\ExpressionDUneColonne;
++use App\Domain\Tenancy\Support\LitteralSql;
+ use Closure;
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Model;
+@@ -52,7 +54,7 @@ final class RechercheSansAccents
+      * typographiques des claviers de téléphone, chacune avec ce qui la
+      * remplace une fois le texte en minuscules.
+      *
+-     * @var array<string, string>
++     * @var array<literal-string, literal-string>
+      */
+     public const LETTRES_SANS_DECOMPOSITION = [
+         'æ' => 'ae',
+@@ -123,6 +125,8 @@ public static function dans(string ...$colonnes): Closure
+      * (replace()) : « Œuvre » devient « oeuvre », « Łódź » devient « lodz ».
+      * Tout autre caractère reste tel quel : « ½ », « °C » ou « € » se
+      * cherchent comme ils s'écrivent, jamais retirés.
++     *
++     * @return literal-string
+      */
+     public static function creationDeLaFonction(): string
+     {
+@@ -133,17 +137,12 @@ public static function creationDeLaFonction(): string
+         $pliage = "lower(regexp_replace(normalize(texte, NFD), '[{$diacritiques}]', '', 'g'))";
+ 
+         foreach (self::LETTRES_SANS_DECOMPOSITION as $lettre => $remplacement) {
+-            $pliage = 'replace('.$pliage.', '.self::litteralSql($lettre).', '.self::litteralSql($remplacement).')';
++            $pliage = 'replace('.$pliage.', '.LitteralSql::de($lettre).', '.LitteralSql::de($remplacement).')';
+         }
+ 
+         return 'CREATE OR REPLACE FUNCTION '.self::FONCTION_SQL.'(texte text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$ SELECT '.$pliage.' $$';
+     }
+ 
+-    private static function litteralSql(string $texte): string
+-    {
+-        return "'".str_replace("'", "''", $texte)."'";
+-    }
+-
+     /**
+      * @template TModel of Model
+      *
+@@ -152,9 +151,10 @@ private static function litteralSql(string $texte): string
+      */
+     private static function contient(Builder $requete, string $colonne, string $motif, string $booleen = 'and'): Builder
+     {
+-        $fonction = self::FONCTION_SQL;
+-        $colonneSql = $requete->getQuery()->getGrammar()->wrap($requete->qualifyColumn($colonne));
+-
+-        return $requete->whereRaw("{$fonction}({$colonneSql}) like {$fonction}(?) escape '!'", [$motif], $booleen);
++        return $requete->whereRaw(
++            new ExpressionDUneColonne(self::FONCTION_SQL.'('.ExpressionDUneColonne::COLONNE.') like '.self::FONCTION_SQL."(?) escape '!'", $requete->qualifyColumn($colonne)),
++            [$motif],
++            $booleen,
++        );
+     }
+ }
+diff --git a/app/Domain/Tenancy/Actions/AnnulerCessionAction.php b/app/Domain/Tenancy/Actions/AnnulerCessionAction.php
+index aaa7262..0041004 100644
+--- a/app/Domain/Tenancy/Actions/AnnulerCessionAction.php
++++ b/app/Domain/Tenancy/Actions/AnnulerCessionAction.php
+@@ -20,6 +20,7 @@
+ use App\Domain\Tenancy\Services\JournalAudit;
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonImmutable;
+ use Illuminate\Database\Eloquent\Collection;
+ use LogicException;
+@@ -89,7 +90,7 @@ public function handle(Magasin $magasin, InterventionDeLEditeur $editeur): Motif
+             $instant = $cession->created_at;
+             $sorties = $this->sortiesDeLaDerniereCession($verrouille);
+ 
+-            $this->exigerAucuneOperationApres($instant, $sorties->modelKeys());
++            $this->exigerAucuneOperationApres($instant, ValeursLues::entiers($sorties->modelKeys()));
+             $motif = $cession->action === ActionAuditee::MagasinCede
+                 ? (MotifFermeture::tryFrom((string) ($cession->anciennes_valeurs['motif'] ?? '')) ?? MotifFermeture::Temporaire)
+                 : MotifFermeture::Temporaire;
+diff --git a/app/Domain/Tenancy/Actions/CorrigerLeTerritoireAction.php b/app/Domain/Tenancy/Actions/CorrigerLeTerritoireAction.php
+index 1fc86df..854eb79 100644
+--- a/app/Domain/Tenancy/Actions/CorrigerLeTerritoireAction.php
++++ b/app/Domain/Tenancy/Actions/CorrigerLeTerritoireAction.php
+@@ -89,7 +89,7 @@ public function handle(Magasin $magasin, InterventionDeLEditeur $editeur): Terri
+                 throw new LogicException($lu['motif']);
+             }
+ 
+-            [$corrige, $ancien] = app(TenantContext::class)->runAs($magasin, fn (): array => $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, function () use ($magasin, $siret, $consultation, $lu, $editeur): array {
++            [$corrige, $ancien] = app(TenantContext::class)->runAs($magasin, fn () => $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrou($magasin, function () use ($magasin, $siret, $consultation, $lu, $editeur) {
+                 $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
+ 
+                 if ($verrouille->siret !== $siret) {
+diff --git a/app/Domain/Tenancy/Actions/CreerEtablissementAction.php b/app/Domain/Tenancy/Actions/CreerEtablissementAction.php
+index 5d74919..067922f 100644
+--- a/app/Domain/Tenancy/Actions/CreerEtablissementAction.php
++++ b/app/Domain/Tenancy/Actions/CreerEtablissementAction.php
+@@ -192,7 +192,7 @@ public function handle(User $auteur, Societe $societe, array $donnees): Magasin
+ 
+     /**
+      * @param  array<string, mixed>  $donnees
+-     * @return array{nom: string, code?: string|null, nic: string, email?: string|null}
++     * @return array<string, mixed> les données validées : nom, code, nic et email
+      *
+      * @throws ValidationException
+      */
+diff --git a/app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php b/app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php
+index fa53dab..8112ee7 100644
+--- a/app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php
++++ b/app/Domain/Tenancy/Actions/FermerLaDemonstrationAction.php
+@@ -126,14 +126,14 @@ private function retirerLesComptesDEntrainementSiElleFinit(Magasin $demonstratio
+             return;
+         }
+ 
+-        $comptes = User::query()
++        $comptes = array_values(User::query()
+             ->where('societe_id', $demonstration->societe_id)
+             ->where('role_societe', RoleSociete::Membre->value)
+             ->where('statut', '<>', StatutCompte::Retire->value)
+             ->whereIn('id', Identifiant::query()->where('magasin_id', $demonstration->getKey())->select('user_id'))
+             ->orderBy('id')
+             ->get()
+-            ->all();
++            ->all());
+ 
+         if ($comptes === []) {
+             return;
+diff --git a/app/Domain/Tenancy/Actions/FermerMagasinAction.php b/app/Domain/Tenancy/Actions/FermerMagasinAction.php
+index 6759ba6..d4d3af9 100644
+--- a/app/Domain/Tenancy/Actions/FermerMagasinAction.php
++++ b/app/Domain/Tenancy/Actions/FermerMagasinAction.php
+@@ -305,11 +305,10 @@ private function sortirLeStock(Magasin $magasin): array
+         return [
+             'valeur_stock_sorti_ht' => number_format($valeur['total_ht'], 2, '.', ''),
+             'produits_sortis' => $sorties->count(),
+-            'produits_en_stock_negatif' => $produits
++            'produits_en_stock_negatif' => array_values($produits
+                 ->filter(fn (Produit $produit): bool => $produit->stock_quantite < 0)
+                 ->map(fn (Produit $produit): string => "{$produit->reference} {$produit->nom} ({$produit->stock_quantite})")
+-                ->values()
+-                ->all(),
++                ->all()),
+         ];
+     }
+ 
+diff --git a/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php b/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
+index 630c34e..eac19ba 100644
+--- a/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
++++ b/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
+@@ -129,8 +129,6 @@ class RevoquerSocieteAction
+ 
+     private const ESSAIS_SI_LES_MAGASINS_CHANGENT = 3;
+ 
+-    private const MAGASINS_CHANGES = 'magasins_changes';
+-
+     public function __construct(
+         private readonly RegistreFiscal $registre,
+         private readonly JournalAudit $journalAudit,
+@@ -199,15 +197,17 @@ private static function preuveQuElleSeRevoque(Societe $verrouillee): CodeConfirm
+      */
+     private function revoquerUneSociete(Societe $societe, InterventionDeLEditeur $editeur): array
+     {
+-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $editeur): array {
++        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $editeur) {
+             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
+                 $magasins = $societe->magasinsReels()->orderBy('id')->get();
+ 
+-                $resultat = $this->operateur->pendantLeSysteme(fn (): array|string => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $editeur): array|string {
++                // null quand les magasins réels ont changé entre leur lecture
++                // et leurs verrous : tout reprend alors.
++                $resultat = $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $editeur) {
+                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
+ 
+                     if (array_map(intval(...), $verrouillee->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
+-                        return self::MAGASINS_CHANGES;
++                        return null;
+                     }
+ 
+                     if ($verrouillee->statut === StatutSociete::Revoquee) {
+@@ -223,7 +223,7 @@ private function revoquerUneSociete(Societe $societe, InterventionDeLEditeur $ed
+                     return [...$this->revoquerSousVerrou($verrouillee, $editeur, $magasinsVerrouilles, $preuve), 'magasins' => $fermes];
+                 }));
+ 
+-                if ($resultat !== self::MAGASINS_CHANGES) {
++                if ($resultat !== null) {
+                     return $resultat;
+                 }
+             }
+@@ -248,7 +248,7 @@ private function revoquerUneSociete(Societe $societe, InterventionDeLEditeur $ed
+      */
+     private function revoquerUnCabinet(Societe $cabinet, InterventionDeLEditeur $editeur): array
+     {
+-        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn (): ?array => $this->operateur->pendantLeSysteme(fn (): ?array => DB::transaction(function () use ($cabinet, $editeur): ?array {
++        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->operateur->pendantLeSysteme(fn () => DB::transaction(function () use ($cabinet, $editeur) {
+             $verrouille = Societe::query()->whereKey($cabinet->getKey())->lock('for no key update')->firstOrFail();
+ 
+             if ($verrouille->statut === StatutSociete::Revoquee) {
+diff --git a/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php b/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
+index ff47e81..7d60f77 100644
+--- a/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
++++ b/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
+@@ -412,7 +412,7 @@ private function servir(Societe $societe, CodeConfirmation $code, ?array $nouvea
+      */
+     private function reprendreLaSociete(Societe $verrouillee, array $nouveauCompte): array
+     {
+-        $comptes = User::query()->where('societe_id', $verrouillee->getKey())->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get()->all();
++        $comptes = array_values(User::query()->where('societe_id', $verrouillee->getKey())->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get()->all());
+         $magasins = Magasin::query()->where('societe_id', $verrouillee->getKey())->orderBy('id')->get();
+ 
+         $resultat = $this->journalDesDroits->modifier(null, ActionAuditee::ProprieteReprise, $comptes, $magasins, function (?User $systeme, array $relus) use ($verrouillee, $nouveauCompte): array {
+diff --git a/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php b/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
+index e4dcd1e..e9be412 100644
+--- a/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
++++ b/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
+@@ -129,7 +129,7 @@ public function handle(TenantContext $contexte, DocumentsDeLaPeriode $documents,
+                 ->orderBy('id')
+                 ->get()
+                 ->each(fn (Magasin $magasin): Magasin => $magasin->setRelation('societe', $societe));
+-            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->selection ?? [], $telechargement->piece_manquante_seulement);
++            $choisis = $documents->choisis($compte, $magasins, (string) $telechargement->du, (string) $telechargement->au, $telechargement->typesDemandes(), $telechargement->origine, $telechargement->clesChoisies(), $telechargement->piece_manquante_seulement);
+ 
+             if ($choisis === []) {
+                 $this->echouer($telechargement, ArchiveDesDocuments::AUCUN_DOCUMENT);
+diff --git a/app/Domain/Tenancy/Models/Affectation.php b/app/Domain/Tenancy/Models/Affectation.php
+index 8395dae..1500fa4 100644
+--- a/app/Domain/Tenancy/Models/Affectation.php
++++ b/app/Domain/Tenancy/Models/Affectation.php
+@@ -6,6 +6,7 @@
+ use App\Domain\Tenancy\Enums\RoleMagasin;
+ use App\Domain\Tenancy\Enums\RoleSociete;
+ use App\Domain\Tenancy\Services\AffectationsDesMembres;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Database\Eloquent\Relations\BelongsTo;
+@@ -102,11 +103,10 @@ public function estDeResponsable(): bool
+      */
+     public function autorisations(): array
+     {
+-        return DB::table('autorisations_affectations')
++        return ValeursLues::textes(DB::table('autorisations_affectations')
+             ->where('affectation_id', $this->getKey())
+             ->orderBy('autorisation')
+-            ->pluck('autorisation')
+-            ->all();
++            ->pluck('autorisation'));
+     }
+ 
+     /**
+diff --git a/app/Domain/Tenancy/Models/TelechargementDeDocuments.php b/app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+index 804f3a2..d4b9506 100644
+--- a/app/Domain/Tenancy/Models/TelechargementDeDocuments.php
++++ b/app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+@@ -11,11 +11,13 @@
+ use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+ use App\Domain\Tenancy\Enums\StatutDuTelechargement;
+ use App\Domain\Tenancy\Scopes\SocieteScope;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Database\Eloquent\Relations\BelongsTo;
+ use Illuminate\Support\Str;
++use UnexpectedValueException;
+ 
+ /**
+  * Un téléchargement des documents par période (décision de l'éditeur du
+@@ -147,6 +149,19 @@ public function typesDemandes(): array
+         return array_values(array_filter(array_map(fn (mixed $type): ?TypeDeDocumentTelechargeable => is_string($type) ? TypeDeDocumentTelechargeable::tryFrom($type) : null, $this->types ?? [])));
+     }
+ 
++    /**
++     * Les clés des documents choisis (voir DocumentTrouve::cle()), telles
++     * que la demande les a gardées : des textes, que seul le code y écrit.
++     *
++     * @return list<string>
++     *
++     * @throws UnexpectedValueException une valeur qui n'est pas un texte
++     */
++    public function clesChoisies(): array
++    {
++        return ValeursLues::textes($this->selection ?? []);
++    }
++
+     public function estExpire(): bool
+     {
+         return $this->expire_le->lessThanOrEqualTo(now());
+diff --git a/app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php b/app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
+index f9ac7b3..41f98fb 100644
+--- a/app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
++++ b/app/Domain/Tenancy/Notifications/AvisDuTelechargementDesDocuments.php
+@@ -5,9 +5,11 @@
  use App\Domain\Calendrier\Calendrier;
-@@ -321,6 +322,38 @@ public function test_dans_l_espace_d_une_societe_suspendue_restent_l_equipe_et_l
-         $this->assertSame([true, false, false, false], $gestes());
+ use App\Domain\Tenancy\Enums\StatutDuTelechargement;
+ use App\Domain\Tenancy\Models\TelechargementDeDocuments;
++use App\Models\User;
+ use Filament\Notifications\Actions\Action;
+ use Filament\Notifications\Notification as NotificationFilament;
+ use Illuminate\Notifications\Notification;
++use LogicException;
+ 
+ /**
+  * Dans la cloche de la personne qui l'a demandé : son téléchargement des
+@@ -41,6 +43,7 @@ public function via(object $notifiable): array
+      */
+     public function toDatabase(object $notifiable): array
+     {
++        $destinataire = $notifiable instanceof User ? $notifiable : throw new LogicException('Seul un compte reçoit l\'avis d\'un téléchargement de documents.');
+         $telechargement = $this->telechargement;
+         $periode = 'du '.Calendrier::afficherJour((string) $telechargement->du, 'd/m/Y').' au '.Calendrier::afficherJour((string) $telechargement->au, 'd/m/Y');
+         $notification = $telechargement->statut === StatutDuTelechargement::Pret
+@@ -69,8 +72,8 @@ public function toDatabase(object $notifiable): array
+         return [
+             ...$notification->getDatabaseMessage(),
+             'telechargement_id' => (int) $telechargement->getKey(),
+-            'societe_id' => (int) $notifiable->societe_id,
+-            ...((int) $telechargement->societe_id === (int) $notifiable->societe_id ? [] : ['client_id' => (int) $telechargement->societe_id]),
++            'societe_id' => (int) $destinataire->societe_id,
++            ...((int) $telechargement->societe_id === (int) $destinataire->societe_id ? [] : ['client_id' => (int) $telechargement->societe_id]),
+             ...(count($magasins) === 1 ? ['magasin_id' => (int) $magasins[0]] : []),
+         ];
+     }
+diff --git a/app/Domain/Tenancy/Services/JetonsDuLien.php b/app/Domain/Tenancy/Services/JetonsDuLien.php
+index 4ffa7be..e092bf8 100644
+--- a/app/Domain/Tenancy/Services/JetonsDuLien.php
++++ b/app/Domain/Tenancy/Services/JetonsDuLien.php
+@@ -6,6 +6,7 @@
+ use App\Models\User;
+ use Illuminate\Support\Facades\DB;
+ use Illuminate\Support\Facades\Hash;
++use stdClass;
+ 
+ /**
+  * Les jetons des liens « Mot de passe oublié » du propriétaire, gardés par
+@@ -59,7 +60,7 @@ public function effacer(string $adresse): void
+ 
+     private function verifier(?object $ligne, string $jeton): bool
+     {
+-        if ($ligne === null || ! is_string($ligne->token) || $ligne->created_at === null) {
++        if (! $ligne instanceof stdClass || ! is_string($ligne->token) || $ligne->created_at === null) {
+             return false;
+         }
+ 
+diff --git a/app/Domain/Tenancy/Services/JournalDesDroits.php b/app/Domain/Tenancy/Services/JournalDesDroits.php
+index 569f393..c9d97ff 100644
+--- a/app/Domain/Tenancy/Services/JournalDesDroits.php
++++ b/app/Domain/Tenancy/Services/JournalDesDroits.php
+@@ -98,7 +98,7 @@ public function __construct(
+      *
+      * @param-immediately-invoked-callable  $modification
+      *
+-     * @param  Closure(User|null, list<User>): TResultat  $modification
++     * @param  ($auteur is null ? Closure(null, list<User>): TResultat : Closure(User, list<User>): TResultat)  $modification
+      * @param  (Closure(): void)|null  $verrousAvantLesComptes  d'autres verrous, pris juste après les registres et avant les comptes (les liens des clients confiés, voir ConfierDesClientsAction)
+      * @return TResultat
+      *
+@@ -108,14 +108,16 @@ public function __construct(
+      */
+     public function modifier(?User $auteur, ActionAuditee $action, array $comptes, iterable $magasinsVises, Closure $modification, ?Closure $verrousAvantLesComptes = null): mixed
+     {
+-        $vises = collect($magasinsVises)->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all();
++        $vises = array_values(collect($magasinsVises)->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all());
+         $ids = array_map(fn (User $compte): int => (int) $compte->getKey(), $comptes);
+ 
+         for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
+             $magasins = $this->magasinsTouches($ids, $vises);
+-            $termine = false;
+ 
+-            $resultat = $this->sousVerrouDesRegistres($magasins, function () use ($auteur, $action, $ids, $vises, $magasins, $modification, $verrousAvantLesComptes, &$termine): mixed {
++            // Le résultat de la modification, dans un tableau d'un élément,
++            // ou null quand les magasins touchés ont changé entre leur
++            // lecture et leurs verrous : tout reprend alors.
++            $tenu = $this->sousVerrouDesRegistres($magasins, function () use ($auteur, $action, $ids, $vises, $magasins, $modification, $verrousAvantLesComptes) {
+                 if ($verrousAvantLesComptes !== null) {
+                     $verrousAvantLesComptes();
+                 }
+@@ -129,28 +131,24 @@ public function modifier(?User $auteur, ActionAuditee $action, array $comptes, i
+                     return null;
+                 }
+ 
+-                $resultat = $this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $action, $relus, $magasins, $modification): mixed {
++                return [$this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $action, $relus, $magasins, $modification) {
+                     $avant = $this->etats($magasins, $relus);
+                     $resultat = $modification($auteurRelu, $relus);
+-                    $cree = $resultat instanceof User ? $resultat : (is_array($resultat) && ($resultat['compte'] ?? null) instanceof User ? $resultat['compte'] : null);
++                    $cree = self::compteCree($resultat);
+                     $apres = $this->etats($magasins, $cree === null ? $relus : [...$relus, $cree]);
+ 
+                     $this->inscrire($auteurRelu, $action, $magasins, $avant, $apres);
+ 
+                     return $resultat;
+-                });
+-
+-                $termine = true;
+-
+-                return $resultat;
++                })];
+             });
+ 
+-            if ($termine) {
++            if ($tenu !== null) {
+                 foreach ($comptes as $compte) {
+                     $compte->oublierLesDroits();
+                 }
+ 
+-                return $resultat;
++                return $tenu[0];
+             }
+         }
+ 
+@@ -262,21 +260,21 @@ public function modifierLeLien(?User $auteur, Societe $client, array $liens, Clo
+                     $auteurRelu = $auteur === null ? null : ($comptesVerrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.'));
+ 
+                     $resultat = $this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $clientVerrouille, $relus, $verrouilles, $modification, $entrees, $editeur, $visee, $magasins, $comptesAvant): mixed {
+-                        $avant = $this->etats($magasins, $comptesAvant->values()->all());
++                        $avant = $this->etats($magasins, array_values($comptesAvant->all()));
+                         $resultat = $modification($auteurRelu, $clientVerrouille, $relus);
+                         $liensApres = LienCabinet::query()
+                             ->where(fn ($apres) => $apres->whereKey($verrouilles->keys()->all())->orWhere('etat', EtatDuLien::Actif->value))
+                             ->orderBy('id')
+                             ->get();
+                         $comptesApres = $liensApres->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => (int) $compte->getKey());
+-                        $apres = $this->etats($magasins, $comptesAvant->union($comptesApres)->sortKeys()->values()->all());
++                        $apres = $this->etats($magasins, array_values($comptesAvant->union($comptesApres)->sortKeys()->all()));
+ 
+                         foreach ($apres as $compteId => $etat) {
+                             $this->inscrireLeJet130($magasins, $etat['compte'], $avant[$compteId]['magasins'] ?? [], $etat['magasins']);
+                         }
+ 
+-                        $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : $liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has((int) $lien->getKey()))->values()->all();
+-                        $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, fn (Societe $journal, array $liens): array => $entrees($journal, $liens, $resultat), $editeur, $visee);
++                        $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : array_values($liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has((int) $lien->getKey()))->all());
++                        $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, $entrees, $resultat, $editeur, $visee);
+ 
+                         return $resultat;
+                     });
+@@ -398,7 +396,7 @@ private function etats(Collection $magasins, array $comptes): array
+         $etats = [];
+ 
+         foreach ($comptes as $compte) {
+-            $relu = User::query()->findOrFail($compte->getKey());
++            $relu = User::query()->whereKey($compte->getKey())->firstOrFail();
+             $etats[$relu->getKey()] = [
+                 'compte' => $relu,
+                 'societe' => [
+@@ -482,19 +480,23 @@ private function sousVerrouDesRegistres(Collection $magasins, Closure $operation
+      * n'inscrit sa justification et ses opérateurs qu'au journal de la
+      * société qu'elle vise.
+      *
++     * @template TResultat
++     *
+      * @param  Collection<int, LienCabinet>  $liens
+      * @param  list<LienCabinet>  $concernes  les liens dont parlent les entrées, la première étant leur cible
+      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $avant
+      * @param  array<int, array{compte: User, societe: array<string, mixed>, magasins: array<int, array<string, mixed>|null>}>  $apres
++     * @param  Closure(Societe, list<LienCabinet>, TResultat): list<array{0: ActionAuditee, 1: array<string, mixed>, 2: int}>  $entrees  les entrées de chaque journal, d'après ce que la modification a rendu
++     * @param  TResultat  $resultat  ce que la modification a rendu
+      */
+-    private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, ?InterventionDeLEditeur $editeur, ?Societe $visee): void
++    private function inscrireAuxJournauxDuLien(?User $auteur, Societe $client, Collection $liens, array $concernes, array $avant, array $apres, Closure $entrees, mixed $resultat, ?InterventionDeLEditeur $editeur, ?Societe $visee): void
+     {
+         $cabinets = $liens->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
+         $journaux = [$client, ...$cabinets->map(fn (int $id): Societe => Societe::query()->findOrFail($id))->all()];
+         $duVisiteur = (int) ($auteur->societe_id ?? $client->getKey());
+ 
+         foreach ($journaux as $journal) {
+-            foreach ($entrees($journal, $concernes) as [$action, $valeurs, $cabinetId]) {
++            foreach ($entrees($journal, $concernes, $resultat) as [$action, $valeurs, $cabinetId]) {
+                 $droitsAvant = [];
+                 $droitsApres = [];
+ 
+@@ -582,4 +584,17 @@ private function inscrireLeJet130(Collection $magasins, User $compte, array $ava
+             $operateur === null || (int) $operateur->societe_id === (int) $magasin->societe_id ? $dansSaSociete() : $this->traces->horsDeSaSociete($dansSaSociete);
+         }
+     }
++
++    /**
++     * Le compte que la modification a créé, qu'elle le rende seul ou dans
++     * son résultat (« compte ») ; aucun sinon.
++     */
++    private static function compteCree(mixed $resultat): ?User
++    {
++        return match (true) {
++            $resultat instanceof User => $resultat,
++            is_array($resultat) && ($resultat['compte'] ?? null) instanceof User => $resultat['compte'],
++            default => null,
++        };
++    }
+ }
+diff --git a/app/Domain/Tenancy/Services/PeriodesDActivite.php b/app/Domain/Tenancy/Services/PeriodesDActivite.php
+index 81897fd..c153d5f 100644
+--- a/app/Domain/Tenancy/Services/PeriodesDActivite.php
++++ b/app/Domain/Tenancy/Services/PeriodesDActivite.php
+@@ -65,11 +65,11 @@ public function jours(Magasin $magasin): array
+     {
+         $calendrier = $magasin->calendrier();
+ 
+-        return PeriodeActivite::query()
++        return array_values(PeriodeActivite::query()
+             ->where('magasin_id', $magasin->getKey())
+             ->orderBy('debut')
+             ->get(['debut', 'fin'])
+             ->map(fn (PeriodeActivite $periode): array => [$calendrier->jourDe($periode->debut), $periode->fin === null ? null : $calendrier->jourDe($periode->fin)])
+-            ->all();
++            ->all());
+     }
+ }
+diff --git a/app/Domain/Tenancy/Services/PiecesDeVerification.php b/app/Domain/Tenancy/Services/PiecesDeVerification.php
+index f7e8b9e..d4b5fbf 100644
+--- a/app/Domain/Tenancy/Services/PiecesDeVerification.php
++++ b/app/Domain/Tenancy/Services/PiecesDeVerification.php
+@@ -55,11 +55,10 @@ public static function dossiersDExamen(): array
+     {
+         $disque = Storage::disk(self::DISQUE);
+ 
+-        return collect($disque->directories())
++        return array_values(collect($disque->directories())
+             ->filter(fn (string $dossier): bool => str_starts_with($dossier, self::PREFIXE_DES_DOSSIERS_D_EXAMEN))
+             ->map(fn (string $dossier): string => $disque->path($dossier))
+-            ->values()
+-            ->all();
++            ->all());
      }
  
+     /**
+diff --git a/app/Domain/Tenancy/Services/SiretsDesMagasins.php b/app/Domain/Tenancy/Services/SiretsDesMagasins.php
+index 07e1dbd..19e2cf3 100644
+--- a/app/Domain/Tenancy/Services/SiretsDesMagasins.php
++++ b/app/Domain/Tenancy/Services/SiretsDesMagasins.php
+@@ -99,7 +99,7 @@ public function liberer(Magasin $magasin, string $motif): void
+      */
+     public function libererCeuxDeLaSociete(Societe $societe, string $motif): array
+     {
+-        return SiretMagasin::query()
++        return array_values(SiretMagasin::query()
+             ->where('societe_id', $societe->getKey())
+             ->whereNull('libere_le')
+             ->orderBy('id')
+@@ -110,7 +110,7 @@ public function libererCeuxDeLaSociete(Societe $societe, string $motif): array
+ 
+                 return (string) $reservation->siret;
+             })
+-            ->all();
++            ->all());
+     }
+ 
+     /**
+diff --git a/app/Domain/Tenancy/Support/EntetesDeConfiance.php b/app/Domain/Tenancy/Support/EntetesDeConfiance.php
+new file mode 100644
+index 0000000..44a1932
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/EntetesDeConfiance.php
+@@ -0,0 +1,26 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use InvalidArgumentException;
++
++/**
++ * Les en-têtes que l'application croit d'un mandataire de confiance (voir
++ * FaireConfianceAuxMandataires), tels que Symfony les attend : un masque
++ * des six en-têtes qu'il connaît (Request::HEADER_*), de 0 à 63 ; un autre
++ * nombre est refusé.
++ */
++final class EntetesDeConfiance
++{
++    public const REFUS = 'Les en-têtes de confiance d\'un mandataire forment un masque de 0 à 63 : %d.';
++
 +    /**
-+     * Dans l'espace d'une société en lecture seule, le contrôle refuse
-+     * lui-même (false, sans laisser répondre la policy) tout geste qui n'est
-+     * ni une consultation, ni un geste sur l'équipe, ni la gestion de son
-+     * cabinet, et, dans une société révoquée, ces deux gestes-là aussi ; il
-+     * laisse répondre les policies (null) pour tout le reste, et pour tout
-+     * geste d'une société active.
++     * @return int<0, 63>
++     *
++     * @throws InvalidArgumentException un nombre hors du masque
 +     */
-+    public function test_dans_l_espace_d_une_societe_en_lecture_seule_le_controle_refuse_lui_meme_ce_qui_n_y_reste_pas_permis(): void
++    public static function masque(int $entetes): int
 +    {
-+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-+        $proprietaire = $this->proprietaireDe($magasin);
-+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-+        $societe = $magasin->societe;
-+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
-+        $controle = app(ControleDesDroits::class);
-+        $reponses = fn (): array => [
-+            $controle($proprietaire, 'view', [$societe]),
-+            $controle($proprietaire, 'suspendreOuReactiver', [$vendeur]),
-+            $controle($proprietaire, 'gererSonCabinet', [$societe]),
-+            $controle($proprietaire, 'modifierLesParametres', [$societe]),
++        return $entetes >= 0 && $entetes <= 63 ? $entetes : throw new InvalidArgumentException(sprintf(self::REFUS, $entetes));
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/ExpressionDUneColonne.php b/app/Domain/Tenancy/Support/ExpressionDUneColonne.php
+new file mode 100644
+index 0000000..de389e1
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/ExpressionDUneColonne.php
+@@ -0,0 +1,34 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use Illuminate\Contracts\Database\Query\Expression;
++use Illuminate\Database\Grammar;
++
++/**
++ * Une expression SQL écrite dans le code autour d'une colonne : à la place
++ * de « {colonne} », la grammaire de la connexion écrit le nom de la
++ * colonne protégé (wrap() : entre guillemets doubles, chacun doublé, la
++ * table qualifiée par son préfixe). Elle se passe partout où le
++ * constructeur de requêtes accepte une expression (where(), whereRaw(),
++ * orderBy(), select()), au lieu d'un SQL brut assemblé avec le nom de la
++ * colonne : whereRaw(), orderByRaw() et selectRaw() n'acceptent qu'un
++ * texte du code (literal-string), ce que vérifie l'analyse statique. Seul
++ * le nom de la colonne vient ainsi d'ailleurs que du code, et toujours
++ * protégé par la grammaire.
++ */
++final readonly class ExpressionDUneColonne implements Expression
++{
++    public const COLONNE = '{colonne}';
++
++    /**
++     * @param  literal-string  $expression  le SQL, avec « {colonne} » à la place de la colonne
++     * @param  string  $colonne  la colonne, qualifiée par sa table ou non (« clients.nom »)
++     */
++    public function __construct(private string $expression, private string $colonne) {}
++
++    public function getValue(Grammar $grammar): string
++    {
++        return str_replace(self::COLONNE, $grammar->wrap($this->colonne), $this->expression);
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/FicheLue.php b/app/Domain/Tenancy/Support/FicheLue.php
+index 5206db5..0c8693e 100644
+--- a/app/Domain/Tenancy/Support/FicheLue.php
++++ b/app/Domain/Tenancy/Support/FicheLue.php
+@@ -91,7 +91,7 @@ public static function depuis(string $modele, array $valeurs, ?array $attributs
+      */
+     private static function modifiables(Model $fiche, ?array $attributs): array
+     {
+-        return $attributs === null ? $fiche->getFillable() : array_values(array_intersect($fiche->getFillable(), $attributs));
++        return array_values($attributs === null ? $fiche->getFillable() : array_intersect($fiche->getFillable(), $attributs));
+     }
+ 
+     /**
+diff --git a/app/Domain/Tenancy/Support/GardesDesDroits.php b/app/Domain/Tenancy/Support/GardesDesDroits.php
+index eba1939..87f7e1d 100644
+--- a/app/Domain/Tenancy/Support/GardesDesDroits.php
++++ b/app/Domain/Tenancy/Support/GardesDesDroits.php
+@@ -130,7 +130,7 @@ public static function retirer(): void
+      * séquence quand le déclencheur d'une insertion la lit), et son
+      * message.
+      *
+-     * @return array<string, list<array{0: string, 1: string}>>
++     * @return array<key-of<self::TABLES>, list<array{0: literal-string, 1: literal-string}>>
+      */
+     private static function refus(): array
+     {
+@@ -187,6 +187,8 @@ private static function refus(): array
+      * La ligne parente que chaque fonction verrouille avant de lire (voir
+      * le docblock de la classe) ; aucune pour users, dont la ligne écrite
+      * est déjà verrouillée.
++     *
++     * @return literal-string
+      */
+     private static function verrou(string $garde): string
+     {
+@@ -200,15 +202,20 @@ private static function verrou(string $garde): string
+ 
+     /**
+      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
+-     * (apostrophes doublées).
++     * (voir LitteralSql).
++     *
++     * @param  literal-string  $garde
++     * @param  literal-string  $raison
++     * @return literal-string
+      */
+     private static function message(string $garde, string $raison): string
+     {
+-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
++        return LitteralSql::de("{$garde} : {$raison}");
+     }
+ 
+     /**
+-     * @param  list<string>  $valeurs
++     * @param  list<literal-string>  $valeurs
++     * @return literal-string
+      */
+     private static function liste(array $valeurs): string
+     {
+diff --git a/app/Domain/Tenancy/Support/GardesDesIdentifiants.php b/app/Domain/Tenancy/Support/GardesDesIdentifiants.php
+index 6b9d703..6375a69 100644
+--- a/app/Domain/Tenancy/Support/GardesDesIdentifiants.php
++++ b/app/Domain/Tenancy/Support/GardesDesIdentifiants.php
+@@ -50,11 +50,11 @@ public static function poser(): void
+ 
+         $connexion->unprepared("ALTER TABLE identifiants ADD CONSTRAINT identifiants_forme CHECK (identifiant ~ '^[1-9][0-9]{7}$')");
+         $connexion->unprepared('CREATE OR REPLACE FUNCTION garde_identifiants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN '
+-            ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_EFFACEMENT).'; END IF; '
+-            ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_ENTRAINEMENT).'; END IF; '
++            ."IF TG_OP IN ('DELETE', 'TRUNCATE') THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_EFFACEMENT).'; END IF; '
++            ."IF TG_OP = 'INSERT' AND NEW.magasin_id IS NOT NULL AND ".self::DEMONSTRATION.' AND NOT '.self::COMPTE_DE_MEMBRE." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_ENTRAINEMENT).'; END IF; '
+             ."IF TG_OP = 'UPDATE' THEN "
+-            ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_MODIFICATION).'; END IF; '
+-            .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".self::litteral(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
++            ."IF {$figees} OR (OLD.magasin_id IS NOT NULL AND NEW.magasin_id IS DISTINCT FROM OLD.magasin_id) THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_MODIFICATION).'; END IF; '
++            .'IF OLD.magasin_id IS NULL AND NEW.magasin_id IS NOT NULL AND '.self::DEMONSTRATION." THEN RAISE EXCEPTION '%', ".LitteralSql::de(self::MESSAGE_DEMONSTRATION_APRES_COUP).'; END IF; '
+             .'END IF; '
+             .'RETURN NEW; END $$');
+         $connexion->unprepared('CREATE TRIGGER garde_identifiants BEFORE INSERT OR UPDATE OR DELETE ON identifiants FOR EACH ROW EXECUTE FUNCTION garde_identifiants()');
+@@ -68,12 +68,4 @@ public static function retirer(): void
+     {
+         DB::connection()->unprepared('DROP FUNCTION IF EXISTS garde_identifiants()');
+     }
+-
+-    /**
+-     * Un message en littéral SQL (apostrophes doublées).
+-     */
+-    private static function litteral(string $message): string
+-    {
+-        return "'".str_replace("'", "''", $message)."'";
+-    }
+ }
+diff --git a/app/Domain/Tenancy/Support/GardesDesTypesDActivite.php b/app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
+index 12c910a..af2e0df 100644
+--- a/app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
++++ b/app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
+@@ -107,7 +107,7 @@ public static function retirer(string $garde): void
+      * ne refuse donc rien à l'insertion.
+      *
+      * @param  key-of<self::TABLES>  $garde
+-     * @return list<array{0: string, 1: string}>
++     * @return list<array{0: literal-string, 1: literal-string}>
+      */
+     private static function refus(string $garde): array
+     {
+@@ -141,6 +141,7 @@ private static function refus(string $garde): array
+      * Les valeurs de ces types, en liste SQL.
+      *
+      * @param  array<array-key, TypeDActivite>  $types
++     * @return literal-string
+      */
+     private static function liste(array $types): string
+     {
+@@ -149,12 +150,14 @@ private static function liste(array $types): string
+ 
+     /**
+      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
+-     * (apostrophes doublées).
++     * (voir LitteralSql).
+      *
+      * @param  key-of<self::TABLES>  $garde
++     * @param  literal-string  $raison
++     * @return literal-string
+      */
+     private static function message(string $garde, string $raison): string
+     {
+-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
++        return LitteralSql::de("{$garde} : {$raison}");
+     }
+ }
+diff --git a/app/Domain/Tenancy/Support/LitteralSql.php b/app/Domain/Tenancy/Support/LitteralSql.php
+new file mode 100644
+index 0000000..1bd7628
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/LitteralSql.php
+@@ -0,0 +1,48 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use InvalidArgumentException;
++
++/**
++ * Un texte du code écrit en littéral SQL de PostgreSQL, entre dollars
++ * (« $texte$…$texte$ ») : sans échappement, il garde tels quels ses
++ * apostrophes et ses barres obliques inverses, et se place aussi bien
++ * dans une requête que dans le corps d'une fonction, lui-même entre
++ * dollars (« $$…$$ »), ou parmi les arguments d'un déclencheur. Il
++ * n'est pas vide et ne contient aucun dollar : l'un et l'autre pourraient
++ * le terminer, ou terminer le corps de la fonction qui le contient
++ * (« $texte$$texte$ » contient « $$ »). Seul un texte écrit dans le code s'y
++ * place (literal-string), jamais une saisie : l'instruction qui le reçoit
++ * reste faite de textes du code, ce que vérifie l'analyse statique
++ * (DB::unprepared() n'accepte rien d'autre). Les gardes de la base y
++ * écrivent leurs messages de refus, et la fonction de la recherche sans
++ * accents ses lettres.
++ */
++final class LitteralSql
++{
++    public const REFUS_DOLLAR = 'Un littéral SQL entre dollars ne contient aucun dollar.';
++
++    public const REFUS_VIDE = 'Un littéral SQL entre dollars n\'est jamais vide.';
++
++    private const DOLLARS = '$texte$';
++
++    /**
++     * @param  literal-string  $texte
++     * @return literal-string
++     *
++     * @throws InvalidArgumentException un texte vide, ou qui contient un dollar
++     */
++    public static function de(string $texte): string
++    {
++        if ($texte === '') {
++            throw new InvalidArgumentException(self::REFUS_VIDE);
++        }
++
++        if (str_contains($texte, '$')) {
++            throw new InvalidArgumentException(self::REFUS_DOLLAR);
++        }
++
++        return self::DOLLARS.$texte.self::DOLLARS;
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/ResultatDePhp.php b/app/Domain/Tenancy/Support/ResultatDePhp.php
+new file mode 100644
+index 0000000..593981c
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/ResultatDePhp.php
+@@ -0,0 +1,35 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use RuntimeException;
++
++/**
++ * Le résultat d'une fonction de PHP ou d'une bibliothèque qui rend false
++ * quand elle échoue (fopen(), Number::format()…), lu pour ce qu'il est : un
++ * échec lève une exception qui nomme l'opération, au lieu de passer pour un
++ * flux ou un texte.
++ */
++final class ResultatDePhp
++{
++    public const ECHEC = '%s a échoué.';
++
++    /**
++     * @throws RuntimeException l'opération a échoué (false)
++     */
++    public static function texte(string|false $resultat, string $operation): string
++    {
++        return $resultat !== false ? $resultat : throw new RuntimeException(sprintf(self::ECHEC, $operation));
++    }
++
++    /**
++     * @param  resource|false  $resultat
++     * @return resource
++     *
++     * @throws RuntimeException l'opération a échoué (false)
++     */
++    public static function flux(mixed $resultat, string $operation): mixed
++    {
++        return is_resource($resultat) ? $resultat : throw new RuntimeException(sprintf(self::ECHEC, $operation));
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/SensDuTri.php b/app/Domain/Tenancy/Support/SensDuTri.php
+new file mode 100644
+index 0000000..a055942
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/SensDuTri.php
+@@ -0,0 +1,30 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use InvalidArgumentException;
++
++/**
++ * Le sens d'un tri qu'un tableau reçoit du navigateur (Filament le passe
++ * à la requête d'une colonne triable), lu comme le lit le constructeur de
++ * requêtes : « asc » ou « desc », sans tenir compte de la casse ; tout
++ * autre sens est refusé, avec le message du constructeur de requêtes.
++ */
++final class SensDuTri
++{
++    public const REFUS = 'Order direction must be "asc" or "desc".';
++
++    /**
++     * @return 'asc'|'desc'
++     *
++     * @throws InvalidArgumentException un autre sens
++     */
++    public static function de(string $sens): string
++    {
++        return match (strtolower($sens)) {
++            'asc' => 'asc',
++            'desc' => 'desc',
++            default => throw new InvalidArgumentException(self::REFUS),
++        };
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/ValeursLues.php b/app/Domain/Tenancy/Support/ValeursLues.php
+new file mode 100644
+index 0000000..4aa7b01
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/ValeursLues.php
+@@ -0,0 +1,156 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use UnexpectedValueException;
++
++/**
++ * Des valeurs lues là où rien ne dit leur type à l'analyse statique (une
++ * colonne d'une requête, pluck(), un champ d'une colonne JSON que le code a
++ * écrite, une liste passée à une macro, une option d'une commande, une
++ * variable d'environnement, un montant que le code écrit en texte), lues
++ * pour ce que leur source garantit : un texte, un entier, un booléen, un
++ * tableau ou un nombre écrit en texte, ou une liste de textes ou
++ * d'entiers, dans leur ordre. Une autre valeur (une colonne nulle, un champ
++ * absent, ou d'un autre type que celui que le code attend) est refusée par
++ * une exception, au lieu d'être utilisée pour ce qu'elle n'est pas.
++ */
++final class ValeursLues
++{
++    public const REFUS_TEXTE = 'Une valeur lue n\'est pas un texte : %s.';
++
++    public const REFUS_ENTIER = 'Une valeur lue n\'est pas un entier : %s.';
++
++    public const REFUS_NOMBRE = 'Un texte lu n\'est pas un nombre : « %s ».';
++
++    public const REFUS_BOOLEEN = 'Une valeur lue n\'est ni vraie ni fausse : %s.';
++
++    public const REFUS_TABLEAU = 'Une valeur lue n\'est pas un tableau : %s.';
++
++    public const REFUS_CHAMP = 'Un tableau lu n\'a pas son champ « %s ».';
++
++    /**
++     * Le texte de ce champ d'un tableau lu (une colonne JSON que le code a
++     * écrite).
++     *
++     * @param  array<array-key, mixed>  $tableau
++     *
++     * @throws UnexpectedValueException un champ absent, ou qui n'est pas un texte
++     */
++    public static function texteDe(array $tableau, string $champ): string
++    {
++        return self::texte(self::champ($tableau, $champ));
++    }
++
++    /**
++     * Le texte de ce champ, ou null quand il est nul.
++     *
++     * @param  array<array-key, mixed>  $tableau
++     *
++     * @throws UnexpectedValueException un champ absent, ou ni texte ni nul
++     */
++    public static function texteOuNulDe(array $tableau, string $champ): ?string
++    {
++        $valeur = self::champ($tableau, $champ);
++
++        return $valeur === null ? null : self::texte($valeur);
++    }
++
++    /**
++     * @param  array<array-key, mixed>  $tableau
++     *
++     * @throws UnexpectedValueException un champ absent, ou ni vrai ni faux
++     */
++    public static function booleenDe(array $tableau, string $champ): bool
++    {
++        $valeur = self::champ($tableau, $champ);
++
++        return is_bool($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_BOOLEEN, get_debug_type($valeur)));
++    }
++
++    /**
++     * @param  array<array-key, mixed>  $tableau
++     * @return array<array-key, mixed>
++     *
++     * @throws UnexpectedValueException un champ absent, ou qui n'est pas un tableau
++     */
++    public static function tableauDe(array $tableau, string $champ): array
++    {
++        $valeur = self::champ($tableau, $champ);
++
++        return is_array($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TABLEAU, get_debug_type($valeur)));
++    }
++
++    /**
++     * @throws UnexpectedValueException une valeur qui n'est pas un texte
++     */
++    public static function texte(mixed $valeur): string
++    {
++        return is_string($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TEXTE, get_debug_type($valeur)));
++    }
++
++    /**
++     * @throws UnexpectedValueException une valeur qui n'est pas un entier
++     */
++    public static function entier(mixed $valeur): int
++    {
++        return is_int($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_ENTIER, get_debug_type($valeur)));
++    }
++
++    /**
++     * Un nombre écrit en texte (« 120.00 »), tel que PHP le reconnaît
++     * (is_numeric()), sans le convertir.
++     *
++     * @return numeric-string
++     *
++     * @throws UnexpectedValueException un texte qui n'est pas un nombre
++     */
++    public static function nombre(string $valeur): string
++    {
++        return is_numeric($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_NOMBRE, $valeur));
++    }
++
++    /**
++     * @param  array<array-key, mixed>  $tableau
++     *
++     * @throws UnexpectedValueException un champ absent
++     */
++    private static function champ(array $tableau, string $champ): mixed
++    {
++        return array_key_exists($champ, $tableau) ? $tableau[$champ] : throw new UnexpectedValueException(sprintf(self::REFUS_CHAMP, $champ));
++    }
++
++    /**
++     * @param  iterable<mixed>  $valeurs
++     * @return list<string>
++     *
++     * @throws UnexpectedValueException une valeur qui n'est pas un texte
++     */
++    public static function textes(iterable $valeurs): array
++    {
++        $textes = [];
++
++        foreach ($valeurs as $valeur) {
++            $textes[] = self::texte($valeur);
++        }
++
++        return $textes;
++    }
++
++    /**
++     * @param  iterable<mixed>  $valeurs
++     * @return list<int>
++     *
++     * @throws UnexpectedValueException une valeur qui n'est pas un entier
++     */
++    public static function entiers(iterable $valeurs): array
++    {
++        $entiers = [];
++
++        foreach ($valeurs as $valeur) {
++            $entiers[] = self::entier($valeur);
++        }
++
++        return $entiers;
++    }
++}
+diff --git a/app/Http/Middleware/FaireConfianceAuxMandataires.php b/app/Http/Middleware/FaireConfianceAuxMandataires.php
+index 82c0f9e..14db28d 100644
+--- a/app/Http/Middleware/FaireConfianceAuxMandataires.php
++++ b/app/Http/Middleware/FaireConfianceAuxMandataires.php
+@@ -2,6 +2,7 @@
+ 
+ namespace App\Http\Middleware;
+ 
++use App\Domain\Tenancy\Support\EntetesDeConfiance;
+ use Illuminate\Http\Middleware\TrustProxies;
+ use Illuminate\Http\Request;
+ 
+@@ -38,7 +39,7 @@ protected function setTrustedProxyIpAddresses(Request $request): void
+         $adresses = $this->proxies();
+ 
+         if ($adresses !== []) {
+-            $request->setTrustedProxies($adresses, $this->getTrustedHeaderNames());
++            $request->setTrustedProxies($adresses, EntetesDeConfiance::masque($this->getTrustedHeaderNames()));
+         }
+     }
+ 
+diff --git a/app/Integrations/EnvoiRecommande/AdressePostale.php b/app/Integrations/EnvoiRecommande/AdressePostale.php
+index b6a20ff..7d0a760 100644
+--- a/app/Integrations/EnvoiRecommande/AdressePostale.php
++++ b/app/Integrations/EnvoiRecommande/AdressePostale.php
+@@ -2,6 +2,9 @@
+ 
+ namespace App\Integrations\EnvoiRecommande;
+ 
++use App\Domain\Tenancy\Support\ValeursLues;
++use UnexpectedValueException;
++
+ /**
+  * L'adresse officielle du siège d'une entreprise, avec sa dénomination et
+  * sa source : le registre national des entreprises ou, quand il n'en donne
+@@ -50,10 +53,19 @@ public function enTableau(): array
+     }
+ 
+     /**
+-     * @param  array{denomination: string|null, adresse: string, complement_adresse: string|null, code_postal: string, ville: string, source: string}  $donnees  ce qu'a écrit enTableau()
++     * @param  array<array-key, mixed>  $donnees  ce qu'a écrit enTableau(), relu de la base
++     *
++     * @throws UnexpectedValueException un tableau qui n'est pas celui qu'écrit enTableau()
+      */
+     public static function depuisTableau(array $donnees): self
+     {
+-        return new self($donnees['denomination'], $donnees['adresse'], $donnees['complement_adresse'], $donnees['code_postal'], $donnees['ville'], $donnees['source']);
++        return new self(
++            ValeursLues::texteOuNulDe($donnees, 'denomination'),
++            ValeursLues::texteDe($donnees, 'adresse'),
++            ValeursLues::texteOuNulDe($donnees, 'complement_adresse'),
++            ValeursLues::texteDe($donnees, 'code_postal'),
++            ValeursLues::texteDe($donnees, 'ville'),
++            ValeursLues::texteDe($donnees, 'source'),
++        );
+     }
+ }
+diff --git a/app/Integrations/EnvoiRecommande/DestinataireDuCourrier.php b/app/Integrations/EnvoiRecommande/DestinataireDuCourrier.php
+index 23d4078..e85c3c2 100644
+--- a/app/Integrations/EnvoiRecommande/DestinataireDuCourrier.php
++++ b/app/Integrations/EnvoiRecommande/DestinataireDuCourrier.php
+@@ -2,6 +2,9 @@
+ 
+ namespace App\Integrations\EnvoiRecommande;
+ 
++use App\Domain\Tenancy\Support\ValeursLues;
++use UnexpectedValueException;
++
+ /**
+  * Le destinataire d'un courrier recommandé à code : le représentant légal
+  * de l'entreprise inscrit au registre national des entreprises, par son
+@@ -42,10 +45,12 @@ public function enTableau(): array
+     }
+ 
+     /**
+-     * @param  array{nom: string, personne_morale: bool, adresse: array{denomination: string|null, adresse: string, complement_adresse: string|null, code_postal: string, ville: string, source: string}}  $donnees  ce qu'a écrit enTableau()
++     * @param  array<array-key, mixed>  $donnees  ce qu'a écrit enTableau(), relu de la base
++     *
++     * @throws UnexpectedValueException un tableau qui n'est pas celui qu'écrit enTableau()
+      */
+     public static function depuisTableau(array $donnees): self
+     {
+-        return new self($donnees['nom'], $donnees['personne_morale'], AdressePostale::depuisTableau($donnees['adresse']));
++        return new self(ValeursLues::texteDe($donnees, 'nom'), ValeursLues::booleenDe($donnees, 'personne_morale'), AdressePostale::depuisTableau(ValeursLues::tableauDe($donnees, 'adresse')));
+     }
+ }
+diff --git a/app/Models/User.php b/app/Models/User.php
+index 8b3dca2..9489693 100644
+--- a/app/Models/User.php
++++ b/app/Models/User.php
+@@ -15,6 +15,7 @@
+ use App\Domain\Tenancy\Models\Identifiant;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\Societe;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Database\Factories\UserFactory;
+ use Filament\Facades\Filament;
+ use Filament\Models\Contracts\FilamentUser;
+@@ -80,6 +81,13 @@
+  * propriétaire, confirmée par un lien et unique parmi les propriétaires
+  * (voir aUneAdresseDeConnexion()), ou un simple contact pour tout autre
+  * compte.
++ *
++ * Sa société n'est jamais nulle : societe_id ne l'est jamais en base, sa
++ * clé étrangère vise une société, qu'aucune société ne s'efface (voir
++ * DeclencheursDeProtection::sansSuppression()) et que Societe n'a aucun
++ * scope global.
++ *
++ * @property-read Societe $societe
+  */
+ #[Fillable(['name', 'email', 'password'])]
+ #[Hidden(['password', 'remember_token', 'nouvelle_adresse_jeton_hache', 'jeton_acces_redonne'])]
+@@ -356,7 +364,7 @@ public function estAdministrateur(): bool
+      */
+     public function estDUnCabinet(): bool
+     {
+-        return $this->societe?->estUnCabinet() === true;
++        return $this->societe->estUnCabinet();
+     }
+ 
+     public function estMembre(): bool
+@@ -566,12 +574,11 @@ public function autorisationsDeSociete(): array
+             return [];
+         }
+ 
+-        return DB::table('autorisations_societe')
++        return ValeursLues::textes(DB::table('autorisations_societe')
+             ->where('user_id', $this->getKey())
+             ->where('societe_id', $this->societe_id)
+             ->orderBy('autorisation')
+-            ->pluck('autorisation')
+-            ->all();
++            ->pluck('autorisation'));
+     }
+ 
+     /**
+@@ -734,7 +741,7 @@ public function oublierLesDroits(): void
+      */
+     public function droitsDans(Magasin $magasin): ?array
+     {
+-        $compte = self::query()->findOrFail($this->getKey());
++        $compte = self::query()->whereKey($this->getKey())->firstOrFail();
+         $duCabinet = $compte->estDUnCabinet();
+ 
+         if ($magasin->societe_id !== $compte->societe_id && ! $duCabinet) {
+@@ -978,9 +985,9 @@ public function effacerToutesSesNotifications(): void
+      */
+     public function magasinsDeSesDroits(): array
+     {
+-        return $this->estMembre()
+-            ? $this->affectations()->whereNotNull('magasin_id')->pluck('magasin_id')->all()
+-            : $this->magasinsDeSaPortee()->pluck('magasins.id')->all();
++        return ValeursLues::entiers($this->estMembre()
++            ? $this->affectations()->whereNotNull('magasin_id')->pluck('magasin_id')
++            : $this->magasinsDeSaPortee()->pluck('magasins.id'));
+     }
+ 
+     /**
+@@ -1020,9 +1027,9 @@ public function effacerLesAvisDesClients(array $clients): void
+      * l'administrer, et son cabinet dans l'espace du cabinet pour un compte
+      * actif d'un cabinet d'expertise comptable.
+      *
+-     * @return array<int, Magasin|Societe>|Collection<int, Magasin>|Collection<int, Societe>
++     * @return Collection<int, Magasin>|Collection<int, Societe>
+      */
+-    public function getTenants(Panel $panel): array|Collection
++    public function getTenants(Panel $panel): Collection
+     {
+         return match ($panel->getId()) {
+             'app' => $this->estDUnCabinet() ? $this->magasinsDuClientOuvert() : $this->magasinsAccessibles(),
+diff --git a/tests/Feature/Tenancy/ExpressionDUneColonneTest.php b/tests/Feature/Tenancy/ExpressionDUneColonneTest.php
+new file mode 100644
+index 0000000..53bf648
+--- /dev/null
++++ b/tests/Feature/Tenancy/ExpressionDUneColonneTest.php
+@@ -0,0 +1,36 @@
++<?php
++
++namespace Tests\Feature\Tenancy;
++
++use App\Domain\Tenancy\Support\ExpressionDUneColonne;
++use Illuminate\Support\Facades\DB;
++use Tests\TestCase;
++
++/**
++ * Une expression SQL du code autour d'une colonne (voir
++ * ExpressionDUneColonne) : la grammaire de PostgreSQL écrit à la place de
++ * chaque « {colonne} » le nom de la colonne protégé, qualifié par sa table,
++ * et le constructeur de requêtes l'accepte comme toute expression.
++ */
++class ExpressionDUneColonneTest extends TestCase
++{
++    public function test_chaque_marque_devient_la_colonne_protegee_par_la_grammaire(): void
++    {
++        $grammaire = DB::connection()->getQueryGrammar();
++
++        $this->assertSame('lower("clients"."nom") || "clients"."nom"', (new ExpressionDUneColonne('lower('.ExpressionDUneColonne::COLONNE.') || '.ExpressionDUneColonne::COLONNE, 'clients.nom'))->getValue($grammaire));
++        $this->assertSame('"nom""; drop table clients; --" is null', (new ExpressionDUneColonne(ExpressionDUneColonne::COLONNE.' is null', 'nom"; drop table clients; --'))->getValue($grammaire));
++    }
++
++    public function test_le_constructeur_de_requetes_l_execute_comme_toute_expression(): void
++    {
++        $noms = DB::query()
++            ->fromRaw("(values ('Pain'), ('Lait'), ('PAIN')) as t(nom)")
++            ->where(new ExpressionDUneColonne('lower('.ExpressionDUneColonne::COLONNE.')', 't.nom'), 'pain')
++            ->orderBy(new ExpressionDUneColonne(ExpressionDUneColonne::COLONNE.' collate "C"', 't.nom'))
++            ->pluck('nom')
++            ->all();
++
++        $this->assertSame(['PAIN', 'Pain'], $noms);
++    }
++}
+diff --git a/tests/Feature/Tenancy/LitteralSqlTest.php b/tests/Feature/Tenancy/LitteralSqlTest.php
+new file mode 100644
+index 0000000..de1ff9f
+--- /dev/null
++++ b/tests/Feature/Tenancy/LitteralSqlTest.php
+@@ -0,0 +1,60 @@
++<?php
++
++namespace Tests\Feature\Tenancy;
++
++use App\Domain\Tenancy\Support\LitteralSql;
++use Illuminate\Support\Facades\DB;
++use InvalidArgumentException;
++use Tests\TestCase;
++
++/**
++ * Un texte du code écrit en littéral SQL entre dollars (voir LitteralSql) :
++ * PostgreSQL le relit tel quel, apostrophes et barres obliques inverses
++ * comprises, dans une requête comme dans le corps d'une fonction entre
++ * dollars ; un texte vide ou qui contient un dollar, qui pourrait le
++ * terminer, est refusé.
++ */
++class LitteralSqlTest extends TestCase
++{
++    public function test_postgresql_relit_tel_quel_le_texte_ecrit_entre_dollars(): void
++    {
++        $relu = DB::selectOne('SELECT '.LitteralSql::de('une pièce ne s\'efface que d\'un brouillon \\ ; fin').' AS texte');
++
++        $this->assertSame('$texte$une pièce ne s\'efface que d\'un brouillon \\ ; fin$texte$', LitteralSql::de('une pièce ne s\'efface que d\'un brouillon \\ ; fin'));
++        $this->assertSame('une pièce ne s\'efface que d\'un brouillon \\ ; fin', $relu->texte);
++    }
++
++    public function test_le_corps_d_une_fonction_entre_dollars_garde_le_texte_tel_quel(): void
++    {
++        DB::beginTransaction();
++
++        try {
++            DB::unprepared('CREATE FUNCTION pg_temp.litteral_entre_dollars() RETURNS text LANGUAGE sql AS $$ SELECT '.LitteralSql::de('l\'apostrophe et la barre \\').' $$');
++            $relu = DB::selectOne('SELECT pg_temp.litteral_entre_dollars() AS texte');
++        } finally {
++            DB::rollBack();
++        }
++
++        $this->assertSame('l\'apostrophe et la barre \\', $relu->texte);
++    }
++
++    public function test_un_texte_qui_contient_un_dollar_est_refuse(): void
++    {
++        $this->expectException(InvalidArgumentException::class);
++        $this->expectExceptionMessage(LitteralSql::REFUS_DOLLAR);
++
++        LitteralSql::de('100 $');
++    }
++
++    /**
++     * Vide, il s'écrirait « $texte$$texte$ », où PostgreSQL lirait la fin du
++     * corps entre dollars de la fonction qui le contient.
++     */
++    public function test_un_texte_vide_est_refuse(): void
++    {
++        $this->expectException(InvalidArgumentException::class);
++        $this->expectExceptionMessage(LitteralSql::REFUS_VIDE);
++
++        LitteralSql::de('');
++    }
++}
+diff --git a/tests/Unit/EntetesDeConfianceTest.php b/tests/Unit/EntetesDeConfianceTest.php
+new file mode 100644
+index 0000000..6a11c29
+--- /dev/null
++++ b/tests/Unit/EntetesDeConfianceTest.php
+@@ -0,0 +1,48 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Tenancy\Support\EntetesDeConfiance;
++use InvalidArgumentException;
++use PHPUnit\Framework\Attributes\DataProvider;
++use PHPUnit\Framework\TestCase;
++use Symfony\Component\HttpFoundation\Request;
++
++/**
++ * Les en-têtes de confiance d'un mandataire (voir EntetesDeConfiance) : un
++ * masque des six en-têtes que Symfony connaît, de 0 à 63, rendu tel quel ;
++ * un autre nombre est refusé.
++ */
++class EntetesDeConfianceTest extends TestCase
++{
++    public function test_un_masque_des_en_tetes_de_symfony_est_rendu_tel_quel(): void
++    {
++        $tous = Request::HEADER_FORWARDED | Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_HOST
++            | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT | Request::HEADER_X_FORWARDED_PREFIX;
++
++        $this->assertSame(63, $tous);
++        $this->assertSame($tous, EntetesDeConfiance::masque($tous));
++        $this->assertSame(0, EntetesDeConfiance::masque(0));
++        $this->assertSame(Request::HEADER_X_FORWARDED_FOR, EntetesDeConfiance::masque(Request::HEADER_X_FORWARDED_FOR));
++    }
++
++    /**
++     * @return array<string, array{int}>
++     */
++    public static function horsDuMasque(): array
++    {
++        return [
++            'négatif' => [-1],
++            'au-delà des six en-têtes' => [64],
 +        ];
-+
-+        $this->assertSame([null, null, null, null], $reponses());
-+
-+        $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
-+        $this->assertSame([null, null, null, false], $reponses());
-+
-+        $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
-+        $this->assertSame([null, false, false, false], $reponses());
 +    }
 +
-     /**
-      * Un compte qui n'est pas actif n'a aucun droit, propriétaire compris,
-      * pas même une consultation.
-diff --git a/tests/Unit/CalculateurLigneLimitesTest.php b/tests/Unit/CalculateurLigneLimitesTest.php
-index 97fb8ff..bf4130d 100644
---- a/tests/Unit/CalculateurLigneLimitesTest.php
-+++ b/tests/Unit/CalculateurLigneLimitesTest.php
-@@ -217,6 +217,19 @@ public function test_une_part_negative_d_un_demi_centime_s_arrondit_en_s_eloigna
-         $this->assertSame([0, 1], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 1), self::part(1, 1)], 2000, 1)));
-     }
- 
-+    /**
-+     * Une ligne de 0,01 € HT dont la proposition portait 3 centimes de TVA
-+     * (une note d'avoir qui écrit un HT plus bas que celui des articles
-+     * retournés), ramenée à une TVA retenue nulle : la part de sa base d'un
-+     * centime retire les 3 centimes, et la ligne n'en garde aucun. Divisée
-+     * par une base de 2 centimes, la part n'en retirerait que 2 et la ligne
-+     * en garderait 1, au-delà de la TVA retenue.
-+     */
-+    public function test_la_part_d_une_base_d_un_centime_retire_toute_la_tva_proposee_en_trop(): void
++    #[DataProvider('horsDuMasque')]
++    public function test_un_nombre_hors_du_masque_est_refuse(int $entetes): void
 +    {
-+        $this->assertSame([0], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 3)], 2000, 0)));
++        $this->expectException(InvalidArgumentException::class);
++        $this->expectExceptionMessage(sprintf(EntetesDeConfiance::REFUS, $entetes));
++
++        EntetesDeConfiance::masque($entetes);
++    }
++}
+diff --git a/tests/Unit/ResultatDePhpTest.php b/tests/Unit/ResultatDePhpTest.php
+new file mode 100644
+index 0000000..95c04a0
+--- /dev/null
++++ b/tests/Unit/ResultatDePhpTest.php
+@@ -0,0 +1,49 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Tenancy\Support\ResultatDePhp;
++use PHPUnit\Framework\TestCase;
++use RuntimeException;
++
++/**
++ * Le résultat d'une fonction qui rend false quand elle échoue (voir
++ * ResultatDePhp) : un texte ou un flux est rendu tel quel, un texte vide
++ * compris ; false lève une exception qui nomme l'opération.
++ */
++class ResultatDePhpTest extends TestCase
++{
++    public function test_un_texte_est_rendu_tel_quel_meme_vide(): void
++    {
++        $this->assertSame('1 234,50', ResultatDePhp::texte('1 234,50', 'Number::format()'));
++        $this->assertSame('', ResultatDePhp::texte('', 'Number::format()'));
++        $this->assertSame('0', ResultatDePhp::texte('0', 'Number::format()'));
 +    }
 +
-     /**
-      * Un retour au fournisseur ne propose jamais un montant négatif : quand
-      * les retours précédents ont déjà rendu plus que la proposition des
++    public function test_un_texte_qui_echoue_leve_une_exception_qui_nomme_l_operation(): void
++    {
++        $this->expectException(RuntimeException::class);
++        $this->expectExceptionMessage(sprintf(ResultatDePhp::ECHEC, 'Number::format()'));
++
++        ResultatDePhp::texte(false, 'Number::format()');
++    }
++
++    public function test_un_flux_ouvert_est_rendu_tel_quel(): void
++    {
++        $ouvert = fopen('php://memory', 'w+');
++
++        try {
++            $this->assertSame($ouvert, ResultatDePhp::flux($ouvert, 'fopen()'));
++        } finally {
++            fclose($ouvert);
++        }
++    }
++
++    public function test_un_flux_qui_n_a_pas_pu_s_ouvrir_leve_une_exception_qui_nomme_l_operation(): void
++    {
++        $this->expectException(RuntimeException::class);
++        $this->expectExceptionMessage(sprintf(ResultatDePhp::ECHEC, 'fopen()'));
++
++        ResultatDePhp::flux(false, 'fopen()');
++    }
++}
+diff --git a/tests/Unit/SensDuTriTest.php b/tests/Unit/SensDuTriTest.php
+new file mode 100644
+index 0000000..89e25d3
+--- /dev/null
++++ b/tests/Unit/SensDuTriTest.php
+@@ -0,0 +1,57 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Tenancy\Support\SensDuTri;
++use InvalidArgumentException;
++use PHPUnit\Framework\Attributes\DataProvider;
++use PHPUnit\Framework\TestCase;
++
++/**
++ * Le sens d'un tri reçu du navigateur (voir SensDuTri), lu comme le
++ * constructeur de requêtes le lit : « asc » ou « desc », sans tenir compte
++ * de la casse ; tout autre sens est refusé avec son message.
++ */
++class SensDuTriTest extends TestCase
++{
++    /**
++     * @return array<string, array{string, string}>
++     */
++    public static function sensAcceptes(): array
++    {
++        return [
++            'croissant' => ['asc', 'asc'],
++            'décroissant' => ['desc', 'desc'],
++            'majuscules' => ['DESC', 'desc'],
++            'casse mêlée' => ['Asc', 'asc'],
++        ];
++    }
++
++    #[DataProvider('sensAcceptes')]
++    public function test_asc_et_desc_sont_lus_sans_tenir_compte_de_la_casse(string $sens, string $lu): void
++    {
++        $this->assertSame($lu, SensDuTri::de($sens));
++    }
++
++    /**
++     * @return array<string, array{string}>
++     */
++    public static function sensRefuses(): array
++    {
++        return [
++            'vide' => [''],
++            'mot entier' => ['ascending'],
++            'espace autour' => [' asc'],
++            'injection' => ['asc, (select 1)'],
++        ];
++    }
++
++    #[DataProvider('sensRefuses')]
++    public function test_un_autre_sens_est_refuse(string $sens): void
++    {
++        $this->expectException(InvalidArgumentException::class);
++        $this->expectExceptionMessage(SensDuTri::REFUS);
++
++        SensDuTri::de($sens);
++    }
++}
+diff --git a/tests/Unit/ValeursLuesTest.php b/tests/Unit/ValeursLuesTest.php
+new file mode 100644
+index 0000000..6285b9d
+--- /dev/null
++++ b/tests/Unit/ValeursLuesTest.php
+@@ -0,0 +1,194 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Tenancy\Support\ValeursLues;
++use ArrayIterator;
++use PHPUnit\Framework\Attributes\DataProvider;
++use PHPUnit\Framework\TestCase;
++use UnexpectedValueException;
++
++/**
++ * Les valeurs lues là où rien ne dit leur type à l'analyse statique (voir
++ * ValeursLues) : chacune est rendue telle quelle quand elle est du type que
++ * le code attend, et refusée sinon, avec un message qui nomme le type
++ * trouvé, le texte qui n'est pas un nombre ou le champ absent.
++ */
++class ValeursLuesTest extends TestCase
++{
++    public function test_un_texte_un_entier_et_un_nombre_ecrit_en_texte_sont_rendus_tels_quels(): void
++    {
++        $this->assertSame('0', ValeursLues::texte('0'));
++        $this->assertSame('', ValeursLues::texte(''));
++        $this->assertSame(0, ValeursLues::entier(0));
++        $this->assertSame(-12, ValeursLues::entier(-12));
++        $this->assertSame('120.00', ValeursLues::nombre('120.00'));
++        $this->assertSame('-0.05', ValeursLues::nombre('-0.05'));
++    }
++
++    /**
++     * @return array<string, array{mixed, string}>
++     */
++    public static function pasDesTextes(): array
++    {
++        return [
++            'nul' => [null, 'null'],
++            'entier' => [12, 'int'],
++            'décimal' => [1.5, 'float'],
++            'booléen' => [false, 'bool'],
++            'tableau' => [['a'], 'array'],
++        ];
++    }
++
++    #[DataProvider('pasDesTextes')]
++    public function test_une_valeur_qui_n_est_pas_un_texte_est_refusee(mixed $valeur, string $type): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_TEXTE, $type));
++
++        ValeursLues::texte($valeur);
++    }
++
++    /**
++     * Un entier écrit en texte n'est pas un entier : la valeur lue n'est
++     * jamais convertie.
++     *
++     * @return array<string, array{mixed, string}>
++     */
++    public static function pasDesEntiers(): array
++    {
++        return [
++            'nul' => [null, 'null'],
++            'entier écrit en texte' => ['12', 'string'],
++            'décimal entier' => [12.0, 'float'],
++            'booléen' => [true, 'bool'],
++        ];
++    }
++
++    #[DataProvider('pasDesEntiers')]
++    public function test_une_valeur_qui_n_est_pas_un_entier_est_refusee(mixed $valeur, string $type): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_ENTIER, $type));
++
++        ValeursLues::entier($valeur);
++    }
++
++    /**
++     * @return array<string, array{string}>
++     */
++    public static function pasDesNombres(): array
++    {
++        return [
++            'vide' => [''],
++            'virgule décimale' => ['12,50'],
++            'monnaie' => ['12.50 €'],
++            'lettres' => ['douze'],
++        ];
++    }
++
++    #[DataProvider('pasDesNombres')]
++    public function test_un_texte_qui_n_est_pas_un_nombre_est_refuse(string $texte): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_NOMBRE, $texte));
++
++        ValeursLues::nombre($texte);
++    }
++
++    public function test_les_champs_d_un_tableau_lu_sont_rendus_tels_quels(): void
++    {
++        $tableau = ['nom' => 'Caisse 1', 'complement' => null, 'personne_morale' => false, 'adresse' => ['ville' => 'Lyon']];
++
++        $this->assertSame('Caisse 1', ValeursLues::texteDe($tableau, 'nom'));
++        $this->assertSame('Caisse 1', ValeursLues::texteOuNulDe($tableau, 'nom'));
++        $this->assertNull(ValeursLues::texteOuNulDe($tableau, 'complement'));
++        $this->assertFalse(ValeursLues::booleenDe($tableau, 'personne_morale'));
++        $this->assertTrue(ValeursLues::booleenDe(['personne_morale' => true], 'personne_morale'));
++        $this->assertSame(['ville' => 'Lyon'], ValeursLues::tableauDe($tableau, 'adresse'));
++    }
++
++    /**
++     * Un champ absent est refusé même là où un champ nul est accepté : la
++     * source l'écrit toujours.
++     *
++     * @return array<string, array{callable(array<array-key, mixed>, string): mixed}>
++     */
++    public static function lecturesDUnChamp(): array
++    {
++        return [
++            'texte' => [ValeursLues::texteDe(...)],
++            'texte ou nul' => [ValeursLues::texteOuNulDe(...)],
++            'booléen' => [ValeursLues::booleenDe(...)],
++            'tableau' => [ValeursLues::tableauDe(...)],
++        ];
++    }
++
++    /**
++     * @param  callable(array<array-key, mixed>, string): mixed  $lecture
++     */
++    #[DataProvider('lecturesDUnChamp')]
++    public function test_un_champ_absent_est_refuse(callable $lecture): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_CHAMP, 'ville'));
++
++        $lecture(['code_postal' => '69001'], 'ville');
++    }
++
++    public function test_un_champ_d_un_autre_type_est_refuse(): void
++    {
++        $refus = [];
++
++        foreach ([
++            fn (): string => ValeursLues::texteDe(['nom' => 12], 'nom'),
++            fn (): ?string => ValeursLues::texteOuNulDe(['nom' => false], 'nom'),
++            fn (): bool => ValeursLues::booleenDe(['personne_morale' => 1], 'personne_morale'),
++            fn (): bool => ValeursLues::booleenDe(['personne_morale' => '0'], 'personne_morale'),
++            fn (): array => ValeursLues::tableauDe(['adresse' => 'Lyon'], 'adresse'),
++        ] as $lecture) {
++            try {
++                $lecture();
++            } catch (UnexpectedValueException $exception) {
++                $refus[] = $exception->getMessage();
++            }
++        }
++
++        $this->assertSame([
++            sprintf(ValeursLues::REFUS_TEXTE, 'int'),
++            sprintf(ValeursLues::REFUS_TEXTE, 'bool'),
++            sprintf(ValeursLues::REFUS_BOOLEEN, 'int'),
++            sprintf(ValeursLues::REFUS_BOOLEEN, 'string'),
++            sprintf(ValeursLues::REFUS_TABLEAU, 'string'),
++        ], $refus);
++    }
++
++    /**
++     * Une liste lue garde l'ordre de sa source, sans ses clés, d'un tableau
++     * comme d'un itérable (une collection).
++     */
++    public function test_une_liste_de_textes_ou_d_entiers_garde_son_ordre_sans_ses_cles(): void
++    {
++        $this->assertSame(['b', 'a'], ValeursLues::textes(['x' => 'b', 'y' => 'a']));
++        $this->assertSame([], ValeursLues::textes([]));
++        $this->assertSame([3, 1, 2], ValeursLues::entiers(new ArrayIterator([7 => 3, 2 => 1, 5 => 2])));
++    }
++
++    public function test_une_liste_qui_contient_une_autre_valeur_est_refusee(): void
++    {
++        $refus = [];
++
++        foreach ([
++            fn (): array => ValeursLues::textes(['a', null]),
++            fn (): array => ValeursLues::entiers([1, '2']),
++        ] as $lecture) {
++            try {
++                $lecture();
++            } catch (UnexpectedValueException $exception) {
++                $refus[] = $exception->getMessage();
++            }
++        }
++
++        $this->assertSame([sprintf(ValeursLues::REFUS_TEXTE, 'null'), sprintf(ValeursLues::REFUS_ENTIER, 'string')], $refus);
++    }
++}

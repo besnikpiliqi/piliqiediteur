@@ -1,0 +1,2557 @@
+{
+ "points": [
+  {
+   "id": "T1",
+   "section": "expert-comptable",
+   "titre": "Déclarer les paiements de particuliers pour des services",
+   "question": "Les encaissements de particuliers pour des prestations se déclarent-ils (e-reporting), et comment (TTC ou HT, paiement partiel, facture mixte) ? Qui le confirme, puisque vous n'avez pas d'expert-comptable ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Rien n'est déclaré d'ici là ; l'aperçu de la clôture les montre à part, en attente de cette confirmation.",
+   "bloquant": "étape 2 (déclaration des encaissements)",
+   "sources": [
+    "CLAUDE.md:176",
+    "notes/decisions-editeur.md:109",
+    "notes/decisions-editeur.md:110",
+    "notes/superpdp-plan.md:1015",
+    "notes/serie8/caisse-clotures-jet-ereporting.md:208",
+    "notes/historique/DIRECTIVES.md:196",
+    "notes/historique/DIRECTIVES.md:597"
+   ],
+   "citation": "les paiements de particuliers pour des services ne sont déclarés qu'une fois la règle confirmée par l'expert-comptable de la société"
+  },
+  {
+   "id": "T2",
+   "section": "expert-comptable",
+   "titre": "Catégorie et motif des ventes sans TVA française",
+   "question": "Quelle catégorie (E, Z, O, K ou G) et quel motif VATEX transmettre, et quelle catégorie d'e-reporting (TNT1 ?), pour l'export, une livraison vers un DOM, la franchise ?",
+   "qui": "expert-comptable et SUPER PDP",
+   "etat": "applique-a-confirmer",
+   "proposition": "Aucune vente à 0 % n'est transmise sans motif géré, G proposé pour un DOM, vérification au bac à sable à l'étape 2.",
+   "bloquant": "étape 2 (émission et e-reporting)",
+   "sources": [
+    "CLAUDE.md:176",
+    "notes/superpdp-plan.md:1024",
+    "notes/tva/plan-execution.md:2494",
+    "notes/tva/plan-execution.md:2500",
+    "notes/regles-tva-international.md:618",
+    "notes/regles-tva-international.md:621",
+    "notes/serie8/plan-serie8.md:995"
+   ],
+   "citation": "Une vente à 0 % n'est pas transmise tant que son motif d'exonération n'est pas géré"
+  },
+  {
+   "id": "T3",
+   "section": "expert-comptable",
+   "titre": "Codes de date d'exigibilité dans la facture électronique",
+   "question": "Quelles valeurs donner, dans la facture électronique et l'e-reporting, aux codes qui disent quand la TVA devient due (prestations de services, option pour les débits) ?",
+   "qui": "expert-comptable et SUPER PDP",
+   "etat": "ouvert",
+   "proposition": "Codes omis par défaut (plan de l'étape 2) ; valeurs à vérifier au bac à sable SUPER PDP avant les premiers envois.",
+   "bloquant": "étape 2 (émission et e-reporting)",
+   "sources": [
+    "notes/superpdp-plan.md:1021",
+    "notes/superpdp-plan.md:1022",
+    "notes/superpdp-plan.md:1023",
+    "notes/superpdp-plan.md:755"
+   ],
+   "citation": "`tax_due_date_type_code` (UNTDID 2005 ou 2475) pour TLB1 et TPS1, et `vat_point_date_code` (BT-8) sur une facture avec option pour les débits : quelles valeurs ?"
+  },
+  {
+   "id": "T4",
+   "section": "expert-comptable",
+   "titre": "Ventes et achats avec Monaco (EC8)",
+   "question": "Monaco : risque de double déclaration avec un fournisseur monégasque, circuit d'un achat livré depuis la France, e-reporting en plus de la facture pour des biens livrés à Monaco ?",
+   "qui": "expert-comptable et SUPER PDP",
+   "etat": "applique-a-confirmer",
+   "proposition": "Circuits prévus par le plan TVA ; un achat à un fournisseur monégasque reste à la TVA française, circuit fixé à l'étape 2.",
+   "bloquant": "étape 2",
+   "sources": [
+    "notes/tva/plan-execution.md:2499",
+    "notes/regles-tva-international.md:630",
+    "notes/tva/reglementation.md:478"
+   ],
+   "citation": "Monaco : risque de double déclaration si le fournisseur émet par le réseau français ; circuit d'un achat à un fournisseur monégasque livré depuis la France"
+  },
+  {
+   "id": "T5",
+   "section": "expert-comptable",
+   "titre": "Détaxe des voyageurs : points à confirmer",
+   "question": "Détaxe : comment déclarer la bascule en exonération après le visa, enregistrer le remboursement au voyageur, quel délai rend la TVA définitive sans visa, quelles règles en DOM ?",
+   "qui": "expert-comptable, DGFiP ou douanes",
+   "etat": "applique-a-confirmer",
+   "proposition": "Votre règle I3 : ticket à la TVA française, n° du bordereau noté, régularisation seulement après le visa, rien d'automatique.",
+   "bloquant": "étape 2 (e-reporting des ventes)",
+   "sources": [
+    "notes/regles-tva-international.md:611",
+    "notes/regles-tva-international.md:613",
+    "notes/decisions-editeur.md:165",
+    "notes/tva/reglementation.md:492"
+   ],
+   "citation": "enregistrement du remboursement au voyageur dans la caisse sécurisée ;"
+  },
+  {
+   "id": "T6",
+   "section": "expert-comptable",
+   "titre": "Achats exonérés à un prestataire étranger (EC20)",
+   "question": "Prime d'assurance ou opération bancaire achetée à un prestataire non établi en France : sur quelle ligne de la CA3, et entre-t-elle dans l'e-reporting des achats ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Aucune TVA autoliquidée ni déductible, hors e-reporting ; la ligne de la CA3 sera fixée à l'étape 5.",
+   "bloquant": "étapes 2 et 5",
+   "sources": [
+    "notes/tva/plan-execution.md:2511"
+   ],
+   "citation": "Déclaration des achats exonérés à un prestataire non établi (prime d'assurance, opération bancaire) : ligne de la CA3 ; e-reporting « in » de l'étape 2"
+  },
+  {
+   "id": "T7",
+   "section": "expert-comptable",
+   "titre": "Export emporté par l'acheteur : garantie de TVA (EC12)",
+   "question": "Export ou livraison dans l'UE emportés par l'acheteur lui-même : facture taxée puis avoir et facture exonérée, ou facture exonérée avec consignation de la TVA ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Exonération refusée pour un export emporté : vente à la TVA française (détaxe possible pour un voyageur) jusqu'au lot M9.",
+   "bloquant": "lot M9 (après l'étape 2)",
+   "sources": [
+    "notes/tva/plan-execution.md:2503",
+    "notes/regles-tva-international.md:617",
+    "notes/tva/conception-finale.md:1282"
+   ],
+   "citation": "Garantie de TVA d'un export ou d'une livraison intracommunautaire emportés par l'acquéreur."
+  },
+  {
+   "id": "T8",
+   "section": "expert-comptable",
+   "titre": "Société en franchise : achats et ventes hors de France (EC6)",
+   "question": "Société en franchise : acquisitions dans l'UE et importations (seuil de 10 000 €, option, e-reporting), ventes à l'étranger : vos choix TVA10 sont-ils justes fiscalement ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Acquisitions dans l'UE et importations refusées avec un message jusqu'à confirmation, puis lot M9 ; ventes selon votre choix TVA10.",
+   "bloquant": "lot M9 (après l'étape 2)",
+   "sources": [
+    "notes/tva/plan-execution.md:2497",
+    "notes/tva/inventaire-code.md:673",
+    "notes/tva/reponses-serie7.md:33",
+    "notes/tva/reglementation.md:474",
+    "notes/tva/reglementation.md:475"
+   ],
+   "citation": "Acquisitions intracommunautaires et importations d'une société en franchise (régime dérogatoire sous 10 000 €, compteur de la société, e-reporting)."
+  },
+  {
+   "id": "T9",
+   "section": "expert-comptable",
+   "titre": "Déclaration de TVA CA3 : lignes, avoirs et services encaissés (EC18)",
+   "question": "Sur quelles lignes de la CA3 déclarer chaque montant, les avoirs de la même période compris ? La TVA d'un service encaissé se tire-t-elle de celle du document ?",
+   "qui": "un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Table par millésime de notice (étape 5) ; avoirs d'une période déjà déclarée en ligne 21 ; TVA encaissée tirée du document, par cumul.",
+   "bloquant": "étape 5 (état de TVA)",
+   "sources": [
+    "notes/tva/plan-execution.md:2509",
+    "notes/calculs/tva-deductible-et-ca3.md:262",
+    "notes/calculs/tva-deductible-et-ca3.md:271",
+    "notes/calculs/tva-deductible-et-ca3.md:272",
+    "notes/calculs/tva-deductible-et-ca3.md:276",
+    "notes/tva/reglementation.md:472"
+   ],
+   "citation": "Le traitement des avoirs de la même période (nets des ventes ou ligne 21) est à faire valider par l'expert-comptable."
+  },
+  {
+   "id": "T10",
+   "section": "expert-comptable",
+   "titre": "Exigibilité des services autoliquidés et de l'énergie (EC7)",
+   "question": "À quelle date la TVA d'un service acheté à l'étranger (autoliquidé) et celle de l'énergie (fin de période facturée, acomptes) deviennent-elles exigibles ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Rien n'est enregistré avant l'étape 5, qui demandera la date ; jamais « au paiement » par défaut.",
+   "bloquant": "étape 5 (état de TVA)",
+   "sources": [
+    "notes/tva/plan-execution.md:2498",
+    "notes/tva/reglementation.md:473",
+    "notes/tva/conception-finale.md:1355"
+   ],
+   "citation": "Exigibilité des services autoliquidés (date de réalisation ; l'article du CGI n'a pas été retrouvé) et de l'énergie (fin de la période facturée, acomptes)."
+  },
+  {
+   "id": "T11",
+   "section": "expert-comptable",
+   "titre": "Magasins en métropole et outre-mer : une seule déclaration de TVA ?",
+   "question": "Une société qui a des magasins en métropole et outre-mer dépose-t-elle une seule déclaration de TVA (CA3) ? Comment y déclarer les taux de chaque territoire ?",
+   "qui": "un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Une seule déclaration par SIREN supposée, chaque territoire sur ses propres lignes ; à vérifier avant la table de la CA3 (étape 5).",
+   "bloquant": "étape 5 (état de TVA)",
+   "sources": [
+    "notes/regles-tva-international.md:603",
+    "notes/calculs/tva-deductible-et-ca3.md:264",
+    "notes/calculs/tva-deductible-et-ca3.md:266"
+   ],
+   "citation": "Magasins d'un même SIREN dans des territoires différents (DOM) : taux propres, une seule CA3 (certitude faible)."
+  },
+  {
+   "id": "T12",
+   "section": "expert-comptable",
+   "titre": "Plan de comptes, écritures et export comptable (FEC)",
+   "question": "Le plan de comptes proposé (loyer 6132, assurances 616…), les écritures générées et l'export FEC par société sont-ils justes, avant d'être proposés aux sociétés ?",
+   "qui": "un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "La session prépare à l'étape 5 un plan de comptes et un FEC d'exemple à faire relire ; comptes modifiables par chaque société.",
+   "bloquant": "étape 5 (comptabilité)",
+   "sources": [
+    "CLAUDE.md:200",
+    "notes/tva/plan-execution.md:1794",
+    "notes/societe/conception-v2-finale.md:1221",
+    "notes/societe/avenant-A4-serie6.md:1344"
+   ],
+   "citation": "Compte proposé pour l'étape 5 (à valider par l'expert-comptable)"
+  },
+  {
+   "id": "T13",
+   "section": "expert-comptable",
+   "titre": "Escompte d'un fournisseur et TVA déductible (EC2)",
+   "question": "Un escompte écrit sur la facture du fournisseur réduit-il la TVA déductible ? Faut-il distinguer l'escompte déduit sur la facture et l'escompte conditionnel pris ensuite ?",
+   "qui": "expert-comptable, puis vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Aujourd'hui l'escompte baisse le coût, jamais la TVA ; recommandé : distinguer les deux escomptes, régularisés à l'étape 5.",
+   "bloquant": "mise en production (M5c), étape 5",
+   "sources": [
+    "notes/tva/plan-execution.md:2493",
+    "notes/calculs/tva-deductible-et-ca3.md:207",
+    "notes/tr/decision-tr.md:49",
+    "notes/tva/conception-finale.md:1121"
+   ],
+   "citation": "Effet d'un escompte de la facture du fournisseur sur la base de la TVA déductible."
+  },
+  {
+   "id": "T14",
+   "section": "expert-comptable",
+   "titre": "Coefficient de déduction d'une société en partie exonérée (EC19)",
+   "question": "Comment calculer la TVA déductible d'une société qui réalise aussi des opérations exonérées (sous-location nue, par exemple) ou hors du champ de la TVA ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Déduction totale supposée ; si la société déclare de telles opérations, chaque charge est signalée « à confirmer » ; aucun coefficient calculé.",
+   "bloquant": "étape 5 (lot CH2 applique le défaut)",
+   "sources": [
+    "notes/tva/plan-execution.md:2510",
+    "notes/tva/plan-execution.md:1842"
+   ],
+   "citation": "Coefficient de déduction d'une société qui réalise aussi des opérations exonérées (par exemple la sous-location nue d'une partie de son local, art. 261 D 2° du CGI)"
+  },
+  {
+   "id": "T15",
+   "section": "expert-comptable",
+   "titre": "Société en franchise : stock et marges TVA comprise",
+   "question": "Pour une société en franchise, qui ne récupère pas la TVA, le coût du stock et les marges se calculent-ils TVA comprise, comme votre correction O1 le prévoit ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Coût TTC décidé (O1, 11/10), fait avec la chaîne TVA et l'étape 5 ; aujourd'hui les marges restent en HT.",
+   "bloquant": "étape 5 (comptabilité)",
+   "sources": [
+    "notes/calculs/tva-deductible-et-ca3.md:209",
+    "notes/tva/reponses-serie7.md:55",
+    "notes/tr/decision-tr.md:49"
+   ],
+   "citation": "Société en franchise en base : coût d'achat TTC, puisque la TVA n'y est pas récupérable (voir 5.1) / garder le HT. À faire confirmer par l'expert-comptable."
+  },
+  {
+   "id": "T16",
+   "section": "expert-comptable",
+   "titre": "Marchandises détruites, volées ou disparues (EC14)",
+   "question": "Dans quels cas la TVA déduite sur des marchandises détruites, volées ou disparues n'a-t-elle pas à être reversée ?",
+   "qui": "un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Traité avec les ajustements de stock de l'étape 7, toujours par un document numéroté avec son motif (votre choix Q-AUD4).",
+   "bloquant": "étape 7 (stock)",
+   "sources": [
+    "notes/tva/plan-execution.md:2505",
+    "notes/tva/conception-finale.md:1360"
+   ],
+   "citation": "Conditions des dispenses de reversement de la TVA déduite sur des marchandises détruites, volées ou disparues."
+  },
+  {
+   "id": "T17",
+   "section": "expert-comptable",
+   "titre": "Mention « option pour les débits » sur des biens (EC10)",
+   "question": "La mention « option pour les débits » doit-elle figurer sur un document qui ne vend que des biens ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Imprimée comme aujourd'hui sur tout document hors franchise.",
+   "bloquant": "mise en production (lot M2)",
+   "sources": [
+    "notes/tva/plan-execution.md:2501",
+    "notes/regles-tva-international.md:629",
+    "notes/tva/reglementation.md:488"
+   ],
+   "citation": "Portée de la mention « option pour les débits » sur un document qui ne vend que des biens."
+  },
+  {
+   "id": "T18",
+   "section": "expert-comptable",
+   "titre": "Services immatériels vendus à un particulier hors de l'UE (EC17)",
+   "question": "Comment taxer les services de l'art. 259 B du CGI vendus à un particulier domicilié hors de l'Union ? Voulez-vous aussi un marqueur « service immatériel » ?",
+   "qui": "expert-comptable, puis vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Un avertissement à l'émission ; le marqueur « service immatériel » au lot M9 seulement si vous le demandez.",
+   "bloquant": "mise en production (lot M4)",
+   "sources": [
+    "notes/tva/plan-execution.md:2508"
+   ],
+   "citation": "Services de l'art. 259 B vendus à un particulier domicilié hors de l'Union. | Avertissement ; marqueur « service immatériel » au lot M9 si l'éditeur le demande."
+  },
+  {
+   "id": "T19",
+   "section": "expert-comptable",
+   "titre": "Documents émis après le dépassement du seuil de franchise (EC16)",
+   "question": "Que faire des documents émis entre le jour où la société dépasse le seuil de franchise et la saisie de son nouveau régime de TVA ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Liste des documents à revoir, magasin par magasin, corrigés par avoir et nouvelle facture sur le conseil d'un expert-comptable.",
+   "bloquant": "mise en production (lot M5a)",
+   "sources": [
+    "notes/tva/plan-execution.md:2507",
+    "notes/tva/resume-editeur.md:352"
+   ],
+   "citation": "Documents émis entre le jour du dépassement du seuil de la franchise et la saisie du nouveau régime."
+  },
+  {
+   "id": "T20",
+   "section": "expert-comptable",
+   "titre": "Droit à déduction de la TVA des charges (EC1)",
+   "question": "Ces règles de déduction sont-elles justes : péages d'un véhicule de tourisme 0 %, restaurant 100 %, assurance non déductible, cadeaux jusqu'à 73 € TTC, électricité, GPL, tickets ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Recommandations du plan TVA appliquées, chaque règle marquée « à confirmer », corrigée au besoin par une nouvelle version des règles.",
+   "bloquant": "mise en production (lots M5c, CH2)",
+   "sources": [
+    "notes/tva/plan-execution.md:2492"
+   ],
+   "citation": "Règles de 4.3 : péages et parkings d'un véhicule de tourisme ; restaurant ; TVA facturée sur une prime d'assurance ; seuil des cadeaux en 2026"
+  },
+  {
+   "id": "T21",
+   "section": "expert-comptable",
+   "titre": "TVA des frais de transport d'un achat à plusieurs taux (EC4)",
+   "question": "Quel taux de TVA appliquer aux frais de transport d'un achat dont les marchandises ont plusieurs taux, en France et en autoliquidation ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Taux de la facture en France ; en autoliquidation, celui des marchandises s'il est unique, sinon le taux normal, modifiable.",
+   "bloquant": "mise en production (lot M5c)",
+   "sources": [
+    "notes/tva/plan-execution.md:2495",
+    "notes/tva/conception-finale.md:1890"
+   ],
+   "citation": "Frais d'acheminement d'un achat dont les marchandises ont plusieurs taux : ventilation de leur TVA par taux."
+  },
+  {
+   "id": "T22",
+   "section": "expert-comptable",
+   "titre": "Fournisseur de l'UE : TVA étrangère facturée, franchise ou n° de TVA absent",
+   "question": "Un fournisseur de l'UE facture la TVA de son pays, est en franchise chez lui ou n'a pas de n° de TVA : ces traitements sont-ils justes ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Votre choix TVA15 : TVA étrangère notée à part, liste « à régulariser » ; franchise ou n° absent : saisie manuelle.",
+   "bloquant": "mise en production (lots M5c, M6)",
+   "sources": [
+    "notes/tva/plan-execution.md:2496",
+    "notes/tva/reglementation.md:480",
+    "notes/tva/resume-editeur.md:347",
+    "notes/tva/reponses-serie7.md:48"
+   ],
+   "citation": "Fournisseur de l'UE ayant facturé sa TVA (A10) et fournisseur franchisé dans son État (A9) : traitement à faire valider par l'expert-comptable."
+  },
+  {
+   "id": "T23",
+   "section": "expert-comptable",
+   "titre": "Date du taux de change d'un achat en devise (EC11)",
+   "question": "Pour un achat en devise étrangère, quelle date et quelle source du taux de change faut-il retenir ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Taux saisi sur la facture avec sa source (votre choix TVA16) ; pour une importation, celui de la déclaration en douane.",
+   "bloquant": "mise en production (lot M5e)",
+   "sources": [
+    "notes/tva/plan-execution.md:2502",
+    "notes/tva/resume-editeur.md:350",
+    "notes/tva/reponses-serie7.md:51"
+   ],
+   "citation": "Date du taux de change d'un achat en devise."
+  },
+  {
+   "id": "T24",
+   "section": "expert-comptable",
+   "titre": "Transport d'une importation dans la base de TVA (EC15)",
+   "question": "Quelle preuve faut-il que le transport d'une importation est compris dans la TVA d'importation, quand le transporteur facture à 0 % (art. 262 II 14° du CGI) ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Un avertissement quand la déclaration en douane rattachée ne compte aucun frais accessoire.",
+   "bloquant": "mise en production (lot M7)",
+   "sources": [
+    "notes/tva/plan-execution.md:2506"
+   ],
+   "citation": "Preuve que le transport d'une importation entre dans la base de la TVA d'importation, pour la facture d'un transporteur à 0 % (art. 262 II 14° du CGI)."
+  },
+  {
+   "id": "T25",
+   "section": "expert-comptable",
+   "titre": "Table des taux de TVA par territoire (Corse, DOM)",
+   "question": "La table des taux par territoire, qui avertit seulement d'un taux inhabituel, est-elle juste, notamment les listes de la Corse et les taux réduits des DOM ?",
+   "qui": "un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Taux saisi librement, 20 % par défaut (8,5 % aux Antilles et à La Réunion) ; taux hors table : avertissement, jamais refus.",
+   "bloquant": "mise en production (avertissements seulement)",
+   "sources": [
+    "notes/regles-tva-international.md:264",
+    "notes/regles-tva-international.md:625",
+    "notes/tva/plan-execution.md:682",
+    "notes/tva/reglementation.md:374",
+    "notes/tva/reglementation.md:489",
+    "notes/decisions-editeur.md:17"
+   ],
+   "citation": "La table des catégories fiscales pour la Corse et les DOM doit être validée par un expert-comptable."
+  },
+  {
+   "id": "T26",
+   "section": "expert-comptable",
+   "titre": "Règle de calcul des ventes : avis facultatif d'un expert-comptable",
+   "question": "Faire valider la règle gardée le 09/11 : HT de chaque taux tiré du TTC, TVA égale à la différence, écart possible avec base × taux ?",
+   "qui": "un expert-comptable, facultatif",
+   "etat": "applique-a-confirmer",
+   "proposition": "Règle (a) appliquée ; montrez-lui la facture de 15 lignes refaite le 09/11 avec la règle (a).",
+   "bloquant": "aucun ; avant la mise en production",
+   "sources": [
+    "a-trancher/conversation-2.txt:1483",
+    "a-trancher/conversation-2.txt:1872",
+    "a-trancher/conversation-2.txt:1911",
+    "a-trancher/conversation-2.txt:1995",
+    "notes/calculs/decision-calc.md:24"
+   ],
+   "citation": "Dans les deux cas, demandez à votre expert-comptable si une TVA qui s'écarte un peu de « HT × taux » lui convient."
+  },
+  {
+   "id": "T27",
+   "section": "expert-comptable",
+   "titre": "Avoir de régularisation après correction d'un SIREN",
+   "question": "Après la correction exceptionnelle d'un SIREN : avoir sous l'ancien SIREN avec sa mention, rectificative sous le nouveau, crédit réservé, jamais déclaré comme encaissement. Est-ce juste fiscalement ?",
+   "qui": "expert-comptable de la société",
+   "etat": "applique-a-confirmer",
+   "proposition": "Règle de CLAUDE.md appliquée (lot A7b) ; avoir et rectificative émis seulement si la situation l'exige ; à confirmer au premier cas.",
+   "bloquant": "le jour où le cas se présente",
+   "sources": [
+    "CLAUDE.md:163",
+    "notes/a7b/decision-a7b.md:51",
+    "notes/societe/conception-v2-finale.md:1404",
+    "notes/societe/reponses-serie5.md:10",
+    "notes/historique/DIRECTIVES.md:597"
+   ],
+   "citation": "cette règle est à faire confirmer par l'expert-comptable de la société le jour où le cas se présente"
+  },
+  {
+   "id": "T28",
+   "section": "expert-comptable",
+   "titre": "Durée d'un exercice changé par procès-verbal",
+   "question": "Quand une société change légalement sa date de clôture, la durée de l'exercice en cours doit être validée : qui la valide, et selon quelles règles ?",
+   "qui": "expert-comptable de la société",
+   "etat": "applique-a-confirmer",
+   "proposition": "Seulement par votre procédure, sur procès-verbal, avec le nom de qui valide la durée, sans toucher un exercice clos ni une archive.",
+   "bloquant": "le jour où le cas se présente",
+   "sources": [
+    "CLAUDE.md:175",
+    "notes/societe/conception-v2-finale.md:1057",
+    "notes/societe/conception-v2-finale.md:1059",
+    "notes/historique/DIRECTIVES.md:597"
+   ],
+   "citation": "une durée validée par l'expert-comptable de la société, sans jamais toucher un exercice clos ni une archive, ni repousser une clôture obligatoire"
+  },
+  {
+   "id": "T29",
+   "section": "expert-comptable",
+   "titre": "Preuves d'export : rappel au 31e jour et magasin fermé",
+   "question": "Le rappel des preuves d'export (rouge à partir du 31e jour) et la saisie d'une preuve dans un magasin fermé, cédé ou suspendu sont-ils corrects fiscalement ?",
+   "qui": "expert-comptable de la société",
+   "etat": "applique-a-confirmer",
+   "proposition": "Vos choix Q-AF10 et Q-AF12 (a) du 01/11, appliqués au lot S9-A comme simples rappels internes.",
+   "bloquant": "aucun (rappel interne)",
+   "sources": [
+    "notes/serie9/reponses-serie9.md:43",
+    "notes/serie9/reponses-serie9.md:44",
+    "notes/ec2/cahier-des-charges.definitif.md:1213"
+   ],
+   "citation": "C'est un rappel interne, à faire confirmer par l'expert-comptable de la société"
+  },
+  {
+   "id": "T30",
+   "section": "juridique-administration",
+   "titre": "Norme EN 16931 révisée : prix unitaire limité à 4 décimales ?",
+   "question": "La révision EN 16931-1:2026 limite-t-elle le prix unitaire à 4 décimales et retire-t-elle BR-CO-17 ? Si oui, le PU HT à six décimales devra changer dans la facture électronique.",
+   "qui": "texte officiel, SUPER PDP",
+   "etat": "ouvert",
+   "proposition": "Six décimales gardées, permises aujourd'hui en France ; relire le texte officiel de la norme avant l'étape 2.",
+   "bloquant": "étape 2 (facture électronique)",
+   "sources": [
+    "notes/calculs/synthese.md:308",
+    "notes/calculs/normes.md:316",
+    "notes/calculs/normes.md:345"
+   ],
+   "citation": "la limite de 4 décimales et le retrait de BR-CO-17 ne sont connus que par des sources tierces."
+  },
+  {
+   "id": "T31",
+   "section": "juridique-administration",
+   "titre": "Attestation de l'éditeur, admise de nouveau depuis 2026 ?",
+   "question": "Selon deux notes, la loi de finances 2026 (art. 125) admet de nouveau l'attestation de l'éditeur depuis le 21/02/2026. Le faire confirmer avant l'étape 3 ?",
+   "qui": "texte officiel (BOFiP)",
+   "etat": "applique-a-confirmer",
+   "proposition": "Attestation par magasin prévue (votre choix D11) ; relire ACTU-2026-00073 et le modèle BOI-LETTRE-000242 avant l'étape 3.",
+   "bloquant": "étape 3 (caisse sécurisée)",
+   "sources": [
+    "notes/regles-tva-international.md:433",
+    "notes/serie8/caisse-clotures-jet-ereporting.md:174",
+    "notes/serie8/decision-types-activite.md:450",
+    "notes/historique/DIRECTIVES.md:596",
+    "notes/decisions-editeur.md:89",
+    "CLAUDE.md:175"
+   ],
+   "citation": "L'attestation individuelle de l'éditeur est rétablie par la LF 2026 (loi n° 2026-103 du 19/02/2026, art. 125), applicable depuis le 21/02/2026 (ACTU-2026-00073). Modèle : BOI-LETTRE-000242."
+  },
+  {
+   "id": "T32",
+   "section": "juridique-administration",
+   "titre": "Rédiger et signer l'attestation de l'éditeur et la notice",
+   "question": "À l'étape 3, vous signerez une attestation par magasin et la notice (démonstration, ticket Z chaque jour, attestation après une correction de SIREN) : voulez-vous une relecture extérieure ?",
+   "qui": "vous, avec un avocat",
+   "etat": "ouvert",
+   "proposition": "La session prépare le projet d'attestation et de notice à l'étape 3 ; une relecture extérieure est conseillée, car elle vous engage.",
+   "bloquant": "étape 3, puis mise en production",
+   "sources": [
+    "CLAUDE.md:175",
+    "CLAUDE.md:198",
+    "notes/a7b/decision-a7b.md:52",
+    "notes/regles-tva-international.md:394",
+    "a-trancher/conversation-1.txt (01/11 23:50 UTC)"
+   ],
+   "citation": "Pour la caisse sécurisée, l'attestation engage l'éditeur, donc vous. Un regard humain extérieur, qui en répond, reste précieux."
+  },
+  {
+   "id": "T33",
+   "section": "juridique-administration",
+   "titre": "Analyse d'impact (AIPD) de la vérification par courrier",
+   "question": "Faire rédiger et tenir à jour l'analyse d'impact de la vérification des sociétés par courrier (dirigeant lu à l'INPI, lettre recommandée, codes) et valider les mentions d'information ?",
+   "qui": "vous, avec un juriste",
+   "etat": "ouvert",
+   "proposition": "La session rédige un projet à l'étape 9 avec les faits techniques ; la CNIL n'est consultée que si un risque élevé subsiste.",
+   "bloquant": "étape 9, avant la mise en production",
+   "sources": [
+    "CLAUDE.md:204",
+    "notes/serie8/decision-verification-courrier.md:48",
+    "notes/pilotage-reprise/README.md:305",
+    "notes/historique/DIRECTIVES.md:600"
+   ],
+   "citation": "analyse d'impact de la vérification des sociétés par courrier tenue à jour"
+  },
+  {
+   "id": "T34",
+   "section": "juridique-administration",
+   "titre": "Durées de conservation et d'effacement conformes au droit",
+   "question": "Les durées (documents et journaux 10 ans, IP 1 an, audit des accès 5 ans, vérification 5 ans après la relation, invitations 48 h ou 7 jours) sont-elles conformes ?",
+   "qui": "vous, avec un juriste",
+   "etat": "applique-a-confirmer",
+   "proposition": "Votre choix (a) du 11/10 est appliqué et les durées restent réglables (01/11) ; à confirmer avec l'analyse d'impact.",
+   "bloquant": "étape 9 (RGPD)",
+   "sources": [
+    "CLAUDE.md:175",
+    "CLAUDE.md:178",
+    "notes/societe/conception-v2-finale.md:1397",
+    "notes/societe/reponses-serie5.md:8"
+   ],
+   "citation": "Faites confirmer ces durées par votre conseil si possible : elles ne sont pas sourcées sur un texte officiel relu."
+  },
+  {
+   "id": "T35",
+   "section": "juridique-administration",
+   "titre": "Sort des sociétés jamais validées et de leurs démonstrations",
+   "question": "Que deviennent les données d'une inscription close sans validation et de son magasin de démonstration : effacement, anonymisation, après quel délai ?",
+   "qui": "vous, avec un juriste",
+   "etat": "ouvert",
+   "proposition": "La session proposera à l'étape 9 un délai d'effacement, documents légaux mis à part.",
+   "bloquant": "étape 9 (RGPD)",
+   "sources": [
+    "CLAUDE.md:204"
+   ],
+   "citation": "sort des sociétés jamais validées et de leurs données de démonstration"
+  },
+  {
+   "id": "T36",
+   "section": "juridique-administration",
+   "titre": "Mots de passe et recommandation de la CNIL",
+   "question": "La règle (d'abord l'identifiant, puis 8 caractères sans lui ni suite) suit-elle la recommandation CNIL 2022-100 ? Refuser aussi les mots de passe divulgués (service extérieur) ?",
+   "qui": "vous, d'après la CNIL",
+   "etat": "applique-a-confirmer",
+   "proposition": "Règle appliquée (poste reconnu, essais limités) ; recommandé : 12 caractères ou 3 sortes sur 4 ; contrôle extérieur seulement avec votre accord.",
+   "bloquant": "étape 9, avant la mise en production",
+   "sources": [
+    "notes/serie8/analyse-avenant-comptes.md:451",
+    "notes/serie8/analyse-avenant-comptes.md:264",
+    "notes/serie8/avenant-S8V-A4c.md:502",
+    "notes/serie8/avenant-S8V-A4c.md:944",
+    "notes/serie8/reponse-editeur.md:374",
+    "notes/serie8/reponses-serie8.md:34",
+    "CLAUDE.md:161"
+   ],
+   "citation": "Selon la recommandation de la CNIL (texte non joignable d'ici, à vérifier), 8 caractères ne suffisent qu'avec une limitation des essais et un mélange de sortes de caractères"
+  },
+  {
+   "id": "T37",
+   "section": "juridique-administration",
+   "titre": "Paiement en ligne : l'argent va directement au magasin",
+   "question": "Faut-il confirmer qu'avec un compte de chaque société chez le prestataire, l'argent ne passant jamais par vous, aucun agrément d'établissement de paiement n'est nécessaire ?",
+   "qui": "avocat ou prestataire",
+   "etat": "ouvert",
+   "proposition": "Chaque société relie son propre compte chez le prestataire, comme pour SUPER PDP ; à confirmer avant l'étape 11.",
+   "bloquant": "étape 11 (paiements en ligne)",
+   "sources": [
+    "a-trancher/conversation-1.txt (02/11 08:48 UTC)",
+    "notes/paiements/demande-devis-en-ligne.md:5"
+   ],
+   "citation": "Si l'argent passait par vous, vous auriez besoin d'un agrément d'établissement de paiement. Cette solution l'évite."
+  },
+  {
+   "id": "T38",
+   "section": "juridique-administration",
+   "titre": "Revue indépendante de la conformité fiscale avant la production",
+   "question": "Voulez-vous faire relire la conformité fiscale (TVA, caisse, facture électronique) et les règles « à confirmer » par un expert-comptable, un avocat fiscaliste ou un certificateur ? Qui, quand ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Recommandée à l'étape 15 ; sans expert-comptable chez vous, elle peut confirmer d'un coup les points de la section expert-comptable.",
+   "bloquant": "mise en production (étape 15)",
+   "sources": [
+    "notes/audits-externes/rapport-lecture-2026-11-07.md:280",
+    "notes/reprises/PASSATION-2026-11-08.md:65",
+    "a-trancher/conversation-1.txt (01/11 23:50 UTC)",
+    "a-trancher/conversation-2.txt:1848",
+    "notes/historique/DIRECTIVES.md:196"
+   ],
+   "citation": "par un expert-comptable, un avocat fiscaliste ou un organisme certificateur, à inscrire à l'étape 15 si vous la voulez."
+  },
+  {
+   "id": "T39",
+   "section": "juridique-administration",
+   "titre": "Nomenclature NAF 2025 : code des cabinets d'expertise comptable",
+   "question": "Quand l'INSEE passera à la NAF 2025, quel code remplacera 69.20Z pour reconnaître un cabinet ? D'ici là, vous contrôlez à la main un code absent ou d'une autre nomenclature.",
+   "qui": "vous, selon l'INSEE",
+   "etat": "applique-a-confirmer",
+   "proposition": "Contrôle manuel par votre procédure de l'Ordre ; le cabinet reste bloqué, sans courrier ni client, jusqu'à votre contrôle.",
+   "bloquant": "passage de l'INSEE à la NAF 2025",
+   "sources": [
+    "CLAUDE.md:166",
+    "notes/serie8/avenant-cabinets.md:547",
+    "notes/serie8/avenant-cabinets.md:1927",
+    "notes/serie8/decision-types-activite.md:122"
+   ],
+   "citation": "une activité classée dans une autre nomenclature que NAFRev2 (une nouvelle nomenclature, NAF 2025, est annoncée, date d'usage et code à vérifier) est contrôlée par l'éditeur dans la procédure de l'Ordre, jusqu'à ce qu'il fixe le code équivalent à 69.20Z"
+  },
+  {
+   "id": "T40",
+   "section": "juridique-administration",
+   "titre": "Articles du CIBS dans les mentions des factures (EC13)",
+   "question": "Quels articles du CIBS imprimer à la place de ceux du CGI (293 B, 262 I, 262 ter I, 294, 259-1°), et jusqu'à quand le CGI reste-t-il admis ?",
+   "qui": "DGFiP ou un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Articles du CGI imprimés (votre O4), admis jusqu'au 30/06/2028 selon des sources concordantes ; changement par une nouvelle version des règles.",
+   "bloquant": "avant le 30/06/2028 (lot M2)",
+   "sources": [
+    "notes/tva/plan-execution.md:2504",
+    "notes/tva/reponses-serie7.md:58",
+    "notes/serie8/plan-serie8.md:996",
+    "notes/tva/reglementation.md:470",
+    "notes/tva/reglementation.md:471",
+    "notes/regles-tva-international.md:22"
+   ],
+   "citation": "Numéros définitifs du CIBS pour les mentions. | Articles du CGI imprimés jusqu'à la confirmation (admis jusqu'au 30/06/2028, O4) ; passage par une nouvelle version des règles."
+  },
+  {
+   "id": "T41",
+   "section": "produit",
+   "titre": "« Paiements reçus » visible sans le droit de voir les paiements",
+   "question": "La section « Paiements reçus » d'une facture s'affiche à qui voit la facture, même sans « Paiements : voir ». Faut-il la cacher à ces comptes ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Laissée visible en attendant votre choix ; à trancher avant le lot NAV-2, qui teste les écrans de vente.",
+   "bloquant": "lot NAV-2 (écrans de vente)",
+   "sources": [
+    "notes/pilotage-reprise/README.md:190"
+   ],
+   "citation": "constat à lui soumettre (la section « Paiements reçus » de la fiche d'une facture s'affiche à qui voit la facture, même sans « Paiements : voir »)"
+  },
+  {
+   "id": "T42",
+   "section": "produit",
+   "titre": "Fiche d'un brouillon de facture sans « Modifier » ni « Émettre »",
+   "question": "La fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre ». Faut-il ajouter ces deux boutons sur la fiche ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Laissé tel quel en attendant votre avis ; à trancher avant le lot NAV-2.",
+   "bloquant": "lot NAV-2 (écrans de vente)",
+   "sources": [
+    "notes/pilotage-reprise/README.md:190"
+   ],
+   "citation": "constat d'écran à lui soumettre (la fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre »)"
+  },
+  {
+   "id": "T43",
+   "section": "produit",
+   "titre": "Choix d'écran du lot NAV-2 : couleur de sélection, numéros cliquables",
+   "question": "Ces choix vous conviennent-ils : ligne choisie en teinte violette légère au texte lisible, et tout numéro de document affiché cliquable, pas seulement sous « Crédit appliqué » ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqués au lot NAV-2, contraste vérifié par un test ; dites-le avant ce lot si vous préférez autre chose.",
+   "bloquant": "lot NAV-2",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:465",
+    "notes/historique/DIRECTIVES.md:478",
+    "a-trancher/conversation-1.txt (03/11 00:54 UTC)"
+   ],
+   "citation": "Tient (lot NAV-2 ; généralisé à tout numéro de document affiché, choix de Claude)"
+  },
+  {
+   "id": "T44",
+   "section": "produit",
+   "titre": "Cabinet : une seule case « voir toutes » pour factures et clôtures",
+   "question": "Votre idée du 01/11 (le comptable voit toutes les factures) devient une case unique « voir toutes », factures et clôtures. Cette forme vous convient-elle ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Case « Factures : voir toutes celles du magasin », de même pour les clôtures ; rien ne change pour les comptes d'une société.",
+   "bloquant": "lot EC2",
+   "sources": [
+    "notes/ec2/decision-expert-comptable-societe.md:33",
+    "notes/ec2/cahier-des-charges.definitif.md:270",
+    "notes/historique/DIRECTIVES.md:451",
+    "a-trancher/conversation-1.txt (01/11 20:30 et 20:31 UTC)"
+   ],
+   "citation": "Choix de Claude, que l'éditeur peut contester : pour un cabinet lié et pour l'expert-comptable déclaré, « Factures : voir (les siennes) » et « Factures : voir celles de toute l'équipe » deviennent une seule case"
+  },
+  {
+   "id": "T45",
+   "section": "produit",
+   "titre": "Cabinet suspendu : retirer aussi ses demandes de lien",
+   "question": "Votre oui du 09/11 laisse un cabinet suspendu retirer ses invitations ouvertes ; la session y ajoute ses demandes de lien ouvertes. D'accord, ou les invitations seules ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Invitations et demandes ouvertes retirables par le seul propriétaire du cabinet, chaque retrait inscrit au journal d'audit (lot EC2).",
+   "bloquant": "lot EC2",
+   "sources": [
+    "a-trancher/conversation-2.txt:2770",
+    "notes/ec2/decision-expert-comptable-societe.md:38",
+    "notes/historique/DIRECTIVES.md:485"
+   ],
+   "citation": "J'y ai ajouté ses demandes de lien encore ouvertes, qui sont de même nature ; dites-le-moi si vous ne voulez que les invitations."
+  },
+  {
+   "id": "T46",
+   "section": "produit",
+   "titre": "Expert-comptable déclaré par la société : deux risques acceptés ?",
+   "question": "Le propriétaire peut saisir sa propre adresse pour son expert-comptable, et un faux cabinet inscrit sous un vrai SIREN recevrait les sociétés qui l'ont déclaré. Acceptez-vous ces risques ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Notés acceptés par vos choix 1 et 3 du 01/11 ; parades : journal d'audit, avis, fin du lien à tout moment, cabinet vérifié seulement.",
+   "bloquant": "lot EC2",
+   "sources": [
+    "notes/ec2/cahier-des-charges.definitif.md:480"
+   ],
+   "citation": "C29 — Risques connus, acceptés par la décision. (1) Choix 1 : le propriétaire saisit l'adresse ; il pourrait y mettre la sienne et agir sous le nom de la personne."
+  },
+  {
+   "id": "T47",
+   "section": "produit",
+   "titre": "Étape « Ajouter un magasin » après le premier magasin",
+   "question": "Votre première proposition du 01/11 est appliquée (« Ajouter un magasin », nombre de magasins dessous). Préférez-vous l'ordinal (deuxième, troisième) ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Gardé sans réponse de votre part : un ordinal deviendrait faux avec les magasins fermés, cédés ou hors de la portée d'un administrateur.",
+   "bloquant": "lot EC2, priorité basse",
+   "sources": [
+    "a-trancher/conversation-1.txt (01/11 16:35 et 16:37 UTC)",
+    "notes/ec2/decision-expert-comptable-societe.md:32",
+    "notes/ec2/cahier-des-charges.definitif.md:262",
+    "notes/historique/DIRECTIVES.md:446"
+   ],
+   "citation": "donc ou laisser un texte par defaut comme \"Ajouter un magasin\" ou ecrire par deuxieme, troxiem etc"
+  },
+  {
+   "id": "T48",
+   "section": "produit",
+   "titre": "Deux comptes connectés dans le même navigateur",
+   "question": "Trois pages (code du courrier, invitation d'un cabinet, inscription) connectent quelqu'un sans fermer ni noter la session déjà ouverte dans ce navigateur. Faut-il la fermer proprement ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Conseil donné : une fenêtre privée ou un navigateur par compte. Le lot EC2 signale le cas dans son compte rendu sans rien changer.",
+   "bloquant": "compte rendu du lot EC2",
+   "sources": [
+    "notes/ec2/cahier-des-charges.definitif.md:1506",
+    "notes/navigateur/diag-419-rapport.md:83",
+    "a-trancher/conversation-1.txt (01/11 23:55 UTC)"
+   ],
+   "citation": "appellent `Auth::login()` sans fermer la session d'un autre compte ouverte dans le même navigateur, dont la fin ne s'inscrit donc pas (JET 40) : le lot ne les change pas, l'éditeur décidera."
+  },
+  {
+   "id": "T49",
+   "section": "produit",
+   "titre": "Date de livraison ou de prestation sur les factures",
+   "question": "La date de livraison ou de prestation, obligatoire quand elle diffère de la date d'émission (art. 242 nonies A, annexe II du CGI), n'existe pas dans PILIQI. Faut-il l'ajouter ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Limite signalée, non couverte ; options et recommandation présentées au plus tard dans le compte rendu après le lot 21.",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/decision-types-activite.md:444",
+    "notes/historique/DIRECTIVES.md:603"
+   ],
+   "citation": "la date de la prestation ou de la livraison, quand elle diffère de la date d'émission (art. 242 nonies A de l'annexe II au CGI), n'existe pour aucun type ;"
+  },
+  {
+   "id": "T50",
+   "section": "produit",
+   "titre": "Factures d'acompte et acompte reçu avant la facture",
+   "question": "Faut-il des factures d'acompte, et pouvoir enregistrer un acompte reçu avant la facture ? Aujourd'hui, un paiement égale toujours ce qu'il règle sur des factures.",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Non couvert ; seul un paiement partiel à l'émission existe (« Émettre et encaisser »).",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/decision-types-activite.md:445",
+    "notes/historique/DIRECTIVES.md:603"
+   ],
+   "citation": "les factures d'acompte n'existent pas, et un acompte reçu avant la facture ne s'enregistre pas, puisque le montant d'un paiement est égal au total imputé sur les factures ;"
+  },
+  {
+   "id": "T51",
+   "section": "produit",
+   "titre": "Règles propres aux travaux du bâtiment",
+   "question": "Faut-il gérer, pour le bâtiment, l'autoliquidation de la sous-traitance, le justificatif des taux réduits, la retenue de garantie, les situations de travaux et la décennale jointe ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Le bâtiment s'inscrit en Services, sans règle propre ; une facture de travaux à un particulier viendra avec la facture demandée (lot C-b).",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/decision-types-activite.md:447",
+    "notes/serie8/decision-types-activite.md:448",
+    "notes/serie8/reponses-types-activite.md:15",
+    "notes/decisions/reponses-complements-14-20.md:23",
+    "notes/historique/DIRECTIVES.md:603"
+   ],
+   "citation": "travaux du bâtiment : sous-traitance où la TVA est due par le donneur d'ordre (autoliquidation, art. 283, 2 nonies du CGI), dont la facture ne doit pas porter de TVA, sous peine d'en devenir redevable (art. 283, 3 du CGI)"
+  },
+  {
+   "id": "T52",
+   "section": "produit",
+   "titre": "Vente au poids et travail à l'heure fractionnée",
+   "question": "Faut-il permettre les quantités qui ne sont pas des nombres entiers (vente au kilo ou au mètre, une demi-heure de main-d'œuvre) ? Aujourd'hui, toute quantité est un nombre entier.",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Quantités entières jusqu'à l'étape 7 ; une facture reçue en kilos ou litres passe en saisie manuelle ; options présentées après le lot 21.",
+   "bloquant": "compte rendu après le lot 21, étape 7",
+   "sources": [
+    "notes/serie8/decision-types-activite.md:446",
+    "notes/historique/DIRECTIVES.md:603",
+    "CLAUDE.md:176"
+   ],
+   "citation": "les quantités sont entières : la vente au poids et le travail à l'heure fractionnée attendent l'étape 7 ;"
+  },
+  {
+   "id": "T53",
+   "section": "produit",
+   "titre": "Textes à approuver pour CLAUDE.md",
+   "question": "Écrire dans CLAUDE.md les 12 décisions restées dans le code (alertes claires, retour à la page parente…) et la règle qui interdit de révéler d'autres magasins ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Le lot 21 prépare chaque texte, rien n'est écrit sans votre accord ; plus tard, règles des charges et des totaux entre magasins (TVA7).",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:504",
+    "notes/historique/DIRECTIVES.md:601",
+    "notes/decisions/reponses-regles-ecran-26-10.md:12",
+    "notes/tva/reponses-serie7.md:18"
+   ],
+   "citation": "Écriture dans `CLAUDE.md` des décisions de la conversation de la § 2.2 : aucune n'est écrite ; à lui proposer, puisque seul lui change les règles de `CLAUDE.md` (le lot 21 en prépare le texte dans « laisses »)."
+  },
+  {
+   "id": "T54",
+   "section": "produit",
+   "titre": "Choix C2 à C23 sur les comptes et la connexion",
+   "question": "Les choix C2 à C23 vous conviennent-ils : ventes du propriétaire refusées par la base, identifiant sans séparateur, limitation des essais, avis, rappels, limite de comptes créés ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqués au lot A4c ; présentés au plus tard dans le compte rendu après le lot 21.",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/avenant-S8V-A4c.md:68",
+    "notes/historique/DIRECTIVES.md:595"
+   ],
+   "citation": "les choix C2 à C23 de `notes/serie8/avenant-S8V-A4c.md` (§ 0.4)"
+  },
+  {
+   "id": "T55",
+   "section": "produit",
+   "titre": "Cabinets : limites et autres choix de la session",
+   "question": "Acceptez-vous : 50 invitations et demandes par jour et par cabinet, mot de passe redemandé pour inviter, 7 jours avant de réinviter, sessions coupées à leur requête suivante ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqués (lot EC) et écrits dans CLAUDE.md, comme les autres choix de la section 8 du cahier des cabinets, tous contestables.",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/reponses-cabinets.md:26",
+    "notes/serie8/avenant-cabinets.md:1911",
+    "notes/serie8/avenant-cabinets.md:1912",
+    "notes/serie8/avenant-cabinets.md:1913",
+    "CLAUDE.md:166",
+    "notes/historique/DIRECTIVES.md:595"
+   ],
+   "citation": "Q-EC4 reste un choix de Claude (pas de fermeture des sessions à la fin d'un lien ; chaque session perd l'accès à sa requête suivante), comme les limites qu'il a fixées (50 invitations par jour et par cabinet, mot de passe redemandé pour inviter), que l'éditeur peut contester."
+  },
+  {
+   "id": "T56",
+   "section": "produit",
+   "titre": "Assurance professionnelle facultative, même pour le bâtiment",
+   "question": "Gardez-vous l'assurance professionnelle facultative (imprimée si elle est renseignée) pour tous les types, alors que la loi l'impose à certains artisans, du bâtiment notamment ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Facultative pour tous ; l'aide de l'entrée Services et l'avertissement des codes d'activité du bâtiment rappellent l'obligation.",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/reponses-types-activite.md:18",
+    "notes/serie8/decision-types-activite.md:427",
+    "CLAUDE.md:168",
+    "notes/historique/DIRECTIVES.md:595"
+   ],
+   "citation": "Choix de Claude, contestable : le bloc d'assurance professionnelle reste facultatif pour tous les types qui ont un magasin"
+  },
+  {
+   "id": "T57",
+   "section": "produit",
+   "titre": "Autres choix de la session sur les types d'activité",
+   "question": "Ces choix vous conviennent-ils : textes du menu, code d'activité jamais revérifié (sauf cabinet), type changé sur la page du lien, mot magasin partout, catalogue de démonstration gardé ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqués au lot TA (choix 1 à 14 ; l'assurance, choix 4, est le T56) ; un choix contesté se change par un lot.",
+   "bloquant": "compte rendu après le lot 21",
+   "sources": [
+    "notes/serie8/decision-types-activite.md:427",
+    "notes/serie8/decision-types-activite.md:434",
+    "notes/serie8/decision-types-activite.md:436",
+    "notes/serie8/decision-types-activite.md:441"
+   ],
+   "citation": "Choix de Claude que l'éditeur peut contester"
+  },
+  {
+   "id": "T58",
+   "section": "produit",
+   "titre": "« Transformer en facture » un ticket : choix d'application",
+   "question": "Validez-vous : aucun mouvement de stock, compensation jamais déclarée comme encaissement, avoir et facture dans la même journée de caisse, refus d'un ticket déjà transformé ou repris ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqué au lot C-b de la chaîne TVA, avec votre décision du 01/11 : un clic, avoir interne entièrement consommé.",
+   "bloquant": "lot C-b de la chaîne TVA",
+   "sources": [
+    "notes/decisions/reponses-complements-14-20.md:29",
+    "notes/decisions/reponses-complements-14-20.md:31",
+    "notes/historique/DIRECTIVES.md:594"
+   ],
+   "citation": "Choix d'application proposés par Claude (à signaler à l'éditeur, modifiables) : aucun mouvement de stock (la marchandise n'est pas revenue) ; la compensation n'est pas un encaissement (jamais déclarée comme paiement, ni fr:212 ni b2c_payments)"
+  },
+  {
+   "id": "T59",
+   "section": "produit",
+   "titre": "Charges communes : trois limites provisoires jamais posées",
+   "question": "Gardez-vous ces limites : charge commune réservée aux magasins d'un même territoire, organisme étranger pour des services seulement, aucune TVA saisie à la main au niveau de la société ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliquées à titre provisoire au lot CH5 (option 1 recommandée), sans être écrites dans CLAUDE.md.",
+   "bloquant": "lot CH5 de la chaîne TVA",
+   "sources": [
+    "notes/tva/plan-execution-decisions.md:10",
+    "notes/tva/plan-execution.md:2458",
+    "notes/tva/plan-execution.md:1918",
+    "notes/historique/DIRECTIVES.md:595"
+   ],
+   "citation": "Points non posés à l'éditeur, appliqués selon la recommandation du plan, à titre provisoire et sans être écrits dans CLAUDE.md : 6.1 e1 (charge commune limitée aux magasins d'un même territoire de TVA), 6.1 e2 (organisme non établi : services seulement dans une charge commune)"
+  },
+  {
+   "id": "T60",
+   "section": "produit",
+   "titre": "Régime de la marge : questions de détail avant le lot",
+   "question": "Avant le lot du régime de la marge : mention, marge négative, retour d'un article, clôtures et e-reporting, coût de chaque article, vente à un professionnel ou à l'étranger ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "L'atelier de la chaîne TVA vérifie les textes officiels puis vous pose ces questions avec une recommandation ; règles ensuite à confirmer.",
+   "bloquant": "lot du régime de la marge",
+   "sources": [
+    "notes/tva/decision-tva-sur-marge.md:20",
+    "notes/tva/decision-tva-sur-marge.md:29",
+    "notes/pilotage-reprise/README.md:227"
+   ],
+   "citation": "Les questions métier qui en sortent sont posées à l'éditeur, en français simple, avec une recommandation, avant le lot."
+  },
+  {
+   "id": "T61",
+   "section": "produit",
+   "titre": "Campagne de tests 1 bis : objectifs chiffrés et stratégie",
+   "question": "Objectifs de la campagne 1 bis : combien de sociétés et de magasins, de ventes par seconde en pointe, quel délai pour une vente et une page ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Sans réponse, le plus grand volume de cette machine (votre choix T2 du 10/10) ; la stratégie vous sera présentée avant le premier palier.",
+   "bloquant": "étape 1 bis (campagne de tests)",
+   "sources": [
+    "notes/audits-externes/rapport-lecture-2026-11-07.md:281",
+    "notes/reprises/PASSATION-2026-11-08.md:65",
+    "notes/pilotage-reprise/README.md:233",
+    "notes/societe/reponses-serie4.md:250",
+    "notes/societe/reponses-serie4.md:260",
+    "CLAUDE.md:196",
+    "a-trancher/conversation-2.txt:1849"
+   ],
+   "citation": "nombre de sociétés et de magasins, ventes par seconde en pointe, délai acceptable pour une vente et pour l'ouverture d'une page."
+  },
+  {
+   "id": "T62",
+   "section": "produit",
+   "titre": "Numéro de facture du fournisseur obligatoire ?",
+   "question": "Le numéro de la facture du fournisseur est facultatif sur une facture d'achat. L'e-reporting international l'exigera : faut-il le rendre obligatoire ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Facultatif aujourd'hui, avec un avertissement pour un avoir fournisseur ; à trancher avant l'étape 2.",
+   "bloquant": "étape 2",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:515"
+   ],
+   "citation": "Le numéro du fournisseur est aujourd'hui facultatif (`notes/tva/ergonomie-donnees.md`) ; l'e-reporting international l'exigera."
+  },
+  {
+   "id": "T63",
+   "section": "produit",
+   "titre": "Place des fournisseurs dans une société de services",
+   "question": "Une société de services n'a pas d'écran fournisseurs. Quand elle reçoit des factures par SUPER PDP, faut-il créer des fiches fournisseurs (reconnus par leur SIRET), et où les montrer ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "La session vous proposera un choix à l'étape 2 ; aucune facture reçue n'y devient un achat de marchandises.",
+   "bloquant": "étape 2 (factures reçues)",
+   "sources": [
+    "CLAUDE.md:197",
+    "notes/serie8/decision-types-activite.md:442"
+   ],
+   "citation": "l'étape décide de la place des fournisseurs, reconnus par leur SIRET, dans une société de services"
+  },
+  {
+   "id": "T64",
+   "section": "produit",
+   "titre": "Facture reçue avec deux lignes du même produit",
+   "question": "Quand une facture reçue par SUPER PDP porte deux lignes du même produit, PILIQI les réunit-il en une, ou la facture passe-t-elle en saisie manuelle ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "À trancher au lot de l'étape 2 ; la saisie à la main garde déjà une seule ligne par produit.",
+   "bloquant": "étape 2 (factures reçues)",
+   "sources": [
+    "notes/serie9/reponses-serie9.md:23"
+   ],
+   "citation": "À l'étape 2 (factures reçues de SUPER PDP), deux lignes du même produit se réunissent en une, ou passent en saisie manuelle : à trancher au lot de l'étape 2."
+  },
+  {
+   "id": "T65",
+   "section": "produit",
+   "titre": "Questions SUPER PDP de la campagne de l'étape 2",
+   "question": "Avant la campagne de l'étape 2 : facture reçue par un magasin suspendu, encaissement négatif après contre-passation, journée transmise puis corrigée, facture mixte, magasin en franchise, international ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Posées pour information dans la stratégie ; à trancher avant la campagne C2, après essais au bac à sable.",
+   "bloquant": "campagne C2 de l'étape 2",
+   "sources": [
+    "notes/campagne/strategie/finale.md:1436",
+    "notes/campagne/strategie/finale.md:1438"
+   ],
+   "citation": "Questions SUPER PDP à trancher avant C2, pour information dès maintenant :"
+  },
+  {
+   "id": "T66",
+   "section": "produit",
+   "titre": "Lot M9 : guichet OSS, ventes des DOM, export emporté",
+   "question": "Au lot M9, après SUPER PDP : quel prix paie le client sous le guichet OSS, et quel régime pour les expéditions des DOM et l'export emporté ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "D'ici là : refus au-delà de 10 000 € de ventes à distance, expéditions des DOM refusées, export emporté à la TVA française.",
+   "bloquant": "lot M9 (après l'étape 2)",
+   "sources": [
+    "notes/tva/conception-finale.md:1946",
+    "notes/tva/plan-execution.md:348",
+    "notes/tva/reponses-serie7.md:27",
+    "notes/tva/reponses-serie7.md:62",
+    "notes/serie8/decision-types-activite.md:449"
+   ],
+   "citation": "| QT3 (prix payé sous OSS) | Reportée au lot M9 : elle ne compte que si l'OSS est construit |"
+  },
+  {
+   "id": "T67",
+   "section": "produit",
+   "titre": "Charges récurrentes : question à vous reposer après l'étape 2",
+   "question": "Après l'étape 2, voudrez-vous des modèles qui créent chaque mois le brouillon d'une charge récurrente (loyer d'un bailleur particulier) qui n'arrive pas par facture électronique ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Votre « Pas pour l'instant » du 12/10 s'applique : aucun modèle ; rien à décider avant la fin de l'étape 2.",
+   "bloquant": "après l'étape 2",
+   "sources": [
+    "notes/tva/plan-execution-decisions.md:8",
+    "notes/historique/DIRECTIVES.md:593"
+   ],
+   "citation": "6.1 f — Charges récurrentes — « Pas pour l'instant » : aucun modèle mensuel (les factures électroniques arriveront seules en brouillon à l'étape 2) ; à revoir après l'étape 2."
+  },
+  {
+   "id": "T68",
+   "section": "produit",
+   "titre": "Régularisation d'un SIREN : trois comportements laissés",
+   "question": "Acceptez-vous : PDF d'une rectificative émise avant l'avoir montrant tout son dû, rectificative comptée dans le TTC vendu de la caisse, contre-passation qui rouvre le dû de l'ancienne facture ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Laissés tels quels, le cas étant rare ; le TTC vendu se revoit avec les clôtures de l'étape 3.",
+   "bloquant": "étape 3 (clôtures)",
+   "sources": [
+    "notes/pilotage-reprise/README.md:190"
+   ],
+   "citation": "ses autres « laisses », à soumettre à l'éditeur : PDF d'une rectificative émise avant l'avoir, qui montre tout son montant dû ; rectificative comptée dans le « TTC vendu » du relevé de caisse personnelle (étape 3)"
+  },
+  {
+   "id": "T69",
+   "section": "produit",
+   "titre": "Heure locale des magasins : choix C1 à C14",
+   "question": "Ces choix vous conviennent-ils : territoire figé, démonstration au territoire du siège, relances de 9 h à 12 h locales, version mineure du module fiscal (C8) ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Tous appliqués, l'autre option écrite pour chacun ; C8 à revoir avec l'attestation de l'étape 3.",
+   "bloquant": "étape 3 pour le choix C8",
+   "sources": [
+    "notes/t3/decision-heure-locale.md:905",
+    "notes/t3/decision-heure-locale.md:914"
+   ],
+   "citation": "C8. Version mineure du module fiscal (question 5 de la carte). Autre option : version majeure. Écartée : rien ne change dans l'inaltérabilité, la sécurisation, la conservation ni l'archivage, et aucune attestation n'a encore été émise (étape 3). À revoir avec l'attestation si l'éditeur en juge autrement."
+  },
+  {
+   "id": "T70",
+   "section": "produit",
+   "titre": "Un administrateur peut-il produire l'export comptable ?",
+   "question": "Seuls le propriétaire et le cabinet lié produisent l'export comptable (FEC). Voulez-vous qu'un administrateur autorisé le puisse aussi ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Question posée au début de l'étape 5 ; d'ici là, aucun export par un administrateur.",
+   "bloquant": "étape 5 (comptabilité)",
+   "sources": [
+    "notes/societe/avenant-A4-serie6.md:1343",
+    "CLAUDE.md:200"
+   ],
+   "citation": "Un administrateur ne le produit que si l'éditeur le décide à l'étape 5 (question à poser alors)."
+  },
+  {
+   "id": "T71",
+   "section": "produit",
+   "titre": "Avoir fournisseur « net de taxes » et ristournes sans retour",
+   "question": "Faut-il une case « net de taxes » sur l'avoir fournisseur, et permettre un avoir sans retour de marchandise (ristourne de fin d'année, erreur de prix) ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Pas d'avoir sans retour pour l'instant (Q10, 17/10) ; une case recommandée ; à reprendre avec les avoirs reçus ou l'étape 5.",
+   "bloquant": "étape 5 (comptabilité)",
+   "sources": [
+    "notes/calculs/tva-deductible-et-ca3.md:208",
+    "notes/calculs/tva-deductible-et-ca3.md:284",
+    "notes/serie8/reponses-serie8.md:50",
+    "notes/tr/decision-tr.md:49"
+   ],
+   "citation": "Ristournes et remises de fin d'année sans retour de marchandise. Un avoir fournisseur ne porte aujourd'hui que des lignes retournées"
+  },
+  {
+   "id": "T72",
+   "section": "produit",
+   "titre": "Paiement en ligne : prestataire et outils comptables",
+   "question": "Quel prestataire de paiement (Stripe ou Mollie ?) pour la carte, Apple Pay, Google Pay, Pay by Bank et PayPal, et quels outils comptables brancher à l'étape 11 ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Un seul prestataire, chaque société reliant son propre compte ; offres comparées (conditions, frais) au moment de construire l'étape 11.",
+   "bloquant": "étape 11 (intégrations)",
+   "sources": [
+    "CLAUDE.md:206",
+    "notes/paiements/demande-devis-en-ligne.md:5",
+    "a-trancher/conversation-1.txt (02/11 08:48 UTC)"
+   ],
+   "citation": "un seul prestataire de paiement qui réunit tous les moyens (Stripe ou Mollie, à choisir et vérifier dans leur documentation officielle au moment de construire), chaque société reliant son propre compte"
+  },
+  {
+   "id": "T73",
+   "section": "produit",
+   "titre": "Paiement en ligne : règles métier",
+   "question": "Paiement en ligne : qui émet la facture et enregistre l'encaissement, acompte ou totalité, qui paie les frais, que faire d'une opposition par carte, puisque rien n'est jamais remboursé ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Questions posées au moment de construire l'étape 11 ; d'ici là, un devis accepté devient facture par un geste du magasin.",
+   "bloquant": "étape 11 (intégrations)",
+   "sources": [
+    "notes/paiements/demande-devis-en-ligne.md:5",
+    "notes/paiements/demande-devis-en-ligne.md:18",
+    "a-trancher/conversation-1.txt (02/11 08:48 UTC)"
+   ],
+   "citation": "Règles métier à soumettre au moment de construire (étape 11 pour les paiements) : qui émet la facture et qui enregistre l'encaissement en ligne (le système au nom du magasin), acompte ou totalité, oppositions et remboursements par carte face à « rien n'est jamais remboursé », frais, e-reporting."
+  },
+  {
+   "id": "T74",
+   "section": "produit",
+   "titre": "Abonnements : plans, prix, cabinets et clients invités",
+   "question": "Quels plans, limites, fonctionnalités et prix par magasin, quoi en cas d'impayé, quel abonnement pour un cabinet, et comment facturer ses clients invités ou venus par sa déclaration ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Déjà décidé : démonstration, société non validée et société sans magasin réel (hors cabinet) jamais facturées ; périodes d'activité déjà tenues.",
+   "bloquant": "étape 12 (abonnements)",
+   "sources": [
+    "CLAUDE.md:207",
+    "CLAUDE.md:166",
+    "CLAUDE.md:163",
+    "notes/ec2/cahier-des-charges.definitif.md:1189",
+    "notes/ec2/cahier-des-charges.definitif.md:1211"
+   ],
+   "citation": "L'abonnement d'un cabinet et la facturation des clients qu'il invite se décident à l'étape 12"
+  },
+  {
+   "id": "T75",
+   "section": "produit",
+   "titre": "Achats auprès de particuliers (registre des objets achetés)",
+   "question": "Quelles règles pour acheter des objets à des particuliers : registre des objets achetés, pièces demandées au vendeur, lien avec le régime de la marge ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Laissé de côté à votre demande (08/10) ; la session vous soumettra un projet de règles à l'étape 14.",
+   "bloquant": "étape 14",
+   "sources": [
+    "CLAUDE.md:209",
+    "notes/historique/DIRECTIVES.md:592",
+    "notes/tva/decision-tva-sur-marge.md:3"
+   ],
+   "citation": "08/10/2026, message 112 : « on laisse tomber pour l'instant les achat aux particulier on va revenir. » Prévu à l'étape 14 de `CLAUDE.md` ; ses règles restent à trancher."
+  },
+  {
+   "id": "T76",
+   "section": "produit",
+   "titre": "Restauration d'une sauvegarde face au registre fiscal",
+   "question": "Après la restauration d'une sauvegarde, quelle procédure pour le registre signé, les numéros déjà remis aux clients et les déclarations déjà transmises ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "La campagne finale en mesure l'effet ; procédure à décider avec la configuration de production.",
+   "bloquant": "étape 15 (mise en production)",
+   "sources": [
+    "notes/campagne/strategie/finale.md:1455",
+    "notes/campagne/strategie/finale.md:958"
+   ],
+   "citation": "Restauration d'une sauvegarde : quelle procédure pour le registre, les numéros déjà remis aux clients et les déclarations déjà transmises ? À trancher au plus tard à l'étape 15."
+  },
+  {
+   "id": "T77",
+   "section": "produit",
+   "titre": "Lancement d'abord chez quelques magasins pilotes",
+   "question": "Lancer PILIQI d'abord chez quelques magasins pilotes, avec leur vrai matériel (imprimante de tickets, terminal de paiement, douchette, tiroir-caisse), avant l'ouverture à tous ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Recommandé par la session, à prévoir à l'étape 15 ; elle ne peut pas brancher le matériel réel.",
+   "bloquant": "mise en production",
+   "sources": [
+    "a-trancher/conversation-1.txt (01/11 23:46 UTC)",
+    "a-trancher/conversation-1.txt (01/11 23:50 UTC)"
+   ],
+   "citation": "un essai chez quelques magasins pilotes avec leur vrai matériel, et le signalement automatique des erreurs dont je vous ai parlé."
+  },
+  {
+   "id": "T78",
+   "section": "produit",
+   "titre": "Signalement automatique des erreurs en production",
+   "question": "Mettre en place un signalement automatique de chaque erreur rencontrée en production, sans donnée personnelle ? Un service extérieur qui recevrait ces données demande votre accord.",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Recommandé par la session, à prévoir à l'étape 15, sans aucune donnée personnelle des clients.",
+   "bloquant": "mise en production",
+   "sources": [
+    "a-trancher/conversation-1.txt (01/11 23:46 UTC)",
+    "notes/historique/DIRECTIVES.md:358"
+   ],
+   "citation": "un signalement automatique de chaque erreur rencontrée en production, sans aucune donnée personnelle des clients, pour que je la corrige avec un test ;"
+  },
+  {
+   "id": "T79",
+   "section": "produit",
+   "titre": "Pièce déposée : jeter un jour l'original papier ?",
+   "question": "Une pièce déposée dans PILIQI doit-elle un jour permettre de jeter l'original papier (numérisation fiscale avec cachet électronique, prestataire payant) ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Non pour l'instant : simple copie de consultation, original à garder 10 ans ; à reconsidérer à l'étape 15 si les sociétés le demandent.",
+   "bloquant": "étape 15",
+   "sources": [
+    "notes/tva/plan-execution-decisions.md:10",
+    "notes/tva/plan-execution.md:2478"
+   ],
+   "citation": "6.1 g (pas de numérisation fiscale : la pièce reste une copie de consultation)"
+  },
+  {
+   "id": "T80",
+   "section": "produit",
+   "titre": "Créer les produits depuis une facture d'achat PDF ou Excel",
+   "question": "Quand vous voudrez cette fonction : quelles sources (facture électronique, Excel à modèle imposé, PDF), comment reconnaître un produit, quel prix et quel taux, qui importe, prestataire payant ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Rien n'est construit ; recommandé : un brouillon validé à la main, jamais d'entrée en stock directe, import réservé à qui crée achats et produits.",
+   "bloquant": "le jour où vous la voulez",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:591",
+    "notes/serie8/plan-serie8.md:88",
+    "notes/serie8/plan-serie8.md:416",
+    "notes/serie8/reponse-editeur.md:123",
+    "notes/serie8/equipe-et-achats.md:392"
+   ],
+   "citation": "« Por per (9) te jap rregullat pastaj kur te me kerkosh se si! » (« Mais pour le 9, je te donne les règles plus tard, quand tu me demanderas comment »)"
+  },
+  {
+   "id": "T81",
+   "section": "produit",
+   "titre": "Territoires : Guyane, Mayotte, collectivités d'outre-mer",
+   "question": "Voulez-vous un jour accepter des magasins en Guyane ou à Mayotte (sans TVA), ou dans une collectivité d'outre-mer ?",
+   "qui": "vous, puis un expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Refusés aujourd'hui (territoire non géré) ; leur calendrier est prêt, les règles de TVA et de facture restent à faire.",
+   "bloquant": "le jour où le cas se présente",
+   "sources": [
+    "CLAUDE.md:180",
+    "notes/t3/decision-heure-locale.md:238",
+    "notes/t3/decision-heure-locale.md:898",
+    "notes/tva/plan-execution.md:682",
+    "notes/regles-tva-international.md:630"
+   ],
+   "citation": "La Guyane et Mayotte ont leur entrée. Elles ne sont pas encore acceptées, mais la table est exhaustive (un `match` sur l'énumération) et `CalendrierTest` la vérifie. Le jour où l'éditeur les accepte, leur calendrier est prêt."
+  },
+  {
+   "id": "T82",
+   "section": "produit",
+   "titre": "Clients prévenus quand l'accès de leur cabinet est suspendu",
+   "question": "Après la correction du SIREN d'un cabinet, chaque client lié est prévenu que l'accès de son cabinet est suspendu jusqu'à sa nouvelle vérification, puis rétabli. D'accord ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Avis au propriétaire de chaque client lié, sans autre détail, à la suspension puis au retour de l'accès (lot A7b).",
+   "bloquant": "aucun (déjà appliqué)",
+   "sources": [
+    "notes/a7b/decision-a7b.md:39",
+    "a-trancher/conversation-1.txt (01/11 16:44 UTC)"
+   ],
+   "citation": "choix de Claude, contestable : le propriétaire de chaque client lié est prévenu que l'accès de son cabinet est suspendu jusqu'à sa nouvelle vérification (sans autre détail)"
+  },
+  {
+   "id": "T83",
+   "section": "produit",
+   "titre": "Administrateur à distance : pas de connexion avec l'identifiant",
+   "question": "Un administrateur hors d'un poste reconnu ne peut pas ouvrir son compte tant que son mot de passe est son identifiant. Cette limite vous convient-elle ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Il choisit d'abord son mot de passe sur un poste reconnu, ou en présence de qui lui redonne l'accès (conséquence de Q-A d).",
+   "bloquant": "aucun",
+   "sources": [
+    "notes/historique/resumes-de-session.md:3979",
+    "notes/serie8/reponses-serie8.md:76"
+   ],
+   "citation": "Point signalé par la relecture d'A4c : un administrateur qui travaille à distance ne peut pas ouvrir son compte avec son identifiant comme mot de passe (conséquence de la réponse Q-A b). Déjà signalé à l'éditeur."
+  },
+  {
+   "id": "T84",
+   "section": "produit",
+   "titre": "TVA des achats : trois choix de calcul du lot TR",
+   "question": "Confirmez-vous : HT proposé arrondi au centime le plus proche (demi-centime vers le bas), écart de TVA réparti au prorata des HT, confirmation valable pour l'écart exactement confirmé ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqués au lot TR ; la facture du fournisseur reste celle qui compte, dans les tolérances de CLAUDE.md.",
+   "bloquant": "aucun",
+   "sources": [
+    "notes/pilotage-reprise/README.md:190"
+   ],
+   "citation": "trois choix de Claude à faire confirmer par l'éditeur (HT proposé d'un PU à six décimales arrondi une fois au centime le plus proche, un demi-centime exact au centime inférieur"
+  },
+  {
+   "id": "T85",
+   "section": "produit",
+   "titre": "Téléchargement par période : jour de classement et date du fournisseur",
+   "question": "Confirmez-vous le classement : avoir fournisseur à son jour d'émission, achat reçu par l'API sans date à sa validation, paiement à son enregistrement ; et la date fournisseur obligatoire ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Appliqué au lot EX ; la date de la facture du fournisseur, ajoutée par la session, sert à classer chaque achat.",
+   "bloquant": "aucun",
+   "sources": [
+    "notes/export/decision-ex.md:16",
+    "notes/pilotage-reprise/README.md:190",
+    "a-trancher/conversation-1.txt (03/11 01:40 UTC)"
+   ],
+   "citation": "choix de Claude à faire confirmer par l'éditeur sur le jour de classement (avoir fournisseur à son jour d'émission, achat reçu par l'API sans date au jour de sa validation, paiement au jour de son enregistrement)"
+  },
+  {
+   "id": "T86",
+   "section": "produit",
+   "titre": "Devis accepté en ligne : signature simple ou code par SMS",
+   "question": "Pour accepter un devis en ligne, le nom tapé et la case Bon pour accord vous suffisent-ils, ou voulez-vous un code par SMS (numéro du client, service payant) ?",
+   "qui": "vous",
+   "etat": "applique-a-confirmer",
+   "proposition": "Lot DV sans SMS (signature électronique simple) ; SMS seulement sur votre demande ; pour de gros devis, un avocat peut confirmer sa valeur.",
+   "bloquant": "aucun (lot DV sans SMS)",
+   "sources": [
+    "notes/paiements/demande-devis-en-ligne.md:18",
+    "notes/paiements/demande-devis-en-ligne.md:19",
+    "a-trancher/conversation-1.txt (02/11 08:56 UTC)"
+   ],
+   "citation": "un code par SMS demanderait le numéro du client et un prestataire de SMS : à proposer seulement si l'éditeur le veut, plus tard."
+  },
+  {
+   "id": "T87",
+   "section": "technique-comptes",
+   "titre": "SUPER PDP : deux paramètres absents de la spécification",
+   "question": "SUPER PDP confirme-t-il, dans sa documentation officielle, les paramètres superpdp_directory_entry_identifier et superpdp_send_and_receive, absents de sa spécification 1.36.0.beta ?",
+   "qui": "SUPER PDP",
+   "etat": "applique-a-confirmer",
+   "proposition": "Ces deux paramètres ne sont pas envoyés tant que la documentation officielle ne les décrit pas.",
+   "bloquant": "étape 2 (connexion des sociétés)",
+   "sources": [
+    "CLAUDE.md:197"
+   ],
+   "citation": "superpdp_directory_entry_identifier et superpdp_send_and_receive, absents de la spécification 1.36.0.beta, ne s'envoient qu'une fois confirmés par la documentation officielle."
+  },
+  {
+   "id": "T88",
+   "section": "technique-comptes",
+   "titre": "Motifs et statuts d'une facture reçue refusée ou contestée",
+   "question": "Quels motifs de refus ou de litige (liste officielle) et quels statuts pour une facture reçue ? Faut-il un statut pour une facture refusée déjà importée ?",
+   "qui": "SUPER PDP, puis vous",
+   "etat": "ouvert",
+   "proposition": "Statuts proposés 205, 207 et 210, sans 204 automatique ; qui refuse est tranché (E4) : propriétaire et administrateurs autorisés.",
+   "bloquant": "étape 2 (factures reçues)",
+   "sources": [
+    "notes/superpdp-plan.md:1006",
+    "notes/superpdp-plan.md:1007",
+    "notes/superpdp-plan.md:1008",
+    "notes/superpdp-plan.md:1002",
+    "notes/decisions-editeur.md:105",
+    "CLAUDE.md:176"
+   ],
+   "citation": "Liste exacte des motifs MDT-113 (XP Z12-012) pour le refus et le litige, à fournir."
+  },
+  {
+   "id": "T89",
+   "section": "technique-comptes",
+   "titre": "Factures de fournisseurs étrangers reçues par Peppol",
+   "question": "Une facture envoyée volontairement par un fournisseur étranger via Peppol arrive-t-elle, à quel magasin, et est-elle déjà déclarée, pour ne jamais déclarer deux fois ?",
+   "qui": "SUPER PDP",
+   "etat": "ouvert",
+   "proposition": "Saisie manuelle de l'achat, puis déclaration B2BInt « in » à l'étape 2, après vérification au bac à sable.",
+   "bloquant": "étape 2 (factures reçues)",
+   "sources": [
+    "notes/decisions/reponses-complements-14-20.md:19",
+    "notes/historique/DIRECTIVES.md:599",
+    "notes/tva/reglementation.md:478"
+   ],
+   "citation": "sauf si le fournisseur envoie volontairement par le réseau Peppol à l'adresse de la société (à vérifier dans le bac à sable : réception, attribution, et e-reporting automatique ou non, pour ne jamais déclarer deux fois)"
+  },
+  {
+   "id": "T90",
+   "section": "technique-comptes",
+   "titre": "SUPER PDP : recette au bac à sable et contrôles réels",
+   "question": "Faire la recette au bac à sable SUPER PDP (Tricatel, Burger Queen) : contrôles réels de l'écart de TVA par taux, du PU HT à six décimales, qualification réelle.",
+   "qui": "vous, avec SUPER PDP",
+   "etat": "applique-a-confirmer",
+   "proposition": "Règle actuelle gardée (tolérance européenne de 1 € par taux) ; la session prépare les vérifications et les cas d'essai, rien sans votre accord.",
+   "bloquant": "étape 2",
+   "sources": [
+    "notes/superpdp-plan.md:955",
+    "notes/serie8/arrondi-et-calculs.md:335",
+    "notes/calculs/synthese.md:307",
+    "notes/calculs/normes.md:346",
+    "notes/serie8/plan-serie8.md:994",
+    "notes/campagne/strategie/finale.md:1457",
+    "a-trancher/conversation-2.txt:1153",
+    "a-trancher/conversation-2.txt:1938"
+   ],
+   "citation": "Recette dans le bac à sable (manuelle, par l'éditeur, avec ses identifiants)"
+  },
+  {
+   "id": "T91",
+   "section": "technique-comptes",
+   "titre": "Clients professionnels étrangers : B2BInt ou Peppol",
+   "question": "Pour un client professionnel établi hors de France : déclaration B2BInt, ou envoi par le réseau Peppol avec la règle B2BInt ?",
+   "qui": "SUPER PDP, expert-comptable",
+   "etat": "ouvert",
+   "proposition": "Phase reportée après cette réponse ; d'abord la catégorie de TVA des lignes ; l'écran dit « Déclaration internationale non prise en charge ».",
+   "bloquant": "étape 2 (international)",
+   "sources": [
+    "notes/superpdp-plan.md:1028",
+    "notes/superpdp-plan.md:950"
+   ],
+   "citation": "Question : déclaration B2BInt (/b2bint_invoices), ou envoi Peppol avec `processing_rule=B2BInt` ?"
+  },
+  {
+   "id": "T92",
+   "section": "technique-comptes",
+   "titre": "SUPER PDP : compte de production et secrets du bac à sable",
+   "question": "Ouvrir le compte SUPER PDP de production avec l'application OAuth (URL de retour du domaine de production), et renouveler les deux secrets du bac à sable montrés en capture.",
+   "qui": "vous, dans SUPER PDP",
+   "etat": "ouvert",
+   "proposition": "Le bac à sable sert jusque-là ; aucun secret n'est recopié dans le dépôt ni dans les notes.",
+   "bloquant": "après les essais de l'étape 2",
+   "sources": [
+    "CLAUDE.md:197",
+    "notes/pilotage-reprise/README.md:303",
+    "notes/pilotage-reprise/README.md:304",
+    "notes/historique/DIRECTIVES.md:600"
+   ],
+   "citation": "Renouveler les deux secrets du bac à sable SUPER PDP après les tests."
+  },
+  {
+   "id": "T93",
+   "section": "technique-comptes",
+   "titre": "Hébergement de production",
+   "question": "Choisir l'hébergeur de production (PostgreSQL 17 ou 18 géré, Redis, files, sauvegardes avec restauration à un instant donné). Acceptez-vous un fournisseur soumis au CLOUD Act ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Recommandé : PostgreSQL géré hébergé en France, où l'antivirus ClamAV peut tourner ; la session prépare la configuration et compare des offres.",
+   "bloquant": "étape 15 (mise en production)",
+   "sources": [
+    "CLAUDE.md:210",
+    "README.md:145",
+    "notes/moteurs/choix-moteur-finale.md:84",
+    "notes/moteurs/choix-moteur-finale.md:199",
+    "notes/moteurs/choix-moteur-finale.md:200",
+    "a-trancher/conversation-2.txt:1155"
+   ],
+   "citation": "Leur soumission au CLOUD Act est à trancher par vous."
+  },
+  {
+   "id": "T94",
+   "section": "technique-comptes",
+   "titre": "Machine dédiée pour la campagne de tests finale",
+   "question": "Fournir une machine dédiée au volume complet pour la campagne de tests finale, avant la mise en production (votre choix T2 du 10/10).",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Les campagnes intermédiaires tournent sur cette machine, puis avec Redis ; au-delà de sa capacité, résultats signalés comme extrapolés.",
+   "bloquant": "étape 15 (campagne finale)",
+   "sources": [
+    "CLAUDE.md:196",
+    "CLAUDE.md:210",
+    "notes/societe/reponses-serie4.md:250",
+    "notes/societe/conception-v2-finale.md:1426"
+   ],
+   "citation": "campagne de tests finale sur une machine dédiée au volume complet"
+  },
+  {
+   "id": "T95",
+   "section": "technique-comptes",
+   "titre": "Test d'intrusion indépendant",
+   "question": "Faire faire un test d'intrusion de PILIQI par un prestataire de sécurité indépendant : par qui, quand, avec quel budget ?",
+   "qui": "vous, avec un prestataire",
+   "etat": "ouvert",
+   "proposition": "Recommandé sur une copie d'essai aux données fictives, avant la campagne finale de l'étape 15 ; les outils internes ne le remplacent pas.",
+   "bloquant": "mise en production",
+   "sources": [
+    "notes/audits-externes/rapport-lecture-2026-11-07.md:279",
+    "notes/audits-externes/decision-aud.md:260",
+    "notes/reprises/PASSATION-2026-11-08.md:65",
+    "notes/pilotage-reprise/README.md:309",
+    "a-trancher/conversation-1.txt (01/11 23:50 UTC)",
+    "a-trancher/conversation-2.txt:1847"
+   ],
+   "citation": "par qui, quand, avec quel budget ? Recommandé : sur une copie d'essai aux données fictives, avant la campagne finale de l'étape 15."
+  },
+  {
+   "id": "T96",
+   "section": "technique-comptes",
+   "titre": "Clés de production : création et garde",
+   "question": "Générer les clés de production (signature fiscale, journal d'audit), décider où les garder (variables de l'hébergeur, coffre de secrets) et qui garde la copie de secours.",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Jamais dans le dépôt ; la session vous guide (caisse:generer-cle, clé aléatoire de 32 octets) et caisse:diagnostiquer les contrôle sans les afficher.",
+   "bloquant": "mise en production (étape 15)",
+   "sources": [
+    "README.md:65",
+    "README.md:66",
+    "README.md:128",
+    "notes/audits-externes/rapport-lecture-2026-11-07.md:282",
+    "notes/reprises/PASSATION-2026-11-08.md:65",
+    "notes/societe/conception-v2-finale.md:1425",
+    "a-trancher/conversation-2.txt:1850"
+   ],
+   "citation": "où les garder (variables de l'hébergeur, coffre de secrets) et qui garde la copie de secours."
+  },
+  {
+   "id": "T97",
+   "section": "technique-comptes",
+   "titre": "Service d'envoi des e-mails en production",
+   "question": "Choisir le service qui enverra les e-mails de PILIQI en production (il recevra des données) et régler votre nom de domaine (SPF, DKIM, DMARC).",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Mailtrap ne sert qu'aux essais ; en local, les e-mails s'écrivent dans le journal (MAIL_MAILER=log).",
+   "bloquant": "mise en production",
+   "sources": [
+    "README.md:64",
+    "CLAUDE.md:180",
+    "a-trancher/conversation-1.txt (01/11 13:39 UTC)"
+   ],
+   "citation": "Pour la production, il faudra plus tard un vrai service d'envoi, avec votre propre domaine (SPF, DKIM et DMARC). Ce choix se fera à l'étape 15."
+  },
+  {
+   "id": "T98",
+   "section": "technique-comptes",
+   "titre": "Clé de l'API Sirene de l'INSEE et commune en diffusion partielle",
+   "question": "Créer votre clé de l'API Sirene (portail de l'INSEE, gratuite) ; avec elle, vérifier que la commune d'un établissement en diffusion partielle est bien donnée.",
+   "qui": "vous, auprès de l'INSEE",
+   "etat": "ouvert",
+   "proposition": "Répertoire factice en développement et en test ; sans commune lue, un établissement est refusé pour territoire inconnu.",
+   "bloquant": "mise en production",
+   "sources": [
+    "CLAUDE.md:164",
+    "README.md:143",
+    "notes/societe/conception-v2-finale.md:1420",
+    "notes/pilotage-reprise/README.md:303",
+    "notes/t3/decision-heure-locale.md:178",
+    "notes/t3/decision-heure-locale.md:969",
+    "a-trancher/conversation-1.txt (01/11 16:37 UTC)"
+   ],
+   "citation": "Une confirmation reste à obtenir, sans bloquer le lot : que l'INSEE diffuse la commune d'un établissement en diffusion partielle (§ 3.2). Elle se constate sur l'API réelle, avec la clé de l'éditeur."
+  },
+  {
+   "id": "T99",
+   "section": "technique-comptes",
+   "titre": "Accès à l'API du registre national des entreprises (INPI)",
+   "question": "Ouvrir un accès à l'API du registre national des entreprises (INPI) ; les champs lus (dénomination, forme juridique, greffe, capital) seront alors confirmés dans son dictionnaire officiel.",
+   "qui": "vous, auprès de l'INPI",
+   "etat": "ouvert",
+   "proposition": "Registre factice d'ici là ; un registre injoignable fait seulement réessayer ; le greffe est déduit, pas vérifié.",
+   "bloquant": "mise en production",
+   "sources": [
+    "CLAUDE.md:164",
+    "notes/societe/conception-v2-finale.md:1421",
+    "notes/pilotage-reprise/README.md:303",
+    "notes/pilotage-reprise/README.md:308",
+    "notes/serie8/avenant-cabinets.md:897",
+    "notes/serie8/avenant-cabinets.md:905"
+   ],
+   "citation": "Chemins du registre national des entreprises (INPI) lus par `InpiRne::identite()` (dénomination, forme juridique, greffe d'immatriculation, capital) : à confirmer dans le dictionnaire de données officiel du RNE avant la production"
+  },
+  {
+   "id": "T100",
+   "section": "technique-comptes",
+   "titre": "Contrat La Poste : recommandé par API, remis en personne",
+   "question": "Signer avec La Poste l'envoi de lettres recommandées par API (clauses de sous-traitance RGPD, coût par courrier) en vérifiant que l'offre impose la remise au destinataire en personne.",
+   "qui": "vous, avec La Poste",
+   "etat": "ouvert",
+   "proposition": "Envoi factice en PDF dans le stockage privé ; sans remise en personne, un mandataire pourrait recevoir le code de vérification.",
+   "bloquant": "mise en production (premiers vrais courriers)",
+   "sources": [
+    "CLAUDE.md:164",
+    "notes/serie8/decision-verification-courrier.md:14",
+    "notes/serie8/decision-verification-courrier.md:17",
+    "notes/serie8/notes-lot-V2.md:26",
+    "notes/societe/conception-v2-finale.md:1422",
+    "notes/pilotage-reprise/README.md:303",
+    "README.md:143"
+   ],
+   "citation": "CONDITION À CONFIRMER PAR L'ÉDITEUR lors du contrat avec La Poste : que l'offre utilisée permette d'imposer la remise au destinataire en personne"
+  },
+  {
+   "id": "T101",
+   "section": "technique-comptes",
+   "titre": "Vérification des cabinets à l'Ordre des experts-comptables",
+   "question": "Obtenir de l'Ordre (ou du Conseil supérieur) une convention ou une API pour vérifier automatiquement l'inscription des cabinets ; sinon, vous vérifiez vous-même chaque cabinet, une fois.",
+   "qui": "vous, avec l'Ordre",
+   "etat": "applique-a-confirmer",
+   "proposition": "Vérification à la main par votre commande editeur:cabinet:verifier-ordre, inscrite au journal d'audit ; jamais de moissonnage de l'annuaire public.",
+   "bloquant": "premier cabinet inscrit, puis production",
+   "sources": [
+    "CLAUDE.md:166",
+    "notes/serie8/avenant-cabinets.md:581",
+    "notes/serie8/avenant-cabinets.md:1812",
+    "notes/pilotage-reprise/README.md:307",
+    "README.md:143"
+   ],
+   "citation": "Pour une vérification automatique, l'éditeur doit obtenir de l'Ordre (ou du Conseil supérieur) une convention ou une API d'accès à l'annuaire, avec ses identifiants, son format de réponse et ses conditions d'usage"
+  },
+  {
+   "id": "T102",
+   "section": "technique-comptes",
+   "titre": "Opérateurs de l'éditeur et adresse d'alerte",
+   "question": "Qui seront vos opérateurs des procédures exceptionnelles (deux personnes distinctes pour les procédures graves : révocation, correction de SIREN, libération de SIRET), et quelle adresse reçoit les alertes ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Les déclarer sur le serveur (EDITEUR_OPERATEURS, PILIQI_EDITEUR_EMAIL) ; les procédures passent par les commandes editeur:* jusqu'aux écrans de l'étape 13.",
+   "bloquant": "première procédure réelle, puis étape 13",
+   "sources": [
+    "README.md:143",
+    "notes/societe/conception-v2-finale.md:1424",
+    "a-trancher/conversation-1.txt (02/11 00:16 UTC)"
+   ],
+   "citation": "une procédure grave, comme la révocation d'une société qui a pris le SIREN d'une autre entreprise (`php artisan editeur:societe:revoquer`, une fois saisi le code du courrier de révocation), exige deux opérateurs distincts"
+  },
+  {
+   "id": "T103",
+   "section": "technique-comptes",
+   "titre": "Commande unique de développement sur votre PC",
+   "question": "Voulez-vous une commande unique, sans Node (composer run dev), qui lance ensemble le serveur, les files d'attente et le planificateur sur votre PC ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Rien n'est fait sans votre oui ; aujourd'hui, les quatre commandes du développement se lancent une par une.",
+   "bloquant": "aucun",
+   "sources": [
+    "notes/a-faire-apres-chaine.md:4",
+    "notes/historique/DIRECTIVES.md:590",
+    "notes/pilotage-reprise/README.md:310"
+   ],
+   "citation": "Proposé à l'éditeur, à faire seulement s'il le confirme : une commande `composer run dev` propre à PILIQI, sans Node, qui lance serve, queue:listen et schedule:work ensemble."
+  }
+ ],
+ "urgent": [
+  {
+   "id": "T41",
+   "pourquoi": "Le lot NAV-2, qui teste les écrans de vente, arrive après TY, PS, CALC, FI et AUD : sans réponse, ses tests figent l'affichage actuel."
+  },
+  {
+   "id": "T42",
+   "pourquoi": "À trancher avant le lot NAV-2, sinon ses tests en navigateur figent une fiche de brouillon sans ces boutons."
+  },
+  {
+   "id": "T44",
+   "pourquoi": "Le lot EC2 construit cette case unique : une objection après lui obligerait à refaire le lot."
+  },
+  {
+   "id": "T45",
+   "pourquoi": "Le lot EC2 applique votre oui avec les demandes de lien : c'est avant lui qu'il faut dire si vous ne voulez que les invitations."
+  },
+  {
+   "id": "T58",
+   "pourquoi": "Le lot C-b de la chaîne TVA, juste après le lot 21, construit la transformation d'un ticket en facture avec ces choix."
+  },
+  {
+   "id": "T59",
+   "pourquoi": "Sans réponse avant le lot CH5 de la chaîne TVA, ces limites s'appliquent, et les lever ensuite demande un lot d'amendement."
+  },
+  {
+   "id": "T61",
+   "pourquoi": "La campagne 1 bis suit la chaîne TVA : ses objectifs chiffrés doivent être connus avant son premier palier."
+  },
+  {
+   "id": "T62",
+   "pourquoi": "À trancher avant l'étape 2, qui reçoit les factures et prépare l'e-reporting international."
+  },
+  {
+   "id": "T63",
+   "pourquoi": "L'étape 2 doit savoir où ranger les fournisseurs des factures reçues par une société de services."
+  },
+  {
+   "id": "T1",
+   "pourquoi": "Sans règle confirmée, ces encaissements ne seront pas déclarés à l'étape 2, et trouver qui la confirme prend du temps."
+  },
+  {
+   "id": "T2",
+   "pourquoi": "Sans réponse, aucune vente à 0 % (export, DOM, franchise) ne sera transmise à l'étape 2."
+  }
+ ],
+ "tranche": [
+  {
+   "date": "2026-11-09 (23 h 18 UTC)",
+   "titre": "PU HT imprimé exact sur les documents aux professionnels",
+   "decision": "Le PU HT s'imprime tel qu'enregistré, jusqu'à six décimales, sur les factures, avoirs et devis aux professionnels et les ventes sans TVA française ; aucun montant ne change (lot CALC).",
+   "mots_editeur": "« exact » (dans « exact, A, oui »)",
+   "sources": [
+    "notes/calculs/decision-calc.md:5",
+    "notes/historique/DIRECTIVES.md:485",
+    "a-trancher/conversation-2.txt:2756"
+   ]
+  },
+  {
+   "date": "2026-11-09 (23 h 18 UTC)",
+   "titre": "Couverture des branches mesurée chaque nuit",
+   "decision": "Lignes mesurées à chaque envoi, branches chaque nuit par Xdebug, seuils qui ne peuvent que monter ; si la mesure dépasse les limites de GitHub, les chiffres vous seront soumis.",
+   "mots_editeur": "« A » (dans « exact, A, oui »)",
+   "sources": [
+    "notes/audits-externes/decision-aud.md:288",
+    "notes/qualite/decision-qualite.md:52",
+    "notes/historique/DIRECTIVES.md:485"
+   ]
+  },
+  {
+   "date": "2026-11-09 (23 h 18 UTC)",
+   "titre": "Cabinet suspendu : retrait de ses invitations ouvertes",
+   "decision": "Le propriétaire d'un cabinet suspendu ou plus vérifié peut retirer ses invitations ouvertes, chaque retrait au journal d'audit ; ses collaborateurs ne le peuvent pas (lot EC2).",
+   "mots_editeur": "« oui » (dans « exact, A, oui »)",
+   "sources": [
+    "notes/ec2/decision-expert-comptable-societe.md:36",
+    "notes/historique/DIRECTIVES.md:485",
+    "a-trancher/conversation-2.txt:2770"
+   ]
+  },
+  {
+   "date": "2026-11-09 (21 h 08 UTC)",
+   "titre": "Analyse statique au plus strict (D56)",
+   "decision": "Larastan au niveau le plus strict, puis Psalm au niveau 1 ; chaque erreur corrigée, niveaux qui ne redescendent jamais (lots TY1 à TY3, PS1, PS2).",
+   "mots_editeur": "« oui + Psalm 1 »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:362",
+    "notes/historique/DIRECTIVES.md:486",
+    "notes/qualite/decision-statique.md:3",
+    "a-trancher/conversation-2.txt:2551"
+   ]
+  },
+  {
+   "date": "2026-11-09 (10 h 48 UTC)",
+   "titre": "Constat C7 corrigé dans le lot suivant",
+   "decision": "L'avis qui promettait des tickets de caisse avant la validation est corrigé dans le lot PG, avec ses tests (fait, poussé le 10/11).",
+   "mots_editeur": "« fais-le plus tôt, dans le lot suivant »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:487",
+    "a-trancher/conversation-2.txt:2295"
+   ]
+  },
+  {
+   "date": "2026-11-09 (09 h 37 UTC)",
+   "titre": "Tests de mutation de la caisse reportés à l'étape 3",
+   "decision": "Le lot QA limite la mutation aux calculs et aux droits ; la caisse sécurisée, le registre et les clôtures y passent à l'étape 3, avec leur seuil.",
+   "mots_editeur": "« caisse à l'étape 3 »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:488",
+    "CLAUDE.md:198",
+    "a-trancher/conversation-2.txt:2159"
+   ]
+  },
+  {
+   "date": "2026-11-09 (09 h 19 UTC)",
+   "titre": "Calcul des ventes : règle actuelle gardée (Q-CALC2)",
+   "decision": "HT de chaque taux tiré du TTC, arrondi une fois, réparti par cumul, TVA par différence, pour toutes les ventes ; la règle des deux prix du 08/11 est abandonnée.",
+   "mots_editeur": "« « (a) » pour garder l'affichage au centime ; et montre moi la meme pdf avec cette decision afin que je compare »",
+   "sources": [
+    "notes/calculs/decision-calc.md:3",
+    "notes/calculs/decision-calc.md:24",
+    "notes/historique/DIRECTIVES.md:489",
+    "notes/reprises/PASSATION-2026-11-08.md:64",
+    "a-trancher/conversation-2.txt:2069"
+   ]
+  },
+  {
+   "date": "2026-11-09 (00 h 10 UTC)",
+   "titre": "Constats des audits externes (Q-AUD1 à Q-AUD7)",
+   "decision": "Écart de stock signalé sans blocage, faux ticket Z retiré par votre procédure, échec d'envoi signalé et relançable, ajustements par document numéroté, horloges contrôlées, Dependabot, textes CLAUDE.md.",
+   "mots_editeur": "« tout en a, Q-AUD6 oui, Q-AUD7 oui »",
+   "sources": [
+    "notes/audits-externes/questions-editeur.md:5",
+    "notes/audits-externes/decision-aud.md:286",
+    "notes/historique/DIRECTIVES.md:491",
+    "a-trancher/conversation-2.txt:1715"
+   ]
+  },
+  {
+   "date": "2026-11-08 (13 h 31 UTC)",
+   "titre": "Montants sans nombre à virgule flottante",
+   "decision": "Les dernières conversions en virgule flottante sont remplacées par des entiers ou brick/math, et une règle automatique les interdit ensuite (lot CALC).",
+   "mots_editeur": "« je crois qu'il a raison mais tu me dit aussi c'est bien d'apliquer ca »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:496",
+    "notes/calculs/decision-calc.md:9",
+    "notes/calculs/sans-virgule-flottante.md"
+   ]
+  },
+  {
+   "date": "2026-11-08 (vers 00 h UTC)",
+   "titre": "PostgreSQL seul moteur, plus de SQLite (D55)",
+   "decision": "PostgreSQL 17 ou 18 seulement, en production, en développement, pour les tests et la CI ; SQLite retiré partout (lot PG, poussé le 10/11).",
+   "mots_editeur": "« et je veux pas que tu fasse sqlite car j'utilis que postgresql pour la production et developemnet du coup pas besion sqlite »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:360",
+    "notes/historique/DIRECTIVES.md:497",
+    "CLAUDE.md:180",
+    "a-trancher/conversation-2.txt:897"
+   ]
+  },
+  {
+   "date": "2026-11-07 (23 h 56 UTC)",
+   "titre": "Fichiers reçus : PDF à code actif refusé, photos nettoyées",
+   "decision": "PDF refusé s'il contient du JavaScript, une action automatique ou un fichier joint autre que le XML d'une Factur-X ; photo réenregistrée sans métadonnées, empreinte de l'original gardée.",
+   "mots_editeur": "« q-fi1(a), q-fi2 (a) »",
+   "sources": [
+    "notes/fichiers/decision-fi.md:11",
+    "notes/historique/DIRECTIVES.md:498"
+   ]
+  },
+  {
+   "date": "2026-11-07 (22 h 37 UTC)",
+   "titre": "Paquets utiles ajoutés sans vous demander (D54)",
+   "decision": "La session ajoute seule tout paquet utile, maintenu, sans faille, sous licence compatible ; restent à vous le payant, un service extérieur recevant des données, une version majeure.",
+   "mots_editeur": "« donc tu est libre d installler tout ce que tu vois utile pour le logiciel »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:358",
+    "notes/historique/DIRECTIVES.md:481",
+    "CLAUDE.md:180",
+    "a-trancher/conversation-2.txt:685"
+   ]
+  },
+  {
+   "date": "2026-11-03 (01 h 51 UTC)",
+   "titre": "Achat sans pièce du fournisseur ; téléchargement du cabinet",
+   "decision": "Un achat saisi à la main se valide sans la pièce, marqué pièce manquante ; le cabinet lié ne télécharge par période que si le client le coche.",
+   "mots_editeur": "« F1= b),F2=oui »",
+   "sources": [
+    "notes/export/decision-ex.md",
+    "notes/historique/DIRECTIVES.md:480"
+   ]
+  },
+  {
+   "date": "2026-11-03 (01 h 37 UTC)",
+   "titre": "Téléchargement des documents par période (E1 à E6)",
+   "decision": "Tous les documents, pièces comprises, avec un filtre Saisie manuelle ; ZIP ou CSV ; autorisation donnée compte par compte par le propriétaire ; dans chaque magasin.",
+   "mots_editeur": "« e1=tout » ; « Le E2 les deux option il faut afficher donc, elle veut en zip (les pdf) ou en CSV » ; « E3= oui c'est le proprietaire qui doit donner leur autorisation pour chacun » ; « E6= comme tu veut »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:479",
+    "notes/export/decision-ex.md",
+    "a-trancher/conversation-1.txt (03/11 01:37 UTC)"
+   ]
+  },
+  {
+   "date": "2026-11-03 (00 h 34 UTC)",
+   "titre": "Mises à jour des paquets (Q-MAJ)",
+   "decision": "Faille connue corrigée aussitôt ; mises à jour mineures à chaque relance de la campagne et avant la production ; version majeure seulement sur votre décision.",
+   "mots_editeur": "« oui »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:356",
+    "notes/historique/DIRECTIVES.md:477",
+    "notes/qualite/question-mises-a-jour.md:10"
+   ]
+  },
+  {
+   "date": "2026-11-03 (00 h 10 UTC)",
+   "titre": "Police et initiales servies par PILIQI (Q-TIERS)",
+   "decision": "La police est servie par PILIQI et les initiales dessinées par le serveur : aucune page n'envoie l'adresse IP ni un nom à un site tiers (lot NAV-2).",
+   "mots_editeur": "« oui recommandé »",
+   "sources": [
+    "notes/navigateur/question-ressources-tierces.md:10",
+    "notes/historique/DIRECTIVES.md:476"
+   ]
+  },
+  {
+   "date": "2026-11-02 (23 h 40 UTC)",
+   "titre": "TVA des achats recopiée, « Émettre et encaisser », ventes inchangées",
+   "decision": "TVA et PU d'achat recopiés de la facture du fournisseur, dès l'étape 1 ; émission et encaissement d'un geste, partiel permis ; reçu de paiement ; calcul des ventes inchangé.",
+   "mots_editeur": "« T1 =oui,T2= oui,t3=oui, r1=oui,r2=oui, les C=non »",
+   "sources": [
+    "notes/tr/decision-tr.md:5",
+    "notes/historique/DIRECTIVES.md:474",
+    "a-trancher/conversation-1.txt (02/11 23:40 UTC)"
+   ]
+  },
+  {
+   "date": "2026-11-02 (de 08 h 54 à 10 h 00 UTC)",
+   "titre": "Devis : réponse du client en ligne, stock et transformation en facture",
+   "decision": "Lien Accepter ou Refuser sécurisé, sans paiement (lot DV) ; aucun stock réservé mais un avertissement ; Transformer en facture sur la fiche, devis gardé et cité, prix repris.",
+   "mots_editeur": "« oui mais j'ai une question? […] si tu peut faire hyper securise si oui » ; « je choisi le a) » ; « j'accepte tes proposition de 1 à 5 »",
+   "sources": [
+    "notes/paiements/demande-devis-en-ligne.md:5",
+    "notes/paiements/demande-devis-en-ligne.md:24",
+    "notes/historique/DIRECTIVES.md:468",
+    "notes/historique/DIRECTIVES.md:469",
+    "notes/historique/DIRECTIVES.md:470"
+   ]
+  },
+  {
+   "date": "2026-11-02 (07 h 47 UTC)",
+   "titre": "Nouvelles tentatives d'un e-mail raté",
+   "decision": "Trois tentatives : aussitôt, 30 secondes après, puis 2 minutes après ; la cause et l'heure de la tentative suivante s'affichent sur la fiche (lot ML).",
+   "mots_editeur": "« Fais comme tu proposes - recommandé »",
+   "sources": [
+    "notes/courriels/constat-queue-listen.md:74",
+    "notes/historique/DIRECTIVES.md:467"
+   ]
+  },
+  {
+   "date": "2026-11-02 (01 h 33 UTC)",
+   "titre": "Chacun voit ses propres factures à encaisser",
+   "decision": "Par défaut, tout compte qui encaisse voit ses propres factures à encaisser ; voir celles de toute l'équipe reste une case décochée par défaut (lot S9-A).",
+   "mots_editeur": "« donc par defaut il faut que chacun voit tout les siennes »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:463",
+    "notes/serie9/reponses-serie9.md (règle 4 de l'« À faire »)"
+   ]
+  },
+  {
+   "date": "2026-11-01 (23 h 29 UTC)",
+   "titre": "Outils de qualité (lot QA)",
+   "decision": "Couverture du code et seuils, tests de mutation, analyse statique, audits des dépendances et tests au hasard ajoutés ; réponse honnête : aucun outil ne garantit zéro défaut.",
+   "mots_editeur": "« fait ce qui est le meilleur donc s'il faut ajouter alors ajoute tout pour que le logiciel soit hyper performant avec zero de faille ou erreurs »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:460",
+    "notes/qualite/decision-qualite.md"
+   ]
+  },
+  {
+   "date": "2026-11-01 (22 h 52 et 23 h 14 UTC)",
+   "titre": "Tests en navigateur de chaque action et audit final complet",
+   "decision": "Pest 4 et son module navigateur ; chaque action de chaque écran testée pour chaque rôle (lots NAV) ; à l'audit final, tous les tests repassent avant la production.",
+   "mots_editeur": "« 1a 2 oui 3 oui » ; « il faut pas que tu oublie de notes que à la fin pour l'audit de faire tous ces testes en navigateur »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:170",
+    "notes/historique/DIRECTIVES.md:457",
+    "notes/historique/DIRECTIVES.md:458",
+    "notes/navigateur/decision-tests-navigateur.md"
+   ]
+  },
+  {
+   "date": "2026-11-01 (21 h 51 UTC)",
+   "titre": "Client comptoir : avoir interne, bons d'avoir, hors de la liste",
+   "decision": "Avoir d'annulation automatique dans le même clic ; bons d'avoir gardés et avoirs non utilisés montrés au tableau de bord ; client comptoir retiré de la liste des clients.",
+   "mots_editeur": "« 1a 2a( mais la il faut afficher qq part (peut etre dans le tableau de bord ) les avoir des client comptoires et professionel s'il reste des avoir sans regler […] ) 3 oui »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:454",
+    "notes/serie9/reponses-serie9.md:51",
+    "notes/decisions/client-comptoir-01-11.md"
+   ]
+  },
+  {
+   "date": "2026-11-01 (19 h 19 UTC)",
+   "titre": "Durées de conservation réglables",
+   "decision": "Les variables CONSERVATION_* restent réglables, en commentaire dans .env.example ; rien ne change (option c).",
+   "mots_editeur": "« les durées de conservation: laisse comme ils sont »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:450",
+    "notes/etat-chaines.md:124"
+   ]
+  },
+  {
+   "date": "2026-11-01 (19 h 15 UTC)",
+   "titre": "Expert-comptable déclaré par la société (lot EC2)",
+   "decision": "Une société déclare son expert-comptable par son nom et le SIREN de son cabinet, avec des autorisations, rattaché seul au cabinet vérifié ; P1 à P13 comme recommandé.",
+   "mots_editeur": "« je veux que cette option existe » ; « tout comme recommandé »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:441",
+    "notes/historique/DIRECTIVES.md:449",
+    "notes/ec2/decision-expert-comptable-societe.md:9",
+    "notes/ec2/cahier-des-charges.definitif.md:5"
+   ]
+  },
+  {
+   "date": "2026-11-01 (16 h 39 UTC)",
+   "titre": "Correction de SIREN : rectificative, cabinet, choix du lot A7",
+   "decision": "Avoir de régularisation comme tout avoir, rectificative par un compte autorisé à vendre ; SIREN d'un cabinet corrigeable, 69.20Z et Ordre refaits ; trois choix du lot A7 confirmés.",
+   "mots_editeur": "« 1a 2a 3 oui »",
+   "sources": [
+    "notes/a7b/decision-a7b.md:5",
+    "notes/historique/DIRECTIVES.md:447"
+   ]
+  },
+  {
+   "date": "2026-11-01 (vers 11 h 20 UTC)",
+   "titre": "Régime de la marge (biens d'occasion)",
+   "decision": "Dans la chaîne TVA, avant l'étape 2 : case sur le produit, mention et article de loi ; marge calculée article par article ; achats aux particuliers à l'étape 14.",
+   "mots_editeur": "« 1. Quand le faire ? le b) et 2. Comment calculer la marge ? le a) »",
+   "sources": [
+    "notes/tva/decision-tva-sur-marge.md:22",
+    "notes/historique/DIRECTIVES.md:443"
+   ]
+  },
+  {
+   "date": "2026-11-01 (vers 11 h 20 UTC)",
+   "titre": "Phrase de l'inscription sur les activités exonérées",
+   "decision": "La franchise en base (art. 293 B) est dite prise en charge ; les activités exonérées par la loi (art. 261 à 261 E) restent non facturées par PILIQI.",
+   "mots_editeur": "« a) d'accord pour cette phrase, et le refus reste »",
+   "sources": [
+    "notes/ec2/decision-expert-comptable-societe.md:30",
+    "notes/historique/DIRECTIVES.md:442",
+    "CLAUDE.md:165"
+   ]
+  },
+  {
+   "date": "2026-11-01",
+   "titre": "Refus d'inviter un cabinet ; délais et gestes de l'« À faire »",
+   "decision": "Refus d'inviter le SIREN d'un cabinet gardé ; preuve d'export en rouge au 31e jour ; preuve notée même magasin fermé ; boutons Garder et C'est vérifié, date du visa.",
+   "mots_editeur": "« 1a 2a 3a 4a »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:500",
+    "notes/serie9/reponses-serie9.md:39",
+    "notes/ec2/decision-expert-comptable-societe.md:22"
+   ]
+  },
+  {
+   "date": "2026-11-01",
+   "titre": "Grille faketime une seule fois, à la fin",
+   "decision": "La grille des changements d'heure ne tourne plus à chaque lot, seulement une fois avant la production ; risque accepté d'erreurs de date trouvées plus tard.",
+   "mots_editeur": "« En fait tu enlèves faketime pour toujours et on le met juste à la fin du logiciel pour tout regler »",
+   "sources": [
+    "notes/historique/DIRECTIVES.md:163",
+    "README.md:102"
+   ]
+  },
+  {
+   "date": "2026-10-26",
+   "titre": "Règles d'écran : « ce magasin » permis, rien sur les autres",
+   "decision": "Un message d'un magasin peut dire « ce magasin » ; aucun écran de magasin ne laisse deviner d'autres magasins ou sociétés.",
+   "mots_editeur": "« Abandonner cette règle » ; « Oui, elle tient »",
+   "sources": [
+    "notes/decisions/reponses-regles-ecran-26-10.md:7",
+    "notes/decisions/reponses-regles-ecran-26-10.md:8"
+   ]
+  },
+  {
+   "date": "2026-10-26",
+   "titre": "Fuseau UTC de la base fixé par les migrations",
+   "decision": "Les migrations fixent le fuseau UTC de la base et caisse:diagnostiquer le contrôle ; la phrase de l'étape 15 de CLAUDE.md est approuvée (lot L1).",
+   "mots_editeur": "« Oui, l'ajouter »",
+   "sources": [
+    "notes/a-faire-apres-chaine.md:7",
+    "notes/historique/DIRECTIVES.md:440"
+   ]
+  },
+  {
+   "date": "2026-10-26",
+   "titre": "Série 9 : un produit, une ligne ; « À faire » au tableau de bord",
+   "decision": "Un produit n'a qu'une ligne partout, achats compris ; À faire et À surveiller au tableau de bord, rien pour le cabinet ; aucun nombre dans les menus.",
+   "mots_editeur": "« il faut enlever tout parce que tout va être affiché dans le tableau de bord »",
+   "sources": [
+    "notes/serie9/reponses-serie9.md:20",
+    "notes/serie9/reponses-serie9.md:29"
+   ]
+  },
+  {
+   "date": "2026-10-25",
+   "titre": "Prix unitaires affichés au centime, note de calcul gardée",
+   "decision": "Prix unitaires de vente affichés au centime, calcul exact inchangé, note de calcul gardée ; remplacé depuis pour les achats (02/11) et le PU HT aux professionnels (09/11).",
+   "mots_editeur": "« Non pas de décimale, donc tu fais 54.17 € et non 54.1667. » ; « tu mets la mention comme t'avais mis aux PDF »",
+   "sources": [
+    "notes/serie8/reponses-affichage-pu.md:9",
+    "notes/serie8/reponses-affichage-pu.md:10",
+    "notes/historique/DIRECTIVES.md:438",
+    "notes/historique/DIRECTIVES.md:439"
+   ]
+  },
+  {
+   "date": "2026-10-25",
+   "titre": "Heure locale de chaque magasin (T2, T3)",
+   "decision": "Chaque magasin suit l'heure de son territoire ; pas de déménagement entre territoires ; rien de numéroté avant la confirmation ; territoire mal lu corrigé par votre procédure.",
+   "mots_editeur": "Q1 du lot T2, puis A, B et C du lot T3 : options recommandées",
+   "sources": [
+    "notes/t2/reponses-t2.md:5",
+    "notes/t3/reponses-t3.md:5",
+    "notes/t3/reponses-t3.md:6",
+    "notes/t3/reponses-t3.md:7"
+   ]
+  },
+  {
+   "date": "2026-10-24",
+   "titre": "Types d'activité définitifs",
+   "decision": "Deux familles, avec stock et services sans stock, plus le cabinet ; pas d'articles fabriqués pour l'instant ; le type d'une société ne change jamais.",
+   "mots_editeur": "« Pour l'instant on va garder que ceux qui ont besoin de stock et ceux qui font le service » ; « Non, jamais. »",
+   "sources": [
+    "notes/serie8/reponses-types-activite.md:7",
+    "notes/serie8/reponses-types-activite.md:8"
+   ]
+  },
+  {
+   "date": "2026-10-24",
+   "titre": "Espace des cabinets d'expertise comptable",
+   "decision": "Invitation par le seul propriétaire du cabinet, par SIREN, validée sans courrier ; rattachement d'une société inscrite ; transmission à un collaborateur ; demandes expirées après 7 jours.",
+   "mots_editeur": "« f1, g2, h1, i1, j1,k2 » (19/10) ; « Donc par courrier c'est uniquement pour ceux qui s'inscrivent eux-mêmes. » (24/10)",
+   "sources": [
+    "notes/serie8/reponses-cabinets.md:7",
+    "notes/serie8/reponses-cabinets.md:10",
+    "notes/serie8/reponses-cabinets.md:12",
+    "notes/historique/DIRECTIVES.md:436"
+   ]
+  },
+  {
+   "date": "2026-10-24",
+   "titre": "Points laissés par la relecture du lot V2",
+   "decision": "Nom lu à l'INPI ; adresse choisie confirmée par lien ; adresse d'une inscription close libérée ; code jamais annulé après essais faux ; signature manuelle après transmission.",
+   "mots_editeur": "Réponses écrites dans reponses-v2.md, sans citation mot pour mot",
+   "sources": [
+    "notes/serie8/reponses-v2.md:5",
+    "notes/serie8/reponses-v2.md:6",
+    "notes/serie8/reponses-v2.md:7",
+    "notes/serie8/reponses-v2.md:8",
+    "notes/serie8/reponses-v2.md:9"
+   ]
+  },
+  {
+   "date": "2026-10-19",
+   "titre": "Vérification des sociétés par courrier recommandé",
+   "decision": "SIREN unique ; seule preuve, le code d'un recommandé remis au représentant légal en personne, valable 30 jours ; plus aucun prestataire de vérification d'identité.",
+   "mots_editeur": "« A1,b1,c1,d1,e2 » ; « contre signature veut dire remis à l'adresse contre une signature, par le dirigeant en personne, donc il faut aller le chercher à la poste »",
+   "sources": [
+    "notes/serie8/decision-verification-courrier.md:9",
+    "notes/historique/DIRECTIVES.md:435"
+   ]
+  },
+  {
+   "date": "2026-10-18",
+   "titre": "Comptes : mot de passe égal à l'identifiant, poste reconnu ; avoirs et devis",
+   "decision": "Premier mot de passe égal à l'identifiant, valable seulement depuis un poste reconnu ; responsables et administrateurs choisissent le leur ; avoirs et devis ne sont pas des ventes.",
+   "mots_editeur": "Q-A : (d) ; Q-V1 : (a) ; Q-V2 : (b) ; précision 5 (message 212)",
+   "sources": [
+    "notes/serie8/reponses-serie8.md:69",
+    "notes/serie8/reponses-serie8.md:74",
+    "notes/serie8/reponses-serie8.md:75",
+    "notes/serie8/reponses-serie8.md:76",
+    "notes/historique/DIRECTIVES.md:434"
+   ]
+  },
+  {
+   "date": "2026-10-17",
+   "titre": "Série 8 : un calcul pour tous, demi-centime au supérieur",
+   "decision": "Le même calcul vaut pour particuliers et professionnels ; un demi-centime exact arrondit le HT au centime supérieur (2,97 € TTC à 20 % donne 2,48 € HT).",
+   "mots_editeur": "« Oui, pour tous » (Q1-a) ; Q2",
+   "sources": [
+    "notes/serie8/reponses-serie8.md:11",
+    "notes/serie8/reponses-serie8.md:12"
+   ]
+  },
+  {
+   "date": "2026-10-17",
+   "titre": "Série 8 : identifiant de connexion ; administrateur qui vend si coché",
+   "decision": "Identifiant de 8 chiffres tiré au hasard ; propriétaire par e-mail ou identifiant, les autres par identifiant ; un administrateur ne vend que si le propriétaire le lui coche.",
+   "mots_editeur": "« 8 chiffre au hasard, aleatoir, donc je veux pas des numeros coninues mais des numero melanger » ; « Administratori nuk duhet leju me ba shitje »",
+   "sources": [
+    "notes/serie8/reponses-serie8.md:19",
+    "notes/serie8/reponses-serie8.md:26",
+    "notes/serie8/reponses-serie8.md:27",
+    "notes/serie8/reponses-serie8.md:35",
+    "notes/historique/DIRECTIVES.md:432",
+    "notes/historique/DIRECTIVES.md:433"
+   ]
+  },
+  {
+   "date": "2026-10-17",
+   "titre": "Série 8 : paiements, avoirs et crédit",
+   "decision": "Plusieurs modes par vente, cinq modes plus Avoir ; jamais de remboursement en argent ; service réglé par avoir encaissé à son usage ; avoir fournisseur seulement avec retour.",
+   "mots_editeur": "« quand j'ai écrit “remboursements”, je ne voulais pas dire qu'un retour client doit rendre automatiquement de l'argent » ; Q13 (a) ; Q14 (c) ; Q10 (a)",
+   "sources": [
+    "notes/serie8/reponses-serie8.md:41",
+    "notes/serie8/reponses-serie8.md:43",
+    "notes/serie8/reponses-serie8.md:44",
+    "notes/serie8/reponses-serie8.md:50"
+   ]
+  },
+  {
+   "date": "2026-10-17",
+   "titre": "Série 8 : magasins cédés et « Les caisses » de la société",
+   "decision": "Un magasin fermé se cède sans être rouvert ni recontrôlé, par le propriétaire seul ; une page de la société réunit les caisses de tous les magasins de sa portée.",
+   "mots_editeur": "M1 (a), M2 (a), P7 (b)",
+   "sources": [
+    "notes/serie8/reponses-serie8.md:22",
+    "notes/serie8/reponses-serie8.md:58"
+   ]
+  },
+  {
+   "date": "2026-10-12",
+   "titre": "Charges : arrondis, magasin fermé, avoir lié, pas de charges récurrentes",
+   "decision": "Arrondis des achats et charges comme les ventes ; charges encore saisissables dans un magasin fermé ; avoir lié à la charge ; pas de charge récurrente pour l'instant.",
+   "mots_editeur": "« Comme vos ventes, partout » ; « Oui, charges seulement » ; « Un avoir lié » ; « Pas pour l'instant »",
+   "sources": [
+    "notes/tva/plan-execution-decisions.md:5",
+    "notes/tva/plan-execution-decisions.md:6",
+    "notes/tva/plan-execution-decisions.md:7",
+    "notes/tva/plan-execution-decisions.md:8"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Moteur de TVA : place, régime, questions (TVA1 à TVA7)",
+   "decision": "Moteur avant la campagne 1 bis ; régime appliqué seul si vos réponses le justifient ; un régime par facture ; 0 % refusé en France ; totaux multi-magasins permis.",
+   "mots_editeur": "TVA1 à TVA7 : a (recommandation)",
+   "sources": [
+    "notes/tva/reponses-serie7.md:6",
+    "notes/tva/reponses-serie7.md:9",
+    "notes/tva/reponses-serie7.md:12",
+    "notes/tva/reponses-serie7.md:15",
+    "notes/tva/reponses-serie7.md:18",
+    "notes/tva/reponses-serie7.md:21",
+    "notes/tva/reponses-serie7.md:24"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Moteur de TVA : OSS, cartes cadeaux, franchise, achats (TVA8 à TVA16)",
+   "decision": "OSS après SUPER PDP, refus au-delà du seuil ; jamais de cartes cadeaux ; achats étrangers d'un franchisé refusés ; frais dans le coût ; TVA étrangère à régulariser.",
+   "mots_editeur": "« Ne jamais vendre de cartes cadeaux dans PILIQI. » (TVA9 : c) ; TVA15 : b ; les autres : a",
+   "sources": [
+    "notes/tva/reponses-serie7.md:27",
+    "notes/tva/reponses-serie7.md:30",
+    "notes/tva/reponses-serie7.md:33",
+    "notes/tva/reponses-serie7.md:36",
+    "notes/tva/reponses-serie7.md:39",
+    "notes/tva/reponses-serie7.md:45",
+    "notes/tva/reponses-serie7.md:48",
+    "notes/tva/reponses-serie7.md:51"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Huit corrections du moteur de TVA (O1 à O8)",
+   "decision": "Toutes acceptées : stock au coût, coût TTC d'un franchisé, clients publics hors plateforme, VIES le jour d'émission, articles du CGI gardés, nom et adresse obligatoires, DOM, régime daté.",
+   "mots_editeur": "« Je les accepte toutes. »",
+   "sources": [
+    "notes/tva/reponses-serie7.md:54",
+    "notes/tva/reponses-serie7.md:55",
+    "notes/tva/reponses-serie7.md:62"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Espace « Charges du magasin »",
+   "decision": "Charges communes saisies par la société et réparties entre magasins ; salaires en totaux du mois, visibles des seuls autorisés ; charges construites avec les achats du moteur de TVA.",
+   "mots_editeur": "« Saisie société, répartie » ; « Avec les achats du moteur TVA »",
+   "sources": [
+    "notes/tva/charges-demande-et-decisions.md:27",
+    "notes/tva/charges-demande-et-decisions.md:28",
+    "notes/tva/charges-demande-et-decisions.md:29"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Facture demandée par un particulier, ticket transformé en facture",
+   "decision": "Case Le client demande une facture ; ticket entièrement payé transformé en facture, soldée par un avoir d'annulation ; retours sur ticket par un vendeur autorisé, sans remboursement.",
+   "mots_editeur": "Réponses conservées dans la conversation du 11/10 (compléments 13 à 16)",
+   "sources": [
+    "notes/decisions/reponses-complements-14-20.md:23",
+    "notes/decisions/reponses-complements-14-20.md:24",
+    "notes/decisions/reponses-complements-14-20.md:31",
+    "notes/decisions/reponses-complements-14-20.md:32",
+    "notes/historique/DIRECTIVES.md:425"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "SUPER PDP regroupe et transmet les déclarations",
+   "decision": "SUPER PDP regroupe les données et les transmet selon le calendrier ; PILIQI envoie une seule fois chaque clôture ayant des opérations et ne tient aucun calendrier.",
+   "mots_editeur": "Précision validée avec vous le 11/10 (message 167)",
+   "sources": [
+    "notes/decisions/reponses-complements-14-20.md:18",
+    "notes/historique/DIRECTIVES.md:424"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Plusieurs responsables par magasin ; autorisations propres à PILIQI",
+   "decision": "Un magasin peut avoir plusieurs responsables, nommés par le propriétaire ou un administrateur autorisé ; autorisations propres à PILIQI à la place de Spatie, choix laissé à la session.",
+   "mots_editeur": "« Si c'est mieux pour logiciel d'avoir son propre système alors tu le fais »",
+   "sources": [
+    "notes/societe/reponses-serie6.md",
+    "notes/historique/DIRECTIVES.md:427",
+    "notes/historique/DIRECTIVES.md:428"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "titre": "Série 5 : prix d'une ligne, une caisse à la fois, audit, régularisation",
+   "decision": "Prix dérogatoire avec l'autorisation des remises ; une caisse à la fois ; audit gardé 10, 5 ou 1 an ; régularisation sous l'ancien SIREN, fermeture temporaire sans clôture d'exercice.",
+   "mots_editeur": "Q1 à Q7 : option recommandée (a)",
+   "sources": [
+    "notes/societe/reponses-serie5.md:5",
+    "notes/societe/reponses-serie5.md:6",
+    "notes/societe/reponses-serie5.md:8",
+    "notes/societe/reponses-serie5.md:10",
+    "notes/societe/reponses-serie5.md:11"
+   ]
+  },
+  {
+   "date": "2026-10-10",
+   "titre": "Série 4 : adresses, recherches, références, devis",
+   "decision": "Adresses e-mail en minuscules, recherches sans casse ni accents, référence produit unique sans casse, règles des devis échus confirmées ; SQLite remplacé depuis par D55.",
+   "mots_editeur": "« Je les confirme toutes. »",
+   "sources": [
+    "notes/societe/reponses-serie4.md:243"
+   ]
+  },
+  {
+   "date": "2026-10-10",
+   "titre": "Campagne de tests (T1 à T6)",
+   "decision": "Campagne initiale après la chaîne société, relancée après les grandes étapes ; volume maximal de cette machine, puis Redis ; la session classe, vous ne validez que les déclassements bloquants.",
+   "mots_editeur": "T1 à T6 : a (recommandé)",
+   "sources": [
+    "notes/societe/reponses-serie4.md:247",
+    "notes/societe/reponses-serie4.md:250",
+    "notes/societe/reponses-serie4.md:253",
+    "notes/societe/reponses-serie4.md:259",
+    "CLAUDE.md:196"
+   ]
+  },
+  {
+   "date": "2026-10-09",
+   "titre": "Arbitrages A et B : comptes, ventes et paiements",
+   "decision": "Paiement égal aux imputations, contre-passation, crédit sans remboursement, échéance, mentions, franchise, identité légale, SIREN des clients, devis, archivage ; taux saisi librement, 20 % par défaut ; A1 remplacé.",
+   "mots_editeur": "« ca depend ou il vend car des fois il peux vendre à l'etranger […] je te laisse confimer toi qu'est ce que c'est ces regles sur les sites francais » (B1) ; « Garder la saisie libre mais par defaut 20% car le logiciel va etre utiliser en france » (B2) ; recommandations pour le reste",
+   "sources": [
+    "notes/decisions-editeur.md:5",
+    "notes/decisions-editeur.md:14",
+    "notes/decisions-editeur.md:17",
+    "notes/decisions-editeur.md:18",
+    "notes/decisions-editeur.md:51"
+   ]
+  },
+  {
+   "date": "2026-10-09",
+   "titre": "Mentions entre professionnels, aussi dans la facture électronique (B9)",
+   "decision": "Pénalités de 3 fois le taux d'intérêt légal, indemnité de 40 €, « pas d'escompte », réglables par magasin ; les notes PMT, PMD, AAB les reprennent.",
+   "mots_editeur": "Recommandation choisie (B9), qui répond aussi à la question D14 de SUPER PDP",
+   "sources": [
+    "notes/decisions-editeur.md:30",
+    "notes/decisions-editeur.md:31",
+    "notes/superpdp-plan.md:1037",
+    "CLAUDE.md:168"
+   ]
+  },
+  {
+   "date": "2026-10-09",
+   "titre": "Arbitrages C : achats et stock",
+   "decision": "Retour au fournisseur au coût de sa ligne, achat validé modifiable avec l'autorisation de valider, fournisseur du dernier achat reconnu par son SIRET, produits créés à la validation.",
+   "mots_editeur": "« Il devient celui du dernier achat, même saisi à la main. la reconnaissace du fourniseur se fait par son siret »",
+   "sources": [
+    "notes/decisions-editeur.md:55",
+    "notes/decisions-editeur.md:61"
+   ]
+  },
+  {
+   "date": "2026-10-09",
+   "titre": "Arbitrages D : caisse sécurisée",
+   "decision": "Clôture par bouton, sinon automatique à minuit ; ticket Z chaque jour même à zéro, rien déclaré pour un jour vide ; conservation 10 ans ; une attestation par magasin.",
+   "mots_editeur": "« Créer un bouton pour clôture manuelle par le magasin en fin de journée. Si la clôture manuelle n'est pas faite, déclencher une clôture automatique à minuit » ; « il faut avoir une trace de tickte Z, donc meme zero »",
+   "sources": [
+    "notes/decisions-editeur.md:67",
+    "notes/decisions-editeur.md:71",
+    "notes/decisions-editeur.md:74",
+    "notes/decisions-editeur.md:91",
+    "notes/decisions-editeur.md:95",
+    "notes/decisions-editeur.md:187"
+   ]
+  },
+  {
+   "date": "2026-10-09",
+   "titre": "Arbitrages E : facture électronique SUPER PDP",
+   "decision": "SUPER PDP après les corrections, réception d'abord ; refus des factures reçues ; clients publics hors plateforme ; 0 % non transmis sans motif ; E1, E10, E11 remplacés.",
+   "mots_editeur": "Recommandations choisies (E2 à E9)",
+   "sources": [
+    "notes/decisions-editeur.md:99",
+    "notes/decisions-editeur.md:109",
+    "notes/decisions-editeur.md:128"
+   ]
+  },
+  {
+   "date": "2026-10-09",
+   "titre": "Arbitrages F à K : outillage, e-mails, identité, international, magasins",
+   "decision": "Aucun paquet inutilisé ; plafonds et relances des e-mails ; capital social ; natures d'opération et VIES ; numérotation par code de magasin ; J2 à J4 et K5 remplacés.",
+   "mots_editeur": "« apliquer quand le magasin creer son equipe et la il leur donnes des autorisation ce qu'il veut » (G4) ; recommandations pour le reste",
+   "sources": [
+    "notes/decisions-editeur.md:132",
+    "notes/decisions-editeur.md:161",
+    "notes/decisions-editeur.md:168",
+    "notes/decisions-editeur.md:172",
+    "notes/decisions-editeur.md:191",
+    "notes/decisions-editeur.md:210"
+   ]
+  }
+ ],
+ "ecartes": [
+  "« Déclarer les paiements de particuliers pour des services » (decisions, fiscal-1, fiscal-2, societe-1, societe-2) : doublons, fusionnés dans T1.",
+  "« EC3 » et « EC9 » (decisions, fiscal-2), « Catégorie EN 16931 d'une livraison vers un DOM et hors champ » et « Catégorie e-reporting des ventes aux particuliers hors TVA française » (fiscal-1), « Ventes à 0 % et franchise : catégorie de TVA transmise » (societe-2) : même question, fusionnés dans T2.",
+  "« EC8 : achats et ventes avec Monaco » (decisions, fiscal-2) et la partie Monaco de « Monaco, Guyane et Mayotte » (fiscal-1) : fusionnés dans T4 ; la partie Guyane et Mayotte va en T81.",
+  "« Points restés ouverts : détaxe, Monaco, assujetti unique » (fiscal-2) : la détaxe rejoint T5 et Monaco T4 ; l'assujetti unique, cas rare jamais posé, reste une vérification de la session.",
+  "« EC20 » (decisions, fiscal-2) : doublon, fusionné dans T6.",
+  "« EC1 » (decisions, fiscal-2) : doublon, fusionné dans T20.",
+  "« EC2 » (decisions, fiscal-2) : doublon, fusionné dans T13.",
+  "« Achats internationaux : frais, devises, importations, fournisseurs UE » (fiscal-1), « EC4 », « EC5 », « EC11 » et « EC15 » (decisions, fiscal-2) : répartis entre T21, T22, T23 et T24.",
+  "« Traitement de la TVA étrangère facturée par erreur, à confirmer » (fiscal-2) : fusionné dans T22.",
+  "« EC16 » (decisions, fiscal-2) : doublon, fusionné dans T19.",
+  "« EC17 » (decisions, fiscal-2) : doublon, fusionné dans T18.",
+  "« EC12 » (decisions, fiscal-2) : doublon, fusionné dans T7.",
+  "« EC10 » (decisions, fiscal-2) : doublon, fusionné dans T17.",
+  "« Taux de TVA 2026 et listes de la Corse et des DOM » (fiscal-2) : doublon, fusionné dans T25.",
+  "« EC6 » (decisions, fiscal-2) : doublon, fusionné dans T8.",
+  "« EC7 » (decisions, fiscal-2) : doublon, fusionné dans T10.",
+  "« EC18 » (decisions, fiscal-2) et « CA3 : avoirs de vente de la même période » (fiscal-1) : fusionnés dans T9.",
+  "« EC19 » (decisions, fiscal-2) : doublon, fusionné dans T14.",
+  "« Comptes comptables proposés pour les catégories de charges » (fiscal-2) et « Export comptable (FEC) par société et sa conservation » (societe-2) : fusionnés dans T12.",
+  "« EC14 » (decisions, fiscal-2) : doublon, fusionné dans T16.",
+  "« Avoir de régularisation après correction d'un SIREN » (decisions, fiscal-1, societe-1, societe-2, conversation-1) : doublons, fusionnés dans T27.",
+  "« Durée d'un exercice modifié par changement légal de clôture » (decisions, fiscal-1, societe-1, societe-2) : doublons, fusionnés dans T28.",
+  "« Preuve d'exonération notée après la fermeture du magasin » (societe-1, societe-2) et « Délai de 30 jours pour la preuve d'export » (societe-2) : fusionnés dans T29.",
+  "« Attestation de l'éditeur ou certificat d'un organisme accrédité » (decisions, fiscal-2, societe-2) : doublons, fusionnés dans T31.",
+  "« Attestation de l'éditeur pour la caisse sécurisée » (spec), « Attestation de la caisse : elle engage l'éditeur » (conversation-1) et « Attestation de l'éditeur après une correction de SIREN » (societe-1) : fusionnés dans T32.",
+  "« Analyse d'impact (AIPD) de la vérification par courrier » (decisions, societe-2) : doublons, fusionnés dans T33.",
+  "« Durées de conservation du journal d'audit » (societe-2) : doublon, fusionné dans T34.",
+  "« Revue indépendante de la conformité fiscale » (societe-2, conversation-2) et « Relecture des règles fiscales par un expert-comptable » (conversation-1) : fusionnés dans T38.",
+  "« EC13 » (decisions, fiscal-2), « Nouveaux articles du CIBS au 1er janvier 2027 » (fiscal-1), « Nouveaux numéros CIBS dans les mentions » (societe-2) et « Base légale de la mention de franchise » (fiscal-2) : fusionnés dans T40.",
+  "« Nouvelle nomenclature NAF 2025 et code des cabinets » (societe-2) : fusionné dans T39.",
+  "« Couleur de la ligne choisie dans les fenêtres de choix » (conversation-1) : fusionné dans T43.",
+  "« Cabinet : une seule case voir toutes » (societe-1, conversation-1) : doublons, fusionnés dans T44.",
+  "« Étape Ajouter un magasin » (societe-1, conversation-1) : doublons, fusionnés dans T47.",
+  "« Obligations légales que PILIQI ne couvre pas encore » (societe-2), « Date de la prestation », « Factures d'acompte » et « Bâtiment : autoliquidation de sous-traitance et taux réduits » (fiscal-1) : répartis entre T49, T50, T51 et T66.",
+  "« Texte de CLAUDE.md : un magasin ne révèle rien des autres » (societe-1) : fusionné dans T53.",
+  "« Assurance professionnelle facultative » (spec, marquée à tort comme tranchée alors que c'est un choix de Claude contestable ; societe-2) : fusionnés dans T56.",
+  "« Choix de la session sur l'espace des cabinets (section 8) » (decisions) et « Limites et sécurités des cabinets » (societe-2) : fusionnés dans T55.",
+  "« Choix C2 à C23 sur les comptes et les ventes » (societe-2) : doublon, fusionné dans T54.",
+  "« Transformer en facture un ticket : choix proposés par Claude » (fiscal-1) : doublon, fusionné dans T58.",
+  "« Charges communes : quatre choix provisoires » (decisions), « Charges communes et pièces » (fiscal-1), « Trois limites des charges communes » et « Jeter l'original papier » (fiscal-2) : répartis entre T59 et T79.",
+  "« Régime de la marge : règles à confirmer » (fiscal-1, fiscal-2) et « Régime de la marge : questions métier à vous poser » (fiscal-2) : fusionnés dans T60.",
+  "« Objectifs chiffrés de la campagne » (societe-1, societe-2, conversation-2), « Stratégie de la campagne de tests à valider » (decisions) et « Déclassement d'une anomalie bloquante » (spec, règle déjà tranchée le 10/10 : question T5 de la campagne) : fusionnés dans T61.",
+  "« Charges récurrentes » (decisions ; fiscal-2 en tranché) : votre « Pas pour l'instant » du 12/10 est dans tranche, la question reposée après l'étape 2 est T67.",
+  "« Vente à distance UE au-delà de 10 000 € et export enlevé » (decisions) : fusionné dans T66.",
+  "« Prestataires de paiement en ligne et outils comptables » (spec) et « Paiement en ligne : choix du prestataire et des moyens » (conversation-1) : fusionnés dans T72.",
+  "« Paiement en ligne : règles à trancher » (conversation-1) : doublon, fusionné dans T73.",
+  "« Abonnements : plans, limites et prix » et « Abonnement des cabinets » (spec), « Facturation des clients venus par la déclaration de leur expert-comptable » (societe-1) et « Abonnements, prix et facturation des cabinets » (societe-2) : fusionnés dans T74.",
+  "« Achats auprès de particuliers » (spec, fiscal-2) : doublons, fusionnés dans T75.",
+  "« Clients prévenus quand l'accès de leur cabinet est suspendu » (societe-1, conversation-1) : doublons, fusionnés dans T82.",
+  "« Date de la facture du fournisseur obligatoire à la saisie » (conversation-1) : fusionné dans T85.",
+  "« Devis accepté en ligne : conversion faite par le magasin » (decisions) : la conversion est tranchée par « j'accepte tes proposition de 1 à 5 » (02/11) ; sa partie SMS, avec « Valeur de l'acceptation Bon pour accord » et « Code par SMS » (conversation-1), va en T86.",
+  "« Créer les produits depuis une facture d'achat PDF ou Excel » (societe-2) : doublon, fusionné dans T80.",
+  "« Territoires d'outre-mer acceptés » (spec, marqué tranché) et « Accepter des magasins en Guyane, à Mayotte » (fiscal-2) : la question d'en accepter d'autres reste ouverte en T81.",
+  "« Contrôles français et SUPER PDP sur l'écart de TVA » (fiscal-1), « Recette dans le bac à sable » (societe-2), « Contrôles exacts de SUPER PDP » et « Qualification réelle avec SUPER PDP » (conversation-2) : fusionnés dans T90.",
+  "« Paramètres SUPER PDP absents de la documentation » (decisions, societe-2) : doublons, fusionnés dans T87.",
+  "« Fournisseurs étrangers via Peppol » (fiscal-1) et « E-reporting des achats étrangers au bac à sable » (fiscal-2) : fusionnés dans T89.",
+  "« SUPER PDP : application OAuth de production » (spec), « Compte SUPER PDP de production et application OAuth » (decisions) et « Compte SUPER PDP de production et secrets du bac à sable » (societe-2) : fusionnés dans T92.",
+  "« Accès à l'API Sirene » (spec, decisions, societe-2, conversation-1) et « Commune diffusée par l'INSEE en diffusion partielle » (fiscal-2) : fusionnés dans T98.",
+  "« Accès à l'API du registre national des entreprises » (spec, decisions, societe-2) et « Confirmer les champs lus au registre INPI » (decisions) : fusionnés dans T99.",
+  "« Contrat d'envoi de lettres recommandées » (spec, decisions) et « Contrat et clés de l'envoi recommandé par API » (societe-2) : fusionnés dans T100.",
+  "« Vérification des cabinets à l'Ordre » (spec, decisions, societe-2) : doublons, fusionnés dans T101.",
+  "« Opérateurs de l'éditeur » (spec, conversation-1) et « Opérateurs, adresse d'alerte et clé du journal d'audit » (societe-2) : fusionnés dans T102, la clé allant en T96.",
+  "« Clé de signature fiscale de production » et « Clé du journal d'audit de production » (spec), « Garde des clés de production » (societe-1, societe-2) et « Où garder les clés de production » (conversation-2) : fusionnés dans T96.",
+  "« Hébergement de production » (spec, decisions), « Choix de l'hébergeur de production » (societe-1) et « Sauvegardes de production » (conversation-2) : fusionnés dans T93.",
+  "« Service d'envoi des e-mails en production et votre domaine » (conversation-1) : doublon, fusionné dans T97.",
+  "« Test d'intrusion » (societe-2, conversation-1, conversation-2) et « Audit de sécurité externe avant la production » (decisions) : fusionnés dans T95.",
+  "« Machine dédiée pour la campagne de tests finale » (societe-2) : doublon, fusionné dans T94.",
+  "« Mentions légales des factures électroniques entre professionnels » : déjà tranché par vous le 09/10 (B9, qui répond à la question D14 de SUPER PDP), déplacé dans tranche ; leur vérification au bac à sable se fait avec la recette (T90).",
+  "« Avoir fournisseur reçu déjà saisi à la main » : retiré, ce n'est pas une question pour vous ; le plan de la série 8 fixe déjà la règle (rapprochement par le SIRET du fournisseur et le n° d'avoir, sinon à la main), travail de conception de l'étape 2.",
+  "« TVA des services encaissés : arrondi par encaissement » : règle que la session impose au futur état de TVA, jamais posée comme question ; fusionnée dans T9 pour être relue par un expert-comptable avec la CA3.",
+  "« Activités exonérées de TVA : PILIQI ne les facture pas » (spec) et « Activités exonérées refusées à l'inscription » (decisions) : déjà tranché le 01/11 (phrase de l'inscription réécrite), dans tranche.",
+  "« Factures aux clients publics hors plateforme » (spec) : déjà tranché (E7 du 09/10, O2 du 11/10), dans tranche.",
+  "« SUPER PDP retenue, Factur-X, retour OAuth » (spec) : votre choix du 08/10, écrit dans CLAUDE.md, plus ancien que la liste tranche, qui commence au 09/10 ; rien à trancher.",
+  "« SUPER PDP : bac à sable Tricatel et Burger Queen » (spec) : réglage donné par vous et écrit dans CLAUDE.md ; rien à trancher.",
+  "« Paquets payants, services extérieurs et versions majeures » (spec), « Paquet payant, service extérieur, version majeure » (conversation-2) et « Version majeure d'un paquet ou faille sans correctif » (societe-2) : règle permanente (D53, D54) sans cas en attente ; les services payants connus ont leur propre point.",
+  "« Mesurer aussi la couverture des branches » (spec, d'après le README pas encore mis à jour) : tranché « A » le 09/11, dans tranche.",
+  "« Points à signaler du lot V2 » (decisions) : tranchés le 24/10 (reponses-v2.md), dans tranche ; seule la remise en personne reste, en T100.",
+  "« Double authentification des propriétaires et administrateurs » (societe-2) : D54 du 07/11 dit qu'elle n'attend plus votre accord ; un service SMS payant vous serait soumis.",
+  "« Nouvelle version de l'art. L441-9 » (decisions) et « Textes officiels jamais relus en entier » (societe-2) : classés « À vérifier, sans l'éditeur » (plan-serie8.md:990) ; travail de la session.",
+  "« Mention à capital variable sur les factures » (societe-2) : règle déjà écrite dans CLAUDE.md ; sa référence légale est une vérification de la session.",
+  "« CA3 : contrôles de l'outil en ligne et du canal EDI-TVA » (fiscal-1) : vérification de la session sur les sources officielles avant l'étape 5 (D25).",
+  "« Échéances exactes de l'e-reporting et amende » (fiscal-1) : SUPER PDP tient le calendrier (décision du 11/10) ; le reste est une vérification de la session.",
+  "« Date de validité VIES » (fiscal-1) et « Vérification VIES à la date de livraison » (fiscal-2) : vos choix I2 (09/10) et O3 (11/10) s'appliquent ; la date de livraison est une vérification de la session.",
+  "« Facture papier d'un fournisseur obligé à la facture électronique » (fiscal-2) : vérification de la session sur les textes officiels avant l'étape 2 (D25).",
+  "« Fournisseur non établi et autoliquidations internes à exclure » (fiscal-2) : cas douteux déjà en saisie manuelle (TVA11) ; vérification de la session.",
+  "« Importations et échanges des magasins des DOM (octroi de mer) » (fiscal-2) : cas exclu, en saisie manuelle, et expéditions des DOM refusées (O6) ; vérification de la session.",
+  "« Ventes à distance : doctrine en vigueur et produits à accises » (fiscal-2) : vérification de la session avant le lot M8.",
+  "« Importations de faible valeur (150 € ou moins) » (fiscal-2) : vérification de la session avant le lot M7.",
+  "« Franchise européenne (plafond de 100 000 €, suffixe EX) » (fiscal-2) : non gérée ; vérification de la session si le cas apparaît.",
+  "« Coût d'entrée des stocks selon le plan comptable » (fiscal-2) : votre choix TVA14 s'applique ; le texte du PCG est relu par la session à l'étape 5.",
+  "« Vente de ce que la société fabrique elle-même » (decisions) : tranché non pour l'instant (Q-TA1, 24/10), dans tranche.",
+  "« Facture obligatoire pour certaines ventes à un particulier » (decisions) et « Facture à un particulier » (fiscal-1) : tranché le 11/10 (case Le client demande une facture, lot C-b), dans tranche ; les travaux sont rappelés en T51.",
+  "« Vente sur place ou à emporter » (societe-2) : choix 3 du lot TA, compris dans T57 ; l'avertissement de l'inscription la signale.",
+  "« Stock d'un magasin cédé et prix de cession » (societe-2) : conseil affiché au propriétaire de la société ; la règle est déjà dans CLAUDE.md.",
+  "« Service réglé par un crédit d'avoir compté comme encaissé » (societe-2) : tranché (Q13 a, 17/10), dans tranche ; la lecture du BOFiP est une vérification de la session.",
+  "« Choix de Claude du lot AUD sur le stock et les tests » (societe-1) : choix techniques de la session.",
+  "« Polices réduites dans les PDF » (societe-1) : choix technique, apparence inchangée.",
+  "« Archives des audits externes à redonner si besoin » (societe-2) : seulement si le lot AUD en a besoin ; aucune demande en cours.",
+  "« Variables Mailtrap dans l'environnement cloud » (conversation-1) : déjà fait, les trois variables sont présentes (noms vérifiés le 10/11, valeurs non lues).",
+  "« E-mails de test par Mailtrap » (decisions) : votre demande du 01/11, appliquée au lot ML ; pas une réponse à une question.",
+  "« Règlements imprimés à gauche des totaux » (decisions, conversation-1) : votre demande (constat C3), faite au lot TR ; pas une réponse à une question.",
+  "« Étapes d'une société validée par l'invitation de son cabinet » (societe-1) : votre demande du 01/11, appliquée au lot EC2 (R24).",
+  "« Modèle et effort de travail » (decisions) : réglage de la session, pas une règle du logiciel.",
+  "« Le propriétaire ne fait jamais de vente » (conversation-1) : règle de la série 8, gardée sans demande de changement après l'explication du 02/11.",
+  "« Décisions des 02 au 08/10 : prix, achats, SUPER PDP » (decisions) : déjà tranché et écrit dans CLAUDE.md, plus ancien que la liste tranche, qui commence au 09/10.",
+  "« B1 et B2 », « Ticket Z même à zéro », « Attestation pour une société à plusieurs magasins », « Arbitrages I » et « Arbitrages J et K » (decisions), « Factures aux professionnels dans les clôtures ; ticket Z même à zéro » (fiscal-1) : regroupés dans les arbitrages du 09/10 de tranche."
+ ]
+}

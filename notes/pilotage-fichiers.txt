@@ -129,3 +129,6 @@ audits-externes/questions-editeur.md
 calculs/sans-virgule-flottante.md
 calculs/decision-calc.md
 reprises/PASSATION-2026-11-08.md
+a-trancher/LISEZMOI.md
+a-trancher/registre.json
+a-trancher/generer.py

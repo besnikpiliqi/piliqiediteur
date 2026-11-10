@@ -1,8 +1,8 @@
 From 2c55bad6730b62eaf54288c7caaaed75ed06708b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 14:11:08 +0000
-Subject: [PATCH] Ajoute le test d'empreinte de la caisse et des PDF (lot TY1
- 1/n)
+Subject: [PATCH 1/5] Ajoute le test d'empreinte de la caisse et des PDF (lot
+ TY1 1/n)
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -1323,6 +1323,1541 @@ index 0000000..258e587
 +        }
 +    }
 +}
+-- 
+2.43.0
+
+
+From 5946e699904cb1f1df417e4d5cfcebfbbaa629f2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 10 Nov 2026 16:03:37 +0000
+Subject: [PATCH 2/5] =?UTF-8?q?Arr=C3=AAte=20les=20mutants=20survivants=20?=
+ =?UTF-8?q?connus=20des=20calculs=20et=20des=20droits=20(lot=20TY1=202/n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cahier de l'analyse statique, § 6.5, point 1 : avant de toucher un
+  fichier des calculs ou des droits, les survivants connus disparaissent,
+  par des tests qui appellent directement leur code.
+- tests/Unit/CalculateurLigneLimitesTest.php : ajoute
+  test_la_part_d_une_base_d_un_centime_retire_toute_la_tva_proposee_en_trop
+  (CalculateurLigne::repartirLEcart(), max($base, 1) : une ligne de
+  0,01 € HT ramenée à une TVA retenue nulle perd ses 3 centimes ; avec une
+  base de 2, elle en garderait 1).
+- tests/Feature/Authorization/ControleDesDroitsTest.php : ajoute
+  test_dans_l_espace_d_une_societe_en_lecture_seule_le_controle_refuse_lui_meme_ce_qui_n_y_reste_pas_permis
+  (ControleDesDroits::dansLEspaceDeLaSociete() : réponses du contrôle
+  lui-même, null ou false, dans une société active, suspendue puis
+  révoquée, pour une consultation, un geste sur l'équipe, la gestion de
+  son cabinet et un autre geste ; le README disait ses deux survivants
+  équivalents, les policies de l'espace de la société refusant aussi ces
+  gestes).
+- Preuve par Infection sur ces seuls fichiers, avec la couverture de toute
+  la suite prise comme la CI (paratest, 5 632 tests, 1 114 s), sur
+  CalculateurLigne.php et ControleDesDroits.php, et sur les trois fichiers
+  des autres mutants que le README disait équivalents (DerogationsDePrix,
+  ImputationDuCredit, ConstructeurLigneAchat) : 1 032 mutants, 998
+  arrêtés, aucun survivant, 34 non conclus (tests tous plus longs que le
+  délai de 120 s), en 32 min 30 s. CalculateurLigne : 622 mutants, 622
+  arrêtés. ControleDesDroits : 132 mutants, 129 arrêtés, 3 non conclus,
+  tous trois dans __invoke() (lignes 172 et 181, $arguments[1] au lieu de
+  $arguments[0] ; ligne 190, return null retiré), aucun dans
+  dansLEspaceDeLaSociete(), dont les 21 mutants sont arrêtés.
+  ConstructeurLigneAchat : 137 mutants, 123 arrêtés, 14 non conclus ;
+  DerogationsDePrix : 86, 84 et 2 ; ImputationDuCredit : 55, 40 et 15.
+  qualite.php mutation : calculs 869 arrêtés, 31 non conclus, 100 % ;
+  droits et isolation 129 arrêtés, 3 non conclus, 100 %.
+- Preuve par les seuls tests ajoutés : Infection sur ControleDesDroits.php
+  avec ControleDesDroitsTest seul arrête les 21 mutants de
+  dansLEspaceDeLaSociete(), trois d'entre eux d'abord par le test ajouté ;
+  sur CalculateurLigne.php avec CalculateurLigneLimitesTest seul, les deux
+  mutants de max($base, 1) sont arrêtés, max($base, 2) par le test ajouté.
+- README, « Mutants non conclus et tests rapides » : plus de survivant
+  connu dans les deux parties, avec les tests qui appellent directement le
+  code ; le verrou des produits de ConstructeurLigneAchat::enregistrer()
+  sort de la liste des équivalents (FicheProduitPendantUneFactureAchatConcurrenceTest
+  arrête son retrait) ; restent équivalents, et non conclus, le
+  chargement par whereKey() de DerogationsDePrix (lignes 82 et 83) et la
+  facture corrigée gardée de ImputationDuCredit (ligne 129).
+- Mutants non conclus de ce passage : ConstructeurLigneAchat lignes 144
+  (deux), 147, 164, 210, 217, 221, 302, 304, 341, 580, 626, 628 (deux) ;
+  DerogationsDePrix 82, 83 ; ImputationDuCredit 113, 120 (trois), 121,
+  129, 136, 154, 171, 186, 188, 191, 192 (trois) ; ControleDesDroits 172,
+  181, 190.
+- Aucun test existant ne change ; aucun fichier de app ne change.
+- Changements des six sortes du § 6.2 : aucun (commit sans code de app).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ README.md                                     |  2 +-
+ .../Authorization/ControleDesDroitsTest.php   | 33 +++++++++++++++++++
+ tests/Unit/CalculateurLigneLimitesTest.php    | 13 ++++++++
+ 3 files changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/README.md b/README.md
+index 71c047c..4a4f2d8 100644
+--- a/README.md
++++ b/README.md
+@@ -119,7 +119,7 @@ ## Tests, commandes et fonctionnement
+ - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). Leur verrou, `tools/psalm/composer.lock`, est résolu pour PHP 8.3.16 (`config.platform.php` de `tools/psalm/composer.json`), la plus basse version que Psalm accepte pour le PHP du logiciel : il s'installe ainsi sous chaque version de PHP de la CI (8.3, 8.4 et 8.5), et une mise à jour de ses paquets (`composer update --working-dir=tools/psalm`) ne retient jamais un paquet qui exige un PHP plus récent. Avec un PHP 8.3 plus ancien que 8.3.16, lancez Psalm avec PHP 8.4 (`php8.4` à la place de `php` dans les commandes qui suivent). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
+ - *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; une partie qui a un seuil sans aucune ligne mesurée fait échouer le contrôle, comme un rapport produit dans un autre dépôt) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, sans autre marge : une partie dont la couverture descend sous ce dixième fait échouer la CI. La couverture des branches, que demande aussi la décision du 01/11/2026, n'est pas mesurée : PCOV, que la décision impose, ne mesure que les lignes ; la mesurer demanderait Xdebug (couverture des chemins, bien plus lente) dans une tâche de la CI, question soumise à l'éditeur.
+ - *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (les policies, les contrôles et les gardes des droits, la portée des comptes, les droits que lit `User`, l'accès des cabinets à leurs clients et les affectations des membres ; ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; pour les seuls fichiers sensibles ajoutés, modifiés ou renommés depuis un commit, tous leurs mutants, comme la CI, donnez à la place de la configuration leurs chemins, `-- $(php tests/Qualite/qualite.php sensibles-changes <commit>)`, ou ceux de quelques fichiers sensibles, après `--` : une option qui accepte une valeur, comme `--ignore-msi-with-no-mutations`, prendrait sinon le premier chemin pour la sienne, et ce fichier ne serait pas muté ; un filtre de git, `--git-diff-filter` ou `--git-diff-lines`, ne remplace pas ces chemins : Infection ne mute alors que les lignes changées de chaque fichier), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet ; la CI le compare, à chaque envoi, au score des fichiers sensibles que l'envoi ajoute ou modifie, chacun entier (décision du 01/11/2026, point 2) : un test retiré qui arrêtait les mutants d'une autre méthode d'un fichier changé se voit. Sur peu de fichiers, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil. Un envoi qui change `User.php` ou un fichier de calcul très appelé fait tourner la tâche plus d'une heure.
+-- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus, qui ne vérifie rien d'elles : leurs tests (`GardesDesDroitsEnBaseTest`, `GardesDesCabinetsEnBaseTest`, `GardesDesTypesDActiviteTest`) lisent donc d'abord au catalogue de PostgreSQL chaque garde telle que les migrations l'ont posée, puis la reposent avant chaque test par le code de sa classe, celui qu'appellent les migrations (`retirer()` puis `poser()`, dans la transaction du test) ; un test de chaque fichier vérifie que les migrations posent chaque garde telle que `poser()` l'écrit, et les autres vérifient chaque refus par son message exact. Le verrou de chaque garde des droits a son test de concurrence (`GardesDesDroitsEnBaseConcurrenceTest`), qui rejoue les migrations : Infection éprouve ainsi leur code par les tests qui vérifient ce qu'elles refusent. Le référentiel des autorisations, écrit lui aussi pendant les migrations, garde des mutants non conclus. Mutants équivalents connus, qu'aucun test ne peut arrêter : `max($base, 1)` de `CalculateurLigne::repartirLEcart()` (une base de 0 ou 1 centime donne la même part avec 2), le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches), la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou), le verrou des produits de `ConstructeurLigneAchat::enregistrer()`, que seuls les tests de concurrence éprouvent, et, dans `ControleDesDroits::dansLEspaceDeLaSociete()`, le refus d'un geste hors de l'équipe dans une société en lecture seule, que les policies de l'espace de la société font aussi (deux mutants, les seuls survivants des droits et de l'isolation).
++- *Mutants non conclus et tests rapides* : pour chaque mutant, Infection lance les fichiers de test qui couvrent sa ligne, le plus rapide d'abord (selon la durée de tout le fichier dans le rapport JUnit), et l'abandonne, « non conclu », après son délai de 120 s. Une ligne chaude (un calcul que toutes les ventes appellent) est couverte par des centaines de fichiers : le test qui la vérifie doit donc vivre dans un petit fichier rapide, sans quoi Infection ne l'atteint jamais. D'où `CalculateurLigneTest` sans l'application Laravel (ses comparaisons sur des dizaines de milliers de cas sont dans `CalculateurLigneAuHasardTest`), `ConstructeurLigneDocumentTest`, `DerogationsDePrixTest` et les tests unitaires des calculs. Les fichiers de la partie « calculs » déclarent `strict_types` : un transtypage retiré par Infection (`(float)`, `(int)`, `(string)` passé à un paramètre typé ou rendu par une fonction typée) y devient une erreur de type, qu'un test arrête, au lieu d'une conversion silencieuse qui ne changerait rien. Les gardes en base (`GardesDesDroits`, `GardesDesCabinets`, `GardesDesTypesDActivite`) s'écrivent pendant les migrations, que la couverture attribue au premier test de chaque processus, qui ne vérifie rien d'elles : leurs tests (`GardesDesDroitsEnBaseTest`, `GardesDesCabinetsEnBaseTest`, `GardesDesTypesDActiviteTest`) lisent donc d'abord au catalogue de PostgreSQL chaque garde telle que les migrations l'ont posée, puis la reposent avant chaque test par le code de sa classe, celui qu'appellent les migrations (`retirer()` puis `poser()`, dans la transaction du test) ; un test de chaque fichier vérifie que les migrations posent chaque garde telle que `poser()` l'écrit, et les autres vérifient chaque refus par son message exact. Le verrou de chaque garde des droits a son test de concurrence (`GardesDesDroitsEnBaseConcurrenceTest`), qui rejoue les migrations : Infection éprouve ainsi leur code par les tests qui vérifient ce qu'elles refusent. Le référentiel des autorisations, écrit lui aussi pendant les migrations, garde des mutants non conclus. Aucun mutant survivant n'est connu dans ces deux parties : un mutant qu'un parcours ordinaire ne distingue pas s'arrête par un test qui appelle directement son code, comme `CalculateurLigneLimitesTest` pour la part d'une base d'un centime dans `CalculateurLigne::repartirLEcart()`, et `ControleDesDroitsTest` pour ce que `ControleDesDroits::dansLEspaceDeLaSociete()` refuse lui-même dans une société en lecture seule, avant les policies de l'espace de la société. Mutants équivalents connus, qu'aucun test ne peut arrêter et qu'Infection laisse non conclus, leurs tests dépassant tous son délai : le chargement des produits et services par `whereKey()` dans `DerogationsDePrix` (Laravel aplatit les valeurs, et les lignes entières y retrouvent les mêmes fiches) et la lecture d'une facture corrigée gardée pour la transaction dans `ImputationDuCredit` (la relire donne la même facture, sous le même verrou).
+ - *Sécurité des dépendances* : `composer audit`, `composer audit --working-dir=tools/psalm` et `npm audit` ; une faille connue fait échouer la CI et se corrige par la mise à jour du paquet concerné.
+ - *En-têtes de sécurité* : chaque réponse (page, fichier, réponse JSON, erreur) porte une politique de contenu qui ne permet que PILIQI (`Content-Security-Policy`, voir `AjouterLesEnTetesDeSecurite`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` et, en production, `Strict-Transport-Security` ; les tests en navigateur échouent à la moindre violation de la politique de contenu.
+ - *Requêtes N+1* : hors production, `Model::preventLazyLoading()` et `Model::preventAccessingMissingAttributes()` font échouer tout test qui lit une relation fiche par fiche dans une boucle, ou un attribut non chargé (voir `AppServiceProvider`). `PlafondsDeRequetesTest` vérifie que les pages les plus chargées du magasin et le PDF d'une facture lisent la base autant de fois avec peu ou beaucoup de lignes, et que le tableau de bord et « Les caisses » de l'espace de la société (pour le propriétaire comme pour un administrateur) et le tableau de bord d'un cabinet lisent la base autant de fois avec un magasin ou un client que trois, sous un plafond ; `TempsDeReponseTest` (en navigateur) vérifie que chaque page principale du magasin, le tableau de bord et « Les caisses » de l'espace de la société et le tableau de bord d'un cabinet s'ouvrent sous un plafond de temps. Les droits que le compte connecté lit pendant une requête (ses autorisations dans chaque magasin, ses affectations, et pour un compte d'un cabinet les clients que ses liens lui ouvrent et ce que chacun lui accorde) se lisent une fois par requête et s'oublient à sa fin.
+diff --git a/tests/Feature/Authorization/ControleDesDroitsTest.php b/tests/Feature/Authorization/ControleDesDroitsTest.php
+index 22ba8f1..09e16e4 100644
+--- a/tests/Feature/Authorization/ControleDesDroitsTest.php
++++ b/tests/Feature/Authorization/ControleDesDroitsTest.php
+@@ -5,6 +5,7 @@
+ use App\Domain\Achats\Models\AvoirFournisseur;
+ use App\Domain\Achats\Models\FactureAchat;
+ use App\Domain\Authorization\AutorisationsSociete;
++use App\Domain\Authorization\ControleDesDroits;
+ use App\Domain\Authorization\PermissionRegistry;
+ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+ use App\Domain\Calendrier\Calendrier;
+@@ -321,6 +322,38 @@ public function test_dans_l_espace_d_une_societe_suspendue_restent_l_equipe_et_l
+         $this->assertSame([true, false, false, false], $gestes());
+     }
+ 
++    /**
++     * Dans l'espace d'une société en lecture seule, le contrôle refuse
++     * lui-même (false, sans laisser répondre la policy) tout geste qui n'est
++     * ni une consultation, ni un geste sur l'équipe, ni la gestion de son
++     * cabinet, et, dans une société révoquée, ces deux gestes-là aussi ; il
++     * laisse répondre les policies (null) pour tout le reste, et pour tout
++     * geste d'une société active.
++     */
++    public function test_dans_l_espace_d_une_societe_en_lecture_seule_le_controle_refuse_lui_meme_ce_qui_n_y_reste_pas_permis(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $proprietaire = $this->proprietaireDe($magasin);
++        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
++        $societe = $magasin->societe;
++        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
++        $controle = app(ControleDesDroits::class);
++        $reponses = fn (): array => [
++            $controle($proprietaire, 'view', [$societe]),
++            $controle($proprietaire, 'suspendreOuReactiver', [$vendeur]),
++            $controle($proprietaire, 'gererSonCabinet', [$societe]),
++            $controle($proprietaire, 'modifierLesParametres', [$societe]),
++        ];
++
++        $this->assertSame([null, null, null, null], $reponses());
++
++        $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
++        $this->assertSame([null, null, null, false], $reponses());
++
++        $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
++        $this->assertSame([null, false, false, false], $reponses());
++    }
++
+     /**
+      * Un compte qui n'est pas actif n'a aucun droit, propriétaire compris,
+      * pas même une consultation.
+diff --git a/tests/Unit/CalculateurLigneLimitesTest.php b/tests/Unit/CalculateurLigneLimitesTest.php
+index 97fb8ff..bf4130d 100644
+--- a/tests/Unit/CalculateurLigneLimitesTest.php
++++ b/tests/Unit/CalculateurLigneLimitesTest.php
+@@ -217,6 +217,19 @@ public function test_une_part_negative_d_un_demi_centime_s_arrondit_en_s_eloigna
+         $this->assertSame([0, 1], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 1), self::part(1, 1)], 2000, 1)));
+     }
+ 
++    /**
++     * Une ligne de 0,01 € HT dont la proposition portait 3 centimes de TVA
++     * (une note d'avoir qui écrit un HT plus bas que celui des articles
++     * retournés), ramenée à une TVA retenue nulle : la part de sa base d'un
++     * centime retire les 3 centimes, et la ligne n'en garde aucun. Divisée
++     * par une base de 2 centimes, la part n'en retirerait que 2 et la ligne
++     * en garderait 1, au-delà de la TVA retenue.
++     */
++    public function test_la_part_d_une_base_d_un_centime_retire_toute_la_tva_proposee_en_trop(): void
++    {
++        $this->assertSame([0], self::tva($this->calculateur()->repartirUneTvaRetenue([self::part(1, 3)], 2000, 0)));
++    }
++
+     /**
+      * Un retour au fournisseur ne propose jamais un montant négatif : quand
+      * les retours précédents ont déjà rendu plus que la proposition des
+-- 
+2.43.0
+
+
+From d8d2ee3c733e4c1a9504f861eeefcc625dd53a96 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 10 Nov 2026 17:01:12 +0000
+Subject: [PATCH 3/5] =?UTF-8?q?Contr=C3=B4le=20les=20seuils=20de=20l'analy?=
+ =?UTF-8?q?se=20statique=20par=20ses=20param=C3=A8tres=20effectifs=20(lot?=
+ =?UTF-8?q?=20TY1=203/n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cahier de l'analyse statique, § 4.3 : seuils.json enregistre, pour
+  Larastan, le niveau, les chemins, les exclusions, les stubs, les options
+  et les règles désactivées ; « qualite.php seuils <ancien seuils.json> »
+  lit les paramètres effectifs par « phpstan dump-parameters --json »,
+  lancé sans AI_AGENT, CLAUDECODE ni CLAUDE_CODE, et les compare à ce que
+  donnent seuls le niveau et les ensembles de règles inclus.
+- Refus : niveau qui baisse ; chemin, option qui disparaît ; option qui
+  change de valeur ; exclusion, stub, règle désactivée qui apparaît ;
+  classe ajoutée à universalObjectCratesClasses ; entrée de ignoreErrors ;
+  treatPhpDocTypesAsCertain ou reportUnmatchedIgnoredErrors à false ;
+  paramètres effectifs différents de seuils.json ; tout autre paramètre
+  relâché dans phpstan.neon ; commentaire d'un fichier analysé qui fait
+  taire PHPStan (token_get_all, commentaires seulement). Seules les
+  exclusions, les options et la règle désactivée du cahier s'enregistrent.
+  Une clé absente de l'ancien fichier compte comme rien d'enregistré.
+- Sans argument ou avec un nombre d'arguments faux, chaque commande écrit
+  son usage et sort avec le code 2.
+- Les seuils de couverture et de mutation se relisent avec une
+  vérification de leur forme, sans conversion.
+- tests/Qualite/seuils.json : nouvelle forme de la section
+  analyse_statique (niveau 6, chemins ["app"], stub
+  tests/Qualite/macros.stub, option parseModelCastsMethod). Les
+  exclusions viennent avec le périmètre élargi, et les règles
+  désactivées avec TY3 : leurs clés ne s'écrivent pas avant, pour que
+  ces envois les ajoutent à une clé absente (rien d'enregistré) et non à
+  une liste vide, où toute nouvelle entrée est refusée.
+- tests/Feature/Qualite/OutilDeQualiteTest.php : un cas par refus, sur un
+  dépôt temporaire avec phpstan.neon et psalm.xml, le PHPStan du dépôt
+  appelé par son chemin absolu (QUALITE_PHPSTAN). Les ensembles de règles,
+  featureToggles, strictRules et les témoins viendront avec TY3.
+- README et commentaire de la tâche « Analyse statique et seuils » de la
+  CI : ce que le contrôle refuse.
+- Tests réécrits (commit de qualite.php, § 7, point 1) : dans
+  OutilDeQualiteTest, lancer() passe au dépôt de test le PHPStan du dépôt
+  (QUALITE_PHPSTAN) et un délai de 120 s, et le commentaire de la classe
+  dit ce que contrôle « seuils » ; aucun autre test existant ne change.
+  Aucun fichier de app ne change.
+- Changements des six sortes du § 6.2 : aucun (commit sans code de app).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ .github/workflows/tests.yml                  |  10 +-
+ README.md                                    |   2 +-
+ tests/Feature/Qualite/OutilDeQualiteTest.php | 283 ++++++++-
+ tests/Qualite/qualite.php                    | 611 +++++++++++++++++--
+ tests/Qualite/seuils.json                    |  11 +-
+ 5 files changed, 868 insertions(+), 49 deletions(-)
+
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+index 007bd78..c26953f 100644
+--- a/.github/workflows/tests.yml
++++ b/.github/workflows/tests.yml
+@@ -38,10 +38,12 @@ jobs:
+         run: vendor/bin/pint --test
+ 
+   # Analyse statique (Larastan) au niveau de phpstan.neon, sans fichier de
+-  # référence ; puis aucun seuil de tests/Qualite/seuils.json (niveau de
+-  # l'analyse, couverture et score de mutation de chaque partie) ne baisse
+-  # par rapport au commit précédent de la branche, ou à la base de la
+-  # demande de fusion.
++  # référence ; puis aucun seuil de tests/Qualite/seuils.json (couverture et
++  # score de mutation de chaque partie, réglage de l'analyse statique) ne
++  # baisse par rapport au commit précédent de la branche, ou à la base de
++  # la demande de fusion, et phpstan.neon règle l'analyse exactement comme
++  # seuils.json l'enregistre, sans rien relâcher ni cacher (paramètres lus
++  # par phpstan dump-parameters, voir qualite.php seuils).
+   analyse:
+     runs-on: ubuntu-latest
+ 
+diff --git a/README.md b/README.md
+index 4a4f2d8..0428515 100644
+--- a/README.md
++++ b/README.md
+@@ -113,7 +113,7 @@ ## Tests, commandes et fonctionnement
+ 
+ Chaque ligne doit finir par 0.
+ 
+-**Outils de qualité.** Décidés par l'éditeur le 01/11/2026 et le 07/11/2026 ; la CI les passe tous à chaque envoi (tâches « Analyse statique et seuils », « Analyse des flux de données », « Audit des dépendances » et « Couverture et mutation »), toutes sur PostgreSQL quand elles lisent une base. Aucun outil ne garantit un logiciel sans défaut : ils en réduisent le risque. Leurs seuils sont dans `tests/Qualite/seuils.json` et ne font que monter : la CI échoue si un envoi en baisse un (`php tests/Qualite/qualite.php seuils <ancien seuils.json>`), ou si `phpstan.neon` n'analyse pas au niveau qu'il enregistre. Les grandes parties du logiciel (calculs, caisse sécurisée, droits et isolation, cabinets, pages publiques, facturation, achats et stock, société, écrans et socle) sont dans `tests/Qualite/parties.php`.
++**Outils de qualité.** Décidés par l'éditeur le 01/11/2026 et le 07/11/2026 ; la CI les passe tous à chaque envoi (tâches « Analyse statique et seuils », « Analyse des flux de données », « Audit des dépendances » et « Couverture et mutation »), toutes sur PostgreSQL quand elles lisent une base. Aucun outil ne garantit un logiciel sans défaut : ils en réduisent le risque. Leurs seuils sont dans `tests/Qualite/seuils.json` et ne font que monter : la CI échoue si un envoi en baisse un (`php tests/Qualite/qualite.php seuils <ancien seuils.json>`). Pour l'analyse statique, `seuils.json` enregistre exactement ce que règle `phpstan.neon` (son niveau, ses chemins, ses exclusions, ses stubs, ses options et ses règles désactivées), que le contrôle lit par PHPStan lui-même (`phpstan dump-parameters`) et compare à ce que donnent seuls le niveau et les ensembles de règles inclus : il échoue si `phpstan.neon` ne dit pas ce que `seuils.json` enregistre, s'il change un autre paramètre (un contrôle du niveau relâché, une règle de Larastan coupée), ignore une erreur (`ignoreErrors`), libère les propriétés d'une classe (`universalObjectCratesClasses`), met `treatPhpDocTypesAsCertain` ou `reportUnmatchedIgnoredErrors` à false, si un commentaire d'un fichier analysé fait taire PHPStan, et, par rapport à l'ancien fichier, si le niveau baisse, si un chemin ou une option disparaît, si une option change de valeur, ou si une exclusion, un stub ou une règle désactivée apparaît ; seules les exclusions, les options et la règle désactivée que permet la décision de l'éditeur du 09/11/2026 s'y enregistrent. Les grandes parties du logiciel (calculs, caisse sécurisée, droits et isolation, cabinets, pages publiques, facturation, achats et stock, société, écrans et socle) sont dans `tests/Qualite/parties.php`.
+ 
+ - *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
+ - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). Leur verrou, `tools/psalm/composer.lock`, est résolu pour PHP 8.3.16 (`config.platform.php` de `tools/psalm/composer.json`), la plus basse version que Psalm accepte pour le PHP du logiciel : il s'installe ainsi sous chaque version de PHP de la CI (8.3, 8.4 et 8.5), et une mise à jour de ses paquets (`composer update --working-dir=tools/psalm`) ne retient jamais un paquet qui exige un PHP plus récent. Avec un PHP 8.3 plus ancien que 8.3.16, lancez Psalm avec PHP 8.4 (`php8.4` à la place de `php` dans les commandes qui suivent). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
+diff --git a/tests/Feature/Qualite/OutilDeQualiteTest.php b/tests/Feature/Qualite/OutilDeQualiteTest.php
+index db31c0a..d2fba3f 100644
+--- a/tests/Feature/Qualite/OutilDeQualiteTest.php
++++ b/tests/Feature/Qualite/OutilDeQualiteTest.php
+@@ -19,9 +19,13 @@
+  * nomme depuis la racine du dépôt les fichiers sensibles changés, que la
+  * CI donne entiers à Infection, qui les lit tous comme des chemins (la
+  * commande de la CI, lue dans son fichier) ; le contrôle du témoin de
+- * l'analyse des flux exige exactement les chemins qu'il annonce. Chaque
+- * cas de l'outil le lance, comme la CI, sur une copie de tests/Qualite
+- * placée dans un dépôt de test nommé « app ».
++ * l'analyse des flux exige exactement les chemins qu'il annonce ; le
++ * contrôle des seuils (décision de l'éditeur du 09/11/2026, cahier de
++ * l'analyse statique, § 4.3) refuse toute baisse d'un seuil et tout
++ * réglage de l'analyse statique que seuils.json n'enregistre pas, lu par
++ * le PHPStan du dépôt, appelé par son chemin absolu. Chaque cas de l'outil
++ * le lance, comme la CI, sur une copie de tests/Qualite placée dans un
++ * dépôt de test nommé « app », avec son phpstan.neon et son psalm.xml.
+  */
+ class OutilDeQualiteTest extends TestCase
+ {
+@@ -181,6 +185,276 @@ public function test_le_temoin_de_l_analyse_des_flux_exige_exactement_les_chemin
+         $this->assertStringContainsString('chemin en trop : tests/Qualite/Psalm/Temoin/Temoin.php:2 TaintedSql', $sortie);
+     }
+ 
++    public function test_les_seuils_sans_leur_ancien_fichier_ecrivent_l_usage_et_sortent_avec_le_code_2(): void
++    {
++        [$code, $sortie] = $this->lancer('seuils');
++
++        $this->assertSame(2, $code, $sortie);
++        $this->assertStringContainsString('php tests/Qualite/qualite.php seuils <ancien seuils.json>', $sortie);
++    }
++
++    /**
++     * phpstan.neon règle l'analyse exactement comme seuils.json l'enregistre :
++     * rien ne baisse, que l'ancien seuils.json enregistre les mêmes réglages
++     * ou qu'il n'en enregistre aucun (une clé absente ne compte pas).
++     */
++    public function test_une_analyse_reglee_comme_seuils_json_l_enregistre_est_acceptee(): void
++    {
++        $this->depotAnalyse();
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++        $this->assertSame(0, $code, $sortie);
++
++        [$code, $sortie] = $this->lancerLesSeuils(['analyse_statique' => ['niveau' => 6], 'couverture' => [], 'mutation' => []]);
++        $this->assertSame(0, $code, $sortie);
++        $this->assertStringContainsString('Aucun seuil ne baisse', $sortie);
++    }
++
++    public function test_un_niveau_qui_baisse_est_refuse(): void
++    {
++        $this->depotAnalyse(niveau: 6);
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString("niveau de l'analyse statique : 7 → 6", $sortie);
++    }
++
++    /**
++     * Les paramètres effectifs que PHPStan lit dans phpstan.neon doivent
++     * être ceux que seuils.json enregistre : un niveau, un chemin, une
++     * exclusion ou une option qui diffère est refusé.
++     */
++    public function test_un_phpstan_neon_qui_ne_regle_pas_l_analyse_comme_seuils_json_est_refuse(): void
++    {
++        $this->depotAnalyse();
++        $this->ecrireLaConfiguration(niveau: 8, chemins: ['app'], exclusions: [], options: "    parseModelCastsMethod: false\n");
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('phpstan.neon analyse au niveau 8, seuils.json enregistre le niveau 7', $sortie);
++        $this->assertStringContainsString('chemins : phpstan.neon donne ["app"], seuils.json enregistre ["app","tests/Qualite"]', $sortie);
++        $this->assertStringContainsString('exclusions : phpstan.neon donne [], seuils.json enregistre ["tests/Qualite/Psalm"]', $sortie);
++        $this->assertStringContainsString('option parseModelCastsMethod : phpstan.neon donne false, seuils.json enregistre true', $sortie);
++    }
++
++    public function test_un_chemin_qui_n_est_plus_analyse_est_refuse(): void
++    {
++        $this->depotAnalyse(chemins: ['app']);
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString("le chemin tests/Qualite n'est plus analysé", $sortie);
++    }
++
++    public function test_une_option_qui_disparait_ou_change_de_valeur_est_refusee(): void
++    {
++        $this->depotAnalyse(options: []);
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(options: ['parseModelCastsMethod' => true]));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString("l'option parseModelCastsMethod disparaît", $sortie);
++
++        $this->depotAnalyse();
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(options: ['parseModelCastsMethod' => false]));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString("l'option parseModelCastsMethod change de valeur : false → true", $sortie);
++
++        $this->depotAnalyse(options: ['reportUnsafeArrayStringKeyCasting' => 'detect']);
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(options: ['reportUnsafeArrayStringKeyCasting' => 'prevent']));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString("l'option reportUnsafeArrayStringKeyCasting change de valeur : \"prevent\" → \"detect\"", $sortie);
++    }
++
++    /**
++     * Une exclusion, un stub ou une règle désactivée que l'ancien seuils.json
++     * n'enregistrait pas est refusé, même permis.
++     */
++    public function test_une_exclusion_un_stub_ou_une_regle_desactivee_qui_apparait_est_refuse(): void
++    {
++        $this->depotAnalyse(exclusions: ['tests/Qualite/Psalm', 'tests/Qualite/Temoins'], regles: ['strictRules.dynamicCallOnStaticMethod']);
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(stubs: [], regles: []));
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('nouvelle exclusion : tests/Qualite/Temoins', $sortie);
++        $this->assertStringContainsString('nouveau stub : tests/Qualite/macros.stub', $sortie);
++        $this->assertStringContainsString('nouvelle règle désactivée : strictRules.dynamicCallOnStaticMethod', $sortie);
++    }
++
++    /**
++     * Seules les exclusions, les options (à leur valeur stricte), les stubs
++     * et la règle désactivée du cahier s'enregistrent.
++     */
++    public function test_une_exclusion_une_option_un_stub_ou_une_regle_hors_du_cahier_est_refuse(): void
++    {
++        $this->depotAnalyse(exclusions: ['tests/Qualite/Psalm', 'app'], options: ['parseModelCastsMethod' => true, 'checkUninitializedProperties' => false, 'inferPrivatePropertyTypeFromConstructor' => true], stubs: ['tests/Qualite/macros.stub', 'tests/Qualite/autre.stub'], regles: ['noModelMake']);
++
++        [$code, $sortie] = $this->lancerLesSeuils(['couverture' => [], 'mutation' => []]);
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('exclusion non permise : app', $sortie);
++        $this->assertStringContainsString('option checkUninitializedProperties : false n\'est pas sa valeur stricte (true)', $sortie);
++        $this->assertStringContainsString('option non permise : inferPrivatePropertyTypeFromConstructor', $sortie);
++        $this->assertStringContainsString('stub non permis : tests/Qualite/autre.stub', $sortie);
++        $this->assertStringContainsString('règle qui ne se désactive pas : noModelMake', $sortie);
++    }
++
++    /**
++     * Un contrôle que le niveau ou un ensemble de règles active, coupé dans
++     * phpstan.neon sans que seuils.json l'enregistre, est refusé : celui du
++     * niveau 6 sur les types manquants, une règle de Larastan.
++     */
++    public function test_un_controle_relache_dans_phpstan_neon_est_refuse(): void
++    {
++        $this->depotAnalyse(neon: "    checkMissingTypehints: false\n    noModelMake: false\n");
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('checkMissingTypehints vaut false au lieu de true', $sortie);
++        $this->assertStringContainsString('noModelMake vaut false au lieu de true', $sortie);
++    }
++
++    public function test_une_erreur_ignoree_ou_une_classe_aux_proprietes_libres_est_refusee(): void
++    {
++        $this->depotAnalyse(neon: "    ignoreErrors:\n        - '#.*#'\n    universalObjectCratesClasses:\n        - App\\Models\\User\n    reportUnmatchedIgnoredErrors: false\n");
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('ignoreErrors cache des erreurs', $sortie);
++        $this->assertStringContainsString('universalObjectCratesClasses ajoute App\\Models\\User', $sortie);
++        $this->assertStringContainsString('reportUnmatchedIgnoredErrors ne passe jamais à false', $sortie);
++    }
++
++    public function test_les_types_des_phpdoc_restent_tenus_pour_certains(): void
++    {
++        $this->depotAnalyse(neon: "    treatPhpDocTypesAsCertain: false\n");
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('treatPhpDocTypesAsCertain ne passe jamais à false', $sortie);
++    }
++
++    /**
++     * Un commentaire d'un fichier analysé qui fait taire PHPStan est refusé,
++     * avec son fichier et sa ligne ; une chaîne qui le cite, et un fichier
++     * exclu, ne le sont pas.
++     */
++    public function test_un_commentaire_qui_fait_taire_phpstan_est_refuse(): void
++    {
++        $consigne = '@phpstan-'.'ignore';
++        $this->depotAnalyse();
++        $this->ecrire('app/Cite.php', "<?php\n\n\$texte = '{$consigne}';\n");
++        $this->ecrire('tests/Qualite/Psalm/Exclu.php', "<?php\n\n// {$consigne}\n");
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++        $this->assertSame(0, $code, $sortie);
++
++        $this->ecrire('app/Tait.php', "<?php\n\n/** {$consigne}-next-line */\n\$a = 1;\n");
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('commentaire qui fait taire PHPStan : app/Tait.php:3', $sortie);
++        $this->assertStringNotContainsString('app/Cite.php', $sortie);
++        $this->assertStringNotContainsString('Exclu.php', $sortie);
++    }
++
++    public function test_un_seuil_de_couverture_ou_de_mutation_qui_baisse_est_refuse(): void
++    {
++        $this->depotAnalyse();
++        $this->ecrire('tests/Qualite/seuils.json', json_encode([
++            'analyse_statique' => $this->seuilsDeLAnalyse()['analyse_statique'],
++            'couverture' => ['calculs' => 99.9],
++            'mutation' => [],
++        ], JSON_THROW_ON_ERROR));
++
++        [$code, $sortie] = $this->lancerLesSeuils([...$this->seuilsDeLAnalyse(), 'couverture' => ['calculs' => 100], 'mutation' => ['droits_et_isolation' => 99.9]]);
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('couverture de calculs : 100 → 99.9', $sortie);
++        $this->assertStringContainsString('mutation de droits_et_isolation : 99.9 → retiré', $sortie);
++    }
++
++    /**
++     * Le dépôt de test réglé pour l'analyse statique : son phpstan.neon,
++     * son psalm.xml, le stub des macros et les dossiers analysés, et son
++     * seuils.json qui enregistre ce réglage, sauf ce que le cas y change
++     * (le phpstan.neon seul).
++     *
++     * @param  list<string>  $chemins
++     * @param  list<string>  $exclusions
++     * @param  array<string, bool|string>  $options
++     * @param  list<string>  $stubs
++     * @param  list<string>  $regles
++     */
++    private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = [], string $neon = ''): void
++    {
++        foreach ([...$chemins, ...$exclusions] as $dossier) {
++            (new Filesystem)->ensureDirectoryExists($this->depot.'/'.$dossier);
++        }
++
++        foreach (['tests/Qualite/macros.stub', 'psalm.xml'] as $fichier) {
++            (new Filesystem)->copy(__DIR__.'/../../../'.$fichier, $this->depot.'/'.$fichier);
++        }
++
++        $this->ecrire('tests/Qualite/autre.stub', "<?php\n");
++        $this->ecrireLaConfiguration($niveau, $chemins, $exclusions, implode('', array_map(
++            fn (string $option, bool|string $valeur): string => "    {$option}: ".(is_bool($valeur) ? ($valeur ? 'true' : 'false') : $valeur)."\n",
++            array_keys($options),
++            $options,
++        )).$neon, $stubs);
++        $this->ecrire('tests/Qualite/seuils.json', json_encode($this->seuilsDeLAnalyse(options: $options, regles: $regles, stubs: $stubs, chemins: $chemins, exclusions: $exclusions, niveau: $niveau), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
++    }
++
++    /**
++     * @param  list<string>  $chemins
++     * @param  list<string>  $exclusions
++     * @param  list<string>  $stubs
++     */
++    private function ecrireLaConfiguration(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], string $options = "    parseModelCastsMethod: true\n", array $stubs = ['tests/Qualite/macros.stub']): void
++    {
++        $liste = fn (string $cle, array $valeurs): string => $valeurs === [] ? '' : "    {$cle}:\n".implode('', array_map(fn (string $valeur): string => "        - {$valeur}\n", $valeurs));
++
++        $this->ecrire('phpstan.neon', "includes:\n    - ".realpath(__DIR__.'/../../../vendor/larastan/larastan/extension.neon')."\n\nparameters:\n"
++            .$liste('paths', $chemins).$liste('excludePaths', $exclusions)."    level: {$niveau}\n".$liste('stubFiles', $stubs).$options);
++    }
++
++    /**
++     * Les seuils qu'enregistre le dépôt de test : ceux de la couverture et
++     * de la mutation, et le réglage de l'analyse statique.
++     *
++     * @param  list<string>  $chemins
++     * @param  list<string>  $exclusions
++     * @param  array<string, bool|string>  $options
++     * @param  list<string>  $stubs
++     * @param  list<string>  $regles
++     * @return array<string, mixed>
++     */
++    private function seuilsDeLAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = []): array
++    {
++        return [
++            'analyse_statique' => ['niveau' => $niveau, 'chemins' => $chemins, 'exclusions' => $exclusions, 'stubs' => $stubs, 'options' => (object) $options, 'regles_desactivees' => $regles],
++            'couverture' => [],
++            'mutation' => [],
++        ];
++    }
++
++    /**
++     * Lance le contrôle des seuils du dépôt de test contre cet ancien
++     * seuils.json.
++     *
++     * @param  array<string, mixed>  $ancien
++     * @return array{0: int, 1: string}
++     */
++    private function lancerLesSeuils(array $ancien): array
++    {
++        return $this->lancer('seuils', $this->ecrire('ancien.json', json_encode($ancien, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)));
++    }
++
+     /**
+      * Un rapport Clover de ces fichiers : par chemin, le nombre de tests
+      * qui exécutent chaque ligne.
+@@ -223,7 +497,8 @@ private function git(string ...$arguments): void
+      */
+     private function lancer(string ...$arguments): array
+     {
+-        $outil = new Process([PHP_BINARY, $this->depot.'/tests/Qualite/qualite.php', ...$arguments], $this->depot);
++        $outil = new Process([PHP_BINARY, $this->depot.'/tests/Qualite/qualite.php', ...$arguments], $this->depot, ['QUALITE_PHPSTAN' => realpath(__DIR__.'/../../../vendor/bin/phpstan')]);
++        $outil->setTimeout(120);
+         $outil->run();
+ 
+         return [(int) $outil->getExitCode(), $outil->getOutput().$outil->getErrorOutput()];
+diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
+index 7a3a1e0..1f65a4e 100644
+--- a/tests/Qualite/qualite.php
++++ b/tests/Qualite/qualite.php
+@@ -16,8 +16,16 @@
+  *       Le rapport liste aussi les mutants non conclus, lus dans le journal
+  *       texte d'Infection rangé à côté (infection.log).
+  *   php tests/Qualite/qualite.php seuils <ancien seuils.json>
+- *       Aucun seuil ne baisse par rapport à l'ancien fichier, et le niveau
+- *       de l'analyse statique de phpstan.neon est celui de seuils.json.
++ *       Aucun seuil ne baisse par rapport à l'ancien fichier : ni la
++ *       couverture, ni le score de mutation d'une partie, ni l'analyse
++ *       statique (Larastan), que seuils.json enregistre telle que PHPStan
++ *       la règle (niveau, chemins, exclusions, stubs, options, règles
++ *       désactivées) et que phpstan.neon doit suivre exactement, sans rien
++ *       relâcher ni cacher (voir refusDeLAnalyseStatique()). Une clé que
++ *       l'ancien fichier n'a pas compte comme rien d'enregistré. Le PHPStan
++ *       lancé est celui du dépôt (vendor/bin/phpstan), ou celui que nomme
++ *       la variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
++ *       outil, dans un dépôt temporaire).
+  *   php tests/Qualite/qualite.php sensibles
+  *       Les chemins des parties sensibles, un par ligne, à donner à
+  *       Infection comme chemins à muter.
+@@ -43,17 +51,73 @@
+  *       elle suit bien les saisies des écrans Livewire et Filament (voir
+  *       tests/Qualite/Psalm/SaisiesDesEcrans.php).
+  *
+- * Code de sortie : 0 si tout tient, 1 sinon.
++ * Code de sortie : 0 si tout tient, 1 sinon, 2 pour une commande inconnue
++ * ou incomplète, après son usage.
+  */
+ 
+ define('RACINE', (string) realpath(__DIR__.'/../..'));
+ 
+ /**
+- * @return array{analyse_statique: array{niveau: int}, couverture: array<string, float>, mutation: array<string, float>}
++ * Les seuils qu'enregistre ce fichier, chaque section relue par la
++ * fonction qui s'en sert : une clé absente vaut « rien d'enregistré ».
++ *
++ * @return array<array-key, mixed>
+  */
+ function seuils(string $fichier = __DIR__.'/seuils.json'): array
+ {
+-    return json_decode((string) file_get_contents($fichier), true, flags: JSON_THROW_ON_ERROR);
++    $contenu = file_get_contents($fichier);
++
++    if ($contenu === false) {
++        throw new RuntimeException("Seuils illisibles : {$fichier}.");
++    }
++
++    $seuils = json_decode($contenu, true, flags: JSON_THROW_ON_ERROR);
++
++    if (! is_array($seuils)) {
++        throw new RuntimeException("{$fichier} n'enregistre aucun seuil.");
++    }
++
++    return $seuils;
++}
++
++/**
++ * Une section de seuils : un tableau, vide quand la clé est absente.
++ *
++ * @param  array<array-key, mixed>  $seuils
++ * @return array<array-key, mixed>
++ */
++function section(array $seuils, string $cle): array
++{
++    $section = $seuils[$cle] ?? [];
++
++    if (! is_array($section)) {
++        throw new RuntimeException("La section « {$cle} » de seuils.json n'est pas un tableau.");
++    }
++
++    return $section;
++}
++
++/**
++ * Les seuils d'un outil par partie (couverture, mutation), chacun un
++ * nombre de points de pourcentage, entier ou décimal, tel que seuils.json
++ * l'écrit.
++ *
++ * @param  array<array-key, mixed>  $seuils
++ * @return array<string, int|float>
++ */
++function seuilsParPartie(array $seuils, string $outil): array
++{
++    $parPartie = [];
++
++    foreach (section($seuils, $outil) as $partie => $seuil) {
++        if (! is_string($partie) || ! (is_int($seuil) || is_float($seuil))) {
++            throw new RuntimeException("seuils.json : chaque seuil de « {$outil} » est un nombre, par partie.");
++        }
++
++        $parPartie[$partie] = $seuil;
++    }
++
++    return $parPartie;
+ }
+ 
+ /**
+@@ -143,7 +207,7 @@ function couverture(string $clover, ?string $rapport): int
+     }
+ 
+     ksort($parParties);
+-    $seuils = seuils()['couverture'];
++    $seuils = seuilsParPartie(seuils(), 'couverture');
+     $echec = false;
+     $texte = "# Couverture des lignes par partie\n\n| Partie | Lignes | Couvertes | Couverture | Seuil |\n|---|---:|---:|---:|---:|\n";
+ 
+@@ -300,7 +364,7 @@ function mutation(string $journal, ?string $rapport): int
+     }
+ 
+     ksort($parParties);
+-    $seuils = seuils()['mutation'];
++    $seuils = seuilsParPartie(seuils(), 'mutation');
+     $echec = false;
+     $texte = "# Score de mutation (MSI) par partie\n\n"
+         ."Un mutant dont les tests dépassent le délai d'Infection compte, comme Infection le compte, parmi ceux qu'un test arrête ; la colonne « dont délai dépassé » les montre à part. "
+@@ -339,35 +403,460 @@ function seuilsQuiMontent(string $ancien): int
+ {
+     $nouveaux = seuils();
+     $anciens = seuils($ancien);
+-    $baisses = [];
++    $refus = [];
+ 
+-    if ($nouveaux['analyse_statique']['niveau'] < $anciens['analyse_statique']['niveau']) {
+-        $baisses[] = "niveau de l'analyse statique : {$anciens['analyse_statique']['niveau']} → {$nouveaux['analyse_statique']['niveau']}";
++    foreach (['couverture', 'mutation'] as $outil) {
++        $seuilsNouveaux = seuilsParPartie($nouveaux, $outil);
++
++        foreach (seuilsParPartie($anciens, $outil) as $partie => $seuil) {
++            if (($seuilsNouveaux[$partie] ?? -1) < $seuil) {
++                $refus[] = "{$outil} de {$partie} : {$seuil} → ".($seuilsNouveaux[$partie] ?? 'retiré');
++            }
++        }
+     }
+ 
+-    foreach (['couverture', 'mutation'] as $outil) {
+-        foreach ($anciens[$outil] as $partie => $seuil) {
+-            if (($nouveaux[$outil][$partie] ?? -1) < $seuil) {
+-                $baisses[] = "{$outil} de {$partie} : {$seuil} → ".($nouveaux[$outil][$partie] ?? 'retiré');
++    $refus = [...$refus, ...refusDeLAnalyseStatique(section($nouveaux, 'analyse_statique'), section($anciens, 'analyse_statique'))];
++
++    if ($refus === []) {
++        echo "Aucun seuil ne baisse, et phpstan.neon règle l'analyse statique comme seuils.json l'enregistre.\n";
++
++        return 0;
++    }
++
++    echo "Un seuil ne peut que monter, et phpstan.neon suit exactement seuils.json :\n  ".implode("\n  ", $refus)."\n";
++
++    return 1;
++}
++
++/**
++ * Les seules exclusions de l'analyse statique (cahier de l'analyse
++ * statique, § 4.1, point 7) : le cache de l'amorçage, l'extension et le
++ * stub que Psalm charge seul, et les fichiers témoins de PHPStan, qui
++ * violent exprès des règles.
++ */
++const EXCLUSIONS_PERMISES = ['bootstrap/cache', 'tests/Qualite/Psalm', 'tests/Qualite/Temoins'];
++
++/**
++ * Les seuls stubs de l'analyse statique : les macros que AppServiceProvider
++ * ajoute à Filament (voir MacrosDeclareesTest).
++ */
++const STUBS_PERMIS = ['tests/Qualite/macros.stub'];
++
++/**
++ * Les options de contrôle que phpstan.neon peut activer, liste fermée
++ * (cahier de l'analyse statique, § 4.1, points 4 et 5), chacune avec la
++ * valeur qui contrôle le plus : true, false pour
++ * rememberPossiblyImpureFunctionValues, ou l'une des valeurs permises de
++ * reportUnsafeArrayStringKeyCasting ; parseModelCastsMethod fait lire à
++ * Larastan les casts que déclare la méthode casts() des modèles. Une clé
++ * pointée désigne un paramètre imbriqué.
++ *
++ * @var array<string, bool|list<string>>
++ */
++const OPTIONS_PERMISES = [
++    'checkUninitializedProperties' => true,
++    'checkBenevolentUnionTypes' => true,
++    'checkTooWideReturnTypesInProtectedAndPublicMethods' => true,
++    'reportPossiblyNonexistentGeneralArrayOffset' => true,
++    'reportPossiblyNonexistentConstantArrayOffset' => true,
++    'reportAnyTypeWideningInVarTag' => true,
++    'reportAlwaysTrueInLastCondition' => true,
++    'checkMissingCallableSignature' => true,
++    'checkMissingOverrideMethodAttribute' => true,
++    'checkTooWideThrowTypesInProtectedAndPublicMethods' => true,
++    'checkTooWideParameterOutInProtectedAndPublicMethods' => true,
++    'exceptions.check.throwTypeCovariance' => true,
++    'exceptions.check.tooWideImplicitThrowType' => true,
++    'reportUnsafeArrayStringKeyCasting' => ['detect', 'prevent'],
++    'reportIgnoresWithoutComments' => true,
++    'rememberPossiblyImpureFunctionValues' => false,
++    'checkConfigTypes' => true,
++    'checkUniqueJobUniqueFor' => true,
++    'checkUniqueJobUniqueId' => true,
++    'noBatchedUniqueJob' => true,
++    'checkJobSerializesModels' => true,
++    'checkBatchedJobIsBatchable' => true,
++    'checkBatchableJobChecksCancellation' => true,
++    'checkDispatchInTransactionAfterCommit' => true,
++    'checkModelProperties' => true,
++    'checkModelMethodVisibility' => true,
++    'checkUnusedViews' => true,
++    'checkMissingTranslations' => true,
++    'checkAuthCallsWhenInRequestScope' => true,
++    'noImplicitQueryBuilderCall' => true,
++    'noUnnecessaryEnumerableToArrayCalls' => true,
++    'parseModelCastsMethod' => true,
++];
++
++/**
++ * La seule règle qu'un ensemble de règles active et que phpstan.neon peut
++ * désactiver (cahier de l'analyse statique, § 4.1, point 3).
++ */
++const REGLES_DESACTIVABLES = ['strictRules.dynamicCallOnStaticMethod'];
++
++/**
++ * Les paramètres de PHPStan qui ne règlent pas ce que l'analyse contrôle
++ * (l'environnement de la commande, son cache, ses messages, son
++ * parallélisme), ceux qui se contrôlent à part (niveau, chemins,
++ * exclusions, stubs, et les quatre gardes nommées dans
++ * refusDeLAnalyseStatique()), et ceux qui nomment les fichiers de
++ * configuration lus.
++ */
++const PARAMETRES_HORS_COMPARAISON = [
++    'level', 'usedLevel', 'paths', 'analysedPathsFromConfig', 'excludePaths', 'stubFiles',
++    'ignoreErrors', 'universalObjectCratesClasses', 'treatPhpDocTypesAsCertain', 'reportUnmatchedIgnoredErrors',
++    'additionalConfigFiles', 'allConfigFiles', 'composerAutoloaderProjectPaths', 'currentWorkingDirectory', 'rootDir', 'env', 'sysGetTempDir',
++    'tmpDir', 'resultCachePath', 'resultCacheSkipIfOlderThanDays', 'resultCacheChecksProjectExtensionFilesDependencies', 'cache', 'enableMigrationCache', 'parametersNotInvalidatingCache',
++    'tips', 'tipsOfTheDay', 'editorUrl', 'editorUrlTitle', 'errorFormat', 'internalErrorsCountLimit', 'parallel', 'fixer', 'pro',
++    'cliArgumentsVariablesRegistered', 'cliAutoloadFile', 'generateBaselineFile', 'sourceLocatorPlaygroundMode',
++];
++
++/**
++ * Ce que refuse le contrôle de l'analyse statique (Larastan), d'après ses
++ * paramètres effectifs, que PHPStan lit lui-même dans phpstan.neon
++ * (dump-parameters : aucun lecteur NEON n'existe hors de son phar), et ses
++ * paramètres de référence, ceux que donnent seuls son niveau et les
++ * ensembles de règles que phpstan.neon inclut :
++ *
++ * - seuils.json (section analyse_statique) enregistre exactement ce que
++ *   règle phpstan.neon : son niveau, ses chemins, ses exclusions (celles
++ *   d'EXCLUSIONS_PERMISES seulement), ses stubs (STUBS_PERMIS), ses
++ *   options (OPTIONS_PERMISES, chacune à sa valeur) et ses règles
++ *   désactivées (REGLES_DESACTIVABLES) ;
++ * - phpstan.neon ne s'écarte de la référence que par eux : tout autre
++ *   paramètre changé (un contrôle du niveau relâché, une règle de
++ *   Larastan coupée, une valeur qui en cache) est refusé, comme une
++ *   classe ajoutée à universalObjectCratesClasses, une entrée de
++ *   ignoreErrors, ou treatPhpDocTypesAsCertain et
++ *   reportUnmatchedIgnoredErrors à false ;
++ * - par rapport à l'ancien seuils.json, le niveau ne baisse pas, aucun
++ *   chemin ni aucune option ne disparaît, aucune option ne change de
++ *   valeur, aucune exclusion, aucun stub ni aucune règle désactivée
++ *   n'apparaît ; une clé que l'ancien n'a pas compte comme rien
++ *   d'enregistré ;
++ * - aucun commentaire d'un fichier analysé ne fait taire PHPStan sur une
++ *   ligne (recherche par token_get_all, dans les seuls commentaires).
++ *
++ * @param  array<array-key, mixed>  $enregistre  la section analyse_statique du nouveau seuils.json
++ * @param  array<array-key, mixed>  $ancien  celle de l'ancien
++ * @return list<string>
++ */
++function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
++{
++    $configuration = RACINE.'/phpstan.neon';
++    $effectifs = aplatir(parametresDePhpstan($configuration));
++    $reference = aplatir(parametresDePhpstan(configurationDeReference($effectifs, $configuration)));
++    $refus = [];
++
++    $niveau = $enregistre['niveau'] ?? null;
++    $ancienNiveau = $ancien['niveau'] ?? null;
++
++    if ($effectifs['level'] !== $niveau) {
++        $refus[] = 'phpstan.neon analyse au niveau '.json_encode($effectifs['level']).', seuils.json enregistre le niveau '.json_encode($niveau);
++    }
++
++    if (is_int($niveau) && is_int($ancienNiveau) && $niveau < $ancienNiveau) {
++        $refus[] = "niveau de l'analyse statique : {$ancienNiveau} → {$niveau}";
++    }
++
++    $chemins = cheminsDuDepot(listeDeChaines($effectifs['paths'] ?? [], 'paths'));
++    $exclusions = cheminsDuDepot([...listeDeChaines($effectifs['excludePaths.analyseAndScan'] ?? [], 'excludePaths'), ...listeDeChaines($effectifs['excludePaths.analyse'] ?? [], 'excludePaths')]);
++    $stubs = cheminsDuDepot(array_diff(listeDeChaines($effectifs['stubFiles'] ?? [], 'stubFiles'), listeDeChaines($reference['stubFiles'] ?? [], 'stubFiles')));
++
++    foreach (['chemins' => $chemins, 'exclusions' => $exclusions, 'stubs' => $stubs] as $cle => $valeurs) {
++        $enregistres = listeTriee($enregistre[$cle] ?? [], $cle);
++
++        if ($valeurs !== $enregistres) {
++            $refus[] = "{$cle} : phpstan.neon donne ".json_encode($valeurs, JSON_UNESCAPED_SLASHES).', seuils.json enregistre '.json_encode($enregistres, JSON_UNESCAPED_SLASHES);
++        }
++    }
++
++    foreach (listeTriee($enregistre['exclusions'] ?? [], 'exclusions') as $exclusion) {
++        if (! in_array($exclusion, EXCLUSIONS_PERMISES, true)) {
++            $refus[] = "exclusion non permise : {$exclusion} (seules ".implode(', ', EXCLUSIONS_PERMISES).')';
++        }
++    }
++
++    foreach (listeTriee($enregistre['stubs'] ?? [], 'stubs') as $stub) {
++        if (! in_array($stub, STUBS_PERMIS, true)) {
++            $refus[] = "stub non permis : {$stub} (seul ".implode(', ', STUBS_PERMIS).')';
++        }
++    }
++
++    if (array_key_exists('chemins', $ancien)) {
++        foreach (array_diff(listeTriee($ancien['chemins'], 'chemins'), listeTriee($enregistre['chemins'] ?? [], 'chemins')) as $chemin) {
++            $refus[] = "le chemin {$chemin} n'est plus analysé";
++        }
++    }
++
++    foreach (['exclusions' => 'nouvelle exclusion', 'stubs' => 'nouveau stub', 'regles_desactivees' => 'nouvelle règle désactivée'] as $cle => $libelle) {
++        if (array_key_exists($cle, $ancien)) {
++            foreach (array_diff(listeTriee($enregistre[$cle] ?? [], $cle), listeTriee($ancien[$cle], $cle)) as $apparue) {
++                $refus[] = "{$libelle} : {$apparue}";
+             }
+         }
+     }
+ 
+-    preg_match('/^\s*level:\s*(\d+)\s*$/m', (string) file_get_contents(RACINE.'/phpstan.neon'), $niveau);
++    $options = $enregistre['options'] ?? [];
++    $regles = listeTriee($enregistre['regles_desactivees'] ?? [], 'regles_desactivees');
+ 
+-    if ((int) ($niveau[1] ?? -1) !== $nouveaux['analyse_statique']['niveau']) {
+-        $baisses[] = 'phpstan.neon analyse au niveau '.($niveau[1] ?? '?').", seuils.json enregistre le niveau {$nouveaux['analyse_statique']['niveau']}";
++    if (! is_array($options)) {
++        throw new RuntimeException('seuils.json : les options de l\'analyse statique sont un tableau, par paramètre.');
+     }
+ 
+-    if ($baisses === []) {
+-        echo "Aucun seuil ne baisse.\n";
++    foreach ($options as $option => $valeur) {
++        $permise = OPTIONS_PERMISES[$option] ?? null;
+ 
+-        return 0;
++        if ($permise === null) {
++            $refus[] = "option non permise : {$option}";
++        } elseif (is_array($permise) ? ! in_array($valeur, $permise, true) : $valeur !== $permise) {
++            $refus[] = "option {$option} : ".json_encode($valeur).' n\'est pas sa valeur stricte ('.json_encode($permise).')';
++        }
++
++        if (($effectifs[$option] ?? null) !== $valeur) {
++            $refus[] = "option {$option} : phpstan.neon donne ".json_encode($effectifs[$option] ?? null).', seuils.json enregistre '.json_encode($valeur);
++        }
+     }
+ 
+-    echo "Un seuil ne peut que monter :\n  ".implode("\n  ", $baisses)."\n";
++    $anciennesOptions = $ancien['options'] ?? [];
+ 
+-    return 1;
++    if (is_array($anciennesOptions)) {
++        foreach ($anciennesOptions as $option => $valeur) {
++            if (! array_key_exists($option, $options)) {
++                $refus[] = "l'option {$option} disparaît";
++            } elseif ($options[$option] !== $valeur) {
++                $refus[] = "l'option {$option} change de valeur : ".json_encode($valeur).' → '.json_encode($options[$option]);
++            }
++        }
++    }
++
++    foreach ($regles as $regle) {
++        if (! in_array($regle, REGLES_DESACTIVABLES, true)) {
++            $refus[] = "règle qui ne se désactive pas : {$regle}";
++        }
++
++        if (($effectifs[$regle] ?? null) !== false) {
++            $refus[] = "règle {$regle} : seuils.json l'enregistre désactivée, phpstan.neon donne ".json_encode($effectifs[$regle] ?? null);
++        }
++    }
++
++    foreach (array_unique([...array_keys($effectifs), ...array_keys($reference)]) as $parametre) {
++        if (in_array(explode('.', $parametre)[0], PARAMETRES_HORS_COMPARAISON, true)) {
++            continue;
++        }
++
++        $valeur = $effectifs[$parametre] ?? null;
++        $valeurDeReference = $reference[$parametre] ?? null;
++
++        if ($valeur === $valeurDeReference
++            || (array_key_exists($parametre, $options) && $options[$parametre] === $valeur)
++            || (in_array($parametre, $regles, true) && $valeur === false)) {
++            continue;
++        }
++
++        $refus[] = "{$parametre} vaut ".json_encode($valeur, JSON_UNESCAPED_SLASHES).' au lieu de '.json_encode($valeurDeReference, JSON_UNESCAPED_SLASHES)
++            .' (ce que donnent le niveau et les ensembles de règles), sans être une option ni une règle désactivée de seuils.json';
++    }
++
++    if (($effectifs['ignoreErrors'] ?? []) !== []) {
++        $refus[] = 'ignoreErrors cache des erreurs : '.json_encode($effectifs['ignoreErrors'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
++    }
++
++    foreach (array_diff(listeDeChaines($effectifs['universalObjectCratesClasses'] ?? [], 'universalObjectCratesClasses'), listeDeChaines($reference['universalObjectCratesClasses'] ?? [], 'universalObjectCratesClasses')) as $classe) {
++        $refus[] = "universalObjectCratesClasses ajoute {$classe} : ses propriétés ne seraient plus contrôlées";
++    }
++
++    foreach (['treatPhpDocTypesAsCertain', 'reportUnmatchedIgnoredErrors'] as $garde) {
++        if (($effectifs[$garde] ?? null) !== true) {
++            $refus[] = "{$garde} ne passe jamais à false";
++        }
++    }
++
++    foreach (array_diff($chemins, $exclusions) as $chemin) {
++        foreach (consignesQuiFontTairePhpstan($chemin, $exclusions) as $consigne) {
++            $refus[] = "commentaire qui fait taire PHPStan : {$consigne}";
++        }
++    }
++
++    return $refus;
++}
++
++/**
++ * Les paramètres effectifs de PHPStan pour cette configuration, tels que
++ * PHPStan les lit lui-même (dump-parameters), lancé sans les variables qui
++ * lui font écrire un résumé pour un agent de code (AI_AGENT, CLAUDECODE,
++ * CLAUDE_CODE), depuis la racine du dépôt.
++ *
++ * @return array<array-key, mixed>
++ */
++function parametresDePhpstan(string $configuration): array
++{
++    $phpstan = getenv('QUALITE_PHPSTAN');
++    $environnement = array_diff_key(getenv(), array_flip(['AI_AGENT', 'CLAUDECODE', 'CLAUDE_CODE']));
++    $commande = [PHP_BINARY, is_string($phpstan) && $phpstan !== '' ? $phpstan : RACINE.'/vendor/bin/phpstan', 'dump-parameters', '--json', '--memory-limit=1G', '--configuration='.$configuration];
++    $processus = proc_open($commande, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tubes, RACINE, $environnement);
++
++    if ($processus === false) {
++        throw new RuntimeException('PHPStan ne se lance pas.');
++    }
++
++    $sortie = stream_get_contents($tubes[1]);
++    $erreurs = stream_get_contents($tubes[2]);
++    fclose($tubes[1]);
++    fclose($tubes[2]);
++    $code = proc_close($processus);
++
++    if ($sortie === false || $erreurs === false) {
++        throw new RuntimeException("La sortie de PHPStan pour {$configuration} est illisible.");
++    }
++
++    $parametres = json_decode($sortie, true);
++
++    if ($code !== 0 || ! is_array($parametres)) {
++        throw new RuntimeException("PHPStan ne rend pas les paramètres de {$configuration} (code {$code}) : ".trim($erreurs.' '.$sortie));
++    }
++
++    return $parametres;
++}
++
++/**
++ * Une configuration qui inclut les mêmes fichiers que celle-ci (ensembles
++ * de règles et extensions, lus après elle dans allConfigFiles), au même
++ * niveau, sans aucun autre paramètre : ce que PHPStan contrôle d'office à
++ * ce niveau avec ces ensembles de règles. Écrite dans un fichier
++ * temporaire, effacé à la fin de la commande.
++ *
++ * @param  array<string, mixed>  $effectifs  les paramètres effectifs aplatis de cette configuration
++ */
++function configurationDeReference(array $effectifs, string $configuration): string
++{
++    $fichiers = listeDeChaines($effectifs['allConfigFiles'] ?? [], 'allConfigFiles');
++    $rang = array_search(realpath($configuration), $fichiers, true);
++
++    if ($rang === false || ! is_int($effectifs['level'] ?? null)) {
++        throw new RuntimeException("PHPStan ne dit ni le niveau ni les fichiers inclus de {$configuration}.");
++    }
++
++    $neon = "includes:\n";
++
++    foreach (array_slice($fichiers, $rang + 1) as $inclus) {
++        $neon .= "    - '".str_replace("'", "''", $inclus)."'\n";
++    }
++
++    $reference = sys_get_temp_dir().'/piliqi-reference-'.getmypid().'-'.bin2hex(random_bytes(4)).'.neon';
++    file_put_contents($reference, $neon."\nparameters:\n    level: {$effectifs['level']}\n");
++    register_shutdown_function(static fn (): bool => ! is_file($reference) || unlink($reference));
++
++    return $reference;
++}
++
++/**
++ * Les paramètres, chacun sous sa clé pointée (« exceptions.check.tooWideThrowType ») :
++ * un tableau associatif se déplie, une liste reste une valeur.
++ *
++ * @param  array<array-key, mixed>  $parametres
++ * @return array<string, mixed>
++ */
++function aplatir(array $parametres, string $prefixe = ''): array
++{
++    $aplatis = [];
++
++    foreach ($parametres as $cle => $valeur) {
++        $nom = $prefixe.$cle;
++
++        if (is_array($valeur) && $valeur !== [] && ! array_is_list($valeur)) {
++            $aplatis = [...$aplatis, ...aplatir($valeur, $nom.'.')];
++        } else {
++            $aplatis[$nom] = $valeur;
++        }
++    }
++
++    return $aplatis;
++}
++
++/**
++ * @return list<string>
++ */
++function listeDeChaines(mixed $valeurs, string $nom): array
++{
++    if (! is_array($valeurs) || ! array_is_list($valeurs)) {
++        throw new RuntimeException("{$nom} n'est pas une liste.");
++    }
++
++    return array_map(static function (mixed $valeur) use ($nom): string {
++        if (! is_string($valeur)) {
++            throw new RuntimeException("{$nom} ne contient pas que des chaînes.");
++        }
++
++        return $valeur;
++    }, $valeurs);
++}
++
++/**
++ * @return list<string> triée
++ */
++function listeTriee(mixed $valeurs, string $nom): array
++{
++    $liste = listeDeChaines($valeurs, $nom);
++    sort($liste);
++
++    return $liste;
++}
++
++/**
++ * Ces chemins absolus, relatifs à la racine du dépôt, triés.
++ *
++ * @param  array<array-key, string>  $chemins
++ * @return list<string>
++ */
++function cheminsDuDepot(array $chemins): array
++{
++    $relatifs = array_map(relatifAuDepot(...), array_values($chemins));
++    sort($relatifs);
++
++    return $relatifs;
++}
++
++/**
++ * Les commentaires d'un fichier PHP de ce chemin (un fichier ou un
++ * dossier du dépôt), hors des exclusions, qui demandent à PHPStan d'ignorer
++ * une erreur, chacun « fichier:ligne » : la recherche se fait par
++ * token_get_all, dans les seuls commentaires, si bien qu'une chaîne du code
++ * qui cite la consigne (comme celle de cette fonction) n'est pas une
++ * consigne.
++ *
++ * @param  list<string>  $exclusions
++ * @return list<string>
++ */
++function consignesQuiFontTairePhpstan(string $chemin, array $exclusions): array
++{
++    $absolu = RACINE.'/'.$chemin;
++    $fichiers = is_dir($absolu) ? glob_recursif($absolu) : (is_file($absolu) ? [$absolu] : []);
++    $consignes = [];
++
++    foreach ($fichiers as $fichier) {
++        $relatif = relatifAuDepot($fichier);
++
++        foreach ($exclusions as $exclusion) {
++            if ($relatif === $exclusion || str_starts_with($relatif, $exclusion.'/')) {
++                continue 2;
++            }
++        }
++
++        $source = file_get_contents($fichier);
++
++        if ($source === false) {
++            throw new RuntimeException("Fichier illisible : {$relatif}.");
++        }
++
++        foreach (token_get_all($source) as $jeton) {
++            if (is_array($jeton) && in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true) && str_contains($jeton[1], '@phpstan-'.'ignore')) {
++                $consignes[] = "{$relatif}:{$jeton[2]}";
++            }
++        }
++    }
++
++    return $consignes;
+ }
+ 
+ /**
+@@ -586,24 +1075,68 @@ function fluxDuTemoin(string $rapport): int
+     return 1;
+ }
+ 
+-try {
+-    exit(match ($argv[1] ?? null) {
+-        'couverture' => couverture($argv[2], $argv[3] ?? null),
+-        'nouveau-code' => nouveauCode($argv[2], $argv[3]),
+-        'mutation' => mutation($argv[2], $argv[3] ?? null),
+-        'seuils' => seuilsQuiMontent($argv[2]),
++/**
++ * Les commandes, chacune avec le nombre d'arguments qu'elle exige et ceux
++ * qu'elle accepte en plus, et leur usage.
++ */
++const COMMANDES = [
++    'couverture' => [1, 1, '<clover.xml> [<rapport.md>]'],
++    'nouveau-code' => [2, 0, '<clover.xml> <commit de base>'],
++    'mutation' => [1, 1, '<infection.json> [<rapport.md>]'],
++    'seuils' => [1, 0, '<ancien seuils.json>'],
++    'sensibles' => [0, 0, ''],
++    'sensibles-changes' => [1, 0, '<commit de base>'],
++    'configuration-sensibles' => [1, 0, '<destination>'],
++    'flux' => [1, 0, '<rapport-psalm.json>'],
++    'flux-temoin' => [1, 0, '<rapport-psalm.json>'],
++];
++
++/**
++ * L'usage de l'outil, sur la sortie d'erreur ; code de sortie 2.
++ */
++function usage(): int
++{
++    $lignes = array_map(
++        static fn (string $commande, array $definition): string => rtrim("  php tests/Qualite/qualite.php {$commande} {$definition[2]}"),
++        array_keys(COMMANDES),
++        COMMANDES,
++    );
++    fwrite(STDERR, "Usage :\n".implode("\n", $lignes)."\n");
++
++    return 2;
++}
++
++/**
++ * Lance la commande avec ses arguments, ou écrit l'usage quand elle est
++ * inconnue ou que ses arguments ne sont pas en nombre.
++ *
++ * @param  list<string>  $arguments
++ */
++function lancer(?string $commande, array $arguments): int
++{
++    $definition = COMMANDES[$commande] ?? null;
++
++    if ($commande === null || $definition === null || count($arguments) < $definition[0] || count($arguments) > $definition[0] + $definition[1]) {
++        return usage();
++    }
++
++    return match ($commande) {
++        'couverture' => couverture($arguments[0], $arguments[1] ?? null),
++        'nouveau-code' => nouveauCode($arguments[0], $arguments[1]),
++        'mutation' => mutation($arguments[0], $arguments[1] ?? null),
++        'seuils' => seuilsQuiMontent($arguments[0]),
+         'sensibles' => sensibles(),
+-        'sensibles-changes' => sensiblesChanges($argv[2]),
+-        'configuration-sensibles' => configurationSensibles($argv[2]),
+-        'flux' => flux($argv[2]),
+-        'flux-temoin' => fluxDuTemoin($argv[2]),
+-        default => (function (): int {
+-            fwrite(STDERR, "Usage : php tests/Qualite/qualite.php couverture|nouveau-code|mutation|seuils|sensibles|sensibles-changes|configuration-sensibles|flux|flux-temoin ...\n");
+-
+-            return 2;
+-        })(),
+-    });
+-} catch (RuntimeException $erreur) {
++        'sensibles-changes' => sensiblesChanges($arguments[0]),
++        'configuration-sensibles' => configurationSensibles($arguments[0]),
++        'flux' => flux($arguments[0]),
++        'flux-temoin' => fluxDuTemoin($arguments[0]),
++        default => usage(),
++    };
++}
++
++try {
++    exit(lancer($argv[1] ?? null, array_slice($argv, 2)));
++} catch (RuntimeException|JsonException $erreur) {
+     echo 'Échec : ', $erreur->getMessage(), "\n";
+ 
+     exit(1);
+diff --git a/tests/Qualite/seuils.json b/tests/Qualite/seuils.json
+index 2701ec1..a86180b 100644
+--- a/tests/Qualite/seuils.json
++++ b/tests/Qualite/seuils.json
+@@ -1,6 +1,15 @@
+ {
+     "analyse_statique": {
+-        "niveau": 6
++        "niveau": 6,
++        "chemins": [
++            "app"
++        ],
++        "stubs": [
++            "tests/Qualite/macros.stub"
++        ],
++        "options": {
++            "parseModelCastsMethod": true
++        }
+     },
+     "couverture": {
+         "achats_et_stock": 98.3,
+-- 
+2.43.0
+
+
+From 6fcefd03fdc409831210021dd7b50bb23d537439 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 10 Nov 2026 16:57:49 +0000
+Subject: [PATCH 4/5] =?UTF-8?q?Lit=20comme=20absent=20un=20t=C3=A9moin=20d?=
+ =?UTF-8?q?e=20poste=20envoy=C3=A9=20en=20tableau,=20au=20lieu=20d'une=20e?=
+ =?UTF-8?q?rreur=20500=20(lot=20TY1=204/n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Défaut réel trouvé par Larastan au niveau 7 (cast.string) :
+  PostesConnus::postes() et PostesReconnus::jetonsDuNavigateur()
+  convertissaient le témoin du navigateur en texte par (string). Un
+  témoin envoyé en tableau (« postes_connus[0]=… »), dont la valeur est un
+  témoin chiffré par le site, comme celui de la session que tout
+  visiteur reçoit, passe le déchiffrement des témoins en tableau : à la
+  connexion, « Array to string conversion », erreur 500.
+- Correction : le témoin ne se lit que s'il est un texte ; sinon, il
+  compte comme un témoin absent (aucun poste connu, aucun poste reconnu),
+  comme un témoin mal formé aujourd'hui.
+- Test de régression, qui échoue sans la correction (500 à la connexion) :
+  ConnexionParIdentifiantTest::test_un_temoin_de_poste_envoye_en_tableau_compte_comme_un_temoin_absent
+  (une vraie requête Livewire de connexion, avec les deux témoins en
+  tableau : refus ordinaire d'un mot de passe égal à l'identifiant hors
+  d'un poste reconnu, puis connexion d'un compte au mot de passe choisi).
+- Changements des six sortes du § 6.2 (défaut réel, § 6.3) : (a) et (c)
+  PostesConnus::postes() et PostesReconnus::jetonsDuNavigateur() : avant
+  json_decode((string) $requete->cookie(self::TEMOIN, ''), true), après
+  is_string($temoin) ? json_decode($temoin, true) : null ; pour un témoin
+  absent ou en texte, le même résultat ; en tableau, un témoin absent au
+  lieu de l'erreur 500.
+- Aucun test existant ne change.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ app/Domain/Tenancy/Services/PostesConnus.php  |  7 ++++-
+ .../Tenancy/Services/PostesReconnus.php       |  6 ++--
+ .../Societe/ConnexionParIdentifiantTest.php   | 29 +++++++++++++++++++
+ 3 files changed, 39 insertions(+), 3 deletions(-)
+
+diff --git a/app/Domain/Tenancy/Services/PostesConnus.php b/app/Domain/Tenancy/Services/PostesConnus.php
+index cc570fc..6e8db77 100644
+--- a/app/Domain/Tenancy/Services/PostesConnus.php
++++ b/app/Domain/Tenancy/Services/PostesConnus.php
+@@ -54,11 +54,16 @@ public function retenir(Request $requete, User $compte): void
+     }
+ 
+     /**
++     * Les postes que porte le témoin du navigateur (déchiffré par
++     * EncryptCookies) ; aucun pour un témoin absent, mal formé, ou envoyé
++     * en tableau (« postes_connus[0]=… »).
++     *
+      * @return array<string, mixed>
+      */
+     private function postes(Request $requete): array
+     {
+-        $postes = json_decode((string) $requete->cookie(self::TEMOIN, ''), true);
++        $temoin = $requete->cookie(self::TEMOIN);
++        $postes = is_string($temoin) ? json_decode($temoin, true) : null;
+ 
+         return is_array($postes) ? $postes : [];
+     }
+diff --git a/app/Domain/Tenancy/Services/PostesReconnus.php b/app/Domain/Tenancy/Services/PostesReconnus.php
+index c4958c6..4130975 100644
+--- a/app/Domain/Tenancy/Services/PostesReconnus.php
++++ b/app/Domain/Tenancy/Services/PostesReconnus.php
+@@ -139,13 +139,15 @@ public function posteDuNavigateur(Request $requete): ?PosteReconnu
+ 
+     /**
+      * Les jetons de postes que porte le témoin du navigateur (déchiffré par
+-     * EncryptCookies) ; aucun pour un témoin absent ou mal formé.
++     * EncryptCookies) ; aucun pour un témoin absent, mal formé, ou envoyé
++     * en tableau (« postes_reconnus[0]=… »).
+      *
+      * @return list<string>
+      */
+     public function jetonsDuNavigateur(Request $requete): array
+     {
+-        $jetons = json_decode((string) $requete->cookie(self::TEMOIN, ''), true);
++        $temoin = $requete->cookie(self::TEMOIN);
++        $jetons = is_string($temoin) ? json_decode($temoin, true) : null;
+ 
+         return is_array($jetons) ? array_values(array_filter($jetons, static fn (mixed $jeton): bool => is_string($jeton) && preg_match('/^[A-Za-z0-9]{64}$/D', $jeton) === 1)) : [];
+     }
+diff --git a/tests/Feature/Societe/ConnexionParIdentifiantTest.php b/tests/Feature/Societe/ConnexionParIdentifiantTest.php
+index 2561dd7..92c036d 100644
+--- a/tests/Feature/Societe/ConnexionParIdentifiantTest.php
++++ b/tests/Feature/Societe/ConnexionParIdentifiantTest.php
+@@ -338,6 +338,35 @@ public function test_les_compteurs_ignorent_un_x_forwarded_for_venu_d_un_proxy_n
+         }
+     }
+ 
++    /**
++     * Un témoin de poste envoyé en tableau (« postes_connus[0]=… »), avec
++     * pour valeur un témoin chiffré par le site, comme celui de la session
++     * que tout visiteur reçoit : le déchiffrement des témoins le laisse
++     * passer en tableau, que la connexion lit comme un témoin absent, sans
++     * erreur, pour le poste connu (voir PostesConnus) comme pour le poste
++     * reconnu (voir PostesReconnus).
++     */
++    public function test_un_temoin_de_poste_envoye_en_tableau_compte_comme_un_temoin_absent(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        [, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
++        $prudent = $this->membre($magasin, RoleMagasin::Vendeur);
++        $this->flushSession();
++        auth()->logout();
++        $page = $this->get('/app/login')->assertOk();
++        $instantane = $this->instantaneLivewire($page->getContent(), 'connexion');
++        $temoinDeSession = $page->getCookie(config('session.cookie'), decrypt: false);
++        $this->assertNotNull($temoinDeSession);
++        $this->withCredentials()->withUnencryptedCookies([PostesConnus::TEMOIN => [$temoinDeSession->getValue()], PostesReconnus::TEMOIN => [$temoinDeSession->getValue()]]);
++
++        $refus = $this->requeteLivewire($instantane, ['data.login' => $identifiant, 'data.password' => $identifiant], 'authenticate')->assertOk();
++        $this->assertSame(Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE, $this->erreurDeConnexion($refus));
++        $this->assertGuest();
++
++        $this->requeteLivewire($instantane, ['data.login' => (string) $prudent->identifiantDeConnexion(), 'data.password' => self::MOT_DE_PASSE_CHOISI], 'authenticate')->assertOk();
++        $this->assertAuthenticatedAs($prudent);
++    }
++
+     /**
+      * Sans mandataire déclaré, aucun en-tête X-Forwarded-For n'est cru, même
+      * sur Laravel Cloud (LARAVEL_CLOUD=1) ou sur un hôte de Forge ou de
+-- 
+2.43.0
+
+
+From 8b3b73191a7a25d0298a8da0a7d291a9601ab4a3 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 10 Nov 2026 17:27:06 +0000
+Subject: [PATCH 5/5] =?UTF-8?q?=C3=89tend=20l'analyse=20statique=20=C3=A0?=
+ =?UTF-8?q?=20tout=20le=20code=20de=20l'application=20hors=20des=20tests?=
+ =?UTF-8?q?=20(lot=20TY1=205/n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cahier de l'analyse statique, § 4.1, point 7 : phpstan.neon analyse
+  app, routes, bootstrap, config, database et tests/Qualite, sans
+  bootstrap/cache (les caches que Laravel écrit), tests/Qualite/Psalm
+  (l'extension et le stub que Psalm charge seul) ni tests/Qualite/Temoins
+  (les fichiers témoins de PHPStan, qui violeront exprès ses règles ;
+  exclusion marquée facultative, « (?) », tant que le dossier n'existe
+  pas : son arrivée n'ajoutera aucune exclusion). seuils.json enregistre
+  ces chemins et ces trois exclusions, les seules que le cahier permet.
+  Les tests (tests/Feature, tests/Unit, tests/Browser) restent hors du
+  périmètre : le README dit pourquoi.
+- Niveau 6 sur le périmètre élargi : 1 erreur, corrigée.
+  database/seeders/DatabaseSeeder.php : Larastan lit Seeder::$command
+  comme toujours présente (PHPDoc de Laravel), alors qu'elle est vide
+  tant que setCommand() ne l'a pas donnée ; le semeur garde sa propre
+  commande, nulle par défaut, que setCommand() lui donne, et l'appel
+  nullsafe reste sur elle : même comportement, avec ou sans commande.
+  tests/Qualite (qualite.php, parties.php) n'a aucune erreur au niveau 6.
+- « qualite.php seuils » passe contre le seuils.json du commit précédent
+  et contre celui de la base de l'envoi.
+- README, « Analyse statique » : le périmètre, ses exclusions et leurs
+  raisons, et pourquoi les tests en restent dehors.
+- Changements des six sortes du § 6.2 : aucun (la garantie à
+  l'exécution de DatabaseSeeder est gardée).
+- Aucun test existant ne change.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ README.md                           |  2 +-
+ database/seeders/DatabaseSeeder.php | 17 ++++++++++++++++-
+ phpstan.neon                        |  9 +++++++++
+ tests/Qualite/seuils.json           | 12 +++++++++++-
+ 4 files changed, 37 insertions(+), 3 deletions(-)
+
+diff --git a/README.md b/README.md
+index 0428515..61925e3 100644
+--- a/README.md
++++ b/README.md
+@@ -115,7 +115,7 @@ ## Tests, commandes et fonctionnement
+ 
+ **Outils de qualité.** Décidés par l'éditeur le 01/11/2026 et le 07/11/2026 ; la CI les passe tous à chaque envoi (tâches « Analyse statique et seuils », « Analyse des flux de données », « Audit des dépendances » et « Couverture et mutation »), toutes sur PostgreSQL quand elles lisent une base. Aucun outil ne garantit un logiciel sans défaut : ils en réduisent le risque. Leurs seuils sont dans `tests/Qualite/seuils.json` et ne font que monter : la CI échoue si un envoi en baisse un (`php tests/Qualite/qualite.php seuils <ancien seuils.json>`). Pour l'analyse statique, `seuils.json` enregistre exactement ce que règle `phpstan.neon` (son niveau, ses chemins, ses exclusions, ses stubs, ses options et ses règles désactivées), que le contrôle lit par PHPStan lui-même (`phpstan dump-parameters`) et compare à ce que donnent seuls le niveau et les ensembles de règles inclus : il échoue si `phpstan.neon` ne dit pas ce que `seuils.json` enregistre, s'il change un autre paramètre (un contrôle du niveau relâché, une règle de Larastan coupée), ignore une erreur (`ignoreErrors`), libère les propriétés d'une classe (`universalObjectCratesClasses`), met `treatPhpDocTypesAsCertain` ou `reportUnmatchedIgnoredErrors` à false, si un commentaire d'un fichier analysé fait taire PHPStan, et, par rapport à l'ancien fichier, si le niveau baisse, si un chemin ou une option disparaît, si une option change de valeur, ou si une exclusion, un stub ou une règle désactivée apparaît ; seules les exclusions, les options et la règle désactivée que permet la décision de l'éditeur du 09/11/2026 s'y enregistrent. Les grandes parties du logiciel (calculs, caisse sécurisée, droits et isolation, cabinets, pages publiques, facturation, achats et stock, société, écrans et socle) sont dans `tests/Qualite/parties.php`.
+ 
+-- *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
++- *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Elle porte sur tout le code de l'application hors des tests : `app`, `routes`, `bootstrap` (sans `bootstrap/cache`, les caches que Laravel y écrit), `config`, `database` (migrations, factories et semeurs) et les outils de la CI de `tests/Qualite` (sans `tests/Qualite/Psalm`, l'extension et le stub que Psalm charge seul, avec son propre chargeur, dont le témoin contient exprès des chemins dangereux, ni `tests/Qualite/Temoins`, les fichiers témoins qui violeront exprès des règles de PHPStan pour prouver qu'elles s'appliquent, exclusion marquée facultative tant que ce dossier n'existe pas). Les tests (`tests/Feature`, `tests/Unit`, `tests/Browser`) restent hors de ce périmètre : ils ne partent pas en production, et leurs erreurs se voient quand ils tournent. Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
+ - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). Leur verrou, `tools/psalm/composer.lock`, est résolu pour PHP 8.3.16 (`config.platform.php` de `tools/psalm/composer.json`), la plus basse version que Psalm accepte pour le PHP du logiciel : il s'installe ainsi sous chaque version de PHP de la CI (8.3, 8.4 et 8.5), et une mise à jour de ses paquets (`composer update --working-dir=tools/psalm`) ne retient jamais un paquet qui exige un PHP plus récent. Avec un PHP 8.3 plus ancien que 8.3.16, lancez Psalm avec PHP 8.4 (`php8.4` à la place de `php` dans les commandes qui suivent). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
+ - *Couverture du code* : elle demande l'extension PCOV (sous Linux, `sudo apt-get install php8.3-pcov` ; sous Windows, la DLL `php_pcov.dll` de PECL pour PHP 8.3 NTS x64 dans `C:\xampp\php\ext`, et `extension=pcov` dans `php.ini` ; elle n'est pas nécessaire pour lancer les tests). `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-clover=storage/qualite/clover.xml` (les tests en navigateur ne comptent pas dans la couverture : Infection, qui s'en sert, ne retrouve pas leurs noms ; paratest plutôt que `php artisan test`, dont le rapport JUnit, celui de Pest, ne donne pas à Infection le fichier de chaque test), puis `php tests/Qualite/qualite.php couverture storage/qualite/clover.xml storage/qualite/couverture.md` (couverture des lignes de chaque partie, comparée à son seuil ; une partie qui a un seuil sans aucune ligne mesurée fait échouer le contrôle, comme un rapport produit dans un autre dépôt) et `php tests/Qualite/qualite.php nouveau-code storage/qualite/clover.xml <commit>` (chaque ligne de `app/` ajoutée ou modifiée depuis ce commit est exécutée par un test). Le seuil de couverture d'une partie est la mesure de son passage complet, arrondie au dixième de point inférieur, sans autre marge : une partie dont la couverture descend sous ce dixième fait échouer la CI. La couverture des branches, que demande aussi la décision du 01/11/2026, n'est pas mesurée : PCOV, que la décision impose, ne mesure que les lignes ; la mesurer demanderait Xdebug (couverture des chemins, bien plus lente) dans une tâche de la CI, question soumise à l'éditeur.
+ - *Tests de mutation* : Infection, sur les parties sensibles : les calculs des ventes et des achats, les droits et l'isolation (les policies, les contrôles et les gardes des droits, la portée des comptes, les droits que lit `User`, l'accès des cabinets à leurs clients et les affectations des membres ; ceux de la caisse sécurisée, du registre et des clôtures se feront à l'étape 3 de la feuille de route, où ce code sera terminé : décision de l'éditeur du 09/11/2026). Il lui faut la couverture de la suite, par paratest : `LARAVEL_PARALLEL_TESTING=1 vendor/bin/paratest --testsuite=Unit,Feature --cache-directory=storage/framework/cache/phpunit --coverage-xml=storage/qualite/infection/coverage-xml --log-junit=storage/qualite/infection/junit.xml`, puis `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json` (la configuration d'Infection limitée aux parties sensibles) et `LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=max --only-covering-test-cases --coverage="$PWD/storage/qualite/infection" --skip-initial-tests` (seuls les tests qui exécutent la ligne changée tournent pour chaque mutant ; dans un terminal piloté par un agent de code (variables `AI_AGENT`, `CLAUDECODE` ou `CLAUDE_CODE`), PHPUnit écrit un résumé en JSON qu'Infection ne sait pas lire et compte alors comme tué un mutant dont tous les tests passent : préfixez la commande par `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE`, et `qualite.php mutation` refuse un rapport ainsi faussé ; chaque processus d'Infection a sa base de test PostgreSQL, `piliqi_test_test_<n>` ; toutes les parties sensibles prennent plusieurs heures ; pour les seuls fichiers sensibles ajoutés, modifiés ou renommés depuis un commit, tous leurs mutants, comme la CI, donnez à la place de la configuration leurs chemins, `-- $(php tests/Qualite/qualite.php sensibles-changes <commit>)`, ou ceux de quelques fichiers sensibles, après `--` : une option qui accepte une valeur, comme `--ignore-msi-with-no-mutations`, prendrait sinon le premier chemin pour la sienne, et ce fichier ne serait pas muté ; un filtre de git, `--git-diff-filter` ou `--git-diff-lines`, ne remplace pas ces chemins : Infection ne mute alors que les lignes changées de chaque fichier), et enfin `php tests/Qualite/qualite.php mutation storage/qualite/infection.json storage/qualite/mutation.md` (score de mutation de chaque partie, comparé à son seuil, liste des mutants qu'aucun test n'arrête, et liste des mutants non conclus, lue dans le journal texte `storage/qualite/infection.log` : ceux dont les tests, tous plus longs que le délai d'Infection, n'ont pas fini ; Infection les écarte du score, et un test plus court les tranche). Le passage complet se fait aux relances de la campagne de tests et à l'audit final. Le score minimal de chaque partie (`mutation` dans `seuils.json`) est celui de son passage complet ; la CI le compare, à chaque envoi, au score des fichiers sensibles que l'envoi ajoute ou modifie, chacun entier (décision du 01/11/2026, point 2) : un test retiré qui arrêtait les mutants d'une autre méthode d'un fichier changé se voit. Sur peu de fichiers, un mutant équivalent (qu'aucun test ne peut arrêter parce qu'il ne change rien, comme un `(int)` sur un identifiant déjà entier ou une garde que `Gate::before` assure déjà) pèse lourd ; il se fait disparaître en simplifiant le code, jamais en baissant le seuil. Un envoi qui change `User.php` ou un fichier de calcul très appelé fait tourner la tâche plus d'une heure.
+diff --git a/database/seeders/DatabaseSeeder.php b/database/seeders/DatabaseSeeder.php
+index 37d5512..6606f70 100644
+--- a/database/seeders/DatabaseSeeder.php
++++ b/database/seeders/DatabaseSeeder.php
+@@ -2,6 +2,7 @@
+ 
+ namespace Database\Seeders;
+ 
++use Illuminate\Console\Command;
+ use Illuminate\Database\Seeder;
+ 
+ /**
+@@ -12,8 +13,22 @@
+  */
+ class DatabaseSeeder extends Seeder
+ {
++    /**
++     * La commande de la console qui lance le semis (db:seed), qui la donne
++     * par setCommand() ; aucune quand le semeur est lancé autrement.
++     * Seeder::$command se dit toujours présente, mais reste vide jusque-là.
++     */
++    private ?Command $commande = null;
++
++    public function setCommand(Command $command): static
++    {
++        $this->commande = $command;
++
++        return parent::setCommand($command);
++    }
++
+     public function run(): void
+     {
+-        $this->command?->info('Aucune donnée de démonstration : créez une société depuis la page d\'inscription (/app/register).');
++        $this->commande?->info('Aucune donnée de démonstration : créez une société depuis la page d\'inscription (/app/register).');
+     }
+ }
+diff --git a/phpstan.neon b/phpstan.neon
+index 4a4e7d2..1ddddb9 100644
+--- a/phpstan.neon
++++ b/phpstan.neon
+@@ -4,6 +4,15 @@ includes:
+ parameters:
+     paths:
+         - app
++        - routes
++        - bootstrap
++        - config
++        - database
++        - tests/Qualite
++    excludePaths:
++        - bootstrap/cache
++        - tests/Qualite/Psalm
++        - tests/Qualite/Temoins (?)
+     level: 6
+     tmpDir: storage/framework/cache/phpstan
+     parseModelCastsMethod: true
+diff --git a/tests/Qualite/seuils.json b/tests/Qualite/seuils.json
+index a86180b..b4ad5e3 100644
+--- a/tests/Qualite/seuils.json
++++ b/tests/Qualite/seuils.json
+@@ -2,7 +2,17 @@
+     "analyse_statique": {
+         "niveau": 6,
+         "chemins": [
+-            "app"
++            "app",
++            "bootstrap",
++            "config",
++            "database",
++            "routes",
++            "tests/Qualite"
++        ],
++        "exclusions": [
++            "bootstrap/cache",
++            "tests/Qualite/Psalm",
++            "tests/Qualite/Temoins"
+         ],
+         "stubs": [
+             "tests/Qualite/macros.stub"
 -- 
 2.43.0
 

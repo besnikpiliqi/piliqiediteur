@@ -587,6 +587,8 @@ Elles sont appliquées dans le code depuis leur demande (sauf la règle (1) du p
 
 ## 4. Questions encore ouvertes, qu'il n'a pas tranchées
 
+> Depuis le 10/11/2026 (D57), la liste complète et tenue à jour est le document « PILIQI — Ce qui reste à trancher » (https://claude.ai/artifact/9M7jL75DYpwBcTrLC1TpGS), rempli vers 17 h 40 UTC : T1 à T103, dont 12 urgents, et 61 réponses dans « Déjà tranché » ; copie dans `a-trancher/registre.json`. Les points ci-dessous y sont repris : 1 → T103 ; 2 → T80 ; 3 → T75 ; 4 → T67 ; 5 → T58 ; 6 → T55, T56, T59, T79 ; 7 → T31, T32 ; 8 → section « À voir avec votre expert-comptable » (T1 à T29) ; 9 → écarté (D54 : plus besoin de son accord, sauf un service SMS payant) ; 10 → T89 ; 11 → T33, T92, T95, T98 à T101 ; 12 → T53 ; 14 → T49 à T52, T66 ; 13, 15, 16 et 17 sont tranchés (16 laisse T45). Un nouveau point va d'abord dans le document, avec le numéro suivant (T104).
+
 1. **Commande `composer run dev` propre à PILIQI** (sans Node, qui lance serve, queue:listen et schedule:work) : proposée, attend son accord (`notes/a-faire-apres-chaine.md`, point 2 ; `README.md`, § 9). Origine : message 180.
 2. **Créer les produits automatiquement depuis une facture d'achat en PDF ou Excel** (série 8, point 9) : 17/10/2026, message 210 : « Por per (9) te jap rregullat pastaj kur te me kerkosh se si! » (« Mais pour le 9, je te donne les règles plus tard, quand tu me demanderas comment »). Questions prêtes au § 4.2 de `notes/serie8/plan-serie8.md`. À lui poser au moment voulu.
 3. **Achats auprès de particuliers** (registre des objets achetés, TVA sur marge) : 08/10/2026, message 112 : « on laisse tomber pour l'instant les achat aux particulier on va revenir. » Prévu à l'étape 14 de `CLAUDE.md` ; ses règles restent à trancher.

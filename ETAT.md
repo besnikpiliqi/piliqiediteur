@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 14:38 UTC par pilotage-sync.sh : « Sauvegarde du lot TY1 (1 commit, 3 entrées) ».
+Mis à jour le 10/11/2026 à 15:28 UTC par pilotage-sync.sh : « D57 : note « Ce qui reste à trancher » ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

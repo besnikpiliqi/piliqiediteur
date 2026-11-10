@@ -1554,3 +1554,7 @@ mais je crois qu'il utilise .env.testing car c est ici que j ai mis cette base p
 
 ok continue
 
+## 150. 2026-11-10 15:21 UTC
+
+Je veux que tu mettes dans une note spéciale pour tout ce que tu m’as dit et ce que tu va dire ce que reste à confirmer par mes propos moyens. Dont tu m’as dit voir avec l’expert comptable pour pas mal de décision et bien plus d’autres choses importantes. Donc tu me mets tout ce que t’as deja dit et tout ce que tu va dire et après moi ke dois trancher car si non je vais oublier ce que tu me dis. D’accord
+

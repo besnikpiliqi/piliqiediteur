@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 07:32 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 09:36 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,6 +41,10 @@ f9b669c Relecture du lot A7b des suites du lot A7
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .github/workflows/tests.yml
+ M README.md
+ M tests/Feature/Qualite/OutilDeQualiteTest.php
+ M tests/Qualite/qualite.php
 ```
 
 ## Dernière course de la chaîne

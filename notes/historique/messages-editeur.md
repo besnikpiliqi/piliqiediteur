@@ -1566,3 +1566,7 @@ T’as dit « • Quand vous avez tranché, je range le point dans « Déjà tra
 
 pour dans la "PILIQI — Ce qui reste à trancher" il faut que tu mette ou qqpart ensemble ou strict à part: donc quand tu m 'as proposé et ce que tu vas me proposer il faut mettre à part meme si moi j'ai repondu autrement malgre que tu m'as dit par exemple il faut voir avec l expert comptable,donc tu me mets tout tes question ou demande pour que je demand l'avis de l expert comptable ou juriste ou etc. car je veux toujour avoir dans un tableaux tout ce genre de question meme si moi j'ai repondu autrement malgre ton avertissement
 
+## 153. 2026-11-10 23:33 UTC
+
+« T41 : cacher » pour que cette partie soit cachée à qui n’a pas le droit de voir les paiements ;
+

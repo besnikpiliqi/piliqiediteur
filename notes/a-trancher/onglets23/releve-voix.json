@@ -13215,6 +13215,26 @@
     "r4-099",
     "r9-097"
    ]
+  },
+  {
+   "id": "Q387",
+   "serie": "Points de l'onglet « Ce qui reste à trancher » (11/11)",
+   "date_utc": "2026-11-10 23:33",
+   "date_paris": "11/11/2026 à 00 h 33",
+   "code": "T41",
+   "question": "La section « Paiements reçus » de la fiche d'une facture s'affiche à qui voit la facture, même sans le droit « Paiements : voir ». Faut-il la cacher à ces comptes ? Je l'avais laissée visible en attendant votre choix, à trancher avant le lot NAV-2, qui teste les écrans de vente.",
+   "mots": "« T41 : cacher » pour que cette partie soit cachée à qui n’a pas le droit de voir les paiements ;",
+   "decision": "La section « Paiements reçus » de la fiche d'une facture ou d'un ticket ne s'affiche qu'aux comptes qui ont le droit de voir les paiements ; pour les autres, elle n'apparaît pas du tout. « Payé / Restant dû » reste visible sur la fiche.",
+   "theme": "Écrans",
+   "statut": "a-appliquer",
+   "statut_detail": "Lot NAV-2 de la chaîne, avec un test en navigateur (constat C8 de ses consignes).",
+   "sources": [
+    "pilotage-reprise/notes/historique/messages-editeur.md (message du 10/11 à 23 h 33 UTC)",
+    "nouvelle-session/navigateur/constats-editeur.md (C8)"
+   ],
+   "refs": [
+    "T41"
+   ]
   }
  ]
 }

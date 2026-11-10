@@ -96,3 +96,15 @@ Diagnostic de la session (lecture du code au commit 1b34f61, à revérifier) : l
 - relire tous les autres textes montrés à l'écran ou dans un e-mail qui annoncent qu'une vente « reste possible » (par exemple `IdentiteDeLaSocieteIncompleteException`, le « Facture impossible » de la caisse, les messages d'émission), et les rendre justes dans chaque état ;
 - tests : page « Identité » et tableau de bord d'une société en cours de vérification (jamais « tickets restent possibles », mais la phrase de la vérification) et d'une société validée (texte actuel) ; un test en navigateur qui ouvre la page « Identité » d'une société en cours de vérification à qui manque une mention ;
 - À faire sur le PC de l'éditeur : rien (`git pull`).
+
+## C8 — Fiche d'une facture ou d'un ticket : la section « Paiements reçus » se voit sans le droit de voir les paiements (point T41 du document « Ce qui reste à trancher », réponse de l'éditeur du 10/11/2026 à 23 h 33 UTC ; lot NAV-2)
+
+Question posée (T41) : la section « Paiements reçus » de la fiche d'une facture s'affiche à qui voit la facture, même sans « Paiements : voir » (constat laissé par le lot TR) ; faut-il la cacher à ces comptes ?
+
+Réponse de l'éditeur : « T41 : cacher » pour que cette partie soit cachée à qui n’a pas le droit de voir les paiements ;
+
+À faire :
+- la section « Paiements reçus » de la fiche d'une facture ou d'un ticket (`FactureResource::infolist()`) ne s'affiche qu'à un compte qui a le droit de voir les paiements de ce document (« Paiements : voir », avec sa portée : ses documents ou ceux de toute l'équipe) ; le propriétaire, les responsables du magasin et un compte du cabinet lié à qui le client accorde la consultation des paiements la voient ; pour les autres comptes, la section n'apparaît pas du tout (ni titre vide, ni message) ;
+- « Payé / Restant dû » reste visible sur la fiche pour qui voit le document (règle de CLAUDE.md, « Caisse et clôtures ») ;
+- même règle partout où le détail des paiements d'un document s'affiche sur une fiche du panneau du magasin (liste des paiements, références, reçus de paiement et contre-passations du document) ;
+- tests : en navigateur, un vendeur qui voit la facture sans « Paiements : voir » ne voit pas la section, le même avec l'autorisation la voit ; le propriétaire et un responsable la voient ; un test du rendu de la fiche par rôle ; l'inventaire des actions tenu à jour.

@@ -674,13 +674,20 @@
    "titre": "« Paiements reçus » visible sans le droit de voir les paiements",
    "question": "La section « Paiements reçus » d'une facture s'affiche à qui voit la facture, même sans « Paiements : voir ». Faut-il la cacher à ces comptes ?",
    "qui": "vous",
-   "etat": "ouvert",
+   "etat": "tranche",
    "proposition": "Laissée visible en attendant votre choix ; à trancher avant le lot NAV-2, qui teste les écrans de vente.",
    "bloquant": "lot NAV-2 (écrans de vente)",
    "sources": [
     "notes/pilotage-reprise/README.md:190"
    ],
-   "citation": "constat à lui soumettre (la section « Paiements reçus » de la fiche d'une facture s'affiche à qui voit la facture, même sans « Paiements : voir »)"
+   "citation": "constat à lui soumettre (la section « Paiements reçus » de la fiche d'une facture s'affiche à qui voit la facture, même sans « Paiements : voir »)",
+   "reponse": {
+    "date_utc": "2026-11-10 23:33",
+    "date_paris": "11/11/2026 à 00 h 33",
+    "mots": "« T41 : cacher » pour que cette partie soit cachée à qui n’a pas le droit de voir les paiements ;",
+    "decision": "La section « Paiements reçus » d'une facture ou d'un ticket ne s'affiche qu'aux comptes qui ont le droit de voir les paiements ; « Payé / Restant dû » reste visible.",
+    "ou": "Lot NAV-2 (constat C8) ; onglet « Mes questions et vos réponses », Q387."
+   }
   },
   {
    "id": "T42",
@@ -1704,10 +1711,6 @@
   }
  ],
  "urgent": [
-  {
-   "id": "T41",
-   "pourquoi": "Le lot NAV-2, qui teste les écrans de vente, arrive après TY, PS, CALC, FI et AUD : sans réponse, ses tests figent l'affichage actuel."
-  },
   {
    "id": "T42",
    "pourquoi": "À trancher avant le lot NAV-2, sinon ses tests en navigateur figent une fiche de brouillon sans ces boutons."

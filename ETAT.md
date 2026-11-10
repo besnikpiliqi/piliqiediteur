@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 15:28 UTC par pilotage-sync.sh : « D57 : note « Ce qui reste à trancher » ».
+Mis à jour le 10/11/2026 à 15:36 UTC par pilotage-sync.sh : « Point de suivi 10/11 15:40 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

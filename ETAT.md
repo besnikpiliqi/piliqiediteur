@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 09:36 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 11:36 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `6c7b3d1`. Commits locaux pas encore poussés :
 
 ```
+d8deaf9 Mute en entier chaque fichier sensible changé par l'envoi (CI, lot PG)
 4e6d832 Prouve chaque protection de la base par un test qui échoue sans elle (lot PG)
 50d39d1 Dit vrai sur les ventes dans l'avis de l'identité incomplète (constat C7)
 ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
@@ -41,10 +42,27 @@ f9b669c Relecture du lot A7b des suites du lot A7
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .github/workflows/tests.yml
  M README.md
- M tests/Feature/Qualite/OutilDeQualiteTest.php
- M tests/Qualite/qualite.php
+ M app/Domain/Cabinets/Support/GardesDesCabinets.php
+ M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
+ M app/Domain/Facturation/Services/DocumentNumberingService.php
+ M app/Domain/Facturation/Support/GardesDeLaVente.php
+ M app/Providers/AppServiceProvider.php
+ M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
+ M infection.json5
+ M tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
+ M tests/Feature/Authorization/GardesDesCabinetsEnBaseTest.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseConcurrenceTest.php
+ M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
+ M tests/Feature/Authorization/GardesDesTypesDActiviteTest.php
+ M tests/Feature/Authorization/ProprietaireSansVenteConcurrenceTest.php
+ M tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
+ M tests/Feature/Calendrier/FuseauParDefautDeLaBaseTest.php
+ M tests/Feature/Facturation/DocumentNumberingServiceTest.php
+ M tests/Feature/OutillageTest.php
+ M tests/Feature/Recherche/RechercheSansAccentsTest.php
+ M tests/Feature/Societe/IdentifiantsTest.php
+ M tests/TestCase.php
 ```
 
 ## Dernière course de la chaîne
@@ -60,4 +78,7 @@ QA:poussee
 QA:fiche
 QA:notes
 PG:implementation
+PG:relecture1
+PG:relecture2
+PG:correction
 ```

@@ -159,13 +159,12 @@ class RecapitulatifDeCloture
         return [
             'nombre' => $documents->count(),
             ...$this->montants($documents, 'total', $sens),
-            'par_taux' => $documents->toBase()
+            'par_taux' => array_values($documents->toBase()
                 ->flatMap(fn (Facture|Avoir $document): array => $document->lignes->all())
                 ->groupBy(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->taux_tva))
                 ->sortKeysDesc()
                 ->map(fn (Collection $lignes, int $taux): array => ['taux' => $taux, ...$this->montants($lignes, 'montant', $sens)])
-                ->values()
-                ->all(),
+                ->all()),
         ];
     }
 
@@ -196,7 +195,7 @@ class RecapitulatifDeCloture
      */
     private static function documents(Collection $ventes, string $type): array
     {
-        return $ventes->where('type', $type)->map(fn (EnregistrementFiscal $vente): int => (int) $vente->document_id)->values()->all();
+        return array_values($ventes->where('type', $type)->map(fn (EnregistrementFiscal $vente): int => (int) $vente->document_id)->all());
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -115,17 +116,16 @@ final class CaissesDeLaSociete
             ->get(['magasin_id', ...self::COLONNES_DU_RELEVE])
             ->groupBy('magasin_id');
 
-        return $magasins
+        return array_values($magasins
             ->map(fn (Magasin $magasin, int $id): array => [
                 'magasin' => $magasin,
                 'calendrier' => $magasin->calendrier(),
                 'journee' => $journees[$id],
-                'caisses_ouvertes' => $ouvertes[$id]->pluck('name')->values()->all(),
+                'caisses_ouvertes' => ValeursLues::textes($ouvertes[$id]->pluck('name')),
                 'releves' => (new Collection($releves->get($id)?->all() ?? []))->each(
                     fn (ClotureCaissePersonnelle $releve): ClotureCaissePersonnelle => $releve->setRawAttributes(Arr::except($releve->getAttributes(), 'magasin_id'), true),
                 ),
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 }

@@ -679,14 +679,13 @@ class Facture extends Model implements DocumentEnvoyable
     {
         $calculateur = app(CalculateurLigne::class);
 
-        return $this->allocationsAvoir
+        return array_values($this->allocationsAvoir
             ->sortBy('id')
             ->groupBy('avoir_id')
             ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
             ->map(fn (Collection $allocations): ?string => $allocations->first()->avoir?->numero)
             ->filter()
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**

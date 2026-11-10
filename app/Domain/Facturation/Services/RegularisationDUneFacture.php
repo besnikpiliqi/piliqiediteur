@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
@@ -10,6 +11,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -195,11 +197,10 @@ class RegularisationDUneFacture
      */
     public function lignesDeLAvoir(Facture $facture): array
     {
-        return $facture->lignes()->get()
+        return array_values($facture->lignes()->get()
             ->map(fn (LigneFacture $ligne): array => ['ligne_facture_id' => (int) $ligne->getKey(), 'quantite' => $ligne->quantiteCreditableRestante()])
             ->filter(fn (array $ligne): bool => $ligne['quantite'] > 0)
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -212,7 +213,7 @@ class RegularisationDUneFacture
      * après elle (le dernier retour d'une ligne en rend le solde exact, voir
      * LigneFacture::montantsDuRetour()). Aucune quand tout a été crédité.
      *
-     * @return list<array<string, mixed>>
+     * @return list<array{produit_id: int|null, service_id: int|null, nature: NatureLigne, description: string, reference: string|null, quantite: int, prix_unitaire_ht: numeric-string, prix_unitaire_ttc: numeric-string, taux_tva: numeric-string, taux_tva_du_prix: numeric-string, remise_pourcentage: numeric-string, montant_ht: numeric-string, montant_tva: numeric-string, montant_ttc: numeric-string, ordre: int}>
      */
     public function lignesDeLaRectificative(Facture $facture): array
     {
@@ -229,9 +230,9 @@ class RegularisationDUneFacture
                 continue;
             }
 
-            $reste = fn (string $colonne): string => $this->calculateur->enDecimal(
+            $reste = fn (string $colonne): string => ValeursLues::nombre($this->calculateur->enDecimal(
                 $this->calculateur->enCentiemes($ligne->getAttribute($colonne)) - (int) $creditees->sum(fn (LigneAvoir $creditee): int => $this->calculateur->enCentiemes($creditee->getAttribute($colonne))),
-            );
+            ));
 
             $lignes[] = [
                 'produit_id' => $ligne->produit_id,

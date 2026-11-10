@@ -14,13 +14,13 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Support\ExpressionDUneColonne;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Str;
 use LogicException;
 
@@ -318,18 +318,17 @@ class Client extends Model
      */
     public function scopeAvecUnCreditDAvoir(Builder $query): void
     {
-        $grammaire = $query->getQuery()->getGrammar();
-        $enCentimes = fn (string $colonne): string => 'cast(round('.$grammaire->wrap($colonne).' * 100) as bigint)';
+        $enCentimes = 'cast(round('.ExpressionDUneColonne::COLONNE.' * 100) as bigint)';
 
         $query->whereNull($query->qualifyColumn('est_comptoir'))
             ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs
                 ->where($avoirs->qualifyColumn('statut'), StatutAvoir::Emise)
                 ->where($avoirs->qualifyColumn('regularisation'), false)
                 ->where(
-                    new Expression($enCentimes($avoirs->qualifyColumn('total_ttc'))),
+                    new ExpressionDUneColonne($enCentimes, $avoirs->qualifyColumn('total_ttc')),
                     '>',
                     AvoirAllocation::query()
-                        ->selectRaw('coalesce(sum('.$enCentimes('avoir_allocations.montant_alloue').'), 0)')
+                        ->select(new ExpressionDUneColonne("coalesce(sum({$enCentimes}), 0)", 'avoir_allocations.montant_alloue'))
                         ->whereColumn('avoir_allocations.avoir_id', $avoirs->qualifyColumn('id')),
                 ));
     }

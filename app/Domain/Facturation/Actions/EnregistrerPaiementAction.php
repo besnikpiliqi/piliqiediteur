@@ -141,9 +141,9 @@ class EnregistrerPaiementAction
             'imputations' => array_map(fn (float $montantImpute): string => number_format($montantImpute, 2, '.', ''), $imputations),
         ];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin, $recu, $aLEmission, $recuLe) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, Paiement::class, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin, $recu, $aLEmission, $recuLe) {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 

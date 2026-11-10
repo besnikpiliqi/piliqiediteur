@@ -93,9 +93,10 @@ class ActionsUniques
      * actif, et rend son résultat ; une demande répétée rend le résultat
      * déjà enregistré, relu en base.
      *
-     * @template TResultat of Model|null
+     * @template TResultat of Model
      *
      * @param  string|null  $jeton  null pour une action interne ou du système, qui ne consomme aucun jeton
+     * @param  class-string<TResultat>  $classe  la classe de son résultat, que la demande répétée relit
      * @param  array<array-key, mixed>  $parametres  le contenu de la demande, ce qui la distingue d'une autre
      * @param  Closure(): mixed  $verrou  le premier verrou de l'action, pris avant de chercher le jeton
      * @param  Closure(): TResultat  $operation  l'action elle-même
@@ -104,7 +105,7 @@ class ActionsUniques
      * @throws InvalidArgumentException quand le jeton n'est pas un identifiant unique
      * @throws LogicException quand une demande différente a déjà été enregistrée sous ce jeton
      */
-    public function executer(?string $jeton, string $action, User $auteur, array $parametres, Closure $verrou, Closure $operation): ?Model
+    public function executer(?string $jeton, string $action, string $classe, User $auteur, array $parametres, Closure $verrou, Closure $operation): Model
     {
         if ($jeton === null) {
             return $operation();
@@ -117,19 +118,19 @@ class ActionsUniques
         $empreinte = self::empreinte($parametres);
 
         try {
-            return DB::transaction(function () use ($jeton, $action, $auteur, $empreinte, $verrou, $operation): ?Model {
+            return DB::transaction(function () use ($jeton, $action, $classe, $auteur, $empreinte, $verrou, $operation): Model {
                 $verrou();
 
                 $traitee = $this->traitee($jeton);
 
                 if ($traitee !== null) {
-                    return $this->resultatDeja($traitee, $action, $auteur, $empreinte);
+                    return $this->resultatDeja($traitee, $action, $classe, $auteur, $empreinte) ?? throw new LogicException(self::REFUS);
                 }
 
                 return $this->inscrire($jeton, $action, $auteur, $empreinte, $operation());
             });
         } catch (UniqueConstraintViolationException $doublon) {
-            return $this->resultatApresUneCourse($doublon, $jeton, $action, $auteur, $empreinte);
+            return $this->resultatApresUneCourse($doublon, $jeton, $action, $classe, $auteur, $empreinte) ?? throw new LogicException(self::REFUS);
         }
     }
 
@@ -143,18 +144,19 @@ class ActionsUniques
      * jeton se suivent étape par étape, et celle qui arrive après la
      * dernière étape de l'autre en rend le résultat, sans rien refaire.
      *
-     * @template TResultat of Model|null
+     * @template TResultat of Model
      *
      * @param  string|null  $jeton  null pour une action du système ou des tests, qui ne consomme aucun jeton
+     * @param  class-string<TResultat>  $classe  la classe du résultat d'une étape, que la demande répétée relit
      * @param  array<array-key, mixed>  $parametres  le contenu de la demande, ce qui la distingue d'une autre
      * @param  Closure(): mixed  $verrou  le premier verrou de l'action, pris au début de chaque étape
-     * @param  Closure(): array{0: TResultat, 1: bool}  $etape  une étape, dans sa transaction : son résultat, et si elle est la dernière
-     * @return array{resultat: TResultat, deja_enregistree: bool} le résultat de la dernière étape, et si la demande l'avait déjà obtenu
+     * @param  Closure(): array{0: TResultat|null, 1: bool}  $etape  une étape, dans sa transaction : son résultat, et si elle est la dernière
+     * @return array{resultat: TResultat|null, deja_enregistree: bool} le résultat de la dernière étape, et si la demande l'avait déjà obtenu
      *
      * @throws InvalidArgumentException quand le jeton n'est pas un identifiant unique
      * @throws LogicException quand une demande différente a déjà été enregistrée sous ce jeton
      */
-    public function executerParEtapes(?string $jeton, string $action, User $auteur, array $parametres, Closure $verrou, Closure $etape): array
+    public function executerParEtapes(?string $jeton, string $action, string $classe, User $auteur, array $parametres, Closure $verrou, Closure $etape): array
     {
         if ($jeton !== null && ! Str::isUuid($jeton)) {
             throw new InvalidArgumentException('Cette demande ne porte pas de jeton valable : rechargez la page, puis recommencez.');
@@ -164,13 +166,13 @@ class ActionsUniques
 
         do {
             try {
-                [$resultat, $derniere, $dejaEnregistree] = DB::transaction(function () use ($jeton, $action, $auteur, $empreinte, $verrou, $etape): array {
+                [$resultat, $derniere, $dejaEnregistree] = DB::transaction(function () use ($jeton, $action, $classe, $auteur, $empreinte, $verrou, $etape): array {
                     $verrou();
 
                     $traitee = $jeton === null ? null : $this->traitee($jeton);
 
                     if ($traitee !== null) {
-                        return [$this->resultatDeja($traitee, $action, $auteur, $empreinte), true, true];
+                        return [$this->resultatDeja($traitee, $action, $classe, $auteur, $empreinte), true, true];
                     }
 
                     [$resultat, $derniere] = $etape();
@@ -182,7 +184,7 @@ class ActionsUniques
                     throw $doublon;
                 }
 
-                [$resultat, $derniere, $dejaEnregistree] = [$this->resultatApresUneCourse($doublon, $jeton, $action, $auteur, $empreinte), true, true];
+                [$resultat, $derniere, $dejaEnregistree] = [$this->resultatApresUneCourse($doublon, $jeton, $action, $classe, $auteur, $empreinte), true, true];
             }
         } while (! $derniere);
 
@@ -273,10 +275,15 @@ class ActionsUniques
      * Une autre demande du même jeton a été inscrite pendant celle-ci,
      * annulée : le résultat de l'autre, pourvu qu'elle soit la même.
      *
+     * @template TResultat of Model
+     *
+     * @param  class-string<TResultat>  $classe
+     * @return TResultat|null
+     *
      * @throws UniqueConstraintViolationException quand l'index unique a arrêté autre chose que le jeton
      * @throws LogicException
      */
-    private function resultatApresUneCourse(UniqueConstraintViolationException $doublon, string $jeton, string $action, User $auteur, string $empreinte): ?Model
+    private function resultatApresUneCourse(UniqueConstraintViolationException $doublon, string $jeton, string $action, string $classe, User $auteur, string $empreinte): ?Model
     {
         $traitee = $this->traitee($jeton);
 
@@ -284,17 +291,22 @@ class ActionsUniques
             throw $doublon;
         }
 
-        return $this->resultatDeja($traitee, $action, $auteur, $empreinte);
+        return $this->resultatDeja($traitee, $action, $classe, $auteur, $empreinte);
     }
 
     /**
      * Le résultat enregistré sous ce jeton, relu dans le magasin actif,
      * pourvu que la demande soit la même : même action, même compte, même
-     * contenu.
+     * contenu, et un résultat de la classe que rend l'action.
+     *
+     * @template TResultat of Model
+     *
+     * @param  class-string<TResultat>  $classe
+     * @return TResultat|null
      *
      * @throws LogicException
      */
-    private function resultatDeja(ActionTraitee $traitee, string $action, User $auteur, string $empreinte): ?Model
+    private function resultatDeja(ActionTraitee $traitee, string $action, string $classe, User $auteur, string $empreinte): ?Model
     {
         if ($traitee->action !== $action || $traitee->user_id !== (int) $auteur->getKey() || ! hash_equals($traitee->empreinte_demande, $empreinte)) {
             throw new LogicException(self::REFUS);
@@ -304,9 +316,9 @@ class ActionsUniques
             return null;
         }
 
-        $classe = Relation::getMorphedModel($traitee->resultat_type) ?? $traitee->resultat_type;
+        $classeEnregistree = Relation::getMorphedModel($traitee->resultat_type) ?? $traitee->resultat_type;
 
-        return $classe::query()->findOrFail($traitee->resultat_id);
+        return $classeEnregistree === $classe ? $classe::query()->whereKey($traitee->resultat_id)->firstOrFail() : throw new LogicException(self::REFUS);
     }
 
     /**

@@ -99,7 +99,7 @@ class EnregistrerVenteCaisseAction
     {
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::VENDRE_A_LA_CAISSE, $auteur, [
+        return $this->actionsUniques->executer($jeton, ActionsUniques::VENDRE_A_LA_CAISSE, Facture::class, $auteur, [
             'client_id' => $client->getKey(),
             'lignes' => self::lignesCanoniques($lignes),
             'reglement' => $reglement->enTableau(),

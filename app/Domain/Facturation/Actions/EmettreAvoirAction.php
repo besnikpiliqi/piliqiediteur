@@ -91,7 +91,7 @@ class EmettreAvoirAction
 
         return DB::transaction(function () use ($auteur, $avoir, $magasin) {
             $instant = $this->registre->verrouiller($magasin);
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 
             return $this->operateur->pendant($compte, fn (): Avoir => $this->emettre($avoir, $instant));

@@ -81,7 +81,7 @@ class EnregistrerAvoirFournisseurAction
         };
         $parametres = ['facture_achat_id' => $factureAchat->getKey(), 'lignes' => array_values($lignesSelectionnees), 'motif' => $motif, 'numero_fournisseur' => $numeroFournisseur, 'montants' => $montants->enTableau(), 'pieces' => PieceDeposee::signatures($pieces)];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR_FOURNISSEUR, $auteur, $parametres, $verrou, fn (): AvoirFournisseur => DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants, $pieces, $verrou): AvoirFournisseur {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR_FOURNISSEUR, AvoirFournisseur::class, $auteur, $parametres, $verrou, fn (): AvoirFournisseur => DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants, $pieces, $verrou): AvoirFournisseur {
             $verrou();
             $brouillon = $this->creerAvoirFournisseur->handle($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants);
             $this->pieces->joindre($auteur, $brouillon, $pieces);

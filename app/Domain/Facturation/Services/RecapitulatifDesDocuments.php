@@ -19,6 +19,8 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -69,7 +71,7 @@ final class RecapitulatifDesDocuments
      */
     public function ecrire(User $compte, array $documents, string $du, string $au): string
     {
-        $flux = fopen('php://temp', 'r+');
+        $flux = ResultatDePhp::flux(fopen('php://temp', 'r+'), 'L\'ouverture du fichier temporaire du récapitulatif');
         fwrite($flux, "\xEF\xBB\xBF");
         fputcsv($flux, self::COLONNES, ';', '"', '', "\r\n");
         $parMagasin = collect($documents)->groupBy(fn (DocumentTrouve $document): int => $document->magasinId);
@@ -123,7 +125,7 @@ final class RecapitulatifDesDocuments
 
         return [
             'ventes' => $ventes,
-            'paye' => $this->payes($ventes->keys()->all(), $fin),
+            'paye' => $this->payes(ValeursLues::entiers($ventes->keys()), $fin),
             'avoirs' => $lireLes(TypeDeDocumentTelechargeable::AvoirsClients, Avoir::query()->with('lignes')),
             'achats' => $lireLes(TypeDeDocumentTelechargeable::FacturesAchat, FactureAchat::query()->with(['taux', 'fournisseur'])),
             'avoirsFournisseur' => $lireLes(TypeDeDocumentTelechargeable::AvoirsFournisseur, AvoirFournisseur::query()->with(['taux', 'factureAchat.fournisseur'])),
@@ -171,26 +173,26 @@ final class RecapitulatifDesDocuments
                 $facture = self::lu($lus['ventes'], $document);
                 $paye = $lus['paye'][(int) $facture->getKey()] ?? 0;
 
-                return $this->parTaux($facture->lignes)->values()->map(fn (array $taux, int $rang): array => $ligne(
+                return array_values($this->parTaux($facture->lignes)->values()->map(fn (array $taux, int $rang): array => $ligne(
                     $taux,
                     identifiant: self::identifiantDuClient($facture),
                     reglement: $rang === 0 ? [$paye, $this->calculateur->enCentiemes($facture->total_ttc) - $paye] : null,
-                ))->all();
+                ))->all());
             case TypeDeDocumentTelechargeable::AvoirsClients:
                 $avoir = self::lu($lus['avoirs'], $document);
 
-                return $this->parTaux($avoir->lignes)->values()->map(fn (array $taux): array => $ligne($taux, identifiant: self::identifiantDuClient($avoir)))->all();
+                return array_values($this->parTaux($avoir->lignes)->map(fn (array $taux): array => $ligne($taux, identifiant: self::identifiantDuClient($avoir)))->all());
             case TypeDeDocumentTelechargeable::FacturesAchat:
             case TypeDeDocumentTelechargeable::AvoirsFournisseur:
                 $achat = $document->type === TypeDeDocumentTelechargeable::FacturesAchat ? self::lu($lus['achats'], $document) : self::lu($lus['avoirsFournisseur'], $document);
                 $fournisseur = $achat instanceof FactureAchat ? $achat->fournisseur : $achat->factureAchat->fournisseur;
 
-                return $achat->taux->map(fn (TauxFactureAchat|TauxAvoirFournisseur $taux): array => $ligne([
+                return array_values($achat->taux->map(fn (TauxFactureAchat|TauxAvoirFournisseur $taux): array => $ligne([
                     'taux' => self::taux($taux->taux_tva),
                     'ht' => $this->calculateur->enCentiemes($taux->base_ht),
                     'tva' => $this->calculateur->enCentiemes($taux->montant_tva),
                     'ttc' => $this->calculateur->enCentiemes($taux->base_ht) + $this->calculateur->enCentiemes($taux->montant_tva),
-                ], identifiant: self::identifiantDuFournisseur($fournisseur)))->values()->all();
+                ], identifiant: self::identifiantDuFournisseur($fournisseur)))->all());
             case TypeDeDocumentTelechargeable::Clotures:
                 $nets = self::lu($lus['clotures'], $document)->netParTaux();
 

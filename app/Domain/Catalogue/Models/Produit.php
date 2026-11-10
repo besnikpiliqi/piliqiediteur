@@ -19,6 +19,7 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Database\Factories\ProduitFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -448,7 +449,7 @@ class Produit extends Model
     private function arrondirLePrixDeVente(): void
     {
         if ($this->isDirty('prix_vente_ttc') && filled($this->prix_vente_ttc)) {
-            $this->prix_vente_ttc = app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($this->getAttributes()['prix_vente_ttc']));
+            $this->prix_vente_ttc = ValeursLues::nombre(app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($this->getAttributes()['prix_vente_ttc'])));
         }
     }
 

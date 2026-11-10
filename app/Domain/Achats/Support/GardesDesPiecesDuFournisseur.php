@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Support;
 
+use App\Domain\Tenancy\Support\LitteralSql;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -78,10 +79,14 @@ final class GardesDesPiecesDuFournisseur
 
     /**
      * Le message d'un refus, préfixé du nom de sa garde, en littéral SQL
-     * (apostrophes doublées).
+     * (voir LitteralSql).
+     *
+     * @param  literal-string  $garde
+     * @param  literal-string  $raison
+     * @return literal-string
      */
     private static function message(string $garde, string $raison): string
     {
-        return "'".str_replace("'", "''", "{$garde} : {$raison}")."'";
+        return LitteralSql::de("{$garde} : {$raison}");
     }
 }

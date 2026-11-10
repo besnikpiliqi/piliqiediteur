@@ -132,13 +132,13 @@ class ClotureCaisse extends Model
             ),
         ];
 
-        return [
+        return array_values([
             ...$rubrique('ventes_particuliers', 'Ventes aux particuliers (tickets)'),
             ...$rubrique('avoirs_particuliers', 'Avoirs sur des tickets'),
             $ligne('Net des ventes aux particuliers (base de l\'e-reporting)', null, $calculateur->enCentiemes($this->total_ht), $calculateur->enCentiemes($this->total_tva), $calculateur->enCentiemes($this->total_ttc)),
             ...$rubrique('factures_professionnels', 'Factures aux professionnels (pour information)'),
             ...$rubrique('avoirs_professionnels', 'Avoirs aux professionnels (pour information)'),
-        ];
+        ]);
     }
 
     /**

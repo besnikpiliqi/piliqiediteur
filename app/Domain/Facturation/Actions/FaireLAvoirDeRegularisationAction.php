@@ -79,7 +79,7 @@ class FaireLAvoirDeRegularisationAction
     {
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::FAIRE_L_AVOIR_DE_REGULARISATION, $auteur, ['facture_id' => $facture->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $facture, $magasin): Avoir {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::FAIRE_L_AVOIR_DE_REGULARISATION, Avoir::class, $auteur, ['facture_id' => $facture->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $facture, $magasin): Avoir {
             $this->registre->verrouiller($magasin);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
             $origine = Facture::query()->whereKey($facture->getKey())->first() ?? throw new LogicException(Facture::REFUS_INTROUVABLE);

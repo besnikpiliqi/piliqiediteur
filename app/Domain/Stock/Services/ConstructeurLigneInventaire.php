@@ -67,7 +67,7 @@ class ConstructeurLigneInventaire
      * Enregistre les lignes de l'inventaire, dans leur ordre, à la place de
      * celles qu'il avait, puis sa valeur.
      *
-     * @param  array<array-key, array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: mixed, cout_unitaire_ht: mixed}>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes  chaque ligne telle que l'écran la saisit (produit_id ou produit, quantite, cout_unitaire_ht), chaque valeur lue par sa vérification
      *
      * @throws InvalidArgumentException
      * @throws LogicException

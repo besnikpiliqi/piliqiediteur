@@ -183,7 +183,7 @@ class ModifierFactureAchatAction
             // Les produits que la réception a reçus avant sa correction ; un
             // brouillon n'a rien reçu.
             $produitsAvant = $estValidee
-                ? $factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all()
+                ? array_values($factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->all())
                 : [];
             $avant = $estValidee ? Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES) : [];
 
@@ -259,10 +259,9 @@ class ModifierFactureAchatAction
             ->with('factureAchat')
             ->get()
             ->groupBy('facture_achat_id')
-            ->map(fn (Collection $lignes): array => $lignes
+            ->map(fn (Collection $lignes): array => array_values($lignes
                 ->map(fn (LigneAchat $ligne): array => ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()])
-                ->values()
-                ->all())
+                ->all()))
             ->all();
     }
 }

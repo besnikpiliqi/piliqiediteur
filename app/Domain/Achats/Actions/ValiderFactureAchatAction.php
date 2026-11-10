@@ -117,7 +117,7 @@ class ValiderFactureAchatAction
             ActionsUniques::verrouDe($auteur)();
         };
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_FACTURE_ACHAT, $auteur, ['facture_achat_id' => $factureAchat->getKey()], $verrou, fn (): FactureAchat => DB::transaction(function () use ($auteur, $factureAchat, $magasin) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_FACTURE_ACHAT, FactureAchat::class, $auteur, ['facture_achat_id' => $factureAchat->getKey()], $verrou, fn (): FactureAchat => DB::transaction(function () use ($auteur, $factureAchat, $magasin) {
             Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'valider', $magasin, $factureAchat);

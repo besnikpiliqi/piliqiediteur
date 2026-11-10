@@ -464,7 +464,7 @@ class RegistreFiscal
         [$tete, $instant] = $this->verrou($magasin);
 
         if ($chaine !== ChaineFiscale::Evenement) {
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
         }
 
         foreach ($this->evenementsAutomatiques($tete) as [$code, $details]) {

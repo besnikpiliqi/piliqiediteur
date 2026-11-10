@@ -18,10 +18,12 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Exceptions\MathException;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +104,15 @@ use ValueError;
  * s'inscrit pendant la vérification sera vérifié par la suivante. Les
  * clôtures de caisse et les archives ne sont pas encore vérifiées : leur
  * forme définitive attend les décisions de l'éditeur.
+ *
+ * Une imputation, telle qu'un contenu signé la donne (un identifiant ou un
+ * montant illisible y vaut null) ou telle que la base la porte : celle
+ * d'un paiement sur une facture, celle d'un avoir sur une facture, ou le
+ * crédit d'un avoir qu'un paiement impute, le seul qui désigne aussi son
+ * avoir.
+ *
+ * @phpstan-type ImputationSignee array{origine: 'paiement'|'avoir', origine_id: int|null, facture_id: int|null, montant: int|null}|array{origine: 'credit', origine_id: int|null, avoir_id: int|null, facture_id: int|null, montant: int|null}
+ * @phpstan-type ImputationEnBase array{origine: 'paiement'|'avoir', origine_id: int, facture_id: int, montant: int|null}|array{origine: 'credit', origine_id: int, avoir_id: int, facture_id: int, montant: int|null}
  */
 class VerificateurIntegrite
 {
@@ -129,6 +140,16 @@ class VerificateurIntegrite
         'paiement' => Paiement::class,
     ];
 
+    /**
+     * La table de chaque modèle de MODELES, que les requêtes qui comptent
+     * les enregistrements de chaque document écrivent dans leur SQL.
+     */
+    private const TABLES = [
+        'facture' => 'factures',
+        'avoir' => 'avoirs',
+        'paiement' => 'paiements',
+    ];
+
     private RapportIntegrite $rapport;
 
     private Magasin $magasin;
@@ -152,7 +173,7 @@ class VerificateurIntegrite
      * Les imputations signées par un enregistrement vérifié et introuvables
      * en base, par clé (voir cleDImputation()).
      *
-     * @var array<string, array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
+     * @var array<string, ImputationSignee>
      */
     private array $imputationsIntrouvables = [];
 
@@ -161,7 +182,7 @@ class VerificateurIntegrite
      * alias : les imputations d'un même paiement, d'une même facture ou
      * d'un même avoir se suivent en base.
      *
-     * @var array<string, array{document_id: int, imputations: list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>}>
+     * @var array<string, array{document_id: int, imputations: list<ImputationSignee>}>
      */
     private array $dernieresImputationsLues = [];
 
@@ -706,9 +727,11 @@ class VerificateurIntegrite
         $donnees = is_array($contenu['donnees'] ?? null) ? $contenu['donnees'] : [];
         $this->noterLesImputationsIntrouvables(self::imputationsSignees($alias, $documentId, $donnees));
 
+        // La fiche du client d'un paiement, signée telle qu'elle était ce
+        // jour-là, change ensuite : elle ne se compare pas.
         try {
             $recalcule = $document instanceof Paiement
-                ? $this->contenuFiscal->encaissement($document)
+                ? Arr::except($this->contenuFiscal->encaissement($document), ['client'])
                 : ['document' => $this->contenuFiscal->blocDocument($document)];
         } catch (ErrorException|InvalidArgumentException|MathException|ValueError|TypeError $illisible) {
             $this->rapport->signaler(AnomalieFiscale::defaut('document', "{$libelle} ne se relit plus en base : {$illisible->getMessage()}", $reference));
@@ -718,8 +741,8 @@ class VerificateurIntegrite
 
         $ecarts = [];
 
-        foreach ($document instanceof Paiement ? ['paiement', 'contre_passe', 'allocations', 'credits_imputes'] : ['document'] as $bloc) {
-            $ecarts = [...$ecarts, ...self::ecarts($bloc, $recalcule[$bloc], $donnees[$bloc] ?? null)];
+        foreach ($recalcule as $bloc => $valeur) {
+            $ecarts = [...$ecarts, ...self::ecarts($bloc, $valeur, $donnees[$bloc] ?? null)];
         }
 
         if ($ecarts !== []) {
@@ -748,7 +771,7 @@ class VerificateurIntegrite
      * Note les imputations signées qui n'existent pas en base, signalées
      * par verifierLesImputations().
      *
-     * @param  list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>  $imputations
+     * @param  list<ImputationSignee>  $imputations
      */
     private function noterLesImputationsIntrouvables(array $imputations): void
     {
@@ -853,7 +876,7 @@ class VerificateurIntegrite
     private function verifierLEnregistrementUniqueDesDocuments(string $alias): void
     {
         [$chaine, $types] = self::enregistrementsDuDocument($alias);
-        $table = (new (self::MODELES[$alias]))->getTable();
+        $table = self::TABLES[$alias];
         $numero = $alias === 'paiement' ? 'null' : "{$table}.numero";
         $contrePasse = $alias === 'paiement' ? "{$table}.contre_passe_paiement_id" : 'null';
 
@@ -889,15 +912,14 @@ class VerificateurIntegrite
                 $nomDeLaChaine = self::nomDeLaChaine(ChaineFiscale::from($chaine));
 
                 if ($nombre !== 1) {
-                    $sequences = $this->enregistrements()
+                    $sequences = ValeursLues::entiers($this->enregistrements()
                         ->where('chaine', $chaine)
                         ->whereIn('type', $types)
                         ->where('document_type', $alias)
                         ->where('document_id', $documentId)
                         ->orderBy('sequence')
                         ->limit(self::LISTE_MAXIMUM)
-                        ->pluck('sequence')
-                        ->all();
+                        ->pluck('sequence'));
 
                     $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', $nombre === 0
                         ? "{$libelle} n'a aucun enregistrement {$nomDeLaChaine}."
@@ -930,7 +952,7 @@ class VerificateurIntegrite
     private function verifierLesDocumentsDesEnregistrements(string $alias): void
     {
         [$chaine, $types] = self::enregistrementsDuDocument($alias);
-        $table = (new (self::MODELES[$alias]))->getTable();
+        $table = self::TABLES[$alias];
         $nature = match ($alias) {
             'facture' => 'une facture introuvable ou jamais numérotée',
             'avoir' => 'un avoir introuvable ou jamais numéroté',
@@ -1015,7 +1037,7 @@ class VerificateurIntegrite
      * une émission, celui de la facture qu'il a réglée à son émission ou
      * le sien.
      *
-     * @param  array{origine: string, origine_id: int, avoir_id?: int, facture_id: int, montant: int|null}  $imputation
+     * @param  ImputationEnBase  $imputation
      */
     private function verifierLImputation(array $imputation): void
     {
@@ -1053,7 +1075,7 @@ class VerificateurIntegrite
      * une seule fois pour les imputations du même document qui se suivent.
      *
      * @param  key-of<self::MODELES>  $alias
-     * @return list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
+     * @return list<ImputationSignee>
      */
     private function imputationsSigneesDuDocument(string $alias, int $documentId): array
     {
@@ -1090,26 +1112,28 @@ class VerificateurIntegrite
      *
      * @param  key-of<self::MODELES>  $alias
      * @param  array<array-key, mixed>  $donnees
-     * @return list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
+     * @return list<ImputationSignee>
      */
     private static function imputationsSignees(string $alias, int $documentId, array $donnees): array
     {
         $entier = static fn (mixed $valeur): ?int => is_int($valeur) ? $valeur : null;
-        $listes = match ($alias) {
-            'paiement' => [
-                [$donnees['allocations'] ?? [], static fn (array $signee): array => ['origine' => 'paiement', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]],
-                [$donnees['credits_imputes'] ?? [], static fn (array $signee): array => ['origine' => 'credit', 'origine_id' => $documentId, 'avoir_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $entier($signee['facture_id'] ?? null)]],
-            ],
-            'facture' => [[$donnees['contexte']['credits_avoir'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $documentId]]],
-            'avoir' => [[$donnees['contexte']['imputations'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]]],
-        };
         $signees = [];
 
-        foreach ($listes as [$imputations, $imputation]) {
-            foreach (is_array($imputations) ? $imputations : [] as $signee) {
-                if (is_array($signee)) {
-                    $signees[] = [...$imputation($signee), 'montant' => $entier($signee['montant'] ?? null)];
-                }
+        if ($alias === 'paiement') {
+            foreach (self::tableauxSignes($donnees['allocations'] ?? []) as $signee) {
+                $signees[] = ['origine' => 'paiement', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null), 'montant' => $entier($signee['montant'] ?? null)];
+            }
+
+            foreach (self::tableauxSignes($donnees['credits_imputes'] ?? []) as $signee) {
+                $signees[] = ['origine' => 'credit', 'origine_id' => $documentId, 'avoir_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $entier($signee['facture_id'] ?? null), 'montant' => $entier($signee['montant'] ?? null)];
+            }
+        } elseif ($alias === 'facture') {
+            foreach (self::tableauxSignes($donnees['contexte']['credits_avoir'] ?? []) as $signee) {
+                $signees[] = ['origine' => 'avoir', 'origine_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $documentId, 'montant' => $entier($signee['montant'] ?? null)];
+            }
+        } else {
+            foreach (self::tableauxSignes($donnees['contexte']['imputations'] ?? []) as $signee) {
+                $signees[] = ['origine' => 'avoir', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null), 'montant' => $entier($signee['montant'] ?? null)];
             }
         }
 
@@ -1117,11 +1141,22 @@ class VerificateurIntegrite
     }
 
     /**
+     * Les tableaux d'une liste signée, dans leur ordre ; ce qui n'en est pas
+     * un (une liste ou une entrée illisible) ne signe aucune imputation.
+     *
+     * @return list<array<array-key, mixed>>
+     */
+    private static function tableauxSignes(mixed $liste): array
+    {
+        return array_values(array_filter(is_array($liste) ? $liste : [], is_array(...)));
+    }
+
+    /**
      * Les allocations en base d'une imputation : un crédit d'avoir imputé
      * par un paiement désigne ce paiement, un crédit imputé à une émission
      * n'en désigne aucun.
      *
-     * @param  array{origine: string, origine_id: int, avoir_id?: int, facture_id: int}  $imputation
+     * @param  ImputationEnBase  $imputation
      * @return Builder<PaiementAllocation>|Builder<AvoirAllocation>
      */
     private static function allocationsDeLImputation(array $imputation): Builder
@@ -1168,7 +1203,7 @@ class VerificateurIntegrite
             ->toBase()
             ->select(['id', 'numero', 'total_ttc'])
             ->chunkById(100, function (Collection $documents) use ($alias, $sommes, $nature): void {
-                [$centimesImputes, $illisibles] = $this->centimesImputesSur($documents->pluck('id')->all(), $sommes);
+                [$centimesImputes, $illisibles] = $this->centimesImputesSur(ValeursLues::entiers($documents->pluck('id')), $sommes);
 
                 foreach ($documents as $document) {
                     $impute = $centimesImputes[$document->id] ?? 0;

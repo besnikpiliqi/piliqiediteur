@@ -115,7 +115,7 @@ class ContrePasserPaiementAction
 
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::CONTRE_PASSER_PAIEMENT, $auteur, ['paiement_id' => $paiementErrone->getKey(), 'motif' => $motif], fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $paiementErrone, $motif, $magasin) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::CONTRE_PASSER_PAIEMENT, Paiement::class, $auteur, ['paiement_id' => $paiementErrone->getKey(), 'motif' => $motif], fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $paiementErrone, $motif, $magasin) {
             $journee = $this->registre->verrouiller($magasin)->jour();
             $original = Paiement::query()->whereKey($paiementErrone->getKey())->firstOrFail();
 
@@ -128,7 +128,7 @@ class ContrePasserPaiementAction
             }
 
             $this->refuserSiLaJourneeEstCloturee($journee, $this->registre->derniereJourneeCloturee($magasin));
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'contrePasser', $magasin, $original);
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 

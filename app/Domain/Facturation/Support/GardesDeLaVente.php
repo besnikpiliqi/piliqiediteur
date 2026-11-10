@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Support;
 
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Support\LitteralSql;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -55,7 +56,7 @@ final class GardesDeLaVente
      * modification se contrôle et la condition qui fait de cette
      * modification une vente attribuée à son auteur.
      *
-     * @var array<string, array{auteur: string, vente: string, modification: array{colonnes: list<string>, condition: string}|null}>
+     * @var array<literal-string, array{auteur: literal-string, vente: literal-string, modification: array{colonnes: list<literal-string>, condition: literal-string}|null}>
      */
     private const TABLES = [
         'enregistrements_fiscaux' => [
@@ -88,6 +89,8 @@ final class GardesDeLaVente
      * modification, la seule qui lise OLD, la ligne d'avant, nulle à
      * l'ajout), et son déclencheur.
      *
+     * @param  literal-string  $table
+     *
      * @throws InvalidArgumentException quand la table n'est pas gardée
      */
     public static function poser(string $table): void
@@ -115,6 +118,8 @@ final class GardesDeLaVente
      * Retire ce qui reste de la garde une fois sa table supprimée : sa
      * fonction ; ses déclencheurs disparaissent avec la table.
      *
+     * @param  literal-string  $table
+     *
      * @throws InvalidArgumentException quand la table n'est pas gardée
      */
     public static function retirer(string $table): void
@@ -125,7 +130,7 @@ final class GardesDeLaVente
     }
 
     /**
-     * @return array{auteur: string, vente: string, modification: array{colonnes: list<string>, condition: string}|null}
+     * @return array{auteur: literal-string, vente: literal-string, modification: array{colonnes: list<literal-string>, condition: literal-string}|null}
      *
      * @throws InvalidArgumentException
      */
@@ -134,6 +139,10 @@ final class GardesDeLaVente
         return self::TABLES[$table] ?? throw new InvalidArgumentException("La table {$table} n'a pas de garde de la vente.");
     }
 
+    /**
+     * @param  literal-string  $table
+     * @return literal-string
+     */
     private static function nom(string $table): string
     {
         return "garde_vente_{$table}";
@@ -145,6 +154,9 @@ final class GardesDeLaVente
      * d'expertise comptable compris), ou un collaborateur d'un cabinet. Le
      * rôle suffit : un compte d'un cabinet a toujours l'un de ces deux
      * rôles, la garde des rôles l'impose (voir GardesDesDroits).
+     *
+     * @param  literal-string  $auteur
+     * @return literal-string
      */
     private static function auteurQuiNeVendJamais(string $auteur): string
     {
@@ -152,10 +164,12 @@ final class GardesDeLaVente
     }
 
     /**
-     * Le message du refus, en littéral SQL (apostrophes doublées).
+     * Le message du refus, en littéral SQL (voir LitteralSql).
+     *
+     * @return literal-string
      */
     private static function message(): string
     {
-        return "'".str_replace("'", "''", self::MESSAGE)."'";
+        return LitteralSql::de(self::MESSAGE);
     }
 }

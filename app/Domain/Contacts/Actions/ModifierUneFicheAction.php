@@ -76,8 +76,12 @@ class ModifierUneFicheAction
     ) {}
 
     /**
+     * @template TFiche of Client|Fournisseur|Produit|Service
+     *
+     * @param  TFiche  $fiche
      * @param  array<string, mixed>  $ficheLue  la fiche telle que le formulaire l'a lue (voir FicheLue::valeurs())
      * @param  array<string, mixed>  $saisie  les attributs que le formulaire envoie
+     * @return TFiche
      *
      * @throws AuthorizationException
      * @throws LogicException
@@ -88,7 +92,7 @@ class ModifierUneFicheAction
         $corrections = $lue->corrections($saisie);
 
         try {
-            return DB::transaction(function () use ($auteur, $fiche, $lue, $corrections): Client|Fournisseur|Produit|Service {
+            return DB::transaction(function () use ($auteur, $fiche, $lue, $corrections) {
                 $magasin = app(TenantContext::class)->magasin();
 
                 if ($fiche instanceof Produit && array_intersect_key($corrections, array_flip(Produit::parametresDeConformite())) !== []) {
@@ -98,8 +102,12 @@ class ModifierUneFicheAction
                 Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
                 $compte = $this->lecteur->exigerSousVerrou($auteur, 'updateAny', $magasin, $fiche::class);
 
-                $relue = $fiche->newQueryWithoutScope(SoftDeletingScope::class)->whereKey($fiche->getKey())->lockForUpdate()->first()
-                    ?? throw new LogicException(ArchiverUneFicheAction::REFUS_INTROUVABLE);
+                $relue = $fiche->newQueryWithoutScope(SoftDeletingScope::class)->whereKey($fiche->getKey())->lockForUpdate()->first();
+                $classe = $fiche::class;
+
+                if (! $relue instanceof $classe) {
+                    throw new LogicException(ArchiverUneFicheAction::REFUS_INTROUVABLE);
+                }
 
                 if (! $relue instanceof Service && $relue->trashed()) {
                     throw new LogicException(self::REFUS_ARCHIVEE);

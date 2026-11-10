@@ -189,10 +189,11 @@ class DocumentMail extends Mailable
      */
     private function paragraphesDuMessage(): array
     {
-        return collect(preg_split('/\R/', (string) $this->envoi->message))
+        $lignes = preg_split('/\R/', (string) $this->envoi->message);
+
+        return array_values(collect($lignes !== false ? $lignes : throw new LogicException('Le message de l\'envoi ne se découpe pas en paragraphes.'))
             ->map(fn (string $ligne): string => trim($ligne))
             ->filter(fn (string $ligne): bool => $ligne !== '')
-            ->values()
-            ->all();
+            ->all());
     }
 }

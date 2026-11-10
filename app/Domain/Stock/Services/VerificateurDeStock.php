@@ -104,10 +104,9 @@ class VerificateurDeStock
      */
     private function manquesParmi(Collection $produits, array $quantites): array
     {
-        return $produits
+        return array_values($produits
             ->filter(fn (Produit $produit): bool => $produit->suivi_stock && $produit->stock_quantite - $quantites[$produit->getKey()] < 0)
             ->map(fn (Produit $produit): ManqueDeStock => new ManqueDeStock($produit->getKey(), $produit->nom, (string) $produit->reference, $produit->stock_quantite, $quantites[$produit->getKey()]))
-            ->values()
-            ->all();
+            ->all());
     }
 }

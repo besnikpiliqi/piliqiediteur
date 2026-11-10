@@ -171,7 +171,7 @@ class ConstructeurLigneDocument
      * TTC et son taux (voir Service::vendAuPrixDeReferenceSansTva()) ; un
      * autre prix saisi pour un service y est déjà sans TVA.
      *
-     * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|int|string|null, taux_tva?: float|int|string|null, remise_pourcentage?: float|int|string|null}  $donnees
+     * @param  array<array-key, mixed>  $donnees  la ligne telle que l'écran, l'API ou un panier de la caisse la saisit (produit_id, service_id, quantite, prix_unitaire_ttc, taux_tva, remise_pourcentage), chaque valeur lue par sa vérification
      * @param  Collection<int, Produit>  $produits  les produits des lignes, archivés compris (voir catalogue())
      * @param  Collection<int, Service>  $services  les services des lignes
      * @return array<string, mixed>

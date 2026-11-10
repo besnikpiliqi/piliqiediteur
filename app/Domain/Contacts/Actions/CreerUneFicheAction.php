@@ -41,6 +41,8 @@ use LogicException;
  */
 class CreerUneFicheAction
 {
+    public const REFUS_CLASSE = 'La fiche créée n\'est pas de la classe demandée.';
+
     public function __construct(
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
@@ -59,7 +61,7 @@ class CreerUneFicheAction
     public function handle(User $auteur, string $classe, array $attributs): Client|Fournisseur|Service
     {
         try {
-            return DB::transaction(function () use ($auteur, $classe, $attributs): Client|Fournisseur|Service {
+            return DB::transaction(function () use ($auteur, $classe, $attributs) {
                 $magasin = app(TenantContext::class)->magasin();
                 Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
                 $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, $classe);
@@ -68,7 +70,9 @@ class CreerUneFicheAction
                     $this->lecteur->exiger($compte, PermissionRegistry::VENTE_REMISES_ET_PRIX, $magasin);
                 }
 
-                return $this->operateur->pendant($compte, fn (): Client|Fournisseur|Service => $classe::query()->create($attributs));
+                $fiche = $this->operateur->pendant($compte, fn () => $classe::query()->create($attributs));
+
+                return $fiche instanceof $classe ? $fiche : throw new LogicException(self::REFUS_CLASSE);
             });
         } catch (UniqueConstraintViolationException $doublon) {
             throw DoublonDUneFiche::refus($classe, $doublon);

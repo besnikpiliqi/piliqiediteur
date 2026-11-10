@@ -69,7 +69,7 @@ class TvaDuFournisseur
             $ecarts[$taux] = new EcartsDUnTaux(
                 $this->calculateur->enCentiemes($taux),
                 $this->calculateur->enCentiemes($montants['montant_ht']),
-                $this->calculateur->enCentiemes($montants['montant_tva_calcule']),
+                $this->calculateur->enCentiemes($document->tvaProposee($taux)),
                 $this->calculateur->enCentiemes($montants['montant_tva']),
                 array_values(array_map(fn (array $ligne): array => [
                     'description' => $ligne['description'],

@@ -123,9 +123,9 @@ class ModifierFactureAction
      */
     private function modifier(User $compte, Facture $facture, Client $client, array $lignes, array $attributs): Facture
     {
-        $avant = $facture->lignes
+        $avant = array_values($facture->lignes
             ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
-            ->all();
+            ->all());
 
         $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
         $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
@@ -138,10 +138,10 @@ class ModifierFactureAction
             $facture->lignes()->create($ligne);
         }
 
-        $apres = array_map(
+        $apres = array_values(array_map(
             fn (array $ligne): array => $this->lignesRetirees->comparable($ligne['produit_id'], $ligne['service_id'], $ligne['description'], $ligne['quantite'], $ligne['prix_unitaire_ttc']),
             $document->lignes,
-        );
+        ));
 
         foreach ($this->lignesRetirees->entre($avant, $apres) as $retrait) {
             $this->registre->journaliser(CodeEvenement::LigneRetiree, ['origine' => 'brouillon', 'facture_id' => $facture->getKey(), ...$retrait]);

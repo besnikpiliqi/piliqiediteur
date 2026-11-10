@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Tenancy\Support\ResultatDePhp;
 use Dompdf\Dompdf;
 use Dompdf\FontMetrics;
 use Illuminate\Support\Number;
@@ -113,18 +114,18 @@ final readonly class TableauDesLignes
             ['titre' => $enTtc ? 'Total TTC' : 'Total HT', 'montant' => true],
         ];
 
-        $lignes = $document->lignes->map(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): array => [
+        $lignes = array_values($document->lignes->map(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): array => [
             'reference' => $ligne->reference ?? '',
             'designation' => $ligne->description,
             'factureDOrigine' => $ligne instanceof LigneAvoir ? ($ligne->ligneFacture?->facture->numero ?? '—') : null,
             'montants' => array_values(array_filter([
-                Number::format($ligne->quantite, locale: 'fr'),
+                ResultatDePhp::texte(Number::format($ligne->quantite, locale: 'fr'), 'Le format de la quantité'),
                 $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($enTtc ? $ligne->prix_unitaire_ttc : $ligne->prix_unitaire_ht)),
                 $avecRemise ? $pourcentage($ligne->remise_pourcentage) : null,
                 $pourcentage($ligne->taux_tva),
                 $calculateur->enEuros($calculateur->enCentiemes($enTtc ? $ligne->montant_ttc : $ligne->montant_ht)),
             ], fn (?string $texte): bool => $texte !== null)),
-        ])->values()->all();
+        ])->all());
 
         return self::mesure($titres, $lignes, app(Dompdf::class)->getFontMetrics());
     }

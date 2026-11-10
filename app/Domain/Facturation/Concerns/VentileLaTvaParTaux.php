@@ -88,7 +88,7 @@ trait VentileLaTvaParTaux
      */
     private static function ventilerParTaux(Collection $lignes): array
     {
-        return $lignes
+        return array_values($lignes
             ->groupBy(fn (array $ligne): string => number_format((float) $ligne['taux_tva'], 2, '.', ''))
             ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
             ->map(function (Collection $lignesDuTaux, string $tauxTva): array {
@@ -101,7 +101,6 @@ trait VentileLaTvaParTaux
                     'montant_ttc' => $totaux['total_ttc'],
                 ];
             })
-            ->values()
-            ->all();
+            ->all());
     }
 }

@@ -97,7 +97,7 @@ class EnvoyerDocumentAction
         $destinataire = $this->destinataireValide($destinataire);
         $parametres = ['document' => [$document->getMorphClass(), $document->getKey()], 'destinataire' => $destinataire, 'message' => $message];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENVOYER_DOCUMENT, $auteur, $parametres, self::premierVerrou($auteur), fn (): EnvoiDocument => DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENVOYER_DOCUMENT, EnvoiDocument::class, $auteur, $parametres, self::premierVerrou($auteur), fn (): EnvoiDocument => DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
             $expediteur = $this->expediteur($auteur, $document);
             $document = $this->verrouiller($document);
             $this->verifierLeDebit($document, $expediteur);
@@ -107,7 +107,7 @@ class EnvoyerDocumentAction
             }
 
             if (! $document->peutEtreEnvoye()) {
-                throw new LogicException("Impossible d'envoyer ce document au statut « {$document->statut->getLabel()} ».");
+                throw new LogicException($document instanceof RecuPaiement ? self::REFUS_INTROUVABLE : "Impossible d'envoyer ce document au statut « {$document->statut->getLabel()} ».");
             }
 
             if ($document instanceof Facture && $document->statut === StatutFacture::Emise) {
@@ -148,7 +148,7 @@ class EnvoyerDocumentAction
     {
         $destinataire = $this->destinataireValide($destinataire);
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::RELANCER_FACTURE, $auteur, ['facture_id' => $facture->getKey(), 'destinataire' => $destinataire], self::premierVerrou($auteur), fn (): EnvoiDocument => DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture))));
+        return $this->actionsUniques->executer($jeton, ActionsUniques::RELANCER_FACTURE, EnvoiDocument::class, $auteur, ['facture_id' => $facture->getKey(), 'destinataire' => $destinataire], self::premierVerrou($auteur), fn (): EnvoiDocument => DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture))));
     }
 
     /**
@@ -288,10 +288,11 @@ class EnvoyerDocumentAction
      */
     private function relire(DocumentEnvoyable $document, bool $sousVerrou): DocumentEnvoyable
     {
-        $requete = $document::query()->whereKey($document->getKey());
+        $requete = $document->newQuery()->whereKey($document->getKey());
+        $relu = ($sousVerrou && ! $document instanceof RecuPaiement ? $requete->lockForUpdate() : $requete)->first();
+        $classe = $document::class;
 
-        return ($sousVerrou && ! $document instanceof RecuPaiement ? $requete->lockForUpdate() : $requete)->first()
-            ?? throw new LogicException(self::REFUS_INTROUVABLE);
+        return $relu instanceof $classe ? $relu : throw new LogicException(self::REFUS_INTROUVABLE);
     }
 
     /**

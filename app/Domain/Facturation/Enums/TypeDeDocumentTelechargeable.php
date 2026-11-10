@@ -10,6 +10,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use Filament\Support\Contracts\HasLabel;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Les types de documents du téléchargement par période (décision de
@@ -63,7 +64,7 @@ enum TypeDeDocumentTelechargeable: string implements HasLabel
      * AvoirFournisseurPolicy, ClotureCaissePolicy et PaiementPolicy) : un
      * type qu'on ne peut pas voir n'est pas proposé.
      *
-     * @return class-string
+     * @return class-string<Model>
      */
     public function modele(): string
     {

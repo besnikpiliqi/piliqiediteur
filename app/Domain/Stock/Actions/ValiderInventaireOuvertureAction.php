@@ -106,7 +106,7 @@ class ValiderInventaireOuvertureAction
             ActionsUniques::verrouDe($auteur)();
         };
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_INVENTAIRE_OUVERTURE, $auteur, ['inventaire_ouverture_id' => $inventaire->getKey()], $verrou, fn (): InventaireOuverture => DB::transaction(function () use ($auteur, $inventaire, $magasin): InventaireOuverture {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_INVENTAIRE_OUVERTURE, InventaireOuverture::class, $auteur, ['inventaire_ouverture_id' => $inventaire->getKey()], $verrou, fn (): InventaireOuverture => DB::transaction(function () use ($auteur, $inventaire, $magasin): InventaireOuverture {
             $this->registre->verrouiller($magasin);
             $magasinRelu = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
             $magasinRelu->verifierQuIlEstOuvert();

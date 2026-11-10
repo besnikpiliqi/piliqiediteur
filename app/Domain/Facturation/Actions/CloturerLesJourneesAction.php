@@ -112,6 +112,7 @@ class CloturerLesJourneesAction
         $demande = $this->actionsUniques->executerParEtapes(
             $jeton,
             ActionsUniques::CLOTURER_LA_JOURNEE,
+            ClotureCaisse::class,
             $auteur,
             ['jour' => $jour],
             fn () => $this->registre->verrouiller($magasin),

@@ -340,7 +340,7 @@ final class Calendrier
      */
     public static function nomDuMois(int $mois): string
     {
-        return ucfirst(CarbonImmutable::create(2000, $mois, 1, 0, 0, 0, 'UTC')->locale('fr')->translatedFormat('F'));
+        return ucfirst(CarbonImmutable::create(2000, $mois, 1, 0, 0, 0, 'UTC')->settings(['locale' => 'fr'])->translatedFormat('F'));
     }
 
     /**

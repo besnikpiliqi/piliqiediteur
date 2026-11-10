@@ -465,7 +465,7 @@ final class DocumentsDeLaPeriode
      */
     private function relevesDesEncaissements(User $compte, Magasin $magasin, string $nom, Calendrier $calendrier, string $du, string $au, bool $deLEquipe): array
     {
-        return $this->paiementsVisibles($compte, $calendrier, $du, $au)
+        return array_values($this->paiementsVisibles($compte, $calendrier, $du, $au)
             ->get(['id', 'montant', 'created_at'])
             ->groupBy(fn (Paiement $paiement): string => substr($calendrier->jourDe($paiement->created_at), 0, 7))
             ->map(fn (Collection $paiements, string $mois): DocumentTrouve => new DocumentTrouve(
@@ -479,7 +479,6 @@ final class DocumentsDeLaPeriode
                 (int) $paiements->sum(fn (Paiement $paiement): int => $this->calculateur->enCentiemes($paiement->montant)),
                 porteeDuReleve: $deLEquipe ? DocumentTrouve::RELEVE_DE_L_EQUIPE : DocumentTrouve::RELEVE_DE_LA_PERSONNE,
             ))
-            ->values()
-            ->all();
+            ->all());
     }
 }

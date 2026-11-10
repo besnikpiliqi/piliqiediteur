@@ -65,6 +65,9 @@ use InvalidArgumentException;
  */
 final class DeclencheursDeProtection
 {
+    /**
+     * @param  literal-string  $table
+     */
     public static function ajoutSeul(string $table): void
     {
         self::poser($table, 'ajout_seul', [
@@ -74,6 +77,9 @@ final class DeclencheursDeProtection
         ]);
     }
 
+    /**
+     * @param  literal-string  $table
+     */
     public static function sansSuppression(string $table): void
     {
         self::poser($table, 'sans_suppression', [
@@ -82,6 +88,9 @@ final class DeclencheursDeProtection
         ]);
     }
 
+    /**
+     * @param  literal-string  $table
+     */
     public static function effacementApresExpiration(string $table): void
     {
         self::poser($table, 'effacement_apres_expiration', [
@@ -101,7 +110,8 @@ final class DeclencheursDeProtection
      * relation et figée ensuite, voir FinDeLaRelation) ; le journal d'audit
      * ne la donne qu'aux entrées de sa catégorie de la vérification.
      *
-     * @param  string|null  $categorie  la seule catégorie de lignes que la fin de la relation laisse effacer (categorie), null pour toutes
+     * @param  literal-string  $table
+     * @param  literal-string|null  $categorie  la seule catégorie de lignes que la fin de la relation laisse effacer (categorie), null pour toutes
      */
     public static function effacementApresExpirationOuFinDeLaRelation(string $table, ?string $categorie = null): void
     {
@@ -121,7 +131,9 @@ final class DeclencheursDeProtection
      * serveur de base. Qui efface ces lignes les choisit par elle, comme
      * par conditionDExpiration().
      *
-     * @param  string|null  $categorie  la seule catégorie de lignes concernée, null pour toutes
+     * @param  literal-string  $table
+     * @param  literal-string|null  $categorie  la seule catégorie de lignes concernée, null pour toutes
+     * @return literal-string
      */
     public static function conditionDeFinDeLaRelation(string $table, ?string $categorie = null): string
     {
@@ -131,7 +143,8 @@ final class DeclencheursDeProtection
     }
 
     /**
-     * @param  string  $colonne  la fin de la conservation d'une ligne, nulle tant qu'elle n'est pas fixée
+     * @param  literal-string  $table
+     * @param  literal-string  $colonne  la fin de la conservation d'une ligne, nulle tant qu'elle n'est pas fixée
      */
     public static function suppressionApresConservation(string $table, string $colonne): void
     {
@@ -150,8 +163,10 @@ final class DeclencheursDeProtection
      * colonne (refus_<table>_<colonne>) et un déclencheur BEFORE UPDATE OF
      * <colonne>.
      *
-     * @param  string|null  $remplacableTantQue  une condition SQL sur l'ancienne ligne (OLD), tant que tient laquelle une valeur renseignée peut encore être remplacée par une autre (jamais effacée) ; null pour ne jamais la remplacer
-     * @param  string|null  $poseeSeulementSi  une condition SQL sur la nouvelle ligne (NEW), sans laquelle une valeur ne se pose pas sur la colonne nulle ; null pour la laisser se poser sur toute ligne
+     * @param  literal-string  $table
+     * @param  literal-string  $colonne
+     * @param  literal-string|null  $remplacableTantQue  une condition SQL sur l'ancienne ligne (OLD), tant que tient laquelle une valeur renseignée peut encore être remplacée par une autre (jamais effacée) ; null pour ne jamais la remplacer
+     * @param  literal-string|null  $poseeSeulementSi  une condition SQL sur la nouvelle ligne (NEW), sans laquelle une valeur ne se pose pas sur la colonne nulle ; null pour la laisser se poser sur toute ligne
      */
     public static function colonneFigee(string $table, string $colonne, ?string $remplacableTantQue = null, ?string $poseeSeulementSi = null): void
     {
@@ -174,6 +189,9 @@ final class DeclencheursDeProtection
     /**
      * Retire la fonction de refus d'une colonne figée (voir colonneFigee())
      * une fois sa table supprimée.
+     *
+     * @param  literal-string  $table
+     * @param  literal-string  $colonne
      */
     public static function retirerLaColonneFigee(string $table, string $colonne): void
     {
@@ -191,6 +209,9 @@ final class DeclencheursDeProtection
      * app:purger-traces) les choisit par elle : l'heure de l'application,
      * que peut devancer celle du serveur de base, ne ferait refuser tout un
      * lot pour une seule ligne.
+     *
+     * @param  literal-string  $colonne
+     * @return literal-string
      */
     public static function conditionDExpiration(string $colonne = 'expire_le'): string
     {
@@ -204,6 +225,8 @@ final class DeclencheursDeProtection
      * supprimée : sa fonction de refus. Sans CASCADE : tant que la table
      * existe, ses déclencheurs dépendent de la fonction et PostgreSQL
      * refuse de la retirer.
+     *
+     * @param  literal-string  $table
      */
     public static function retirer(string $table): void
     {
@@ -221,10 +244,11 @@ final class DeclencheursDeProtection
      * passée à l'heure UTC du serveur, ou qui remplit l'autre condition de
      * sa protection.
      *
-     * @param  string  $protection  le suffixe du nom des déclencheurs
-     * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus  le message de refus de chaque opération
-     * @param  string|null  $colonneDExpiration  la colonne au-delà de laquelle la suppression d'une ligne passe, null pour la refuser toujours
-     * @param  string|null  $suppressionAussiPermise  une autre condition SQL sur la ligne effacée (OLD) sous laquelle sa suppression passe aussi
+     * @param  literal-string  $table
+     * @param  literal-string  $protection  le suffixe du nom des déclencheurs
+     * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', literal-string>  $refus  le message de refus de chaque opération
+     * @param  literal-string|null  $colonneDExpiration  la colonne au-delà de laquelle la suppression d'une ligne passe, null pour la refuser toujours
+     * @param  literal-string|null  $suppressionAussiPermise  une autre condition SQL sur la ligne effacée (OLD) sous laquelle sa suppression passe aussi
      */
     private static function poser(string $table, string $protection, array $refus, ?string $colonneDExpiration = null, ?string $suppressionAussiPermise = null): void
     {
@@ -258,7 +282,8 @@ final class DeclencheursDeProtection
      * fuseau écrit en UTC (voir Instant), renseignée et passée à l'heure
      * UTC du serveur de base (now() AT TIME ZONE 'UTC').
      *
-     * @param  string  $colonne  la colonne (expire_le), ou celle de la ligne qu'un déclencheur efface (OLD.expire_le)
+     * @param  literal-string  $colonne  la colonne (expire_le), ou celle de la ligne qu'un déclencheur efface (OLD.expire_le)
+     * @return literal-string
      */
     private static function ligneExpiree(string $colonne): string
     {
@@ -271,6 +296,9 @@ final class DeclencheursDeProtection
      * résiliée (étape 12). Seule une telle société reçoit la fin de la
      * conservation de ses données de vérification (voir FinDeLaRelation),
      * et seules ses données s'effacent une fois cette fin passée.
+     *
+     * @param  literal-string  $ligne
+     * @return literal-string
      */
     public static function relationFinie(string $ligne = 'NEW'): string
     {
@@ -286,7 +314,9 @@ final class DeclencheursDeProtection
      * l'heure UTC du serveur de base, la fin de la conservation de ses
      * données de vérification.
      *
-     * @param  string  $ligne  la ligne (OLD dans un déclencheur, le nom de sa table dans une requête)
+     * @param  literal-string  $ligne  la ligne (OLD dans un déclencheur, le nom de sa table dans une requête)
+     * @param  literal-string|null  $categorie
+     * @return literal-string
      */
     private static function finDeLaRelationPassee(string $ligne, ?string $categorie): string
     {

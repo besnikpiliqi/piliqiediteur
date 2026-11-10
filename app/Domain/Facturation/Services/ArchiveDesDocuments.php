@@ -130,7 +130,7 @@ final class ArchiveDesDocuments
             return [[$this->fiches->nomFichier($document), $this->fiches->generer($document)->output()]];
         }
 
-        return $pieces->map(fn (PieceDuFournisseur $piece): array => [$document->numero.' - '.$piece->nom_origine, $this->pieces->contenu($piece)])->all();
+        return array_values($pieces->map(fn (PieceDuFournisseur $piece): array => [$document->numero.' - '.$piece->nom_origine, $this->pieces->contenu($piece)])->all());
     }
 
     /**

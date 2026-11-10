@@ -94,7 +94,7 @@ class FermerSaCaisseAction
     {
         $saPropreCaisse = $auteur->is($vendeur);
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::FERMER_UNE_CAISSE, $auteur, ['vendeur_id' => $vendeur->getKey()], ActionsUniques::verrouDe($auteur, $vendeur), fn (): ClotureCaissePersonnelle => DB::transaction(function () use ($auteur, $vendeur, $saPropreCaisse): ClotureCaissePersonnelle {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::FERMER_UNE_CAISSE, ClotureCaissePersonnelle::class, $auteur, ['vendeur_id' => $vendeur->getKey()], ActionsUniques::verrouDe($auteur, $vendeur), fn (): ClotureCaissePersonnelle => DB::transaction(function () use ($auteur, $vendeur, $saPropreCaisse): ClotureCaissePersonnelle {
             User::query()->whereKey([$auteur->getKey(), $vendeur->getKey()])->orderBy('id')->lock('for no key update')->get();
             $magasin = app(TenantContext::class)->magasin();
             $compte = $saPropreCaisse

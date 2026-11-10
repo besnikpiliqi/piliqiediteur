@@ -95,14 +95,14 @@ class EncaisserEnPlusieursModesAction
         $bonsDAvoir = PartDeReglement::numerosDesBons($bonsDAvoir);
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENCAISSER_EN_PLUSIEURS_MODES, $auteur, [
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENCAISSER_EN_PLUSIEURS_MODES, Facture::class, $auteur, [
             'facture_id' => $facture->getKey(),
             'parts' => array_map(fn (PartDeReglement $part): array => $part->enTableau(), $parts),
             'bons_d_avoir' => $bonsDAvoir,
             'recu_le' => $recuLe,
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $parts, $bonsDAvoir, $recuLe, $magasin): Facture {
             $this->registre->verrouiller($magasin);
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            Magasin::query()->whereKey($magasin->getKey())->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
             $this->lecteur->exiger($compte, 'encaisser', $magasin, $facture);
@@ -151,7 +151,7 @@ class EncaisserEnPlusieursModesAction
             throw new LogicException(Avoir::BON_D_AVOIR_HORS_DE_LA_CAISSE);
         }
 
-        return array_map(function (string $numero): Avoir {
+        return array_values(array_map(function (string $numero): Avoir {
             $bon = Avoir::query()->bonDAvoir($numero)->lockForUpdate()->first();
 
             if ($bon === null || $bon->creditEnCentimes() <= 0) {
@@ -159,7 +159,7 @@ class EncaisserEnPlusieursModesAction
             }
 
             return $bon;
-        }, $numeros);
+        }, $numeros));
     }
 
     /**

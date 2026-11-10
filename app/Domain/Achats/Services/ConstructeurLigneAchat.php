@@ -139,7 +139,7 @@ class ConstructeurLigneAchat
     public function verrouillerLeRegistreSiUnTauxChange(array $lignes): void
     {
         $changeUnTaux = collect($lignes)->contains(function (array $donnees): bool {
-            $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->find($donnees['produit_id']) : null;
+            $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->whereKey($donnees['produit_id'])->first() : null;
 
             return $produit !== null && self::corrigeUnParametreDeConformite($produit, $donnees);
         });
@@ -186,7 +186,7 @@ class ConstructeurLigneAchat
      * identifiant croissant (voir Produit::verrouillerPourLeStock()), après
      * la facture d'achat que l'action a verrouillée ou créée.
      *
-     * @param  array<array-key, array{produit_id?: int|string|null, produit?: array<string, mixed>, fiche_lue?: array<string, mixed>|null, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null, montant_ht?: float|string|null}>  $lignes
+     * @param  array<array-key, array<string, mixed>>  $lignes  chaque ligne telle que l'écran ou l'API la saisit (produit_id ou produit, fiche_lue, quantite, prix_unitaire_ht, taux_tva, remise_pourcentage, montant_ht), chaque valeur lue par sa vérification
      *
      * @throws InvalidArgumentException
      * @throws LogicException
@@ -292,8 +292,8 @@ class ConstructeurLigneAchat
      * ligne, chaque fiche gardée ne servant qu'une fois, et ne valide pas
      * ce brouillon (voir ValiderFactureAchatAction).
      *
-     * @param  list<LigneAchat>  $lignes
-     * @param  list<array<string, mixed>>  $fichesDejaSaisies  voir ficheComparable()
+     * @param  array<array-key, LigneAchat>  $lignes  dans leur ordre
+     * @param  array<int, array<string, mixed>>  $fichesDejaSaisies  voir ficheComparable()
      */
     private function verifierLesNouveauxProduits(User $auteur, array $lignes, array $fichesDejaSaisies): void
     {
@@ -560,7 +560,7 @@ class ConstructeurLigneAchat
         $attributs = self::attributsDuProduit($donnees);
 
         if (filled($donnees['produit_id'] ?? null)) {
-            $produit = Produit::withTrashed()->findOrFail($donnees['produit_id']);
+            $produit = Produit::withTrashed()->whereKey($donnees['produit_id'])->firstOrFail();
 
             if ($produit->trashed()) {
                 throw new LogicException("Le produit « {$produit->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.");

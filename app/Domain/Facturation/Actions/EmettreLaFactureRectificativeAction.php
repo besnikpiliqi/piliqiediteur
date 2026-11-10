@@ -84,7 +84,7 @@ class EmettreLaFactureRectificativeAction
     {
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_LA_FACTURE_RECTIFICATIVE, $auteur, ['facture_id' => $facture->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $magasin): Facture {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_LA_FACTURE_RECTIFICATIVE, Facture::class, $auteur, ['facture_id' => $facture->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $magasin): Facture {
             $this->registre->verrouiller($magasin);
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);

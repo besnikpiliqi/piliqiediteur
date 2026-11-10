@@ -70,7 +70,7 @@ class EnregistrerAvoirAction
             'motif' => $motif,
         ];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $magasin): Avoir {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR, Avoir::class, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $magasin): Avoir {
             $this->registre->verrouiller($magasin);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 

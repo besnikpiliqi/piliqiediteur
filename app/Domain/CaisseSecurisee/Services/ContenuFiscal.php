@@ -130,15 +130,14 @@ class ContenuFiscal
                 'sequence' => $this->sequenceDeLEncaissement((int) $paiement->contre_passe_paiement_id),
             ] : null,
             'client' => $this->client($paiement->client),
-            'allocations' => $paiement->allocations->sortBy('id')
+            'allocations' => array_values($paiement->allocations->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
                     'facture_id' => (int) $allocation->facture_id,
                     'numero' => $allocation->facture->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
-                ->values()
-                ->all(),
-            'credits_imputes' => $paiement->creditsImputes->sortBy('id')
+                ->all()),
+            'credits_imputes' => array_values($paiement->creditsImputes->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'avoir_id' => (int) $allocation->avoir_id,
                     'avoir_numero' => $allocation->avoir->numero,
@@ -146,8 +145,7 @@ class ContenuFiscal
                     'facture_numero' => $allocation->facture->numero,
                     'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
                 ])
-                ->values()
-                ->all(),
+                ->all()),
         ];
     }
 
@@ -330,11 +328,11 @@ class ContenuFiscal
                 'facture_id' => (int) $ligne->ligneFacture->facture_id,
                 'numero' => $ligne->ligneFacture->facture->numero,
             ]] : []),
-        ])->values();
+        ]);
 
         return [
-            'lignes' => $lignesSignees->all(),
-            'ventilation' => $lignesSignees
+            'lignes' => array_values($lignesSignees->all()),
+            'ventilation' => array_values($lignesSignees
                 ->groupBy('taux_tva')
                 ->sortKeysDesc()
                 ->map(fn (Collection $lignesDuTaux, int $taux): array => [
@@ -343,8 +341,7 @@ class ContenuFiscal
                     'tva' => $lignesDuTaux->sum('tva'),
                     'ttc' => $lignesDuTaux->sum('ttc'),
                 ])
-                ->values()
-                ->all(),
+                ->all()),
             'totaux' => [
                 'ht' => $sens * $this->calculateur->enCentiemes($document->total_ht),
                 'tva' => $sens * $this->calculateur->enCentiemes($document->total_tva),

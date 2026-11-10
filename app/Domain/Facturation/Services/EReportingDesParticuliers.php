@@ -235,17 +235,20 @@ class EReportingDesParticuliers
                 ->flatMap(fn (Avoir $avoir): array => $avoir->lignes->map(fn (LigneAvoir $ligne): array => $this->transaction($avoir, $ligne, -1))->all()),
         ]);
         $ordre = array_flip(array_map(fn (CategorieEReporting $categorie): string => $categorie->value, CategorieEReporting::cases()));
+        $groupes = [];
 
-        return $lignes
-            ->groupBy(fn (array $ligne): string => implode('|', [$ligne['categorie']->value, $ligne['taux'], $ligne['motif']]))
-            ->map(fn (Collection $groupe): array => [
-                ...$groupe->first(),
-                'ht' => (int) $groupe->sum('ht'),
-                'tva' => (int) $groupe->sum('tva'),
-            ])
-            ->sort(fn (array $a, array $b): int => [$ordre[$a['categorie']->value], -$a['taux'], (string) $a['motif']] <=> [$ordre[$b['categorie']->value], -$b['taux'], (string) $b['motif']])
-            ->values()
-            ->all();
+        // Une transaction par catégorie, taux et motif : la première de
+        // chacune, ses montants additionnés à ceux des suivantes.
+        foreach ($lignes as $ligne) {
+            $cle = implode('|', [$ligne['categorie']->value, $ligne['taux'], $ligne['motif']]);
+            $groupes[$cle] = array_key_exists($cle, $groupes)
+                ? [...$groupes[$cle], 'ht' => $groupes[$cle]['ht'] + $ligne['ht'], 'tva' => $groupes[$cle]['tva'] + $ligne['tva']]
+                : $ligne;
+        }
+
+        uasort($groupes, fn (array $a, array $b): int => [$ordre[$a['categorie']->value], -$a['taux'], (string) $a['motif']] <=> [$ordre[$b['categorie']->value], -$b['taux'], (string) $b['motif']]);
+
+        return array_values($groupes);
     }
 
     /**
@@ -578,14 +581,13 @@ class EReportingDesParticuliers
      */
     private function groupes(Facture $ticket): array
     {
-        return $ticket->lignes
+        return array_values($ticket->lignes
             ->groupBy(fn (LigneFacture $ligne): string => $ligne->nature->value.'|'.$this->calculateur->enCentiemes($ligne->taux_tva))
             ->map(fn (Collection $lignes): array => [
                 'nature' => $lignes->first()->nature,
                 'taux' => $this->calculateur->enCentiemes($lignes->first()->taux_tva),
                 'ttc' => (int) $lignes->sum(fn (LigneFacture $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)),
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 }

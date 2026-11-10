@@ -30,7 +30,7 @@ class NotifierLeStockNegatif
         $magasin = Magasin::query()->findOrFail($event->produit->magasin_id);
 
         app(TenantContext::class)->runAs($magasin, function () use ($magasin, $event): void {
-            $produit = Produit::withTrashed()->find($event->produit->getKey());
+            $produit = Produit::withTrashed()->whereKey($event->produit->getKey())->first();
 
             if ($produit === null || ! $produit->estEnStockNegatif()) {
                 return;

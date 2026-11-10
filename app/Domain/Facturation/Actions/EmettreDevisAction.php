@@ -80,7 +80,7 @@ class EmettreDevisAction
             ActionsUniques::verrouDe($auteur)();
         };
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_DEVIS, $auteur, ['devis_id' => $devis->getKey()], $verrou, fn (): Devis => DB::transaction(function () use ($auteur, $devis, $magasin) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_DEVIS, Devis::class, $auteur, ['devis_id' => $devis->getKey()], $verrou, fn (): Devis => DB::transaction(function () use ($auteur, $devis, $magasin) {
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::DEVIS_ENVOYER, $magasin);
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->first()

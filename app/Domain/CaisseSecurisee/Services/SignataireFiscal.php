@@ -260,10 +260,14 @@ class SignataireFiscal
      * donneraient d'autres octets, donc un autre cle_id, pour la même clé.
      * OpenSSL rend aussi chaque coordonnée sans ses octets nuls de tête,
      * d'où le complément à 32 octets.
+     *
+     * @throws RuntimeException OpenSSL ne donne pas le détail de la clé
      */
     private static function spki(OpenSSLAsymmetricKey $cle): string
     {
-        $coordonnees = openssl_pkey_get_details($cle)['ec'];
+        ErreursOpenSsl::oublier();
+        $details = openssl_pkey_get_details($cle);
+        $coordonnees = ($details !== false ? $details : throw new RuntimeException('OpenSSL ne donne pas le détail de la clé ECDSA P-256. '.ErreursOpenSsl::detail()))['ec'];
 
         return hex2bin(self::ENTETE_SPKI_P256)."\x04"
             .str_pad($coordonnees['x'], 32, "\0", STR_PAD_LEFT)

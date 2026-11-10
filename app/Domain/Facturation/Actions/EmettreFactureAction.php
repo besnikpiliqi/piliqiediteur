@@ -215,7 +215,7 @@ class EmettreFactureAction
             $reglement = null;
         }
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, $auteur, [
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, Facture::class, $auteur, [
             'facture_id' => $facture->getKey(),
             'reglement' => $reglement?->enTableau(),
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $reglement, $confirmation, $magasin) {

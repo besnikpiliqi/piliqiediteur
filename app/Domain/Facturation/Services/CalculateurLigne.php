@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use InvalidArgumentException;
 
 /**
@@ -254,8 +255,17 @@ class CalculateurLigne
             }
         }
 
-        $montants = array_map(fn (array $ligne): array => [...$ligne, 'montant_ttc' => $ligne['montant_ht'] + $ligne['montant_tva']], $montants);
-        $ventilation = $this->ventiler($montants);
+        // Les montants de chaque ligne, relus comme des entiers (la
+        // répartition d'un écart les rend sans forme connue), et son TTC.
+        $lignesAvecTtc = [];
+
+        foreach ($montants as $ligne) {
+            $ht = ValeursLues::entier($ligne['montant_ht']);
+            $tva = ValeursLues::entier($ligne['montant_tva']);
+            $lignesAvecTtc[] = ['taux' => ValeursLues::entier($ligne['taux']), 'montant_ht' => $ht, 'montant_tva' => $tva, 'montant_ht_calcule' => ValeursLues::entier($ligne['montant_ht_calcule']), 'montant_ttc' => $ht + $tva];
+        }
+
+        $ventilation = $this->ventiler($lignesAvecTtc);
         $parTaux = [];
 
         foreach ($ventilation['taux'] as $taux => $montantsDuTaux) {
@@ -266,7 +276,7 @@ class CalculateurLigne
             'lignes' => array_map(
                 fn (array $montantsDeLigne, array $ligne): array => [...$montantsDeLigne, 'montant_ht_calcule' => $ligne['montant_ht_calcule']],
                 $ventilation['lignes'],
-                $montants,
+                $lignesAvecTtc,
             ),
             'taux' => $parTaux,
             'total' => $ventilation['total'],

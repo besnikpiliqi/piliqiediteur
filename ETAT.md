@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 00:36 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 07:32 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `6c7b3d1`. Commits locaux pas encore poussés :
 
 ```
+4e6d832 Prouve chaque protection de la base par un test qui échoue sans elle (lot PG)
 50d39d1 Dit vrai sur les ventes dans l'avis de l'identité incomplète (constat C7)
 ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 7f4d7ae Résout le verrou de Psalm pour PHP 8.3.16 (CI, analyse des flux)
@@ -40,33 +41,6 @@ f9b669c Relecture du lot A7b des suites du lot A7
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Console/Commands/MarquerFacturesEnRetard.php
- M app/Domain/Cabinets/Models/InvitationCabinet.php
- M app/Domain/Cabinets/Models/LienCabinet.php
- M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
- M app/Domain/Catalogue/Actions/TrouverOuCreerServiceAction.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
- M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
- M app/Domain/Tenancy/Actions/RouvrirMagasinAction.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Domain/Tenancy/Models/Societe.php
- M app/Domain/Tenancy/Services/GenerateurDIdentifiants.php
- M tests/Feature/Authorization/GardesDesCabinetsEnBaseTest.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseConcurrenceTest.php
- M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
- M tests/Feature/Authorization/GardesDesTypesDActiviteTest.php
- M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
- M tests/Feature/Calendrier/ReglesDuCalendrierTest.php
- M tests/Feature/Catalogue/TrouverOuCreerServiceActionTest.php
- M tests/Feature/Editeur/LibererSiretTest.php
- M tests/Feature/Facturation/EmettreFactureActionTest.php
- M tests/Feature/RetourArriereDesMigrationsTest.php
- M tests/Feature/Societe/CreerEtablissementActionTest.php
- M tests/Feature/Societe/IdentifiantsTest.php
- M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
-?? tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
 ```
 
 ## Dernière course de la chaîne

@@ -14,19 +14,17 @@ use Illuminate\Support\Facades\DB;
 use Mockery;
 use Mockery\MockInterface;
 use PDOException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
 /**
- * La première migration n'accepte que PostgreSQL, seul moteur de PILIQI.
  * Le fuseau par défaut de la base PostgreSQL, que reçoit toute session
  * ouverte hors de l'application, est fixé à UTC par les migrations, sans
  * commande manuelle. Un rôle qui n'a pas le droit de changer les réglages
  * de la base fait échouer la migration avec un message qui dit quoi faire,
- * sauf si la base est déjà à UTC. Le diagnostic d'un fuseau
- * qui n'est pas l'UTC en nomme la cause et donne la commande qui la
- * corrige, même une fois les migrations passées.
+ * sauf si la base est déjà à UTC. Le diagnostic d'un fuseau qui n'est pas
+ * l'UTC en nomme la cause et donne la commande qui la corrige, même une
+ * fois les migrations passées.
  *
  * Une nouvelle session ne voit un réglage de la base ou du rôle que s'il
  * est validé : les tests qui en changent un l'exécutent sur une autre
@@ -165,48 +163,6 @@ class FuseauParDefautDeLaBaseTest extends TestCase
         ]);
 
         return $connexion;
-    }
-
-    /**
-     * Deux autres moteurs, jamais joints : la migration s'arrête avant
-     * d'ouvrir leur connexion.
-     *
-     * @return array<string, array{0: array<string, string>}>
-     */
-    public static function autresBases(): array
-    {
-        return [
-            'SQLite' => [['driver' => 'sqlite', 'database' => ':memory:']],
-            'MySQL' => [['driver' => 'mysql', 'host' => '127.0.0.1', 'database' => 'piliqi']],
-        ];
-    }
-
-    /**
-     * Les déclencheurs et les gardes de la base ne s'écrivent que pour
-     * PostgreSQL : sur une autre base, la première migration s'arrête
-     * avant toute table, en disant quoi régler, au lieu de laisser une
-     * table sans sa protection. La connexion par défaut est rendue avant
-     * que RefreshDatabase n'annule la transaction du test.
-     *
-     * @param  array<string, string>  $configuration
-     */
-    #[DataProvider('autresBases')]
-    public function test_les_migrations_s_arretent_avant_toute_table_sur_une_autre_base_que_postgresql(array $configuration): void
-    {
-        $connexionDuTest = DB::getDefaultConnection();
-        config(['database.connections.autre_base' => $configuration]);
-        DB::setDefaultConnection('autre_base');
-
-        try {
-            $this->assertThrows(
-                fn () => $this->migrationDuFuseau()->up(),
-                RuntimeException::class,
-                "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « autre_base » utilise le pilote « {$configuration['driver']} ». Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), puis relancez php artisan migrate.",
-            );
-        } finally {
-            DB::setDefaultConnection($connexionDuTest);
-            DB::purge('autre_base');
-        }
     }
 
     /**

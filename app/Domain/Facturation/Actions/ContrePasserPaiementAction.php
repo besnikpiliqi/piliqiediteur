@@ -61,8 +61,8 @@ use LogicException;
  * Le registre fiscal du magasin actif se verrouille avant toute lecture de
  * la transaction ; l'original, relu sous ce verrou sans verrou de ligne (la
  * table des paiements est en ajout seul : le compte de l'application n'y a
- * pas le droit de modifier, qu'exige un SELECT ... FOR UPDATE sous
- * PostgreSQL), et chaque facture qu'il réglait, relue verrouillée, voient
+ * pas le droit de modifier, qu'exige un SELECT ... FOR UPDATE), et chaque
+ * facture qu'il réglait, relue verrouillée, voient
  * ce que les transactions précédentes ont validé. La contre-passation est
  * signée dans la chaîne des encaissements (type « contre_passation », voir
  * ContenuFiscal), imputations et crédits inversés et crédit réimputé

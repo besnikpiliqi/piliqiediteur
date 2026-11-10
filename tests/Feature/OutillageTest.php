@@ -3,9 +3,12 @@
 namespace Tests\Feature;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Models\Societe;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Laravel\Boost\Install\GuidelineConfig;
 use Laravel\Boost\Install\SkillComposer;
@@ -13,6 +16,7 @@ use Laravel\Boost\Support\Config;
 use Livewire\Component;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -139,18 +143,108 @@ class OutillageTest extends TestCase
     /**
      * PostgreSQL est le seul moteur de PILIQI, en production, en
      * développement et pour les tests (décision de l'éditeur du
-     * 08/11/2026) : la configuration de la base ne déclare que lui, par
-     * défaut, et les tests tournent sur lui (voir aussi
-     * FuseauParDefautDeLaBaseTest, dont la première migration refuse tout
-     * autre moteur).
+     * 08/11/2026) : config/database.php ne déclare que lui et le choisit
+     * quand DB_CONNECTION manque, et les tests tournent sur lui. Chaque
+     * autre connexion de la configuration de l'application en marche,
+     * celles que Laravel y ajoute (sqlite, mysql, mariadb, sqlsrv), est
+     * refusée dès son ouverture, en disant quoi régler, comme une
+     * connexion PostgreSQL dont l'adresse DB_URL nomme un autre pilote.
      */
     public function test_postgresql_est_le_seul_moteur_de_la_base(): void
     {
         $configuration = require config_path('database.php');
+        $defautSansDbConnection = Process::path(base_path())->env(['DB_CONNECTION' => false])->timeout(60)
+            ->run([PHP_BINARY, '-r', 'require "vendor/autoload.php"; echo (require "config/database.php")["default"];']);
+        config(['database.connections.adresse_sqlite' => [...config('database.connections.pgsql'), 'url' => 'sqlite:///'.storage_path('framework/testing/adresse.sqlite')]]);
+        $refus = [];
+
+        foreach (array_keys(config('database.connections')) as $connexion) {
+            if ($connexion !== 'pgsql') {
+                $refus[$connexion] = $this->refusDeLOuverture($connexion);
+            }
+        }
 
         $this->assertSame(['pgsql'], array_keys($configuration['connections']));
+        $this->assertSame('pgsql', $defautSansDbConnection->output());
         $this->assertSame('pgsql', config('database.default'));
         $this->assertSame('pgsql', DB::connection()->getDriverName());
+        $this->assertSame([
+            'sqlite' => self::refusDuMoteur('sqlite', 'sqlite'),
+            'mysql' => self::refusDuMoteur('mysql', 'mysql'),
+            'mariadb' => self::refusDuMoteur('mariadb', 'mariadb'),
+            'sqlsrv' => self::refusDuMoteur('sqlsrv', 'sqlsrv'),
+            'adresse_sqlite' => self::refusDuMoteur('adresse_sqlite', 'sqlite'),
+        ], $refus);
+    }
+
+    /**
+     * Le poste d'une installation d'avant PostgreSQL, dont le .env dit
+     * encore DB_CONNECTION=sqlite, avec une base SQLite déjà migrée : ni
+     * les migrations, ni le diagnostic, deux vrais processus artisan, ni
+     * une recherche de l'application ne l'ouvrent. Chacun s'arrête en
+     * disant quoi régler, sans créer ni toucher le fichier de la base :
+     * aucune table, pas même celle des migrations, et plus d'erreur SQL
+     * brute (« no such function », « syntax error »). Les processus ont un
+     * terminal assez large pour que la console ne coupe pas le message.
+     */
+    public function test_une_ancienne_base_sqlite_ne_s_ouvre_ni_pour_les_migrations_ni_pour_le_diagnostic_ni_pour_l_application(): void
+    {
+        $dossier = storage_path('framework/testing/ancienne-base-'.Str::random(8));
+        File::ensureDirectoryExists($dossier);
+        $this->beforeApplicationDestroyed(fn () => File::deleteDirectory($dossier));
+        $migree = "{$dossier}/database.sqlite";
+        $absente = "{$dossier}/absente.sqlite";
+        File::put($migree, "SQLite format 3\0 base migrée avant PostgreSQL");
+        $artisan = static fn (string $base, string ...$commande) => Process::path(base_path())->env(['DB_CONNECTION' => 'sqlite', 'DB_DATABASE' => $base, 'COLUMNS' => '1000'])->timeout(60)->run([PHP_BINARY, 'artisan', ...$commande]);
+
+        $migration = $artisan($migree, 'migrate', '--force');
+        $migrationSansFichier = $artisan($absente, 'migrate', '--force');
+        $diagnostic = $artisan($migree, 'caisse:diagnostiquer');
+        $connexionDuTest = DB::getDefaultConnection();
+        config(['database.connections.ancienne_base' => ['driver' => 'sqlite', 'database' => $migree, 'prefix' => '']]);
+        DB::setDefaultConnection('ancienne_base');
+
+        try {
+            $this->assertThrows(fn () => RechercheSansAccents::appliquer(Societe::query(), 'creme', ['raison_sociale'])->get(), RuntimeException::class, self::refusDuMoteur('ancienne_base', 'sqlite'));
+        } finally {
+            DB::setDefaultConnection($connexionDuTest);
+            DB::purge('ancienne_base');
+        }
+        $this->assertSame(1, $migration->exitCode());
+        $this->assertStringContainsString(self::refusDuMoteur('sqlite', 'sqlite'), $migration->errorOutput().$migration->output());
+        $this->assertSame(1, $migrationSansFichier->exitCode());
+        $this->assertStringContainsString(self::refusDuMoteur('sqlite', 'sqlite'), $migrationSansFichier->errorOutput().$migrationSansFichier->output());
+        $this->assertSame("SQLite format 3\0 base migrée avant PostgreSQL", File::get($migree));
+        $this->assertFileDoesNotExist($absente);
+        $this->assertSame(1, $diagnostic->exitCode());
+        $this->assertMatchesRegularExpression('/\| Fuseau par défaut de la base +\| ÉCHEC +\| '.preg_quote(self::refusDuMoteur('sqlite', 'sqlite'), '/').' +\|/u', $diagnostic->output());
+    }
+
+    /**
+     * Le message de l'exception levée à l'ouverture de cette connexion,
+     * qui est alors oubliée.
+     */
+    private function refusDeLOuverture(string $connexion): string
+    {
+        try {
+            DB::connection($connexion);
+        } catch (RuntimeException $refus) {
+            return $refus->getMessage();
+        } finally {
+            DB::purge($connexion);
+        }
+
+        return 'ouverte';
+    }
+
+    /**
+     * Le refus d'une connexion qui n'est pas PostgreSQL : ce qu'il faut
+     * régler, sans erreur SQL.
+     */
+    private static function refusDuMoteur(string $connexion, string $pilote): string
+    {
+        return "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « {$connexion} » utilise le pilote « {$pilote} ». "
+            .'Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), videz la configuration en cache (php artisan config:clear), puis recommencez.';
     }
 
     /**

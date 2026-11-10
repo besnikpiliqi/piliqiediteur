@@ -348,9 +348,31 @@ class IdentifiantsTest extends TestCase
         foreach ([RoleSociete::Administrateur, RoleSociete::Collaborateur] as $role) {
             $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => $role->value])), QueryException::class);
         }
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $administrateur->id)->update(['magasin_id' => $demonstration->id])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $administrateur->id)->update(['magasin_id' => $demonstration->id])), QueryException::class, 'identifiants : aucun compte ne se rattache après coup au magasin de démonstration');
 
         $this->assertSame([RoleSociete::Membre, true, null], [$entrainement->refresh()->role_societe, $entrainement->estUnCompteDEntrainement(), $administrateur->refresh()->magasinDeSonIdentifiant()]);
+    }
+
+    /**
+     * Seul un compte de membre, un compte d'entraînement, naît rattaché au
+     * magasin de démonstration : la base refuse l'identifiant d'un
+     * administrateur ou du propriétaire écrit directement avec ce magasin,
+     * avant même l'index unique du compte, qui a déjà le sien.
+     */
+    public function test_seul_un_compte_de_membre_nait_rattache_au_magasin_de_demonstration(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $administrateur = $this->administrateur($this->creerLeMagasinDuSiege($societe));
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
+        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
+        $ligne = fn (User $compte): array => ['identifiant' => '48210937', 'societe_id' => $societe->id, 'user_id' => $compte->id, 'magasin_id' => $demonstration->id, 'created_at' => now()];
+
+        foreach ([$administrateur, $societe->proprietaire] as $compte) {
+            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->insert($ligne($compte))), QueryException::class, 'identifiants : seul un compte de membre se rattache au magasin de démonstration');
+        }
+
+        $this->assertSame((int) $demonstration->id, (int) $entrainement->magasinDeSonIdentifiant()?->id);
+        $this->assertSame(0, DB::table('identifiants')->where('identifiant', '48210937')->count());
     }
 
     /**

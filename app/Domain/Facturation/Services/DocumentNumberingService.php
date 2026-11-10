@@ -45,9 +45,10 @@ use LogicException;
  *  2. Deux créations simultanées de la PREMIÈRE séquence d'un magasin/type
  *     (aucune ligne à verrouiller tant qu'elle n'existe pas) : gérée via
  *     createOrFirst(). Le "perdant" de la course tente sa création dans un
- *     point de sauvegarde, que le refus de la clé unique annule seul (sous
- *     PostgreSQL, une erreur SQL annulerait sinon toute la transaction de
- *     l'émission), puis relit la ligne du gagnant, validée entre-temps.
+ *     point de sauvegarde, que le refus de la clé unique annule seul (une
+ *     erreur SQL hors d'un point de sauvegarde annulerait toute la
+ *     transaction de l'émission), puis relit la ligne du gagnant, validée
+ *     entre-temps.
  *
  * Une fois la ligne de séquence garantie existante, lockForUpdate()
  * sérialise tous les incréments suivants (SELECT ... FOR UPDATE).

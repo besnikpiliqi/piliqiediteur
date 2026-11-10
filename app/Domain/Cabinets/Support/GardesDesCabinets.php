@@ -20,7 +20,8 @@ use Illuminate\Support\Facades\DB;
  *   société qui n'est pas un cabinet ; une invitation close sans sa date
  *   de fin, ou ouverte avec une date de fin (la purge n'en oublie aucune) ;
  * - liens_entre_un_cabinet_et_un_client (liens_cabinet) : un lien dont le
- *   cabinet n'est pas un cabinet, dont le client en est un, ou vers soi ;
+ *   cabinet n'est pas un cabinet, ou dont le client en est un (un lien
+ *   vers soi est donc toujours refusé, par l'un ou l'autre de ces refus) ;
  *   un jeton hors d'une demande du cabinet en cours ; un lien qui naît dans
  *   un autre état qu'une demande, ou actif hors d'une invitation acceptée ;
  *   un client, un cabinet ou une origine qui change ; une transition qui
@@ -143,7 +144,6 @@ final class GardesDesCabinets
             self::LIENS => [
                 ["{$typeDe('cabinet_id')} <> {$cabinet}", 'un lien ne se fait qu\'avec un cabinet d\'expertise comptable', self::TOUJOURS],
                 ["{$typeDe('societe_id')} = {$cabinet}", 'un cabinet d\'expertise comptable n\'est jamais le client d\'un cabinet', self::TOUJOURS],
-                ['NEW.cabinet_id = NEW.societe_id', 'un cabinet n\'est jamais son propre client', self::TOUJOURS],
                 ["NEW.jeton_hache IS NOT NULL AND NEW.etat <> '".EtatDuLien::DemandeParLeCabinet->value."'", 'le jeton d\'un lien ne vaut que pour une demande de rattachement en cours', self::TOUJOURS],
                 ["NEW.etat NOT IN ({$demandes}) AND NOT (NEW.etat = {$actif} AND NEW.origine = '".OrigineDuLien::Invitation->value."')", 'un lien naît d\'une demande, ou actif par une invitation acceptée', self::INSERTION],
                 ['NEW.societe_id <> OLD.societe_id OR NEW.cabinet_id <> OLD.cabinet_id OR NEW.origine <> OLD.origine', 'le client, le cabinet et l\'origine d\'un lien ne changent jamais', self::MODIFICATION],

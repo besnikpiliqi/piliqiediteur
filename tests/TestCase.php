@@ -1011,6 +1011,32 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Ces gardes de la base (GardesDesDroits, GardesDesCabinets,
+     * GardesDesTypesDActivite) telles qu'elles sont en base, lues au
+     * catalogue de PostgreSQL : pour chacune, la définition de chacun de
+     * ses déclencheurs, table et moments compris (pg_get_triggerdef), et
+     * celle de sa fonction garde_<nom>, corps compris (pg_get_functiondef),
+     * null quand elle manque. Les tests qui reposent ces gardes par leur
+     * code les lisent d'abord, telles que les migrations les ont posées.
+     *
+     * @param  list<string>  $gardes
+     * @return array<string, array{declencheurs: list<string>, fonction: string|null}>
+     */
+    protected function definitionsDesGardes(array $gardes): array
+    {
+        $definitions = [];
+
+        foreach ($gardes as $garde) {
+            $definitions[$garde] = [
+                'declencheurs' => array_column(DB::select('select pg_get_triggerdef(oid) as definition from pg_trigger where tgname = ? and not tgisinternal order by 1', [$garde]), 'definition'),
+                'fonction' => DB::selectOne('select pg_get_functiondef(oid) as definition from pg_proc where proname = ?', ["garde_{$garde}"])?->definition,
+            ];
+        }
+
+        return $definitions;
+    }
+
+    /**
      * Ce compte, connecté, dans l'espace d'administration de la société,
      * comme pour un écran de ce panneau testé par Livewire. La session est
      * repartie de zéro : celle d'un compte connecté avant n'y reste pas.

@@ -90,9 +90,16 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Validator as ValidatorDeLaravel;
 use LogicException;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * Les pilotes de base que connaît Laravel, hors PostgreSQL : aucune de
+     * leurs connexions ne s'ouvre (voir register()).
+     */
+    private const PILOTES_REFUSES = ['sqlite', 'mysql', 'mariadb', 'sqlsrv'];
+
     /**
      * scoped() : l'instant que donne le verrou du registre fiscal vaut pour
      * toutes les écritures fiscales de la transaction, transactions
@@ -107,6 +114,16 @@ class AppServiceProvider extends ServiceProvider
      * place de la réponse de Filament.
      *
      * La connexion PostgreSQL lie ses dates en UTC (voir ConnexionPostgres).
+     * Toute autre base est refusée dès l'ouverture de sa connexion, avant
+     * la moindre requête, en disant quoi régler : PILIQI ne fonctionne
+     * qu'avec PostgreSQL (décision de l'éditeur du 08/11/2026), ses
+     * déclencheurs et ses gardes ne s'écrivent que pour lui. Laravel ajoute
+     * à la connexion de config/database.php les siennes (sqlite, mysql,
+     * mariadb, sqlsrv), que désigne encore un DB_CONNECTION resté d'une
+     * ancienne installation, et une adresse DB_URL peut nommer un autre
+     * pilote : une base SQLite, même déjà migrée, ne s'ouvre donc ni pour
+     * les migrations, qui ne créent aucune table, ni pour l'application, ni
+     * pour le diagnostic (caisse:diagnostiquer).
      */
     public function register(): void
     {
@@ -114,6 +131,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(OrigineDesProduits::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
         Connection::resolverFor('pgsql', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres => new ConnexionPostgres($pdo, $base, $prefixe, $configuration));
+
+        foreach (self::PILOTES_REFUSES as $pilote) {
+            Connection::resolverFor($pilote, static fn (mixed $pdo, string $base, string $prefixe, array $configuration): never => throw new RuntimeException(
+                "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « {$configuration['name']} » utilise le pilote « {$pilote} ». "
+                .'Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), videz la configuration en cache (php artisan config:clear), puis recommencez.',
+            ));
+        }
     }
 
     /**

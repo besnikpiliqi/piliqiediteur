@@ -85,8 +85,8 @@ final class GardesDeLaVente
      * qui lit le rôle de l'auteur, sous le verrou FOR SHARE de sa ligne,
      * seulement quand la ligne écrite est une vente (à l'ajout, selon la
      * condition de la table ; à la modification, selon celle de la
-     * modification, jamais OLD lu à l'ajout, où il n'existe pas), et son
-     * déclencheur.
+     * modification, la seule qui lise OLD, la ligne d'avant, nulle à
+     * l'ajout), et son déclencheur.
      *
      * @throws InvalidArgumentException quand la table n'est pas gardée
      */

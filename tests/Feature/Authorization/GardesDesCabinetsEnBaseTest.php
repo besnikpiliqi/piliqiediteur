@@ -23,9 +23,20 @@ class GardesDesCabinetsEnBaseTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const GARDES = [GardesDesCabinets::CABINETS, GardesDesCabinets::INVITATIONS, GardesDesCabinets::LIENS, GardesDesCabinets::AUTORISATIONS, GardesDesCabinets::CLIENTS_CONFIES];
+
     /**
-     * Chaque test repose les gardes par le code de leurs migrations
-     * (GardesDesCabinets::retirer() puis poser()), dans sa transaction : la
+     * Les gardes telles que les migrations les ont posées, lues avant que
+     * setUp() ne les repose.
+     *
+     * @var array<string, array{declencheurs: list<string>, fonction: string|null}>
+     */
+    private array $gardesDesMigrations = [];
+
+    /**
+     * Chaque test lit les gardes telles que les migrations les ont posées,
+     * puis les repose par leur code (GardesDesCabinets::retirer() puis
+     * poser(), qu'appellent leurs migrations), dans sa transaction : la
      * couverture relie ainsi ce code aux tests qui vérifient ce que les
      * gardes refusent, et les tests de mutation l'éprouvent par eux (voir
      * le README).
@@ -34,10 +45,28 @@ class GardesDesCabinetsEnBaseTest extends TestCase
     {
         parent::setUp();
 
-        foreach ([GardesDesCabinets::CABINETS, GardesDesCabinets::INVITATIONS, GardesDesCabinets::LIENS, GardesDesCabinets::AUTORISATIONS, GardesDesCabinets::CLIENTS_CONFIES] as $garde) {
+        $this->gardesDesMigrations = $this->definitionsDesGardes(self::GARDES);
+
+        foreach (self::GARDES as $garde) {
             GardesDesCabinets::retirer($garde);
             GardesDesCabinets::poser($garde);
         }
+    }
+
+    /**
+     * Les migrations posent chaque garde, son déclencheur sur sa table et
+     * sa fonction, telle que poser() l'écrit : ce que les autres tests de
+     * ce fichier vérifient des gardes reposées vaut donc pour celles de la
+     * base. Une migration qui ne pose pas sa garde, ou la pose autrement,
+     * fait échouer ce test.
+     */
+    public function test_les_migrations_posent_chaque_garde_telle_que_poser_l_ecrit(): void
+    {
+        $reposees = $this->definitionsDesGardes(self::GARDES);
+
+        $this->assertSame($reposees, $this->gardesDesMigrations);
+        $this->assertNotContains([], array_column($reposees, 'declencheurs'));
+        $this->assertNotContains(null, array_column($reposees, 'fonction'));
     }
 
     /**

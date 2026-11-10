@@ -174,9 +174,9 @@ class DocumentNumberingServiceTest extends TestCase
      * Deux caisses du même magasin numérotent au même instant le premier
      * document d'une série : l'autre caisse a créé la série juste après la
      * requête qui ne l'a pas trouvée. La création se tente dans un point
-     * de sauvegarde, que le refus de la clé unique annule seul : sous
-     * PostgreSQL, la transaction reste utilisable et la numérotation
-     * continue sur la série de l'autre caisse.
+     * de sauvegarde, que le refus de la clé unique annule seul : la
+     * transaction reste utilisable et la numérotation continue sur la série
+     * de l'autre caisse.
      */
     public function test_une_serie_creee_entre_temps_par_une_autre_caisse_est_reprise(): void
     {

@@ -13,6 +13,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
@@ -37,6 +38,7 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
      * affectation à tous les magasins : l'écriture attend la rétrogradation,
      * puis la base la refuse, le compte étant devenu membre.
      */
+    #[Group('concurrence')]
     public function test_une_retrogradation_et_une_affectation_globale_simultanees_ne_laissent_jamais_une_affectation_globale_a_un_membre(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -64,6 +66,7 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
      * seconde écriture attend la première, la voit et se refuse. Une seule
      * reste.
      */
+    #[Group('concurrence')]
     public function test_deux_affectations_simultanees_globale_et_par_magasin_d_un_administrateur_n_en_retiennent_qu_une(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -89,6 +92,7 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
      * promotion (sa garde verrouille d'abord l'affectation), puis la base
      * la refuse, l'affectation étant devenue celle d'un responsable.
      */
+    #[Group('concurrence')]
     public function test_une_promotion_en_responsable_et_une_case_simultanees_ne_laissent_jamais_une_case_a_un_responsable(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -114,6 +118,7 @@ class GardesDesDroitsEnBaseConcurrenceTest extends TestCase
      * garde verrouille d'abord le compte), puis la base la refuse, le compte
      * étant devenu membre.
      */
+    #[Group('concurrence')]
     public function test_une_retrogradation_et_une_autorisation_de_societe_simultanees_ne_laissent_jamais_une_autorisation_a_un_membre(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

@@ -36,9 +36,20 @@ class GardesDesDroitsEnBaseTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const GARDES = [GardesDesDroits::AFFECTATIONS, GardesDesDroits::CASES, GardesDesDroits::AUTORISATIONS_SOCIETE, GardesDesDroits::ROLES];
+
     /**
-     * Chaque test repose les gardes par le code de leur migration
-     * (GardesDesDroits::retirer() puis poser()), dans sa transaction : la
+     * Les gardes telles que leur migration les a posées, lues avant que
+     * setUp() ne les repose.
+     *
+     * @var array<string, array{declencheurs: list<string>, fonction: string|null}>
+     */
+    private array $gardesDesMigrations = [];
+
+    /**
+     * Chaque test lit les gardes telles que leur migration les a posées,
+     * puis les repose par leur code (GardesDesDroits::retirer() puis
+     * poser(), qu'appelle leur migration), dans sa transaction : la
      * couverture relie ainsi ce code aux tests qui vérifient ce que les
      * gardes refusent, et les tests de mutation l'éprouvent par eux (voir
      * le README).
@@ -47,8 +58,26 @@ class GardesDesDroitsEnBaseTest extends TestCase
     {
         parent::setUp();
 
+        $this->gardesDesMigrations = $this->definitionsDesGardes(self::GARDES);
+
         GardesDesDroits::retirer();
         GardesDesDroits::poser();
+    }
+
+    /**
+     * La migration des autorisations de société pose chaque garde, son
+     * déclencheur sur sa table et sa fonction, telle que poser() l'écrit :
+     * ce que les autres tests de ce fichier vérifient des gardes reposées
+     * vaut donc pour celles de la base. Une migration qui ne les pose pas,
+     * ou les pose autrement, fait échouer ce test.
+     */
+    public function test_la_migration_pose_chaque_garde_telle_que_poser_l_ecrit(): void
+    {
+        $reposees = $this->definitionsDesGardes(self::GARDES);
+
+        $this->assertSame($reposees, $this->gardesDesMigrations);
+        $this->assertNotContains([], array_column($reposees, 'declencheurs'));
+        $this->assertNotContains(null, array_column($reposees, 'fonction'));
     }
 
     public function test_la_base_refuse_une_affectation_au_proprietaire(): void

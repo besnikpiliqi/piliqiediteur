@@ -8,9 +8,11 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Magasin;
@@ -19,6 +21,8 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -32,7 +36,10 @@ use Tests\TestCase;
  * pendant. Soit le
  * ticket passe avant, signé par un administrateur ; soit il est refusé
  * après, son auteur relu sous verrou étant devenu propriétaire. Jamais un
- * enregistrement de vente au nom d'un propriétaire.
+ * enregistrement de vente au nom d'un propriétaire. Une vente écrite
+ * directement en base pendant la transmission, sans l'application,
+ * attend de même la transmission et se refuse ensuite : la garde de la
+ * vente verrouille la ligne de son auteur (voir GardesDeLaVente).
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -84,6 +91,71 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         $droits = EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $venduAvant)->where('type', (string) CodeEvenement::ModificationDesDroits->value)->orderByDesc('id')->firstOrFail();
         $this->assertSame([(int) $administrateurApres, (int) $administrateurApres], [(int) $ticket->cree_par, (int) $vente->operateur_id]);
         $this->assertLessThan($droits->id, $vente->id, 'La vente est signée avant que la transmission ne fasse de son auteur le propriétaire.');
+    }
+
+    /**
+     * Une vente écrite directement en base, sans l'application, au nom de
+     * cet auteur : une facture, un paiement ou l'enregistrement signé d'un
+     * ticket, et la colonne de son auteur.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function ventesEcritesDirectement(): array
+    {
+        return [
+            'facture' => ['factures', 'cree_par'],
+            'paiement' => ['paiements', 'cree_par'],
+            'enregistrement signé d\'un ticket' => ['enregistrements_fiscaux', 'operateur_id'],
+        ];
+    }
+
+    /**
+     * Le test transmet par la base la propriété de la société à un
+     * administrateur qui vend, comme l'acceptation de la transmission : il
+     * verrouille les comptes, fait l'ancien propriétaire administrateur,
+     * puis l'administrateur propriétaire. Pendant ce temps, un autre
+     * processus écrit directement en base, sans l'application qui
+     * verrouillerait d'abord le registre et le compte, une vente au nom de
+     * cet administrateur. La garde de la vente verrouille la ligne de son
+     * auteur avant de lire son rôle (voir GardesDeLaVente) : l'écriture
+     * attend la transmission, puis la base la refuse, son auteur étant
+     * devenu propriétaire. Sans ce verrou, elle lirait le rôle d'avant la
+     * transmission et passerait pendant elle.
+     */
+    #[DataProvider('ventesEcritesDirectement')]
+    #[Group('concurrence')]
+    public function test_une_vente_ecrite_en_base_pendant_la_transmission_a_son_auteur_l_attend_puis_est_refusee(string $table, string $auteur): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        [$magasinId, $administrateurId] = $this->magasinDUnAdministrateurQuiVend('Ma Boutique');
+        $magasin = Magasin::query()->findOrFail($magasinId);
+        $proprietaireId = (int) $this->proprietaireDe($magasin)->id;
+        $clientId = app(TenantContext::class)->runAs($magasin, fn (): int => Client::factory()->create()->id);
+        $instant = now()->toDateTimeString();
+        $vente = match ($table) {
+            'factures' => ['magasin_id' => $magasinId, 'client_id' => $clientId, 'type_client' => TypeClient::Particulier->value, 'cree_par' => $administrateurId, 'created_at' => $instant, 'updated_at' => $instant],
+            'paiements' => ['magasin_id' => $magasinId, 'client_id' => $clientId, 'mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => '2026-10-09', 'cree_par' => $administrateurId, 'created_at' => $instant, 'updated_at' => $instant],
+            'enregistrements_fiscaux' => ['magasin_id' => $magasinId, 'chaine' => ChaineFiscale::Vente->value, 'sequence' => 1, 'type' => 'ticket', 'operateur_id' => $administrateurId, 'horodatage' => $instant, 'contenu' => '{}', 'signature' => 'signature', 'algorithme' => 'ES256', 'cle_id' => str_repeat('0', 64), 'version_module' => '1.5', 'created_at' => $instant],
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLaLigneEstVerrouillee('users', 'for update', static function () use ($table, $vente): void {
+            DB::table($table)->insert($vente);
+        }, $concurrente);
+
+        DB::transaction(function () use ($proprietaireId, $administrateurId): void {
+            DB::table('users')->whereIn('id', [$proprietaireId, $administrateurId])->orderBy('id')->lockForUpdate()->get();
+            DB::table('affectations')->where('user_id', $administrateurId)->delete();
+            DB::table('autorisations_societe')->where('user_id', $administrateurId)->delete();
+            DB::table('users')->where('id', $proprietaireId)->update(['role_societe' => RoleSociete::Administrateur->value]);
+            DB::table('users')->where('id', $administrateurId)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email_verified_at' => now()]);
+        });
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $refus = $concurrente->wait();
+        $this->assertFalse($refus->successful(), 'La vente, écrite pendant la transmission, aurait dû l\'attendre puis être refusée.');
+        $this->assertStringContainsString(GardesDeLaVente::MESSAGE, $refus->errorOutput());
+        $this->assertSame(RoleSociete::Proprietaire, User::query()->findOrFail($administrateurId)->role_societe);
+        $this->assertSame(0, DB::table($table)->where($auteur, $administrateurId)->count());
     }
 
     /**

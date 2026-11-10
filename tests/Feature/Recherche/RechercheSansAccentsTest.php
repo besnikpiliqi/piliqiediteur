@@ -111,14 +111,17 @@ class RechercheSansAccentsTest extends TestCase
     }
 
     /**
-     * Le pliage de la base est, caractère par caractère, celui que
-     * définit Unicode (voir pliageSelonUnicode()), pour toutes les lettres
-     * latines, grecques et cyrilliques, la ponctuation, les symboles et
-     * les formes pleine chasse : la décomposition canonique et la
-     * correspondance simple des minuscules de PostgreSQL, sous la collation
-     * C.UTF-8 de la base, sont celles d'Unicode, et l'expression régulière
-     * des diacritiques n'en laisse aucun. Le saut de ligne sépare les
-     * caractères : il ne se plie pas, et ne se combine à aucun accent.
+     * Le pliage de la base est, caractère par caractère, celui que calcule
+     * PHP selon Unicode avec les plages de diacritiques et les lettres sans
+     * décomposition de RechercheSansAccents (voir pliageSelonUnicode()),
+     * pour toutes les lettres latines, grecques et cyrilliques, la
+     * ponctuation, les symboles et les formes pleine chasse : la
+     * décomposition canonique et la correspondance simple des minuscules
+     * de PostgreSQL, sous la collation C.UTF-8 de la base, sont celles
+     * d'Unicode. Reprenant ces plages, ce test ne dit rien de celles qui
+     * manqueraient : le suivant le vérifie sans elles. Le saut de ligne
+     * sépare les caractères : il ne se plie pas, et ne se combine à aucun
+     * accent.
      */
     public function test_la_base_plie_chaque_caractere_selon_unicode(): void
     {
@@ -142,6 +145,46 @@ class RechercheSansAccentsTest extends TestCase
             array_combine(array_keys($caracteres), $pliesSelonUnicode),
             array_combine(array_keys($caracteres), $pliesParLaBase),
         );
+    }
+
+    /**
+     * Sans les plages de RechercheSansAccents : une fois pliés par la base,
+     * les caractères des blocs du test précédent et les blocs de marques
+     * combinantes d'Unicode (diacritiques, diacritiques étendus et
+     * supplémentaires, marques des symboles, demi-marques) ne gardent
+     * aucune marque combinante (propriété \p{Mn} d'Unicode, lue par PCRE) :
+     * ni une lettre latine, grecque ou cyrillique, dont « É », « ῼ » et
+     * « Ӂ », ni un accent tapé seul. Une plage de diacritiques retirée de
+     * la classe y laisserait les siens. Restent seules, voulues, des marques
+     * qui ne sont pas des accents : les signes combinants cyrilliques
+     * U+0483 à U+0487 (titlo et signes de l'écriture slavonne, qui ne sont
+     * pas des lettres) et les points des formes de présentation de
+     * l'hébreu (U+FB1D à U+FB4F : « שׁ » se plie en « ש » suivi du point
+     * U+05C1).
+     */
+    public function test_aucun_accent_ne_reste_une_fois_plie_hors_des_marques_qui_n_en_sont_pas(): void
+    {
+        $caracteres = [];
+
+        foreach ([[0x0001, 0x052F], [0x1AB0, 0x1AFF], [0x1DC0, 0x1FFF], [0x2000, 0x2BFF], [0xFB00, 0xFB4F], [0xFE20, 0xFE2F], [0xFF00, 0xFFEF]] as [$debut, $fin]) {
+            foreach (range($debut, $fin) as $codePoint) {
+                if ($codePoint !== 0x0A) {
+                    $caracteres[$codePoint] = mb_chr($codePoint, 'UTF-8');
+                }
+            }
+        }
+
+        $plies = array_combine(array_keys($caracteres), explode("\n", DB::selectOne('select '.RechercheSansAccents::FONCTION_SQL.'(?) as pliage', [implode("\n", $caracteres)])->pliage));
+        $gardentUneMarque = array_keys(array_filter($plies, static fn (string $plie): bool => preg_match('/\p{Mn}/u', $plie) === 1));
+        $horsDesMarquesVoulues = array_map(
+            static fn (int $codePoint): string => sprintf('U+%04X', $codePoint),
+            array_values(array_filter($gardentUneMarque, static fn (int $codePoint): bool => ($codePoint < 0x0483 || $codePoint > 0x0487) && ($codePoint < 0xFB1D || $codePoint > 0xFB4F))),
+        );
+
+        $this->assertSame(['e', 'ω', 'ж', ''], [$plies[0x00C9], $plies[0x1FFC], $plies[0x04C1], $plies[0x0301]]);
+        $this->assertContains(0x0483, $gardentUneMarque);
+        $this->assertSame("\u{05E9}\u{05C1}", $plies[0xFB2A]);
+        $this->assertSame([], $horsDesMarquesVoulues);
     }
 
     public function test_une_colonne_d_une_fiche_liee_se_cherche_de_meme(): void

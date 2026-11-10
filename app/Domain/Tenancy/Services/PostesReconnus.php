@@ -139,13 +139,15 @@ final class PostesReconnus
 
     /**
      * Les jetons de postes que porte le témoin du navigateur (déchiffré par
-     * EncryptCookies) ; aucun pour un témoin absent ou mal formé.
+     * EncryptCookies) ; aucun pour un témoin absent, mal formé, ou envoyé
+     * en tableau (« postes_reconnus[0]=… »).
      *
      * @return list<string>
      */
     public function jetonsDuNavigateur(Request $requete): array
     {
-        $jetons = json_decode((string) $requete->cookie(self::TEMOIN, ''), true);
+        $temoin = $requete->cookie(self::TEMOIN);
+        $jetons = is_string($temoin) ? json_decode($temoin, true) : null;
 
         return is_array($jetons) ? array_values(array_filter($jetons, static fn (mixed $jeton): bool => is_string($jeton) && preg_match('/^[A-Za-z0-9]{64}$/D', $jeton) === 1)) : [];
     }

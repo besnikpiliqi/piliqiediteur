@@ -339,6 +339,35 @@ class ConnexionParIdentifiantTest extends TestCase
     }
 
     /**
+     * Un témoin de poste envoyé en tableau (« postes_connus[0]=… »), avec
+     * pour valeur un témoin chiffré par le site, comme celui de la session
+     * que tout visiteur reçoit : le déchiffrement des témoins le laisse
+     * passer en tableau, que la connexion lit comme un témoin absent, sans
+     * erreur, pour le poste connu (voir PostesConnus) comme pour le poste
+     * reconnu (voir PostesReconnus).
+     */
+    public function test_un_temoin_de_poste_envoye_en_tableau_compte_comme_un_temoin_absent(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        [, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        $prudent = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->flushSession();
+        auth()->logout();
+        $page = $this->get('/app/login')->assertOk();
+        $instantane = $this->instantaneLivewire($page->getContent(), 'connexion');
+        $temoinDeSession = $page->getCookie(config('session.cookie'), decrypt: false);
+        $this->assertNotNull($temoinDeSession);
+        $this->withCredentials()->withUnencryptedCookies([PostesConnus::TEMOIN => [$temoinDeSession->getValue()], PostesReconnus::TEMOIN => [$temoinDeSession->getValue()]]);
+
+        $refus = $this->requeteLivewire($instantane, ['data.login' => $identifiant, 'data.password' => $identifiant], 'authenticate')->assertOk();
+        $this->assertSame(Connexion::MESSAGE_ECHEC.' '.Connexion::MESSAGE_POSTE, $this->erreurDeConnexion($refus));
+        $this->assertGuest();
+
+        $this->requeteLivewire($instantane, ['data.login' => (string) $prudent->identifiantDeConnexion(), 'data.password' => self::MOT_DE_PASSE_CHOISI], 'authenticate')->assertOk();
+        $this->assertAuthenticatedAs($prudent);
+    }
+
+    /**
      * Sans mandataire déclaré, aucun en-tête X-Forwarded-For n'est cru, même
      * sur Laravel Cloud (LARAVEL_CLOUD=1) ou sur un hôte de Forge ou de
      * Vapor, où Laravel croirait sinon tout mandataire ; « * », « ** » et

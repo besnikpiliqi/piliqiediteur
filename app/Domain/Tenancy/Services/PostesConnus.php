@@ -54,11 +54,16 @@ final class PostesConnus
     }
 
     /**
+     * Les postes que porte le témoin du navigateur (déchiffré par
+     * EncryptCookies) ; aucun pour un témoin absent, mal formé, ou envoyé
+     * en tableau (« postes_connus[0]=… »).
+     *
      * @return array<string, mixed>
      */
     private function postes(Request $requete): array
     {
-        $postes = json_decode((string) $requete->cookie(self::TEMOIN, ''), true);
+        $temoin = $requete->cookie(self::TEMOIN);
+        $postes = is_string($temoin) ? json_decode($temoin, true) : null;
 
         return is_array($postes) ? $postes : [];
     }

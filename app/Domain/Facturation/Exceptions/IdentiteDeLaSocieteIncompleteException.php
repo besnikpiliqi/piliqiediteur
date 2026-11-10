@@ -10,8 +10,10 @@ use LogicException;
  * B11, art. 242 nonies A de l'annexe II au CGI et art. R123-237 et
  * R123-238 du Code de commerce) : tant qu'il en manque une mention, elle
  * ne s'émet pas -- ni numéro consommé, ni signature au registre fiscal.
- * Les tickets de caisse restent possibles (voir
- * Magasin::mentionsLegalesManquantes() et EmettreFactureAction).
+ * Les tickets de caisse n'en dépendent pas (voir
+ * Magasin::mentionsLegalesManquantes() et EmettreFactureAction) ; ce
+ * qu'en dit la société dépend de son état (voir
+ * Societe::avisDIdentiteIncomplete()).
  */
 class IdentiteDeLaSocieteIncompleteException extends LogicException
 {

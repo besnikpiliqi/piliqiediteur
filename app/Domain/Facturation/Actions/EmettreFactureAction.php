@@ -75,7 +75,7 @@ use LogicException;
  * de la société et du magasin (B11, voir
  * Magasin::verifierSonIdentiteLegale()) et, pour un
  * client établi en France, son SIREN : sinon elle reste un brouillon,
- * sans numéro consommé ni signature. Les tickets restent possibles.
+ * sans numéro consommé ni signature. Les tickets n'en dépendent pas.
  *
  * Une vente hors de la TVA française (export, livraison vers un DOM,
  * livraison intracommunautaire, prestation à un professionnel établi hors

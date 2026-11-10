@@ -88,9 +88,9 @@ class IdentiteSociete extends Page implements HasForms
                 ->schema([
                     Placeholder::make('mentions_manquantes')
                         ->hiddenLabel()
-                        ->content(fn (): string => 'Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : '.implode(', ', $this->societe()->mentionsLegalesManquantes()).'.'),
+                        ->content(fn (): ?string => $this->societe()->avisDIdentiteIncomplete()),
                 ])
-                ->visible(fn (): bool => $this->societe()->type_activite->aDesMagasins() && $this->societe()->mentionsLegalesManquantes() !== []),
+                ->visible(fn (): bool => $this->societe()->avisDIdentiteIncomplete() !== null),
             Section::make('Identité légale')
                 ->description(fn (): ?string => $this->societe()->type_activite->aDesMagasins() ? 'Imprimée dans le pied des devis, factures, tickets et avoirs de tous vos magasins.' : null)
                 ->schema([

@@ -1,7 +1,7 @@
 {{-- Voir TableauDeBord. --}}
 <x-filament-panels::page>
     @php($societe = $this->societe())
-    @php($manquantes = $societe->mentionsLegalesManquantes())
+    @php($identiteIncomplete = $societe->avisDIdentiteIncomplete())
 
     @include('filament.bienvenue', ['compte' => auth()->user(), 'role' => auth()->user()->libelleDuRoleDeSociete()])
 
@@ -55,11 +55,11 @@
         </x-filament::section>
     @endif
 
-    @if ($manquantes !== [])
+    @if ($identiteIncomplete !== null)
         <x-filament::section icon="heroicon-o-exclamation-triangle" icon-color="warning">
             <x-slot name="heading">Identité incomplète pour facturer un professionnel</x-slot>
 
-            <p>Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise tant que ces mentions manquent : {{ implode(', ', $manquantes) }}.</p>
+            <p>{{ $identiteIncomplete }}</p>
         </x-filament::section>
     @endif
 

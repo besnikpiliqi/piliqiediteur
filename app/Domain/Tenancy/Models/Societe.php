@@ -618,6 +618,35 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * L'avis « Identité incomplète pour facturer un professionnel » de la
+     * page « Identité » et du tableau de bord de son espace, vrai dans
+     * chaque état de la société : en lecture seule, son motif, sans aucune
+     * vente annoncée ; en cours de vérification, aucune vente dans ses
+     * magasins réels avant sa validation, ces mentions servant ensuite ;
+     * validée, ses tickets restent possibles, mais aucune facture à un
+     * professionnel tant que ces mentions manquent. Null quand rien ne
+     * manque, et pour un cabinet d'expertise comptable, qui n'a aucun
+     * magasin.
+     */
+    public function avisDIdentiteIncomplete(): ?string
+    {
+        $manquantes = $this->mentionsLegalesManquantes();
+
+        if ($manquantes === [] || ! $this->type_activite->aDesMagasins()) {
+            return null;
+        }
+
+        $mentions = implode(', ', $manquantes);
+
+        return match (true) {
+            $this->estClose() => "L'inscription de votre société est close : vos magasins sont en lecture seule, et aucune vente n'y est possible. Ces mentions manquent pour facturer un professionnel : {$mentions}.",
+            $this->statut->estEnLectureSeule() => 'Votre société est '.mb_strtolower($this->statut->getLabel())." : vos magasins sont en lecture seule, et aucune vente n'y est possible. Ces mentions manquent pour facturer un professionnel : {$mentions}.",
+            ! $this->estValidee() => "Votre société est en cours de vérification : aucune vente n'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : {$mentions}.",
+            default => "Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : {$mentions}.",
+        };
+    }
+
+    /**
      * Les magasins dont le journal des événements note un changement de
      * ses réglages : ses magasins réels, fermés compris, par ordre de
      * création, dont les registres se verrouillent dans cet ordre (voir

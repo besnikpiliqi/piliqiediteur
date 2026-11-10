@@ -12,11 +12,14 @@ use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Pages\IdentiteSociete;
+use App\Filament\Societe\Pages\TableauDeBord;
+use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -382,6 +385,93 @@ class IdentiteSocieteTest extends TestCase
             ->fillForm(self::identiteComplete())
             ->call('save')
             ->assertDontSee('Identité incomplète pour facturer un professionnel');
+    }
+
+    /**
+     * L'avis de l'identité incomplète dit vrai dans chaque état de la
+     * société (constat C7 de l'éditeur) : validée, ses tickets restent
+     * possibles ; en cours de vérification, aucune vente avant sa
+     * validation ; en lecture seule, son motif, sans aucune vente
+     * annoncée. Rien quand l'identité est complète, ni pour un cabinet
+     * d'expertise comptable, qui n'a aucun magasin.
+     *
+     * @return array<string, array{0: Closure(Societe): void, 1: string}>
+     */
+    public static function etatsDeLaSociete(): array
+    {
+        return [
+            'validée' => [static function (Societe $societe): void {}, 'Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : capital social, immatriculation.'],
+            'en cours de vérification' => [static fn (Societe $societe) => $societe->validee_le = null, 'Votre société est en cours de vérification : aucune vente n\'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : capital social, immatriculation.'],
+            'suspendue' => [static fn (Societe $societe) => $societe->statut = StatutSociete::Suspendue, 'Votre société est suspendue : vos magasins sont en lecture seule, et aucune vente n\'y est possible. Ces mentions manquent pour facturer un professionnel : capital social, immatriculation.'],
+            'résiliée' => [static fn (Societe $societe) => $societe->statut = StatutSociete::Resiliee, 'Votre société est résiliée : vos magasins sont en lecture seule, et aucune vente n\'y est possible. Ces mentions manquent pour facturer un professionnel : capital social, immatriculation.'],
+            'révoquée avant sa validation' => [static function (Societe $societe): void {
+                $societe->validee_le = null;
+                $societe->statut = StatutSociete::Revoquee;
+            }, 'Votre société est révoquée : vos magasins sont en lecture seule, et aucune vente n\'y est possible. Ces mentions manquent pour facturer un professionnel : capital social, immatriculation.'],
+            'inscription close' => [static function (Societe $societe): void {
+                $societe->validee_le = null;
+                $societe->close_le = now();
+            }, 'L\'inscription de votre société est close : vos magasins sont en lecture seule, et aucune vente n\'y est possible. Ces mentions manquent pour facturer un professionnel : capital social, immatriculation.'],
+        ];
+    }
+
+    /**
+     * @param  Closure(Societe): void  $etat
+     */
+    #[DataProvider('etatsDeLaSociete')]
+    public function test_l_avis_de_l_identite_incomplete_dit_vrai_dans_chaque_etat_de_la_societe(Closure $etat, string $avis): void
+    {
+        $societe = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'])->societe;
+        $etat($societe);
+
+        $this->assertSame($avis, $societe->avisDIdentiteIncomplete());
+    }
+
+    public function test_aucun_avis_pour_une_identite_complete_ni_pour_un_cabinet(): void
+    {
+        $societe = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'])->societe;
+        $societe->forceFill(['capital_social' => '10000', 'immatriculation' => 'RCS Marseille']);
+        $cabinet = $this->ouvrirUnCabinet();
+
+        $this->assertSame([], $societe->mentionsLegalesManquantes());
+        $this->assertNull($societe->avisDIdentiteIncomplete());
+        $this->assertNotSame([], $cabinet->mentionsLegalesManquantes());
+        $this->assertNull($cabinet->avisDIdentiteIncomplete());
+    }
+
+    /**
+     * Une société inscrite, qui attend le code de son courrier : la page
+     * « Identité » et le tableau de bord de son espace disent qu'aucune
+     * vente n'est possible avant sa validation, jamais que ses tickets
+     * restent possibles.
+     */
+    public function test_la_page_identite_et_le_tableau_de_bord_d_une_societe_en_cours_de_verification_n_annoncent_aucune_vente(): void
+    {
+        $societe = $this->ouvrirLAdministration($this->inscrireUneSociete());
+        $avis = 'Votre société est en cours de vérification : aucune vente n\'est possible dans vos magasins réels avant sa validation, et le magasin de démonstration vous permet de vous essayer. Ces mentions seront nécessaires pour facturer un professionnel : capital social, immatriculation.';
+
+        $this->assertFalse($societe->estValidee());
+        Livewire::test(IdentiteSociete::class)
+            ->assertSee('Identité incomplète pour facturer un professionnel')
+            ->assertSee($avis)
+            ->assertDontSee('tickets de caisse restent possibles');
+        Livewire::test(TableauDeBord::class)
+            ->assertSee('Identité incomplète pour facturer un professionnel')
+            ->assertSee($avis)
+            ->assertDontSee('tickets de caisse restent possibles');
+    }
+
+    /**
+     * Une société validée : la page « Identité » et le tableau de bord
+     * gardent le même avis, ses tickets restant possibles.
+     */
+    public function test_la_page_identite_et_le_tableau_de_bord_d_une_societe_validee_disent_que_ses_tickets_restent_possibles(): void
+    {
+        $this->ouvrirLAdministration();
+        $avis = 'Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise, dans aucun de vos magasins, tant que ces mentions manquent : capital social, immatriculation.';
+
+        Livewire::test(IdentiteSociete::class)->assertSee($avis);
+        Livewire::test(TableauDeBord::class)->assertSee($avis);
     }
 
     /**

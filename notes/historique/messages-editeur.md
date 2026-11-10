@@ -1570,3 +1570,7 @@ pour dans la "PILIQI — Ce qui reste à trancher" il faut que tu mette ou qqpar
 
 « T41 : cacher » pour que cette partie soit cachée à qui n’a pas le droit de voir les paiements ;
 
+## 154. 2026-11-10 23:51 UTC
+
+est ce que tu peux voir "T42 : ajouter « Modifier » et « Émettre » sur la fiche d’une facture en brouillon, comme sur la liste." comment j'ai mis dans la fiche
+

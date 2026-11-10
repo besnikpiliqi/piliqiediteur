@@ -695,13 +695,20 @@
    "titre": "Fiche d'un brouillon de facture sans « Modifier » ni « Émettre »",
    "question": "La fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre ». Faut-il ajouter ces deux boutons sur la fiche ?",
    "qui": "vous",
-   "etat": "ouvert",
+   "etat": "tranche",
    "proposition": "Ajouter ces deux boutons sur la fiche du brouillon, comme sur la liste des factures ; à trancher avant le lot NAV-2.",
    "bloquant": "lot NAV-2 (écrans de vente)",
    "sources": [
     "notes/pilotage-reprise/README.md:190"
    ],
-   "citation": "constat d'écran à lui soumettre (la fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre »)"
+   "citation": "constat d'écran à lui soumettre (la fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre »)",
+   "reponse": {
+    "date_utc": "2026-11-10 23:50",
+    "date_paris": "11/11/2026 vers 00 h 50",
+    "mots": "oui",
+    "decision": "La fiche d'une facture en brouillon a les boutons « Modifier » et « Émettre », comme la liste des factures.",
+    "ou": "Lot NAV-2 (constat C9) ; onglet « Mes questions et vos réponses », Q388 (ligne ajoutée par l'éditeur)."
+   }
   },
   {
    "id": "T43",
@@ -1711,10 +1718,6 @@
   }
  ],
  "urgent": [
-  {
-   "id": "T42",
-   "pourquoi": "À trancher avant le lot NAV-2, sinon ses tests en navigateur figent une fiche de brouillon sans ces boutons."
-  },
   {
    "id": "T44",
    "pourquoi": "Le lot EC2 construit cette case unique : une objection après lui obligerait à refaire le lot."

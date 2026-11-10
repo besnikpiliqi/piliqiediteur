@@ -108,3 +108,13 @@ Réponse de l'éditeur : « T41 : cacher » pour que cette partie soit cachée �
 - « Payé / Restant dû » reste visible sur la fiche pour qui voit le document (règle de CLAUDE.md, « Caisse et clôtures ») ;
 - même règle partout où le détail des paiements d'un document s'affiche sur une fiche du panneau du magasin (liste des paiements, références, reçus de paiement et contre-passations du document) ;
 - tests : en navigateur, un vendeur qui voit la facture sans « Paiements : voir » ne voit pas la section, le même avec l'autorisation la voit ; le propriétaire et un responsable la voient ; un test du rendu de la fiche par rôle ; l'inventaire des actions tenu à jour.
+
+## C9 — Fiche d'un brouillon de facture : ajouter « Modifier » et « Émettre » (point T42 du document « Ce qui reste à trancher », réponse de l'éditeur du 10/11/2026 vers 23 h 50 UTC : « oui » à la proposition ; lot NAV-2)
+
+Question posée (T42, constat laissé par le lot NAV-1) : la fiche d'un brouillon de facture n'offre ni « Modifier » ni « Émettre » ; proposition : ajouter ces deux boutons sur la fiche du brouillon, comme sur la liste des factures.
+
+Réponse de l'éditeur, écrite dans le document (ligne T42 ajoutée par lui dans « Mes questions et vos réponses ») : « oui ».
+
+À faire :
+- la fiche d'une facture (ou d'un ticket) en brouillon montre « Modifier » et « Émettre », avec les mêmes conditions et les mêmes droits que sur la liste des factures (et « Émettre et encaisser » s'il y est offert), jamais au propriétaire pour l'émission, qui ne vend jamais ; une facture émise n'a plus « Modifier » ;
+- tests : en navigateur, depuis la fiche d'un brouillon, « Modifier » ouvre le formulaire et « Émettre » émet la facture (numéro, fiche à jour), pour chaque rôle qui en a le droit ; un compte sans le droit ne voit pas ces boutons ; l'inventaire des actions tenu à jour.

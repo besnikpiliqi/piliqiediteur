@@ -13235,6 +13235,26 @@
    "refs": [
     "T41"
    ]
+  },
+  {
+   "id": "Q388",
+   "serie": "Points de l'onglet « Ce qui reste à trancher » (11/11)",
+   "date_utc": "2026-11-10 23:50",
+   "date_paris": "11/11/2026 vers 00 h 50",
+   "code": "T42",
+   "question": "Fiche d'un brouillon de facture sans « Modifier » ni « Émettre ». Ma proposition : ajouter ces deux boutons sur la fiche du brouillon, comme sur la liste des factures. (Texte recopié par l'éditeur dans sa ligne.)",
+   "mots": "oui",
+   "decision": "La fiche d'une facture en brouillon a les boutons « Modifier » et « Émettre », comme la liste des factures.",
+   "theme": "Écrans",
+   "statut": "a-appliquer",
+   "statut_detail": "Lot NAV-2 de la chaîne, avec un test en navigateur (constat C9 de ses consignes).",
+   "sources": [
+    "document « PILIQI — Ce qui reste à trancher », onglet « Mes questions et vos réponses », ligne T42 écrite par l'éditeur (rev 22 à 27)",
+    "nouvelle-session/navigateur/constats-editeur.md (C9)"
+   ],
+   "refs": [
+    "T42"
+   ]
   }
  ]
 }

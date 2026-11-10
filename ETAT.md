@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 23:45 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 23:52 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -59,6 +59,8 @@ d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
  M tests/Feature/Qualite/OutilDeQualiteTest.php
  M tests/Qualite/qualite.php
 ?? app/Domain/Tenancy/Support/TemoinsEnTableau.php
+?? tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php
+?? tests/Feature/Tenancy/TemoinsEnTableauTest.php
 ```
 
 ## Dernière course de la chaîne

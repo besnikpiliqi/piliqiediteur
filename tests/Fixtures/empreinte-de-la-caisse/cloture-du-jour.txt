@@ -1,0 +1,19 @@
+{
+    "id": ⟦clotures_caisse:cloture⟧,
+    "magasin_id": ⟦magasins:lyon1⟧,
+    "cree_par": ⟦users:vendeur⟧,
+    "cree_par_nom": "Responsable de test",
+    "numero": "Z-LYON1-2026-000001",
+    "date_cloture": "2026-10-09",
+    "nombre_ventes": 1,
+    "nombre_avoirs": 1,
+    "total_ht": "16.16",
+    "total_tva": "2.34",
+    "total_ttc": "18.50",
+    "recapitulatif": "{\"ventes_particuliers\":{\"nombre\":1,\"ht\":2616,\"tva\":434,\"ttc\":3050,\"par_taux\":[{\"taux\":2000,\"ht\":2000,\"tva\":400,\"ttc\":2400},{\"taux\":550,\"ht\":616,\"tva\":34,\"ttc\":650}]},\"avoirs_particuliers\":{\"nombre\":1,\"ht\":-1000,\"tva\":-200,\"ttc\":-1200,\"par_taux\":[{\"taux\":2000,\"ht\":-1000,\"tva\":-200,\"ttc\":-1200}]},\"factures_professionnels\":{\"nombre\":1,\"ht\":11375,\"tva\":2275,\"ttc\":13650,\"par_taux\":[{\"taux\":2000,\"ht\":11375,\"tva\":2275,\"ttc\":13650}]},\"avoirs_professionnels\":{\"nombre\":1,\"ht\":-3375,\"tva\":-675,\"ttc\":-4050,\"par_taux\":[{\"taux\":2000,\"ht\":-3375,\"tva\":-675,\"ttc\":-4050}]},\"encaissements\":[{\"mode\":\"especes\",\"libelle\":\"Esp\\u00e8ces\",\"paiements\":1,\"contre_passations\":0,\"montant\":1050},{\"mode\":\"carte_bancaire\",\"libelle\":\"Carte bancaire\",\"paiements\":1,\"contre_passations\":0,\"montant\":2000},{\"mode\":\"cheque\",\"libelle\":\"Ch\\u00e8que\",\"paiements\":0,\"contre_passations\":0,\"montant\":0},{\"mode\":\"virement\",\"libelle\":\"Virement\",\"paiements\":1,\"contre_passations\":1,\"montant\":0},{\"mode\":\"prelevement\",\"libelle\":\"Pr\\u00e9l\\u00e8vement\",\"paiements\":0,\"contre_passations\":0,\"montant\":0}],\"credit_avoir_impute\":4050,\"grands_totaux\":{\"perpetuel_reel\":11450,\"perpetuel_absolu\":21950}}",
+    "derniere_sequence_vente": 4,
+    "derniere_sequence_encaissement": 4,
+    "cloturee_a": "2026-10-09 17:00:00",
+    "created_at": "2026-10-09 17:00:00",
+    "updated_at": "2026-10-09 17:00:00"
+}

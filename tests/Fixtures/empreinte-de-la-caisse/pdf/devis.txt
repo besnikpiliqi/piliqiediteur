@@ -1,0 +1,58 @@
+fichier : devis-DEV-LYON1-2026-000001.pdf
+--- page 1 (0.000 0.000 595.280 841.890)
+Ma Boutique
+12 rue Mercière
+69002 Lyon
+FR
+SIRET : 10000000900017
+Tél. 04 72 00 00 00 · contact@ma-boutique.example
+Devis
+DEV-LYON1-2026-000001
+Émis le 09/10/2026
+ÉTABLI POUR
+Atelier Dupont SARL
+8 rue des Tanneurs
+69001 Lyon
+SIREN : 123456789
+SIRET : 12345678900011
+N° TVA : FR32123456789
+RÉFÉRENCE
+DÉSIGNATION
+QTÉ
+PU HT
+TAUX
+TOTAL HT
+COF-DEG
+Coffret dégustation
+2
+37,50 €
+20 %
+75,00 €
+Livraison sur rendez-vous
+1
+12,50 €
+20 %
+12,50 €
+Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la
+différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du
+total de la ligne.
+TAUX TVA
+BASE HT
+TVA
+TOTAL TTC
+20 %
+87,50 €
+17,50 €
+105,00 €
+Total HT
+87,50 €
+Total TVA
+17,50 €
+Total TTC
+105,00 €
+Devis valable pour une livraison en novembre.
+Date et signature du client, précédées de la mention « Bon pour
+accord »
+Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
+FR88100000009
+Page 1 sur 1

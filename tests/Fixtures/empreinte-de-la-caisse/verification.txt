@@ -1,0 +1,23 @@
+{
+    "conforme": true,
+    "anomalies": 0,
+    "enregistrements_verifies": {
+        "vente": 4,
+        "encaissement": 4,
+        "evenement": 4
+    },
+    "points_de_reprise": {
+        "vente": {
+            "sequence": 4,
+            "signature": "⟦signature:vente:4⟧"
+        },
+        "encaissement": {
+            "sequence": 4,
+            "signature": "⟦signature:encaissement:4⟧"
+        },
+        "evenement": {
+            "sequence": 4,
+            "signature": "⟦signature:evenement:4⟧"
+        }
+    }
+}

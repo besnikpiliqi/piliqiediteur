@@ -69,7 +69,7 @@ class FicheDuClient extends ViewRecord
      */
     public function magasins(): array
     {
-        return Magasin::query()->where('societe_id', $this->lien()->societe_id)->where('est_demonstration', false)->orderBy('nom')->orderBy('id')
+        return array_values(Magasin::query()->where('societe_id', $this->lien()->societe_id)->where('est_demonstration', false)->orderBy('nom')->orderBy('id')
             ->get(['id', 'uuid', 'nom', 'code', 'ville', 'statut'])
             ->map(fn (Magasin $magasin): array => [
                 'nom' => (string) $magasin->nom,
@@ -78,7 +78,7 @@ class FicheDuClient extends ViewRecord
                 'statut' => (string) $magasin->statut->getLabel(),
                 'url' => Dashboard::getUrl(panel: 'app', tenant: $magasin),
             ])
-            ->all();
+            ->all());
     }
 
     /**

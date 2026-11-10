@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
 use App\Filament\Societe\Resources\MagasinResource;
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
+use UnexpectedValueException;
 
 /**
  * La création d'un magasin de la société, le premier compris : la page
@@ -91,9 +93,10 @@ class CreerMagasin extends CreateRecord
 
     /**
      * Les établissements actifs du SIREN, tels que le répertoire les a
-     * listés, par SIRET (voir listeDuRepertoire()).
+     * listés, par SIRET (voir listeDuRepertoire()), une clé que PHP garde
+     * en entier quand le SIRET ne commence pas par 0.
      *
-     * @var array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>
+     * @var array<array-key, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>
      */
     #[Locked]
     public array $etablissements = [];
@@ -243,7 +246,7 @@ class CreerMagasin extends CreateRecord
      * Null, sans rien garder, quand le répertoire ne répond pas ou que la
      * société a atteint sa limite de consultations.
      *
-     * @return array{etablissements: array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>, complete: bool}|null
+     * @return array{etablissements: array<array-key, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>, complete: bool}|null
      */
     private function listeDuRepertoire(): ?array
     {
@@ -252,7 +255,7 @@ class CreerMagasin extends CreateRecord
         $gardee = Cache::get($cle);
 
         if (is_array($gardee)) {
-            return $gardee;
+            return self::listeGardee($gardee);
         }
 
         if (! $this->consulterLeRepertoire()) {
@@ -279,6 +282,35 @@ class CreerMagasin extends CreateRecord
         Cache::put($cle, $liste, now()->addMinutes(self::MINUTES_DE_LA_LISTE));
 
         return $liste;
+    }
+
+    /**
+     * La liste que listeDuRepertoire() a gardée dans le cache, relue champ
+     * par champ : le cache la rend sans type, et une autre forme est
+     * refusée (voir ValeursLues).
+     *
+     * @param  array<array-key, mixed>  $gardee
+     * @return array{etablissements: array<array-key, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, refus_du_territoire: string|null}>, complete: bool}
+     *
+     * @throws UnexpectedValueException une liste d'une autre forme
+     */
+    private static function listeGardee(array $gardee): array
+    {
+        $etablissements = [];
+
+        foreach (ValeursLues::tableauDe($gardee, 'etablissements') as $siret => $etablissement) {
+            $lu = is_array($etablissement) ? $etablissement : throw new UnexpectedValueException(sprintf(ValeursLues::REFUS_TABLEAU, get_debug_type($etablissement)));
+            $etablissements[$siret] = [
+                'nic' => ValeursLues::texteDe($lu, 'nic'),
+                'enseigne' => ValeursLues::texteOuNulDe($lu, 'enseigne'),
+                'adresse' => ValeursLues::texteDe($lu, 'adresse'),
+                'ville' => ValeursLues::texteOuNulDe($lu, 'ville'),
+                'siege' => ValeursLues::booleenDe($lu, 'siege'),
+                'refus_du_territoire' => ValeursLues::texteOuNulDe($lu, 'refus_du_territoire'),
+            ];
+        }
+
+        return ['etablissements' => $etablissements, 'complete' => ValeursLues::booleenDe($gardee, 'complete')];
     }
 
     /**

@@ -182,10 +182,10 @@ class TableauDeBord extends Dashboard
 
         return [
             'lie' => $lie === null ? null : $denomination((int) $lie->cabinet_id),
-            'demandes' => $demandes->map(fn (LienCabinet $demande): array => [
+            'demandes' => array_values($demandes->map(fn (LienCabinet $demande): array => [
                 'cabinet' => $denomination((int) $demande->cabinet_id),
                 'url' => RattachementDUnCabinet::getUrl(['lien' => $demande->uuid]),
-            ])->values()->all(),
+            ])->all()),
         ];
     }
 

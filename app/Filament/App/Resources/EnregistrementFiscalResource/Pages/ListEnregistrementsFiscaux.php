@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -102,7 +103,7 @@ class ListEnregistrementsFiscaux extends ListRecords
                     }
 
                     return response()->streamDownload(
-                        static fn () => $ecrire(fopen('php://output', 'wb')),
+                        static fn () => $ecrire(ResultatDePhp::flux(fopen('php://output', 'wb'), 'L\'ouverture de la sortie du téléchargement')),
                         "journal-des-evenements-du-{$data['du']}-au-{$data['au']}.csv",
                         ['Content-Type' => 'text/csv; charset=UTF-8'],
                     );

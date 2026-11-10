@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\FactureResource\Pages;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -62,7 +63,7 @@ class EditFacture extends EditRecord
         // Limité au magasin par MagasinScope ; withTrashed() garde le client
         // déjà rattaché s'il a été archivé depuis (voir
         // AppServiceProvider::limiterLesChoixAuMagasin()).
-        $client = Client::withTrashed()->findOrFail($data['client_id']);
+        $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
         return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle(auth()->user(), $this->record, $client, $data['lignes'], [
             'conditions_paiement' => $data['conditions_paiement'] ?? null,

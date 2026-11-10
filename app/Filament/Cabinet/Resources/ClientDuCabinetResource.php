@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -202,12 +203,11 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
      */
     public static function collaborateursConfies(LienCabinet $lien): array
     {
-        return User::query()
+        return ValeursLues::textes(User::query()
             ->where('societe_id', $lien->cabinet_id)
             ->whereIn('id', ClientConfie::query()->where('lien_id', $lien->getKey())->select('user_id'))
             ->orderBy('name')
-            ->pluck('name')
-            ->all();
+            ->pluck('name'));
     }
 
     /**

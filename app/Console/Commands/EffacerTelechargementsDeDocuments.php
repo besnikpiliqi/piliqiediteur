@@ -35,7 +35,7 @@ class EffacerTelechargementsDeDocuments extends Command
         $effaces = 0;
 
         foreach ($societes as $societeId) {
-            $effaces += $contexte->runAsSociete(Societe::query()->findOrFail($societeId), function (): int {
+            $effaces += $contexte->runAsSociete(Societe::query()->whereKey($societeId)->firstOrFail(), function (): int {
                 $effaces = 0;
 
                 foreach (TelechargementDeDocuments::query()->where('expire_le', '<=', now())->orderBy('id')->get() as $telechargement) {

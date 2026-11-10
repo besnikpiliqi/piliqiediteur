@@ -13,7 +13,8 @@ use UnexpectedValueException;
  * tableau ou un nombre écrit en texte, ou une liste de textes ou
  * d'entiers, dans leur ordre. Une autre valeur (une colonne nulle, un champ
  * absent, ou d'un autre type que celui que le code attend) est refusée par
- * une exception, au lieu d'être utilisée pour ce qu'elle n'est pas.
+ * une exception, au lieu d'être utilisée pour ce qu'elle n'est pas. La clé
+ * d'une fiche saisie dans un écran se lit par cle().
  */
 final class ValeursLues
 {
@@ -28,6 +29,8 @@ final class ValeursLues
     public const REFUS_TABLEAU = 'Une valeur lue n\'est pas un tableau : %s.';
 
     public const REFUS_CHAMP = 'Un tableau lu n\'a pas son champ « %s ».';
+
+    public const REFUS_CLE = 'Une clé saisie n\'est pas une seule clé : %s.';
 
     /**
      * Le texte de ce champ d'un tableau lu (une colonne JSON que le code a
@@ -95,6 +98,21 @@ final class ValeursLues
     public static function entier(mixed $valeur): int
     {
         return is_int($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_ENTIER, get_debug_type($valeur)));
+    }
+
+    /**
+     * La clé d'une fiche choisie dans un écran (un Select, une ligne d'un
+     * répéteur), telle que le navigateur l'envoie : un texte, un nombre, un
+     * booléen ou rien, que whereKey() lit comme find() lisait une seule
+     * clé. Un tableau, que find() lisait comme plusieurs clés (une
+     * collection, sur laquelle l'écran s'arrêtait par une erreur) et que
+     * seule une requête forgée envoie à la place d'une clé, est refusé.
+     *
+     * @throws UnexpectedValueException un tableau ou un objet
+     */
+    public static function cle(mixed $valeur): int|string|float|bool|null
+    {
+        return $valeur === null || is_scalar($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_CLE, get_debug_type($valeur)));
     }
 
     /**

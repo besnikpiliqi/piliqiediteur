@@ -63,13 +63,19 @@ class MarquerFacturesEnRetard extends Command
             ->whereIn('statut', [StatutFacture::Emise, StatutFacture::Envoyee, StatutFacture::PartiellementPayee])
             ->where('date_echeance', '<', $aujourdhui);
 
-        $marquees = $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
-            ->filter(fn (string $numero, int $id): bool => $echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1);
+        $marquees = [];
 
-        if ($marquees->isNotEmpty()) {
-            Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees->values()->all()));
+        $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
+            ->each(function (string $numero, int $id) use ($echues, &$marquees): void {
+                if ($echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1) {
+                    $marquees[] = $numero;
+                }
+            });
+
+        if ($marquees !== []) {
+            Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees));
         }
 
-        return $marquees->count();
+        return count($marquees);
     }
 }

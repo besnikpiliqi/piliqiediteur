@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\Tenancy\Support\ValeursLues;
+
 return [
 
     /*
@@ -81,7 +83,7 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            'url' => rtrim(ValeursLues::texte(env('APP_URL', 'http://localhost')), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

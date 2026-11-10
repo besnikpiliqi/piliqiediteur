@@ -35,6 +35,7 @@ use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
 use App\Policies\AffectationPolicy;
@@ -70,6 +71,7 @@ use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -155,9 +157,11 @@ class AppServiceProvider extends ServiceProvider
         // (ex: Database\Factories\Domain\Tenancy\Models\MagasinFactory).
         // On la fait pointer sur un répertoire plat Database\Factories\
         // {NomDuModele}Factory, plus simple à maintenir.
-        Factory::guessFactoryNamesUsing(
-            fn (string $modelName) => 'Database\\Factories\\'.class_basename($modelName).'Factory'
-        );
+        Factory::guessFactoryNamesUsing(static function (string $modelName): string {
+            $factory = 'Database\\Factories\\'.class_basename($modelName).'Factory';
+
+            return is_subclass_of($factory, Factory::class) ? $factory : throw new LogicException("Le modèle {$modelName} n'a pas de factory {$factory}.");
+        });
 
         // Même raisonnement pour les Policies : l'auto-discovery de
         // Laravel ne devine pas App\Policies\ClientPolicy depuis
@@ -188,7 +192,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(InvitationCabinet::class, InvitationCabinetPolicy::class);
         Gate::policy(EntreeAudit::class, EntreeAuditPolicy::class);
 
-        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
+        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app->make('hash'), $config['model']));
 
         $this->nommerLesModelesPolymorphes();
         $this->declarerLaSaisieEnDirect();
@@ -297,7 +301,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Field::configureUsing(function (Field $champ): void {
             $champ->validationAttribute(static function (Field $component): string {
-                $libelle = strip_tags((string) $component->getLabel());
+                $libelle = $component->getLabel();
+                $libelle = strip_tags($libelle instanceof Htmlable ? $libelle->toHtml() : (string) $libelle);
 
                 return preg_match('/^\p{Lu}{2,}(?!\p{Ll})/u', $libelle) === 1 ? $libelle : Str::lcfirst($libelle);
             });
@@ -373,7 +378,7 @@ class AppServiceProvider extends ServiceProvider
                 $proposables = $relation->getQuery();
                 $proposables->scopes(['proposables' => [$component->getRecord()?->getOriginal($relation->getForeignKeyName())]]);
 
-                return RechercheSansAccents::appliquer($proposables, $search, $colonnesDeRecherche ?? [$attributAffiche])
+                return RechercheSansAccents::appliquer($proposables, $search, ValeursLues::textes($colonnesDeRecherche ?? [$attributAffiche]))
                     ->orderBy($attributAffiche)
                     ->orderBy($cle)
                     ->limit($component->getOptionsLimit())

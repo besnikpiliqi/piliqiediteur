@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -97,7 +98,7 @@ class PaiementResource extends Resource
                     // Son mode de paiement préféré est présélectionné (B8) ;
                     // sans préférence, le mode déjà choisi reste.
                     ->afterStateUpdated(function (mixed $state, Set $set): void {
-                        $modePrefere = Client::withTrashed()->find($state)?->mode_paiement_prefere;
+                        $modePrefere = Client::withTrashed()->whereKey(ValeursLues::cle($state))->first()?->mode_paiement_prefere;
 
                         if ($modePrefere !== null) {
                             $set('mode_paiement', $modePrefere->value);

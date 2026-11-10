@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\FactureResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RecoitLeClientChoisi;
@@ -20,7 +21,7 @@ class CreateFacture extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        $client = Client::query()->findOrFail($data['client_id']);
+        $client = Client::query()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
         return static::executerOuInterrompre(fn () => app(CreerFactureAction::class)->handle(auth()->user(), $client, $data['lignes'], [
             'conditions_paiement' => $data['conditions_paiement'] ?? null,

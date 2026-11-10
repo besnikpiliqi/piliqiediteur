@@ -7,6 +7,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -52,7 +53,7 @@ class EditFactureAchat extends EditRecord
         // Limité au magasin par MagasinScope ; withTrashed() garde le
         // fournisseur déjà rattaché s'il a été archivé depuis (voir
         // AppServiceProvider::limiterLesChoixAuMagasin()).
-        $fournisseur = Fournisseur::withTrashed()->findOrFail($data['fournisseur_id']);
+        $fournisseur = Fournisseur::withTrashed()->whereKey(ValeursLues::cle($data['fournisseur_id']))->firstOrFail();
 
         $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(auth()->user(), $this->record, $fournisseur, array_values($data['lignes']), [
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,

@@ -15,6 +15,7 @@ use App\Domain\Cabinets\Services\RechercheDesCabinets;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -215,7 +216,7 @@ class CabinetComptable extends Page implements HasForms
                 static::executerSansCasser(function () use ($arguments): void {
                     $cabinet = app(RechercheDesCabinets::class)->pour($this->recherche)->firstWhere('uuid', (string) ($arguments['uuid'] ?? ''))
                         ?? throw new LogicException(DesignerUnCabinetAction::MESSAGE_CABINET_NON_LIABLE);
-                    app(DesignerUnCabinetAction::class)->handle(auth()->user(), $this->societe(), Societe::query()->findOrFail($cabinet->getKey()));
+                    app(DesignerUnCabinetAction::class)->handle(auth()->user(), $this->societe(), Societe::query()->whereKey($cabinet->getKey())->firstOrFail());
                     Notification::make()->title('Votre demande est envoyée au cabinet.')->success()->send();
                 });
             });
@@ -261,14 +262,13 @@ class CabinetComptable extends Page implements HasForms
      */
     public function personnesQuiOntAcces(LienCabinet $lien): array
     {
-        return User::query()
+        return ValeursLues::textes(User::query()
             ->where('societe_id', $lien->cabinet_id)
             ->where('statut', StatutCompte::Actif->value)
             ->where(fn ($comptes) => $comptes->where('role_societe', 'proprietaire')
                 ->orWhereIn('id', DB::table('clients_confies')->where('societe_id', $lien->cabinet_id)->where('lien_id', $lien->getKey())->select('user_id')))
             ->orderBy('name')
-            ->pluck('name')
-            ->all();
+            ->pluck('name'));
     }
 
     /**

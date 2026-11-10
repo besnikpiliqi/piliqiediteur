@@ -22,6 +22,7 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
 use Closure;
@@ -202,16 +203,16 @@ trait AjouteDesLignesDeVente
             return $calculer();
         }
 
-        self::$calculsDeLaRequete ??= new WeakMap;
+        $calculs = self::$calculsDeLaRequete ??= new WeakMap;
 
-        if (! array_key_exists($cle, self::$calculsDeLaRequete[$page] ?? [])) {
+        if (! array_key_exists($cle, $calculs[$page] ?? [])) {
             $resultat = $calculer();
             // Relu après le calcul, qui a pu en mémoriser un autre (le
             // contexte de vente d'un aperçu).
-            self::$calculsDeLaRequete[$page] = [...(self::$calculsDeLaRequete[$page] ?? []), $cle => $resultat];
+            $calculs[$page] = [...($calculs[$page] ?? []), $cle => $resultat];
         }
 
-        return self::$calculsDeLaRequete[$page][$cle];
+        return $calculs[$page][$cle];
     }
 
     /**
@@ -244,7 +245,7 @@ trait AjouteDesLignesDeVente
         $prixSansTva = ContexteDeVente::documentRetireLaTvaDuPrix($document);
         $calculateur = app(CalculateurLigne::class);
 
-        return $document->lignes->loadMissing('service')->map(fn (LigneFacture|LigneDevis $ligne): array => [
+        return array_values($document->lignes->loadMissing('service')->map(fn (LigneFacture|LigneDevis $ligne): array => [
             'produit_id' => $ligne->produit_id,
             'service_id' => $ligne->service_id,
             'description' => $ligne->description,
@@ -260,7 +261,7 @@ trait AjouteDesLignesDeVente
                 default => $ligne->service->taux_tva ?? self::magasin()->tauxTvaParDefaut(),
             }),
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
-        ])->all();
+        ])->all());
     }
 
     /**
@@ -285,7 +286,7 @@ trait AjouteDesLignesDeVente
                 // plus tant qu'il n'est pas restauré ou retiré (voir
                 // ConstructeurLigneDocument).
                 ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
-                ->getOptionLabelUsing(fn ($value) => Produit::withTrashed()->find($value)?->nom)
+                ->getOptionLabelUsing(fn ($value) => Produit::withTrashed()->whereKey(ValeursLues::cle($value))->first()?->nom)
                 ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
                 ->live()
                 ->columnSpan(2)
@@ -443,7 +444,7 @@ trait AjouteDesLignesDeVente
                 ->afterStateHydrated(function (Get $get, Set $set): void {
                     $produit = self::estUneLigneDeService($get) || blank($get('produit_id'))
                         ? null
-                        : Produit::withTrashed()->find($get('produit_id'));
+                        : Produit::withTrashed()->whereKey(ValeursLues::cle($get('produit_id')))->first();
 
                     if ($produit !== null) {
                         self::appliquerLeTauxDuProduit($produit, $get, $set);
@@ -558,7 +559,7 @@ trait AjouteDesLignesDeVente
      */
     private static function ligneAuPrixDuCatalogue(array $ligne, ContexteDeVente $contexte): array
     {
-        $produit = filled($ligne['produit_id'] ?? null) ? Produit::withTrashed()->find($ligne['produit_id']) : null;
+        $produit = filled($ligne['produit_id'] ?? null) ? Produit::withTrashed()->whereKey(ValeursLues::cle($ligne['produit_id']))->first() : null;
 
         if ($produit !== null) {
             $calculateur = app(CalculateurLigne::class);
@@ -573,7 +574,7 @@ trait AjouteDesLignesDeVente
             ];
         }
 
-        $service = filled($ligne['service_id'] ?? null) ? Service::query()->find($ligne['service_id']) : null;
+        $service = filled($ligne['service_id'] ?? null) ? Service::query()->whereKey(ValeursLues::cle($ligne['service_id']))->first() : null;
 
         if ($service === null || ! $service->aUnPrixDeReference()) {
             return $ligne;
@@ -1077,7 +1078,9 @@ trait AjouteDesLignesDeVente
         // Seulement ceux que la personne peut vendre : un identifiant envoyé
         // sans passer par les cases à cocher n'ajoute rien.
         $services = self::servicesVendables()->whereKey($identifiants)->get()->keyBy('id');
-        $etat = $livewire->getForm('form')->getRawState();
+        $formulaire = $livewire->getForm('form') ?? throw new LogicException('Le formulaire de la vente est introuvable.');
+        $etat = $formulaire->getRawState();
+        $etat = is_array($etat) ? $etat : $etat->toArray();
         $contexte = self::contexteDeVente($etat['client_id'] ?? null, NatureOperation::depuisSaisie($etat['nature_operation'] ?? null));
 
         // Dans l'ordre où le vendeur les a cochés ; le nouveau service en

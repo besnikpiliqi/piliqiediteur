@@ -1,6 +1,6 @@
 {
     "analyse_statique": {
-        "niveau": 6,
+        "niveau": 7,
         "chemins": [
             "app",
             "bootstrap",

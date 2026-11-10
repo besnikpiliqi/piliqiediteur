@@ -7,6 +7,7 @@ use App\Filament\App\Resources\ClientResource;
 use App\Filament\Concerns\SignaleUneLigneDisparue;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Collection;
 
 class ListClients extends ListRecords
 {
@@ -29,7 +30,9 @@ class ListClients extends ListRecords
      */
     public function creditDAvoirEnCentimes(Client $client): int
     {
-        return ($this->credits ??= Client::creditsDAvoirEnCentimes($this->getTableRecords()->items()))[$client->getKey()] ?? 0;
+        $enregistrements = $this->getTableRecords();
+
+        return ($this->credits ??= Client::creditsDAvoirEnCentimes($enregistrements instanceof Collection ? $enregistrements : $enregistrements->items()))[$client->getKey()] ?? 0;
     }
 
     protected function getHeaderActions(): array

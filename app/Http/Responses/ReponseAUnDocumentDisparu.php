@@ -116,6 +116,7 @@ final class ReponseAUnDocumentDisparu
         }
 
         return $modele === $introuvable->getModel()
+            && is_string($page)
             && is_subclass_of($page, Page::class)
             && $page::getResource()::getModel() === $modele
             && $modele::query()->whereKey($document['key'])->doesntExist()

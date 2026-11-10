@@ -19,6 +19,7 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
@@ -139,7 +140,7 @@ class ConstructeurLigneAchat
     public function verrouillerLeRegistreSiUnTauxChange(array $lignes): void
     {
         $changeUnTaux = collect($lignes)->contains(function (array $donnees): bool {
-            $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->whereKey($donnees['produit_id'])->first() : null;
+            $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->whereKey(ValeursLues::cle($donnees['produit_id']))->first() : null;
 
             return $produit !== null && self::corrigeUnParametreDeConformite($produit, $donnees);
         });
@@ -560,7 +561,7 @@ class ConstructeurLigneAchat
         $attributs = self::attributsDuProduit($donnees);
 
         if (filled($donnees['produit_id'] ?? null)) {
-            $produit = Produit::withTrashed()->whereKey($donnees['produit_id'])->firstOrFail();
+            $produit = Produit::withTrashed()->whereKey(ValeursLues::cle($donnees['produit_id']))->firstOrFail();
 
             if ($produit->trashed()) {
                 throw new LogicException("Le produit « {$produit->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.");

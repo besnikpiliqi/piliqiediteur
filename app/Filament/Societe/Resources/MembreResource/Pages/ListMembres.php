@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\MontreLeCompteCree;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
@@ -107,7 +108,7 @@ class ListMembres extends ListRecords
                 $cree = null;
 
                 if ($data['compte'] === 'existant') {
-                    $candidat = User::query()->where('societe_id', MembreResource::societe()->getKey())->find($data['candidat']);
+                    $candidat = User::query()->where('societe_id', MembreResource::societe()->getKey())->whereKey(ValeursLues::cle($data['candidat']))->first();
                     $enPresence = $candidat?->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
 
                     if ($enPresence) {
@@ -197,7 +198,7 @@ class ListMembres extends ListRecords
                         $this->auteur(),
                         MembreResource::societe(),
                         ['name' => $data['name']],
-                        $data['portee'] === 'tous' ? null : array_map(intval(...), $data['magasins'] ?? []),
+                        $data['portee'] === 'tous' ? null : array_values(array_map(intval(...), $data['magasins'] ?? [])),
                         MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
                         array_values($data['autorisations_societe'] ?? []),
                         filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null,

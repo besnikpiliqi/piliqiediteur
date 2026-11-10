@@ -132,9 +132,9 @@ class CollaborateurResource extends RessourceDuPanneauCabinet
     {
         $clients = app(AccesDesCabinets::class)->liensDuCompte($collaborateur)->pluck('liens_cabinet.societe_id')->all();
 
-        return Societe::query()->whereKey($clients)->orderBy('raison_sociale')->get(['id', 'siren', 'raison_sociale'])
+        return array_values(Societe::query()->whereKey($clients)->orderBy('raison_sociale')->get(['id', 'siren', 'raison_sociale'])
             ->map(fn (Societe $client): string => ($client->raison_sociale ?? 'Sans dénomination').' · SIREN '.$client->siren)
-            ->all();
+            ->all());
     }
 
     public static function getPages(): array

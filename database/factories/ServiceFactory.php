@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -15,7 +16,7 @@ class ServiceFactory extends Factory
     public function definition(): array
     {
         return [
-            'nom' => ucfirst(fake()->unique()->words(3, true)),
+            'nom' => ucfirst(ValeursLues::texte(fake()->unique()->words(3, true))),
             'actif' => true,
         ];
     }

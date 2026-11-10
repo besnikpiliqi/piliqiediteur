@@ -28,6 +28,7 @@ use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Support\SensDuTri;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
@@ -128,7 +129,7 @@ trait AfficheLeJournalDAudit
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date (heure de Paris)')
                     ->formatStateUsing(fn (EntreeAudit $record): string => Calendrier::deParis()->afficherDansUnJournal($record->created_at, 'd/m/Y H:i:s'))
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction)),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', SensDuTri::de($direction))),
                 Tables\Columns\TextColumn::make('categorie')->label('Catégorie')->badge(),
                 Tables\Columns\TextColumn::make('action')->label('Action')->wrap(),
                 Tables\Columns\TextColumn::make('portee')

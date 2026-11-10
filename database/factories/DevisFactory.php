@@ -25,7 +25,7 @@ class DevisFactory extends Factory
     {
         return [
             'client_id' => Client::factory(),
-            'type_client' => fn (array $attributs): TypeClient => Client::query()->withTrashed()->findOrFail($attributs['client_id'])->type_client,
+            'type_client' => fn (array $attributs): TypeClient => Client::query()->withTrashed()->whereKey($attributs['client_id'])->firstOrFail()->type_client,
             'date_validite' => Calendrier::ajouterJours(app(TenantContext::class)->magasin()->calendrier()->aujourdhui(), 30),
         ];
     }

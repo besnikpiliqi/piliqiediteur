@@ -72,7 +72,7 @@ class AccepterLInvitationDuCabinetController
         } catch (InvitationInvalideException) {
             return $this->invalide();
         } catch (ValidationException $refus) {
-            return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, collect($refus->errors())->flatten()->values()->all(), $type);
+            return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, array_values($refus->validator->errors()->all()), $type);
         } catch (LogicException $refus) {
             return $this->page($jeton, InvitationCabinet::parSonJeton($jeton), null, [$refus->getMessage()], $type);
         }

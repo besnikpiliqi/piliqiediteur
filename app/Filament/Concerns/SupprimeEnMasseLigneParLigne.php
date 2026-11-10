@@ -56,11 +56,12 @@ trait SupprimeEnMasseLigneParLigne
     /**
      * @template TLigne of Model
      *
+     * @param  class-string<TLigne>  $classe  la classe des lignes du tableau
      * @param  Closure(TLigne): mixed  $supprimer  l'action du domaine qui supprime une ligne cochée, au nom de la personne connectée
      */
-    protected static function suppressionEnMasse(Closure $supprimer): DeleteBulkAction
+    protected static function suppressionEnMasse(string $classe, Closure $supprimer): DeleteBulkAction
     {
-        return self::retraitEnMasse(DeleteBulkAction::make(), $supprimer, 'supprimée', 'supprimées', 'Vous ne pouvez pas la supprimer, ou elle ne peut plus l\'être.', 'Vous ne pouvez pas les supprimer, ou elles ne peuvent plus l\'être.');
+        return self::retraitEnMasse(DeleteBulkAction::make(), $classe, $supprimer, 'supprimée', 'supprimées', 'Vous ne pouvez pas la supprimer, ou elle ne peut plus l\'être.', 'Vous ne pouvez pas les supprimer, ou elles ne peuvent plus l\'être.');
     }
 
     protected static function archivageEnMasse(): DeleteBulkAction
@@ -74,7 +75,8 @@ trait SupprimeEnMasseLigneParLigne
                 ->successNotificationTitle('Archivés')
                 ->icon('heroicon-m-archive-box')
                 ->modalIcon('heroicon-o-archive-box'),
-            fn (Client|Fournisseur|Produit $fiche) => app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $fiche),
+            Model::class,
+            fn (Model $fiche) => app(ArchiverUneFicheAction::class)->archiver(auth()->user(), $fiche instanceof Client || $fiche instanceof Fournisseur || $fiche instanceof Produit ? $fiche : throw new LogicException('Seule une fiche de client, de fournisseur ou de produit s\'archive.')),
             'archivée',
             'archivées',
             'Vous ne pouvez pas l\'archiver.',
@@ -88,11 +90,20 @@ trait SupprimeEnMasseLigneParLigne
      *
      * @template TLigne of Model
      *
+     * @param  class-string<TLigne>  $classe  la classe des lignes du tableau
      * @param  Closure(TLigne): mixed  $retirer
      */
-    private static function retraitEnMasse(DeleteBulkAction $action, Closure $retirer, string $participe, string $participePluriel, string $raison, string $raisonPluriel): DeleteBulkAction
+    private static function retraitEnMasse(DeleteBulkAction $action, string $classe, Closure $retirer, string $participe, string $participePluriel, string $raison, string $raisonPluriel): DeleteBulkAction
     {
-        return $action->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne($action, $records, $retirer, $participe, $participePluriel, $raison, $raisonPluriel));
+        return $action->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne(
+            $action,
+            $records->map(fn (Model $record): Model => $record instanceof $classe ? $record : throw new LogicException('Une ligne cochée n\'est pas une ligne de ce tableau.')),
+            $retirer,
+            $participe,
+            $participePluriel,
+            $raison,
+            $raisonPluriel,
+        ));
     }
 
     /**
@@ -140,11 +151,10 @@ trait SupprimeEnMasseLigneParLigne
     {
         $modele = $refusees->first();
 
-        return $modele->newQuery()->whereKey($refusees->modelKeys())->pluck($modele->getQualifiedKeyName())
+        return array_values($modele->newQuery()->whereKey($refusees->modelKeys())->pluck($modele->getQualifiedKeyName())
             ->map(fn (mixed $cle): string => (string) $cle)
             ->sort()
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**

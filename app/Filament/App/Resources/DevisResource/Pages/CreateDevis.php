@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\DevisResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RecoitLeClientChoisi;
@@ -26,7 +27,7 @@ class CreateDevis extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        $client = Client::query()->findOrFail($data['client_id']);
+        $client = Client::query()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
         return static::executerOuInterrompre(fn () => app(CreerDevisAction::class)->handle(auth()->user(), $client, $data['lignes'], [
             'date_validite' => $data['date_validite'] ?? null,

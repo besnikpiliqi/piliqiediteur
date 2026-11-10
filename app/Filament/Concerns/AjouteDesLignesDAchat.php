@@ -19,6 +19,7 @@ use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use Closure;
 use Filament\Forms\Components\Actions;
@@ -258,9 +259,10 @@ trait AjouteDesLignesDAchat
      */
     private static function tvaProposee(Get $get): string
     {
-        $montants = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [])->parTaux[self::tauxDeLaRangee($get)] ?? null;
+        $document = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? []);
+        $taux = self::tauxDeLaRangee($get);
 
-        return $montants === null ? '' : self::montantEnTexte($montants['montant_tva_calcule']);
+        return isset($document->parTaux[$taux]) ? self::montantEnTexte($document->tvaProposee($taux)) : '';
     }
 
     /**
@@ -277,7 +279,7 @@ trait AjouteDesLignesDAchat
             return '';
         }
 
-        $detail = 'Base HT '.self::montantEnTexte($montants['montant_ht']).' · calcul depuis les lignes : '.self::montantEnTexte($montants['montant_tva_calcule']).'. Laissez vide pour le garder.';
+        $detail = 'Base HT '.self::montantEnTexte($montants['montant_ht']).' · calcul depuis les lignes : '.self::montantEnTexte($document->tvaProposee($taux)).'. Laissez vide pour le garder.';
         $ecart = app(TvaDuFournisseur::class)->ecarts($document)[$taux] ?? null;
 
         return $ecart !== null && $ecart->tvaHorsTolerance() ? $detail.' '.implode(' ', array_slice($ecart->avertissements(), -1)) : $detail;
@@ -534,7 +536,7 @@ trait AjouteDesLignesDAchat
         // Archivé compris : la ligne qui le garde se rouvre sur sa fiche,
         // non modifiable (voir ProduitPolicy::update()), et l'enregistrement
         // la refuse ensuite avec un message (voir ConstructeurLigneAchat).
-        $produitSelectionne = fn (Get $get): ?Produit => filled($get('produit_id')) ? Produit::withTrashed()->find($get('produit_id')) : null;
+        $produitSelectionne = fn (Get $get): ?Produit => filled($get('produit_id')) ? Produit::withTrashed()->whereKey(ValeursLues::cle($get('produit_id')))->first() : null;
         $produitChoisi = fn (Get $get): bool => $get('origine') === self::NOUVEAU_PRODUIT || filled($get('produit_id'));
         $ficheNonModifiable = fn (Get $get): bool => ($produit = $produitSelectionne($get)) !== null && ! auth()->user()->can('update', $produit);
         $figeParSonFournisseur = fn (Get $get): bool => $produitSelectionne($get)?->vientDUneFactureAchatApi() ?? false;
@@ -563,7 +565,7 @@ trait AjouteDesLignesDAchat
                     ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
-                    ->getOptionLabelUsing(fn ($value): ?string => Produit::withTrashed()->find($value)?->nom)
+                    ->getOptionLabelUsing(fn ($value): ?string => Produit::withTrashed()->whereKey(ValeursLues::cle($value))->first()?->nom)
                     ->required()
                     ->visible(fn (Get $get): bool => $get('origine') !== self::NOUVEAU_PRODUIT)
                     ->live()
@@ -679,7 +681,7 @@ trait AjouteDesLignesDAchat
             // d'achat précédent ne doit pas rester comme si elle valait
             // encore -- sauf si la personne l'a déjà changée elle-même.
             if (filled($get('prix_vente_propose')) && $get('prix_vente_ttc') === $get('prix_vente_propose')) {
-                $produit = filled($get('produit_id')) ? Produit::withTrashed()->find($get('produit_id')) : null;
+                $produit = filled($get('produit_id')) ? Produit::withTrashed()->whereKey(ValeursLues::cle($get('produit_id')))->first() : null;
 
                 $set('prix_vente_ttc', $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc));
             }
@@ -808,7 +810,7 @@ trait AjouteDesLignesDAchat
      */
     private static function ligneDepuisLeFormulaire(array $data): array
     {
-        $produit = filled($data['produit_id'] ?? null) ? Produit::withTrashed()->find($data['produit_id']) : null;
+        $produit = filled($data['produit_id'] ?? null) ? Produit::withTrashed()->whereKey(ValeursLues::cle($data['produit_id']))->first() : null;
         $ficheLue = match (true) {
             $produit === null => null,
             is_array($data['fiche_lue'] ?? null) => FicheLue::depuis(Produit::class, $data['fiche_lue']),

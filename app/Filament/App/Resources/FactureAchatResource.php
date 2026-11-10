@@ -25,6 +25,7 @@ use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -279,7 +280,7 @@ class FactureAchatResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(fn (FactureAchat $factureAchat) => app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $factureAchat)),
+                    static::suppressionEnMasse(FactureAchat::class, fn (FactureAchat $factureAchat) => app(SupprimerFactureAchatAction::class)->handle(auth()->user(), $factureAchat)),
                 ]),
             ]);
     }
@@ -730,7 +731,7 @@ class FactureAchatResource extends Resource
         }
 
         $calculateur = app(CalculateurLigne::class);
-        $proposition = 'Base HT '.$calculateur->enEuros($calculateur->enCentiemes($montants['montant_ht'])).' · proposition de PILIQI : '.$calculateur->enEuros($calculateur->enCentiemes($montants['montant_tva_calcule'])).'. Laissez vide pour la garder.';
+        $proposition = 'Base HT '.$calculateur->enEuros($calculateur->enCentiemes($montants['montant_ht'])).' · proposition de PILIQI : '.$calculateur->enEuros($calculateur->enCentiemes($document->tvaProposee($taux))).'. Laissez vide pour la garder.';
         $ecart = app(TvaDuFournisseur::class)->ecarts($document)[$taux] ?? null;
 
         return $ecart !== null && $ecart->tvaHorsTolerance() ? $proposition.' '.implode(' ', array_slice($ecart->avertissements(), -1)) : $proposition;
@@ -757,7 +758,7 @@ class FactureAchatResource extends Resource
      */
     private static function enregistrerLAvoirFournisseur(?Model $record, array $data): void
     {
-        $factureAchat = self::factureDuRetour($record) ?? FactureAchat::query()->findOrFail($data['facture_achat_id']);
+        $factureAchat = self::factureDuRetour($record) ?? FactureAchat::query()->whereKey(ValeursLues::cle($data['facture_achat_id']))->firstOrFail();
         $avoir = app(EnregistrerAvoirFournisseurAction::class)->handle(
             auth()->user(),
             $factureAchat,

@@ -8,6 +8,8 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Support\ExpressionDUneColonne;
+use App\Domain\Tenancy\Support\SensDuTri;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -22,6 +24,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Livewire\Component;
 
 /**
@@ -84,7 +87,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
             // trié par « est vide », il passe avant eux, quand PostgreSQL
             // rangerait les valeurs vides en tête d'un tri décroissant de
             // la colonne.
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->orderByRaw($query->getQuery()->getGrammar()->wrap($query->qualifyColumn('est_comptoir')).' is null'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->orderBy(new ExpressionDUneColonne(ExpressionDUneColonne::COLONNE.' is null', $query->qualifyColumn('est_comptoir'))))
             ->defaultSort('created_at', 'desc')
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25)
@@ -128,7 +131,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                 TextColumn::make('created_at')
                     ->label('Créé le')
                     ->dateTime('d/m/Y')
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('created_at', $direction)->orderBy('id', $direction)),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('created_at', SensDuTri::de($direction))->orderBy('id', SensDuTri::de($direction))),
             ])
             ->filters([
                 SelectFilter::make('type_client')
@@ -186,6 +189,8 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
      */
     private function credits(): array
     {
-        return $this->credits ??= Client::creditsDAvoirEnCentimes($this->getTableRecords()->items());
+        $enregistrements = $this->getTableRecords();
+
+        return $this->credits ??= Client::creditsDAvoirEnCentimes($enregistrements instanceof Collection ? $enregistrements : $enregistrements->items());
     }
 }

@@ -33,6 +33,7 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -48,6 +49,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\View\ViewException;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -55,6 +57,32 @@ use Tests\TestCase;
 class FactureResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Le client d'une facture se choisit un à un : une requête forgée qui
+     * envoie un tableau d'identifiants à sa place est refusée dès que
+     * l'écran lit ce client (voir ValeursLues::cle()), sans rien créer, au
+     * lieu que la facture prenne l'un de ces clients.
+     */
+    public function test_un_client_saisi_en_tableau_par_une_requete_forgee_est_refuse(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $premier = Client::factory()->create();
+        $second = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $this->assertThrows(
+            fn () => Livewire::test(CreateFacture::class)->fillForm([
+                'client_id' => [$premier->id, $second->id],
+                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ])->call('create'),
+            ViewException::class,
+            sprintf(ValeursLues::REFUS_CLE, 'array'),
+        );
+        $this->assertSame(0, Facture::query()->count());
+    }
 
     /**
      * Le résumé d'un avoir (numéro/motif/total) ne dit pas CE QUI a été

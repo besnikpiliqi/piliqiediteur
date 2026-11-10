@@ -210,7 +210,7 @@ class DevisResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(auth()->user(), $devis)),
+                    static::suppressionEnMasse(Devis::class, fn (Devis $devis) => app(SupprimerDevisAction::class)->handle(auth()->user(), $devis)),
                 ]),
             ]);
     }

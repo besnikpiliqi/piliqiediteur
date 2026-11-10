@@ -9,6 +9,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -177,7 +178,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                 // achat, une réception ou un inventaire.
                 TextColumn::make('stock_quantite')
                     ->label('Stock restant')
-                    ->formatStateUsing(fn (Produit $produit): string => $produit->suivi_stock ? Number::format($produit->stock_quantite, locale: config('app.locale')) : '—')
+                    ->formatStateUsing(fn (Produit $produit): string => $produit->suivi_stock ? ResultatDePhp::texte(Number::format($produit->stock_quantite, locale: config('app.locale')), 'Le format du stock restant') : '—')
                     ->color(fn (Produit $produit): ?string => $produit->estEpuise() ? 'danger' : null)
                     ->description(fn (Produit $produit): ?string => $produit->estEnStockNegatif() ? 'À régulariser' : null)
                     ->visible($voitLesFiches),

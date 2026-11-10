@@ -253,7 +253,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
         $portee = $auteur->magasinsDeSaPortee()->pluck('magasins.id')->map(fn ($id): int => (int) $id)->all();
 
-        return Affectation::query()
+        return array_values(Affectation::query()
             ->where('societe_id', $auteur->societe_id)
             ->where('user_id', $compte->getKey())
             ->whereIn('magasin_id', $portee)
@@ -269,7 +269,7 @@ class MembreResource extends RessourceDuPanneauSociete
                     : [],
                 'nomination' => $affectation->nomme_par === null ? null : 'Nommé par '.(User::query()->find($affectation->nomme_par)->name ?? 'un administrateur').' : annulable',
             ])
-            ->all();
+            ->all());
     }
 
     /**

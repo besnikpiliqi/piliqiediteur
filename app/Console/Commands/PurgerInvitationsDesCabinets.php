@@ -34,7 +34,7 @@ class PurgerInvitationsDesCabinets extends Command
         $effacees = 0;
 
         foreach ($cabinets as $cabinetId) {
-            $effacees += app(TenantContext::class)->runAsSociete(Societe::query()->findOrFail($cabinetId), fn (): int => InvitationCabinet::query()
+            $effacees += app(TenantContext::class)->runAsSociete(Societe::query()->whereKey($cabinetId)->firstOrFail(), fn (): int => InvitationCabinet::query()
                 ->where(fn ($invitations) => $invitations
                     ->where(fn ($closes) => $closes->where('etat', '<>', EtatInvitation::Refusee->value)->where('close_le', '<=', now()->subHours(self::HEURES_APRES_LA_FIN)))
                     ->orWhere(fn ($refusees) => $refusees->where('etat', EtatInvitation::Refusee->value)->where('close_le', '<=', Calendrier::deParis()->decaler(now(), CarbonInterval::days(-self::JOURS_APRES_UN_REFUS)))))

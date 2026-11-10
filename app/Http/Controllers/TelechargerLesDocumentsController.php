@@ -70,7 +70,7 @@ class TelechargerLesDocumentsController
         if (! $compte->peutAgir()
             || $magasins->count() !== count($trouve->magasins)
             || $magasins->contains(fn (Magasin $magasin): bool => ! $documents->peutTelechargerDans($compte, $magasin))
-            || $documents->nombreEncoreVisibles($compte, $magasins, $trouve->selection ?? []) !== $trouve->nombre_documents) {
+            || $documents->nombreEncoreVisibles($compte, $magasins, $trouve->clesChoisies()) !== $trouve->nombre_documents) {
             return $this->indisponible(self::SANS_DROIT, 403);
         }
 

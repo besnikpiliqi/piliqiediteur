@@ -13,6 +13,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Filament\Concerns\ArchiveLaFiche;
@@ -524,7 +525,7 @@ class ClientResource extends Resource
             return null;
         }
 
-        $solde = Client::withTrashed()->find($clientId)?->soldeCrediteur();
+        $solde = Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first()?->soldeCrediteur();
 
         return $solde !== null && $solde > 0 ? $solde : null;
     }

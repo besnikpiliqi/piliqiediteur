@@ -36,7 +36,7 @@ class ExpirerInvitationsDesCabinets extends Command
         $cabinets = InvitationCabinet::query()->withoutGlobalScopes()->where('etat', EtatInvitation::Ouverte->value)->distinct()->orderBy('societe_id')->pluck('societe_id');
 
         foreach ($cabinets as $cabinetId) {
-            $cabinet = Societe::query()->findOrFail($cabinetId);
+            $cabinet = Societe::query()->whereKey($cabinetId)->firstOrFail();
             $caduques = app(TenantContext::class)->runAsSociete($cabinet, fn (): array => DB::transaction(function () use ($cabinet): array {
                 Societe::query()->whereKey($cabinet->getKey())->lockForUpdate()->firstOrFail();
                 $caduques = [];

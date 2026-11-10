@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\DestinataireOfficiel;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use LogicException;
@@ -97,9 +98,10 @@ class EnvoyerUnCourrier extends ProcedureDeLEditeur
      */
     private function identifiant(string $option): ?string
     {
-        $valeur = (string) preg_replace('/\s+/', '', (string) $this->option($option));
+        $valeur = $this->option($option);
+        $sansEspace = $valeur === null ? null : preg_replace('/\s+/', '', ValeursLues::texte($valeur));
 
-        return $valeur === '' ? null : $valeur;
+        return $sansEspace === '' ? null : $sansEspace;
     }
 
     private function motif(): ?MotifCode

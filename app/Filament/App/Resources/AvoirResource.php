@@ -304,12 +304,11 @@ class AvoirResource extends Resource
             ->get()
             ->keyBy('id');
 
-        return $identifiants
+        return array_values($identifiants
             ->map(fn (int $identifiant): ?Facture => $lignesVues->get($identifiant)?->facture)
             ->filter()
             ->unique(fn (Facture $facture): int => $facture->getKey())
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Closure;
@@ -250,14 +251,14 @@ class ClotureCaisseResource extends Resource
         $nature = $estUnAvoir ? 'avoir' : 'ticket';
 
         return [
-            'visibles' => $vus->map(fn (Facture|Avoir $document): array => [
+            'visibles' => array_values($vus->map(fn (Facture|Avoir $document): array => [
                 'numero' => $document->numero,
                 'url' => $estUnAvoir ? AvoirResource::getUrl('view', ['record' => $document]) : FactureResource::getUrl('view', ['record' => $document]),
                 'client_nom' => $document->client_nom,
                 'ht' => $montant($document, 'total_ht'),
                 'tva' => $montant($document, 'total_tva'),
                 'ttc' => $montant($document, 'total_ttc'),
-            ])->values()->all(),
+            ])->all()),
             'autres' => $autres->isEmpty() ? null : sprintf(
                 '%d %s%s, %s TTC',
                 $autres->count(),
@@ -296,12 +297,12 @@ class ClotureCaisseResource extends Resource
      */
     private static function encaissements(ClotureCaisse $cloture): array
     {
-        return array_map(fn (array $mode): array => [
-            'libelle' => $mode['libelle'],
-            'paiements' => $mode['paiements'],
-            'contre_passations' => $mode['contre_passations'],
-            'montant' => app(CalculateurLigne::class)->enEuros($mode['montant']),
-        ], $cloture->recapitulatif['encaissements']);
+        return array_values(array_map(fn (array $mode): array => [
+            'libelle' => ValeursLues::texte($mode['libelle']),
+            'paiements' => ValeursLues::entier($mode['paiements']),
+            'contre_passations' => ValeursLues::entier($mode['contre_passations']),
+            'montant' => app(CalculateurLigne::class)->enEuros(ValeursLues::entier($mode['montant'])),
+        ], $cloture->recapitulatif['encaissements']));
     }
 
     public static function table(Table $table): Table

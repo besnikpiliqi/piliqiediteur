@@ -40,7 +40,7 @@ class MagasinFactory extends Factory
         return [
             'societe_id' => Societe::factory()->validee()->avecProprietaire(),
             'nom' => fake()->unique()->company(),
-            'siret' => fn (array $attributs): string => self::siretLibre(Societe::query()->findOrFail($attributs['societe_id'])),
+            'siret' => fn (array $attributs): string => self::siretLibre(Societe::query()->whereKey($attributs['societe_id'])->firstOrFail()),
             'etablissement_verifie_le' => now(),
             'territoire' => Territoire::Metropole,
             'adresse' => fake()->streetAddress(),

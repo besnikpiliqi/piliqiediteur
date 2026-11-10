@@ -96,6 +96,46 @@ class ValeursLuesTest extends TestCase
         ValeursLues::nombre($texte);
     }
 
+    /**
+     * Une clé saisie dans un écran est rendue sous chaque forme que le
+     * navigateur et Livewire envoient, pour que whereKey() la lise comme
+     * find() lisait une seule clé.
+     */
+    public function test_une_cle_saisie_est_rendue_telle_quelle(): void
+    {
+        $this->assertSame('12', ValeursLues::cle('12'));
+        $this->assertSame(12, ValeursLues::cle(12));
+        $this->assertSame('1', ValeursLues::cle('1'));
+        $this->assertSame('0', ValeursLues::cle('0'));
+        $this->assertSame('', ValeursLues::cle(''));
+        $this->assertTrue(ValeursLues::cle(true));
+        $this->assertNull(ValeursLues::cle(null));
+    }
+
+    /**
+     * Un tableau, que find() lisait comme plusieurs clés, et un objet sont
+     * refusés.
+     *
+     * @return array<string, array{mixed, string}>
+     */
+    public static function pasDesCles(): array
+    {
+        return [
+            'tableau de clés' => [[12, 13], 'array'],
+            'tableau vide' => [[], 'array'],
+            'objet' => [new ArrayIterator([12]), ArrayIterator::class],
+        ];
+    }
+
+    #[DataProvider('pasDesCles')]
+    public function test_une_cle_saisie_qui_n_est_pas_une_seule_cle_est_refusee(mixed $valeur, string $type): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_CLE, $type));
+
+        ValeursLues::cle($valeur);
+    }
+
     public function test_les_champs_d_un_tableau_lu_sont_rendus_tels_quels(): void
     {
         $tableau = ['nom' => 'Caisse 1', 'complement' => null, 'personne_morale' => false, 'adresse' => ['ville' => 'Lyon']];

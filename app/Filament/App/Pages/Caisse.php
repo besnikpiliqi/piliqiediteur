@@ -22,6 +22,7 @@ use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
@@ -345,7 +346,7 @@ class Caisse extends Page implements HasForms
      */
     private static function modePrefere(mixed $clientId): ModePaiement
     {
-        $mode = blank($clientId) ? null : Client::withTrashed()->find($clientId)?->mode_paiement_prefere;
+        $mode = blank($clientId) ? null : Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first()?->mode_paiement_prefere;
 
         return $mode !== null && in_array($mode, ModePaiement::aLaCaisse(), true) ? $mode : ModePaiement::Especes;
     }
@@ -390,7 +391,7 @@ class Caisse extends Page implements HasForms
                         ->orderBy('id')
                         ->limit(50)
                         ->pluck('nom', 'id'))
-                    ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->find($value)?->nom)
+                    ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->whereKey(ValeursLues::cle($value))->first()?->nom)
                     ->suffixAction(ClientResource::actionChercherUnClient())
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
@@ -525,7 +526,7 @@ class Caisse extends Page implements HasForms
      */
     private function factureImpossible(mixed $clientId): ?Htmlable
     {
-        $client = blank($clientId) ? null : Client::withTrashed()->find($clientId);
+        $client = blank($clientId) ? null : Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first();
 
         if (! $client?->estProfessionnel()) {
             return null;
@@ -597,7 +598,7 @@ class Caisse extends Page implements HasForms
 
         $data = $this->form->getState();
 
-        $client = Client::query()->findOrFail($data['client_id']);
+        $client = Client::query()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
         try {
             $this->enregistrerLePanier();

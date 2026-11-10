@@ -42,6 +42,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
@@ -73,6 +74,8 @@ use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
+use Filament\Pages\BasePage;
+use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -81,6 +84,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\HtmlString;
+use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FactureResource extends Resource
@@ -215,7 +219,7 @@ class FactureResource extends Resource
     {
         /** @var Magasin $magasin */
         $magasin = Filament::getTenant();
-        $delai = $magasin->delaiDePaiementPour(blank($clientId) ? null : Client::withTrashed()->find($clientId));
+        $delai = $magasin->delaiDePaiementPour(blank($clientId) ? null : Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first());
 
         return 'Fixée à l\'émission : date d\'émission + '.$delai.' jour'.($delai > 1 ? 's' : '');
     }
@@ -857,7 +861,7 @@ class FactureResource extends Resource
             // corrige par un avoir (voir l'action "avoir" ci-dessus).
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(auth()->user(), $facture)),
+                    static::suppressionEnMasse(Facture::class, fn (Facture $facture) => app(SupprimerFactureAction::class)->handle(auth()->user(), $facture)),
                 ]),
             ]);
     }
@@ -1155,9 +1159,11 @@ class FactureResource extends Resource
         $livewire = $action->getLivewire();
 
         if ($action instanceof Tables\Actions\Action) {
-            $livewire->mountedTableActionsArguments[array_key_last($livewire->mountedTableActionsArguments)] = $nouveaux;
+            $liste = $livewire instanceof ListRecords ? $livewire : throw new LogicException('L\'émission d\'une facture depuis un tableau se fait dans la liste des factures.');
+            $liste->mountedTableActionsArguments[array_key_last($liste->mountedTableActionsArguments)] = $nouveaux;
         } else {
-            $livewire->mountedActionsArguments[array_key_last($livewire->mountedActionsArguments)] = $nouveaux;
+            $page = $livewire instanceof BasePage ? $livewire : throw new LogicException('L\'émission d\'une facture se fait depuis une page.');
+            $page->mountedActionsArguments[array_key_last($page->mountedActionsArguments)] = $nouveaux;
         }
 
         $action->arguments($nouveaux);

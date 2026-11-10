@@ -73,7 +73,7 @@ class FicheDuCollaborateur extends ViewRecord
             ])
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    app(ConfierDesClientsAction::class)->handle(auth()->user(), $this->compte(), array_map(intval(...), $data['liens'] ?? []));
+                    app(ConfierDesClientsAction::class)->handle(auth()->user(), $this->compte(), array_values(array_map(intval(...), $data['liens'] ?? [])));
                     Notification::make()->title('Les clients confiés sont enregistrés.')->success()->send();
                 });
             });

@@ -172,7 +172,7 @@ trait TelechargeLesDocumentsParPeriode
     protected function preparerLaPage(): void
     {
         $this->raccourci('ce_mois');
-        $this->magasinsCoches = $this->magasinsProposes()->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all();
+        $this->magasinsCoches = array_values($this->magasinsProposes()->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all());
         $this->types = array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $this->typesProposes());
     }
 

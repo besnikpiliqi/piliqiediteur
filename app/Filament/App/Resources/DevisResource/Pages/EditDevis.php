@@ -6,6 +6,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RecoitLeClientChoisi;
@@ -71,7 +72,7 @@ class EditDevis extends EditRecord
         // Limité au magasin par MagasinScope ; withTrashed() garde le client
         // déjà rattaché s'il a été archivé depuis (voir
         // AppServiceProvider::limiterLesChoixAuMagasin()).
-        $client = Client::withTrashed()->findOrFail($data['client_id']);
+        $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
         return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(auth()->user(), $this->record, $client, $data['lignes'], [
             'date_validite' => $data['date_validite'] ?? null,

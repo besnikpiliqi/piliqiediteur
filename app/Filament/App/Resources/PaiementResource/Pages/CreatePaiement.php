@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\PaiementResource\Pages;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\PaiementResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -44,7 +45,7 @@ class CreatePaiement extends CreateRecord
         // Limité au magasin par MagasinScope ; withTrashed() garde le client
         // archivé qui règle ce qu'il doit encore (voir
         // Client::scopeQuiPeuventRegler()).
-        $client = Client::withTrashed()->findOrFail($data['client_id']);
+        $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
         $allocations = array_map(fn (array $allocation) => [
             'facture_id' => (int) $allocation['facture_id'],
             'montant' => (float) $allocation['montant'],

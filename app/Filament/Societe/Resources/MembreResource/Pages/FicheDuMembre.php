@@ -367,7 +367,7 @@ class FicheDuMembre extends ViewRecord
         return [
             $this->auteur(),
             $this->compte(),
-            $data['portee'] === 'tous' ? null : array_map(intval(...), $data['magasins'] ?? []),
+            $data['portee'] === 'tous' ? null : array_values(array_map(intval(...), $data['magasins'] ?? [])),
             MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
             array_values($data['autorisations_societe'] ?? []),
         ];

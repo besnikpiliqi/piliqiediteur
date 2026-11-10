@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 21:48 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 22:28 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b93aeff`. Commits locaux pas encore poussés :
 
 ```
+8546296 Couvre les lignes retouchées par le typage et retire une fonction sans appelant (lot TY1 12/n)
 5ff0152 Type les valeurs requises des écrans, et passe Larastan au niveau 8 (lot TY1 11/n)
 96b3f8a Type les valeurs requises des ventes, des achats, de la caisse et du stock (Larastan niveau 8, lot TY1 10/n)
 283c34d Type les valeurs requises des droits, de la société et des cabinets (Larastan niveau 8, lot TY1 9/n)
@@ -48,17 +49,6 @@ d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Facturation/Models/Facture.php
- M tests/Feature/Cabinets/AccepterLInvitationTest.php
- M tests/Feature/Cabinets/CollaborateursTest.php
- M tests/Feature/Cabinets/FinDuLienTest.php
- M tests/Feature/Cabinets/InvitationsTest.php
- M tests/Feature/Editeur/RevoquerSocieteTest.php
- M tests/Feature/Facturation/RecusDePaiementTest.php
- M tests/Feature/Societe/CabinetComptableTest.php
- M tests/Feature/Stock/VenteSansStockTest.php
- M tests/Feature/Tenancy/TenantIsolationTest.php
-?? tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -81,4 +71,6 @@ PG:poussee
 PG:fiche
 PG:notes
 TY1:implementation
+TY1:relecture1
+TY1:relecture2
 ```

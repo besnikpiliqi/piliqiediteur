@@ -53,6 +53,12 @@
   entre deux lignes sous des titres de niveau 4 « Questions A1 à H1 » et « Questions H2 à K10 ») ; leurs emplacements ont été
   posés à la place des blocs refusés, puis remplis par `remplir-onglets23.js` avec `remplir-args-2.json` (`wf_6f40fd54-734`).
   Premier remplissage : `remplir-args.json` (`wf_5b76763a-43a`, arrêté après les refus ; 8 blocs écrits).
+- Rempli et vérifié le 10/11 vers 22 h 30 UTC : onglet « Vos décisions » au rev 13 (10 blocs), onglet « Mes questions et vos réponses »
+  au rev 14 (11 blocs) ; l'export Markdown de chaque onglet (`mcp__Claude_Docs__export`, gardé dans `scratchpad/a-trancher/exports/`)
+  a été comparé par `comparer-export.py` aux fichiers envoyés : 255 éléments (235 décisions) et 572 éléments (386 réponses), 0 écart.
+  L'onglet 1 (rev 11) n'a plus de tableau « Déjà tranché » : son titre (`mb4cajnjtng.81049`) est suivi d'un paragraphe de renvoi
+  (`mb4cajnjtng.81062`) avec les liens vers les deux onglets ; la liste `tranche` de `registre.json` est remplacée par
+  `onglets23/releve-voix.json`.
 - Tenue à jour : une décision de lui-même → une ligne en haut du premier tableau de « Vos décisions » (nouveau sous-titre pour une
   nouvelle semaine, nouveau titre de niveau 2 pour un nouveau mois), avec son numéro suivant (V236…) dans `onglets23/releve-voix.json` ;
   une réponse à un point T… de l'onglet 1 ou à une question → « Mes questions et vos réponses » (nouvelle série en haut du mois, ou

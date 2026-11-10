@@ -22,9 +22,8 @@ def lire_export(chemin):
     except json.JSONDecodeError:
         return brut
     if isinstance(donnees, list):
-        donnees = next(x for x in donnees if isinstance(x, dict))
-        if "text" in donnees:
-            donnees = json.loads(donnees["text"])
+        donnees = next(json.loads(x["text"]) for x in donnees
+                       if isinstance(x, dict) and x.get("text", "").lstrip().startswith("{"))
     noeud = donnees.get("data", donnees)
     return base64.b64decode(noeud["bytes_b64"]).decode("utf-8")
 

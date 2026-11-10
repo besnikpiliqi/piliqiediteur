@@ -1,579 +1,617 @@
-diff --git a/app/Domain/Facturation/Models/Facture.php b/app/Domain/Facturation/Models/Facture.php
-index e91ffbe..7904ae7 100644
---- a/app/Domain/Facturation/Models/Facture.php
-+++ b/app/Domain/Facturation/Models/Facture.php
-@@ -668,27 +668,6 @@ public function montantCrediteParAvoir(): float
-         return app(CalculateurLigne::class)->sommer($this->allocationsAvoir()->pluck('montant_alloue'));
+diff --git a/README.md b/README.md
+index 61925e3..1f07bec 100644
+--- a/README.md
++++ b/README.md
+@@ -113,7 +113,7 @@ ## Tests, commandes et fonctionnement
+ 
+ Chaque ligne doit finir par 0.
+ 
+-**Outils de qualité.** Décidés par l'éditeur le 01/11/2026 et le 07/11/2026 ; la CI les passe tous à chaque envoi (tâches « Analyse statique et seuils », « Analyse des flux de données », « Audit des dépendances » et « Couverture et mutation »), toutes sur PostgreSQL quand elles lisent une base. Aucun outil ne garantit un logiciel sans défaut : ils en réduisent le risque. Leurs seuils sont dans `tests/Qualite/seuils.json` et ne font que monter : la CI échoue si un envoi en baisse un (`php tests/Qualite/qualite.php seuils <ancien seuils.json>`). Pour l'analyse statique, `seuils.json` enregistre exactement ce que règle `phpstan.neon` (son niveau, ses chemins, ses exclusions, ses stubs, ses options et ses règles désactivées), que le contrôle lit par PHPStan lui-même (`phpstan dump-parameters`) et compare à ce que donnent seuls le niveau et les ensembles de règles inclus : il échoue si `phpstan.neon` ne dit pas ce que `seuils.json` enregistre, s'il change un autre paramètre (un contrôle du niveau relâché, une règle de Larastan coupée), ignore une erreur (`ignoreErrors`), libère les propriétés d'une classe (`universalObjectCratesClasses`), met `treatPhpDocTypesAsCertain` ou `reportUnmatchedIgnoredErrors` à false, si un commentaire d'un fichier analysé fait taire PHPStan, et, par rapport à l'ancien fichier, si le niveau baisse, si un chemin ou une option disparaît, si une option change de valeur, ou si une exclusion, un stub ou une règle désactivée apparaît ; seules les exclusions, les options et la règle désactivée que permet la décision de l'éditeur du 09/11/2026 s'y enregistrent. Les grandes parties du logiciel (calculs, caisse sécurisée, droits et isolation, cabinets, pages publiques, facturation, achats et stock, société, écrans et socle) sont dans `tests/Qualite/parties.php`.
++**Outils de qualité.** Décidés par l'éditeur le 01/11/2026 et le 07/11/2026 ; la CI les passe tous à chaque envoi (tâches « Analyse statique et seuils », « Analyse des flux de données », « Audit des dépendances » et « Couverture et mutation »), toutes sur PostgreSQL quand elles lisent une base. Aucun outil ne garantit un logiciel sans défaut : ils en réduisent le risque. Leurs seuils sont dans `tests/Qualite/seuils.json` et ne font que monter : la CI échoue si un envoi en baisse un (`php tests/Qualite/qualite.php seuils <ancien seuils.json>`). Pour l'analyse statique, `seuils.json` enregistre exactement ce que règle `phpstan.neon` (son niveau, ses chemins, ses exclusions, ses stubs, ses options et ses règles désactivées), que le contrôle lit par PHPStan lui-même (`phpstan dump-parameters`) et compare à ce que donnent seuls le niveau et les ensembles de règles permis qu'il inclut : il échoue si `phpstan.neon` inclut, directement ou non, un autre fichier que l'extension de Larastan (`vendor/larastan/larastan/extension.neon`, avec ce qu'elle inclut elle-même), même un fichier du dépôt, dont les réglages échapperaient sinon à la comparaison, s'il ne dit pas ce que `seuils.json` enregistre, s'il change un autre paramètre (un contrôle du niveau relâché, une règle de Larastan coupée), ignore une erreur (`ignoreErrors`), libère les propriétés d'une classe (`universalObjectCratesClasses`), met `treatPhpDocTypesAsCertain` ou `reportUnmatchedIgnoredErrors` à false, si un commentaire d'un fichier analysé fait taire PHPStan, et, par rapport à l'ancien fichier, si le niveau baisse, si un chemin ou une option disparaît, si une option change de valeur, ou si une exclusion, un stub ou une règle désactivée apparaît ; seules les exclusions, les options et la règle désactivée que permet la décision de l'éditeur du 09/11/2026 s'y enregistrent. Les grandes parties du logiciel (calculs, caisse sécurisée, droits et isolation, cabinets, pages publiques, facturation, achats et stock, société, écrans et socle) sont dans `tests/Qualite/parties.php`.
+ 
+ - *Analyse statique* : `vendor/bin/phpstan analyse --memory-limit=3G` (Larastan, au niveau de `phpstan.neon`, sans fichier de référence qui masquerait des erreurs). Elle porte sur tout le code de l'application hors des tests : `app`, `routes`, `bootstrap` (sans `bootstrap/cache`, les caches que Laravel y écrit), `config`, `database` (migrations, factories et semeurs) et les outils de la CI de `tests/Qualite` (sans `tests/Qualite/Psalm`, l'extension et le stub que Psalm charge seul, avec son propre chargeur, dont le témoin contient exprès des chemins dangereux, ni `tests/Qualite/Temoins`, les fichiers témoins qui violeront exprès des règles de PHPStan pour prouver qu'elles s'appliquent, exclusion marquée facultative tant que ce dossier n'existe pas). Les tests (`tests/Feature`, `tests/Unit`, `tests/Browser`) restent hors de ce périmètre : ils ne partent pas en production, et leurs erreurs se voient quand ils tournent. Les macros que `AppServiceProvider` ajoute aux composants de Filament sont déclarées à l'analyse dans `tests/Qualite/macros.stub`, que `MacrosDeclareesTest` compare aux macros réellement enregistrées.
+ - *Analyse des flux de données* : Psalm et son extension Laravel suivent chaque donnée venue de l'extérieur jusqu'à une requête SQL, une page, un fichier, une commande, une redirection, un autre site ou un e-mail. L'extension Laravel ne connaît pas les écrans Livewire et Filament, par où arrive presque tout ce que saisit une personne : `tests/Qualite/Psalm/SaisiesDesEcrans.php` (une extension de Psalm, chargée par `psalm.xml`) déclare comme saisies les propriétés publiques non verrouillées des composants Livewire (pages et ressources de Filament, l'état `$data` d'un formulaire compris) et les paramètres `$data` et `$state` des fonctions anonymes des écrans, et `tests/Qualite/Psalm/filament.stub` l'état d'un formulaire (`getState()`, `getRawState()`) et la lecture d'un autre champ (`$get`). Ils s'installent à part, dans `tools/psalm`, pour ne rien imposer à l'application : Psalm demande PHP 8.3.16 ou plus (ou 8.4). Leur verrou, `tools/psalm/composer.lock`, est résolu pour PHP 8.3.16 (`config.platform.php` de `tools/psalm/composer.json`), la plus basse version que Psalm accepte pour le PHP du logiciel : il s'installe ainsi sous chaque version de PHP de la CI (8.3, 8.4 et 8.5), et une mise à jour de ses paquets (`composer update --working-dir=tools/psalm`) ne retient jamais un paquet qui exige un PHP plus récent. Avec un PHP 8.3 plus ancien que 8.3.16, lancez Psalm avec PHP 8.4 (`php8.4` à la place de `php` dans les commandes qui suivent). `composer install --working-dir=tools/psalm`, puis, à la racine du dépôt, `php -d memory_limit=6G tools/psalm/vendor/bin/psalm --taint-analysis --report=storage/qualite/psalm.json` et `php tests/Qualite/qualite.php flux storage/qualite/psalm.json`, qui échoue au premier chemin trouvé. Le témoin `tests/Qualite/Psalm/Temoin` prouve que l'analyse voit ces saisies : `php -d memory_limit=2G tools/psalm/vendor/bin/psalm --config=psalm-temoin.xml --taint-analysis --report=storage/qualite/psalm-temoin.json`, puis `php tests/Qualite/qualite.php flux-temoin storage/qualite/psalm-temoin.json`, qui échoue si l'analyse ne voit pas exactement les chemins que ses lignes marquées « attendu : » annoncent. Psalm ne sert qu'à cela (le contrôle des types est celui de Larastan) ; un chemin sûr se justifie dans le code par `@psalm-taint-escape`, avec sa raison (voir `InseeSirene::numero()`). Limites connues : les vues Blade ne sont suivies que par ce que l'extension Laravel en lit, et une saisie lue par un autre chemin que ceux-ci (une propriété d'un autre composant que `$this`, une valeur que Filament passe sous un autre nom) n'est pas une source.
+diff --git a/app/Domain/Tenancy/Services/PostesConnus.php b/app/Domain/Tenancy/Services/PostesConnus.php
+index 6e8db77..27f0bf5 100644
+--- a/app/Domain/Tenancy/Services/PostesConnus.php
++++ b/app/Domain/Tenancy/Services/PostesConnus.php
+@@ -2,6 +2,7 @@
+ 
+ namespace App\Domain\Tenancy\Services;
+ 
++use App\Domain\Tenancy\Support\TemoinsEnTableau;
+ use App\Models\User;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\Cookie;
+@@ -40,7 +41,9 @@ public function nonceDuCompte(Request $requete, User $compte): ?string
+     /**
+      * Retient ce navigateur comme un poste connu de ce compte, avec son
+      * nonce s'il en avait déjà un : le témoin part avec la réponse, ce
+-     * compte en dernier, les plus anciens sortant au-delà de 30 comptes.
++     * compte en dernier, les plus anciens sortant au-delà de 30 comptes ;
++     * elle efface tout témoin de ce nom envoyé en tableau, que PHP lirait à
++     * sa place (voir TemoinsEnTableau).
+      */
+     public function retenir(Request $requete, User $compte): void
+     {
+@@ -50,6 +53,7 @@ public function retenir(Request $requete, User $compte): void
+         unset($postes[$cle]);
+         $postes[$cle] = $nonce;
+ 
++        TemoinsEnTableau::effacer($requete, self::TEMOIN);
+         Cookie::queue(Cookie::make(self::TEMOIN, json_encode(array_slice($postes, -self::MAXIMUM_PAR_NAVIGATEUR, preserve_keys: true), JSON_THROW_ON_ERROR), self::DUREE_EN_MINUTES, httpOnly: true, sameSite: 'lax'));
+     }
+ 
+diff --git a/app/Domain/Tenancy/Services/PostesReconnus.php b/app/Domain/Tenancy/Services/PostesReconnus.php
+index 4130975..a8ebab5 100644
+--- a/app/Domain/Tenancy/Services/PostesReconnus.php
++++ b/app/Domain/Tenancy/Services/PostesReconnus.php
+@@ -5,6 +5,7 @@
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\PosteReconnu;
+ use App\Domain\Tenancy\Scopes\MagasinScope;
++use App\Domain\Tenancy\Support\TemoinsEnTableau;
+ use App\Models\User;
+ use Illuminate\Auth\Access\AuthorizationException;
+ use Illuminate\Http\Request;
+@@ -44,7 +45,9 @@ final class PostesReconnus
+      * Reconnaît le navigateur de cette requête comme un poste de ce magasin,
+      * sous ce nom, par le propriétaire ou un responsable du magasin (voir
+      * PorteeDesDroits::gereLEquipeDe()), relu sous le verrou de sa ligne ;
+-     * le témoin du poste part avec la réponse.
++     * le témoin du poste part avec la réponse, qui efface tout témoin de ce
++     * nom envoyé en tableau, que PHP lirait à sa place (voir
++     * TemoinsEnTableau).
+      *
+      * @throws AuthorizationException
+      * @throws ValidationException
+@@ -65,6 +68,7 @@ public function reconnaitre(User $auteur, Magasin $magasin, string $nom, Request
+         }));
+ 
+         $jetons = array_slice([...array_values(array_diff($this->jetonsDuNavigateur($requete), [$jeton])), $jeton], -self::MAXIMUM_PAR_NAVIGATEUR);
++        TemoinsEnTableau::effacer($requete, self::TEMOIN);
+         Cookie::queue(Cookie::forever(self::TEMOIN, json_encode($jetons, JSON_THROW_ON_ERROR), httpOnly: true, sameSite: 'lax'));
+ 
+         return $poste;
+diff --git a/app/Domain/Tenancy/Support/TemoinsEnTableau.php b/app/Domain/Tenancy/Support/TemoinsEnTableau.php
+new file mode 100644
+index 0000000..81f62f5
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/TemoinsEnTableau.php
+@@ -0,0 +1,37 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use Illuminate\Http\Request;
++use Illuminate\Support\Facades\Cookie;
++
++/**
++ * Les témoins qu'un navigateur envoie sous un nom en tableau
++ * (« postes_reconnus[0]=… ») : PHP les range en tableau sous le nom qui
++ * précède le crochet, à la place du témoin ordinaire de ce nom, qu'il ne lit
++ * plus tant qu'ils restent dans le navigateur. Le témoin que le site y pose
++ * sous ce nom arriverait sans jamais être lu : la réponse qui le pose
++ * efface donc aussi chacun d'eux (voir PostesReconnus et PostesConnus).
++ */
++final class TemoinsEnTableau
++{
++    /**
++     * Efface du navigateur, avec la réponse, chaque témoin de l'en-tête
++     * Cookie de cette requête que PHP range en tableau sous ce nom, sous le
++     * nom même que le navigateur envoie : PHP décide lui-même du rangement
++     * de chacun (parse_str(), qui suit ses règles des noms de témoins), que
++     * sa valeur se déchiffre ou non. Un nom qui contient une virgule ou un
++     * espace ne s'efface pas : la réponse ne le renverrait pas tel quel.
++     */
++    public static function effacer(Request $requete, string $nom): void
++    {
++        foreach (explode(';', implode(';', $requete->headers->all('cookie'))) as $temoin) {
++            $nomEnvoye = ltrim(explode('=', $temoin, 2)[0], " \t\n\r\v\f");
++            parse_str(rawurlencode($nomEnvoye).'=', $lu);
++
++            if (is_array($lu[$nom] ?? null) && strpbrk($nomEnvoye, ", \t\n\r\v\f") === false) {
++                Cookie::queue(Cookie::forget($nomEnvoye));
++            }
++        }
++    }
++}
+diff --git a/app/Filament/App/Resources/FactureResource.php b/app/Filament/App/Resources/FactureResource.php
+index 5dda079..ebaad67 100644
+--- a/app/Filament/App/Resources/FactureResource.php
++++ b/app/Filament/App/Resources/FactureResource.php
+@@ -1177,16 +1177,6 @@ private static function emettreLeBrouillon(Facture $record, array $data, array $
+         $action->halt();
      }
  
 -    /**
--     * Les numéros des avoirs dont le crédit reste imputé sur cette facture,
--     * chacun une fois, du premier imputé au dernier : un avoir peut s'y
--     * imputer plusieurs fois (à son émission, puis par un paiement), et le
--     * crédit qu'une contre-passation a rendu à son avoir n'y compte plus.
--     *
--     * @return list<string>
+-     * Une livraison intracommunautaire ou une prestation autoliquidée ne
+-     * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
+-     * même, par la dernière vérification du jour (voir
+-     * ControleNatureOperation::consultationDuJour()) : quand aucune
+-     * vérification d'aujourd'hui ne l'a trouvé valide, ou que la dernière
+-     * l'a trouvé inconnu, l'émission interroge d'abord VIES, hors de toute
+-     * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
+-     * n'est émis, et le refus le dit.
 -     */
--    public function numerosDesAvoirsImputes(): array
--    {
--        $calculateur = app(CalculateurLigne::class);
--
--        return array_values($this->allocationsAvoir
--            ->sortBy('id')
--            ->groupBy('avoir_id')
--            ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
--            ->map(fn (Collection $allocations): ?string => ValeurRequise::de($allocations->first(), 'la première imputation d\'un avoir')->avoir?->numero)
--            ->filter()
--            ->all());
--    }
--
      /**
-      * Ce qui a réglé la facture à son émission, relu dans son contenu
-      * signé, que son PDF imprime (Q5) ; rien pour un brouillon. Ce qu'elle
-diff --git a/tests/Feature/Cabinets/AccepterLInvitationTest.php b/tests/Feature/Cabinets/AccepterLInvitationTest.php
-index 29f3af3..cd3c13d 100644
---- a/tests/Feature/Cabinets/AccepterLInvitationTest.php
-+++ b/tests/Feature/Cabinets/AccepterLInvitationTest.php
-@@ -249,6 +249,32 @@ public function test_l_acceptation_sans_type_avec_le_type_cabinet_ou_sans_la_cas
-         $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
+      * Le paiement d'une imputation de la fiche : sa clé étrangère ne
+      * manque jamais (voir ValeurRequise).
+@@ -1205,6 +1195,16 @@ private static function recuDe(PaiementAllocation $allocation): RecuPaiement
+         return ValeurRequise::de(self::paiementDe($allocation)->recuPaiement, 'le reçu du paiement');
      }
  
 +    /**
-+     * Un formulaire d'acceptation que la validation refuse se réaffiche,
-+     * avec son erreur et le type d'activité choisi, sans rien créer ni
-+     * connecter personne : l'invitation reste ouverte.
++     * Une livraison intracommunautaire ou une prestation autoliquidée ne
++     * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
++     * même, par la dernière vérification du jour (voir
++     * ControleNatureOperation::consultationDuJour()) : quand aucune
++     * vérification d'aujourd'hui ne l'a trouvé valide, ou que la dernière
++     * l'a trouvé inconnu, l'émission interroge d'abord VIES, hors de toute
++     * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
++     * n'est émis, et le refus le dit.
 +     */
-+    public function test_un_formulaire_d_acceptation_refuse_se_reaffiche_avec_son_erreur_et_le_type_choisi(): void
-+    {
-+        $cabinet = $this->ouvrirUnCabinet();
-+        $jeton = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test');
-+        $societes = Societe::query()->count();
+     private static function verifierLeNumeroTvaSurViesSiBesoin(Facture $facture): void
+     {
+         $client = ValeurRequise::de($facture->client, 'le client de la facture');
+diff --git a/tests/Browser/AidesCommunesTest.php b/tests/Browser/AidesCommunesTest.php
+index e8dbfca..b934c9a 100644
+--- a/tests/Browser/AidesCommunesTest.php
++++ b/tests/Browser/AidesCommunesTest.php
+@@ -119,6 +119,17 @@ function fichierDuPoste(string $nom, string $contenu): string
+     expect($onglet->page()->evaluate('() => document.cookie'))->not->toContain('temoin_de_l_essai');
+ });
+ 
++test('les témoins du navigateur arrivent à l’application comme PHP les lit, un nom en tableau compris', function () {
++    Route::get('/essai-temoins-lus', fn (Request $requete) => '<html><body><p id="temoins">'.e((string) json_encode($requete->cookies->all())).'</p></body></html>');
++    $onglet = $this->naviguer('/essai-temoins-lus');
 +
-+        $this->post(route('cabinets.invitation.accepter', ['jeton' => $jeton]), [
-+            'password' => self::MOT_DE_PASSE_CHOISI,
-+            'password_confirmation' => 'un-autre-mot-de-passe',
-+            'type_activite' => TypeDActivite::Services->value,
-+            'choix_definitif' => '1',
-+        ])
-+            ->assertOk()
-+            ->assertSeeText('La confirmation du champ mot de passe ne correspond pas.')
-+            ->assertSee('value="'.TypeDActivite::Services->value.'" checked', false);
++    $onglet->page()->evaluate('() => { document.cookie = "tableau[0]=1; path=/"; document.cookie = "tableau=2; path=/"; document.cookie = "point.espace=x%2By+z; path=/"; document.cookie = "simple=a; path=/"; }');
++    $onglet->aller('/essai-temoins-lus');
 +
-+        $this->assertGuest();
-+        $this->assertSame($societes, Societe::query()->count());
-+        $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
-+    }
++    expect(json_decode((string) $onglet->page()->evaluate('() => document.getElementById("temoins").textContent'), true))
++        ->toBe(['tableau' => ['1'], 'point_espace' => 'x+y+z', 'simple' => 'a']);
++});
 +
-     /**
-      * @return array<string, array{0: string, 1: string}>
+ test('un fichier envoyé par un formulaire arrive au serveur avec les autres champs', function () {
+     Route::get('/essai-envoi', fn () => '<html><body><form method="post" action="/essai-envoi" enctype="multipart/form-data"><input type="file" name="pieces[]"><input name="nom" value="Jeanne Dupont"><button type="submit">Envoyer</button></form></body></html>');
+     Route::post('/essai-envoi', fn (Request $requete) => 'Reçu '.$requete->file('pieces')[0]->getClientOriginalName().' ('.$requete->file('pieces')[0]->get().') de '.$requete->input('nom'));
+diff --git a/tests/Browser/Support/NoyauDUneRequeteNeuve.php b/tests/Browser/Support/NoyauDUneRequeteNeuve.php
+index 7c35225..9c81f66 100644
+--- a/tests/Browser/Support/NoyauDUneRequeteNeuve.php
++++ b/tests/Browser/Support/NoyauDUneRequeteNeuve.php
+@@ -34,6 +34,10 @@
+  *   que chaque requête suivante rejouerait, si bien qu'une page de l'espace
+  *   d'une société recevrait les crochets du panneau des magasins.
+  * Il fait aussi ce que le serveur du module ne fait pas :
++ * - les témoins de la requête se lisent dans son en-tête Cookie comme PHP
++ *   les lit : le serveur du module n'en transmet aucun dès qu'un nom
++ *   contient un crochet (« postes_reconnus[0] »), quand PHP range ce
++ *   témoin en tableau sous « postes_reconnus » ;
+  * - le corps d'un formulaire multipart/form-data (un fichier envoyé, comme
+  *   Livewire le fait pour un champ de fichier) se lit en champs et en
+  *   fichiers, comme PHP le ferait : le serveur du module ne lit que les
+@@ -71,7 +75,10 @@ final class NoyauDUneRequeteNeuve implements Kernel
       */
-diff --git a/tests/Feature/Cabinets/CollaborateursTest.php b/tests/Feature/Cabinets/CollaborateursTest.php
-index 66e8223..94d2c28 100644
---- a/tests/Feature/Cabinets/CollaborateursTest.php
-+++ b/tests/Feature/Cabinets/CollaborateursTest.php
-@@ -12,6 +12,7 @@
- use App\Domain\Tenancy\Enums\TypeDActivite;
- use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
- use App\Domain\Tenancy\Models\Societe;
-+use App\Domain\Tenancy\Models\TransmissionPropriete;
- use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
- use App\Domain\Tenancy\Services\CreationDesComptes;
- use App\Domain\Tenancy\Services\PorteeDesDroits;
-@@ -388,6 +389,34 @@ public function test_la_propriete_d_un_cabinet_se_transmet_a_un_collaborateur_qu
-         $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::ProprieteTransferee));
-     }
+     private array $fichiersEnvoyes = [];
  
+-    public function __construct(private readonly Kernel $noyau)
 +    /**
-+     * Depuis la fiche du collaborateur, le propriétaire du cabinet demande
-+     * la transmission de la propriété en redonnant son mot de passe,
-+     * renvoie le lien, qui remplace le précédent, puis annule : chaque geste
-+     * le dit, et rien n'a changé dans le cabinet.
++     * @param  Closure(): array<string, mixed>  $temoinsDuTest  les témoins que le test pose lui-même (withCookie), qui l'emportent sur ceux du navigateur, comme sur le serveur du module
 +     */
-+    public function test_la_fiche_du_collaborateur_transmet_la_propriete_renvoie_le_lien_et_annule_la_transmission(): void
-+    {
-+        Mail::fake();
-+        $cabinet = $this->ouvrirUnCabinet();
-+        $collaborateur = $this->renseignerSonAdresse($this->collaborateur($cabinet), 'paul@cabinet.test');
-+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
-+
-+        $fiche = Livewire::test(FicheDuCollaborateur::class, ['record' => $collaborateur->getRouteKey()])
-+            ->callAction('transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
-+            ->assertHasNoActionErrors()
-+            ->assertNotified('Un lien a été envoyé à l\'adresse de ce collaborateur : la propriété ne passera que quand il l\'aura suivi.');
-+        $premier = $this->jetonDuDernierLienDeTransmission();
-+
-+        $fiche->callAction('renvoyerLeLienDeTransmission')->assertNotified('Un nouveau lien a été envoyé à l\'adresse de ce collaborateur.');
-+        Mail::assertSent(TransmissionDeLaProprieteMail::class, 2);
-+        $this->assertNotSame($premier, $this->jetonDuDernierLienDeTransmission());
-+
-+        $fiche->callAction('annulerLaTransmission')->assertNotified('La transmission de la propriété est annulée.');
-+        $this->assertNotNull(TransmissionPropriete::query()->where('destinataire_id', $collaborateur->id)->sole()->annulee_le);
-+        $this->assertSame([RoleSociete::Collaborateur, RoleSociete::Proprietaire], [$collaborateur->fresh()->role_societe, $this->proprietaireDuCabinet($cabinet)->role_societe]);
-+    }
-+
-     public function test_l_ancien_proprietaire_du_cabinet_devient_collaborateur_avec_tous_les_clients_confies(): void
++    public function __construct(private readonly Kernel $noyau, private readonly Closure $temoinsDuTest)
      {
-         $cabinet = $this->ouvrirUnCabinet();
-diff --git a/tests/Feature/Cabinets/FinDuLienTest.php b/tests/Feature/Cabinets/FinDuLienTest.php
-index 7dd0f7f..b96a253 100644
---- a/tests/Feature/Cabinets/FinDuLienTest.php
-+++ b/tests/Feature/Cabinets/FinDuLienTest.php
-@@ -13,6 +13,7 @@
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Filament\App\Resources\FactureResource;
- use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
-+use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
- use App\Filament\Societe\Pages\CabinetComptable;
- use Illuminate\Auth\Access\AuthorizationException;
- use Illuminate\Foundation\Testing\RefreshDatabase;
-@@ -60,6 +61,26 @@ public function test_le_cabinet_met_fin_au_lien(): void
-         $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+         $this->rappelsDuDemarrage = (fn (): array => [$this->resolvingCallbacks, $this->afterResolvingCallbacks])->call($noyau->getApplication());
+     }
+@@ -97,6 +104,7 @@ public function handle($request): Response
+         $application->make('auth')->forgetGuards();
+         $application->make('session')->forgetDrivers();
+         $application->make('cookie')->flushQueuedCookies();
++        $this->lireLesTemoins($request);
+         $this->lireLeFormulaireMultipart($request);
+ 
+         $reponse = $this->enEntier($this->noyau->handle($request));
+@@ -158,6 +166,44 @@ public function getApplication(): Application
+         return $this->noyau->getApplication();
      }
  
 +    /**
-+     * « Mettre fin au lien », dans la liste des clients du cabinet : son
-+     * propriétaire met fin au lien, l'écran le dit, et le cabinet n'ouvre
-+     * plus le client.
++     * Les témoins de l'en-tête Cookie, rangés dans la requête comme PHP les
++     * range ($_COOKIE) : séparés par « ; », chaque nom sans les espaces qui
++     * le précèdent et sans décodage, chaque valeur décodée sans faire d'un
++     * « + » une espace (rawurldecode), un nom en tableau rangé par PHP
++     * lui-même (parse_str, qui suit ses règles des noms de variables), et,
++     * pour un nom ordinaire déjà lu, le premier gardé ; puis les témoins que
++     * le test pose lui-même. Une requête sans en-tête Cookie garde ceux
++     * qu'elle porte.
 +     */
-+    public function test_le_proprietaire_du_cabinet_met_fin_au_lien_depuis_la_liste_de_ses_clients(): void
++    private function lireLesTemoins(Request $requete): void
 +    {
-+        $cabinet = $this->ouvrirUnCabinet();
-+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
-+        $lien = $this->lierLeCabinet($cabinet, $magasin);
-+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++        $entetes = $requete->headers->all('cookie');
++        $paires = [];
++        $lus = [];
 +
-+        Livewire::test(ListClientsDuCabinet::class)
-+            ->callTableAction('mettreFin', $lien)
-+            ->assertNotified('Le lien avec ce client a pris fin.');
++        if ($entetes === []) {
++            return;
++        }
 +
-+        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
-+        $this->assertFalse($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
-+    }
++        foreach (explode(';', implode(';', $entetes)) as $temoin) {
++            [$nom, $valeur] = array_pad(explode('=', ltrim($temoin, " \t\n\r\v\f"), 2), 2, '');
++            $nom = rawurlencode($nom);
++            parse_str($nom.'=', $seul);
++            $base = array_key_first($seul);
 +
-     public function test_une_session_ouverte_perd_l_acces_au_client_des_sa_requete_suivante(): void
-     {
-         $cabinet = $this->ouvrirUnCabinet();
-diff --git a/tests/Feature/Cabinets/InvitationsTest.php b/tests/Feature/Cabinets/InvitationsTest.php
-index d6d62a9..bcfcafb 100644
---- a/tests/Feature/Cabinets/InvitationsTest.php
-+++ b/tests/Feature/Cabinets/InvitationsTest.php
-@@ -390,6 +390,32 @@ public function test_le_cabinet_retire_une_invitation_ouverte_et_son_lien_ne_vau
-         $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSeeText(InvitationInvalideException::MESSAGE);
-     }
- 
-+    /**
-+     * « Retirer », dans l'espace du cabinet : son propriétaire retire une
-+     * invitation ouverte et une demande de rattachement en cours, chacune
-+     * le dit, et leurs liens ne servent plus.
-+     */
-+    public function test_le_proprietaire_du_cabinet_retire_une_invitation_et_une_demande_depuis_son_espace(): void
-+    {
-+        $cabinet = $this->ouvrirUnCabinet();
-+        $inscrite = $this->ouvrirUneSociete(['nom' => 'Boutique inscrite'])->societe;
-+        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@libre.test');
-+        $this->demanderLeRattachement($cabinet, $inscrite, 'dirigeant@inscrite.test');
-+        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
-+        $demande = LienCabinet::query()->withoutGlobalScopes()->sole();
-+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
-+
-+        Livewire::test(InvitationsEtDemandes::class)
-+            ->callAction('retirerLInvitation', arguments: ['uuid' => $invitation->uuid])
-+            ->assertNotified('L\'invitation est retirée.')
-+            ->callAction('retirerLaDemande', arguments: ['uuid' => $demande->uuid])
-+            ->assertNotified('La demande est retirée.');
-+
-+        $this->assertSame([EtatInvitation::Retiree, EtatDuLien::Retire], [$invitation->fresh()->etat, $demande->fresh()->etat]);
-+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::InvitationRetiree));
-+        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));
-+    }
-+
-     /**
-      * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
-      * propriétaire peut seulement mettre fin à ses liens (voir
-diff --git a/tests/Feature/Editeur/RevoquerSocieteTest.php b/tests/Feature/Editeur/RevoquerSocieteTest.php
-index c397ad4..44f3982 100644
---- a/tests/Feature/Editeur/RevoquerSocieteTest.php
-+++ b/tests/Feature/Editeur/RevoquerSocieteTest.php
-@@ -48,7 +48,9 @@
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
- use App\Filament\Societe\Resources\JournalAuditResource;
- use App\Models\User;
-+use Database\Factories\MagasinFactory;
- use Database\Factories\SocieteFactory;
-+use Illuminate\Database\Events\QueryExecuted;
- use Illuminate\Database\QueryException;
- use Illuminate\Foundation\Testing\RefreshDatabase;
- use Illuminate\Notifications\ChannelManager;
-@@ -165,6 +167,42 @@ public function test_la_revocation_libere_le_siren_et_les_siret_sans_toucher_aux
-         $this->assertContains('Votre société est révoquée', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
-     }
- 
-+    /**
-+     * Un magasin que la société crée pendant sa révocation, entre la
-+     * lecture de ses magasins réels et leurs verrous, n'y échappe pas : la
-+     * révocation reprend sur tous ses magasins, et le nouveau se ferme,
-+     * motif « révocation de la société », et libère son SIRET comme
-+     * l'autre.
-+     */
-+    public function test_un_magasin_cree_pendant_la_revocation_est_revoque_avec_les_autres(): void
-+    {
-+        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
-+        $societe = $magasin->societe;
-+        $this->prouverLaRemiseDuCourrierDeRevocation($societe);
-+        $proprietaire = $this->proprietaireDe($magasin);
-+        $nouveau = null;
-+        $cree = false;
-+        DB::listen(function (QueryExecuted $requete) use ($societe, $proprietaire, &$nouveau, &$cree): void {
-+            if ($cree || ! str_contains($requete->sql, 'from "magasins"') || str_contains($requete->sql, ' for ')) {
-+                return;
++            if ($base === null || (isset($lus[$base]) && ! is_array($seul[$base]))) {
++                continue;
 +            }
 +
-+            $cree = true;
-+            $nouveau = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Ouvert pendant la révocation', 'code' => null, 'email' => null, 'nic' => MagasinFactory::nicLibre($societe)]);
-+        });
-+
-+        $revocation = app(RevoquerSocieteAction::class)->handle($societe->fresh(), $this->editeur());
-+
-+        $this->assertInstanceOf(Magasin::class, $nouveau);
-+        $this->assertEqualsCanonicalizing([(string) $magasin->siret, (string) $nouveau->siret], $revocation['sirets']);
-+        $this->assertSame(StatutSociete::Revoquee, $societe->fresh()->statut);
-+        foreach ([$magasin, $nouveau] as $revoque) {
-+            $this->assertFalse(SiretsDesMagasins::estReserve((string) $revoque->siret), $revoque->nom);
-+            $periode = app(TenantContext::class)->runAs($revoque->fresh(), fn (): PeriodeActivite => PeriodeActivite::query()->where('magasin_id', $revoque->id)->sole());
-+            $this->assertSame(MotifFermeture::RevocationSociete, $periode->motif_fin, $revoque->nom);
++            $lus[$base] = true;
++            $paires[] = $nom.'='.rawurlencode(rawurldecode($valeur));
 +        }
++
++        parse_str(implode('&', $paires), $temoins);
++        $requete->cookies->replace(array_replace($temoins, ($this->temoinsDuTest)()));
 +    }
 +
      /**
-      * Les comptes de la société révoquée consultent encore (le propriétaire
-      * ouvre son journal d'audit), mais plus rien ne s'y vend, ne s'y règle
-diff --git a/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php b/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
-new file mode 100644
-index 0000000..1fbcf08
---- /dev/null
-+++ b/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
-@@ -0,0 +1,114 @@
-+<?php
+      * Les champs et les fichiers d'un corps multipart/form-data, rangés dans
+      * la requête comme PHP les range ($_POST et $_FILES), noms en tableau
+diff --git a/tests/Browser/TestCaseDuNavigateur.php b/tests/Browser/TestCaseDuNavigateur.php
+index ab5923c..8685dd9 100644
+--- a/tests/Browser/TestCaseDuNavigateur.php
++++ b/tests/Browser/TestCaseDuNavigateur.php
+@@ -76,7 +76,7 @@ protected function setUp(): void
+ 
+         $this->travelTo(self::instantDuTest());
+         config(['session.driver' => 'database']);
+-        $this->app->extend(Kernel::class, fn (Kernel $noyau): Kernel => $noyau instanceof NoyauDUneRequeteNeuve ? $noyau : new NoyauDUneRequeteNeuve($noyau));
++        $this->app->extend(Kernel::class, fn (Kernel $noyau): Kernel => $noyau instanceof NoyauDUneRequeteNeuve ? $noyau : new NoyauDUneRequeteNeuve($noyau, fn (): array => $this->prepareCookiesForRequest()));
+         $this->journal = new JournalDesReponses;
+         Event::listen(RequestHandled::class, $this->journal->noter(...));
+     }
+diff --git a/tests/Feature/Qualite/OutilDeQualiteTest.php b/tests/Feature/Qualite/OutilDeQualiteTest.php
+index d2fba3f..a5f0732 100644
+--- a/tests/Feature/Qualite/OutilDeQualiteTest.php
++++ b/tests/Feature/Qualite/OutilDeQualiteTest.php
+@@ -318,6 +318,65 @@ public function test_un_controle_relache_dans_phpstan_neon_est_refuse(): void
+         $this->assertStringContainsString('noModelMake vaut false au lieu de true', $sortie);
+     }
+ 
++    /**
++     * phpstan.neon n'inclut que l'extension de Larastan : un autre fichier
++     * inclus, ici un fichier du dépôt, est refusé, et ce qu'il relâche reste
++     * vu comme s'il était écrit dans phpstan.neon (il n'entre pas dans la
++     * référence) : un contrôle du niveau coupé, des stubs ajoutés, dans le
++     * dépôt ou hors de lui, une classe aux propriétés libres.
++     */
++    public function test_un_fichier_inclus_autre_que_l_extension_de_larastan_est_refuse_avec_chaque_relachement(): void
++    {
++        $horsDuDepot = dirname($this->depot).'/hors-du-depot.stub';
++        file_put_contents($horsDuDepot, "<?php\n");
++        $this->ecrire('tests/Qualite/relache.neon', "parameters:\n    checkNullables: false\n    stubFiles:\n        - autre.stub\n        - {$horsDuDepot}\n    universalObjectCratesClasses:\n        - App\\Models\\User\n");
++        $this->depotAnalyse(niveau: 8, inclusions: ['tests/Qualite/relache.neon']);
 +
-+namespace Tests\Feature\Facturation;
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(niveau: 8));
 +
-+use App\Domain\Contacts\Models\Client;
-+use App\Domain\Tenancy\Models\ActionTraitee;
-+use App\Domain\Tenancy\Models\Magasin;
-+use App\Domain\Tenancy\Services\ActionsUniques;
-+use App\Domain\Tenancy\Services\TenantContext;
-+use App\Models\User;
-+use Closure;
-+use Illuminate\Foundation\Testing\DatabaseMigrations;
-+use Illuminate\Support\Str;
-+use LogicException;
-+use Tests\TestCase;
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('fichier inclus non permis : tests/Qualite/relache.neon', $sortie);
++        $this->assertStringContainsString('checkNullables vaut false au lieu de true', $sortie);
++        $this->assertStringContainsString('stubs : phpstan.neon donne ["'.$horsDuDepot.'","tests/Qualite/autre.stub","tests/Qualite/macros.stub"], seuils.json enregistre ["tests/Qualite/macros.stub"]', $sortie);
++        $this->assertStringContainsString('universalObjectCratesClasses ajoute App\\Models\\User', $sortie);
++    }
++
++    /**
++     * Les stubs que charge phpstan.neon sont ceux que seuils.json
++     * enregistre, ni moins ni plus, même quand l'ancien seuils.json dit la
++     * même chose que le nouveau.
++     */
++    public function test_un_stub_que_phpstan_neon_charge_sans_que_seuils_json_l_enregistre_ou_l_inverse_est_refuse(): void
++    {
++        $this->depotAnalyse();
++        $this->ecrireLaConfiguration(stubs: []);
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('stubs : phpstan.neon donne [], seuils.json enregistre ["tests/Qualite/macros.stub"]', $sortie);
++
++        $this->depotAnalyse(stubs: []);
++        $this->ecrireLaConfiguration();
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(stubs: []));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('stubs : phpstan.neon donne ["tests/Qualite/macros.stub"], seuils.json enregistre []', $sortie);
++    }
++
++    /**
++     * Une règle que seuils.json enregistre désactivée l'est aussi dans
++     * phpstan.neon, même quand l'ancien seuils.json l'enregistrait déjà.
++     */
++    public function test_une_regle_que_seuils_json_enregistre_desactivee_sans_que_phpstan_neon_la_desactive_est_refusee(): void
++    {
++        $this->depotAnalyse(regles: ['strictRules.dynamicCallOnStaticMethod']);
++
++        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(regles: ['strictRules.dynamicCallOnStaticMethod']));
++
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('règle strictRules.dynamicCallOnStaticMethod : seuils.json l\'enregistre désactivée, phpstan.neon donne null', $sortie);
++    }
++
+     public function test_une_erreur_ignoree_ou_une_classe_aux_proprietes_libres_est_refusee(): void
+     {
+         $this->depotAnalyse(neon: "    ignoreErrors:\n        - '#.*#'\n    universalObjectCratesClasses:\n        - App\\Models\\User\n    reportUnmatchedIgnoredErrors: false\n");
+@@ -383,15 +442,17 @@ public function test_un_seuil_de_couverture_ou_de_mutation_qui_baisse_est_refuse
+      * Le dépôt de test réglé pour l'analyse statique : son phpstan.neon,
+      * son psalm.xml, le stub des macros et les dossiers analysés, et son
+      * seuils.json qui enregistre ce réglage, sauf ce que le cas y change
+-     * (le phpstan.neon seul).
++     * (le phpstan.neon seul : ses paramètres en plus, les fichiers qu'il
++     * inclut en plus de l'extension de Larastan).
+      *
+      * @param  list<string>  $chemins
+      * @param  list<string>  $exclusions
+      * @param  array<string, bool|string>  $options
+      * @param  list<string>  $stubs
+      * @param  list<string>  $regles
++     * @param  list<string>  $inclusions
+      */
+-    private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = [], string $neon = ''): void
++    private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = [], string $neon = '', array $inclusions = []): void
+     {
+         foreach ([...$chemins, ...$exclusions] as $dossier) {
+             (new Filesystem)->ensureDirectoryExists($this->depot.'/'.$dossier);
+@@ -406,20 +467,26 @@ private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Q
+             fn (string $option, bool|string $valeur): string => "    {$option}: ".(is_bool($valeur) ? ($valeur ? 'true' : 'false') : $valeur)."\n",
+             array_keys($options),
+             $options,
+-        )).$neon, $stubs);
++        )).$neon, $stubs, $inclusions);
+         $this->ecrire('tests/Qualite/seuils.json', json_encode($this->seuilsDeLAnalyse(options: $options, regles: $regles, stubs: $stubs, chemins: $chemins, exclusions: $exclusions, niveau: $niveau), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+     }
+ 
+     /**
++     * Le phpstan.neon du dépôt de test : il inclut l'extension de Larastan
++     * installée avec le PHPStan qui l'analyse (celui du dépôt), puis ces
++     * fichiers du dépôt de test.
++     *
+      * @param  list<string>  $chemins
+      * @param  list<string>  $exclusions
+      * @param  list<string>  $stubs
++     * @param  list<string>  $inclusions
+      */
+-    private function ecrireLaConfiguration(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], string $options = "    parseModelCastsMethod: true\n", array $stubs = ['tests/Qualite/macros.stub']): void
++    private function ecrireLaConfiguration(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], string $options = "    parseModelCastsMethod: true\n", array $stubs = ['tests/Qualite/macros.stub'], array $inclusions = []): void
+     {
+         $liste = fn (string $cle, array $valeurs): string => $valeurs === [] ? '' : "    {$cle}:\n".implode('', array_map(fn (string $valeur): string => "        - {$valeur}\n", $valeurs));
++        $inclus = [(string) realpath(__DIR__.'/../../../vendor/larastan/larastan/extension.neon'), ...$inclusions];
+ 
+-        $this->ecrire('phpstan.neon', "includes:\n    - ".realpath(__DIR__.'/../../../vendor/larastan/larastan/extension.neon')."\n\nparameters:\n"
++        $this->ecrire('phpstan.neon', "includes:\n".implode('', array_map(fn (string $fichier): string => "    - {$fichier}\n", $inclus))."\nparameters:\n"
+             .$liste('paths', $chemins).$liste('excludePaths', $exclusions)."    level: {$niveau}\n".$liste('stubFiles', $stubs).$options);
+     }
+ 
+diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
+index 8595cff..0ce4c55 100644
+--- a/tests/Qualite/qualite.php
++++ b/tests/Qualite/qualite.php
+@@ -21,10 +21,11 @@
+  *       statique (Larastan), que seuils.json enregistre telle que PHPStan
+  *       la règle (niveau, chemins, exclusions, stubs, options, règles
+  *       désactivées) et que phpstan.neon doit suivre exactement, sans rien
+- *       relâcher ni cacher (voir refusDeLAnalyseStatique()). Une clé que
+- *       l'ancien fichier n'a pas compte comme rien d'enregistré. Le PHPStan
+- *       lancé est celui du dépôt (vendor/bin/phpstan), ou celui que nomme
+- *       la variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
++ *       relâcher ni cacher, ni inclure d'autre fichier que l'extension de
++ *       Larastan (voir refusDeLAnalyseStatique()). Une clé que l'ancien
++ *       fichier n'a pas compte comme rien d'enregistré. Le PHPStan lancé
++ *       est celui du dépôt (vendor/bin/phpstan), ou celui que nomme la
++ *       variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
+  *       outil, dans un dépôt temporaire).
+  *   php tests/Qualite/qualite.php sensibles
+  *       Les chemins des parties sensibles, un par ligne, à donner à
+@@ -130,18 +131,26 @@ function seuilsParPartie(array $seuils, string $outil): array
+  */
+ function relatifAuDepot(string $fichier): string
+ {
+-    $fichier = str_replace('\\', '/', $fichier);
+-    $racine = str_replace('\\', '/', RACINE).'/';
++    $nom = nomDansLeDepot($fichier);
+ 
+-    if (str_starts_with($fichier, $racine)) {
+-        return substr($fichier, strlen($racine));
++    if (! str_starts_with($nom, '/') && preg_match('#^[A-Za-z]:/#', $nom) !== 1) {
++        return $nom;
+     }
+ 
+-    if (! str_starts_with($fichier, '/') && preg_match('#^[A-Za-z]:/#', $fichier) !== 1) {
+-        return $fichier;
+-    }
++    throw new RuntimeException('Fichier hors du dépôt '.RACINE." : {$nom}. Le rapport doit être lu dans le dépôt qui l'a produit.");
++}
+ 
+-    throw new RuntimeException("Fichier hors du dépôt {$racine} : {$fichier}. Le rapport doit être lu dans le dépôt qui l'a produit.");
++/**
++ * Ce chemin nommé depuis la racine du dépôt quand il y est, en entier
++ * sinon : un chemin, un stub ou un fichier de configuration de l'analyse
++ * statique hors du dépôt se nomme tel quel dans son refus.
++ */
++function nomDansLeDepot(string $chemin): string
++{
++    $chemin = str_replace('\\', '/', $chemin);
++    $racine = str_replace('\\', '/', RACINE).'/';
++
++    return str_starts_with($chemin, $racine) ? substr($chemin, strlen($racine)) : $chemin;
+ }
+ 
+ function partieDe(string $fichier): string
+@@ -447,6 +456,18 @@ function seuilsQuiMontent(string $ancien): int
+  */
+ const STUBS_PERMIS = ['tests/Qualite/macros.stub'];
+ 
++/**
++ * Les seuls fichiers de configuration que phpstan.neon peut inclure, les
++ * ensembles de règles (cahier de l'analyse statique, § 4.1, point 2),
++ * chacun par son chemin dans le dossier vendor du PHPStan que lance le
++ * contrôle (celui du dépôt) : l'extension de Larastan. Ce qu'ils incluent
++ * eux-mêmes les suit. Tout autre fichier inclus est refusé : la référence
++ * ne se bâtit qu'avec eux, si bien que ce qu'un autre fichier réglerait (un
++ * contrôle relâché, un stub, une classe aux propriétés libres) reste un
++ * écart de phpstan.neon, refusé comme tel.
++ */
++const INCLUSIONS_PERMISES = ['larastan/larastan/extension.neon'];
++
+ /**
+  * Les options de contrôle que phpstan.neon peut activer, liste fermée
+  * (cahier de l'analyse statique, § 4.1, points 4 et 5), chacune avec la
+@@ -521,8 +542,10 @@ function seuilsQuiMontent(string $ancien): int
+  * paramètres effectifs, que PHPStan lit lui-même dans phpstan.neon
+  * (dump-parameters : aucun lecteur NEON n'existe hors de son phar), et ses
+  * paramètres de référence, ceux que donnent seuls son niveau et les
+- * ensembles de règles que phpstan.neon inclut :
++ * ensembles de règles permis que phpstan.neon inclut (INCLUSIONS_PERMISES) :
+  *
++ * - phpstan.neon n'inclut aucun autre fichier, directement ou non, que ces
++ *   ensembles de règles et ce qu'ils incluent eux-mêmes ;
+  * - seuils.json (section analyse_statique) enregistre exactement ce que
+  *   règle phpstan.neon : son niveau, ses chemins, ses exclusions (celles
+  *   d'EXCLUSIONS_PERMISES seulement), ses stubs (STUBS_PERMIS), ses
+@@ -550,8 +573,13 @@ function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
+ {
+     $configuration = RACINE.'/phpstan.neon';
+     $effectifs = aplatir(parametresDePhpstan($configuration));
+-    $reference = aplatir(parametresDePhpstan(configurationDeReference($effectifs, $configuration)));
+-    $refus = [];
++    $inclus = fichiersInclus($effectifs, $configuration);
++    $configurationDeReference = configurationDeReference(array_values(array_filter($inclus, estUneInclusionPermise(...))), $effectifs['level'] ?? null);
++    $reference = aplatir(parametresDePhpstan($configurationDeReference));
++    $refus = array_map(
++        static fn (string $fichier): string => 'fichier inclus non permis : '.nomDansLeDepot($fichier),
++        array_values(array_diff($inclus, fichiersInclus($reference, $configurationDeReference))),
++    );
+ 
+     $niveau = $enregistre['niveau'] ?? null;
+     $ancienNiveau = $ancien['niveau'] ?? null;
+@@ -696,9 +724,8 @@ function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
+  */
+ function parametresDePhpstan(string $configuration): array
+ {
+-    $phpstan = getenv('QUALITE_PHPSTAN');
+     $environnement = array_diff_key(getenv(), array_flip(['AI_AGENT', 'CLAUDECODE', 'CLAUDE_CODE']));
+-    $commande = [PHP_BINARY, is_string($phpstan) && $phpstan !== '' ? $phpstan : RACINE.'/vendor/bin/phpstan', 'dump-parameters', '--json', '--memory-limit=1G', '--configuration='.$configuration];
++    $commande = [PHP_BINARY, phpstan(), 'dump-parameters', '--json', '--memory-limit=1G', '--configuration='.$configuration];
+     $processus = proc_open($commande, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tubes, RACINE, $environnement);
+ 
+     if ($processus === false) {
+@@ -725,31 +752,74 @@ function parametresDePhpstan(string $configuration): array
+ }
+ 
+ /**
+- * Une configuration qui inclut les mêmes fichiers que celle-ci (ensembles
+- * de règles et extensions, lus après elle dans allConfigFiles), au même
+- * niveau, sans aucun autre paramètre : ce que PHPStan contrôle d'office à
+- * ce niveau avec ces ensembles de règles. Écrite dans un fichier
+- * temporaire, effacé à la fin de la commande.
++ * Le PHPStan que lance le contrôle : celui du dépôt, ou celui que nomme
++ * QUALITE_PHPSTAN par son chemin absolu (les tests de cet outil, dans un
++ * dépôt temporaire). Son dossier vendor est celui des inclusions permises.
++ */
++function phpstan(): string
++{
++    $phpstan = getenv('QUALITE_PHPSTAN');
++
++    return is_string($phpstan) && $phpstan !== '' ? $phpstan : RACINE.'/vendor/bin/phpstan';
++}
 +
 +/**
-+ * La course que seul l'index unique (magasin, jeton) arrête (R3) : deux
-+ * demandes du même jeton qu'aucun verrou ne fait passer l'une après
-+ * l'autre. L'autre demande, dans son processus, s'inscrit et se valide
-+ * pendant celle du test, qui ne l'a pas encore trouvée ; l'inscription du
-+ * test bute alors sur l'index : sa demande est annulée en entier, puis
-+ * relit le jeton et rend le résultat de l'autre, pourvu qu'elle soit la
-+ * même, sinon elle est refusée (voir ActionsUniques).
-+ *
-+ * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
-+ * ce que le test a validé, et le test voit ce que l'autre a validé.
-+ */
-+class ActionsUniquesCourseConcurrenceTest extends TestCase
-+{
-+    use DatabaseMigrations;
-+
-+    private const ACTION = 'essai.course';
-+
-+    private const PARAMETRES = ['nom' => 'Atelier Dupont'];
-+
-+    public function test_la_demande_qui_perd_la_course_est_annulee_et_rend_le_resultat_de_l_autre(): void
-+    {
-+        [$auteur, $resultatDeLAutre, $autre] = $this->uneAutreDemandeDuMemeJeton(self::PARAMETRES, etapes: false);
-+
-+        $resultat = app(ActionsUniques::class)->executer($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): Client => $this->pendantLAutreDemande($autre['operation']));
-+
-+        $this->assertTrue($resultat->is($resultatDeLAutre));
-+        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++ * Les fichiers de configuration que cette configuration inclut, directement
++ * ou non, tels que PHPStan les a lus : ceux qui la suivent dans
++ * allConfigFiles, où chaque fichier précède ceux qu'il inclut (le schéma
++ * des paramètres et les fichiers des niveaux, que PHPStan lit de lui-même,
++ * la précèdent).
+  *
+- * @param  array<string, mixed>  $effectifs  les paramètres effectifs aplatis de cette configuration
++ * @param  array<string, mixed>  $parametres  les paramètres effectifs aplatis de cette configuration
++ * @return list<string>
+  */
+-function configurationDeReference(array $effectifs, string $configuration): string
++function fichiersInclus(array $parametres, string $configuration): array
+ {
+-    $fichiers = listeDeChaines($effectifs['allConfigFiles'] ?? [], 'allConfigFiles');
++    $fichiers = listeDeChaines($parametres['allConfigFiles'] ?? [], 'allConfigFiles');
+     $rang = array_search(realpath($configuration), $fichiers, true);
+ 
+-    if ($rang === false || ! is_int($effectifs['level'] ?? null)) {
+-        throw new RuntimeException("PHPStan ne dit ni le niveau ni les fichiers inclus de {$configuration}.");
++    if ($rang === false) {
++        throw new RuntimeException("PHPStan ne dit pas les fichiers inclus de {$configuration}.");
 +    }
 +
-+    public function test_l_etape_qui_perd_la_course_est_annulee_et_rend_le_resultat_de_l_autre_deja_enregistre(): void
-+    {
-+        [$auteur, $resultatDeLAutre, $autre] = $this->uneAutreDemandeDuMemeJeton(self::PARAMETRES, etapes: true);
-+
-+        $resultat = app(ActionsUniques::class)->executerParEtapes($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): array => [$this->pendantLAutreDemande($autre['operation']), true]);
-+
-+        $this->assertInstanceOf(Client::class, $resultat['resultat']);
-+        $this->assertTrue($resultat['resultat']->is($resultatDeLAutre));
-+        $this->assertTrue($resultat['deja_enregistree']);
-+        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
-+    }
-+
-+    public function test_la_demande_qui_perd_la_course_contre_une_demande_differente_est_refusee_et_annulee(): void
-+    {
-+        [$auteur, , $autre] = $this->uneAutreDemandeDuMemeJeton(['nom' => 'Atelier Martin'], etapes: false);
-+
-+        $this->assertThrows(
-+            fn () => app(ActionsUniques::class)->executer($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): Client => $this->pendantLAutreDemande($autre['operation'])),
-+            LogicException::class,
-+            ActionsUniques::REFUS,
-+        );
-+
-+        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
-+    }
-+
-+    /**
-+     * Un magasin, l'auteur des deux demandes, le client que rend celle de
-+     * l'autre processus, et cette autre demande : son jeton et l'opération
-+     * qui la fait, de bout en bout, avec ces paramètres, par executer() ou
-+     * par une seule étape d'executerParEtapes(), sans verrou.
-+     *
-+     * @param  array<string, string>  $parametres
-+     * @return array{0: User, 1: Client, 2: array{jeton: string, operation: Closure(): void}}
-+     */
-+    private function uneAutreDemandeDuMemeJeton(array $parametres, bool $etapes): array
-+    {
-+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-+        $auteur = self::responsableDeTest($magasin);
-+        $client = Client::factory()->create(['nom' => 'Client de l\'autre demande']);
-+        $jeton = (string) Str::uuid();
-+        [$magasinId, $auteurId, $clientId] = [$magasin->id, $auteur->id, $client->id];
-+
-+        return [$auteur, $client, ['jeton' => $jeton, 'operation' => static function () use ($magasinId, $auteurId, $clientId, $jeton, $parametres, $etapes): void {
-+            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-+            $auteur = User::query()->findOrFail($auteurId);
-+            $client = static fn (): Client => Client::query()->findOrFail($clientId);
-+
-+            $etapes
-+                ? app(ActionsUniques::class)->executerParEtapes($jeton, self::ACTION, Client::class, $auteur, $parametres, static fn (): null => null, static fn (): array => [$client(), true])
-+                : app(ActionsUniques::class)->executer($jeton, self::ACTION, Client::class, $auteur, $parametres, static fn (): null => null, $client);
-+        }]];
-+    }
-+
-+    /**
-+     * L'opération de la demande du test : elle attend que l'autre demande,
-+     * lancée dans son processus, se soit inscrite et validée, puis crée son
-+     * propre client, que l'annulation de sa demande effacera.
-+     *
-+     * @param  Closure(): void  $autre
-+     */
-+    private function pendantLAutreDemande(Closure $autre): Client
-+    {
-+        $resultat = $this->demarrerUnProcessusConcurrent($autre)->wait();
-+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
-+
-+        return Client::factory()->create(['nom' => 'Client de la demande qui perd']);
-+    }
++    return array_slice($fichiers, $rang + 1);
 +}
-diff --git a/tests/Feature/Facturation/RecusDePaiementTest.php b/tests/Feature/Facturation/RecusDePaiementTest.php
-index 57729c7..99329eb 100644
---- a/tests/Feature/Facturation/RecusDePaiementTest.php
-+++ b/tests/Feature/Facturation/RecusDePaiementTest.php
-@@ -458,6 +458,33 @@ public function test_la_fiche_de_la_facture_telecharge_le_recu_de_chaque_encaiss
-             ->assertFileDownloaded('recu-RP-LYON1-2026-000001.pdf');
++
++/**
++ * Ce fichier de configuration est-il l'une des inclusions permises
++ * (INCLUSIONS_PERMISES), dans le dossier vendor du PHPStan que lance le
++ * contrôle ?
++ */
++function estUneInclusionPermise(string $fichier): bool
++{
++    $reel = realpath($fichier);
++
++    return $reel !== false && in_array($reel, array_map(static fn (string $permise): string|false => realpath(dirname(phpstan(), 2).'/'.$permise), INCLUSIONS_PERMISES), true);
++}
++
++/**
++ * Une configuration qui n'inclut que ces fichiers (les inclusions permises
++ * de phpstan.neon), à ce niveau, sans aucun autre paramètre : ce que
++ * PHPStan contrôle d'office à ce niveau avec ces ensembles de règles.
++ * Écrite dans un fichier temporaire, effacé à la fin de la commande.
++ *
++ * @param  list<string>  $inclusions
++ */
++function configurationDeReference(array $inclusions, mixed $niveau): string
++{
++    if (! is_int($niveau)) {
++        throw new RuntimeException('PHPStan ne dit pas le niveau de phpstan.neon.');
      }
  
-+    /**
-+     * Sur la fiche de la facture, « Envoyer le reçu » d'un encaissement
-+     * l'envoie à l'adresse du client, préremplie, avec le message saisi :
-+     * l'écran dit l'envoi programmé, et l'e-mail part avec le PDF du reçu.
-+     */
-+    public function test_la_fiche_de_la_facture_envoie_le_recu_d_un_encaissement_au_client(): void
-+    {
-+        Mail::fake();
-+        $magasin = $this->magasin();
-+        $facture = $this->facture(Client::factory()->professionnel()->create(['email' => 'compta@atelier.fr']), 100);
-+        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 3000)]);
-+        $this->actingAs(self::auteur());
-+        Filament::setTenant($magasin);
-+
-+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
-+            ->assertInfolistActionVisible('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu')
-+            ->callInfolistAction('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu', ['message' => 'Merci pour votre règlement.'])
-+            ->assertHasNoInfolistActionErrors()
-+            ->assertNotified('Envoi à compta@atelier.fr programmé');
-+
-+        $envoi = EnvoiDocument::query()->sole();
-+        $this->assertSame(['recu_paiement', RecuPaiement::query()->sole()->id, 'compta@atelier.fr', StatutEnvoi::Envoye], [$envoi->document_type, (int) $envoi->document_id, $envoi->destinataire, $envoi->statut]);
-+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('compta@atelier.fr')
-+            && $mail->attachments()[0]->as === 'recu-RP-LYON1-2026-000001.pdf'
-+            && str_contains($mail->render(), 'Merci pour votre règlement.'));
-+    }
-+
-     /**
-      * Le client comptoir sans adresse ne reçoit jamais de reçu par e-mail :
-      * l'action ne se propose pas.
-diff --git a/tests/Feature/Societe/CabinetComptableTest.php b/tests/Feature/Societe/CabinetComptableTest.php
-index 4fe45ab..5f3872e 100644
---- a/tests/Feature/Societe/CabinetComptableTest.php
-+++ b/tests/Feature/Societe/CabinetComptableTest.php
-@@ -5,16 +5,20 @@
- use App\Domain\Authorization\AutorisationsSociete;
- use App\Domain\Authorization\PermissionRegistry;
- use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
-+use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
- use App\Domain\Cabinets\Enums\EtatDuLien;
-+use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
- use App\Domain\Cabinets\Models\LienCabinet;
- use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
- use App\Domain\Tenancy\Enums\MotifCloture;
- use App\Domain\Tenancy\Enums\TypeDActivite;
-+use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
- use App\Filament\Societe\Pages\CabinetComptable;
- use App\Filament\Societe\Pages\RattachementDUnCabinet;
- use Database\Factories\SocieteFactory;
- use Illuminate\Foundation\Testing\RefreshDatabase;
-+use Illuminate\Support\Facades\Mail;
- use Livewire\Livewire;
- use Tests\TestCase;
+-    $neon = "includes:\n";
++    $dossier = realpath(sys_get_temp_dir());
  
-@@ -81,6 +85,31 @@ public function test_la_page_designe_repond_regle_et_met_fin_au_lien(): void
-         $this->assertNotNull($page);
+-    foreach (array_slice($fichiers, $rang + 1) as $inclus) {
+-        $neon .= "    - '".str_replace("'", "''", $inclus)."'\n";
++    if ($dossier === false) {
++        throw new RuntimeException('Le dossier temporaire '.sys_get_temp_dir().' est introuvable.');
      }
  
-+    /**
-+     * Depuis la page, le propriétaire retire la demande de lien qu'il a
-+     * adressée à un cabinet, puis invite son expert-comptable, qui n'a pas
-+     * encore d'espace, à en créer un : chaque geste le dit.
-+     */
-+    public function test_la_page_retire_une_demande_de_lien_et_invite_l_expert_a_creer_son_espace(): void
-+    {
-+        Mail::fake();
-+        $cabinet = $this->ouvrirUnCabinet();
-+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
-+        app(TenantContext::class)->clear();
-+        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
-+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
-+
-+        Livewire::test(CabinetComptable::class)
-+            ->callAction('retirerLaDemande', arguments: ['uuid' => $designation->uuid])
-+            ->assertNotified('Votre demande est retirée.')
-+            ->callAction('inviterSonExpert', ['email' => 'expert@cabinet.test'])
-+            ->assertHasNoActionErrors()
-+            ->assertNotified('L\'invitation est envoyée.');
-+
-+        $this->assertSame(EtatDuLien::Retire, $designation->fresh()->etat);
-+        Mail::assertSent(InvitationACreerUnEspaceMail::class, fn (InvitationACreerUnEspaceMail $mail): bool => $mail->hasTo('expert@cabinet.test'));
-+    }
-+
-     public function test_la_page_ne_propose_que_les_autorisations_du_cabinet_en_deux_groupes(): void
-     {
-         $cabinet = $this->ouvrirUnCabinet();
-diff --git a/tests/Feature/Stock/VenteSansStockTest.php b/tests/Feature/Stock/VenteSansStockTest.php
-index 2594f59..97369ae 100644
---- a/tests/Feature/Stock/VenteSansStockTest.php
-+++ b/tests/Feature/Stock/VenteSansStockTest.php
-@@ -34,6 +34,7 @@
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Filament\App\Pages\Caisse;
- use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
-+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
- use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
- use App\Filament\App\Widgets\StockNegatifApercu;
- use App\Models\User;
-@@ -258,6 +259,31 @@ public function test_la_liste_des_factures_avertit_avant_d_emettre_une_vente_san
-         $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
-     }
+-    $reference = sys_get_temp_dir().'/piliqi-reference-'.getmypid().'-'.bin2hex(random_bytes(4)).'.neon';
+-    file_put_contents($reference, $neon."\nparameters:\n    level: {$effectifs['level']}\n");
++    $neon = $inclusions === [] ? '' : "includes:\n".implode('', array_map(static fn (string $inclus): string => "    - '".str_replace("'", "''", $inclus)."'\n", $inclusions))."\n";
++    $reference = $dossier.'/piliqi-reference-'.getmypid().'-'.bin2hex(random_bytes(4)).'.neon';
++    file_put_contents($reference, $neon."parameters:\n    level: {$niveau}\n");
+     register_shutdown_function(static fn (): bool => ! is_file($reference) || unlink($reference));
  
-+    /**
-+     * Depuis la fiche d'un brouillon, « Émettre » une vente au-delà du
-+     * stock garde sa fenêtre ouverte avec l'avertissement ; confirmé, il
-+     * émet.
-+     */
-+    public function test_la_fiche_d_un_brouillon_avertit_avant_d_emettre_une_vente_sans_stock(): void
-+    {
-+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-+        $responsable = $this->responsableDeTest($magasin);
-+        $cable = $this->produit('Câble USB', 1);
-+        $brouillon = app(CreerFactureAction::class)->handle($responsable, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
-+        $this->actingAs($responsable);
-+        Filament::setTenant($magasin);
-+
-+        $fiche = Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
-+            ->callAction('emettre')
-+            ->assertActionMounted('emettre')
-+            ->assertSee('Le stock de Câble USB passera à −2.');
-+        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
-+
-+        $fiche->callMountedAction();
-+
-+        $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
-+    }
-+
-     public function test_un_responsable_vend_sans_stock_apres_l_avertissement(): void
-     {
-         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-diff --git a/tests/Feature/Tenancy/TenantIsolationTest.php b/tests/Feature/Tenancy/TenantIsolationTest.php
-index e9154f5..f94fb8f 100644
---- a/tests/Feature/Tenancy/TenantIsolationTest.php
-+++ b/tests/Feature/Tenancy/TenantIsolationTest.php
-@@ -16,6 +16,8 @@
- use App\Domain\Calendrier\Calendrier;
- use App\Domain\Catalogue\Models\Produit;
- use App\Domain\Catalogue\Models\Service;
-+use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
-+use App\Domain\Contacts\Actions\ModifierUneFicheAction;
- use App\Domain\Contacts\Enums\TypeClient;
- use App\Domain\Contacts\Models\Client;
- use App\Domain\Contacts\Models\ConsultationVies;
-@@ -63,6 +65,7 @@
- use App\Domain\Tenancy\Scopes\MagasinScope;
- use App\Domain\Tenancy\Services\ActionsUniques;
- use App\Domain\Tenancy\Services\TenantContext;
-+use App\Domain\Tenancy\Support\FicheLue;
- use App\Filament\App\Resources\AvoirFournisseurResource;
- use App\Filament\App\Resources\AvoirResource;
- use App\Filament\App\Resources\ClientResource;
-@@ -456,6 +459,49 @@ public function test_un_magasin_de_la_meme_societe_ne_justifie_pas_une_vente_d_u
-         $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
-     }
+     return $reference;
+@@ -809,17 +879,18 @@ function listeTriee(mixed $valeurs, string $nom): array
+ }
  
-+    /**
-+     * Les fiches que corrige ModifierUneFicheAction.
-+     *
-+     * @return array<string, array{0: class-string<Client|Fournisseur|Produit|Service>}>
-+     */
-+    public static function fichesModifiables(): array
-+    {
-+        return [
-+            'client' => [Client::class],
-+            'fournisseur' => [Fournisseur::class],
-+            'produit' => [Produit::class],
-+            'service' => [Service::class],
-+        ];
-+    }
-+
-+    /**
-+     * Une fiche se corrige dans le magasin qui l'a créée : depuis un autre
-+     * magasin de la même société, l'action qui enregistre la correction ne
-+     * la retrouve pas sous son verrou, même quand on la lui passe, le dit,
-+     * et la fiche reste telle qu'elle était.
-+     *
-+     * @param  class-string<Client|Fournisseur|Produit|Service>  $modelClass
-+     */
-+    #[DataProvider('fichesModifiables')]
-+    public function test_un_magasin_de_la_meme_societe_ne_corrige_pas_la_fiche_d_un_autre(string $modelClass): void
-+    {
-+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
-+        $contexte = app(TenantContext::class);
-+        $contexte->set($this->magasinA);
-+        $fiche = $modelClass::factory()->create(['nom' => 'Nom d\'origine']);
-+        $lue = FicheLue::de($fiche)->valeurs();
-+        $contexte->set($memeSociete);
-+
-+        $this->assertThrows(
-+            fn () => app(ModifierUneFicheAction::class)->handle(self::auteur(), $fiche, $lue, ['nom' => 'Nom corrigé']),
-+            LogicException::class,
-+            ArchiverUneFicheAction::REFUS_INTROUVABLE,
-+        );
-+
-+        $contexte->set($this->magasinA);
-+        $this->assertSame('Nom d\'origine', $fiche->fresh()?->getAttribute('nom'));
-+    }
-+
-     /**
-      * @return array<string, array{0: class-string<RessourceFilament>, 1: string, 2: Closure(Magasin): Model}>
-      */
+ /**
+- * Ces chemins absolus, relatifs à la racine du dépôt, triés.
++ * Ces chemins absolus, nommés depuis la racine du dépôt (en entier hors du
++ * dépôt, voir nomDansLeDepot()), triés.
+  *
+  * @param  array<array-key, string>  $chemins
+  * @return list<string>
+  */
+ function cheminsDuDepot(array $chemins): array
+ {
+-    $relatifs = array_map(relatifAuDepot(...), array_values($chemins));
+-    sort($relatifs);
++    $noms = array_map(nomDansLeDepot(...), array_values($chemins));
++    sort($noms);
+ 
+-    return $relatifs;
++    return $noms;
+ }
+ 
+ /**

@@ -1,7 +1,7 @@
 From 2c55bad6730b62eaf54288c7caaaed75ed06708b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 14:11:08 +0000
-Subject: [PATCH 01/11] Ajoute le test d'empreinte de la caisse et des PDF (lot
+Subject: [PATCH 01/12] Ajoute le test d'empreinte de la caisse et des PDF (lot
  TY1 1/n)
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -1330,7 +1330,7 @@ index 0000000..258e587
 From 5946e699904cb1f1df417e4d5cfcebfbbaa629f2 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 16:03:37 +0000
-Subject: [PATCH 02/11] =?UTF-8?q?Arr=C3=AAte=20les=20mutants=20survivants?=
+Subject: [PATCH 02/12] =?UTF-8?q?Arr=C3=AAte=20les=20mutants=20survivants?=
  =?UTF-8?q?=20connus=20des=20calculs=20et=20des=20droits=20(lot=20TY1=202/?=
  =?UTF-8?q?n)?=
 MIME-Version: 1.0
@@ -1491,7 +1491,7 @@ index 97fb8ff..bf4130d 100644
 From d8d2ee3c733e4c1a9504f861eeefcc625dd53a96 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 17:01:12 +0000
-Subject: [PATCH 03/11] =?UTF-8?q?Contr=C3=B4le=20les=20seuils=20de=20l'ana?=
+Subject: [PATCH 03/12] =?UTF-8?q?Contr=C3=B4le=20les=20seuils=20de=20l'ana?=
  =?UTF-8?q?lyse=20statique=20par=20ses=20param=C3=A8tres=20effectifs=20(lo?=
  =?UTF-8?q?t=20TY1=203/n)?=
 MIME-Version: 1.0
@@ -2597,7 +2597,7 @@ index 2701ec1..a86180b 100644
 From 6fcefd03fdc409831210021dd7b50bb23d537439 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 16:57:49 +0000
-Subject: [PATCH 04/11] =?UTF-8?q?Lit=20comme=20absent=20un=20t=C3=A9moin?=
+Subject: [PATCH 04/12] =?UTF-8?q?Lit=20comme=20absent=20un=20t=C3=A9moin?=
  =?UTF-8?q?=20de=20poste=20envoy=C3=A9=20en=20tableau,=20au=20lieu=20d'une?=
  =?UTF-8?q?=20erreur=20500=20(lot=20TY1=204/n)?=
 MIME-Version: 1.0
@@ -2726,7 +2726,7 @@ index 2561dd7..92c036d 100644
 From 8b3b73191a7a25d0298a8da0a7d291a9601ab4a3 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 17:27:06 +0000
-Subject: [PATCH 05/11] =?UTF-8?q?=C3=89tend=20l'analyse=20statique=20?=
+Subject: [PATCH 05/12] =?UTF-8?q?=C3=89tend=20l'analyse=20statique=20?=
  =?UTF-8?q?=C3=A0=20tout=20le=20code=20de=20l'application=20hors=20des=20t?=
  =?UTF-8?q?ests=20(lot=20TY1=205/n)?=
 MIME-Version: 1.0
@@ -2866,7 +2866,7 @@ index a86180b..b4ad5e3 100644
 From 0e5cf71dc881ae027b27c6909ac8ff20bdc4d8bb Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 18:07:26 +0000
-Subject: [PATCH 06/11] =?UTF-8?q?Type=20les=20lectures=20des=20droits,=20d?=
+Subject: [PATCH 06/12] =?UTF-8?q?Type=20les=20lectures=20des=20droits,=20d?=
  =?UTF-8?q?e=20la=20soci=C3=A9t=C3=A9=20et=20des=20cabinets=20(Larastan=20?=
  =?UTF-8?q?niveau=207,=20lot=20TY1=206/n)?=
 MIME-Version: 1.0
@@ -4978,7 +4978,7 @@ index 0000000..6285b9d
 From 430539cd880e0e1d072ec0d5ead53fe44b902562 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 18:38:16 +0000
-Subject: [PATCH 07/11] Type les ventes, les achats, la caisse et le stock
+Subject: [PATCH 07/12] Type les ventes, les achats, la caisse et le stock
  (Larastan niveau 7, lot TY1 7/n)
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -7034,7 +7034,7 @@ index 0000000..86cc1f4
 From 97c16bc711e363e43b2fff873b7c80c8302719dc Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 19:23:38 +0000
-Subject: [PATCH 08/11] =?UTF-8?q?Type=20les=20=C3=A9crans,=20les=20command?=
+Subject: [PATCH 08/12] =?UTF-8?q?Type=20les=20=C3=A9crans,=20les=20command?=
  =?UTF-8?q?es=20et=20la=20configuration,=20et=20passe=20Larastan=20au=20ni?=
  =?UTF-8?q?veau=207=20(lot=20TY1=208/n)?=
 MIME-Version: 1.0
@@ -8740,7 +8740,7 @@ index 6285b9d..b167b96 100644
 From 283c34db17463f5419dcce09535400c663c968ce Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 19:51:58 +0000
-Subject: [PATCH 09/11] =?UTF-8?q?Type=20les=20valeurs=20requises=20des=20d?=
+Subject: [PATCH 09/12] =?UTF-8?q?Type=20les=20valeurs=20requises=20des=20d?=
  =?UTF-8?q?roits,=20de=20la=20soci=C3=A9t=C3=A9=20et=20des=20cabinets=20(L?=
  =?UTF-8?q?arastan=20niveau=208,=20lot=20TY1=209/n)?=
 MIME-Version: 1.0
@@ -10519,7 +10519,7 @@ index 0000000..9b6e7af
 From 96b3f8a8638c4ff568713a8db069aef33d4f8872 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 20:23:40 +0000
-Subject: [PATCH 10/11] Type les valeurs requises des ventes, des achats, de la
+Subject: [PATCH 10/12] Type les valeurs requises des ventes, des achats, de la
  caisse et du stock (Larastan niveau 8, lot TY1 10/n)
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -12537,7 +12537,7 @@ index 17e67de..ba5c1c7 100644
 From 5ff0152c1628f425d1ddf5946df8a96cc563fbf7 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 10 Nov 2026 20:51:31 +0000
-Subject: [PATCH 11/11] =?UTF-8?q?Type=20les=20valeurs=20requises=20des=20?=
+Subject: [PATCH 11/12] =?UTF-8?q?Type=20les=20valeurs=20requises=20des=20?=
  =?UTF-8?q?=C3=A9crans,=20et=20passe=20Larastan=20au=20niveau=208=20(lot?=
  =?UTF-8?q?=20TY1=2011/n)?=
 MIME-Version: 1.0
@@ -15444,6 +15444,665 @@ index 6723ee1..8ba767c 100644
          "chemins": [
              "app",
              "bootstrap",
+-- 
+2.43.0
+
+
+From 85462966f1e00ca842384f12d1e80aa8b15c5b2d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 10 Nov 2026 21:55:49 +0000
+Subject: [PATCH 12/12] =?UTF-8?q?Couvre=20les=20lignes=20retouch=C3=A9es?=
+ =?UTF-8?q?=20par=20le=20typage=20et=20retire=20une=20fonction=20sans=20ap?=
+ =?UTF-8?q?pelant=20(lot=20TY1=2012/n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cahier de l'analyse statique, § 6.5 : sur la couverture du lot,
+  qualite.php nouveau-code (base
+  origin/claude/saas-invoice-editor-architecture-q6eizh) rendait 20
+  lignes de app/, ajoutées ou modifiées par les commits 6/n à 11/n,
+  qu'aucun test n'exécutait ; l'étape « Nouveau code couvert » de la CI
+  les aurait refusées. Ce commit les fait exécuter par des tests
+  ajoutés, chacun vérifiant l'effet du geste, ou retire la fonction qui
+  les portait :
+  - ModifierUneFicheAction, le refus d'une fiche introuvable sous son
+    verrou : TenantIsolationTest::test_un_magasin_de_la_meme_societe_ne_corrige_pas_la_fiche_d_un_autre
+    (client, fournisseur, produit, service ; la fiche de l'autre magasin
+    reste telle qu'elle était) ;
+  - RevoquerSocieteAction, les magasins réels changés entre leur lecture
+    et leurs verrous, qui font reprendre la révocation :
+    RevoquerSocieteTest::test_un_magasin_cree_pendant_la_revocation_est_revoque_avec_les_autres ;
+  - ActionsUniques, la course que seul l'index unique (magasin, jeton)
+    arrête, par executer() et par executerParEtapes(), et contre une
+    demande différente : nouveau fichier ActionsUniquesCourseConcurrenceTest
+    (DatabaseMigrations, l'autre demande dans son processus ; la demande
+    qui perd est annulée en entier et rend le résultat de l'autre, ou
+    est refusée) ;
+  - FactureResource : « Envoyer le reçu » depuis la fiche d'une facture
+    (RecusDePaiementTest::test_la_fiche_de_la_facture_envoie_le_recu_d_un_encaissement_au_client)
+    et « Émettre » une vente au-delà du stock depuis la fiche d'un
+    brouillon
+    (VenteSansStockTest::test_la_fiche_d_un_brouillon_avertit_avant_d_emettre_une_vente_sans_stock) ;
+  - espace du cabinet : « Retirer » une invitation et une demande
+    (InvitationsTest::test_le_proprietaire_du_cabinet_retire_une_invitation_et_une_demande_depuis_son_espace),
+    « Mettre fin au lien » depuis la liste des clients
+    (FinDuLienTest::test_le_proprietaire_du_cabinet_met_fin_au_lien_depuis_la_liste_de_ses_clients),
+    transmission de la propriété depuis la fiche d'un collaborateur,
+    renvoi du lien et annulation
+    (CollaborateursTest::test_la_fiche_du_collaborateur_transmet_la_propriete_renvoie_le_lien_et_annule_la_transmission) ;
+  - page « Cabinet comptable » de la société : « Retirer » une demande
+    de lien et « L'inviter à créer son espace »
+    (CabinetComptableTest::test_la_page_retire_une_demande_de_lien_et_invite_l_expert_a_creer_son_espace) ;
+  - AccepterLInvitationDuCabinetController : un formulaire que la
+    validation refuse se réaffiche avec son erreur et le type choisi,
+    sans rien créer
+    (AccepterLInvitationTest::test_un_formulaire_d_acceptation_refuse_se_reaffiche_avec_son_erreur_et_le_type_choisi).
+- Facture::numerosDesAvoirsImputes() est supprimée : plus aucun code ne
+  l'appelle depuis le lot S8-R (95a93a5), et ses trois lignes retouchées
+  au niveau 8 (10/n) n'étaient exécutées par aucun test. CLAUDE.md
+  demande de supprimer une fonction devenue inutile ; aucun comportement
+  ne change.
+- Changements des six sortes du § 6.2 : (a) à (f) aucun.
+- Aucune ligne de test existante ne change ; aucune règle métier ne
+  change.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ app/Domain/Facturation/Models/Facture.php     |  21 ----
+ .../Cabinets/AccepterLInvitationTest.php      |  26 ++++
+ tests/Feature/Cabinets/CollaborateursTest.php |  29 +++++
+ tests/Feature/Cabinets/FinDuLienTest.php      |  21 ++++
+ tests/Feature/Cabinets/InvitationsTest.php    |  26 ++++
+ tests/Feature/Editeur/RevoquerSocieteTest.php |  38 ++++++
+ .../ActionsUniquesCourseConcurrenceTest.php   | 114 ++++++++++++++++++
+ .../Facturation/RecusDePaiementTest.php       |  27 +++++
+ .../Feature/Societe/CabinetComptableTest.php  |  29 +++++
+ tests/Feature/Stock/VenteSansStockTest.php    |  26 ++++
+ tests/Feature/Tenancy/TenantIsolationTest.php |  46 +++++++
+ 11 files changed, 382 insertions(+), 21 deletions(-)
+ create mode 100644 tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
+
+diff --git a/app/Domain/Facturation/Models/Facture.php b/app/Domain/Facturation/Models/Facture.php
+index e91ffbe..7904ae7 100644
+--- a/app/Domain/Facturation/Models/Facture.php
++++ b/app/Domain/Facturation/Models/Facture.php
+@@ -668,27 +668,6 @@ public function montantCrediteParAvoir(): float
+         return app(CalculateurLigne::class)->sommer($this->allocationsAvoir()->pluck('montant_alloue'));
+     }
+ 
+-    /**
+-     * Les numéros des avoirs dont le crédit reste imputé sur cette facture,
+-     * chacun une fois, du premier imputé au dernier : un avoir peut s'y
+-     * imputer plusieurs fois (à son émission, puis par un paiement), et le
+-     * crédit qu'une contre-passation a rendu à son avoir n'y compte plus.
+-     *
+-     * @return list<string>
+-     */
+-    public function numerosDesAvoirsImputes(): array
+-    {
+-        $calculateur = app(CalculateurLigne::class);
+-
+-        return array_values($this->allocationsAvoir
+-            ->sortBy('id')
+-            ->groupBy('avoir_id')
+-            ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
+-            ->map(fn (Collection $allocations): ?string => ValeurRequise::de($allocations->first(), 'la première imputation d\'un avoir')->avoir?->numero)
+-            ->filter()
+-            ->all());
+-    }
+-
+     /**
+      * Ce qui a réglé la facture à son émission, relu dans son contenu
+      * signé, que son PDF imprime (Q5) ; rien pour un brouillon. Ce qu'elle
+diff --git a/tests/Feature/Cabinets/AccepterLInvitationTest.php b/tests/Feature/Cabinets/AccepterLInvitationTest.php
+index 29f3af3..cd3c13d 100644
+--- a/tests/Feature/Cabinets/AccepterLInvitationTest.php
++++ b/tests/Feature/Cabinets/AccepterLInvitationTest.php
+@@ -249,6 +249,32 @@ public function test_l_acceptation_sans_type_avec_le_type_cabinet_ou_sans_la_cas
+         $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
+     }
+ 
++    /**
++     * Un formulaire d'acceptation que la validation refuse se réaffiche,
++     * avec son erreur et le type d'activité choisi, sans rien créer ni
++     * connecter personne : l'invitation reste ouverte.
++     */
++    public function test_un_formulaire_d_acceptation_refuse_se_reaffiche_avec_son_erreur_et_le_type_choisi(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $jeton = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test');
++        $societes = Societe::query()->count();
++
++        $this->post(route('cabinets.invitation.accepter', ['jeton' => $jeton]), [
++            'password' => self::MOT_DE_PASSE_CHOISI,
++            'password_confirmation' => 'un-autre-mot-de-passe',
++            'type_activite' => TypeDActivite::Services->value,
++            'choix_definitif' => '1',
++        ])
++            ->assertOk()
++            ->assertSeeText('La confirmation du champ mot de passe ne correspond pas.')
++            ->assertSee('value="'.TypeDActivite::Services->value.'" checked', false);
++
++        $this->assertGuest();
++        $this->assertSame($societes, Societe::query()->count());
++        $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
++    }
++
+     /**
+      * @return array<string, array{0: string, 1: string}>
+      */
+diff --git a/tests/Feature/Cabinets/CollaborateursTest.php b/tests/Feature/Cabinets/CollaborateursTest.php
+index 66e8223..94d2c28 100644
+--- a/tests/Feature/Cabinets/CollaborateursTest.php
++++ b/tests/Feature/Cabinets/CollaborateursTest.php
+@@ -12,6 +12,7 @@
+ use App\Domain\Tenancy\Enums\TypeDActivite;
+ use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
+ use App\Domain\Tenancy\Models\Societe;
++use App\Domain\Tenancy\Models\TransmissionPropriete;
+ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+ use App\Domain\Tenancy\Services\CreationDesComptes;
+ use App\Domain\Tenancy\Services\PorteeDesDroits;
+@@ -388,6 +389,34 @@ public function test_la_propriete_d_un_cabinet_se_transmet_a_un_collaborateur_qu
+         $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::ProprieteTransferee));
+     }
+ 
++    /**
++     * Depuis la fiche du collaborateur, le propriétaire du cabinet demande
++     * la transmission de la propriété en redonnant son mot de passe,
++     * renvoie le lien, qui remplace le précédent, puis annule : chaque geste
++     * le dit, et rien n'a changé dans le cabinet.
++     */
++    public function test_la_fiche_du_collaborateur_transmet_la_propriete_renvoie_le_lien_et_annule_la_transmission(): void
++    {
++        Mail::fake();
++        $cabinet = $this->ouvrirUnCabinet();
++        $collaborateur = $this->renseignerSonAdresse($this->collaborateur($cabinet), 'paul@cabinet.test');
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++
++        $fiche = Livewire::test(FicheDuCollaborateur::class, ['record' => $collaborateur->getRouteKey()])
++            ->callAction('transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
++            ->assertHasNoActionErrors()
++            ->assertNotified('Un lien a été envoyé à l\'adresse de ce collaborateur : la propriété ne passera que quand il l\'aura suivi.');
++        $premier = $this->jetonDuDernierLienDeTransmission();
++
++        $fiche->callAction('renvoyerLeLienDeTransmission')->assertNotified('Un nouveau lien a été envoyé à l\'adresse de ce collaborateur.');
++        Mail::assertSent(TransmissionDeLaProprieteMail::class, 2);
++        $this->assertNotSame($premier, $this->jetonDuDernierLienDeTransmission());
++
++        $fiche->callAction('annulerLaTransmission')->assertNotified('La transmission de la propriété est annulée.');
++        $this->assertNotNull(TransmissionPropriete::query()->where('destinataire_id', $collaborateur->id)->sole()->annulee_le);
++        $this->assertSame([RoleSociete::Collaborateur, RoleSociete::Proprietaire], [$collaborateur->fresh()->role_societe, $this->proprietaireDuCabinet($cabinet)->role_societe]);
++    }
++
+     public function test_l_ancien_proprietaire_du_cabinet_devient_collaborateur_avec_tous_les_clients_confies(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/FinDuLienTest.php b/tests/Feature/Cabinets/FinDuLienTest.php
+index 7dd0f7f..b96a253 100644
+--- a/tests/Feature/Cabinets/FinDuLienTest.php
++++ b/tests/Feature/Cabinets/FinDuLienTest.php
+@@ -13,6 +13,7 @@
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Resources\FactureResource;
+ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
++use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
+ use App\Filament\Societe\Pages\CabinetComptable;
+ use Illuminate\Auth\Access\AuthorizationException;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+@@ -60,6 +61,26 @@ public function test_le_cabinet_met_fin_au_lien(): void
+         $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+     }
+ 
++    /**
++     * « Mettre fin au lien », dans la liste des clients du cabinet : son
++     * propriétaire met fin au lien, l'écran le dit, et le cabinet n'ouvre
++     * plus le client.
++     */
++    public function test_le_proprietaire_du_cabinet_met_fin_au_lien_depuis_la_liste_de_ses_clients(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
++        $lien = $this->lierLeCabinet($cabinet, $magasin);
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++
++        Livewire::test(ListClientsDuCabinet::class)
++            ->callTableAction('mettreFin', $lien)
++            ->assertNotified('Le lien avec ce client a pris fin.');
++
++        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
++        $this->assertFalse($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
++    }
++
+     public function test_une_session_ouverte_perd_l_acces_au_client_des_sa_requete_suivante(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/InvitationsTest.php b/tests/Feature/Cabinets/InvitationsTest.php
+index d6d62a9..bcfcafb 100644
+--- a/tests/Feature/Cabinets/InvitationsTest.php
++++ b/tests/Feature/Cabinets/InvitationsTest.php
+@@ -390,6 +390,32 @@ public function test_le_cabinet_retire_une_invitation_ouverte_et_son_lien_ne_vau
+         $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSeeText(InvitationInvalideException::MESSAGE);
+     }
+ 
++    /**
++     * « Retirer », dans l'espace du cabinet : son propriétaire retire une
++     * invitation ouverte et une demande de rattachement en cours, chacune
++     * le dit, et leurs liens ne servent plus.
++     */
++    public function test_le_proprietaire_du_cabinet_retire_une_invitation_et_une_demande_depuis_son_espace(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $inscrite = $this->ouvrirUneSociete(['nom' => 'Boutique inscrite'])->societe;
++        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@libre.test');
++        $this->demanderLeRattachement($cabinet, $inscrite, 'dirigeant@inscrite.test');
++        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
++        $demande = LienCabinet::query()->withoutGlobalScopes()->sole();
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++
++        Livewire::test(InvitationsEtDemandes::class)
++            ->callAction('retirerLInvitation', arguments: ['uuid' => $invitation->uuid])
++            ->assertNotified('L\'invitation est retirée.')
++            ->callAction('retirerLaDemande', arguments: ['uuid' => $demande->uuid])
++            ->assertNotified('La demande est retirée.');
++
++        $this->assertSame([EtatInvitation::Retiree, EtatDuLien::Retire], [$invitation->fresh()->etat, $demande->fresh()->etat]);
++        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::InvitationRetiree));
++        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));
++    }
++
+     /**
+      * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
+      * propriétaire peut seulement mettre fin à ses liens (voir
+diff --git a/tests/Feature/Editeur/RevoquerSocieteTest.php b/tests/Feature/Editeur/RevoquerSocieteTest.php
+index c397ad4..44f3982 100644
+--- a/tests/Feature/Editeur/RevoquerSocieteTest.php
++++ b/tests/Feature/Editeur/RevoquerSocieteTest.php
+@@ -48,7 +48,9 @@
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+ use App\Filament\Societe\Resources\JournalAuditResource;
+ use App\Models\User;
++use Database\Factories\MagasinFactory;
+ use Database\Factories\SocieteFactory;
++use Illuminate\Database\Events\QueryExecuted;
+ use Illuminate\Database\QueryException;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Notifications\ChannelManager;
+@@ -165,6 +167,42 @@ public function test_la_revocation_libere_le_siren_et_les_siret_sans_toucher_aux
+         $this->assertContains('Votre société est révoquée', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+     }
+ 
++    /**
++     * Un magasin que la société crée pendant sa révocation, entre la
++     * lecture de ses magasins réels et leurs verrous, n'y échappe pas : la
++     * révocation reprend sur tous ses magasins, et le nouveau se ferme,
++     * motif « révocation de la société », et libère son SIRET comme
++     * l'autre.
++     */
++    public function test_un_magasin_cree_pendant_la_revocation_est_revoque_avec_les_autres(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
++        $societe = $magasin->societe;
++        $this->prouverLaRemiseDuCourrierDeRevocation($societe);
++        $proprietaire = $this->proprietaireDe($magasin);
++        $nouveau = null;
++        $cree = false;
++        DB::listen(function (QueryExecuted $requete) use ($societe, $proprietaire, &$nouveau, &$cree): void {
++            if ($cree || ! str_contains($requete->sql, 'from "magasins"') || str_contains($requete->sql, ' for ')) {
++                return;
++            }
++
++            $cree = true;
++            $nouveau = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Ouvert pendant la révocation', 'code' => null, 'email' => null, 'nic' => MagasinFactory::nicLibre($societe)]);
++        });
++
++        $revocation = app(RevoquerSocieteAction::class)->handle($societe->fresh(), $this->editeur());
++
++        $this->assertInstanceOf(Magasin::class, $nouveau);
++        $this->assertEqualsCanonicalizing([(string) $magasin->siret, (string) $nouveau->siret], $revocation['sirets']);
++        $this->assertSame(StatutSociete::Revoquee, $societe->fresh()->statut);
++        foreach ([$magasin, $nouveau] as $revoque) {
++            $this->assertFalse(SiretsDesMagasins::estReserve((string) $revoque->siret), $revoque->nom);
++            $periode = app(TenantContext::class)->runAs($revoque->fresh(), fn (): PeriodeActivite => PeriodeActivite::query()->where('magasin_id', $revoque->id)->sole());
++            $this->assertSame(MotifFermeture::RevocationSociete, $periode->motif_fin, $revoque->nom);
++        }
++    }
++
+     /**
+      * Les comptes de la société révoquée consultent encore (le propriétaire
+      * ouvre son journal d'audit), mais plus rien ne s'y vend, ne s'y règle
+diff --git a/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php b/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
+new file mode 100644
+index 0000000..1fbcf08
+--- /dev/null
++++ b/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
+@@ -0,0 +1,114 @@
++<?php
++
++namespace Tests\Feature\Facturation;
++
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Tenancy\Models\ActionTraitee;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\ActionsUniques;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
++use Closure;
++use Illuminate\Foundation\Testing\DatabaseMigrations;
++use Illuminate\Support\Str;
++use LogicException;
++use Tests\TestCase;
++
++/**
++ * La course que seul l'index unique (magasin, jeton) arrête (R3) : deux
++ * demandes du même jeton qu'aucun verrou ne fait passer l'une après
++ * l'autre. L'autre demande, dans son processus, s'inscrit et se valide
++ * pendant celle du test, qui ne l'a pas encore trouvée ; l'inscription du
++ * test bute alors sur l'index : sa demande est annulée en entier, puis
++ * relit le jeton et rend le résultat de l'autre, pourvu qu'elle soit la
++ * même, sinon elle est refusée (voir ActionsUniques).
++ *
++ * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
++ * ce que le test a validé, et le test voit ce que l'autre a validé.
++ */
++class ActionsUniquesCourseConcurrenceTest extends TestCase
++{
++    use DatabaseMigrations;
++
++    private const ACTION = 'essai.course';
++
++    private const PARAMETRES = ['nom' => 'Atelier Dupont'];
++
++    public function test_la_demande_qui_perd_la_course_est_annulee_et_rend_le_resultat_de_l_autre(): void
++    {
++        [$auteur, $resultatDeLAutre, $autre] = $this->uneAutreDemandeDuMemeJeton(self::PARAMETRES, etapes: false);
++
++        $resultat = app(ActionsUniques::class)->executer($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): Client => $this->pendantLAutreDemande($autre['operation']));
++
++        $this->assertTrue($resultat->is($resultatDeLAutre));
++        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++    }
++
++    public function test_l_etape_qui_perd_la_course_est_annulee_et_rend_le_resultat_de_l_autre_deja_enregistre(): void
++    {
++        [$auteur, $resultatDeLAutre, $autre] = $this->uneAutreDemandeDuMemeJeton(self::PARAMETRES, etapes: true);
++
++        $resultat = app(ActionsUniques::class)->executerParEtapes($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): array => [$this->pendantLAutreDemande($autre['operation']), true]);
++
++        $this->assertInstanceOf(Client::class, $resultat['resultat']);
++        $this->assertTrue($resultat['resultat']->is($resultatDeLAutre));
++        $this->assertTrue($resultat['deja_enregistree']);
++        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++    }
++
++    public function test_la_demande_qui_perd_la_course_contre_une_demande_differente_est_refusee_et_annulee(): void
++    {
++        [$auteur, , $autre] = $this->uneAutreDemandeDuMemeJeton(['nom' => 'Atelier Martin'], etapes: false);
++
++        $this->assertThrows(
++            fn () => app(ActionsUniques::class)->executer($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): Client => $this->pendantLAutreDemande($autre['operation'])),
++            LogicException::class,
++            ActionsUniques::REFUS,
++        );
++
++        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++    }
++
++    /**
++     * Un magasin, l'auteur des deux demandes, le client que rend celle de
++     * l'autre processus, et cette autre demande : son jeton et l'opération
++     * qui la fait, de bout en bout, avec ces paramètres, par executer() ou
++     * par une seule étape d'executerParEtapes(), sans verrou.
++     *
++     * @param  array<string, string>  $parametres
++     * @return array{0: User, 1: Client, 2: array{jeton: string, operation: Closure(): void}}
++     */
++    private function uneAutreDemandeDuMemeJeton(array $parametres, bool $etapes): array
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $auteur = self::responsableDeTest($magasin);
++        $client = Client::factory()->create(['nom' => 'Client de l\'autre demande']);
++        $jeton = (string) Str::uuid();
++        [$magasinId, $auteurId, $clientId] = [$magasin->id, $auteur->id, $client->id];
++
++        return [$auteur, $client, ['jeton' => $jeton, 'operation' => static function () use ($magasinId, $auteurId, $clientId, $jeton, $parametres, $etapes): void {
++            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
++            $auteur = User::query()->findOrFail($auteurId);
++            $client = static fn (): Client => Client::query()->findOrFail($clientId);
++
++            $etapes
++                ? app(ActionsUniques::class)->executerParEtapes($jeton, self::ACTION, Client::class, $auteur, $parametres, static fn (): null => null, static fn (): array => [$client(), true])
++                : app(ActionsUniques::class)->executer($jeton, self::ACTION, Client::class, $auteur, $parametres, static fn (): null => null, $client);
++        }]];
++    }
++
++    /**
++     * L'opération de la demande du test : elle attend que l'autre demande,
++     * lancée dans son processus, se soit inscrite et validée, puis crée son
++     * propre client, que l'annulation de sa demande effacera.
++     *
++     * @param  Closure(): void  $autre
++     */
++    private function pendantLAutreDemande(Closure $autre): Client
++    {
++        $resultat = $this->demarrerUnProcessusConcurrent($autre)->wait();
++        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
++
++        return Client::factory()->create(['nom' => 'Client de la demande qui perd']);
++    }
++}
+diff --git a/tests/Feature/Facturation/RecusDePaiementTest.php b/tests/Feature/Facturation/RecusDePaiementTest.php
+index 57729c7..99329eb 100644
+--- a/tests/Feature/Facturation/RecusDePaiementTest.php
++++ b/tests/Feature/Facturation/RecusDePaiementTest.php
+@@ -458,6 +458,33 @@ public function test_la_fiche_de_la_facture_telecharge_le_recu_de_chaque_encaiss
+             ->assertFileDownloaded('recu-RP-LYON1-2026-000001.pdf');
+     }
+ 
++    /**
++     * Sur la fiche de la facture, « Envoyer le reçu » d'un encaissement
++     * l'envoie à l'adresse du client, préremplie, avec le message saisi :
++     * l'écran dit l'envoi programmé, et l'e-mail part avec le PDF du reçu.
++     */
++    public function test_la_fiche_de_la_facture_envoie_le_recu_d_un_encaissement_au_client(): void
++    {
++        Mail::fake();
++        $magasin = $this->magasin();
++        $facture = $this->facture(Client::factory()->professionnel()->create(['email' => 'compta@atelier.fr']), 100);
++        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 3000)]);
++        $this->actingAs(self::auteur());
++        Filament::setTenant($magasin);
++
++        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
++            ->assertInfolistActionVisible('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu')
++            ->callInfolistAction('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu', ['message' => 'Merci pour votre règlement.'])
++            ->assertHasNoInfolistActionErrors()
++            ->assertNotified('Envoi à compta@atelier.fr programmé');
++
++        $envoi = EnvoiDocument::query()->sole();
++        $this->assertSame(['recu_paiement', RecuPaiement::query()->sole()->id, 'compta@atelier.fr', StatutEnvoi::Envoye], [$envoi->document_type, (int) $envoi->document_id, $envoi->destinataire, $envoi->statut]);
++        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('compta@atelier.fr')
++            && $mail->attachments()[0]->as === 'recu-RP-LYON1-2026-000001.pdf'
++            && str_contains($mail->render(), 'Merci pour votre règlement.'));
++    }
++
+     /**
+      * Le client comptoir sans adresse ne reçoit jamais de reçu par e-mail :
+      * l'action ne se propose pas.
+diff --git a/tests/Feature/Societe/CabinetComptableTest.php b/tests/Feature/Societe/CabinetComptableTest.php
+index 4fe45ab..5f3872e 100644
+--- a/tests/Feature/Societe/CabinetComptableTest.php
++++ b/tests/Feature/Societe/CabinetComptableTest.php
+@@ -5,16 +5,20 @@
+ use App\Domain\Authorization\AutorisationsSociete;
+ use App\Domain\Authorization\PermissionRegistry;
+ use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
++use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+ use App\Domain\Cabinets\Enums\EtatDuLien;
++use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
+ use App\Domain\Cabinets\Models\LienCabinet;
+ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
+ use App\Domain\Tenancy\Enums\MotifCloture;
+ use App\Domain\Tenancy\Enums\TypeDActivite;
++use App\Domain\Tenancy\Services\TenantContext;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+ use App\Filament\Societe\Pages\CabinetComptable;
+ use App\Filament\Societe\Pages\RattachementDUnCabinet;
+ use Database\Factories\SocieteFactory;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\Mail;
+ use Livewire\Livewire;
+ use Tests\TestCase;
+ 
+@@ -81,6 +85,31 @@ public function test_la_page_designe_repond_regle_et_met_fin_au_lien(): void
+         $this->assertNotNull($page);
+     }
+ 
++    /**
++     * Depuis la page, le propriétaire retire la demande de lien qu'il a
++     * adressée à un cabinet, puis invite son expert-comptable, qui n'a pas
++     * encore d'espace, à en créer un : chaque geste le dit.
++     */
++    public function test_la_page_retire_une_demande_de_lien_et_invite_l_expert_a_creer_son_espace(): void
++    {
++        Mail::fake();
++        $cabinet = $this->ouvrirUnCabinet();
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
++        app(TenantContext::class)->clear();
++        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
++        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
++
++        Livewire::test(CabinetComptable::class)
++            ->callAction('retirerLaDemande', arguments: ['uuid' => $designation->uuid])
++            ->assertNotified('Votre demande est retirée.')
++            ->callAction('inviterSonExpert', ['email' => 'expert@cabinet.test'])
++            ->assertHasNoActionErrors()
++            ->assertNotified('L\'invitation est envoyée.');
++
++        $this->assertSame(EtatDuLien::Retire, $designation->fresh()->etat);
++        Mail::assertSent(InvitationACreerUnEspaceMail::class, fn (InvitationACreerUnEspaceMail $mail): bool => $mail->hasTo('expert@cabinet.test'));
++    }
++
+     public function test_la_page_ne_propose_que_les_autorisations_du_cabinet_en_deux_groupes(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Stock/VenteSansStockTest.php b/tests/Feature/Stock/VenteSansStockTest.php
+index 2594f59..97369ae 100644
+--- a/tests/Feature/Stock/VenteSansStockTest.php
++++ b/tests/Feature/Stock/VenteSansStockTest.php
+@@ -34,6 +34,7 @@
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Pages\Caisse;
+ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
++use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+ use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
+ use App\Filament\App\Widgets\StockNegatifApercu;
+ use App\Models\User;
+@@ -258,6 +259,31 @@ public function test_la_liste_des_factures_avertit_avant_d_emettre_une_vente_san
+         $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
+     }
+ 
++    /**
++     * Depuis la fiche d'un brouillon, « Émettre » une vente au-delà du
++     * stock garde sa fenêtre ouverte avec l'avertissement ; confirmé, il
++     * émet.
++     */
++    public function test_la_fiche_d_un_brouillon_avertit_avant_d_emettre_une_vente_sans_stock(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $responsable = $this->responsableDeTest($magasin);
++        $cable = $this->produit('Câble USB', 1);
++        $brouillon = app(CreerFactureAction::class)->handle($responsable, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
++        $this->actingAs($responsable);
++        Filament::setTenant($magasin);
++
++        $fiche = Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
++            ->callAction('emettre')
++            ->assertActionMounted('emettre')
++            ->assertSee('Le stock de Câble USB passera à −2.');
++        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
++
++        $fiche->callMountedAction();
++
++        $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
++    }
++
+     public function test_un_responsable_vend_sans_stock_apres_l_avertissement(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+diff --git a/tests/Feature/Tenancy/TenantIsolationTest.php b/tests/Feature/Tenancy/TenantIsolationTest.php
+index e9154f5..f94fb8f 100644
+--- a/tests/Feature/Tenancy/TenantIsolationTest.php
++++ b/tests/Feature/Tenancy/TenantIsolationTest.php
+@@ -16,6 +16,8 @@
+ use App\Domain\Calendrier\Calendrier;
+ use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Catalogue\Models\Service;
++use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
++use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+ use App\Domain\Contacts\Enums\TypeClient;
+ use App\Domain\Contacts\Models\Client;
+ use App\Domain\Contacts\Models\ConsultationVies;
+@@ -63,6 +65,7 @@
+ use App\Domain\Tenancy\Scopes\MagasinScope;
+ use App\Domain\Tenancy\Services\ActionsUniques;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\FicheLue;
+ use App\Filament\App\Resources\AvoirFournisseurResource;
+ use App\Filament\App\Resources\AvoirResource;
+ use App\Filament\App\Resources\ClientResource;
+@@ -456,6 +459,49 @@ public function test_un_magasin_de_la_meme_societe_ne_justifie_pas_une_vente_d_u
+         $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
+     }
+ 
++    /**
++     * Les fiches que corrige ModifierUneFicheAction.
++     *
++     * @return array<string, array{0: class-string<Client|Fournisseur|Produit|Service>}>
++     */
++    public static function fichesModifiables(): array
++    {
++        return [
++            'client' => [Client::class],
++            'fournisseur' => [Fournisseur::class],
++            'produit' => [Produit::class],
++            'service' => [Service::class],
++        ];
++    }
++
++    /**
++     * Une fiche se corrige dans le magasin qui l'a créée : depuis un autre
++     * magasin de la même société, l'action qui enregistre la correction ne
++     * la retrouve pas sous son verrou, même quand on la lui passe, le dit,
++     * et la fiche reste telle qu'elle était.
++     *
++     * @param  class-string<Client|Fournisseur|Produit|Service>  $modelClass
++     */
++    #[DataProvider('fichesModifiables')]
++    public function test_un_magasin_de_la_meme_societe_ne_corrige_pas_la_fiche_d_un_autre(string $modelClass): void
++    {
++        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
++        $contexte = app(TenantContext::class);
++        $contexte->set($this->magasinA);
++        $fiche = $modelClass::factory()->create(['nom' => 'Nom d\'origine']);
++        $lue = FicheLue::de($fiche)->valeurs();
++        $contexte->set($memeSociete);
++
++        $this->assertThrows(
++            fn () => app(ModifierUneFicheAction::class)->handle(self::auteur(), $fiche, $lue, ['nom' => 'Nom corrigé']),
++            LogicException::class,
++            ArchiverUneFicheAction::REFUS_INTROUVABLE,
++        );
++
++        $contexte->set($this->magasinA);
++        $this->assertSame('Nom d\'origine', $fiche->fresh()?->getAttribute('nom'));
++    }
++
+     /**
+      * @return array<string, array{0: class-string<RessourceFilament>, 1: string, 2: Closure(Magasin): Model}>
+      */
 -- 
 2.43.0
 

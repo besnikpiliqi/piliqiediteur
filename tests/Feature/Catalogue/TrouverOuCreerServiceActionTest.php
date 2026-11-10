@@ -86,7 +86,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
      * l'autre caisse a inséré le sien entre la recherche et la création,
      * juste après la requête qui ne l'a pas trouvé. La création se tente
      * dans un point de sauvegarde, que le refus de l'index annule seul :
-     * sous PostgreSQL, la transaction du test reste utilisable.
+     * la transaction du test reste utilisable.
      */
     public function test_un_service_cree_entre_temps_par_une_autre_caisse_est_repris_et_reactive(): void
     {

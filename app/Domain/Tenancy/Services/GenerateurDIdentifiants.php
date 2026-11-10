@@ -25,8 +25,8 @@ use SensitiveParameter;
  * - l'identifiant s'insère dans un point de sauvegarde : un doublon, refusé
  *   par l'index unique de la table, revient au point de sauvegarde et un
  *   autre nombre se tire, sans interrompre la transaction de la création
- *   (sous PostgreSQL, une violation d'unicité sans point de sauvegarde
- *   l'interromprait toute) ; deux créations simultanées qui tirent la même
+ *   (une violation d'unicité sans point de sauvegarde l'interromprait
+ *   toute) ; deux créations simultanées qui tirent la même
  *   valeur se suivent sur l'index. Le tirage ne lit jamais les identifiants
  *   d'une autre société, et aucun écran ne parle d'un doublon.
  * Au plus ESSAIS tirages, puis une exception claire.

@@ -213,8 +213,8 @@ class Societe extends Model implements HasName
     /**
      * La société d'un identifiant ou d'un uuid tapé par l'éditeur (voir
      * ProcedureDeLEditeur), null si elle n'existe pas. Un texte qui n'est
-     * ni l'un ni l'autre ne désigne aucune société : la colonne uuid, typée
-     * sous PostgreSQL, n'est alors pas interrogée.
+     * ni l'un ni l'autre ne désigne aucune société : la colonne uuid, de
+     * type uuid, n'est alors pas interrogée.
      */
     public static function trouverParIdentifiantOuUuid(string $identifiant): ?self
     {
@@ -228,8 +228,8 @@ class Societe extends Model implements HasName
     /**
      * La société d'un uuid tapé dans l'adresse du panneau de son
      * administration (/societe/{uuid}) : un texte qui n'est pas un uuid ne
-     * désigne aucune société (404), sans interroger la colonne uuid, typée
-     * sous PostgreSQL.
+     * désigne aucune société (404), sans interroger la colonne uuid, de
+     * type uuid.
      *
      * @param  mixed  $query
      * @param  mixed  $value

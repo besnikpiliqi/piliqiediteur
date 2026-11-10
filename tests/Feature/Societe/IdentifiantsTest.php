@@ -204,7 +204,11 @@ class IdentifiantsTest extends TestCase
 
     /**
      * La base refuse toute modification de l'identifiant ou de son compte,
-     * et toute suppression, même écrite directement.
+     * toute suppression et tout vidage de la table, même écrits
+     * directement, chacun par sa garde (voir GardesDesIdentifiants) : une
+     * clé unique ou étrangère ne les refuserait pas tous, ni pour cette
+     * raison. Un identifiant mal formé est refusé par la contrainte de sa
+     * forme, avant même l'index unique du compte.
      */
     public function test_un_identifiant_ne_se_modifie_ni_ne_s_efface_en_base(): void
     {
@@ -215,12 +219,14 @@ class IdentifiantsTest extends TestCase
         $administrateur = $this->administrateur($magasin);
 
         foreach ([['identifiant' => '48210937'], ['user_id' => $autre->id], ['jeton_de_creation' => (string) Str::uuid()]] as $modification) {
-            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $compte->id)->update($modification)), QueryException::class);
+            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $compte->id)->update($modification)), QueryException::class, 'identifiants : seul le magasin de rattachement s\'écrit, une seule fois');
         }
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $compte->id)->delete()), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->insert(['identifiant' => '01234567', 'societe_id' => $magasin->societe_id, 'user_id' => $administrateur->id, 'created_at' => now()])), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->where('user_id', $compte->id)->delete()), QueryException::class, 'identifiants : un identifiant ne s\'efface jamais');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->truncate()), QueryException::class, 'identifiants : un identifiant ne s\'efface jamais');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('identifiants')->insert(['identifiant' => '01234567', 'societe_id' => $magasin->societe_id, 'user_id' => $administrateur->id, 'created_at' => now()])), QueryException::class, 'identifiants_forme');
 
         $this->assertSame($identifiant, $compte->refresh()->identifiantDeConnexion());
+        $this->assertSame(4, DB::table('identifiants')->where('societe_id', $magasin->societe_id)->count());
     }
 
     public function test_un_identifiant_n_est_jamais_redonne_meme_apres_le_retrait_du_compte(): void

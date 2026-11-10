@@ -375,10 +375,9 @@ class Produit extends Model
      * premier, et le second reçoit le même refus que si la référence
      * avait été prise avant lui, jamais une erreur de la base. L'écriture
      * se tente dans un point de sauvegarde quand une transaction est
-     * ouverte (validation d'une facture d'achat) : sous PostgreSQL, le
-     * refus de l'index annulerait sinon toute la transaction, et la
-     * référence ne pourrait plus être relue. Tout autre refus de la base
-     * remonte tel quel.
+     * ouverte (validation d'une facture d'achat) : le refus de l'index
+     * annulerait sinon toute la transaction, et la référence ne pourrait
+     * plus être relue. Tout autre refus de la base remonte tel quel.
      *
      * @param  Builder<static>  $query
      * @param  Closure(): bool  $ecriture

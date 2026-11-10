@@ -81,10 +81,9 @@ class TrouverOuCreerServiceAction
                 // même instant : l'unicité (magasin_id, nom_normalise)
                 // tranche, et firstOrCreate() reprend celui de l'autre
                 // caisse. La création se tente dans un point de sauvegarde,
-                // que le refus de l'index annule seul : sous PostgreSQL, une
-                // erreur SQL annulerait sinon toute la transaction. Les
-                // services d'un autre magasin ne sont jamais vus ici
-                // (MagasinScope).
+                // que le refus de l'index annule seul : une erreur SQL
+                // annulerait sinon toute la transaction. Les services d'un
+                // autre magasin ne sont jamais vus ici (MagasinScope).
                 $service = Service::query()->firstOrCreate(['nom_normalise' => Service::normaliserNom($nom)], ['nom' => $nom, 'actif' => true, ...$prixDeReference]);
 
                 if ($service->wasRecentlyCreated) {

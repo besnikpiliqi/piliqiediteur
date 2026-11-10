@@ -68,7 +68,7 @@ use LogicException;
  * et la clé du dernier enregistrement du magasin, et sa dernière journée de
  * caisse clôturée (voir derniereJourneeCloturee()). Cet état ne se lit que
  * sur cette ligne, verrouillée, jamais dans enregistrements_fiscaux ni
- * clotures_caisse : sous PostgreSQL (READ COMMITTED), une lecture
+ * clotures_caisse : en READ COMMITTED, une lecture
  * verrouillée qui a dû attendre ne revoit que les lignes qu'elle avait
  * trouvées avant d'attendre, et ignorerait l'enregistrement ou la clôture
  * qu'une autre caisse a validés pendant ce temps ; la ligne de tête, qui

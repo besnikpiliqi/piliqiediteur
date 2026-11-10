@@ -20,7 +20,9 @@ use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use Tests\TestCase;
@@ -135,6 +137,36 @@ class LibererSiretTest extends TestCase
         $this->assertFalse(SiretsDesMagasins::estReserve($siret));
         $this->assertTrue($magasin->fresh()->aEteCede());
         $this->assertNotNull($magasin->fresh()->siret_libere_le);
+    }
+
+    /**
+     * Une fois posée, la date de libération du SIRET d'un magasin ne
+     * s'efface plus et ne change plus, même par une requête qui ne passe
+     * pas par le modèle : la base le refuse (voir
+     * DeclencheursDeProtection::colonneFigee()).
+     */
+    public function test_la_liberation_d_un_siret_ne_s_efface_ni_ne_change_en_base(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique']);
+        $societe = $magasin->societe;
+        $siret = (string) $magasin->siret;
+        $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
+        app(TenantContext::class)->clear();
+        app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), MotifFermeture::Cession, 'password', $magasin->nom);
+        $this->prouverLaRemiseDuCourrier($societe, $siret);
+        app(LibererUnSiretSaisiParErreurAction::class)->handle($societe->fresh(), $siret, $this->editeur());
+        $libereLe = DB::table('magasins')->where('id', $magasin->id)->value('siret_libere_le');
+
+        foreach ([null, self::enUtc('2030-01-01 00:00:00')] as $autreValeur) {
+            $this->assertThrows(
+                $this->dansUnPointDeSauvegarde(fn () => DB::table('magasins')->where('id', $magasin->id)->update(['siret_libere_le' => $autreValeur])),
+                QueryException::class,
+                'magasins.siret_libere_le : valeur figée, changement refusé',
+            );
+        }
+
+        $this->assertNotNull($libereLe);
+        $this->assertSame($libereLe, DB::table('magasins')->where('id', $magasin->id)->value('siret_libere_le'));
     }
 
     /**

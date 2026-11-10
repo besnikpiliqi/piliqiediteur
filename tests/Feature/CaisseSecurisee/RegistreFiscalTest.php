@@ -303,7 +303,7 @@ class RegistreFiscalTest extends TestCase
     }
 
     /**
-     * Sous PostgreSQL (READ COMMITTED), une lecture verrouillée du dernier
+     * En READ COMMITTED, une lecture verrouillée du dernier
      * enregistrement d'une chaîne qui a attendu ne revoit que les lignes
      * trouvées avant d'attendre, et ignorerait ce qu'une autre caisse a
      * validé pendant ce temps. Ici le registre est vide, mais la ligne de

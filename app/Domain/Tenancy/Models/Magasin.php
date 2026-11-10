@@ -202,7 +202,7 @@ class Magasin extends Model implements HasName
      * Le magasin d'un identifiant ou d'un uuid tapé par l'éditeur (voir
      * caisse:verifier), null s'il
      * n'existe pas. Un texte qui n'est ni l'un ni l'autre ne désigne aucun
-     * magasin : la colonne uuid, typée sous PostgreSQL, n'est alors pas
+     * magasin : la colonne uuid, de type uuid, n'est alors pas
      * interrogée.
      */
     public static function trouverParIdentifiantOuUuid(string $identifiant): ?self
@@ -217,8 +217,7 @@ class Magasin extends Model implements HasName
     /**
      * Le magasin de l'adresse du panneau (/app/{uuid}, voir
      * AppPanelProvider) : une adresse qui ne porte pas un uuid ne désigne
-     * aucun magasin (404), sans interroger la colonne uuid, typée sous
-     * PostgreSQL.
+     * aucun magasin (404), sans interroger la colonne uuid, de type uuid.
      *
      * @param  mixed  $query
      * @param  mixed  $value

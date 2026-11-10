@@ -10,10 +10,9 @@ use Tests\TestCase;
 /**
  * Chaque migration de création doit pouvoir être défaite puis rejouée,
  * dans l'ordre inverse de ses dépendances (une table référencée n'est
- * supprimée qu'après celles qui la référencent). Sous PostgreSQL, rien
- * ne survit non plus dans le schéma : ni les fonctions de refus des
- * tables protégées (voir DeclencheursDeProtection::retirer()), ni la
- * fonction des recherches.
+ * supprimée qu'après celles qui la référencent). Rien ne survit non plus
+ * dans le schéma : ni les fonctions de refus des tables protégées (voir
+ * DeclencheursDeProtection::retirer()), ni la fonction des recherches.
  *
  * DatabaseMigrations, pas RefreshDatabase : comme un vrai déploiement,
  * hors de toute transaction englobante.

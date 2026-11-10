@@ -201,8 +201,7 @@ class AccesAuxPanneauxTest extends TestCase
 
     /**
      * Une adresse dont le magasin n'est pas un uuid ne désigne aucun
-     * magasin : 404, jamais l'erreur de la colonne uuid, typée sous
-     * PostgreSQL.
+     * magasin : 404, jamais l'erreur de la colonne uuid, de type uuid.
      */
     public function test_une_adresse_qui_ne_porte_pas_un_uuid_de_magasin_est_introuvable(): void
     {

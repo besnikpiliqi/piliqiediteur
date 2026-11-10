@@ -93,7 +93,7 @@ class LienCabinet extends Model
     /**
      * Celle de cet uuid, venu d'une adresse ou d'un geste de l'écran : un
      * texte qui n'est pas un uuid ne désigne rien, sans interroger la
-     * colonne, typée sous PostgreSQL.
+     * colonne, de type uuid.
      *
      * @param  Builder<self>  $requete
      * @return Builder<self>

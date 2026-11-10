@@ -47,9 +47,9 @@ class MarquerFacturesEnRetard extends Command
      * sous les mêmes conditions qu'à la lecture, et seules celles qu'elle a
      * réellement passées en retard sont annoncées au propriétaire et
      * comptées : une facture réglée entre-temps n'est ni touchée ni
-     * annoncée. Sous PostgreSQL, une mise à jour qui trouve la facture
-     * verrouillée par un paiement, une contre-passation ou l'imputation
-     * d'un avoir attend qu'il soit validé, puis relit ses conditions sur la
+     * annoncée. Une mise à jour qui trouve la facture verrouillée par
+     * un paiement, une contre-passation ou l'imputation d'un avoir
+     * attend qu'il soit validé, puis relit ses conditions sur la
      * facture qu'il a laissée. Chacune ne verrouille qu'une facture, le
      * temps de sa mise à jour : aucune n'attend en tenant une autre facture,
      * quel que soit l'ordre dans lequel un paiement de plusieurs factures

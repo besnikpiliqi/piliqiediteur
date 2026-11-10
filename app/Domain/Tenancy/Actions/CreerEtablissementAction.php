@@ -66,7 +66,7 @@ use LogicException;
  *   situe, est refusé (voir Territoire::estPrisEnCharge()).
  *
  * Puis, dans une transaction ouverte sous le verrou de la ligne de la
- * société (FOR NO KEY UPDATE sous PostgreSQL : il attend la validation,
+ * société (FOR NO KEY UPDATE : il attend la validation,
  * qui la verrouille FOR UPDATE, et la fait attendre, sans bloquer les
  * écritures qui ne font que la référencer, comme les entrées du journal
  * d'audit ; il attend aussi toute autre création de magasin dans la

@@ -43,7 +43,6 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -240,41 +239,6 @@ class TypeDActiviteTest extends TestCase
             ['code_activite' => '62.01Z', 'nomenclature_activite' => 'NAFRev2', 'type_activite' => TypeDActivite::Services->value],
             array_intersect_key($inscrite->nouvelles_valeurs, array_flip(['type_activite', 'code_activite', 'nomenclature_activite'])),
         );
-    }
-
-    /**
-     * @return array<string, array{0: TypeDActivite, 1: TypeDActivite}>
-     */
-    public static function passagesDUnTypeAUnAutre(): array
-    {
-        $passages = [];
-
-        foreach (TypeDActivite::cases() as $de) {
-            foreach (TypeDActivite::cases() as $vers) {
-                if ($de !== $vers) {
-                    $passages["{$de->value} vers {$vers->value}"] = [$de, $vers];
-                }
-            }
-        }
-
-        return $passages;
-    }
-
-    /**
-     * La base elle-même refuse un type inconnu et tout passage d'un type à
-     * un autre, même par une requête qui ne passe pas par le modèle.
-     */
-    #[DataProvider('passagesDUnTypeAUnAutre')]
-    public function test_la_base_refuse_un_type_inconnu_et_toute_modification_du_type(TypeDActivite $de, TypeDActivite $vers): void
-    {
-        $societe = Societe::factory()->create(['type_activite' => $de]);
-
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('societes')->where('id', $societe->id)->update(['type_activite' => $vers->value])), QueryException::class, 'le type d\'activité d\'une société ne change jamais');
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('societes')->where('id', $societe->id)->update(['type_activite' => 'boulangerie'])), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('societes')->insert(['uuid' => (string) Str::uuid(), 'siren' => SocieteFactory::sirenFictif(), 'type_activite' => 'boulangerie'])), QueryException::class, 'type d\'activité inconnu');
-
-        $this->assertSame($de->value, DB::table('societes')->where('id', $societe->id)->value('type_activite'));
-        $this->assertSame(1, DB::table('societes')->count());
     }
 
     /**

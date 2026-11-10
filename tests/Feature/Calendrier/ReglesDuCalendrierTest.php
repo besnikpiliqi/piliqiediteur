@@ -175,7 +175,7 @@ class ReglesDuCalendrierTest extends TestCase
      */
     private const VOYAGES_PERMIS = [
         'tests/Feature/CaisseSecurisee/PurgerTracesTest.php' => [
-            'test_une_trace_qui_n_a_expire_qu_a_l_heure_de_l_application_attend_sans_faire_echouer_la_purge' => 'le déclencheur de purge compare à l\'horloge du serveur de base, que faketime ne décale pas sous PostgreSQL : le test la suit (maintenantSelonLaBase())',
+            'test_une_trace_qui_n_a_expire_qu_a_l_heure_de_l_application_attend_sans_faire_echouer_la_purge' => 'le déclencheur de purge compare à l\'horloge du serveur de base, que faketime ne décale pas : le test la suit (maintenantSelonLaBase())',
         ],
     ];
 

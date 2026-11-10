@@ -75,7 +75,7 @@ final class GardesDesTypesDActivite
     {
         [$table, $colonnes] = self::TABLES[$garde];
         $controles = implode(' ', array_map(
-            static fn (array $un): string => ($un[2] ? "IF TG_OP = 'UPDATE' THEN " : '')."IF {$un[0]} THEN RAISE EXCEPTION '%', ".self::message($garde, $un[1]).'; END IF;'.($un[2] ? ' END IF;' : ''),
+            static fn (array $un): string => "IF {$un[0]} THEN RAISE EXCEPTION '%', ".self::message($garde, $un[1]).'; END IF;',
             self::refus($garde),
         ));
         $connexion = DB::connection();
@@ -101,12 +101,13 @@ final class GardesDesTypesDActivite
     }
 
     /**
-     * Les refus de chaque garde : la condition qui refuse, en SQL (NEW
-     * désigne la ligne écrite, OLD la ligne d'avant une modification), son
-     * message, et si elle ne vaut qu'à la modification.
+     * Les refus de chaque garde : la condition qui refuse, en SQL, et son
+     * message. NEW désigne la ligne écrite, OLD la ligne d'avant une
+     * modification, nulle à l'insertion : une condition qui compare à OLD
+     * ne refuse donc rien à l'insertion.
      *
      * @param  key-of<self::TABLES>  $garde
-     * @return list<array{0: string, 1: string, 2: bool}>
+     * @return list<array{0: string, 1: string}>
      */
     private static function refus(string $garde): array
     {
@@ -116,24 +117,23 @@ final class GardesDesTypesDActivite
 
         return match ($garde) {
             self::TYPE_FIXE => [
-                ['NEW.type_activite NOT IN ('.self::liste(TypeDActivite::cases()).')', 'type d\'activité inconnu', false],
-                ['NEW.type_activite <> OLD.type_activite', 'le type d\'activité d\'une société ne change jamais', true],
+                ['NEW.type_activite NOT IN ('.self::liste(TypeDActivite::cases()).')', 'type d\'activité inconnu'],
+                ['NEW.type_activite <> OLD.type_activite', 'le type d\'activité d\'une société ne change jamais'],
             ],
             self::MAGASINS => [
-                ["COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), '') = {$cabinet}", 'un cabinet d\'expertise comptable n\'a aucun magasin', false],
+                ["COALESCE((SELECT type_activite FROM societes WHERE id = NEW.societe_id), '') = {$cabinet}", 'un cabinet d\'expertise comptable n\'a aucun magasin'],
             ],
             self::CASES_D_ARTICLES => [
                 [
                     "COALESCE((SELECT famille FROM referentiel_autorisations_magasin WHERE cle = NEW.autorisation), '') = '".PermissionRegistry::FAMILLE_ARTICLES."'"
                         ." AND COALESCE((SELECT societes.type_activite FROM affectations INNER JOIN societes ON societes.id = affectations.societe_id WHERE affectations.id = NEW.affectation_id), '') NOT IN ({$avecDesArticles})",
                     'une autorisation de la famille des articles n\'existe pas dans une société sans articles',
-                    false,
                 ],
             ],
-            self::PRODUITS => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas de produit', false]],
-            self::FACTURES_ACHAT => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas de facture d\'achat', false]],
-            self::AVOIRS_FOURNISSEUR => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas d\'avoir fournisseur', false]],
-            self::INVENTAIRES_OUVERTURE => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas d\'inventaire d\'ouverture', false]],
+            self::PRODUITS => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas de produit']],
+            self::FACTURES_ACHAT => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas de facture d\'achat']],
+            self::AVOIRS_FOURNISSEUR => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas d\'avoir fournisseur']],
+            self::INVENTAIRES_OUVERTURE => [[$sansArticlesDansLeMagasin, 'une société sans articles n\'a pas d\'inventaire d\'ouverture']],
         };
     }
 

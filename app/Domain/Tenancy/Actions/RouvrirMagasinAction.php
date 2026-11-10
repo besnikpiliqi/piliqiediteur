@@ -63,7 +63,7 @@ use SensitiveParameter;
  * réouverture.
  *
  * En une transaction, le registre du magasin verrouillé en tête, puis la
- * ligne de sa société (FOR NO KEY UPDATE sous PostgreSQL, comme à la
+ * ligne de sa société (FOR NO KEY UPDATE, comme à la
  * création d'un magasin : elle attend la validation de la société, qui la
  * verrouille FOR UPDATE, et la fait attendre, comme son refus ou toute
  * autre écriture de sa ligne), relue pour refuser, comme la policy, une

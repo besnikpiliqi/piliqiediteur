@@ -6,13 +6,17 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\QueryException;
@@ -32,13 +36,28 @@ class GardesDesDroitsEnBaseTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Chaque test repose les gardes par le code de leur migration
+     * (GardesDesDroits::retirer() puis poser()), dans sa transaction : la
+     * couverture relie ainsi ce code aux tests qui vérifient ce que les
+     * gardes refusent, et les tests de mutation l'éprouvent par eux (voir
+     * le README).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        GardesDesDroits::retirer();
+        GardesDesDroits::poser();
+    }
+
     public function test_la_base_refuse_une_affectation_au_proprietaire(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
 
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, $magasin->id, RoleMagasin::Vendeur->value)));
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, null, null)));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, $magasin->id, RoleMagasin::Vendeur->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation'));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, null, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'le propriétaire et un collaborateur d\'un cabinet n\'ont aucune affectation'));
 
         $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
     }
@@ -55,11 +74,11 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         foreach (['comptable', 'administrateur', 'proprietaire', 'chef'] as $role) {
-            $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, $autre->id, $role)), $role);
-            $this->refusee(fn () => DB::table('affectations')->where('id', $affectation->id)->update(['role' => $role]), $role);
+            $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, $autre->id, $role)), self::refus(GardesDesDroits::AFFECTATIONS, 'rôle de magasin inconnu'), $role);
+            $this->refusee(fn () => DB::table('affectations')->where('id', $affectation->id)->update(['role' => $role]), self::refus(GardesDesDroits::AFFECTATIONS, 'rôle de magasin inconnu'), $role);
         }
 
-        $this->refusee(fn () => DB::table('users')->where('id', $vendeur->id)->update(['role_societe' => 'comptable']));
+        $this->refusee(fn () => DB::table('users')->where('id', $vendeur->id)->update(['role_societe' => 'comptable']), self::refus(GardesDesDroits::ROLES, 'rôle de société inconnu'));
 
         $this->assertSame(RoleMagasin::Vendeur, $affectation->fresh()->role);
         $this->assertSame(RoleSociete::Membre, $vendeur->refresh()->role_societe);
@@ -71,9 +90,9 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, null, null)));
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, null, RoleMagasin::Vendeur->value)));
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, $autre->id, null)));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, null, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'seul un administrateur a une affectation sans rôle'));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, null, RoleMagasin::Vendeur->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'une affectation à tous les magasins n\'a pas de rôle de magasin'));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, $autre->id, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'seul un administrateur a une affectation sans rôle'));
 
         $this->assertSame([$magasin->id], Affectation::query()->where('user_id', $vendeur->id)->pluck('magasin_id')->all());
     }
@@ -85,8 +104,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $administrateur = $this->administrateur($magasin, [$magasin->id]);
         $sonAffectation = Affectation::query()->where('user_id', $administrateur->id)->sole();
 
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $administrateur, $autre->id, RoleMagasin::Responsable->value)));
-        $this->refusee(fn () => DB::table('affectations')->where('id', $sonAffectation->id)->update(['role' => RoleMagasin::Vendeur->value]));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $administrateur, $autre->id, RoleMagasin::Responsable->value)), self::refus(GardesDesDroits::AFFECTATIONS, 'un administrateur n\'a aucun rôle de magasin'));
+        $this->refusee(fn () => DB::table('affectations')->where('id', $sonAffectation->id)->update(['role' => RoleMagasin::Vendeur->value]), self::refus(GardesDesDroits::AFFECTATIONS, 'un administrateur n\'a aucun rôle de magasin'));
 
         $this->assertNull($sonAffectation->fresh()->role);
     }
@@ -103,8 +122,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $deLaSelection = $this->administrateur($magasin, [$magasin->id]);
         $deTous = $this->administrateur($magasin);
 
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $deLaSelection, null, null)));
-        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $deTous, $autre->id, null)));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $deLaSelection, null, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'));
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $deTous, $autre->id, null)), self::refus(GardesDesDroits::AFFECTATIONS, 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'));
 
         $this->assertSame([$magasin->id], Affectation::query()->where('user_id', $deLaSelection->id)->pluck('magasin_id')->all());
         $this->assertSame([null], Affectation::query()->where('user_id', $deTous->id)->pluck('magasin_id')->all());
@@ -128,7 +147,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         DB::table('affectations')->where('id', $saSeuleAffectation->id)->update(['magasin_id' => $autre->id]);
         $versUnSeul = $saSeuleAffectation->fresh()->magasin_id;
         DB::table('affectations')->where('id', $saSeuleAffectation->id)->update(['magasin_id' => null]);
-        $this->refusee(fn () => DB::table('affectations')->where('user_id', $deDeux->id)->where('magasin_id', $autre->id)->update(['magasin_id' => null]));
+        $this->refusee(fn () => DB::table('affectations')->where('user_id', $deDeux->id)->where('magasin_id', $autre->id)->update(['magasin_id' => null]), self::refus(GardesDesDroits::AFFECTATIONS, 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'));
 
         $this->assertSame($autre->id, $versUnSeul);
         $this->assertNull($saSeuleAffectation->fresh()->magasin_id);
@@ -148,8 +167,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $affectationDuResponsable = Affectation::query()->where('user_id', $responsable->id)->sole();
         $affectationDuVendeur = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
-        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuResponsable->id, 'autorisation' => PermissionRegistry::FACTURE_VIEW]));
-        $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuVendeur->id)->update(['role' => RoleMagasin::Responsable->value]));
+        $this->refusee(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectationDuResponsable->id, 'autorisation' => PermissionRegistry::FACTURE_VIEW]), self::refus(GardesDesDroits::CASES, 'un responsable n\'a de case que celles que seul le propriétaire coche'));
+        $this->refusee(fn () => DB::table('affectations')->where('id', $affectationDuVendeur->id)->update(['role' => RoleMagasin::Responsable->value]), self::refus(GardesDesDroits::AFFECTATIONS, 'un responsable n\'a de case que celles que seul le propriétaire coche'));
 
         $this->assertSame([], $affectationDuResponsable->autorisations());
         $this->assertSame(RoleMagasin::Vendeur, $affectationDuVendeur->fresh()->role);
@@ -199,7 +218,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
         foreach ([$proprietaire, $responsable, $vendeur] as $compte) {
-            $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $compte->id, 'autorisation' => AutorisationsSociete::RESPONSABLES_NOMMER]), $compte->name);
+            $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $compte->id, 'autorisation' => AutorisationsSociete::RESPONSABLES_NOMMER]), self::refus(GardesDesDroits::AUTORISATIONS_SOCIETE, 'seul un administrateur a des autorisations de société'), $compte->name);
         }
 
         $this->assertSame(0, DB::table('autorisations_societe')->count());
@@ -212,8 +231,8 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $autorise = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::RESPONSABLES_NOMMER]);
         DB::table('affectations')->where('user_id', $autorise->id)->delete();
 
-        $this->refusee(fn () => DB::table('users')->where('id', $deTous->id)->update(['role_societe' => RoleSociete::Membre->value]));
-        $this->refusee(fn () => DB::table('users')->where('id', $autorise->id)->update(['role_societe' => RoleSociete::Membre->value]));
+        $this->refusee(fn () => DB::table('users')->where('id', $deTous->id)->update(['role_societe' => RoleSociete::Membre->value]), self::refus(GardesDesDroits::ROLES, 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'));
+        $this->refusee(fn () => DB::table('users')->where('id', $autorise->id)->update(['role_societe' => RoleSociete::Membre->value]), self::refus(GardesDesDroits::ROLES, 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'));
 
         $this->assertSame([RoleSociete::Administrateur, RoleSociete::Administrateur], [$deTous->refresh()->role_societe, $autorise->refresh()->role_societe]);
     }
@@ -233,12 +252,79 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         foreach ([RoleSociete::Proprietaire, RoleSociete::Collaborateur] as $role) {
             foreach ([$vendeur, $administrateur, $administrateurSansAffectation] as $compte) {
-                $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), "{$role->value} {$compte->name}");
+                $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'le propriétaire et un collaborateur d\'un cabinet n\'ont ni affectation ni autorisation de société'), "{$role->value} {$compte->name}");
             }
         }
 
         $this->assertSame(RoleSociete::Membre, $vendeur->refresh()->role_societe);
         $this->assertSame(RoleSociete::Administrateur, $administrateur->refresh()->role_societe);
+    }
+
+    /**
+     * Un membre n'a d'affectation que dans le magasin de son identifiant
+     * (voir la table identifiants) : jamais dans un autre magasin de sa
+     * société, ni par une nouvelle affectation ni en y déplaçant la sienne.
+     */
+    public function test_la_base_refuse_une_affectation_de_membre_hors_du_magasin_de_son_identifiant(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
+        $refus = self::refus(GardesDesDroits::AFFECTATIONS, 'un membre n\'a d\'affectation que dans le magasin de son identifiant');
+
+        $this->refusee(fn () => DB::table('affectations')->insert($this->ligne($magasin, $vendeur, $autre->id, RoleMagasin::Vendeur->value)), $refus);
+        $this->refusee(fn () => DB::table('affectations')->where('id', $affectation->id)->update(['magasin_id' => $autre->id]), $refus);
+
+        $this->assertSame([$magasin->id], Affectation::query()->where('user_id', $vendeur->id)->pluck('magasin_id')->all());
+    }
+
+    /**
+     * Les autres refus du rôle de société, chacun par son message : un
+     * collaborateur hors d'un cabinet d'expertise comptable, un
+     * administrateur ou un membre dans un cabinet, un administrateur qui
+     * garde l'affectation d'un membre, un propriétaire dont l'adresse de
+     * connexion n'est pas confirmée ou dont le mot de passe est son
+     * identifiant.
+     */
+    public function test_la_base_refuse_un_role_de_societe_que_la_societe_ou_le_compte_contredit(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $sansDroits = $this->administrateur($magasin, [$magasin->id]);
+        DB::table('affectations')->where('user_id', $sansDroits->id)->delete();
+        $collaborateur = $this->collaborateur($this->ouvrirUnCabinet());
+
+        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Collaborateur->value]), self::refus(GardesDesDroits::ROLES, 'un collaborateur n\'existe que dans un cabinet d\'expertise comptable'));
+        foreach ([RoleSociete::Administrateur, RoleSociete::Membre] as $role) {
+            $this->refusee(fn () => DB::table('users')->where('id', $collaborateur->id)->update(['role_societe' => $role->value]), self::refus(GardesDesDroits::ROLES, 'un cabinet d\'expertise comptable n\'a ni administrateur ni membre'), $role->value);
+        }
+        $this->refusee(fn () => DB::table('users')->where('id', $vendeur->id)->update(['role_societe' => RoleSociete::Administrateur->value]), self::refus(GardesDesDroits::ROLES, 'un administrateur n\'a aucune affectation de membre'));
+        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'futur-proprietaire@example.test', 'email_verified_at' => null, 'mot_de_passe_est_l_identifiant' => false]), self::refus(GardesDesDroits::ROLES, 'l\'adresse de connexion d\'un propriétaire est confirmée par un lien'));
+        $this->refusee(fn () => DB::table('users')->where('id', $sansDroits->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => null, 'mot_de_passe_est_l_identifiant' => true]), self::refus(GardesDesDroits::ROLES, 'un propriétaire n\'a jamais pour mot de passe son identifiant'));
+
+        $this->assertSame([RoleSociete::Membre, RoleSociete::Administrateur, RoleSociete::Collaborateur], [$vendeur->refresh()->role_societe, $sansDroits->refresh()->role_societe, $collaborateur->refresh()->role_societe]);
+    }
+
+    /**
+     * Un compte d'entraînement, rattaché au magasin de démonstration, ne
+     * devient jamais propriétaire ni administrateur, même sans aucune
+     * affectation ni mot de passe égal à son identifiant.
+     */
+    public function test_la_base_refuse_qu_un_compte_d_entrainement_change_de_role_de_societe(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $this->creerLeMagasinDuSiege($societe);
+        $proprietaire = $societe->proprietaire()->sole();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
+        $entrainement = app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration, ['name' => 'Essai'], RoleMagasin::Vendeur));
+        DB::table('affectations')->where('user_id', $entrainement->id)->delete();
+        $refus = self::refus(GardesDesDroits::ROLES, 'un compte d\'entraînement ne change jamais de rôle de société');
+
+        $this->refusee(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => null, 'mot_de_passe_est_l_identifiant' => false]), $refus);
+        $this->refusee(fn () => DB::table('users')->where('id', $entrainement->id)->update(['role_societe' => RoleSociete::Administrateur->value]), $refus);
+
+        $this->assertSame(RoleSociete::Membre, $entrainement->refresh()->role_societe);
     }
 
     /**
@@ -295,19 +381,28 @@ class GardesDesDroitsEnBaseTest extends TestCase
     }
 
     /**
-     * L'écriture est refusée par la base, dans un point de sauvegarde qui
-     * laisse la transaction du test utilisable.
+     * Le message d'un refus d'une garde, tel que la base le donne.
      */
-    private function refusee(Closure $ecriture, string $cas = ''): void
+    private static function refus(string $garde, string $raison): string
+    {
+        return "{$garde} : {$raison}";
+    }
+
+    /**
+     * L'écriture est refusée par la base, par ce refus de sa garde (et non
+     * par une autre contrainte), dans un point de sauvegarde qui laisse la
+     * transaction du test utilisable.
+     */
+    private function refusee(Closure $ecriture, string $refus, string $cas = ''): void
     {
         try {
             $this->dansUnPointDeSauvegarde($ecriture)();
-        } catch (QueryException) {
-            $this->addToAssertionCount(1);
+        } catch (QueryException $refusDeLaBase) {
+            $this->assertStringContainsString($refus, $refusDeLaBase->getMessage(), $cas);
 
             return;
         }
 
-        $this->fail("La base aurait dû refuser cette écriture. {$cas}");
+        $this->fail("La base aurait dû refuser cette écriture ({$refus}). {$cas}");
     }
 }

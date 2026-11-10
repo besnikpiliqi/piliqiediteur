@@ -453,15 +453,17 @@ class CreerEtablissementActionTest extends TestCase
 
     /**
      * Un magasin ne s'efface jamais : ni par le modèle, ni par une requête
-     * qui ne passe pas par lui, la base le refuse.
+     * qui ne passe pas par lui, la base le refuse par le déclencheur de sa
+     * table (voir DeclencheursDeProtection::sansSuppression()), avant toute
+     * clé étrangère ; sa société de même.
      */
     public function test_un_magasin_ne_se_supprime_jamais_et_la_base_refuse_de_l_effacer(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon centre']);
 
         $this->assertThrows(fn () => $magasin->delete(), LogicException::class, 'Un magasin ne se supprime jamais');
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins')->where('id', $magasin->id)->delete()), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('societes')->where('id', $magasin->societe_id)->delete()), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins')->where('id', $magasin->id)->delete()), QueryException::class, 'magasins : suppression définitive refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('societes')->where('id', $magasin->societe_id)->delete()), QueryException::class, 'societes : suppression définitive refusée');
 
         $this->assertModelExists($magasin);
         $this->assertModelExists($magasin->societe);

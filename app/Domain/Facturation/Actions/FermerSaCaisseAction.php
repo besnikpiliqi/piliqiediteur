@@ -58,7 +58,7 @@ use Illuminate\Support\Facades\DB;
  * Deux fermetures de la même caisse au même instant (double clic, deux
  * onglets, le vendeur et la fermeture d'office) se suivent : la seconde
  * attend le verrou que la première a pris sur la fiche du vendeur, puis
- * relit tout après elle. Sous PostgreSQL (READ COMMITTED), chaque lecture
+ * relit tout après elle. En READ COMMITTED, chaque lecture
  * qui suit le verrou voit donc la fermeture validée entre-temps : la
  * seconde part d'elle, sans compter une seconde fois ses ventes ou ses
  * paiements ni heurter la clé primaire de

@@ -348,7 +348,7 @@ class EmettreFactureActionTest extends TestCase
     }
 
     /**
-     * Sous PostgreSQL (READ COMMITTED), une lecture verrouillée de
+     * En READ COMMITTED, une lecture verrouillée de
      * clotures_caisse qui a attendu la fin de la clôture de la journée ne
      * revoit que les lignes trouvées avant d'attendre, sans la clôture que
      * celle-ci vient d'inscrire. Le refus se fonde donc sur la journée que

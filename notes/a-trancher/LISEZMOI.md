@@ -18,3 +18,18 @@
   (`query` sous le corps de l'onglet).
 - Commentaire posé le 10/11 : fil `d2a7d77b-78dc`, sur le titre « À voir avec votre expert-comptable »
   (expert-comptable dès maintenant, ou une seule revue fiscale avant la mise en production, T38).
+
+## Trois onglets (D58, 10/11/2026 à 18 h 16 UTC)
+
+- Onglet « Ce qui reste à trancher » (fichier `0705661d-beeb`, corps `1d1e8094-dda6`, révision 10) : Mode d'emploi (avec les liens vers les deux autres onglets) ;
+  Le plus urgent ; À voir avec votre expert-comptable (T1 à T29, puis « Vos autres points qui passent aussi par lui » : T38, T40, T50, T51, T58,
+  T60, T66, T71, T75, T81, T91) ; API et services extérieurs (SUPER PDP : T87 à T92 ; registres et courrier : T98 à T101 ; autres services :
+  T97, T72, T93, T78) ; Juridique et administration (T30 à T40) ; Vos décisions de produit (T41 à T86 sans T72 ni T78) ; Technique et mise en
+  production (T94, T95, T96, T102, T103) ; « Déjà tranché » (61 lignes, à remplacer par un renvoi quand les deux onglets suivants sont remplis).
+  `generer-onglet1.py registre.json <dossier> generer.py` refait les sections réorganisées.
+- Onglet « Vos décisions » (fichier `a79e1f22-bf92`, corps `173dd30d-9caf`, bloc en attente `mb4cajnjtng.39`) : toutes ses décisions de lui-même
+  depuis le 02/10/2026 (date, ses mots, où chacune en est).
+- Onglet « Mes questions et vos réponses » (fichier `d0abfb7f-42fd`, corps `78905e66-067c`, bloc en attente `mb4cajnjtng.30`) : chaque question
+  de Claude, avec sa réponse, sa date et la décision.
+- Les deux derniers se remplissent depuis le workflow `wf_b897639c-407` (tâche `w8h3wdo7c`, lancé à 18 h 22 UTC ; relevés et résultat final
+  dans `scratchpad/a-trancher/decisions/`, résultat final `final.json` : `decisions` V1…, `questions` Q1…).

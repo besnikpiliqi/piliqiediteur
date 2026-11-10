@@ -1558,3 +1558,7 @@ ok continue
 
 Je veux que tu mettes dans une note spéciale pour tout ce que tu m’as dit et ce que tu va dire ce que reste à confirmer par mes propos moyens. Dont tu m’as dit voir avec l’expert comptable pour pas mal de décision et bien plus d’autres choses importantes. Donc tu me mets tout ce que t’as deja dit et tout ce que tu va dire et après moi ke dois trancher car si non je vais oublier ce que tu me dis. D’accord
 
+## 151. 2026-11-10 18:16 UTC
+
+T’as dit « • Quand vous avez tranché, je range le point dans « Déjà tranché », avec la date et vos mots, et j'applique la décision dans le logiciel. » alors tu mets tout mes décisions que j’ai fait depuis le début et aussi à part tes questions avec mes reponses ( décision) et tu mets à part ce qui reste à faire et surtout ceux qui sont liés expert comptable et ceux pour les api etc
+

@@ -1,0 +1,61 @@
+[
+  {
+    "id": "V187",
+    "decision": "Vous ne vouliez pas de la note de calcul sur les PDF, sans en être sûr.",
+    "statut_detail": "remplacée le 25/10 vers 18 h 30 par votre réponse « tu mets la mention comme t'avais mis aux PDF » : note gardée et complétée"
+  },
+  {
+    "id": "V198",
+    "titre": "Effort Extra avec ultracode, Max quand je le dis",
+    "decision": "Le réglage courant est l'effort Extra avec ultracode ; je vous préviens quand passer en Max (lots sensibles, chaîne TVA, SUPER PDP, caisse sécurisée, audits)."
+  },
+  {
+    "id": "V199",
+    "titre": "Je règle moi-même l'effort des agents",
+    "decision": "La session ne change pas son propre réglage, mais fixe l'effort de chaque agent : Extra par défaut, Max pour les lots sensibles (A7, 21) ; vous n'avez plus à changer votre réglage pour la chaîne."
+  },
+  {
+    "id": "V205",
+    "decision": "Les e-mails de PILIQI se vérifient avec Mailtrap : une vraie boîte de test, réglée sur votre PC, et des envois d'essai depuis la session. Aucun identifiant dans le dépôt ni dans la conversation."
+  },
+  {
+    "id": "V207",
+    "decision": "Dans « Vos premières étapes », l'étape reste « Créer votre premier magasin » tant qu'il n'y a aucun magasin réel, puis devient « Ajouter un magasin », avec le nombre de magasins dessous. J'ai retenu votre premier texte, sans numéro d'ordre (contestable)."
+  },
+  {
+    "id": "V217",
+    "decision": "Sur la fiche d'un avoir, chaque facture ou ticket de « Crédit appliqué » est un lien vers son document, comme les avoirs. Je l'ai étendu à tout numéro de document affiché."
+  },
+  {
+    "id": "V220",
+    "decision": "Le client pourra payer en ligne, tout de suite, le devis qu'il accepte et qui devient une facture. Les règles (qui émet la facture, acompte, remboursements, frais) vous seront soumises au moment de construire."
+  },
+  {
+    "id": "V222",
+    "decision": "Vous ne voulez pas de centime d'écart visible sur une facture (2 × 8,33 imprimé 16,67). Une analyse et des options vous ont été soumises."
+  },
+  {
+    "id": "V224",
+    "titre": "Toujours vous dire ce que vous devez faire à la main sur votre PC"
+  },
+  {
+    "id": "V227",
+    "decision": "Changement d'avis : j'ajoute sans demander tout paquet ou extension utile à la sécurité, à la fiabilité, à la qualité ou aux performances (maintenu, compatible, sans faille, licence compatible). Vous restent soumis : un paquet ou service payant, un service qui recevrait des données, une version majeure."
+  },
+  {
+    "id": "V231",
+    "decision": "Le travail reprend dans cette même session, que vous gardez désormais ; je continue comme prévu."
+  },
+  {
+    "id": "V233",
+    "decision": "D'après l'article que vous avez donné : pour chaque document, le total de TVA est exactement la somme des TVA par taux, le TTC est le HT plus la TVA, et le HT la somme des lignes. Un test le fige, et la facture électronique le contrôle avant chaque envoi."
+  },
+  {
+    "id": "V234",
+    "decision": "Tout point à trancher par vous ou à faire confirmer (expert-comptable, avocat, administration, prestataire) vit dans le document « PILIQI — Ce qui reste à trancher ». Chaque nouveau point s'y ajoute le jour même ; chaque réponse passe dans « Déjà tranché »."
+  },
+  {
+    "id": "V235",
+    "decision": "La note a trois parties : ce qui reste à trancher (avec à part l'expert-comptable et les API et services extérieurs), toutes vos décisions depuis le 02/10, et mes questions avec vos réponses."
+  }
+]

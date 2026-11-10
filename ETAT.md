@@ -1,12 +1,15 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 10/11/2026 à 19:46 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 21:48 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `b93aeff`. Commits locaux pas encore poussés :
 
 ```
+5ff0152 Type les valeurs requises des écrans, et passe Larastan au niveau 8 (lot TY1 11/n)
+96b3f8a Type les valeurs requises des ventes, des achats, de la caisse et du stock (Larastan niveau 8, lot TY1 10/n)
+283c34d Type les valeurs requises des droits, de la société et des cabinets (Larastan niveau 8, lot TY1 9/n)
 97c16bc Type les écrans, les commandes et la configuration, et passe Larastan au niveau 7 (lot TY1 8/n)
 430539c Type les ventes, les achats, la caisse et le stock (Larastan niveau 7, lot TY1 7/n)
 0e5cf71 Type les lectures des droits, de la société et des cabinets (Larastan niveau 7, lot TY1 6/n)
@@ -45,66 +48,17 @@ d57bdab Garde la TVA et le PU d'achat qu'écrit la facture du fournisseur
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
-M  app/Console/Commands/RelancerFacturesImpayees.php
-M  app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
-M  app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
-M  app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
-M  app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
-M  app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
-M  app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
-M  app/Domain/Cabinets/Actions/RefuserLaDemandeDeLienAction.php
-M  app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
-M  app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
-M  app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
-M  app/Domain/Cabinets/Models/InvitationCabinet.php
-M  app/Domain/Cabinets/Models/LienCabinet.php
-M  app/Domain/Cabinets/Services/AccesDesCabinets.php
-M  app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
-M  app/Domain/Cabinets/Services/TableauDeBordDesClients.php
-M  app/Domain/Tenancy/Actions/AnnulerCessionAction.php
-M  app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
-M  app/Domain/Tenancy/Actions/CorrigerSirenAction.php
-M  app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
-M  app/Domain/Tenancy/Actions/ExaminerSirenAction.php
-M  app/Domain/Tenancy/Actions/FermerMagasinAction.php
-M  app/Domain/Tenancy/Actions/LibererLeSiretAction.php
-M  app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
-M  app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
-M  app/Domain/Tenancy/Concerns/BelongsToMagasin.php
-M  app/Domain/Tenancy/Concerns/BelongsToSociete.php
-M  app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
-M  app/Domain/Tenancy/Models/Affectation.php
-M  app/Domain/Tenancy/Models/ChangementFinExercice.php
-M  app/Domain/Tenancy/Models/CodeConfirmation.php
-M  app/Domain/Tenancy/Models/DemandeInscription.php
-M  app/Domain/Tenancy/Models/EntreeAudit.php
-M  app/Domain/Tenancy/Models/Magasin.php
-M  app/Domain/Tenancy/Models/PeriodeActivite.php
-M  app/Domain/Tenancy/Models/TelechargementDeDocuments.php
-M  app/Domain/Tenancy/Models/TransmissionPropriete.php
-M  app/Domain/Tenancy/Services/AffectationsDesMembres.php
-M  app/Domain/Tenancy/Services/CodeMagasin.php
-M  app/Domain/Tenancy/Services/CourriersDeVerification.php
-M  app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
-M  app/Domain/Tenancy/Services/JournalDesDroits.php
-M  app/Domain/Tenancy/Services/PiecesDeVerification.php
-M  app/Domain/Tenancy/Services/PorteeDesDroits.php
-M  app/Domain/Tenancy/Services/ReverificationSirene.php
-M  app/Domain/Tenancy/Services/SuiviDesConnexions.php
-M  app/Domain/Tenancy/Services/TenantContext.php
-A  app/Domain/Tenancy/Support/CompteConnecte.php
-A  app/Domain/Tenancy/Support/ModeleRelu.php
-A  app/Domain/Tenancy/Support/ValeurRequise.php
-M  app/Http/Controllers/ConfirmerInscriptionController.php
-M  app/Http/Controllers/TelechargerLesDocumentsController.php
-M  app/Http/Middleware/ExigerSonPropreMotDePasse.php
-M  app/Integrations/Vies/ClientVies.php
-M  app/Models/User.php
-M  app/Providers/Filament/AppPanelProvider.php
-A  tests/Feature/Tenancy/CompteConnecteTest.php
-A  tests/Feature/Tenancy/ModeleReluTest.php
-M  tests/Qualite/qualite.php
-A  tests/Unit/ValeurRequiseTest.php
+ M app/Domain/Facturation/Models/Facture.php
+ M tests/Feature/Cabinets/AccepterLInvitationTest.php
+ M tests/Feature/Cabinets/CollaborateursTest.php
+ M tests/Feature/Cabinets/FinDuLienTest.php
+ M tests/Feature/Cabinets/InvitationsTest.php
+ M tests/Feature/Editeur/RevoquerSocieteTest.php
+ M tests/Feature/Facturation/RecusDePaiementTest.php
+ M tests/Feature/Societe/CabinetComptableTest.php
+ M tests/Feature/Stock/VenteSansStockTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
+?? tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
 ```
 
 ## Dernière course de la chaîne

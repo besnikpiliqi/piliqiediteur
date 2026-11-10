@@ -1,0 +1,12 @@
+[
+ {
+  "id": "Q136",
+  "question": "Qui classe la gravité des anomalies ? a) je classe et corrige, le rapport montre chaque classement, vous validez seulement le déclassement d'une anomalie bloquante (recommandé).",
+  "decision": "Option a : je classe et corrige chaque anomalie ; le rapport montre chaque classement, que vous pouvez contester ; vous validez seulement le déclassement d'une anomalie bloquante."
+ },
+ {
+  "id": "Q144",
+  "question": "Je proposais de retirer le paquet Spatie (gestion des autorisations) pour un système propre à PILIQI ; vous aviez demandé pourquoi. Garder Spatie ou le remplacer ? Une heure plus tôt (message 173), vous demandiez d'expliquer pourquoi Spatie ne convenait pas avant de le retirer, et posiez vos exigences pour tout remplacement (gardées dans « Vos décisions »).",
+  "decision": "Je décide seul de la technique (paquets, structure, moteur), en la justifiant par la fiabilité et la sécurité, puis je l'explique simplement. Décision prise : des autorisations propres à PILIQI, avec leur référentiel en base, à la place de Spatie (retiré le 12/10, lot A4)."
+ }
+]

@@ -1,0 +1,94 @@
+[
+ {
+  "id": "Q1",
+  "question": "Le cahier proposait Livewire + Alpine (ou Vue + Inertia) pour les écrans ; je proposais mon architecture et attendais la validation. Quelle technique pour les écrans ?"
+ },
+ {
+  "id": "Q2",
+  "question": "Je résumais : le magasin doit donner un mandat pour que le logiciel envoie et reçoive ses factures auprès de la plateforme, mandat créé par API. Est-ce bien cela ?"
+ },
+ {
+  "id": "Q3",
+  "question": "Je vous demandais de quels « produits retournés » il s'agissait : retours des clients ou retours du magasin à ses fournisseurs ?"
+ },
+ {
+  "id": "Q4",
+  "question": "Je vous demandais si les vendeurs doivent voir toutes les factures du magasin ou seulement les leurs."
+ },
+ {
+  "id": "Q5",
+  "question": "Je vous demandais les fichiers de base de données dont vous parliez.",
+  "decision": "Le schéma part de vos fichiers : le magasin est le locataire, chaque donnée est isolée par magasin, avec vos tables de clients, de fournisseurs et de produits."
+ },
+ {
+  "id": "Q8",
+  "question": "Pour créer un produit depuis une ligne de facture d'achat, je proposais un formulaire allégé (quelques champs). Cela convient-il ?"
+ },
+ {
+  "id": "Q10",
+  "question": "Après vérification des règles, je confirmais ticket pour le particulier et facture pour le professionnel, et proposais deux séries de numéros séparées. D'accord ?"
+ },
+ {
+  "id": "Q11",
+  "question": "Je recommandais de garder en crédit pour le client l'excédent d'un paiement supérieur à ce qui est dû. D'accord ?"
+ },
+ {
+  "id": "Q12",
+  "question": "Pour l'écart d'un centime (2 × 40 € TTC affichant 79,99 €), je proposais d'augmenter partout la précision des prix unitaires HT enregistrés (recommandé)."
+ },
+ {
+  "id": "Q13",
+  "question": "Je vous laissais décider (« À décider de ton côté ») comment saisir le prix d'une ligne ; d'après le contexte : en HT ou en TTC, le dernier prix saisi faisant foi, pour les professionnels qui récupèrent la TVA.",
+  "decision": "Oui : je fais comme il faut, en pensant aux professionnels qui récupèrent la TVA. Le prix d'une ligne se règle « dans tous les sens » (en HT ou en TTC)."
+ },
+ {
+  "id": "Q14",
+  "question": "Je vous demandais si les magasins vendent aussi des services (réparations) et comment ils sont payés : en une fois avec la pièce, séparément ou en plusieurs fois (pour savoir quand la TVA d'un service est due et ce que l'e-reporting déclare)."
+ },
+ {
+  "id": "Q15",
+  "question": "Je vous montrais 8 recommandations tirées de mes recherches (clôtures nettes des avoirs, avoir imputé d'abord sur sa facture, heure de Paris, coût d'achat net, mention des débits, nature bien ou service, caisse sécurisée…) et vous demandais lesquelles appliquer."
+ },
+ {
+  "id": "Q17",
+  "decision": "Je construis aussi la caisse sécurisée de l'article 286 du CGI."
+ },
+ {
+  "id": "Q20",
+  "question": "Avant d'écrire le protocole, je proposais deux ajustements ; d'après le texte retenu : tests ciblés pendant le travail et suite complète avant chaque commit, et règle métier révélée par un test, qui vous est soumise au lieu d'être choisie.",
+  "decision": "Les deux ajustements que je proposais sont acceptés et le protocole est écrit avec eux."
+ },
+ {
+  "id": "Q21",
+  "decision": "Vous avez pris la recommandation : l'adresse déjà utilisée est refusée, et chaque compte n'appartient qu'à un seul magasin."
+ },
+ {
+  "id": "Q23",
+  "question": "B1 – Quel taux de TVA appliquer à une ligne de produit à la vente ? (Les options de la page ne sont pas conservées ; vous avez choisi « Autre choix » avec une note.)",
+  "decision": "Le taux dépend de l'endroit où l'on vend. J'ai vérifié les règles françaises : la ligne prend le taux de la fiche du produit, et c'est la nature de l'opération (export, DOM, Union européenne…) qui décide d'une exonération."
+ },
+ {
+  "id": "Q24",
+  "question": "B2 – Quels taux de TVA autoriser ? (Les options de la page ne sont pas conservées ; vous avez choisi « Autre choix » avec une note.)"
+ },
+ {
+  "id": "Q27",
+  "question": "B5 – Comment rendre l'argent d'un retour ? (Les options ne sont pas conservées ; vous n'avez pas pris la recommandation et avez choisi : seulement un crédit à valoir, comme aujourd'hui.)"
+ },
+ {
+  "id": "Q44",
+  "question": "C3 – Un produit reçu par facture électronique est ensuite acheté à la main : quel fournisseur garde-t-il ? (Les options ne sont pas conservées ; vous avez choisi « Autre choix » avec une note.)"
+ },
+ {
+  "id": "Q47",
+  "question": "D2 – Que faire d'une journée sans aucune vente ? (Les options ne sont pas conservées ; vous avez choisi « Autre choix » avec une note.)"
+ },
+ {
+  "id": "Q48",
+  "question": "D3 – Comment se clôt la journée de caisse ? (Les options ne sont pas conservées ; vous avez choisi « Autre choix » avec une note.)"
+ },
+ {
+  "id": "Q56",
+  "decision": "Recommandation retenue : une attestation par magasin. Votre question sur une entreprise à plusieurs magasins a mené à la société : un SIREN, plusieurs magasins, une attestation pour chacun."
+ }
+]

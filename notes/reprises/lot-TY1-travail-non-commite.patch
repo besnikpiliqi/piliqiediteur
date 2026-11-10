@@ -1,1586 +1,579 @@
-diff --git a/app/Console/Commands/RelancerFacturesImpayees.php b/app/Console/Commands/RelancerFacturesImpayees.php
-index 710cd21..df9a0fe 100644
---- a/app/Console/Commands/RelancerFacturesImpayees.php
-+++ b/app/Console/Commands/RelancerFacturesImpayees.php
-@@ -11,6 +11,7 @@
- use App\Domain\Tenancy\Enums\StatutSociete;
- use App\Domain\Tenancy\Models\Magasin;
- use App\Domain\Tenancy\Services\TenantContext;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Illuminate\Console\Attributes\Description;
- use Illuminate\Console\Attributes\Signature;
- use Illuminate\Console\Command;
-@@ -94,7 +95,7 @@ private function relancerLesFacturesDe(Magasin $magasin, EnvoyerDocumentAction $
-                 $facture->setRelation('magasin', $magasin);
-                 $due = $magasin->relanceDue(
-                     $facture->niveauDeRelanceAtteint() + 1,
--                    Calendrier::joursEntre($facture->date_echeance, $aujourdhui),
-+                    Calendrier::joursEntre(ValeurRequise::de($facture->date_echeance, 'l\'échéance de la facture échue'), $aujourdhui),
-                     $facture->joursDepuisLaDerniereRelance(),
-                 );
- 
-diff --git a/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php b/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
-index ced19e8..dfe8a5f 100644
---- a/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
-+++ b/app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
-@@ -29,6 +29,7 @@
- use App\Domain\Tenancy\Services\JournalDesDroits;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Services\TraceDuVisiteur;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Domain\Tenancy\Support\RegleDuMotDePasse;
- use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
- use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
-@@ -270,7 +271,7 @@ private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDAct
-             return $proprietaire;
-         });
- 
--        $this->journalDesDroits->modifierLeLien(null, $client->fresh(), [], function (?User $systeme, Societe $clientVerrouille) use ($cabinet, $relue, $type): void {
-+        $this->journalDesDroits->modifierLeLien(null, ModeleRelu::de($client), [], function (?User $systeme, Societe $clientVerrouille) use ($cabinet, $relue, $type): void {
-             $lien = tap((new LienCabinet)->forceFill([
-                 'cabinet_id' => $cabinet->getKey(),
-                 'origine' => OrigineDuLien::Invitation,
-@@ -282,7 +283,7 @@ private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDAct
-         }, function (Societe $journal, array $liens) use ($cabinet, $client): array {
-             return [[ActionAuditee::LienActive, [
-                 'cabinet' => IdentiteDansLeJournal::de($cabinet),
--                'client' => IdentiteDansLeJournal::de($client->fresh()),
-+                'client' => IdentiteDansLeJournal::de(ModeleRelu::de($client)),
-                 'origine' => OrigineDuLien::Invitation->value,
-                 'autorisations' => 'par_defaut',
-             ], (int) $cabinet->getKey()]];
-@@ -290,7 +291,7 @@ private function creer(InvitationCabinet $invitation, Societe $cabinet, TypeDAct
- 
-         app(TenantContext::class)->runAsSociete($cabinet, function () use ($relue, $client): void {
-             $relue->forceFill(['etat' => EtatInvitation::Acceptee, 'close_le' => now()])->save();
--            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::InvitationAcceptee, null, null, null, ['siren' => $relue->siren, 'client' => IdentiteDansLeJournal::de($client->fresh())], $relue));
-+            $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrire(ActionAuditee::InvitationAcceptee, null, null, null, ['siren' => $relue->siren, 'client' => IdentiteDansLeJournal::de(ModeleRelu::de($client))], $relue));
-         });
- 
-         return $proprietaire;
-diff --git a/app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php b/app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
-index 92bbd93..36ebae5 100644
---- a/app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
-+++ b/app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
-@@ -12,6 +12,7 @@
- use App\Domain\Tenancy\Enums\ActionAuditee;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Services\JournalDesDroits;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
- use App\Filament\Societe\Pages\CabinetComptable;
- use App\Models\User;
-@@ -63,6 +64,7 @@ public function handle(User $auteur, LienCabinet $lien, ?array $autorisations =
- 
-         [$remplace, $ancienAcces] = $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations): array {
-             [$demande] = $relus;
-+            $auteurRelu = ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou');
-             $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'accepter', $demande);
- 
-             if (! $demande->estUneDemandeValable()) {
-diff --git a/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php b/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
-index 0a069a6..b0fa036 100644
---- a/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
-+++ b/app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
-@@ -11,6 +11,7 @@
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Services\JournalDesDroits;
- use App\Domain\Tenancy\Services\PorteeDesDroits;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
- use App\Models\User;
- use Illuminate\Auth\Access\AuthorizationException;
-@@ -84,7 +85,7 @@ public function handle(User $auteur, User $collaborateur, array $liens): void
- 
-                 foreach (array_diff($liens, $actuels->pluck('lien_id')->map(fn ($id): int => (int) $id)->all()) as $id) {
-                     tap((new ClientConfie)->forceFill(['lien_id' => $id, 'user_id' => $collaborateurRelu->getKey(), 'confie_par' => $auteurRelu->getKey()]))->save();
--                    $changements['ajoutes'][] = (int) $verrouilles->get($id)->societe_id;
-+                    $changements['ajoutes'][] = (int) ValeurRequise::de($verrouilles->get($id), 'le lien verrouillé du client confié')->societe_id;
-                 }
- 
-                 $changements['retires'] = array_values(LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all());
-diff --git a/app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php b/app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
-index c71d169..33dfc49 100644
---- a/app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
-+++ b/app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
-@@ -11,6 +11,7 @@
- use App\Domain\Tenancy\Services\JournalAudit;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Filament\Cabinet\Pages\VerificationDuCabinet;
- use Illuminate\Support\Facades\DB;
- use LogicException;
-@@ -63,7 +64,7 @@ public function handle(Societe $cabinet, InterventionDeLEditeur $editeur, string
- 
-         $devenuVerifie = $this->operateur->pendantLeSysteme(fn (): bool => app(TenantContext::class)->runAsSociete($cabinet, fn (): bool => DB::transaction(function () use ($cabinet, $editeur, $numero, $conseil, $activiteControlee): bool {
-             $verification = $cabinet->cabinet()->lockForUpdate()->firstOrFail();
--            $etaitVerifie = $cabinet->fresh()->estUnCabinetVerifie();
-+            $etaitVerifie = ModeleRelu::de($cabinet)->estUnCabinetVerifie();
- 
-             if ($activiteControlee && $verification->aUneAutreActivite()) {
-                 throw new LogicException(self::MESSAGE_AUTRE_ACTIVITE);
-@@ -97,7 +98,7 @@ public function handle(Societe $cabinet, InterventionDeLEditeur $editeur, string
-                 ], $cabinet, $editeur);
-             }
- 
--            return ! $etaitVerifie && $cabinet->fresh()->estUnCabinetVerifie();
-+            return ! $etaitVerifie && ModeleRelu::de($cabinet)->estUnCabinetVerifie();
-         })));
- 
-         $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(
-diff --git a/app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php b/app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
-index 0c5f24a..518364b 100644
---- a/app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
-+++ b/app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
-@@ -24,7 +24,9 @@
- use App\Domain\Tenancy\Services\JournalAudit;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Services\TraceDuVisiteur;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Domain\Tenancy\Support\MotDePasseRedemande;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\Societe\Pages\RattachementDUnCabinet;
- use App\Models\User;
- use Carbon\CarbonInterval;
-@@ -147,8 +149,8 @@ public function handle(User $auteur, Societe $cabinet, string $siren, string $em
-         }
- 
-         match ($resultat['resultat']) {
--            ResultatDInvitation::InvitationEnvoyee => DB::afterCommit(fn () => $this->envoi->envoyerLInvitation($resultat['id'], $jeton)),
--            ResultatDInvitation::DemandeEnvoyee => DB::afterCommit(fn () => $this->envoyerLaDemande($resultat['id'], $email, $jeton)),
-+            ResultatDInvitation::InvitationEnvoyee => DB::afterCommit(fn () => $this->envoi->envoyerLInvitation(ValeurRequise::de($resultat['id'], 'l\'invitation envoyée'), $jeton)),
-+            ResultatDInvitation::DemandeEnvoyee => DB::afterCommit(fn () => $this->envoyerLaDemande(ValeurRequise::de($resultat['id'], 'la demande de lien envoyée'), $email, $jeton)),
-             default => null,
-         };
- 
-@@ -275,7 +277,7 @@ private function exigerLeProprietaire(User $auteur, Societe $cabinet): User
-         $relu = User::query()->whereKey($auteur->getKey())->first();
- 
-         if ($relu === null || Gate::forUser($relu)->denies('create', [InvitationCabinet::class, $cabinet])) {
--            if ($relu !== null && $relu->estProprietaire() && (int) $relu->societe_id === (int) $cabinet->getKey() && ! $cabinet->fresh()->estUnCabinetVerifie()) {
-+            if ($relu !== null && $relu->estProprietaire() && (int) $relu->societe_id === (int) $cabinet->getKey() && ! ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
-                 throw new CabinetNonVerifieException;
-             }
- 
-diff --git a/app/Domain/Cabinets/Actions/MettreFinAuLienAction.php b/app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
-index 5e514c0..84bf3ba 100644
---- a/app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
-+++ b/app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
-@@ -13,6 +13,7 @@
- use App\Domain\Tenancy\Scopes\SocieteScope;
- use App\Domain\Tenancy\Services\JournalDesDroits;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
- use App\Filament\Societe\Pages\CabinetComptable;
- use App\Models\User;
-@@ -64,7 +65,7 @@ public function handle(User $auteur, LienCabinet $lien): void
-         $motif = (int) $auteur->societe_id === (int) $lien->cabinet_id ? MotifDeFinDuLien::ParLeCabinet : MotifDeFinDuLien::ParLeClient;
- 
-         $this->terminer($auteur, $lien, $motif, null, function (?User $auteurRelu, LienCabinet $relu): void {
--            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'mettreFin', $relu);
-+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'mettreFin', $relu);
-         });
+diff --git a/app/Domain/Facturation/Models/Facture.php b/app/Domain/Facturation/Models/Facture.php
+index e91ffbe..7904ae7 100644
+--- a/app/Domain/Facturation/Models/Facture.php
++++ b/app/Domain/Facturation/Models/Facture.php
+@@ -668,27 +668,6 @@ public function montantCrediteParAvoir(): float
+         return app(CalculateurLigne::class)->sommer($this->allocationsAvoir()->pluck('montant_alloue'));
      }
  
-diff --git a/app/Domain/Cabinets/Actions/RefuserLaDemandeDeLienAction.php b/app/Domain/Cabinets/Actions/RefuserLaDemandeDeLienAction.php
-index 988fa37..d694663 100644
---- a/app/Domain/Cabinets/Actions/RefuserLaDemandeDeLienAction.php
-+++ b/app/Domain/Cabinets/Actions/RefuserLaDemandeDeLienAction.php
-@@ -7,6 +7,7 @@
- use App\Domain\Cabinets\Models\LienCabinet;
- use App\Domain\Tenancy\Enums\ActionAuditee;
- use App\Domain\Tenancy\Models\Societe;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Illuminate\Auth\Access\AuthorizationException;
- use Illuminate\Support\Facades\DB;
-@@ -30,7 +31,7 @@ class RefuserLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
-     public function handle(User $auteur, LienCabinet $lien): void
-     {
-         $refusee = self::exigerUneDemande($this->cloreLaDemande($auteur, $lien, EtatDuLien::Refuse, ActionAuditee::LienRefuse, function (?User $auteurRelu, LienCabinet $relu): void {
--            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'refuser', $relu);
-+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'refuser', $relu);
-         }));
- 
-         DB::afterCommit(function () use ($refusee): void {
-diff --git a/app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php b/app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
-index 4c1233c..ffaf045 100644
---- a/app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
-+++ b/app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
-@@ -8,6 +8,7 @@
- use App\Domain\Tenancy\Enums\ActionAuditee;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Services\JournalDesDroits;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
- use App\Models\User;
- use Illuminate\Auth\Access\AuthorizationException;
-@@ -47,7 +48,7 @@ public function handle(User $auteur, LienCabinet $lien, array $autorisations): v
- 
-         $this->journalDesDroits->modifierLeLien($auteur, $client, [$lien], function (?User $auteurRelu, Societe $clientVerrouille, array $relus) use ($autorisations): void {
-             [$relu] = $relus;
--            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'reglerLesAutorisations', $relu);
-+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'reglerLesAutorisations', $relu);
- 
-             if (! $relu->estActif()) {
-                 throw new LogicException(self::MESSAGE_LIEN_TERMINE);
-diff --git a/app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php b/app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
-index 3e2caa1..b7e0df5 100644
---- a/app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
-+++ b/app/Domain/Cabinets/Actions/RetirerLaDemandeDeLienAction.php
-@@ -8,6 +8,7 @@
- use App\Domain\Cabinets\Models\LienCabinet;
- use App\Domain\Tenancy\Enums\ActionAuditee;
- use App\Domain\Tenancy\Models\Societe;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Closure;
- use Illuminate\Auth\Access\AuthorizationException;
-@@ -32,7 +33,7 @@ class RetirerLaDemandeDeLienAction extends RepondreAUneDemandeDeLien
-     public function handle(User $auteur, LienCabinet $lien): void
-     {
-         self::exigerUneDemande($this->cloreLaDemande($auteur, $lien, EtatDuLien::Retire, ActionAuditee::DemandeDeLienRetiree, function (?User $auteurRelu, LienCabinet $relu): void {
--            $this->journalDesDroits->exigerDansSaSociete($auteurRelu, 'retirer', $relu);
-+            $this->journalDesDroits->exigerDansSaSociete(ValeurRequise::de($auteurRelu, 'l\'auteur du geste, relu sous verrou'), 'retirer', $relu);
-         }));
-     }
- 
-diff --git a/app/Domain/Cabinets/Actions/VerifierLOrdreAction.php b/app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
-index 7138502..dab6b83 100644
---- a/app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
-+++ b/app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
-@@ -14,6 +14,7 @@
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Services\AlerteEditeur;
- use App\Domain\Tenancy\Services\JournalAudit;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Filament\Cabinet\Pages\VerificationDuCabinet;
- use App\Integrations\Ordre\AnnuaireDeLOrdreIndisponibleException;
- use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
-@@ -115,7 +116,7 @@ public function handle(User $auteur, Societe $cabinet, array $donnees): Cabinet
- 
-             $this->prevenir($cabinet, 'Inscription à l\'Ordre vérifiée', 'L\'annuaire de l\'Ordre confirme l\'inscription de votre cabinet au tableau.', AvisDuCabinet::SUCCES);
- 
--            if ($cabinet->fresh()->estUnCabinetVerifie()) {
-+            if (ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
-                 PrevenirLesClientsDuCabinet::dispatch((int) $cabinet->getKey(), accesRetabli: true);
-             }
- 
-diff --git a/app/Domain/Cabinets/Models/InvitationCabinet.php b/app/Domain/Cabinets/Models/InvitationCabinet.php
-index 1c3b4b3..c16c259 100644
---- a/app/Domain/Cabinets/Models/InvitationCabinet.php
-+++ b/app/Domain/Cabinets/Models/InvitationCabinet.php
-@@ -6,6 +6,7 @@
- use App\Domain\Calendrier\Casts\Instant;
- use App\Domain\Tenancy\Concerns\BelongsToSociete;
- use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
-+use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Builder;
- use Illuminate\Database\Eloquent\Model;
- use Illuminate\Support\Str;
-@@ -22,9 +23,13 @@
-  * désigne le lien de l'e-mail, avant qu'aucune société ne soit ouverte
-  * (voir parSonJeton()).
-  *
-+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
-+ * en base.
-+ *
-  * @property string $siren
-  * @property string $email
-  * @property EtatInvitation $etat
-+ * @property CarbonImmutable $expire_le
-  */
- class InvitationCabinet extends Model
- {
-diff --git a/app/Domain/Cabinets/Models/LienCabinet.php b/app/Domain/Cabinets/Models/LienCabinet.php
-index 58127d0..ee32f55 100644
---- a/app/Domain/Cabinets/Models/LienCabinet.php
-+++ b/app/Domain/Cabinets/Models/LienCabinet.php
-@@ -35,9 +35,14 @@
-  * ouverte, la demande de rattachement que désigne le lien de son e-mail
-  * (voir parSonJeton()).
-  *
-+ * Son client n'est jamais nul : c'est sa société (societe_id, jamais nul
-+ * en base), que sa clé étrangère vise sans jamais la laisser s'effacer,
-+ * et Societe n'a aucun scope global (voir BelongsToSociete).
-+ *
-  * @property int $cabinet_id
-  * @property EtatDuLien $etat
-  * @property OrigineDuLien $origine
-+ * @property-read Societe $client
-  */
- class LienCabinet extends Model
- {
-diff --git a/app/Domain/Cabinets/Services/AccesDesCabinets.php b/app/Domain/Cabinets/Services/AccesDesCabinets.php
-index 87f889d..7a5097b 100644
---- a/app/Domain/Cabinets/Services/AccesDesCabinets.php
-+++ b/app/Domain/Cabinets/Services/AccesDesCabinets.php
-@@ -9,6 +9,7 @@
- use App\Domain\Tenancy\Models\Magasin;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Scopes\SocieteScope;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Domain\Tenancy\Support\ValeursLues;
- use App\Models\User;
- use Illuminate\Database\Eloquent\Builder;
-@@ -198,7 +199,7 @@ public function autorisationsParClient(User $compte): array
-         foreach ($liens as $lien) {
-             $retenues = array_values(array_intersect(
-                 $accordees->get($lien->getKey(), collect())->pluck('autorisation')->all(),
--                PermissionRegistry::duCabinet($types->get($lien->societe_id)->type_activite),
-+                PermissionRegistry::duCabinet(ValeurRequise::de($types->get($lien->societe_id), 'la société d\'un client lié')->type_activite),
-             ));
-             sort($retenues);
-             $parClient[(int) $lien->societe_id] = $retenues;
-diff --git a/app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php b/app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
-index 519ab2c..976d8e3 100644
---- a/app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
-+++ b/app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
-@@ -11,6 +11,7 @@
- use App\Domain\Calendrier\Calendrier;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Scopes\SocieteScope;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
- use Illuminate\Support\Facades\Mail;
- use SensitiveParameter;
-@@ -73,7 +74,7 @@ public function envoyerLaDemande(int $lienId, string $adresse, #[SensitiveParame
-             $cabinet->getFilamentName(),
-             $cabinet->siege_ville,
-             $siren,
--            Calendrier::deParis()->afficher($lien->expire_le, 'd/m/Y à H:i'),
-+            Calendrier::deParis()->afficher(ValeurRequise::de($lien->expire_le, 'l\'échéance de la demande de lien'), 'd/m/Y à H:i'),
-         ));
-     }
- 
-diff --git a/app/Domain/Cabinets/Services/TableauDeBordDesClients.php b/app/Domain/Cabinets/Services/TableauDeBordDesClients.php
-index 685f2b3..8671d52 100644
---- a/app/Domain/Cabinets/Services/TableauDeBordDesClients.php
-+++ b/app/Domain/Cabinets/Services/TableauDeBordDesClients.php
-@@ -7,6 +7,7 @@
- use App\Domain\Tenancy\Models\Magasin;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Scopes\MagasinScope;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Domain\Tenancy\Support\ValeursLues;
- use App\Models\User;
- use Illuminate\Database\Eloquent\Collection;
-@@ -55,14 +56,16 @@ public function pour(User $compte): array
-         $factures = $this->facturesAEncaisser(ValeursLues::entiers($suivis->keys()))
-             ->each(fn (Facture $facture): Facture => $facture->setRelation('magasin', $suivis[$facture->magasin_id]));
- 
-+        $client = fn (LienCabinet $lien): Societe => ValeurRequise::de($clients->get($lien->societe_id), 'le client d\'un lien ouvert');
-+
-         return array_values($liens
--            ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $clients[$lien->societe_id]->raison_sociale))
--            ->map(function (LienCabinet $lien) use ($clients, $magasins, $suivis, $factures): array {
-+            ->sortBy(fn (LienCabinet $lien): string => mb_strtolower((string) $client($lien)->raison_sociale))
-+            ->map(function (LienCabinet $lien) use ($client, $magasins, $suivis, $factures): array {
-                 $siens = $suivis->where('societe_id', $lien->societe_id)->keys()->all();
- 
-                 return [
-                     'lien' => (string) $lien->uuid,
--                    'client' => $clients[$lien->societe_id],
-+                    'client' => $client($lien),
-                     'actif_depuis' => $lien->actif_depuis,
-                     'magasins' => $magasins->where('societe_id', $lien->societe_id)->count(),
-                     'factures' => $siens === [] ? null : Facture::totauxAEncaisser($factures->whereIn('magasin_id', $siens)),
-diff --git a/app/Domain/Tenancy/Actions/AnnulerCessionAction.php b/app/Domain/Tenancy/Actions/AnnulerCessionAction.php
-index 0041004..7cbc727 100644
---- a/app/Domain/Tenancy/Actions/AnnulerCessionAction.php
-+++ b/app/Domain/Tenancy/Actions/AnnulerCessionAction.php
-@@ -20,6 +20,7 @@
- use App\Domain\Tenancy\Services\JournalAudit;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Domain\Tenancy\Support\ValeursLues;
- use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Collection;
-@@ -87,7 +88,7 @@ public function handle(Magasin $magasin, InterventionDeLEditeur $editeur): Motif
-             }
- 
-             $cession = $this->entreeDeLaCession($verrouille);
--            $instant = $cession->created_at;
-+            $instant = ValeurRequise::de($cession->created_at, 'l\'instant de la cession au journal d\'audit');
-             $sorties = $this->sortiesDeLaDerniereCession($verrouille);
- 
-             $this->exigerAucuneOperationApres($instant, ValeursLues::entiers($sorties->modelKeys()));
-diff --git a/app/Domain/Tenancy/Actions/CloreLInscriptionAction.php b/app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
-index 57637e6..819e6b7 100644
---- a/app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
-+++ b/app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
-@@ -21,6 +21,8 @@
- use App\Domain\Tenancy\Services\PiecesDeVerification;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ModeleRelu;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Carbon\CarbonImmutable;
- use Closure;
-@@ -116,7 +118,7 @@ public function parLEditeur(Societe $societe, InterventionDeLEditeur $editeur, M
-             return $this->cloreSousVerrou($verrouillee, $motif, $editeur);
-         });
- 
--        $this->apresLaCloture($societe->fresh(), $motif, $cloture['adresseRetiree'], $cloture['destinataires']);
-+        $this->apresLaCloture(ModeleRelu::de($societe), $motif, $cloture['adresseRetiree'], $cloture['destinataires']);
-     }
- 
-     /**
-@@ -131,7 +133,7 @@ public function cloreSansCode(Societe $societe, CarbonImmutable $limite): bool
-         $cloture = $this->sousLesVerrous($societe, function (Societe $verrouillee) use ($limite): ?array {
-             $courrierRecent = CodeConfirmation::query()->where('motif', MotifCode::Verification->value)->where('envoye_le', '>', $limite)->exists();
- 
--            if (! $verrouillee->attendSonCode() || $courrierRecent || $verrouillee->created_at->greaterThan($limite)) {
-+            if (! $verrouillee->attendSonCode() || $courrierRecent || ValeurRequise::de($verrouillee->created_at, 'la date de l\'inscription')->greaterThan($limite)) {
-                 return null;
-             }
- 
-@@ -142,7 +144,7 @@ public function cloreSansCode(Societe $societe, CarbonImmutable $limite): bool
-             return false;
-         }
- 
--        $this->apresLaCloture($societe->fresh(), MotifCloture::DelaiExpire, $cloture['adresseRetiree'], $cloture['destinataires']);
-+        $this->apresLaCloture(ModeleRelu::de($societe), MotifCloture::DelaiExpire, $cloture['adresseRetiree'], $cloture['destinataires']);
- 
-         return true;
-     }
-diff --git a/app/Domain/Tenancy/Actions/CorrigerSirenAction.php b/app/Domain/Tenancy/Actions/CorrigerSirenAction.php
-index 24bcb9a..7a5bcfb 100644
---- a/app/Domain/Tenancy/Actions/CorrigerSirenAction.php
-+++ b/app/Domain/Tenancy/Actions/CorrigerSirenAction.php
-@@ -28,6 +28,8 @@
- use App\Domain\Tenancy\Services\SiretsDesMagasins;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
-+use App\Domain\Tenancy\Support\ValeursLues;
- use App\Integrations\Sirene\EtablissementSirene;
- use App\Integrations\Sirene\UniteSirene;
- use Illuminate\Database\Eloquent\Collection;
-@@ -207,7 +209,7 @@ public function handle(Societe $societe, string $nouveauSiren, array $siretsParC
-                 }
- 
-                 $this->controleSirene->noterUnite($verrouillee, $unite, editeur: $editeur);
--                $cabinetQuiEtaitVerifie = $verrouillee->estUnCabinet() && $this->remettreAFaireLaVerificationDuCabinet($verrouillee, $unite['unite'], $editeur);
-+                $cabinetQuiEtaitVerifie = $verrouillee->estUnCabinet() && $this->remettreAFaireLaVerificationDuCabinet($verrouillee, ValeurRequise::de($unite['unite'], 'l\'unité légale que le répertoire dit concluante'), $editeur);
-                 $anciensSirets = [];
-                 $nouveauxSirets = [];
- 
-@@ -343,7 +345,7 @@ private function exigerUnExamenConcluantAUneErreur(string $nouveauSiren): Entree
-      */
-     private static function exigerAucuneFactureDepuisLExamen(Collection $magasins, EntreeAudit $examen): void
-     {
--        $avant = Instant::depuisLaBase((string) $examen->nouvelles_valeurs['documents_emis_avant']);
-+        $avant = Instant::depuisLaBase(ValeursLues::texteDe(ValeurRequise::de($examen->nouvelles_valeurs, 'les valeurs de l\'examen du SIREN'), 'documents_emis_avant'));
- 
-         foreach ($magasins as $magasin) {
-             $emise = app(TenantContext::class)->runAs($magasin, fn (): bool => Facture::query()
-diff --git a/app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php b/app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
-index 5b147bc..bcd2c34 100644
---- a/app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
-+++ b/app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
-@@ -6,6 +6,7 @@
- use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Services\DebitDesEmails;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Illuminate\Support\Facades\DB;
- use Illuminate\Support\Facades\Mail;
-@@ -112,7 +113,7 @@ public function envoyer(User $compte, string $jeton): void
-     {
-         Mail::to((string) $compte->nouvelle_adresse)->send(new ConfirmationNouvelleAdresseMail(
-             rtrim((string) config('app.url'), '/').route('profil.adresse.afficher', ['jeton' => $jeton], absolute: false),
--            Calendrier::deParis()->afficher($compte->nouvelle_adresse_expire_le, 'd/m/Y à H:i'),
-+            Calendrier::deParis()->afficher(ValeurRequise::de($compte->nouvelle_adresse_expire_le, 'l\'échéance du lien de la nouvelle adresse'), 'd/m/Y à H:i'),
-             premiereAdresse: ! $compte->aUneAdresseDeConnexion(),
-         ));
-         $this->debit->compter($compte);
-diff --git a/app/Domain/Tenancy/Actions/ExaminerSirenAction.php b/app/Domain/Tenancy/Actions/ExaminerSirenAction.php
-index c5b9c59..ece61c1 100644
---- a/app/Domain/Tenancy/Actions/ExaminerSirenAction.php
-+++ b/app/Domain/Tenancy/Actions/ExaminerSirenAction.php
-@@ -22,6 +22,7 @@
- use App\Domain\Tenancy\Services\JournalAudit;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Carbon\CarbonImmutable;
- use Closure;
- use Illuminate\Support\Facades\DB;
-@@ -188,7 +189,7 @@ private function documentsDuMagasin(Magasin $magasin, CarbonImmutable $avant): L
-             'magasin' => (string) $magasin->code,
-             'type' => $type,
-             'numero' => (string) $document->numero,
--            'date' => $calendrier->jourDe($document->date_emission),
-+            'date' => $calendrier->jourDe(ValeurRequise::de($document->date_emission, 'la date d\'émission du document émis')),
-             'client' => $document->client_nom,
-             'montant_ttc' => $this->calculateur->enCentiemes($document->total_ttc),
-             'regle' => $regleEnCentimes,
-diff --git a/app/Domain/Tenancy/Actions/FermerMagasinAction.php b/app/Domain/Tenancy/Actions/FermerMagasinAction.php
-index d4d3af9..9c1bf34 100644
---- a/app/Domain/Tenancy/Actions/FermerMagasinAction.php
-+++ b/app/Domain/Tenancy/Actions/FermerMagasinAction.php
-@@ -21,6 +21,7 @@
- use App\Domain\Tenancy\Services\JournalAudit;
- use App\Domain\Tenancy\Services\PeriodesDActivite;
- use App\Domain\Tenancy\Services\TenantContext;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Domain\Tenancy\Support\MotDePasseRedemande;
- use App\Models\User;
- use Carbon\CarbonImmutable;
-@@ -170,7 +171,7 @@ public function handle(User $auteur, Magasin $magasin, MotifFermeture $motif, #[
-         }
- 
-         if ($resultat['cession'] !== null) {
--            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede($magasin->fresh(), $resultat['cession']['valeur_ht'], $resultat['cession']['produits_en_stock_negatif']));
-+            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede(ModeleRelu::de($magasin), $resultat['cession']['valeur_ht'], $resultat['cession']['produits_en_stock_negatif']));
-         }
-     }
- 
-diff --git a/app/Domain/Tenancy/Actions/LibererLeSiretAction.php b/app/Domain/Tenancy/Actions/LibererLeSiretAction.php
-index e54bee0..6d5461a 100644
---- a/app/Domain/Tenancy/Actions/LibererLeSiretAction.php
-+++ b/app/Domain/Tenancy/Actions/LibererLeSiretAction.php
-@@ -14,6 +14,7 @@
- use App\Domain\Tenancy\Services\SiretsDesMagasins;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use LogicException;
- 
- /**
-@@ -106,8 +107,9 @@ public function handle(Magasin $magasin, InterventionDeLEditeur $editeur): Terri
-                 }
- 
-                 self::verifierQuIlSeLibere($verrouille);
-+                $territoire = ValeurRequise::de($verrouille->territoire, 'le territoire du magasin confirmé');
- 
--                if ($verrouille->territoire === $lu['territoire']) {
-+                if ($territoire === $lu['territoire']) {
-                     throw new LogicException(self::MESSAGE_MEME_TERRITOIRE);
-                 }
- 
-@@ -117,14 +119,15 @@ public function handle(Magasin $magasin, InterventionDeLEditeur $editeur): Terri
-                 $this->journalAudit->inscrire(ActionAuditee::SiretLibere, null, $verrouille, null, [
-                     'siret' => $siret,
-                     'motif' => self::MOTIF_TERRITOIRE_MAL_LU,
--                    'territoire' => $verrouille->territoire->value,
-+                    'territoire' => $territoire->value,
-                     'territoire_lu' => $lu['territoire']->value,
-                 ], $verrouille, $editeur);
- 
-                 return $verrouille;
-             })));
- 
--            $societe->proprietaire?->notify(new AvisDeVerification($societe, 'SIRET de votre magasin libéré', "Le répertoire Sirene situe l'établissement de {$libere->nom} (SIRET {$libere->siret}) {$lu['territoire']->lieu()}, et non {$libere->territoire->lieu()} : l'éditeur a libéré son SIRET. Vous pouvez créer un nouveau magasin sur cet établissement, qui prendra ce territoire, son taux de TVA par défaut et son heure ; {$libere->nom} reste fermé, avec ses documents."));
-+            $ancienTerritoire = ValeurRequise::de($libere->territoire, 'le territoire du magasin confirmé');
-+            $societe->proprietaire?->notify(new AvisDeVerification($societe, 'SIRET de votre magasin libéré', "Le répertoire Sirene situe l'établissement de {$libere->nom} (SIRET {$libere->siret}) {$lu['territoire']->lieu()}, et non {$ancienTerritoire->lieu()} : l'éditeur a libéré son SIRET. Vous pouvez créer un nouveau magasin sur cet établissement, qui prendra ce territoire, son taux de TVA par défaut et son heure ; {$libere->nom} reste fermé, avec ses documents."));
- 
-             return $lu['territoire'];
-         });
-diff --git a/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php b/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
-index eac19ba..b154895 100644
---- a/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
-+++ b/app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
-@@ -36,6 +36,7 @@
- use App\Domain\Tenancy\Services\SiretsDesMagasins;
- use App\Domain\Tenancy\Services\TenantContext;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Models\User;
- use Carbon\CarbonImmutable;
- use Closure;
-@@ -163,7 +164,7 @@ public function handle(Societe $societe, InterventionDeLEditeur $editeur): array
-         }
- 
-         $revocation = $this->revoquerUneSociete($societe, $editeur);
--        $this->apresLaRevocation($societe->fresh(), $revocation);
-+        $this->apresLaRevocation(ModeleRelu::de($societe), $revocation);
- 
-         return ['sirets' => $revocation['sirets'], 'reprise' => false, 'en_echec' => 0];
-     }
-@@ -282,7 +283,7 @@ private function revoquerUnCabinet(Societe $cabinet, InterventionDeLEditeur $edi
-         }
- 
-         if ($revocation !== null) {
--            $this->apresLaRevocation($cabinet->fresh(), $revocation);
-+            $this->apresLaRevocation(ModeleRelu::de($cabinet), $revocation);
-         }
- 
-         return ['sirets' => [], 'reprise' => $revocation === null, 'en_echec' => $enEchec];
-diff --git a/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php b/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
-index 7d60f77..302eee2 100644
---- a/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
-+++ b/app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
-@@ -27,6 +27,7 @@
- use App\Domain\Tenancy\Services\RegistreDesVerifications;
- use App\Domain\Tenancy\Services\SessionsDesComptes;
- use App\Domain\Tenancy\Services\TenantContext;
-+use App\Domain\Tenancy\Support\ModeleRelu;
- use App\Domain\Tenancy\Support\RegleDuMotDePasse;
- use App\Models\User;
- use Illuminate\Database\Eloquent\Collection;
-@@ -176,7 +177,7 @@ public function handle(string $siren, string $saisie, string $email, #[Sensitive
-             throw ValidationException::withMessages(['code' => self::MESSAGE_VALIDATION_IMPOSSIBLE]);
-         }
- 
--        $societe = $societe->fresh();
-+        $societe = ModeleRelu::de($societe);
-         $this->validerLaSociete->apresLaValidation($societe, $proprietaire);
- 
-         if ($jeton !== null) {
-diff --git a/app/Domain/Tenancy/Concerns/BelongsToMagasin.php b/app/Domain/Tenancy/Concerns/BelongsToMagasin.php
-index 8a5e763..31086c2 100644
---- a/app/Domain/Tenancy/Concerns/BelongsToMagasin.php
-+++ b/app/Domain/Tenancy/Concerns/BelongsToMagasin.php
-@@ -28,6 +28,13 @@
-  *
-  * Un identifiant choisi dans un formulaire se valide avec
-  * regleExisteDansLeMagasin(), jamais avec une règle « exists » nue.
-+ *
-+ * Son magasin n'est jamais nul : magasin_id ne l'est jamais dans les
-+ * tables de ces modèles, sa clé étrangère vise un magasin, qu'aucun
-+ * magasin ne s'efface (voir DeclencheursDeProtection::sansSuppression())
-+ * et que Magasin n'a aucun scope global.
-+ *
-+ * @property-read Magasin $magasin
-  */
- trait BelongsToMagasin
- {
-diff --git a/app/Domain/Tenancy/Concerns/BelongsToSociete.php b/app/Domain/Tenancy/Concerns/BelongsToSociete.php
-index a49e500..fd6d1a7 100644
---- a/app/Domain/Tenancy/Concerns/BelongsToSociete.php
-+++ b/app/Domain/Tenancy/Concerns/BelongsToSociete.php
-@@ -18,6 +18,13 @@
-  *     création, quelle que soit la valeur reçue : il ne figure jamais dans
-  *     $fillable, et un identifiant forcé dans une requête ne rattache
-  *     jamais rien à une autre société.
-+ *
-+ * Sa société n'est jamais nulle : societe_id ne l'est jamais dans les
-+ * tables de ces modèles, sa clé étrangère vise une société, qu'aucune
-+ * société ne s'efface (voir DeclencheursDeProtection::sansSuppression())
-+ * et que Societe n'a aucun scope global.
-+ *
-+ * @property-read Societe $societe
-  */
- trait BelongsToSociete
- {
-diff --git a/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php b/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
-index e9be412..ed62ede 100644
---- a/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
-+++ b/app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
-@@ -265,6 +265,8 @@ private function echouer(TelechargementDeDocuments $telechargement, string $moti
-             return $relu;
-         });
- 
--        $echec?->demandeur->notify(new AvisDuTelechargementDesDocuments($echec));
-+        if ($echec !== null) {
-+            $echec->demandeur->notify(new AvisDuTelechargementDesDocuments($echec));
-+        }
-     }
- }
-diff --git a/app/Domain/Tenancy/Models/Affectation.php b/app/Domain/Tenancy/Models/Affectation.php
-index 1500fa4..1ba65a5 100644
---- a/app/Domain/Tenancy/Models/Affectation.php
-+++ b/app/Domain/Tenancy/Models/Affectation.php
-@@ -46,6 +46,12 @@
-  * lisent avant tout contexte (connexion, choix du magasin). Toute lecture
-  * passe par le compte (User::affectations()), ou filtre explicitement par
-  * société ou par magasin (voir EquipeDuMagasinResource).
-+ *
-+ * Son compte n'est jamais nul : user_id ne l'est jamais en base, et sa clé
-+ * étrangère (avec la société) vise un compte qui ne s'efface pas tant
-+ * qu'elle le vise ; User n'a aucun scope global.
-+ *
-+ * @property-read User $utilisateur
-  */
- class Affectation extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/ChangementFinExercice.php b/app/Domain/Tenancy/Models/ChangementFinExercice.php
-index 1187b97..dee8671 100644
---- a/app/Domain/Tenancy/Models/ChangementFinExercice.php
-+++ b/app/Domain/Tenancy/Models/ChangementFinExercice.php
-@@ -20,7 +20,14 @@
-  * (voir ExercicesDeLaSociete), que les clôtures d'exercice de l'étape 3
-  * suivront.
-  *
-+ * Ses jours (voir JourCivil) ne sont jamais nuls : leurs colonnes ne le
-+ * sont pas en base.
-+ *
-  * @property array{operateurs: list<string>, piece: string, utilisateur_systeme: string, hote: string, version_module: string} $operateur
-+ * @property string $debut_exercice_en_cours
-+ * @property string $fin_exercice_en_cours_avant
-+ * @property string $fin_exercice_en_cours_apres
-+ * @property string $decision_du
-  */
- class ChangementFinExercice extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/CodeConfirmation.php b/app/Domain/Tenancy/Models/CodeConfirmation.php
-index 6e8c353..f60738e 100644
---- a/app/Domain/Tenancy/Models/CodeConfirmation.php
-+++ b/app/Domain/Tenancy/Models/CodeConfirmation.php
-@@ -7,6 +7,7 @@
- use App\Domain\Tenancy\Concerns\BelongsToSociete;
- use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
- use App\Domain\Tenancy\Enums\MotifCode;
-+use Carbon\CarbonImmutable;
- use Carbon\CarbonInterval;
- use Illuminate\Database\Eloquent\Builder;
- use Illuminate\Database\Eloquent\Model;
-@@ -37,7 +38,12 @@
-  * app:purger-verifications), et la base refuse son effacement avant (voir
-  * DeclencheursDeProtection::suppressionApresConservation()).
-  *
-+ * Son envoi et son échéance (voir Instant) ne sont jamais nuls : leurs
-+ * colonnes ne le sont pas en base.
-+ *
-  * @property array<string, mixed> $destinataire
-+ * @property CarbonImmutable $envoye_le
-+ * @property CarbonImmutable $expire_le
-  */
- class CodeConfirmation extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/DemandeInscription.php b/app/Domain/Tenancy/Models/DemandeInscription.php
-index c42d80b..ce5f98a 100644
---- a/app/Domain/Tenancy/Models/DemandeInscription.php
-+++ b/app/Domain/Tenancy/Models/DemandeInscription.php
-@@ -3,6 +3,7 @@
- namespace App\Domain\Tenancy\Models;
- 
- use App\Domain\Calendrier\Casts\Instant;
-+use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Model;
- 
- /**
-@@ -19,7 +20,11 @@
-  * après son expiration (voir app:purger-demandes-inscription), son code
-  * d'activité avec elle.
-  *
-+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
-+ * en base.
-+ *
-  * @property array{siren: string, type_activite: string, code_activite: string|null, nomenclature_activite: string|null, mot_de_passe: string} $donnees
-+ * @property CarbonImmutable $expire_le
-  */
- class DemandeInscription extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/EntreeAudit.php b/app/Domain/Tenancy/Models/EntreeAudit.php
-index 2db079a..dc56ccf 100644
---- a/app/Domain/Tenancy/Models/EntreeAudit.php
-+++ b/app/Domain/Tenancy/Models/EntreeAudit.php
-@@ -6,6 +6,7 @@
- use App\Domain\Tenancy\Concerns\BelongsToSociete;
- use App\Domain\Tenancy\Enums\ActionAuditee;
- use App\Domain\Tenancy\Enums\CategorieAudit;
-+use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Model;
- use Illuminate\Database\Eloquent\Relations\BelongsTo;
- use Illuminate\Database\Eloquent\Relations\HasOne;
-@@ -20,8 +21,12 @@
-  * sa durée de conservation passée, par le début de sa chaîne (voir
-  * app:purger-journal-audit) ; la base refuse tout le reste.
-  *
-+ * Son instant (voir Instant) n'est jamais nul : sa colonne ne l'est pas en
-+ * base, et JournalAudit le pose avant de calculer son empreinte.
-+ *
-  * @property array<string, mixed>|null $anciennes_valeurs
-  * @property array<string, mixed>|null $nouvelles_valeurs
-+ * @property CarbonImmutable $created_at
-  */
- class EntreeAudit extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/Magasin.php b/app/Domain/Tenancy/Models/Magasin.php
-index 25e5758..eabe58e 100644
---- a/app/Domain/Tenancy/Models/Magasin.php
-+++ b/app/Domain/Tenancy/Models/Magasin.php
-@@ -22,6 +22,7 @@
- use App\Domain\Tenancy\Scopes\MagasinScope;
- use App\Domain\Tenancy\Services\CodeMagasin;
- use App\Domain\Tenancy\Services\TenantContext;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Database\Factories\MagasinFactory;
- use Filament\Models\Contracts\HasName;
- use Illuminate\Database\Eloquent\Builder;
-@@ -102,6 +103,13 @@
-  * réelle (voir Emetteur::deDemonstration()) : il vend tant que sa société
-  * n'est ni validée ni close, n'écrit à aucun client et ne transmet rien
-  * (voir peutEcrireAuxClients()), et rien n'en passe aux magasins réels.
-+ *
-+ * Sa société n'est jamais nulle : societe_id ne l'est jamais en base, sa
-+ * clé étrangère vise une société, qu'aucune société ne s'efface (voir
-+ * DeclencheursDeProtection::sansSuppression()) et que Societe n'a aucun
-+ * scope global.
-+ *
-+ * @property-read Societe $societe
-  */
- class Magasin extends Model implements HasName
- {
-@@ -888,7 +896,7 @@ protected function delaisRelance(): Attribute
-      */
-     public function relanceDue(int $niveau, int $joursDeRetard, ?int $joursDepuisLaPrecedente): bool
-     {
--        $delais = $this->delais_relance;
-+        $delais = ValeurRequise::de($this->delais_relance, 'les délais de relance du magasin');
- 
-         if ($niveau < 1 || $niveau > count($delais) || $joursDeRetard < $delais[$niveau - 1]) {
-             return false;
-diff --git a/app/Domain/Tenancy/Models/PeriodeActivite.php b/app/Domain/Tenancy/Models/PeriodeActivite.php
-index bbded3a..da21a94 100644
---- a/app/Domain/Tenancy/Models/PeriodeActivite.php
-+++ b/app/Domain/Tenancy/Models/PeriodeActivite.php
-@@ -5,6 +5,7 @@
- use App\Domain\Calendrier\Casts\Instant;
- use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
- use App\Domain\Tenancy\Enums\MotifFermeture;
-+use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Model;
- use LogicException;
- 
-@@ -17,6 +18,11 @@
-  * figé) se pose, une fois ; elle ne s'efface pas.
-  *
-  * Sans scope global : toute requête filtre explicitement par magasin.
-+ *
-+ * Son début (voir Instant) n'est jamais nul : sa colonne ne l'est pas en
-+ * base.
-+ *
-+ * @property CarbonImmutable $debut
-  */
- class PeriodeActivite extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/TelechargementDeDocuments.php b/app/Domain/Tenancy/Models/TelechargementDeDocuments.php
-index d4b9506..7774cc4 100644
---- a/app/Domain/Tenancy/Models/TelechargementDeDocuments.php
-+++ b/app/Domain/Tenancy/Models/TelechargementDeDocuments.php
-@@ -13,6 +13,7 @@
- use App\Domain\Tenancy\Scopes\SocieteScope;
- use App\Domain\Tenancy\Support\ValeursLues;
- use App\Models\User;
-+use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Builder;
- use Illuminate\Database\Eloquent\Model;
- use Illuminate\Database\Eloquent\Relations\BelongsTo;
-@@ -26,6 +27,21 @@
-  * dans la file d'attente (voir PreparerLeTelechargementDesDocumentsJob),
-  * puis servie par son lien, pendant sept jours, à ce seul compte, toujours
-  * autorisé à ce moment (voir TelechargerLesDocumentsController).
-+ *
-+ * Les jours de sa période (voir JourCivil) ne sont jamais nuls : leurs
-+ * colonnes ne le sont pas en base.
-+ *
-+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
-+ * en base.
-+ *
-+ * Son demandeur n'est jamais nul : demande_par ne l'est jamais en base, et
-+ * sa clé étrangère vise un compte qui ne s'efface pas tant qu'elle le
-+ * vise ; User n'a aucun scope global.
-+ *
-+ * @property string $du
-+ * @property string $au
-+ * @property CarbonImmutable $expire_le
-+ * @property-read User $demandeur
-  */
- class TelechargementDeDocuments extends Model
- {
-diff --git a/app/Domain/Tenancy/Models/TransmissionPropriete.php b/app/Domain/Tenancy/Models/TransmissionPropriete.php
-index 18e4e3f..fadb7c0 100644
---- a/app/Domain/Tenancy/Models/TransmissionPropriete.php
-+++ b/app/Domain/Tenancy/Models/TransmissionPropriete.php
-@@ -5,6 +5,7 @@
- use App\Domain\Calendrier\Casts\Instant;
- use App\Domain\Tenancy\Concerns\BelongsToSociete;
- use App\Models\User;
-+use Carbon\CarbonImmutable;
- use Illuminate\Database\Eloquent\Model;
- use Illuminate\Database\Eloquent\Relations\BelongsTo;
- 
-@@ -20,10 +21,14 @@
-  * demande que désigne l'empreinte de son jeton, et rien d'autre (voir
-  * demandeDuLien()).
-  *
-+ * Son échéance (voir Instant) n'est jamais nulle : sa colonne ne l'est pas
-+ * en base.
-+ *
-  * @property int $demandee_par
-  * @property int $destinataire_id
-  * @property string $adresse
-  * @property string $jeton_hache
-+ * @property CarbonImmutable $expire_le
-  */
- class TransmissionPropriete extends Model
- {
-diff --git a/app/Domain/Tenancy/Services/AffectationsDesMembres.php b/app/Domain/Tenancy/Services/AffectationsDesMembres.php
-index efd52e5..c3c943b 100644
---- a/app/Domain/Tenancy/Services/AffectationsDesMembres.php
-+++ b/app/Domain/Tenancy/Services/AffectationsDesMembres.php
-@@ -7,6 +7,7 @@
- use App\Domain\Tenancy\Models\Affectation;
- use App\Domain\Tenancy\Models\Magasin;
- use App\Domain\Tenancy\Notifications\ResponsableNommeParUnAdministrateur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use LogicException;
- 
-@@ -138,6 +139,6 @@ public function prevenirDUneNomination(User $compte, Affectation $affectation, b
-         $magasin = $affectation->magasin()->firstOrFail();
-         $administrateur = User::query()->findOrFail($affectation->nomme_par);
- 
--        $magasin->societe->proprietaire->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
-+        ValeurRequise::de($magasin->societe->proprietaire, 'le propriétaire de la société')->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
-     }
- }
-diff --git a/app/Domain/Tenancy/Services/CodeMagasin.php b/app/Domain/Tenancy/Services/CodeMagasin.php
-index b822195..17f4587 100644
---- a/app/Domain/Tenancy/Services/CodeMagasin.php
-+++ b/app/Domain/Tenancy/Services/CodeMagasin.php
-@@ -99,7 +99,7 @@ public static function estPris(Societe $societe, string $code, ?Magasin $saufPou
-         return Magasin::query()
-             ->where('code', $code)
-             ->where('societe_id', $societe->getKey())
--            ->when($saufPour, fn (Builder $requete): Builder => $requete->whereKeyNot($saufPour->getKey()))
-+            ->when($saufPour, fn (Builder $requete, Magasin $magasin): Builder => $requete->whereKeyNot($magasin->getKey()))
-             ->exists()
-             || self::aServiSousCeSiren($societe, $code, (string) $societe->siren);
-     }
-diff --git a/app/Domain/Tenancy/Services/CourriersDeVerification.php b/app/Domain/Tenancy/Services/CourriersDeVerification.php
-index a233edf..f7d4d52 100644
---- a/app/Domain/Tenancy/Services/CourriersDeVerification.php
-+++ b/app/Domain/Tenancy/Services/CourriersDeVerification.php
-@@ -6,6 +6,7 @@
- use App\Domain\Tenancy\Enums\MotifCode;
- use App\Domain\Tenancy\Models\CodeConfirmation;
- use App\Domain\Tenancy\Models\Societe;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Carbon\CarbonImmutable;
- use Carbon\CarbonInterval;
- use Illuminate\Database\Eloquent\Collection;
-@@ -60,7 +61,7 @@ public function nouvelEnvoiPossibleLe(Societe $societe): ?CarbonImmutable
-             return null;
-         }
- 
--        $premier = $courriers->first()->envoye_le ?? $societe->created_at;
-+        $premier = ValeurRequise::de($courriers->first()->envoye_le ?? $societe->created_at, 'la date du premier courrier ou de l\'inscription');
- 
-         return Calendrier::deParis()->decaler($premier, CarbonInterval::days(self::JOURS_AVANT_UN_NOUVEL_ENVOI));
-     }
-@@ -80,6 +81,6 @@ public function piecesPossibles(Societe $societe): bool
-      */
-     public function cloturePrevueLe(Societe $societe): CarbonImmutable
-     {
--        return Calendrier::deParis()->decaler($this->dernier($societe)->envoye_le ?? $societe->created_at, CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
-+        return Calendrier::deParis()->decaler(ValeurRequise::de($this->dernier($societe)->envoye_le ?? $societe->created_at, 'la date du dernier courrier ou de l\'inscription'), CarbonInterval::days(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS));
-     }
- }
-diff --git a/app/Domain/Tenancy/Services/ExercicesDeLaSociete.php b/app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
-index 463ae02..4f01881 100644
---- a/app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
-+++ b/app/Domain/Tenancy/Services/ExercicesDeLaSociete.php
-@@ -6,6 +6,7 @@
- use App\Domain\Tenancy\Models\ChangementFinExercice;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Scopes\SocieteScope;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use InvalidArgumentException;
- 
- /**
-@@ -127,7 +128,7 @@ private function exerciceDuJour(Societe $societe, string $jour): array
-             return self::exerciceAuMois($changements->first()->ancien_mois ?? (int) $societe->mois_fin_exercice, $jour, null);
-         }
- 
--        $changement = $changements[$rang];
-+        $changement = ValeurRequise::de($changements->get($rang), 'le changement de fin d\'exercice du jour');
- 
-         if ($jour <= $changement->fin_exercice_en_cours_apres) {
-             return [$changement->debut_exercice_en_cours, $changement->fin_exercice_en_cours_apres];
-diff --git a/app/Domain/Tenancy/Services/JournalDesDroits.php b/app/Domain/Tenancy/Services/JournalDesDroits.php
-index c9d97ff..1ba1b9f 100644
---- a/app/Domain/Tenancy/Services/JournalDesDroits.php
-+++ b/app/Domain/Tenancy/Services/JournalDesDroits.php
-@@ -234,9 +234,11 @@ public function modifierLeLien(?User $auteur, Societe $client, array $liens, Clo
-         return app(TenantContext::class)->runAsSociete($client, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee): mixed {
-             for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
-                 $magasins = $client->magasinsReels()->orderBy('id')->get();
--                $termine = false;
- 
--                $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins, &$termine): mixed {
-+                // Le résultat de la modification, dans un tableau d'un élément,
-+                // ou null quand la liste des magasins a changé entre sa
-+                // lecture et ces verrous : tout reprend alors.
-+                $tenu = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins) {
-                     $clientVerrouille = Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
- 
-                     if (array_map(intval(...), $clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
-@@ -279,13 +281,11 @@ public function modifierLeLien(?User $auteur, Societe $client, array $liens, Clo
-                         return $resultat;
-                     });
- 
--                    $termine = true;
+-    /**
+-     * Les numéros des avoirs dont le crédit reste imputé sur cette facture,
+-     * chacun une fois, du premier imputé au dernier : un avoir peut s'y
+-     * imputer plusieurs fois (à son émission, puis par un paiement), et le
+-     * crédit qu'une contre-passation a rendu à son avoir n'y compte plus.
+-     *
+-     * @return list<string>
+-     */
+-    public function numerosDesAvoirsImputes(): array
+-    {
+-        $calculateur = app(CalculateurLigne::class);
 -
--                    return $resultat;
-+                    return [$resultat];
-                 });
- 
--                if ($termine) {
--                    return $resultat;
-+                if ($tenu !== null) {
-+                    return $tenu[0];
-                 }
-             }
- 
-diff --git a/app/Domain/Tenancy/Services/PiecesDeVerification.php b/app/Domain/Tenancy/Services/PiecesDeVerification.php
-index d4b5fbf..9c31ba0 100644
---- a/app/Domain/Tenancy/Services/PiecesDeVerification.php
-+++ b/app/Domain/Tenancy/Services/PiecesDeVerification.php
-@@ -6,6 +6,7 @@
- use App\Domain\Tenancy\Models\PieceVerification;
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Support\InterventionDeLEditeur;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Illuminate\Support\Facades\Crypt;
- use Illuminate\Support\Facades\DB;
- use Illuminate\Support\Facades\Storage;
-@@ -74,7 +75,7 @@ public function ranger(Societe $societe, string $contenu): string
- 
-     public function dechiffrer(PieceVerification $piece): string
-     {
--        return Crypt::decryptString(Storage::disk(self::DISQUE)->get($piece->chemin));
-+        return Crypt::decryptString(ValeurRequise::de(Storage::disk(self::DISQUE)->get(ValeurRequise::de($piece->chemin, 'le fichier de la pièce, pas encore effacée')), 'le contenu chiffré de la pièce'));
-     }
- 
+-        return array_values($this->allocationsAvoir
+-            ->sortBy('id')
+-            ->groupBy('avoir_id')
+-            ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
+-            ->map(fn (Collection $allocations): ?string => ValeurRequise::de($allocations->first(), 'la première imputation d\'un avoir')->avoir?->numero)
+-            ->filter()
+-            ->all());
+-    }
+-
      /**
-diff --git a/app/Domain/Tenancy/Services/PorteeDesDroits.php b/app/Domain/Tenancy/Services/PorteeDesDroits.php
-index 5b111e6..609413e 100644
---- a/app/Domain/Tenancy/Services/PorteeDesDroits.php
-+++ b/app/Domain/Tenancy/Services/PorteeDesDroits.php
-@@ -11,6 +11,7 @@
- use App\Domain\Tenancy\Models\Affectation;
- use App\Domain\Tenancy\Models\Magasin;
- use App\Domain\Tenancy\Models\Societe;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Illuminate\Database\Eloquent\Builder;
- use LogicException;
-@@ -376,7 +377,7 @@ public function peutAnnulerLaNomination(User $auteur, Affectation $affectation):
-         }
- 
-         return $auteur->estProprietaire()
--            || ($affectation->nomme_par === $auteur->getKey() && $this->peutNommerUnResponsable($auteur, $affectation->magasin));
-+            || ($affectation->nomme_par === $auteur->getKey() && $this->peutNommerUnResponsable($auteur, ValeurRequise::de($affectation->magasin, 'le magasin de la nomination')));
+      * Ce qui a réglé la facture à son émission, relu dans son contenu
+      * signé, que son PDF imprime (Q5) ; rien pour un brouillon. Ce qu'elle
+diff --git a/tests/Feature/Cabinets/AccepterLInvitationTest.php b/tests/Feature/Cabinets/AccepterLInvitationTest.php
+index 29f3af3..cd3c13d 100644
+--- a/tests/Feature/Cabinets/AccepterLInvitationTest.php
++++ b/tests/Feature/Cabinets/AccepterLInvitationTest.php
+@@ -249,6 +249,32 @@ public function test_l_acceptation_sans_type_avec_le_type_cabinet_ou_sans_la_cas
+         $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
      }
  
++    /**
++     * Un formulaire d'acceptation que la validation refuse se réaffiche,
++     * avec son erreur et le type d'activité choisi, sans rien créer ni
++     * connecter personne : l'invitation reste ouverte.
++     */
++    public function test_un_formulaire_d_acceptation_refuse_se_reaffiche_avec_son_erreur_et_le_type_choisi(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $jeton = $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@entreprise.test');
++        $societes = Societe::query()->count();
++
++        $this->post(route('cabinets.invitation.accepter', ['jeton' => $jeton]), [
++            'password' => self::MOT_DE_PASSE_CHOISI,
++            'password_confirmation' => 'un-autre-mot-de-passe',
++            'type_activite' => TypeDActivite::Services->value,
++            'choix_definitif' => '1',
++        ])
++            ->assertOk()
++            ->assertSeeText('La confirmation du champ mot de passe ne correspond pas.')
++            ->assertSee('value="'.TypeDActivite::Services->value.'" checked', false);
++
++        $this->assertGuest();
++        $this->assertSame($societes, Societe::query()->count());
++        $this->assertSame(EtatInvitation::Ouverte, InvitationCabinet::query()->withoutGlobalScopes()->sole()->etat);
++    }
++
      /**
-diff --git a/app/Domain/Tenancy/Services/ReverificationSirene.php b/app/Domain/Tenancy/Services/ReverificationSirene.php
-index d140b2f..fcd808d 100644
---- a/app/Domain/Tenancy/Services/ReverificationSirene.php
-+++ b/app/Domain/Tenancy/Services/ReverificationSirene.php
-@@ -14,6 +14,7 @@
- use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Models\VerificationSociete;
- use App\Domain\Tenancy\Notifications\AvisDeVerification;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Illuminate\Database\Eloquent\Collection;
- use Illuminate\Support\Facades\DB;
- use Illuminate\Support\Facades\Log;
-@@ -120,7 +121,7 @@ private function reverifierLEntreprise(Societe $societe): void
- 
-         if ($consultation['resultat'] === ResultatVerification::Negative) {
-             Log::warning('Revérification Sirene : écart sur une société validée.', ['societe_id' => $societe->getKey(), 'motif' => $consultation['motif']]);
--            $this->signalerLEcart($societe, $consultation['motif'], negative: true);
-+            $this->signalerLEcart($societe, ValeurRequise::de($consultation['motif'], 'le motif de la consultation négative'), negative: true);
-         }
- 
-         if ($societe->estUnCabinet() && $unite !== null && $consultation['resultat'] === ResultatVerification::Concluante && ControleSirene::exerceLesActivitesComptables($unite) === false) {
-@@ -211,7 +212,8 @@ private function reverifierLEtablissement(Magasin $magasin): void
-         }
- 
-         if ($situeAilleurs !== null) {
--            $this->signalerUnAutreTerritoire($situeAilleurs, Territoire::depuisLeRepertoire($etablissement->codeCommune, $etablissement->codePostal));
-+            $etablissementLu = ValeurRequise::de($etablissement, 'l\'établissement que le répertoire situe ailleurs');
-+            $this->signalerUnAutreTerritoire($situeAilleurs, Territoire::depuisLeRepertoire($etablissementLu->codeCommune, $etablissementLu->codePostal));
-         }
-     }
- 
-@@ -277,7 +279,7 @@ private static function dernierResultat(Societe $societe, ?Magasin $magasin): ?R
-         return VerificationSociete::query()
-             ->where('societe_id', $societe->getKey())
-             ->where('type', ($magasin === null ? TypeVerification::SireneUnite : TypeVerification::SireneEtablissement)->value)
--            ->when($magasin === null, fn ($requete) => $requete->whereNull('magasin_id'), fn ($requete) => $requete->where('magasin_id', $magasin->getKey()))
-+            ->when($magasin, fn ($requete, Magasin $leMagasin) => $requete->where('magasin_id', $leMagasin->getKey()), fn ($requete) => $requete->whereNull('magasin_id'))
-             ->orderByDesc('id')
-             ->first()
-             ?->resultat;
-diff --git a/app/Domain/Tenancy/Services/SuiviDesConnexions.php b/app/Domain/Tenancy/Services/SuiviDesConnexions.php
-index 3a7ae90..ccaf175 100644
---- a/app/Domain/Tenancy/Services/SuiviDesConnexions.php
-+++ b/app/Domain/Tenancy/Services/SuiviDesConnexions.php
-@@ -4,6 +4,7 @@
- 
- use App\Domain\Tenancy\Enums\ActionAuditee;
- use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Carbon\CarbonInterface;
- use Filament\Facades\Filament;
-@@ -86,7 +87,7 @@ public static function accesRedonne(User $compte): string
-     {
-         $auteur = $compte->acces_redonne_par === null ? null : User::query()->whereKey($compte->acces_redonne_par)->value('name');
- 
--        return 'Votre accès a été redonné '.self::date($compte, $compte->acces_redonne_le).($auteur === null ? '' : " par {$auteur}").', '.($compte->acces_redonne_en_presence ? 'en votre présence.' : 'en votre absence.');
-+        return 'Votre accès a été redonné '.self::date($compte, ValeurRequise::de($compte->acces_redonne_le, 'l\'instant où l\'accès a été redonné')).($auteur === null ? '' : " par {$auteur}").', '.($compte->acces_redonne_en_presence ? 'en votre présence.' : 'en votre absence.');
-     }
- 
-     /**
-diff --git a/app/Domain/Tenancy/Services/TenantContext.php b/app/Domain/Tenancy/Services/TenantContext.php
-index 81f7740..6e0f87a 100644
---- a/app/Domain/Tenancy/Services/TenantContext.php
-+++ b/app/Domain/Tenancy/Services/TenantContext.php
-@@ -51,7 +51,7 @@ class TenantContext
+      * @return array<string, array{0: string, 1: string}>
       */
-     public function set(Magasin $magasin): void
-     {
--        if ($this->societeExplicite && $magasin->societe_id !== $this->societe->getKey()) {
-+        if ($this->societeExplicite && $magasin->societe_id !== $this->societe()->getKey()) {
-             throw new LogicException('Le magasin d\'une autre société ne s\'ouvre pas dans le contexte de cette société.');
-         }
- 
-diff --git a/app/Domain/Tenancy/Support/CompteConnecte.php b/app/Domain/Tenancy/Support/CompteConnecte.php
-new file mode 100644
-index 0000000..e6dcddb
---- /dev/null
-+++ b/app/Domain/Tenancy/Support/CompteConnecte.php
-@@ -0,0 +1,32 @@
-+<?php
-+
-+namespace App\Domain\Tenancy\Support;
-+
-+use App\Models\User;
-+use Illuminate\Support\Facades\Auth;
-+use RuntimeException;
-+
-+/**
-+ * Le compte connecté, lu là où seul un compte connecté arrive : les pages,
-+ * les actions et les tableaux des panneaux de Filament, derrière leur
-+ * contrôle de l'authentification, et les routes de l'espace qui l'exigent.
-+ * Sans compte connecté, c'est une erreur du code, refusée par une
-+ * exception, et non un visiteur à qui répondre ; jamais le refus d'un
-+ * geste (une LogicException, que les écrans montrent à la personne, voir
-+ * GereLesExceptionsMetier) : comme l'erreur de PHP qu'elle remplace, elle
-+ * remonte jusqu'au journal de l'application.
-+ */
-+final class CompteConnecte
-+{
-+    public const REFUS = 'Aucun compte n\'est connecté : cette page ou cette action exige une connexion.';
-+
-+    /**
-+     * @throws RuntimeException aucun compte connecté
-+     */
-+    public static function exiger(): User
-+    {
-+        $compte = Auth::user();
-+
-+        return $compte instanceof User ? $compte : throw new RuntimeException(self::REFUS);
-+    }
-+}
-diff --git a/app/Domain/Tenancy/Support/ModeleRelu.php b/app/Domain/Tenancy/Support/ModeleRelu.php
-new file mode 100644
-index 0000000..05a7377
---- /dev/null
-+++ b/app/Domain/Tenancy/Support/ModeleRelu.php
-@@ -0,0 +1,33 @@
-+<?php
-+
-+namespace App\Domain\Tenancy\Support;
-+
-+use Illuminate\Database\Eloquent\Model;
-+use UnexpectedValueException;
-+
-+/**
-+ * Un modèle relu en base (fresh()), avec les relations demandées, là où il
-+ * existe forcément : l'action qui le relit vient de l'enregistrer, ou le
-+ * tient sous son verrou. Un modèle disparu entre-temps est une erreur du
-+ * code, refusée par une exception, au lieu d'un modèle nul ; jamais le
-+ * refus d'un geste (une LogicException, que les écrans montrent à la
-+ * personne, voir GereLesExceptionsMetier) : comme l'erreur de PHP qu'elle
-+ * remplace, elle remonte jusqu'au journal de l'application.
-+ */
-+final class ModeleRelu
-+{
-+    public const REFUS = 'Un enregistrement %s n\'existe plus en base : il ne se relit pas.';
-+
-+    /**
-+     * @template TModele of Model
-+     *
-+     * @param  TModele  $modele
-+     * @return TModele
-+     *
-+     * @throws UnexpectedValueException le modèle n'existe plus
-+     */
-+    public static function de(Model $modele, string ...$relations): Model
-+    {
-+        return $modele->fresh($relations) ?? throw new UnexpectedValueException(sprintf(self::REFUS, $modele::class));
-+    }
-+}
-diff --git a/app/Domain/Tenancy/Support/ValeurRequise.php b/app/Domain/Tenancy/Support/ValeurRequise.php
-new file mode 100644
-index 0000000..5a259e5
---- /dev/null
-+++ b/app/Domain/Tenancy/Support/ValeurRequise.php
-@@ -0,0 +1,37 @@
-+<?php
-+
-+namespace App\Domain\Tenancy\Support;
-+
-+use UnexpectedValueException;
-+
-+/**
-+ * Une valeur qui peut être nulle en général (une colonne ou une relation
-+ * facultative, une date posée plus tard), mais pas là où le code la lit :
-+ * l'état du document ou de la demande la garantit (une facture émise a
-+ * son échéance, un paiement enregistré sa date). Nulle, elle est refusée
-+ * par une exception qui la nomme, au lieu d'être utilisée pour ce qu'elle
-+ * n'est pas : une erreur du code, ou des données altérées en base, que la
-+ * vérification de l'intégrité signale alors comme un document qui ne se
-+ * relit plus (voir VerificateurIntegrite). L'exception n'est jamais le
-+ * refus d'un geste (une LogicException, que les écrans montrent à la
-+ * personne, voir GereLesExceptionsMetier) : comme l'erreur de PHP qu'elle
-+ * remplace, elle remonte jusqu'au journal de l'application.
-+ */
-+final class ValeurRequise
-+{
-+    public const REFUS = 'Une valeur requise manque : %s.';
-+
-+    /**
-+     * @template TValeur
-+     *
-+     * @param  TValeur|null  $valeur
-+     * @param  string  $quoi  ce qu'est la valeur (« l'échéance de la facture émise »)
-+     * @return TValeur
-+     *
-+     * @throws UnexpectedValueException une valeur nulle
-+     */
-+    public static function de(mixed $valeur, string $quoi): mixed
-+    {
-+        return $valeur ?? throw new UnexpectedValueException(sprintf(self::REFUS, $quoi));
-+    }
-+}
-diff --git a/app/Http/Controllers/ConfirmerInscriptionController.php b/app/Http/Controllers/ConfirmerInscriptionController.php
-index ccfda78..3b64128 100644
---- a/app/Http/Controllers/ConfirmerInscriptionController.php
-+++ b/app/Http/Controllers/ConfirmerInscriptionController.php
-@@ -6,6 +6,7 @@
+diff --git a/tests/Feature/Cabinets/CollaborateursTest.php b/tests/Feature/Cabinets/CollaborateursTest.php
+index 66e8223..94d2c28 100644
+--- a/tests/Feature/Cabinets/CollaborateursTest.php
++++ b/tests/Feature/Cabinets/CollaborateursTest.php
+@@ -12,6 +12,7 @@
  use App\Domain\Tenancy\Enums\TypeDActivite;
- use App\Domain\Tenancy\Models\DemandeInscription;
- use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Filament\EspaceDeLaSociete;
- use Illuminate\Http\RedirectResponse;
- use Illuminate\Http\Request;
-@@ -124,7 +125,7 @@ public function confirmer(Request $requete, string $jeton, CreerSocieteAction $c
-         }
- 
-         RateLimiter::hit($cle, 86400);
--        Auth::login($societe->proprietaire);
-+        Auth::login(ValeurRequise::de($societe->proprietaire, 'le propriétaire de la société inscrite'));
-         request()->session()->regenerate();
- 
-         return redirect()->to(EspaceDeLaSociete::accueil($societe))
-diff --git a/app/Http/Controllers/TelechargerLesDocumentsController.php b/app/Http/Controllers/TelechargerLesDocumentsController.php
-index 5de53d5..06617cc 100644
---- a/app/Http/Controllers/TelechargerLesDocumentsController.php
-+++ b/app/Http/Controllers/TelechargerLesDocumentsController.php
-@@ -8,6 +8,7 @@
- use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
  use App\Domain\Tenancy\Models\Societe;
- use App\Domain\Tenancy\Models\TelechargementDeDocuments;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Illuminate\Http\Request;
- use Illuminate\Http\Response;
-@@ -74,7 +75,7 @@ public function __invoke(Request $requete, DocumentsDeLaPeriode $documents, stri
-             return $this->indisponible(self::SANS_DROIT, 403);
-         }
- 
--        return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download($trouve->chemin, $trouve->nomDuFichier(), [
-+        return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download(ValeurRequise::de($trouve->chemin, 'le fichier du téléchargement prêt'), $trouve->nomDuFichier(), [
-             'Content-Type' => $trouve->format->typeMime(),
-             'X-Content-Type-Options' => 'nosniff',
-             'Cache-Control' => 'private, no-store',
-diff --git a/app/Http/Middleware/ExigerSonPropreMotDePasse.php b/app/Http/Middleware/ExigerSonPropreMotDePasse.php
-index 56d41da..9dc0d4f 100644
---- a/app/Http/Middleware/ExigerSonPropreMotDePasse.php
-+++ b/app/Http/Middleware/ExigerSonPropreMotDePasse.php
-@@ -2,6 +2,7 @@
- 
- namespace App\Http\Middleware;
- 
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Models\User;
- use Closure;
- use Filament\Facades\Filament;
-@@ -47,7 +48,7 @@ public function handle(Request $request, Closure $next): Response
-             return $next($request);
-         }
- 
--        $panneau = Filament::getCurrentPanel()->getId();
-+        $panneau = ValeurRequise::de(Filament::getCurrentPanel(), 'le panneau de la page')->getId();
- 
-         if ($request->routeIs("filament.{$panneau}.choisir-son-mot-de-passe", "filament.{$panneau}.auth.logout")) {
-             return $next($request);
-diff --git a/app/Integrations/Vies/ClientVies.php b/app/Integrations/Vies/ClientVies.php
-index e133d0a..dc51b22 100644
---- a/app/Integrations/Vies/ClientVies.php
-+++ b/app/Integrations/Vies/ClientVies.php
-@@ -4,6 +4,7 @@
- 
- use App\Domain\Facturation\Services\NumeroTva;
- use App\Domain\Facturation\Services\TerritoireFiscal;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use Illuminate\Http\Client\ConnectionException;
- use Illuminate\Http\Client\Response;
- use Illuminate\Support\Facades\Http;
-@@ -58,7 +59,7 @@ public function verifier(string $numeroTva, ?string $numeroTvaDemandeur): Result
- 
-         if (($prefixeDemandeur = TerritoireFiscal::prefixeTvaUe($numeroTvaDemandeur)) !== null) {
-             $demande['requesterMemberStateCode'] = $prefixeDemandeur;
--            $demande['requesterNumber'] = substr(NumeroTva::normaliser($numeroTvaDemandeur), 2);
-+            $demande['requesterNumber'] = substr(NumeroTva::normaliser(ValeurRequise::de($numeroTvaDemandeur, 'le n° de TVA du demandeur')), 2);
-         }
- 
-         try {
-diff --git a/app/Models/User.php b/app/Models/User.php
-index 9489693..3011f57 100644
---- a/app/Models/User.php
-+++ b/app/Models/User.php
-@@ -15,6 +15,7 @@
- use App\Domain\Tenancy\Models\Identifiant;
- use App\Domain\Tenancy\Models\Magasin;
- use App\Domain\Tenancy\Models\Societe;
-+use App\Domain\Tenancy\Support\ValeurRequise;
- use App\Domain\Tenancy\Support\ValeursLues;
- use Database\Factories\UserFactory;
- use Filament\Facades\Filament;
-@@ -300,7 +301,7 @@ public function magasinDeSonIdentifiant(): ?Magasin
-      */
-     public function calendrier(): Calendrier
-     {
--        return $this->estMembre() ? $this->magasinDeSonIdentifiant()->calendrier() : Calendrier::deParis();
-+        return $this->estMembre() ? ValeurRequise::de($this->magasinDeSonIdentifiant(), 'le magasin de l\'identifiant du membre')->calendrier() : Calendrier::deParis();
-     }
- 
-     /**
-@@ -425,7 +426,7 @@ public function libelleDuRoleDeSociete(): string
-     public function libelleDuRoleDans(Magasin $magasin): string
-     {
-         $libelle = match (true) {
--            $this->estMembre() => ($this->affectationQuiVautDans($magasin)?->role->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom,
-+            $this->estMembre() => $this->libelleDuRoleDeMembreDans($magasin).' · '.$magasin->nom,
-             $this->estDUnCabinet() => $this->libelleDuRoleDeSociete().' · '.$magasin->nom,
-             default => $this->libelleDuRoleDeSociete(),
-         };
-@@ -433,6 +434,18 @@ public function libelleDuRoleDans(Magasin $magasin): string
-         return $magasin->est_demonstration ? "{$libelle} (démonstration)" : $libelle;
++use App\Domain\Tenancy\Models\TransmissionPropriete;
+ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+ use App\Domain\Tenancy\Services\CreationDesComptes;
+ use App\Domain\Tenancy\Services\PorteeDesDroits;
+@@ -388,6 +389,34 @@ public function test_la_propriete_d_un_cabinet_se_transmet_a_un_collaborateur_qu
+         $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::ProprieteTransferee));
      }
  
 +    /**
-+     * Le libellé de son rôle de membre dans ce magasin : celui de son
-+     * affectation, qui en a toujours un (voir affectationQuiVautDans()),
-+     * ou « Membre » sans affectation dans ce magasin.
++     * Depuis la fiche du collaborateur, le propriétaire du cabinet demande
++     * la transmission de la propriété en redonnant son mot de passe,
++     * renvoie le lien, qui remplace le précédent, puis annule : chaque geste
++     * le dit, et rien n'a changé dans le cabinet.
 +     */
-+    private function libelleDuRoleDeMembreDans(Magasin $magasin): string
++    public function test_la_fiche_du_collaborateur_transmet_la_propriete_renvoie_le_lien_et_annule_la_transmission(): void
 +    {
-+        $affectation = $this->affectationQuiVautDans($magasin);
++        Mail::fake();
++        $cabinet = $this->ouvrirUnCabinet();
++        $collaborateur = $this->renseignerSonAdresse($this->collaborateur($cabinet), 'paul@cabinet.test');
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
 +
-+        return $affectation === null ? RoleSociete::Membre->getLabel() : ValeurRequise::de($affectation->role, 'le rôle de l\'affectation d\'un membre')->getLabel();
++        $fiche = Livewire::test(FicheDuCollaborateur::class, ['record' => $collaborateur->getRouteKey()])
++            ->callAction('transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI])
++            ->assertHasNoActionErrors()
++            ->assertNotified('Un lien a été envoyé à l\'adresse de ce collaborateur : la propriété ne passera que quand il l\'aura suivi.');
++        $premier = $this->jetonDuDernierLienDeTransmission();
++
++        $fiche->callAction('renvoyerLeLienDeTransmission')->assertNotified('Un nouveau lien a été envoyé à l\'adresse de ce collaborateur.');
++        Mail::assertSent(TransmissionDeLaProprieteMail::class, 2);
++        $this->assertNotSame($premier, $this->jetonDuDernierLienDeTransmission());
++
++        $fiche->callAction('annulerLaTransmission')->assertNotified('La transmission de la propriété est annulée.');
++        $this->assertNotNull(TransmissionPropriete::query()->where('destinataire_id', $collaborateur->id)->sole()->annulee_le);
++        $this->assertSame([RoleSociete::Collaborateur, RoleSociete::Proprietaire], [$collaborateur->fresh()->role_societe, $this->proprietaireDuCabinet($cabinet)->role_societe]);
++    }
++
+     public function test_l_ancien_proprietaire_du_cabinet_devient_collaborateur_avec_tous_les_clients_confies(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/FinDuLienTest.php b/tests/Feature/Cabinets/FinDuLienTest.php
+index 7dd0f7f..b96a253 100644
+--- a/tests/Feature/Cabinets/FinDuLienTest.php
++++ b/tests/Feature/Cabinets/FinDuLienTest.php
+@@ -13,6 +13,7 @@
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Resources\FactureResource;
+ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
++use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages\ListClientsDuCabinet;
+ use App\Filament\Societe\Pages\CabinetComptable;
+ use Illuminate\Auth\Access\AuthorizationException;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+@@ -60,6 +61,26 @@ public function test_le_cabinet_met_fin_au_lien(): void
+         $this->assertContains('Lien avec votre cabinet terminé', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+     }
+ 
++    /**
++     * « Mettre fin au lien », dans la liste des clients du cabinet : son
++     * propriétaire met fin au lien, l'écran le dit, et le cabinet n'ouvre
++     * plus le client.
++     */
++    public function test_le_proprietaire_du_cabinet_met_fin_au_lien_depuis_la_liste_de_ses_clients(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
++        $lien = $this->lierLeCabinet($cabinet, $magasin);
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++
++        Livewire::test(ListClientsDuCabinet::class)
++            ->callTableAction('mettreFin', $lien)
++            ->assertNotified('Le lien avec ce client a pris fin.');
++
++        $this->assertSame([EtatDuLien::Termine, MotifDeFinDuLien::ParLeCabinet], [$lien->fresh()->etat, $lien->fresh()->motif_fin]);
++        $this->assertFalse($this->proprietaireDuCabinet($cabinet)->peutOuvrir($magasin));
++    }
++
+     public function test_une_session_ouverte_perd_l_acces_au_client_des_sa_requete_suivante(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Cabinets/InvitationsTest.php b/tests/Feature/Cabinets/InvitationsTest.php
+index d6d62a9..bcfcafb 100644
+--- a/tests/Feature/Cabinets/InvitationsTest.php
++++ b/tests/Feature/Cabinets/InvitationsTest.php
+@@ -390,6 +390,32 @@ public function test_le_cabinet_retire_une_invitation_ouverte_et_son_lien_ne_vau
+         $this->get(route('cabinets.invitation.afficher', ['jeton' => $jeton]))->assertStatus(410)->assertSeeText(InvitationInvalideException::MESSAGE);
+     }
+ 
++    /**
++     * « Retirer », dans l'espace du cabinet : son propriétaire retire une
++     * invitation ouverte et une demande de rattachement en cours, chacune
++     * le dit, et leurs liens ne servent plus.
++     */
++    public function test_le_proprietaire_du_cabinet_retire_une_invitation_et_une_demande_depuis_son_espace(): void
++    {
++        $cabinet = $this->ouvrirUnCabinet();
++        $inscrite = $this->ouvrirUneSociete(['nom' => 'Boutique inscrite'])->societe;
++        $this->inviterUneEntreprise($cabinet, SocieteFactory::sirenFictif(), 'dirigeant@libre.test');
++        $this->demanderLeRattachement($cabinet, $inscrite, 'dirigeant@inscrite.test');
++        $invitation = InvitationCabinet::query()->withoutGlobalScopes()->sole();
++        $demande = LienCabinet::query()->withoutGlobalScopes()->sole();
++        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
++
++        Livewire::test(InvitationsEtDemandes::class)
++            ->callAction('retirerLInvitation', arguments: ['uuid' => $invitation->uuid])
++            ->assertNotified('L\'invitation est retirée.')
++            ->callAction('retirerLaDemande', arguments: ['uuid' => $demande->uuid])
++            ->assertNotified('La demande est retirée.');
++
++        $this->assertSame([EtatInvitation::Retiree, EtatDuLien::Retire], [$invitation->fresh()->etat, $demande->fresh()->etat]);
++        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::InvitationRetiree));
++        $this->assertCount(1, $this->entreesDAudit($cabinet, ActionAuditee::DemandeDeLienRetiree));
 +    }
 +
      /**
-      * Son nom tel que l'historique le garde (le nom figé d'un auteur, le
-      * registre fiscal, les journaux) : son nom ; pour un compte d'un
-diff --git a/app/Providers/Filament/AppPanelProvider.php b/app/Providers/Filament/AppPanelProvider.php
-index 13000c6..ebb1042 100644
---- a/app/Providers/Filament/AppPanelProvider.php
-+++ b/app/Providers/Filament/AppPanelProvider.php
-@@ -3,6 +3,7 @@
- namespace App\Providers\Filament;
+      * Un cabinet suspendu ne retire plus ses invitations ouvertes : son
+      * propriétaire peut seulement mettre fin à ses liens (voir
+diff --git a/tests/Feature/Editeur/RevoquerSocieteTest.php b/tests/Feature/Editeur/RevoquerSocieteTest.php
+index c397ad4..44f3982 100644
+--- a/tests/Feature/Editeur/RevoquerSocieteTest.php
++++ b/tests/Feature/Editeur/RevoquerSocieteTest.php
+@@ -48,7 +48,9 @@
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+ use App\Filament\Societe\Resources\JournalAuditResource;
+ use App\Models\User;
++use Database\Factories\MagasinFactory;
+ use Database\Factories\SocieteFactory;
++use Illuminate\Database\Events\QueryExecuted;
+ use Illuminate\Database\QueryException;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Notifications\ChannelManager;
+@@ -165,6 +167,42 @@ public function test_la_revocation_libere_le_siren_et_les_siret_sans_toucher_aux
+         $this->assertContains('Votre société est révoquée', $this->proprietaireDe($magasin)->notifications()->get()->pluck('data.title')->all());
+     }
  
- use App\Domain\Tenancy\Models\Magasin;
-+use App\Domain\Tenancy\Support\CompteConnecte;
- use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
- use App\Filament\App\Pages\Auth\Connexion;
- use App\Filament\App\Pages\Auth\DemandeDeLien;
-@@ -114,7 +115,7 @@ public function panel(Panel $panel): Panel
-             ->tenant(Magasin::class, slugAttribute: 'uuid')
-             // Pour un compte d'un cabinet d'expertise comptable, seulement
-             // les magasins du client ouvert (voir User::getTenants()).
--            ->tenantMenu(fn (): bool => (auth()->user()?->getTenants(Filament::getCurrentPanel())->count() ?? 0) > 1)
-+            ->tenantMenu(fn (): bool => (auth()->user()?->getTenants($panel)->count() ?? 0) > 1)
-             ->tenantMiddleware([
-                 BindTenantContextFromFilamentTenant::class,
-                 JournaliserOuvertureDeSession::class,
-@@ -134,12 +135,12 @@ public function panel(Panel $panel): Panel
-                 MenuItem::make()
-                     ->label('Administration de la société')
-                     ->icon('heroicon-o-building-office-2')
--                    ->url(fn (): string => EspaceDeLaSociete::accueil(auth()->user()->societe))
-+                    ->url(fn (): string => EspaceDeLaSociete::accueil(CompteConnecte::exiger()->societe))
-                     ->visible(fn (): bool => auth()->user()?->peutAdministrer() ?? false),
-                 MenuItem::make()
-                     ->label('Espace du cabinet')
-                     ->icon('heroicon-o-briefcase')
--                    ->url(fn (): string => EspaceDeLaSociete::accueil(auth()->user()->societe))
-+                    ->url(fn (): string => EspaceDeLaSociete::accueil(CompteConnecte::exiger()->societe))
-                     ->visible(fn (): bool => auth()->user()?->ouvreLEspaceDuCabinet() ?? false),
-             ])
-             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')
-diff --git a/tests/Feature/Tenancy/CompteConnecteTest.php b/tests/Feature/Tenancy/CompteConnecteTest.php
-new file mode 100644
-index 0000000..83594f8
---- /dev/null
-+++ b/tests/Feature/Tenancy/CompteConnecteTest.php
-@@ -0,0 +1,35 @@
-+<?php
-+
-+namespace Tests\Feature\Tenancy;
-+
-+use App\Domain\Tenancy\Support\CompteConnecte;
-+use App\Models\User;
-+use Illuminate\Foundation\Testing\RefreshDatabase;
-+use RuntimeException;
-+use Tests\TestCase;
-+
-+/**
-+ * Le compte connecté (voir CompteConnecte) : rendu tel quel quand il y en
-+ * a un ; sans compte connecté, l'appel est refusé par une exception.
-+ */
-+class CompteConnecteTest extends TestCase
-+{
-+    use RefreshDatabase;
-+
-+    public function test_le_compte_connecte_est_rendu_tel_quel(): void
++    /**
++     * Un magasin que la société crée pendant sa révocation, entre la
++     * lecture de ses magasins réels et leurs verrous, n'y échappe pas : la
++     * révocation reprend sur tous ses magasins, et le nouveau se ferme,
++     * motif « révocation de la société », et libère son SIRET comme
++     * l'autre.
++     */
++    public function test_un_magasin_cree_pendant_la_revocation_est_revoque_avec_les_autres(): void
 +    {
-+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
-+        $this->actingAs($proprietaire);
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
++        $societe = $magasin->societe;
++        $this->prouverLaRemiseDuCourrierDeRevocation($societe);
++        $proprietaire = $this->proprietaireDe($magasin);
++        $nouveau = null;
++        $cree = false;
++        DB::listen(function (QueryExecuted $requete) use ($societe, $proprietaire, &$nouveau, &$cree): void {
++            if ($cree || ! str_contains($requete->sql, 'from "magasins"') || str_contains($requete->sql, ' for ')) {
++                return;
++            }
 +
-+        $this->assertTrue(CompteConnecte::exiger()->is($proprietaire));
-+        $this->assertInstanceOf(User::class, CompteConnecte::exiger());
++            $cree = true;
++            $nouveau = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Ouvert pendant la révocation', 'code' => null, 'email' => null, 'nic' => MagasinFactory::nicLibre($societe)]);
++        });
++
++        $revocation = app(RevoquerSocieteAction::class)->handle($societe->fresh(), $this->editeur());
++
++        $this->assertInstanceOf(Magasin::class, $nouveau);
++        $this->assertEqualsCanonicalizing([(string) $magasin->siret, (string) $nouveau->siret], $revocation['sirets']);
++        $this->assertSame(StatutSociete::Revoquee, $societe->fresh()->statut);
++        foreach ([$magasin, $nouveau] as $revoque) {
++            $this->assertFalse(SiretsDesMagasins::estReserve((string) $revoque->siret), $revoque->nom);
++            $periode = app(TenantContext::class)->runAs($revoque->fresh(), fn (): PeriodeActivite => PeriodeActivite::query()->where('magasin_id', $revoque->id)->sole());
++            $this->assertSame(MotifFermeture::RevocationSociete, $periode->motif_fin, $revoque->nom);
++        }
 +    }
 +
-+    public function test_sans_compte_connecte_l_appel_est_refuse(): void
-+    {
-+        $this->expectException(RuntimeException::class);
-+        $this->expectExceptionMessage(CompteConnecte::REFUS);
-+
-+        CompteConnecte::exiger();
-+    }
-+}
-diff --git a/tests/Feature/Tenancy/ModeleReluTest.php b/tests/Feature/Tenancy/ModeleReluTest.php
+     /**
+      * Les comptes de la société révoquée consultent encore (le propriétaire
+      * ouvre son journal d'audit), mais plus rien ne s'y vend, ne s'y règle
+diff --git a/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php b/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
 new file mode 100644
-index 0000000..a89bb82
+index 0000000..1fbcf08
 --- /dev/null
-+++ b/tests/Feature/Tenancy/ModeleReluTest.php
-@@ -0,0 +1,42 @@
++++ b/tests/Feature/Facturation/ActionsUniquesCourseConcurrenceTest.php
+@@ -0,0 +1,114 @@
 +<?php
 +
-+namespace Tests\Feature\Tenancy;
++namespace Tests\Feature\Facturation;
 +
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Tenancy\Models\ActionTraitee;
 +use App\Domain\Tenancy\Models\Magasin;
-+use App\Domain\Tenancy\Support\ModeleRelu;
-+use Illuminate\Foundation\Testing\RefreshDatabase;
-+use Illuminate\Support\Facades\DB;
++use App\Domain\Tenancy\Services\ActionsUniques;
++use App\Domain\Tenancy\Services\TenantContext;
++use App\Models\User;
++use Closure;
++use Illuminate\Foundation\Testing\DatabaseMigrations;
++use Illuminate\Support\Str;
++use LogicException;
 +use Tests\TestCase;
-+use UnexpectedValueException;
 +
 +/**
-+ * Un modèle relu en base (voir ModeleRelu) : une copie à jour, avec les
-+ * relations demandées ; un modèle qui n'existe pas en base est refusé.
++ * La course que seul l'index unique (magasin, jeton) arrête (R3) : deux
++ * demandes du même jeton qu'aucun verrou ne fait passer l'une après
++ * l'autre. L'autre demande, dans son processus, s'inscrit et se valide
++ * pendant celle du test, qui ne l'a pas encore trouvée ; l'inscription du
++ * test bute alors sur l'index : sa demande est annulée en entier, puis
++ * relit le jeton et rend le résultat de l'autre, pourvu qu'elle soit la
++ * même, sinon elle est refusée (voir ActionsUniques).
++ *
++ * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
++ * ce que le test a validé, et le test voit ce que l'autre a validé.
 + */
-+class ModeleReluTest extends TestCase
++class ActionsUniquesCourseConcurrenceTest extends TestCase
 +{
-+    use RefreshDatabase;
++    use DatabaseMigrations;
 +
-+    public function test_un_modele_est_relu_a_jour_avec_les_relations_demandees(): void
++    private const ACTION = 'essai.course';
++
++    private const PARAMETRES = ['nom' => 'Atelier Dupont'];
++
++    public function test_la_demande_qui_perd_la_course_est_annulee_et_rend_le_resultat_de_l_autre(): void
++    {
++        [$auteur, $resultatDeLAutre, $autre] = $this->uneAutreDemandeDuMemeJeton(self::PARAMETRES, etapes: false);
++
++        $resultat = app(ActionsUniques::class)->executer($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): Client => $this->pendantLAutreDemande($autre['operation']));
++
++        $this->assertTrue($resultat->is($resultatDeLAutre));
++        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++    }
++
++    public function test_l_etape_qui_perd_la_course_est_annulee_et_rend_le_resultat_de_l_autre_deja_enregistre(): void
++    {
++        [$auteur, $resultatDeLAutre, $autre] = $this->uneAutreDemandeDuMemeJeton(self::PARAMETRES, etapes: true);
++
++        $resultat = app(ActionsUniques::class)->executerParEtapes($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): array => [$this->pendantLAutreDemande($autre['operation']), true]);
++
++        $this->assertInstanceOf(Client::class, $resultat['resultat']);
++        $this->assertTrue($resultat['resultat']->is($resultatDeLAutre));
++        $this->assertTrue($resultat['deja_enregistree']);
++        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++    }
++
++    public function test_la_demande_qui_perd_la_course_contre_une_demande_differente_est_refusee_et_annulee(): void
++    {
++        [$auteur, , $autre] = $this->uneAutreDemandeDuMemeJeton(['nom' => 'Atelier Martin'], etapes: false);
++
++        $this->assertThrows(
++            fn () => app(ActionsUniques::class)->executer($autre['jeton'], self::ACTION, Client::class, $auteur, self::PARAMETRES, static fn (): null => null, fn (): Client => $this->pendantLAutreDemande($autre['operation'])),
++            LogicException::class,
++            ActionsUniques::REFUS,
++        );
++
++        $this->assertSame([0, 1], [Client::query()->where('nom', 'Client de la demande qui perd')->count(), ActionTraitee::query()->count()]);
++    }
++
++    /**
++     * Un magasin, l'auteur des deux demandes, le client que rend celle de
++     * l'autre processus, et cette autre demande : son jeton et l'opération
++     * qui la fait, de bout en bout, avec ces paramètres, par executer() ou
++     * par une seule étape d'executerParEtapes(), sans verrou.
++     *
++     * @param  array<string, string>  $parametres
++     * @return array{0: User, 1: Client, 2: array{jeton: string, operation: Closure(): void}}
++     */
++    private function uneAutreDemandeDuMemeJeton(array $parametres, bool $etapes): array
 +    {
 +        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-+        DB::table('magasins')->where('id', $magasin->getKey())->update(['nom' => 'Mon Atelier']);
++        $auteur = self::responsableDeTest($magasin);
++        $client = Client::factory()->create(['nom' => 'Client de l\'autre demande']);
++        $jeton = (string) Str::uuid();
++        [$magasinId, $auteurId, $clientId] = [$magasin->id, $auteur->id, $client->id];
 +
-+        $relu = ModeleRelu::de($magasin, 'societe');
++        return [$auteur, $client, ['jeton' => $jeton, 'operation' => static function () use ($magasinId, $auteurId, $clientId, $jeton, $parametres, $etapes): void {
++            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
++            $auteur = User::query()->findOrFail($auteurId);
++            $client = static fn (): Client => Client::query()->findOrFail($clientId);
 +
-+        $this->assertNotSame($magasin, $relu);
-+        $this->assertTrue($relu->is($magasin));
-+        $this->assertSame('Mon Atelier', $relu->nom);
-+        $this->assertSame('Ma Boutique', $magasin->nom);
-+        $this->assertTrue($relu->relationLoaded('societe'));
-+        $this->assertFalse(ModeleRelu::de($magasin)->relationLoaded('societe'));
++            $etapes
++                ? app(ActionsUniques::class)->executerParEtapes($jeton, self::ACTION, Client::class, $auteur, $parametres, static fn (): null => null, static fn (): array => [$client(), true])
++                : app(ActionsUniques::class)->executer($jeton, self::ACTION, Client::class, $auteur, $parametres, static fn (): null => null, $client);
++        }]];
 +    }
 +
-+    public function test_un_modele_qui_n_existe_pas_en_base_est_refuse(): void
++    /**
++     * L'opération de la demande du test : elle attend que l'autre demande,
++     * lancée dans son processus, se soit inscrite et validée, puis crée son
++     * propre client, que l'annulation de sa demande effacera.
++     *
++     * @param  Closure(): void  $autre
++     */
++    private function pendantLAutreDemande(Closure $autre): Client
 +    {
-+        $this->expectException(UnexpectedValueException::class);
-+        $this->expectExceptionMessage(sprintf(ModeleRelu::REFUS, Magasin::class));
++        $resultat = $this->demarrerUnProcessusConcurrent($autre)->wait();
++        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
 +
-+        ModeleRelu::de(new Magasin);
++        return Client::factory()->create(['nom' => 'Client de la demande qui perd']);
 +    }
 +}
-diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
-index 1f65a4e..8595cff 100644
---- a/tests/Qualite/qualite.php
-+++ b/tests/Qualite/qualite.php
-@@ -169,9 +169,14 @@ function partieDe(string $fichier): string
- function lignesDuClover(string $clover): array
- {
-     $xml = simplexml_load_file($clover) ?: throw new RuntimeException("Rapport Clover illisible : {$clover}");
-+    $elements = $xml->xpath('//file');
-     $fichiers = [];
+diff --git a/tests/Feature/Facturation/RecusDePaiementTest.php b/tests/Feature/Facturation/RecusDePaiementTest.php
+index 57729c7..99329eb 100644
+--- a/tests/Feature/Facturation/RecusDePaiementTest.php
++++ b/tests/Feature/Facturation/RecusDePaiementTest.php
+@@ -458,6 +458,33 @@ public function test_la_fiche_de_la_facture_telecharge_le_recu_de_chaque_encaiss
+             ->assertFileDownloaded('recu-RP-LYON1-2026-000001.pdf');
+     }
  
--    foreach ($xml->xpath('//file') as $fichier) {
-+    if (! is_array($elements)) {
-+        throw new RuntimeException("Rapport Clover illisible : {$clover}");
++    /**
++     * Sur la fiche de la facture, « Envoyer le reçu » d'un encaissement
++     * l'envoie à l'adresse du client, préremplie, avec le message saisi :
++     * l'écran dit l'envoi programmé, et l'e-mail part avec le PDF du reçu.
++     */
++    public function test_la_fiche_de_la_facture_envoie_le_recu_d_un_encaissement_au_client(): void
++    {
++        Mail::fake();
++        $magasin = $this->magasin();
++        $facture = $this->facture(Client::factory()->professionnel()->create(['email' => 'compta@atelier.fr']), 100);
++        self::encaisser($facture, [new PartDeReglement(ModePaiement::Especes, 3000)]);
++        $this->actingAs(self::auteur());
++        Filament::setTenant($magasin);
++
++        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
++            ->assertInfolistActionVisible('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu')
++            ->callInfolistAction('allocationsPaiement.0.envoyer_recuAction', 'envoyer_recu', ['message' => 'Merci pour votre règlement.'])
++            ->assertHasNoInfolistActionErrors()
++            ->assertNotified('Envoi à compta@atelier.fr programmé');
++
++        $envoi = EnvoiDocument::query()->sole();
++        $this->assertSame(['recu_paiement', RecuPaiement::query()->sole()->id, 'compta@atelier.fr', StatutEnvoi::Envoye], [$envoi->document_type, (int) $envoi->document_id, $envoi->destinataire, $envoi->statut]);
++        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('compta@atelier.fr')
++            && $mail->attachments()[0]->as === 'recu-RP-LYON1-2026-000001.pdf'
++            && str_contains($mail->render(), 'Merci pour votre règlement.'));
 +    }
 +
-+    foreach ($elements as $fichier) {
-         $relatif = relatifAuDepot((string) $fichier['name']);
+     /**
+      * Le client comptoir sans adresse ne reçoit jamais de reçu par e-mail :
+      * l'action ne se propose pas.
+diff --git a/tests/Feature/Societe/CabinetComptableTest.php b/tests/Feature/Societe/CabinetComptableTest.php
+index 4fe45ab..5f3872e 100644
+--- a/tests/Feature/Societe/CabinetComptableTest.php
++++ b/tests/Feature/Societe/CabinetComptableTest.php
+@@ -5,16 +5,20 @@
+ use App\Domain\Authorization\AutorisationsSociete;
+ use App\Domain\Authorization\PermissionRegistry;
+ use App\Domain\Cabinets\Actions\AccepterLaDemandeDeLienAction;
++use App\Domain\Cabinets\Actions\DesignerUnCabinetAction;
+ use App\Domain\Cabinets\Enums\EtatDuLien;
++use App\Domain\Cabinets\Mail\InvitationACreerUnEspaceMail;
+ use App\Domain\Cabinets\Models\LienCabinet;
+ use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
+ use App\Domain\Tenancy\Enums\MotifCloture;
+ use App\Domain\Tenancy\Enums\TypeDActivite;
++use App\Domain\Tenancy\Services\TenantContext;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+ use App\Filament\Societe\Pages\CabinetComptable;
+ use App\Filament\Societe\Pages\RattachementDUnCabinet;
+ use Database\Factories\SocieteFactory;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\Mail;
+ use Livewire\Livewire;
+ use Tests\TestCase;
  
-         if (! str_starts_with($relatif, 'app/')) {
-diff --git a/tests/Unit/ValeurRequiseTest.php b/tests/Unit/ValeurRequiseTest.php
-new file mode 100644
-index 0000000..9b6e7af
---- /dev/null
-+++ b/tests/Unit/ValeurRequiseTest.php
-@@ -0,0 +1,32 @@
-+<?php
-+
-+namespace Tests\Unit;
-+
-+use App\Domain\Tenancy\Support\ValeurRequise;
-+use PHPUnit\Framework\TestCase;
-+use UnexpectedValueException;
-+
-+/**
-+ * Une valeur requise (voir ValeurRequise) : rendue telle quelle quand elle
-+ * n'est pas nulle, même vide ou fausse ; nulle, elle est refusée par une
-+ * exception qui la nomme.
-+ */
-+class ValeurRequiseTest extends TestCase
-+{
-+    public function test_une_valeur_non_nulle_est_rendue_telle_quelle_meme_vide_ou_fausse(): void
+@@ -81,6 +85,31 @@ public function test_la_page_designe_repond_regle_et_met_fin_au_lien(): void
+         $this->assertNotNull($page);
+     }
+ 
++    /**
++     * Depuis la page, le propriétaire retire la demande de lien qu'il a
++     * adressée à un cabinet, puis invite son expert-comptable, qui n'a pas
++     * encore d'espace, à en créer un : chaque geste le dit.
++     */
++    public function test_la_page_retire_une_demande_de_lien_et_invite_l_expert_a_creer_son_espace(): void
 +    {
-+        $this->assertSame('2026-11-10', ValeurRequise::de('2026-11-10', 'le jour'));
-+        $this->assertSame('', ValeurRequise::de('', 'le texte'));
-+        $this->assertSame(0, ValeurRequise::de(0, 'le nombre'));
-+        $this->assertFalse(ValeurRequise::de(false, 'le choix'));
-+        $this->assertSame([], ValeurRequise::de([], 'la liste'));
++        Mail::fake();
++        $cabinet = $this->ouvrirUnCabinet();
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
++        app(TenantContext::class)->clear();
++        $designation = app(DesignerUnCabinetAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, $cabinet);
++        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
++
++        Livewire::test(CabinetComptable::class)
++            ->callAction('retirerLaDemande', arguments: ['uuid' => $designation->uuid])
++            ->assertNotified('Votre demande est retirée.')
++            ->callAction('inviterSonExpert', ['email' => 'expert@cabinet.test'])
++            ->assertHasNoActionErrors()
++            ->assertNotified('L\'invitation est envoyée.');
++
++        $this->assertSame(EtatDuLien::Retire, $designation->fresh()->etat);
++        Mail::assertSent(InvitationACreerUnEspaceMail::class, fn (InvitationACreerUnEspaceMail $mail): bool => $mail->hasTo('expert@cabinet.test'));
 +    }
 +
-+    public function test_une_valeur_nulle_est_refusee_avec_son_nom(): void
+     public function test_la_page_ne_propose_que_les_autorisations_du_cabinet_en_deux_groupes(): void
+     {
+         $cabinet = $this->ouvrirUnCabinet();
+diff --git a/tests/Feature/Stock/VenteSansStockTest.php b/tests/Feature/Stock/VenteSansStockTest.php
+index 2594f59..97369ae 100644
+--- a/tests/Feature/Stock/VenteSansStockTest.php
++++ b/tests/Feature/Stock/VenteSansStockTest.php
+@@ -34,6 +34,7 @@
+ use App\Domain\Tenancy\Services\TenantContext;
+ use App\Filament\App\Pages\Caisse;
+ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
++use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
+ use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
+ use App\Filament\App\Widgets\StockNegatifApercu;
+ use App\Models\User;
+@@ -258,6 +259,31 @@ public function test_la_liste_des_factures_avertit_avant_d_emettre_une_vente_san
+         $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
+     }
+ 
++    /**
++     * Depuis la fiche d'un brouillon, « Émettre » une vente au-delà du
++     * stock garde sa fenêtre ouverte avec l'avertissement ; confirmé, il
++     * émet.
++     */
++    public function test_la_fiche_d_un_brouillon_avertit_avant_d_emettre_une_vente_sans_stock(): void
 +    {
-+        $this->expectException(UnexpectedValueException::class);
-+        $this->expectExceptionMessage(sprintf(ValeurRequise::REFUS, "l'échéance de la facture émise"));
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $responsable = $this->responsableDeTest($magasin);
++        $cable = $this->produit('Câble USB', 1);
++        $brouillon = app(CreerFactureAction::class)->handle($responsable, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
++        $this->actingAs($responsable);
++        Filament::setTenant($magasin);
 +
-+        ValeurRequise::de(null, "l'échéance de la facture émise");
++        $fiche = Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])
++            ->callAction('emettre')
++            ->assertActionMounted('emettre')
++            ->assertSee('Le stock de Câble USB passera à −2.');
++        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
++
++        $fiche->callMountedAction();
++
++        $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
 +    }
-+}
++
+     public function test_un_responsable_vend_sans_stock_apres_l_avertissement(): void
+     {
+         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+diff --git a/tests/Feature/Tenancy/TenantIsolationTest.php b/tests/Feature/Tenancy/TenantIsolationTest.php
+index e9154f5..f94fb8f 100644
+--- a/tests/Feature/Tenancy/TenantIsolationTest.php
++++ b/tests/Feature/Tenancy/TenantIsolationTest.php
+@@ -16,6 +16,8 @@
+ use App\Domain\Calendrier\Calendrier;
+ use App\Domain\Catalogue\Models\Produit;
+ use App\Domain\Catalogue\Models\Service;
++use App\Domain\Contacts\Actions\ArchiverUneFicheAction;
++use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+ use App\Domain\Contacts\Enums\TypeClient;
+ use App\Domain\Contacts\Models\Client;
+ use App\Domain\Contacts\Models\ConsultationVies;
+@@ -63,6 +65,7 @@
+ use App\Domain\Tenancy\Scopes\MagasinScope;
+ use App\Domain\Tenancy\Services\ActionsUniques;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\FicheLue;
+ use App\Filament\App\Resources\AvoirFournisseurResource;
+ use App\Filament\App\Resources\AvoirResource;
+ use App\Filament\App\Resources\ClientResource;
+@@ -456,6 +459,49 @@ public function test_un_magasin_de_la_meme_societe_ne_justifie_pas_une_vente_d_u
+         $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
+     }
+ 
++    /**
++     * Les fiches que corrige ModifierUneFicheAction.
++     *
++     * @return array<string, array{0: class-string<Client|Fournisseur|Produit|Service>}>
++     */
++    public static function fichesModifiables(): array
++    {
++        return [
++            'client' => [Client::class],
++            'fournisseur' => [Fournisseur::class],
++            'produit' => [Produit::class],
++            'service' => [Service::class],
++        ];
++    }
++
++    /**
++     * Une fiche se corrige dans le magasin qui l'a créée : depuis un autre
++     * magasin de la même société, l'action qui enregistre la correction ne
++     * la retrouve pas sous son verrou, même quand on la lui passe, le dit,
++     * et la fiche reste telle qu'elle était.
++     *
++     * @param  class-string<Client|Fournisseur|Produit|Service>  $modelClass
++     */
++    #[DataProvider('fichesModifiables')]
++    public function test_un_magasin_de_la_meme_societe_ne_corrige_pas_la_fiche_d_un_autre(string $modelClass): void
++    {
++        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
++        $contexte = app(TenantContext::class);
++        $contexte->set($this->magasinA);
++        $fiche = $modelClass::factory()->create(['nom' => 'Nom d\'origine']);
++        $lue = FicheLue::de($fiche)->valeurs();
++        $contexte->set($memeSociete);
++
++        $this->assertThrows(
++            fn () => app(ModifierUneFicheAction::class)->handle(self::auteur(), $fiche, $lue, ['nom' => 'Nom corrigé']),
++            LogicException::class,
++            ArchiverUneFicheAction::REFUS_INTROUVABLE,
++        );
++
++        $contexte->set($this->magasinA);
++        $this->assertSame('Nom d\'origine', $fiche->fresh()?->getAttribute('nom'));
++    }
++
+     /**
+      * @return array<string, array{0: class-string<RessourceFilament>, 1: string, 2: Closure(Magasin): Model}>
+      */

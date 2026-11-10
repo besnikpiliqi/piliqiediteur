@@ -1,0 +1,42 @@
+[
+ {
+  "id": "V5",
+  "titre": "Proposer l'architecture et attendre votre validation avant le code",
+  "decision": "Je devais d'abord proposer l'architecture complète, puis attendre votre accord avant d'écrire le code."
+ },
+ {
+  "id": "V11",
+  "decision": "Une règle de calcul, d'arrondi, d'obligation légale ou de droits non tranchée vous est soumise, expliquée, avec des options et une recommandation. Je ne la devine jamais."
+ },
+ {
+  "id": "V17",
+  "decision": "Les factures électroniques s'envoient et se reçoivent par l'API de SUPER PDP, qui sert aussi à l'e-reporting. Le 08/10, vous confirmez ce choix et donnez le lien de sa documentation."
+ },
+ {
+  "id": "V18",
+  "titre": "Vous vendez le logiciel, chaque magasin a son espace",
+  "decision": "Vous êtes l'éditeur. Les commerces ouvrent leur compte chez vous ; chacun a son espace séparé et ses clients particuliers et professionnels."
+ },
+ {
+  "id": "V24",
+  "decision": "Pas d'espace dédié aux comptables. Vous y aviez pensé, puis jugé qu'avec la facture électronique les comptables voient déjà les factures de leurs clients (les magasins) avec leurs propres outils."
+ },
+ {
+  "id": "V25",
+  "titre": "Faire mieux que ce que vous demandez, et parfaitement",
+  "decision": "Vos idées sont un point de départ. Je fais mieux que ce qui est demandé. Quand vous vous trompez (droit, technique), je vous le dis et propose mieux. Le travail attendu est « parfait »."
+ },
+ {
+  "id": "V36",
+  "titre": "Vous êtes l'éditeur, jamais le propriétaire d'un magasin",
+  "decision": "« Le propriétaire » désigne toujours le propriétaire d'une société cliente. L'éditeur est le créateur de PILIQI. Ne jamais vous parler de « vos magasins » ni de « vous, le propriétaire »."
+ },
+ {
+  "id": "V43",
+  "decision": "Une facture en brouillon se modifie ; elle peut aussi se supprimer en entier d'un seul geste. Vous revenez ainsi sur l'interdiction d'éditer donnée plus tôt."
+ },
+ {
+  "id": "V59",
+  "titre": "Le logiciel est à vous seul : dépôt privé"
+ }
+]

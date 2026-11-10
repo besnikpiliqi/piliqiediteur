@@ -1,0 +1,89 @@
+[
+  {
+    "id": "V62",
+    "decision": "Tous les montants se calculent en centimes entiers, ou en décimal exact, jamais avec des nombres à virgule flottante, pour qu'aucun centime ne se perde sur la TVA et les totaux envoyés à l'État. Vous l'avez redit le 05/10, le 17/10 et le 08/11 : les derniers endroits qui passent encore par un nombre à virgule doivent disparaître, sans changer aucun résultat, et une règle automatique doit ensuite l'interdire."
+  },
+  {
+    "id": "V70",
+    "decision": "Un avoir s'ouvre pour voir les produits repris, et son numéro, cité sur la facture, s'ouvre d'un clic. Vous l'avez redit le même soir ; la règle vaut pour tout numéro de document cité (avoir, ticket, facture)."
+  },
+  {
+    "id": "V74",
+    "decision": "Quand un cas semble difficile à tester, je cherche le chemin testable (concurrence sous PostgreSQL, appel direct, faux service). Jamais « difficile à tester » à la place d'un test."
+  },
+  {
+    "id": "V80",
+    "decision": "Le client comptoir, partagé par tous et inconnu, n'a jamais de crédit ni de solde d'avoir. Vous l'avez redit le 01/11."
+  },
+  {
+    "id": "V81",
+    "decision": "Calculer les totaux HT et TTC chacun de son côté, sans diviser le TTC par 1,2. Les 05 et 06/10, vous le redites puis précisez (06/10 à 07 h 05 UTC) : chaque produit porte son HT, sa TVA et son TTC, chaque ligne se calcule à part (« il faut avoir pour chaque produit le ht, la tva du produit, le ttc et comme tu calcule chaque ligne seperant, donc calcule ht, tva, ttc »), pour qu'une facture de 100 € fasse 84,99 € HT et non 85,00 €.",
+    "statut_detail": "Remplacée le 17/10 par la politique d'arrondi unique des ventes (CLAUDE.md, « Prix et TVA des ventes ») ; l'idée est revenue le 08/11 (question Q-CALC), puis vous avez gardé la règle actuelle le 09/11 (Q-CALC2, choix a)."
+  },
+  {
+    "id": "V87",
+    "decision": "Les calculs se testent sur des milliers de cas, tirés avec une graine fixe et comparés à un calcul de référence exact, en plus de vos exemples."
+  },
+  {
+    "id": "V90",
+    "decision": "Ne jamais vous renvoyer vers « votre comptable ». Je cherche les règles sur les sites officiels (impots.gouv.fr, Légifrance, BOFiP) et ceux des cabinets, et cite la source. Seul le comptable de chaque société cliente confirme ce que CLAUDE.md marque ainsi."
+  },
+  {
+    "id": "V93",
+    "titre": "PILIQI est un logiciel indépendant, sans magasin pour vous",
+    "decision": "PILIQI est un logiciel vendu à d'autres entreprises. Vous n'avez ni société ni magasin dedans. Aucune donnée ni aucun exemple lié à votre lieu de travail. L'attestation de l'éditeur va à chaque magasin client."
+  },
+  {
+    "id": "V94",
+    "decision": "Une seule migration de création par table, modifiée sur place, puis base recréée. Aucun code de reprise de données. On code comme pour la production. Cela vaut jusqu'à la mise en production. Redit le 10/10 dans votre note sous S12 : ne rien garder d'une ancienne architecture pour d'anciennes données fictives."
+  },
+  {
+    "id": "V101",
+    "decision": "Un produit ne se crée pas dans la page « Produits » : il naît d'une facture d'achat, pour rester relié à son achat (puis aussi d'un inventaire d'ouverture). Le 17/10, vous le redites et précisez qu'il se modifie ensuite dans « Produits », sauf son fournisseur et ses données d'achat."
+  },
+  {
+    "id": "V103",
+    "decision": "Votre calculateur de prix devient une option des paramètres du magasin : le magasin fixe ses conditions et le logiciel propose le prix de vente TTC des produits de ses factures d'achat."
+  },
+  {
+    "id": "V109",
+    "decision": "À chaque changement, si le code peut être réduit ou rendu plus lisible, il est réécrit proprement. On ne crée rien seulement pour éviter de supprimer l'existant. Le code doit rester lisible par vous."
+  },
+  {
+    "id": "V110",
+    "decision": "Un protocole de rigueur, prioritaire sur tout, ouvre CLAUDE.md : code complet, isolation vérifiée, tests à chaque changement, échecs que je corrige jusqu'au vert, formatage automatique du code avant chaque commit. Je donne d'abord mon avis, puis j'analyse tout le code.",
+    "statut_detail": "CLAUDE.md, « Protocole de rigueur » (commit 49c7f8a), enrichi depuis avec votre accord"
+  },
+  {
+    "id": "V111",
+    "titre": "Les règles de CLAUDE.md ne changent qu'avec votre accord",
+    "decision": "Vos décisions doivent arriver dans CLAUDE.md. Vous seul en changez les règles : je propose le texte et j'attends votre accord, sauf les textes déjà approuvés dans un fichier de décision."
+  },
+  {
+    "id": "V112",
+    "decision": "J'enchaîne seul les lots de la feuille de route, sans attendre de feu vert à chaque lot. Je ne m'arrête que pour une règle métier à trancher, un geste que vous devez faire vous-même ou un refus.",
+    "statut_detail": "README § 2 ; CLAUDE.md, « Feuille de route » (je mène le projet en autonomie)"
+  },
+  {
+    "id": "V113",
+    "decision": "Je conçois tous les écrans (pages, formulaires, tableau de bord) pour que le logiciel soit entièrement utilisable par les magasins."
+  },
+  {
+    "id": "V114",
+    "decision": "Je peux utiliser le modèle Fable pour concevoir les écrans, si c'est nécessaire. C'est une autorisation, pas une obligation."
+  },
+  {
+    "id": "V115",
+    "titre": "SUPER PDP par son API, avec l'application OAuth créée par vous",
+    "decision": "Vous retenez l'API de SUPER PDP et donnez le lien de sa documentation OpenAPI. Vous créez vous-même dans SUPER PDP l'application OAuth de PILIQI (type « php », côté serveur), avec les adresses de retour locales, et fournissez les entreprises fictives du bac à sable (Tricatel et Burger Queen). C'est la « convention retenue avec l'éditeur » de l'étape 2 de CLAUDE.md : route de retour /superpdp/retour, variables SUPERPDP_URL, SUPERPDP_CLIENT_ID, SUPERPDP_CLIENT_SECRET et SUPERPDP_REDIRECT_URI, application confidentielle, Factur-X comme format préféré."
+  },
+  {
+    "id": "V116",
+    "decision": "Toute affirmation sur la loi ou sur un fournisseur cite sa source. Une affirmation non vérifiée qui se révèle fausse se corrige aussitôt auprès de vous."
+  },
+  {
+    "id": "V118",
+    "titre": "Quand vous dites d'arrêter, tout s'arrête jusqu'à votre ordre de reprise",
+    "decision": "Un ordre d'arrêt tient jusqu'à votre ordre de reprise. Aucune course ne se relance entre les deux."
+  }
+]

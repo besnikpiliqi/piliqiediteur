@@ -1,0 +1,48 @@
+[
+ {
+  "id": "Q333",
+  "question": "Mon choix, à confirmer : le client comptoir sort de la liste « Clients », son adresse est refusée, il reste « Client comptoir » sur ses tickets et la colonne « Solde créditeur » ne le concerne pas."
+ },
+ {
+  "id": "Q338",
+  "question": "J'expliquais qu'aujourd'hui un vendeur ordinaire ne voit pas l'alerte de ses propres factures à encaisser (seul un vendeur autorisé à contre-passer la voit), que le lot S9-A la lui donnera, et j'ajoutais : « Si vous préférez qu'un vendeur voie par défaut toutes les factures à encaisser du magasin, ce serait un changement de votre règle : dites-le-moi et je l'ajoute à S9-A. »"
+ },
+ {
+  "id": "Q354",
+  "decision": "Une faille connue se corrige aussitôt par une mise à jour testée. Les mises à jour mineures passent dans un lot à chaque relance de la campagne et avant la production. Une version majeure attend votre décision."
+ },
+ {
+  "id": "Q360",
+  "decision": "Lot EX juste après TR et avant QA (mon choix, que vous m'avez laissé) ; l'export comptable FEC viendra en plus à l'étape 5."
+ },
+ {
+  "id": "Q365",
+  "decision": "Vous refusez les trois options : la TVA se calcule ligne par ligne, pour que le client retombe sur les montants en recalculant ; le PU HT exact est 8,333333 € imprimé 8,33 €."
+ },
+ {
+  "id": "Q369",
+  "question": "J'avais redit ma lecture : 2 articles = 16,66 € HT, 3,33 € de TVA, 19,99 € TTC. « Si ce n'est pas exactement ce que vous voulez, dites-le-moi avant. »"
+ },
+ {
+  "id": "Q378",
+  "decision": "Un flux de nuit audite chaque jour les paquets de la branche de travail (PHP et JavaScript) et Dependabot propose les mises à jour mineures ; ces deux fichiers sont copiés sur la branche principale par la session. Les versions majeures vous restent soumises."
+ },
+ {
+  "id": "Q379",
+  "question": "Accord pour écrire dans CLAUDE.md les textes du § 5.2 que j'ai proposés (garanties posées par le lot, étape 15 : deux comptes de base, clés, planificateur ; campagne 1 bis ; reprise des transmissions) ? (a) oui ; (b) non."
+ },
+ {
+  "id": "Q380",
+  "question": "Le PDF de 15 lignes montre que la règle des deux prix rend une TVA trop forte avec la quantité, au risque d'un refus de la facture électronique. (a) recommandé : règle actuelle ; (b) HT d'abord ; (c) garder votre règle ; (d) votre règle avec une sécurité par taux.",
+  "decision": "Toutes les ventes gardent la règle de CLAUDE.md : TTC = étiquette × quantité, HT de chaque taux depuis le TTC, réparti par cumul, TVA = différence, PU HT au millionième. La règle des deux prix du 08/11 est abandonnée. Le même PDF refait avec cette règle vous a été envoyé."
+ },
+ {
+  "id": "Q383",
+  "question": "Vous aviez demandé « pourquoi le niveau est 6 et s'il peut monter au plus strict, 10 pour Larastan et 1 pour Psalm ». Le lot QA s'est arrêté au niveau 6 de Larastan. Proposition : monter par paliers jusqu'au niveau 10 et aux règles les plus strictes, chaque erreur corrigée, sans rien masquer ; Psalm au niveau 1 seulement si vous le voulez aussi."
+ },
+ {
+  "id": "Q386",
+  "question": "Un cabinet suspendu peut-il retirer ses invitations encore ouvertes ? Aujourd'hui non ; je conseille oui, car retirer ne donne accès à rien et évite qu'un client accepte l'invitation d'un cabinet suspendu.",
+  "statut_detail": "Lot EC2 de la chaîne en cours (§ 5 bis de ec2/decision-expert-comptable-societe.md) ; j'ai ajouté les demandes de lien."
+ }
+]

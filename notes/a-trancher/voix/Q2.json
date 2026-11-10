@@ -1,0 +1,35 @@
+[
+ {
+  "id": "Q69",
+  "question": "E11 – Plusieurs magasins d'une même société (même SIREN) peuvent-ils se connecter ? (Les options ne sont pas conservées ; vous n'avez pas pris la recommandation et avez choisi : autorisé, avec une adresse de réception par établissement.)"
+ },
+ {
+  "id": "Q78",
+  "question": "G4 – Qui peut envoyer les documents par e-mail ? (Les options ne sont pas conservées ; vous avez choisi « Une autre répartition » avec une note.)"
+ },
+ {
+  "id": "Q99",
+  "decision": "Recommandation retenue : après la clôture manuelle, la caisse refuse toute vente jusqu'à minuit. Votre note : la fenêtre de confirmation prévient qu'ensuite on ne pourra plus vendre ce jour-là."
+ },
+ {
+  "id": "Q100",
+  "question": "K5 – Qui change un réglage commun à plusieurs magasins d'une même société ? (Les options ne sont pas conservées ; vous n'avez pas pris la recommandation et avez choisi : le magasin principal.)"
+ },
+ {
+  "id": "Q102",
+  "question": "K7 – La mention d'immatriculation (RCS, RM) est-elle exigée sur les factures ? (Les options ne sont pas conservées ; vous n'avez pas pris la recommandation et avez choisi de l'exiger.)"
+ },
+ {
+  "id": "Q103",
+  "question": "K8 – Peut-on modifier un devis déjà accepté par le client ? (Les options ne sont pas conservées ; vous n'avez pas pris la recommandation et avez choisi : modifiable comme un devis envoyé.)"
+ },
+ {
+  "id": "Q106",
+  "question": "Vous demandiez le meilleur moteur entre MariaDB, MySQL, PostgreSQL et SQLite (SUPER PDP utilise PostgreSQL) ; je parlais de MySQL ou MariaDB. Lequel appliquer ?",
+  "decision": "J'applique le meilleur moteur : PostgreSQL."
+ },
+ {
+  "id": "Q129",
+  "statut_detail": "Étape 15 de la feuille de route ; depuis le 07/11, un paquet utile à la sécurité s'ajoute sans attendre votre accord."
+ }
+]

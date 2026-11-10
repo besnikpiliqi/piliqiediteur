@@ -1,0 +1,98 @@
+{
+ "champs": {
+  "Q385": {
+   "question": "PCOV ne mesure que les lignes. (A) conseillé : lignes à chaque envoi, branches de tout le logiciel chaque nuit par Xdebug, seuils qui ne baissent jamais ; si cette mesure de nuit prend trop de temps ou de mémoire, je vous donne les chiffres avant de choisir autre chose. (B) branches à chaque envoi, CI bien plus lente ; (C) pas de mesure des branches.",
+   "decision": "La couverture des lignes reste mesurée à chaque envoi. Celle des branches de tout le logiciel est mesurée chaque nuit par Xdebug, par partie, avec des seuils qui ne peuvent que monter. Si cette mesure de nuit ne tient pas dans la durée ou la mémoire d'une tâche de GitHub Actions, je vous donne ses chiffres avant tout autre choix.",
+   "sources": [
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 144",
+    "a-trancher/conversation.txt:6269",
+    "qualite/decision-qualite.md:45",
+    "qualite/decision-qualite.md:45-52",
+    "audits-externes/decision-aud.md:288",
+    "a-trancher/conversation.txt:6066"
+   ],
+   "statut_detail": "Lot AUD (flux de nuit audit-quotidien.yml), puis je le copie sur main."
+  },
+  "Q337": {
+   "decision": "Oui à la mesure de la couverture du code, et plus largement à tous les outils utiles : couverture par partie avec seuils, tests de mutation, analyse statique (Larastan), audit des paquets, contrôle des requêtes, et tests au hasard à graine fixe qui vérifient des règles toujours vraies sur des milliers de combinaisons, ajoutés au même lot après votre question du même soir (« mais toi tu teste tout les options alors comment peux encore avoir des inantendu »). Aucun outil ne garantit zéro défaut.",
+   "sources": [
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 29",
+    "a-trancher/conversation.txt:957",
+    "qualite/decision-qualite.md:3",
+    "qualite/decision-qualite.md:5-20",
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 28",
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 31",
+    "qualite/decision-qualite.md:18",
+    "historique/DIRECTIVES.md:463"
+   ]
+  },
+  "Q289": {
+   "statut_detail": "Appliquée par le lot PU (CLAUDE.md, « Prix et TVA des ventes »). Remplacée en partie le 03/11 à 00 h 40 (lot TR, question T2) : le PU HT d'achat et le coût unitaire de l'inventaire d'ouverture s'affichent tels qu'enregistrés, jusqu'à six décimales ; puis le 10/11 à 00 h 18 (« exact ») : sur les documents aux professionnels et les ventes sans TVA française, le PU HT s'imprimera tel qu'enregistré (lot CALC, à appliquer). Pour les autres prix unitaires de vente montrés en lecture, elle tient.",
+   "sources": [
+    "historique/messages-editeur.md, message 260",
+    "serie8/reponses-affichage-pu.md:9",
+    "calculs/decision-calc.md:5",
+    "serie8/reponses-affichage-pu.md:8",
+    "serie8/reponses-affichage-pu.md:15",
+    "tr/decision-tr.md:9"
+   ]
+  },
+  "Q349": {
+   "statut_detail": "Lot TR, poussé ; CLAUDE.md (« Prix et TVA des ventes ») ; remplace pour les achats l'affichage au centime décidé le 25/10 (lot PU)."
+  },
+  "Q31": {
+   "decision": "Recommandation retenue : les factures portent des pénalités de 3 fois le taux d'intérêt légal, l'indemnité forfaitaire de 40 € et « pas d'escompte ». Les textes se règlent par magasin. Ce choix répond aussi à la question D14 du plan SUPER PDP : la facture électronique reprend ces mentions dans ses notes PMT, PMD et AAB.",
+   "statut_detail": "CLAUDE.md, « Documents de vente » ; notes PMT, PMD et AAB de la facture électronique à l'étape 2 (superpdp-plan.md, D14).",
+   "sources": [
+    "decisions-editeur.md:30",
+    "historique/messages-editeur.md, message 150",
+    "CLAUDE.md:168",
+    "superpdp-plan.md:1037",
+    "superpdp-plan.md:577"
+   ]
+  },
+  "Q275": {
+   "statut_detail": "CLAUDE.md, « Cabinets d'expertise comptable » ; lot EC, poussé. Précisée par votre réponse du 10/11 à 00 h 18 (« Cabinet suspendu », lot EC2 à appliquer) : le propriétaire d'un cabinet suspendu peut aussi retirer ses invitations encore ouvertes ; j'y ai ajouté ses demandes de lien."
+  },
+  "Q57": {
+   "decision": "Recommandation retenue : signature dans l'application ou à la main. Depuis le 19/10, seul le propriétaire qui a validé la société par le code du courrier signe dans l'application ; les autres, dont un propriétaire devenu propriétaire par transmission, signent à la main (rappelé le 24/10 à la relecture du lot V2).",
+   "sources": [
+    "decisions-editeur.md:92",
+    "historique/messages-editeur.md, message 150",
+    "CLAUDE.md:175",
+    "CLAUDE.md:198",
+    "serie8/decision-verification-courrier.md:24",
+    "serie8/reponses-v2.md:9"
+   ]
+  },
+  "V93": {
+   "mots": "et ce logiciel […] sera un logiciel indepandant […]",
+   "decision": "PILIQI est un logiciel vendu à d'autres entreprises. Vous n'avez ni société ni magasin dedans. Aucune donnée ni aucun exemple tiré d'une entreprise réelle. L'attestation de l'éditeur va à chaque magasin client."
+  },
+  "V235": {
+   "statut": "appliquee",
+   "statut_detail": "Fait le 10/11 : le document a trois onglets ; vos décisions et vos réponses à mes questions, relevées depuis le 02/10, sont dans « Vos décisions » et « Mes questions et vos réponses » (D58)."
+  },
+  "V199": {
+   "decision": "Je ne change pas mon propre réglage, mais fixe l'effort de chaque agent : Extra par défaut, Max pour les lots sensibles (A7, 21) ; vous n'avez plus à changer votre réglage pour la chaîne."
+  },
+  "V219": {
+   "decision": "Pas de paiement électronique sur place pour l'instant. À distance, le client paie par carte bancaire avec Apple Pay et Google Pay, par sa banque, ou par PayPal ; l'argent va directement au magasin, jamais à vous."
+  },
+  "Q56": {
+   "question": "D11 – Combien d'attestations de conformité délivrez-vous ? Recommandation : une attestation par magasin."
+  },
+  "Q64": {
+   "question": "E6 – Faut-il déclarer les paiements des particuliers pour des services ? Recommandation : les déclarer une fois la règle confirmée par l'expert-comptable de la société ; rien n'est envoyé d'ici là."
+  },
+  "Q378": {
+   "decision": "Un flux de nuit audite chaque jour les paquets de la branche de travail (PHP et JavaScript) et Dependabot propose les mises à jour mineures ; je copie ces deux fichiers sur la branche principale. Les versions majeures vous restent soumises.",
+   "statut_detail": "Lot AUD de la chaîne en cours, puis je copie les deux fichiers sur main."
+  }
+ },
+ "ajouts": {
+  "decisions": [],
+  "questions": []
+ },
+ "retraits": []
+}

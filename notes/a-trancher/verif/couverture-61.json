@@ -1,0 +1,1002 @@
+{
+ "lignes": [
+  {
+   "n": 1,
+   "titre": "PU HT imprimé exact sur les documents aux professionnels",
+   "ids": [
+    "Q384"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q384 porte le même choix (« exact »), sur les mêmes documents (factures, avoirs et devis aux professionnels, ventes sans TVA française), sans changer aucun montant ; mots exacts du message 144 (« exact, A, oui »)."
+  },
+  {
+   "n": 2,
+   "titre": "Couverture des branches mesurée chaque nuit",
+   "ids": [
+    "Q385"
+   ],
+   "couverture": "partielle",
+   "accord": true,
+   "remarque": "Q385 porte l'option A (lignes à chaque envoi, branches chaque nuit par Xdebug, seuils qui ne peuvent que monter) mais pas sa dernière clause, choisie avec elle : si la mesure de nuit prend trop de temps ou de mémoire, ses chiffres sont soumis à l'éditeur avant tout autre choix (a-trancher/conversation.txt:6066 ; qualite/decision-qualite.md:49 ; audits-externes/decision-aud.md:288). Corrections proposées sur Q385 (question, décision, sources)."
+  },
+  {
+   "n": 3,
+   "titre": "Cabinet suspendu : retrait de ses invitations ouvertes",
+   "ids": [
+    "Q386"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q386 dit la même chose ; B y ajoute le cabinet résilié et les demandes de lien (ajout de Claude signalé dans statut_detail, conforme à ec2/decision-expert-comptable-societe.md:41). Q275 (24/10 : « il peut seulement mettre fin à ses liens ») ne renvoie pas à cette précision : correction de cohérence proposée sur Q275."
+  },
+  {
+   "n": 4,
+   "titre": "Analyse statique au plus strict (D56)",
+   "ids": [
+    "Q383"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q383 (D56, « oui + Psalm 1 », message 142) : Larastan au plus strict puis Psalm au niveau 1, niveaux qui ne redescendent jamais."
+  },
+  {
+   "n": 5,
+   "titre": "Constat C7 corrigé dans le lot suivant",
+   "ids": [
+    "Q382",
+    "V232"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q382 (« fais-le plus tôt, dans le lot suivant », message 139) et V232 : message corrigé au lot PG, avec ses tests."
+  },
+  {
+   "n": 6,
+   "titre": "Tests de mutation de la caisse reportés à l'étape 3",
+   "ids": [
+    "Q381"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q381 (« caisse à l'étape 3 », message 134) : même décision."
+  },
+  {
+   "n": 7,
+   "titre": "Calcul des ventes : règle actuelle gardée (Q-CALC2)",
+   "ids": [
+    "Q380"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q380 : même décision et mêmes mots (message 131) ; la règle des deux prix (Q365 à Q371) y est marquée remplacée."
+  },
+  {
+   "n": 8,
+   "titre": "Constats des audits externes (Q-AUD1 à Q-AUD7)",
+   "ids": [
+    "Q372",
+    "Q373",
+    "Q374",
+    "Q375",
+    "Q376",
+    "Q377",
+    "Q378",
+    "Q379"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q372 à Q379 couvrent Q-AUD1 à Q-AUD7, Q-AUD5 en deux volets (« tout en a », « Q-AUD6 oui », « Q-AUD7 oui », message 123)."
+  },
+  {
+   "n": 9,
+   "titre": "Montants sans nombre à virgule flottante",
+   "ids": [
+    "V62"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "V62 porte la décision, redite le 08/11 (dernières conversions en virgule flottante retirées sans changer aucun résultat, règle automatique qui les interdit, lot CALC) et cite le message 111 du 08/11 ; ses mots sont ceux du 04/10, la phrase du 08/11 citée par A reste lisible dans cette source."
+  },
+  {
+   "n": 10,
+   "titre": "PostgreSQL seul moteur, plus de SQLite (D55)",
+   "ids": [
+    "V230"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "V230 (D55) : même décision et mêmes mots."
+  },
+  {
+   "n": 11,
+   "titre": "Fichiers reçus : PDF à code actif refusé, photos nettoyées",
+   "ids": [
+    "Q363",
+    "Q364",
+    "V228"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q363 et Q364 (« q-fi1(a) », « q-fi2 (a) », message 106), avec V228 : même décision."
+  },
+  {
+   "n": 12,
+   "titre": "Paquets utiles ajoutés sans vous demander (D54)",
+   "ids": [
+    "V227"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "V227 (D54) : même décision ; ses mots sont le début du message 102, A en cite la fin, du même message."
+  },
+  {
+   "n": 13,
+   "titre": "Achat sans pièce du fournisseur ; téléchargement du cabinet",
+   "ids": [
+    "Q361",
+    "Q362"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q361 (F1 = b) et Q362 (F2 = oui) : même décision."
+  },
+  {
+   "n": 14,
+   "titre": "Téléchargement des documents par période (E1 à E6)",
+   "ids": [
+    "Q355",
+    "Q356",
+    "Q357",
+    "Q358",
+    "Q359",
+    "Q360",
+    "V226"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q355 à Q360 (E1 à E6) et V226 : même décision (filtre « Saisie manuelle », ZIP ou CSV, autorisation cochée compte par compte par le propriétaire, page dans chaque magasin)."
+  },
+  {
+   "n": 15,
+   "titre": "Mises à jour des paquets (Q-MAJ)",
+   "ids": [
+    "Q354"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q354 (Q-MAJ) : même décision."
+  },
+  {
+   "n": 16,
+   "titre": "Police et initiales servies par PILIQI (Q-TIERS)",
+   "ids": [
+    "Q353"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q353 (Q-TIERS) : même décision."
+  },
+  {
+   "n": 17,
+   "titre": "TVA des achats recopiée, « Émettre et encaisser », ventes inchangées",
+   "ids": [
+    "Q347",
+    "Q348",
+    "Q349",
+    "Q350",
+    "Q351",
+    "Q352",
+    "V223"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q347 (C1 à C9 = non), Q348 à Q350 (T1 à T3), Q351 (R1), Q352 (R2) et V223 : même décision, même heure (message 57, 23 h 40 UTC)."
+  },
+  {
+   "n": 18,
+   "titre": "Devis : réponse du client en ligne, stock et transformation en facture",
+   "ids": [
+    "Q340",
+    "Q341",
+    "Q342",
+    "Q343",
+    "Q344",
+    "Q345",
+    "Q346",
+    "V218"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q340 (lien sécurisé, avant les paiements), Q341 (a), Q342 à Q346 (propositions 1 à 5) et V218 : même décision et mêmes mots."
+  },
+  {
+   "n": 19,
+   "titre": "Nouvelles tentatives d'un e-mail raté",
+   "ids": [
+    "Q339"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q339 : mêmes trois tentatives et même affichage sur la fiche."
+  },
+  {
+   "n": 20,
+   "titre": "Chacun voit ses propres factures à encaisser",
+   "ids": [
+    "Q338",
+    "Q300"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q338 (précision du 02/11) et Q300 : chacun voit toutes les siennes, « voir celles de toute l'équipe » jamais cochée par défaut."
+  },
+  {
+   "n": 21,
+   "titre": "Outils de qualité (lot QA)",
+   "ids": [
+    "Q337"
+   ],
+   "couverture": "partielle",
+   "accord": true,
+   "remarque": "Q337 porte la décision et les mêmes mots (message 29), mais sa liste d'outils omet les tests au hasard (graine fixe, invariants) qu'A cite et que le lot QA a ajoutés sous cette décision après la question de l'éditeur du même soir (message 31 ; qualite/decision-qualite.md:18 ; historique/DIRECTIVES.md:463). Corrections proposées sur Q337 (décision, sources)."
+  },
+  {
+   "n": 22,
+   "titre": "Tests en navigateur de chaque action et audit final complet",
+   "ids": [
+    "Q334",
+    "Q335",
+    "Q336",
+    "V213",
+    "V214",
+    "V215"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q334 à Q336 (« 1a », « 2 oui », « 3 oui ») et V213 à V215 (audit final qui repasse tous les tests) : même décision."
+  },
+  {
+   "n": 23,
+   "titre": "Client comptoir : avoir interne, bons d'avoir, hors de la liste",
+   "ids": [
+    "Q331",
+    "Q332",
+    "Q333",
+    "V210",
+    "V211"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q331 à Q333 et V210, V211 : même décision ; mots de Q332 identiques."
+  },
+  {
+   "n": 24,
+   "titre": "Durées de conservation réglables",
+   "ids": [
+    "Q330"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q330 (option c) : même décision."
+  },
+  {
+   "n": 25,
+   "titre": "Expert-comptable déclaré par la société (lot EC2)",
+   "ids": [
+    "V201",
+    "V202",
+    "V203",
+    "Q303",
+    "Q304",
+    "Q305",
+    "Q306",
+    "Q317",
+    "Q318",
+    "Q319",
+    "Q320",
+    "Q321",
+    "Q322",
+    "Q323",
+    "Q324",
+    "Q325",
+    "Q326",
+    "Q327",
+    "Q328",
+    "Q329"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "V201 (« je veux que cette option existe », message 321), V202, V203, Q303 à Q306 (quatre choix) et Q317 à Q329 (P1 à P13, « tout comme recommandé ») : même décision."
+  },
+  {
+   "n": 26,
+   "titre": "Correction de SIREN : rectificative, cabinet, choix du lot A7",
+   "ids": [
+    "Q314",
+    "Q315",
+    "Q316"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q314 (1a), Q315 (2a), Q316 (3 oui) : même décision."
+  },
+  {
+   "n": 27,
+   "titre": "Régime de la marge (biens d'occasion)",
+   "ids": [
+    "Q312",
+    "Q313",
+    "V204"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q312 (b), Q313 (a) et V204 (case sur le produit, mention et article de loi) : même décision."
+  },
+  {
+   "n": 28,
+   "titre": "Phrase de l'inscription sur les activités exonérées",
+   "ids": [
+    "Q311"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q311 : même décision ; ses mots, plus complets (« … (recommandé) »), sont exacts au message 325."
+  },
+  {
+   "n": 29,
+   "titre": "Refus d'inviter un cabinet ; délais et gestes de l'« À faire »",
+   "ids": [
+    "Q307",
+    "Q308",
+    "Q309",
+    "Q310"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q307 à Q310 (« 1a 2a 3a 4a », message 322) : même décision."
+  },
+  {
+   "n": 30,
+   "titre": "Grille faketime une seule fois, à la fin",
+   "ids": [
+    "V200"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "V200 (D50, message 316) : même décision et mêmes mots."
+  },
+  {
+   "n": 31,
+   "titre": "Règles d'écran : « ce magasin » permis, rien sur les autres",
+   "ids": [
+    "Q292",
+    "Q293"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q292 (« Abandonner cette règle ») et Q293 (« Oui, elle tient ») : même décision."
+  },
+  {
+   "n": 32,
+   "titre": "Fuseau UTC de la base fixé par les migrations",
+   "ids": [
+    "Q291",
+    "V189"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q291 (« Oui, l'ajouter ») et V189 : même décision."
+  },
+  {
+   "n": 33,
+   "titre": "Série 9 : un produit, une ligne ; « À faire » au tableau de bord",
+   "ids": [
+    "Q294",
+    "Q295",
+    "Q296",
+    "Q297",
+    "Q298",
+    "Q299",
+    "Q300",
+    "Q301",
+    "Q302",
+    "V193",
+    "V194",
+    "V195"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q294 à Q302 et V193 à V195 : même décision ; les mots cités par A sont dans V195."
+  },
+  {
+   "n": 34,
+   "titre": "Prix unitaires affichés au centime, note de calcul gardée",
+   "ids": [
+    "Q287",
+    "Q288",
+    "Q289",
+    "V186",
+    "V187",
+    "V188",
+    "Q349"
+   ],
+   "couverture": "partielle",
+   "accord": false,
+   "remarque": "Q287 à Q289 et V186 à V188 portent la décision du 25/10, Q289 avec les mots exacts du message 260 (« Non pas de décimale donc tu fait 54.17€ et non 54.1677 » ; A cite la version réécrite de serie8/reponses-affichage-pu.md:10). Désaccord : Q289 dit qu'en dehors du changement du 09/11 « elle tient », alors que la décision T2 du 02/11 (Q349 ; tr/decision-tr.md:9) l'a remplacée pour les achats (PU HT d'achat et coût de l'inventaire d'ouverture affichés tels qu'enregistrés), ce qu'A dit et que CLAUDE.md confirme. A est juste : corrections proposées sur Q289 (statut_detail, sources) et Q349 (renvoi)."
+  },
+  {
+   "n": 35,
+   "titre": "Heure locale de chaque magasin (T2, T3)",
+   "ids": [
+    "Q280",
+    "Q284",
+    "Q285",
+    "Q286"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q280 (Q1 du lot T2) et Q284 à Q286 (A, B, C du lot T3) : même décision."
+  },
+  {
+   "n": 36,
+   "titre": "Types d'activité définitifs",
+   "ids": [
+    "Q278",
+    "Q279",
+    "Q273"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q278 et Q279, mêmes mots, avec Q273 (type choisi au menu, définitif) : même décision."
+  },
+  {
+   "n": 37,
+   "titre": "Espace des cabinets d'expertise comptable",
+   "ids": [
+    "Q259",
+    "Q260",
+    "Q261",
+    "Q262",
+    "Q263",
+    "Q264",
+    "Q269",
+    "Q270",
+    "Q271",
+    "Q272",
+    "Q273",
+    "Q274",
+    "Q275",
+    "Q276",
+    "Q277"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q259 à Q264 (19/10, « f1, g2, h1, i1, j1,k2 ») et Q269 à Q277 (24/10) : même décision ; la phrase du 24/10 citée par A est dans les mots de Q271."
+  },
+  {
+   "n": 38,
+   "titre": "Points laissés par la relecture du lot V2",
+   "ids": [
+    "Q265",
+    "Q266",
+    "Q267",
+    "Q268",
+    "Q57"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q265 à Q268 portent les quatre premiers points ; le cinquième (signature à la main après une transmission, serie8/reponses-v2.md:9, rappel d'un choix déjà écrit dans CLAUDE.md) est porté par Q57 (« les autres signent à la main »). Q268 cite reponses-v2.md:9 sans en dire le contenu : précision facultative proposée sur Q57."
+  },
+  {
+   "n": 39,
+   "titre": "Vérification des sociétés par courrier recommandé",
+   "ids": [
+    "Q253",
+    "Q254",
+    "Q255",
+    "Q256",
+    "Q257",
+    "V176",
+    "V177",
+    "V178",
+    "V179",
+    "V180"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q253 à Q257 et V176 à V180 : même décision ; V180 a les mots exacts du message 229, A cite la version réécrite de serie8/decision-verification-courrier.md:9."
+  },
+  {
+   "n": 40,
+   "titre": "Comptes : mot de passe égal à l'identifiant, poste reconnu ; avoirs et devis",
+   "ids": [
+    "Q247",
+    "Q249",
+    "Q250",
+    "Q251",
+    "Q252"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q247 et Q249 (précisions 3 et 5), Q250 (Q-V1), Q251 (Q-V2), Q252 (Q-A) : même décision."
+  },
+  {
+   "n": 41,
+   "titre": "Série 8 : un calcul pour tous, demi-centime au supérieur",
+   "ids": [
+    "Q209",
+    "Q210"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q209 (Q1-a, « Oui, pour tous ») et Q210 (Q2) : même décision."
+  },
+  {
+   "n": 42,
+   "titre": "Série 8 : identifiant de connexion ; administrateur qui vend si coché",
+   "ids": [
+    "Q218",
+    "Q219",
+    "Q214",
+    "V145",
+    "V161"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q218 (Q4-a), Q219 (Q4-b), Q214 (Q3-a), V145 (mots albanais, marquée remplacée) et V161 : même décision."
+  },
+  {
+   "n": 43,
+   "titre": "Série 8 : paiements, avoirs et crédit",
+   "ids": [
+    "Q232",
+    "Q234",
+    "Q235",
+    "Q238",
+    "V140",
+    "V163"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q232 (Q7, mêmes mots), Q234 (Q13), Q235 (Q14), Q238 (Q10-b), V140, V163 : même décision."
+  },
+  {
+   "n": 44,
+   "titre": "Série 8 : magasins cédés et « Les caisses » de la société",
+   "ids": [
+    "Q243",
+    "Q244",
+    "Q217"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q243 (M1), Q244 (M2), Q217 (P7) : même décision."
+  },
+  {
+   "n": 45,
+   "titre": "Charges : arrondis, magasin fermé, avoir lié, pas de charges récurrentes",
+   "ids": [
+    "Q201",
+    "Q202",
+    "Q203",
+    "Q204"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q201 à Q204 : même décision et mêmes mots."
+  },
+  {
+   "n": 46,
+   "titre": "Moteur de TVA : place, régime, questions (TVA1 à TVA7)",
+   "ids": [
+    "Q177",
+    "Q178",
+    "Q179",
+    "Q180",
+    "Q181",
+    "Q182",
+    "Q183"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q177 à Q183 (TVA1 à TVA7, option a) : même décision."
+  },
+  {
+   "n": 47,
+   "titre": "Moteur de TVA : OSS, cartes cadeaux, franchise, achats (TVA8 à TVA16)",
+   "ids": [
+    "Q184",
+    "Q185",
+    "Q186",
+    "Q187",
+    "Q188",
+    "Q189",
+    "Q190",
+    "Q191",
+    "Q192"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q184 à Q192 : même décision. « Ne jamais vendre de cartes cadeaux dans PILIQI. » est le libellé de l'option c, pas une note de l'éditeur (tva/reponses-serie7.md:3 : « Aucune note libre. ») : B laisse les mots vides, à juste titre."
+  },
+  {
+   "n": 48,
+   "titre": "Huit corrections du moteur de TVA (O1 à O8)",
+   "ids": [
+    "Q193",
+    "Q194",
+    "Q195",
+    "Q196",
+    "Q197",
+    "Q198",
+    "Q199",
+    "Q200"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q193 à Q200 (O1 à O8) : même décision ; « Je les accepte toutes. » est le libellé de l'option a (tva/reponses-serie7.md:54), d'où des mots vides dans B."
+  },
+  {
+   "n": 49,
+   "titre": "Espace « Charges du magasin »",
+   "ids": [
+    "Q166",
+    "Q167",
+    "Q168",
+    "V137"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q166 à Q168 et V137 : même décision et mêmes mots."
+  },
+  {
+   "n": 50,
+   "titre": "Facture demandée par un particulier, ticket transformé en facture",
+   "ids": [
+    "Q175",
+    "Q176",
+    "V124",
+    "V125"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q175, Q176 (compléments 13 et 14), V124, V125 (15 et 16) : même décision."
+  },
+  {
+   "n": 51,
+   "titre": "SUPER PDP regroupe et transmet les déclarations",
+   "ids": [
+    "V123"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "V123 (message 167) : même décision."
+  },
+  {
+   "n": 52,
+   "titre": "Plusieurs responsables par magasin ; autorisations propres à PILIQI",
+   "ids": [
+    "Q152",
+    "Q153",
+    "Q156",
+    "Q144",
+    "Q122",
+    "V132",
+    "V133",
+    "V134",
+    "V135"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q152, Q153, Q156 (série 6), Q144 (Spatie, choix laissé à Claude, mêmes mots), Q122 (S12) et V132 à V135 : même décision."
+  },
+  {
+   "n": 53,
+   "titre": "Série 5 : prix d'une ligne, une caisse à la fois, audit, régularisation",
+   "ids": [
+    "Q145",
+    "Q146",
+    "Q147",
+    "Q148",
+    "Q149",
+    "Q150",
+    "Q151"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q145 à Q151 (option a) : même décision."
+  },
+  {
+   "n": 54,
+   "titre": "Série 4 : adresses, recherches, références, devis",
+   "ids": [
+    "Q130",
+    "Q131"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q130 (marquée remplacée par D55) et Q131 : même décision ; « Je les confirme toutes. » est le libellé de l'option a (societe/reponses-serie4.md:243)."
+  },
+  {
+   "n": 55,
+   "titre": "Campagne de tests (T1 à T6)",
+   "ids": [
+    "Q132",
+    "Q133",
+    "Q134",
+    "Q135",
+    "Q136",
+    "Q137"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q132 à Q137 (T1 à T6) : même décision."
+  },
+  {
+   "n": 56,
+   "titre": "Arbitrages A et B : comptes, ventes et paiements",
+   "ids": [
+    "Q21",
+    "Q22",
+    "Q23",
+    "Q24",
+    "Q25",
+    "Q26",
+    "Q27",
+    "Q28",
+    "Q29",
+    "Q30",
+    "Q31",
+    "Q32",
+    "Q33",
+    "Q34",
+    "Q35",
+    "Q36",
+    "Q37",
+    "Q38",
+    "Q39",
+    "Q40",
+    "Q41"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q21 à Q41 (A1, A2, B1 à B19) : même décision, mêmes notes de l'éditeur (B1, B2) ; A1 marquée remplacée."
+  },
+  {
+   "n": 57,
+   "titre": "Mentions entre professionnels, aussi dans la facture électronique (B9)",
+   "ids": [
+    "Q31"
+   ],
+   "couverture": "partielle",
+   "accord": true,
+   "remarque": "Q31 porte les mentions et leur réglage par magasin, mais pas ce qu'A ajoute : ce choix répond aussi à la question D14 du plan SUPER PDP, la facture électronique reprenant ces mentions dans ses notes PMT, PMD et AAB (decisions-editeur.md:30, « (Audit C18 · SUPER PDP D14) » ; superpdp-plan.md:1037 et 577). Corrections proposées sur Q31 (décision, statut_detail, sources)."
+  },
+  {
+   "n": 58,
+   "titre": "Arbitrages C : achats et stock",
+   "ids": [
+    "Q42",
+    "Q43",
+    "Q44",
+    "Q45"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q42 à Q45 (C1 à C4) : même décision ; les mots de Q44 sont la note entière, A en cite le début."
+  },
+  {
+   "n": 59,
+   "titre": "Arbitrages D : caisse sécurisée",
+   "ids": [
+    "Q46",
+    "Q47",
+    "Q48",
+    "Q49",
+    "Q50",
+    "Q51",
+    "Q52",
+    "Q53",
+    "Q54",
+    "Q55",
+    "Q56",
+    "Q57",
+    "Q58",
+    "Q95",
+    "Q99"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q46 à Q58 (D1 à D13), Q95 (J8) et Q99 (K4) : même décision et mêmes notes (D2, D3)."
+  },
+  {
+   "n": 60,
+   "titre": "Arbitrages E : facture électronique SUPER PDP",
+   "ids": [
+    "Q59",
+    "Q60",
+    "Q61",
+    "Q62",
+    "Q63",
+    "Q64",
+    "Q65",
+    "Q66",
+    "Q67",
+    "Q68",
+    "Q69",
+    "Q70",
+    "Q71",
+    "Q72",
+    "Q73"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q59 à Q73 (E1 à E15) : même décision ; E1, E10 et E11 marquées remplacées dans B comme dans A."
+  },
+  {
+   "n": 61,
+   "titre": "Arbitrages F à K : outillage, e-mails, identité, international, magasins",
+   "ids": [
+    "Q74",
+    "Q75",
+    "Q76",
+    "Q77",
+    "Q78",
+    "Q79",
+    "Q80",
+    "Q81",
+    "Q82",
+    "Q83",
+    "Q84",
+    "Q85",
+    "Q86",
+    "Q87",
+    "Q88",
+    "Q89",
+    "Q90",
+    "Q91",
+    "Q92",
+    "Q93",
+    "Q94",
+    "Q95",
+    "Q96",
+    "Q97",
+    "Q98",
+    "Q99",
+    "Q100",
+    "Q101",
+    "Q102",
+    "Q103",
+    "Q104",
+    "Q105"
+   ],
+   "couverture": "entiere",
+   "accord": true,
+   "remarque": "Q74 à Q105 (F1, G1 à G5, H1 à H4, I1 à I4, J1 à J8, K1 à K10) : même décision, note G4 identique ; B marque aussi K9 remplacée (compléments du 11/10, point 1), ce qu'A ne dit pas."
+  }
+ ],
+ "ajouts": [],
+ "corrections": [
+  {
+   "id": "Q385",
+   "champ": "question",
+   "texte": "PCOV ne mesure que les lignes. (A) conseillé : lignes à chaque envoi, branches de tout le logiciel chaque nuit par Xdebug, seuils qui ne baissent jamais, chiffres soumis à l'éditeur avant tout autre choix si la mesure de nuit prend trop de temps ou de mémoire ; (B) branches à chaque envoi, CI bien plus lente ; (C) pas de mesure des branches.",
+   "raison": "Ligne 2 : l'option A posée à l'éditeur portait cette clause (a-trancher/conversation.txt:6066 : « Si cette mesure de nuit prend trop de temps ou de mémoire, je vous donnerai les chiffres avant de choisir autre chose. »)."
+  },
+  {
+   "id": "Q385",
+   "champ": "decision",
+   "texte": "La couverture des lignes reste mesurée à chaque envoi. Celle des branches de tout le logiciel est mesurée chaque nuit par Xdebug, par partie, avec des seuils qui ne peuvent que monter. Si cette mesure de nuit ne tient pas dans la durée ou la mémoire d'une tâche de GitHub Actions, ses chiffres sont soumis à l'éditeur avant tout autre choix.",
+   "raison": "Ligne 2 : clause de l'option A choisie (« A », message 144), reprise par qualite/decision-qualite.md:49 et audits-externes/decision-aud.md:288, absente de B."
+  },
+  {
+   "id": "Q385",
+   "champ": "sources",
+   "texte": [
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 144",
+    "a-trancher/conversation.txt:6269",
+    "qualite/decision-qualite.md:45",
+    "qualite/decision-qualite.md:45-52",
+    "audits-externes/decision-aud.md:288",
+    "a-trancher/conversation.txt:6066"
+   ],
+   "raison": "Ligne 2 : liste complète (valeur de liste), avec la ligne de la conversation où l'option A est posée."
+  },
+  {
+   "id": "Q337",
+   "champ": "decision",
+   "texte": "Oui à la mesure de la couverture du code, et plus largement à tous les outils utiles : couverture par partie avec seuils, tests de mutation, analyse statique (Larastan), audit des paquets, contrôle des requêtes, et tests au hasard à graine fixe qui vérifient des règles toujours vraies sur des milliers de combinaisons, ajoutés au même lot après sa question du même soir (« mais toi tu teste tout les options alors comment peux encore avoir des inantendu »). Aucun outil ne garantit zéro défaut.",
+   "raison": "Ligne 21 : les tests au hasard font partie des outils ajoutés au lot QA sous cette décision (qualite/decision-qualite.md:18, point 5 bis ; historique/DIRECTIVES.md:463) ; mots de l'éditeur exacts, pilotage-reprise/notes/historique/messages-editeur.md, message 31 (ligne 175)."
+  },
+  {
+   "id": "Q337",
+   "champ": "sources",
+   "texte": [
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 29",
+    "a-trancher/conversation.txt:957",
+    "qualite/decision-qualite.md:3",
+    "qualite/decision-qualite.md:5-20",
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 28",
+    "pilotage-reprise/notes/historique/messages-editeur.md, message 31",
+    "qualite/decision-qualite.md:18",
+    "historique/DIRECTIVES.md:463"
+   ],
+   "raison": "Ligne 21 : liste complète (valeur de liste), avec la question de l'éditeur et le point 5 bis du cahier du lot QA."
+  },
+  {
+   "id": "Q289",
+   "champ": "statut_detail",
+   "texte": "Appliquée par le lot PU (CLAUDE.md, « Prix et TVA des ventes »). Remplacée en partie le 02/11 à 23 h 40 (T2, lot TR, Q349) : le PU HT d'achat et le coût unitaire de l'inventaire d'ouverture s'affichent tels qu'enregistrés, jusqu'à six décimales ; puis le 09/11 à 23 h 18 (« exact ») : sur les documents aux professionnels et les ventes sans TVA française, le PU HT s'imprimera tel qu'enregistré (lot CALC, à appliquer). Pour les autres prix unitaires de vente montrés en lecture, elle tient.",
+   "raison": "Ligne 34 : la règle du 25/10 valait pour les ventes comme pour les achats (serie8/reponses-affichage-pu.md:15) ; T2 l'a remplacée pour les achats (tr/decision-tr.md:9 : « s'affichent tels qu'ils sont enregistrés »), comme le dit CLAUDE.md (« Prix et TVA des ventes ») ; « Ailleurs, elle tient » était faux pour les achats."
+  },
+  {
+   "id": "Q289",
+   "champ": "sources",
+   "texte": [
+    "historique/messages-editeur.md, message 260",
+    "serie8/reponses-affichage-pu.md:9",
+    "calculs/decision-calc.md:5",
+    "serie8/reponses-affichage-pu.md:8",
+    "serie8/reponses-affichage-pu.md:15",
+    "tr/decision-tr.md:9"
+   ],
+   "raison": "Ligne 34 : liste complète (valeur de liste), avec la portée de la règle du 25/10 et la décision T2 qui la remplace pour les achats."
+  },
+  {
+   "id": "Q349",
+   "champ": "statut_detail",
+   "texte": "lot TR, poussé ; CLAUDE.md (« Prix et TVA des ventes ») ; remplace pour les achats l'affichage au centime décidé le 25/10 (Q289).",
+   "raison": "Ligne 34 : renvoi réciproque avec Q289."
+  },
+  {
+   "id": "Q31",
+   "champ": "decision",
+   "texte": "Recommandation retenue : les factures portent des pénalités de 3 fois le taux d'intérêt légal, l'indemnité forfaitaire de 40 € et « pas d'escompte ». Les textes se règlent par magasin. Ce choix répond aussi à la question D14 du plan SUPER PDP : la facture électronique reprend ces mentions dans ses notes PMT, PMD et AAB.",
+   "raison": "Ligne 57 : B9 était posée pour l'audit et pour SUPER PDP (decisions-editeur.md:30 : « (Audit C18 · SUPER PDP D14) ») ; superpdp-plan.md:1037 (D14, notes PMT, PMD, AAB, « quels textes, et sont-ils réglables par magasin ? ») et :577 (« notes PMT, PMD et AAB selon D14 »)."
+  },
+  {
+   "id": "Q31",
+   "champ": "statut_detail",
+   "texte": "CLAUDE.md, « Documents de vente » ; notes PMT, PMD et AAB de la facture électronique à l'étape 2 (superpdp-plan.md, D14).",
+   "raison": "Ligne 57 : la part de la facture électronique reste à faire à l'étape 2."
+  },
+  {
+   "id": "Q31",
+   "champ": "sources",
+   "texte": [
+    "decisions-editeur.md:30",
+    "historique/messages-editeur.md, message 150",
+    "CLAUDE.md:168",
+    "superpdp-plan.md:1037",
+    "superpdp-plan.md:577"
+   ],
+   "raison": "Ligne 57 : liste complète (valeur de liste), avec la question D14 du plan SUPER PDP."
+  },
+  {
+   "id": "Q275",
+   "champ": "statut_detail",
+   "texte": "CLAUDE.md, Cabinets d'expertise comptable ; lot EC, poussé. Précisée le 09/11 à 23 h 18 (Q386, lot EC2 à appliquer) : son propriétaire peut aussi retirer ses invitations et ses demandes de lien encore ouvertes.",
+   "raison": "Ligne 3, cohérence (la ligne est couverte par Q386) : sans ce renvoi, Q275 (« il peut seulement mettre fin à ses liens ») contredit Q386 ; ec2/decision-expert-comptable-societe.md:38 et :41."
+  },
+  {
+   "id": "Q57",
+   "champ": "decision",
+   "texte": "Recommandation retenue : signature dans l'application ou à la main. Depuis le 19/10, seul le propriétaire qui a validé la société par le code du courrier signe dans l'application ; les autres, dont un propriétaire devenu propriétaire par transmission, signent à la main (rappelé le 24/10 à la relecture du lot V2).",
+   "raison": "Ligne 38, précision facultative (la ligne est couverte) : serie8/decision-verification-courrier.md:24 et serie8/reponses-v2.md:9 le disent en toutes lettres."
+  },
+  {
+   "id": "Q57",
+   "champ": "sources",
+   "texte": [
+    "decisions-editeur.md:92",
+    "historique/messages-editeur.md, message 150",
+    "CLAUDE.md:175",
+    "CLAUDE.md:198",
+    "serie8/decision-verification-courrier.md:24",
+    "serie8/reponses-v2.md:9"
+   ],
+   "raison": "Ligne 38 : liste complète (valeur de liste), avec les deux sources du cas de la transmission."
+  }
+ ]
+}

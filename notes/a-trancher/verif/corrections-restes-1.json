@@ -1,0 +1,23 @@
+{
+  "lus": 250,
+  "corrections": [
+    {
+      "id": "V199",
+      "champ": "decision",
+      "texte": "Je ne change pas mon propre réglage, mais fixe l'effort de chaque agent : Extra par défaut, Max pour les lots sensibles (A7, 21) ; vous n'avez plus à changer votre réglage pour la chaîne.",
+      "raison": "« La session » y désigne Claude, qui agit : le titre dit déjà « Je règle moi-même l'effort des agents », la réponse vise votre « tu peux basculer toi meme », et l'autre relevé de la même décision (r5-075) écrit « Claude ne change pas le réglage de la session ». « son propre réglage » est donc le mien : « Je ne change pas mon propre réglage » ; « fixe » garde la même forme avec « je », et rien d'autre ne change."
+    },
+    {
+      "id": "V219",
+      "champ": "decision",
+      "texte": "Pas de paiement électronique sur place pour l'instant. À distance, le client paie par carte bancaire avec Apple Pay et Google Pay, par sa banque, ou par PayPal ; l'argent va directement au magasin, jamais à vous.",
+      "raison": "« l'éditeur » y désigne votre personne (votre entreprise), qui ne doit jamais recevoir l'argent des clients, et non un rôle ni une chose du logiciel. Ma réponse du 02/11 à 08 h 48 (heure UTC) disait d'ailleurs « l'argent doit aller directement au magasin, jamais à vous » : si l'argent passait par vous, il vous faudrait un agrément d'établissement de paiement."
+    },
+    {
+      "id": "Q56",
+      "champ": "question",
+      "texte": "D11 – Combien d'attestations de conformité délivrez-vous ? Recommandation : une attestation par magasin.",
+      "raison": "La question vous était posée, sur ce que vous délivrez vous-même en tant qu'éditeur : c'est vous qui agissez et décidez (« l'attestation engage l'éditeur, donc vous », dans ma réponse ; « je donne pas l'attestation à moi meme », dans vos mots repris en V93). Ce n'est pas le nom d'une chose du logiciel. L'« attestation de l'éditeur » du statut_detail de Q56, nom de cette chose, reste telle quelle."
+    }
+  ]
+}

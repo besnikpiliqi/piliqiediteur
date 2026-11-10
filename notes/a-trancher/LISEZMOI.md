@@ -27,9 +27,35 @@
   T97, T72, T93, T78) ; Juridique et administration (T30 à T40) ; Vos décisions de produit (T41 à T86 sans T72 ni T78) ; Technique et mise en
   production (T94, T95, T96, T102, T103) ; « Déjà tranché » (61 lignes, à remplacer par un renvoi quand les deux onglets suivants sont remplis).
   `generer-onglet1.py registre.json <dossier> generer.py` refait les sections réorganisées.
-- Onglet « Vos décisions » (fichier `a79e1f22-bf92`, corps `173dd30d-9caf`, bloc en attente `mb4cajnjtng.39`) : toutes ses décisions de lui-même
-  depuis le 02/10/2026 (date, ses mots, où chacune en est).
-- Onglet « Mes questions et vos réponses » (fichier `d0abfb7f-42fd`, corps `78905e66-067c`, bloc en attente `mb4cajnjtng.30`) : chaque question
-  de Claude, avec sa réponse, sa date et la décision.
-- Les deux derniers se remplissent depuis le workflow `wf_b897639c-407` (tâche `w8h3wdo7c`, lancé à 18 h 22 UTC ; relevés et résultat final
-  dans `scratchpad/a-trancher/decisions/`, résultat final `final.json` : `decisions` V1…, `questions` Q1…).
+- Onglet « Vos décisions » (fichier `a79e1f22-bf92`, corps `173dd30d-9caf`) : texte d'entrée (lien vers l'onglet 3, légende,
+  compte), « Novembre 2026 » puis « Octobre 2026 », une semaine (du lundi au dimanche, coupée au mois) par sous-titre de niveau 3,
+  la plus récente en haut ; tableau Date (heure de Paris) | Décision (titre en gras, texte, code D… de DIRECTIVES.md) | Vos mots
+  (citation exacte, […] pour une coupe, / pour un retour à la ligne) | Où elle en est (Appliquée, À appliquer, Remplacée, Abandonnée,
+  À vérifier). 235 décisions, V1 à V235 dans `onglets23/releve-voix.json` (« decisions »).
+- Onglet « Mes questions et vos réponses » (fichier `d0abfb7f-42fd`, corps `78905e66-067c`) : texte d'entrée (lien vers l'onglet 2),
+  « Novembre 2026 » puis « Octobre 2026 », une série de questions par sous-titre de niveau 3, la plus récente en haut, avec la date
+  des réponses sous le titre (ou après chaque réponse quand la série couvre plusieurs jours) ; dans une série, l'ordre des questions ;
+  tableau N° (code de la question, ou rang dans la série) | Ma question | Votre réponse (citation exacte, ou « Choix coché, sans mots
+  écrits. ») | Décision | Où elle en est. 386 réponses, Q1 à Q386 dans `onglets23/releve-voix.json` (« questions »), 61 séries.
+- Fabrication, le 10/11 au soir : relevé `wf_b897639c-407` (`decisions/final.json` : 9 lecteurs, 2 fusions, contrôles d'exhaustivité
+  et de justesse, finalisation) ; réécriture à « vous » (l'éditeur) et à « je » (Claude) par `wf_94605ee2-3e2` (`voix/*.json`, seuls
+  les champs changés) ; contrôles `wf_2fc3263f-8ab` (`verif/couverture-61.json` : les 61 lignes « Déjà tranché » de l'onglet 1 sont
+  toutes dans les onglets 2 et 3, 4 complétées ; vie privée : aucune donnée de tiers ni secret, V93 coupé car il parlait du lieu de
+  travail de l'éditeur) ; relecture de la réécriture `wf_65ab60d2-565` (`verif/corrections-*.json`) ; corrections et compléments dans
+  `surcharges.json` ; heures UTC passées en heure de Paris par la table `HEURES_DE_PARIS` de `generer-onglets23.py`.
+- `python3 -I generer-onglets23.py decisions/final.json voix <dossier>` refait `onglets23/` (un fichier Markdown par bloc, `plan.json`,
+  `releve-voix.json`) ; `groupes-figes.json` garde le partage des séries entre les blocs de l'onglet 3. Le remplissage s'est fait par
+  `remplir-onglets23.js` (un agent par bloc en attente, workflow `wf_5b76763a-43a`), puis `comparer-export.py <export> <fichiers.md>`
+  compare l'export Markdown de chaque onglet avec les fichiers envoyés (cellule par cellule, échappements retirés).
+- Plafond du document : 32 768 octets de texte par écriture (refus « row_too_large », rien n'est écrit). Les six blocs plus gros
+  (o3-01, o3-04, o3-05, o3-06, o2-…-10-05, o2-…-09-28) ont été coupés en deux par `decouper-blocs.py <dossier> <clés>`
+  (`<clé>-p1.md`, `<clé>-p2.md` : la semaine par jours entiers, l'onglet 3 entre deux séries, la série « Arbitrages du 09/10 »
+  entre deux lignes sous des titres de niveau 4 « Questions A1 à H1 » et « Questions H2 à K10 ») ; leurs emplacements ont été
+  posés à la place des blocs refusés, puis remplis par `remplir-onglets23.js` avec `remplir-args-2.json` (`wf_6f40fd54-734`).
+  Premier remplissage : `remplir-args.json` (`wf_5b76763a-43a`, arrêté après les refus ; 8 blocs écrits).
+- Tenue à jour : une décision de lui-même → une ligne en haut du premier tableau de « Vos décisions » (nouveau sous-titre pour une
+  nouvelle semaine, nouveau titre de niveau 2 pour un nouveau mois), avec son numéro suivant (V236…) dans `onglets23/releve-voix.json` ;
+  une réponse à un point T… de l'onglet 1 ou à une question → « Mes questions et vos réponses » (nouvelle série en haut du mois, ou
+  ligne ajoutée à la série du jour), avec son numéro suivant (Q387…) ; la ligne du point T… quitte l'onglet 1 ; la décision va aussi
+  dans `historique/DIRECTIVES.md` et, pour un point T…, dans `registre.json`. Une décision qui en change une autre : la nouvelle en haut,
+  l'ancienne passe à « Remplacée », avec la date et ce qui la remplace.

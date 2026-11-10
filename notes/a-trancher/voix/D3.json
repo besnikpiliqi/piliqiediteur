@@ -1,0 +1,20 @@
+[
+ {
+  "id": "V131",
+  "titre": "Pas de formulation ambiguë dans mes questions",
+  "decision": "Je n'emploie pas de formulation ambiguë : je précise de quelle situation je parle (par exemple compte jamais activé ou jamais connecté) avant de demander une décision."
+ },
+ {
+  "id": "V138",
+  "decision": "Le 12/10, vous demandez de commencer avec le modèle Fable, que vous aviez autorisé le 08/10 pour concevoir les écrans."
+ },
+ {
+  "id": "V139",
+  "decision": "Tout ce que j'écris (logiciel, documents, réponses) est en français, même quand vous écrivez en albanais. Redit le 26/10 : « Mais tu prends ca en tant que langue française et pas albanais »."
+ },
+ {
+  "id": "V148",
+  "decision": "Plus tard, PILIQI lira une facture d'achat (PDF ou Excel) pour en trouver les produits et les entrer en stock. Vous donnerez vos règles quand je vous les demanderai.",
+  "statut_detail": "plus tard, après vos règles (questions prêtes, plan-serie8 § 4.2) ; les factures reçues de SUPER PDP en brouillon à l'étape 2"
+ }
+]

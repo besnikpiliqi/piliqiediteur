@@ -1,12 +1,14 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 09/11/2026 à 23:22 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 10/11/2026 à 00:35 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `6c7b3d1`. Commits locaux pas encore poussés :
 
 ```
+50d39d1 Dit vrai sur les ventes dans l'avis de l'identité incomplète (constat C7)
+ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 7f4d7ae Résout le verrou de Psalm pour PHP 8.3.16 (CI, analyse des flux)
 ```
 
@@ -38,66 +40,33 @@ f9b669c Relecture du lot A7b des suites du lot A7
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M .github/workflows/tests.yml
- M .gitignore
- M CLAUDE.md
  M README.md
- M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Domain/Achats/Models/TauxAvoirFournisseur.php
- M app/Domain/Achats/Models/TauxFactureAchat.php
- M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
- M app/Domain/Cabinets/Support/GardesDesCabinets.php
- M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
- M app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php
- M app/Domain/Calendrier/Connexions/ConnexionPostgres.php
- D app/Domain/Calendrier/Connexions/ConnexionSqlite.php
- M app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
- D app/Domain/Calendrier/Connexions/LieLesDatesEnUtc.php
+ M app/Console/Commands/MarquerFacturesEnRetard.php
+ M app/Domain/Cabinets/Models/InvitationCabinet.php
+ M app/Domain/Cabinets/Models/LienCabinet.php
+ M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
+ M app/Domain/Catalogue/Actions/TrouverOuCreerServiceAction.php
  M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Catalogue/Models/Service.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/AjouterPreuveOperationAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Exceptions/IdentiteDeLaSocieteIncompleteException.php
- M app/Domain/Facturation/Services/DocumentNumberingService.php
- M app/Domain/Facturation/Services/PiedDePage.php
- M app/Domain/Facturation/Support/GardesDeLaVente.php
- D app/Domain/Recherche/ConnecteurSqlite.php
- M app/Domain/Recherche/RechercheSansAccents.php
+ M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
+ M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
+ M app/Domain/Tenancy/Actions/RouvrirMagasinAction.php
+ M app/Domain/Tenancy/Models/Magasin.php
  M app/Domain/Tenancy/Models/Societe.php
- M app/Domain/Tenancy/Support/GardesDesDroits.php
- M app/Domain/Tenancy/Support/GardesDesIdentifiants.php
- M app/Domain/Tenancy/Support/GardesDesTypesDActivite.php
- M app/Filament/App/Livewire/SelecteurDeClients.php
- M app/Filament/Societe/Pages/IdentiteSociete.php
- M app/Providers/AppServiceProvider.php
- M config/database.php
- M config/queue.php
- D database/.gitignore
- M database/migrations/0000_00_00_000000_fixer_le_fuseau_par_defaut_de_la_base.php
- M database/migrations/2026_10_02_095000_create_referentiel_autorisations_magasin_table.php
- M database/migrations/2026_10_02_100001_create_fonction_sans_casse_ni_accents.php
- M database/migrations/2026_10_02_100005_create_affectations_table.php
- M database/migrations/2026_10_02_200001_create_clients_table.php
- M database/migrations/2026_10_02_200003_create_produits_table.php
- M database/migrations/2026_10_02_200005_create_services_table.php
- M database/migrations/2026_10_09_100001_create_clotures_caisse_personnelles_table.php
- M database/migrations/2026_10_14_100002_create_enregistrements_fiscaux_table.php
- M phpunit.xml
- M resources/views/filament/societe/pages/tableau-de-bord.blade.php
- M tests/Feature/Achats/FactureAchatArchivageConcurrenceTest.php
- M tests/Feature/Achats/FactureAchatConcurrenceTest.php
- M tests/Feature/Achats/FicheProduitPendantUneFactureAchatConcurrenceTest.php
- M tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
- M tests/Feature/Achats/TvaDuFournisseurConcurrenceTest.php
+ M app/Domain/Tenancy/Services/GenerateurDIdentifiants.php
+ M tests/Feature/Authorization/GardesDesCabinetsEnBaseTest.php
  M tests/Feature/Authorization/GardesDesDroitsEnBaseConcurrenceTest.php
  M tests/Feature/Authorization/GardesDesDroitsEnBaseTest.php
  M tests/Feature/Authorization/GardesDesTypesDActiviteTest.php
- M tests/Feature/Authorization/LecteurDesDroitsTest.php
- M tests/Feature/Authorization/PorteeDesDroitsTest.php
- M tests/Feature/Authorization/ProprietaireSansVenteConcurrenceTest.php
- M tests/Feature/Cabinets/AutorisationsDuCabinetTest.php
+ M tests/Feature/CaisseSecurisee/RegistreFiscalTest.php
+ M tests/Feature/Calendrier/ReglesDuCalendrierTest.php
+ M tests/Feature/Catalogue/TrouverOuCreerServiceActionTest.php
+ M tests/Feature/Editeur/LibererSiretTest.php
+ M tests/Feature/Facturation/EmettreFactureActionTest.php
+ M tests/Feature/RetourArriereDesMigrationsTest.php
+ M tests/Feature/Societe/CreerEtablissementActionTest.php
+ M tests/Feature/Societe/IdentifiantsTest.php
+ M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
+?? tests/Feature/CaisseSecurisee/ProtectionDesTablesTest.php
 ```
 
 ## Dernière course de la chaîne

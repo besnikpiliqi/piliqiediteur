@@ -1502,3 +1502,51 @@ tu peux lire ce lien https://diag-invoice.fr/blog/rejet-br-co-14-total-tva-somme
 
 exact, A, oui
 
+## 145. 2026-11-09 23:25 UTC
+
+"PS C:\xampp\htdocs\piliqiediteur-v2> php artisan db:show      
+
+
+
+  PostgreSQL ....................................................................................... 17.11 (Debian 17.11-1.pgdg13+2)  
+
+  Connection ................................................................................................................. pgsql  
+
+  Database ...................................................................................................... piliqi_audit_tests  
+
+  Host ................................................................................................................... 127.0.0.1  
+
+  Port ........................................................................................................................ 5432  
+
+  Username .................................................................................................................. piliqi  
+
+  URL ..............................................................................................................................  
+
+  Open Connections .............................................................................................................. 18  
+
+  Tables ........................................................................................................................ 78  
+
+  Total Size ............................................................................................................... 2.41 MB  
+
+" mais migrate:fresh ne fait rien donc ne supprime pas les donnes car je reste toujours connecter malgre
+
+## 146. 2026-11-09 23:27 UTC
+
+ah il utilise piliqi_audit_tests mais non pour aller sur mon logiciel je veut utiliser la base normal comme en production
+
+## 147. 2026-11-09 23:29 UTC
+
+j ai deja fait comme ca "DB_HOST=127.0.0.1
+
+DB_PORT=5432
+
+DB_DATABASE=piliqi_editeur
+
+DB_USERNAME=piliqi
+
+DB_PASSWORD=[valeur retirée]
+
+## 148. 2026-11-09 23:31 UTC
+
+mais je crois qu'il utilise .env.testing car c est ici que j ai mis cette base pour les testes ?
+

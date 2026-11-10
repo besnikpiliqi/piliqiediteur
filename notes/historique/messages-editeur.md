@@ -1578,3 +1578,7 @@ est ce que tu peux voir "T42 : ajouter « Modifier » et « Émettre » sur la f
 
 il faut que tu mettes tout les "Le plus urgent" de la fiche dans un tableux pret à ecrire ma reponse. tu mets comme dans "mes question et vosreponses" dans le tableaux pret à remplir ma reponse car comme tu as fait mtn il aller chercher et copier et ajouter la colonne, c'est pas pratique comme ca.
 
+## 156. 2026-11-10 23:59 UTC
+
+voila comme ca tu ajoute toujour dans cette endroit
+

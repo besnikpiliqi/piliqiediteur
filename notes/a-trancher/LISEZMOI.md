@@ -81,3 +81,8 @@
   `scratchpad/a-trancher/avis/final.json`.
 - La décision D59 est la ligne V236 de l'onglet « Vos décisions » (ajoutée le 11/11 à 00 h 08, heure de Paris ; le sous-titre de la
   semaine est devenu « Du 9 au 11 novembre », le texte d'entrée dit 236 décisions, dont 50 à appliquer).
+
+## Où ajouter une nouvelle question (D60, 10/11/2026 à 23 h 56 et 23 h 59 UTC)
+
+- « Le plus urgent », en haut de l'onglet 1, est un tableau (`mb4cajnjtng.85849`) : N° | Ma question | Ma proposition | Votre réponse (vide) | Pourquoi maintenant. Toute nouvelle question posée à l'éditeur s'y ajoute EN HAUT, avec le numéro suivant (T104…), ma vraie proposition et la case « Votre réponse » vide ; elle peut aussi figurer dans le tableau de sa section, et va aussi dans l'onglet « À faire vérifier par un professionnel » si un professionnel doit la vérifier (D59).
+- Une réponse écrite dans ce tableau, dans le tableau d'une section, dans une ligne qu'il ajoute lui-même ou dans la conversation vaut réponse : la ligne quitte les tableaux de l'onglet 1, passe dans la série du jour de « Mes questions et vos réponses », et la consigne va au lot qui l'applique.

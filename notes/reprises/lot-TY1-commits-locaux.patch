@@ -1,0 +1,1328 @@
+From 2c55bad6730b62eaf54288c7caaaed75ed06708b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 10 Nov 2026 14:11:08 +0000
+Subject: [PATCH] Ajoute le test d'empreinte de la caisse et des PDF (lot TY1
+ 1/n)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Décision de l'éditeur du 09/11/2026 (D56), cahier de l'analyse
+  statique, § 6.4 : premier commit du lot, avant tout changement d'un
+  fichier de la caisse sécurisée ou d'un générateur de PDF.
+- tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php :
+  une journée du magasin LYON1, temps figé à chaque geste à une heure de
+  Paris écrite dans le test, uuid tirés d'une suite écrite dans le test,
+  registre signé par une clé fixe dérivée d'une graine écrite dans le test
+  (jamais épinglée ailleurs) : un ticket réglé en espèces et par carte,
+  une facture à un professionnel (remise de 10 % et un service), un
+  virement sur cette facture puis sa contre-passation, l'avoir d'un
+  article du ticket (bon d'avoir du client comptoir), l'avoir d'un
+  article de la facture, un devis émis, une facture d'achat saisie sans
+  la pièce du fournisseur, le relevé de la caisse du vendeur, la
+  clôture du jour et l'export du journal des événements.
+- Comparé au caractère près aux valeurs relevées sur le code d'avant le
+  lot (tests/Fixtures/empreinte-de-la-caisse) : le contenu signé de chaque
+  enregistrement du registre, dans son ordre ; l'export du journal des
+  événements ; le relevé de caisse, la clôture et l'aperçu de son
+  e-reporting tels qu'enregistrés ; le nom et le texte de chaque PDF
+  (ticket, facture, deux avoirs, deux reçus, devis, fiche de saisie,
+  ticket Z, relevé des encaissements) ; le rapport du vérificateur
+  d'intégrité, sans anomalie.
+- Signatures et identifiants : chaque signature s'écrit par la marque
+  ⟦signature:chaîne:séquence⟧ et chaque identifiant tiré par la base par
+  ⟦table:nom⟧ ; le test les remplace par ceux de l'exécution, si bien que
+  chaque signature précédente est celle de l'enregistrement précédent de
+  la même chaîne (null pour le premier), ce que vérifie aussi la colonne
+  signature_precedente. Aucune clé n'est retirée.
+- Témoins : un libellé de PDF changé (« Ticket de caisse. ») et un
+  libellé du journal des événements changé font échouer le test ; joué
+  après un autre fichier de tests (identifiants décalés), il passe.
+- Aucun code de l'application ne change.
+- migrate:fresh ; suite complète PostgreSQL : 5 702 tests, 5 702 réussis,
+  code de sortie 0, tests en navigateur compris ; pint.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ .../EmpreinteDeLaCaisseEtDesPdfTest.php       | 448 ++++++++++++++++++
+ .../apercu-e-reporting.txt                    |  24 +
+ .../cloture-du-jour.txt                       |  19 +
+ .../journal-des-evenements.txt                |   5 +
+ .../empreinte-de-la-caisse/pdf/avoir.txt      |  58 +++
+ .../pdf/bon-d-avoir.txt                       |  52 ++
+ .../empreinte-de-la-caisse/pdf/devis.txt      |  58 +++
+ .../empreinte-de-la-caisse/pdf/facture.txt    |  63 +++
+ .../pdf/fiche-de-saisie.txt                   |  54 +++
+ .../pdf/recu-de-la-contre-passation.txt       |  39 ++
+ .../pdf/recu-du-virement.txt                  |  39 ++
+ .../pdf/releve-des-encaissements.txt          |  58 +++
+ .../empreinte-de-la-caisse/pdf/ticket-z.txt   |  97 ++++
+ .../empreinte-de-la-caisse/pdf/ticket.txt     |  70 +++
+ .../empreinte-de-la-caisse/registre.txt       |  12 +
+ .../releve-de-caisse.txt                      |  21 +
+ .../empreinte-de-la-caisse/verification.txt   |  23 +
+ 17 files changed, 1140 insertions(+)
+ create mode 100644 tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/apercu-e-reporting.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/cloture-du-jour.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/journal-des-evenements.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/fiche-de-saisie.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/recu-de-la-contre-passation.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/recu-du-virement.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/releve-des-encaissements.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/ticket-z.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/registre.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/releve-de-caisse.txt
+ create mode 100644 tests/Fixtures/empreinte-de-la-caisse/verification.txt
+
+diff --git a/tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php b/tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php
+new file mode 100644
+index 0000000..2eceaa6
+--- /dev/null
++++ b/tests/Feature/CaisseSecurisee/EmpreinteDeLaCaisseEtDesPdfTest.php
+@@ -0,0 +1,448 @@
++<?php
++
++namespace Tests\Feature\CaisseSecurisee;
++
++use App\Domain\Achats\Actions\CreerFactureAchatAction;
++use App\Domain\Achats\Actions\ValiderFactureAchatAction;
++use App\Domain\Achats\Services\FicheDeSaisiePdfGenerator;
++use App\Domain\CaisseSecurisee\Actions\ExporterJournalDesEvenementsAction;
++use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
++use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
++use App\Domain\Catalogue\Models\Produit;
++use App\Domain\Catalogue\Models\Service;
++use App\Domain\Contacts\Enums\TypeClient;
++use App\Domain\Contacts\Models\Client;
++use App\Domain\Contacts\Models\Fournisseur;
++use App\Domain\Facturation\Actions\CloturerCaisseAction;
++use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
++use App\Domain\Facturation\Actions\CreerDevisAction;
++use App\Domain\Facturation\Actions\CreerFactureAction;
++use App\Domain\Facturation\Actions\EmettreDevisAction;
++use App\Domain\Facturation\Actions\EmettreFactureAction;
++use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
++use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
++use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
++use App\Domain\Facturation\Actions\FermerSaCaisseAction;
++use App\Domain\Facturation\Enums\ModePaiement;
++use App\Domain\Facturation\Models\RecuPaiement;
++use App\Domain\Facturation\Services\AvoirPdfGenerator;
++use App\Domain\Facturation\Services\ClotureCaissePdfGenerator;
++use App\Domain\Facturation\Services\DevisPdfGenerator;
++use App\Domain\Facturation\Services\EReportingDesParticuliers;
++use App\Domain\Facturation\Services\FacturePdfGenerator;
++use App\Domain\Facturation\Services\PartDeReglement;
++use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
++use App\Domain\Facturation\Services\ReglementComptant;
++use App\Domain\Facturation\Services\ReleveDesEncaissementsPdfGenerator;
++use App\Domain\Tenancy\Enums\FormeJuridique;
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Services\TenantContext;
++use Barryvdh\DomPDF\PDF as PdfDocument;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Str;
++use Ramsey\Uuid\Uuid;
++use Ramsey\Uuid\UuidInterface;
++use Tests\TestCase;
++
++/**
++ * L'empreinte de la caisse sécurisée et des PDF (décision de l'éditeur du
++ * 09/11/2026, D56, cahier de l'analyse statique, § 6.4) : une journée
++ * entière d'un magasin -- un ticket réglé en deux modes, une facture à un
++ * professionnel avec une remise et un service, un paiement de cette
++ * facture et sa contre-passation, l'avoir d'un article du ticket (le bon
++ * d'avoir du client comptoir), l'avoir d'un article de la facture, un
++ * devis, une facture d'achat saisie sans la pièce du fournisseur, le
++ * relevé de la caisse du vendeur, la clôture du jour et l'export du
++ * journal des événements -- rend, au caractère près, ce que le code
++ * rendait avant les lots de l'analyse statique, relevé alors et écrit
++ * dans tests/Fixtures/empreinte-de-la-caisse :
++ *
++ * - le contenu signé de chaque enregistrement du registre fiscal, journal
++ *   des événements compris, dans l'ordre où il s'écrit ;
++ * - le journal des événements tel que son export l'écrit ;
++ * - le relevé de la caisse du vendeur, la clôture du jour et l'aperçu de
++ *   son e-reporting, tels qu'ils sont enregistrés ;
++ * - le nom et le texte de chaque PDF : le ticket, la facture, les deux
++ *   avoirs, les reçus du paiement et de sa contre-passation, le devis, la
++ *   fiche de saisie de l'achat, le ticket Z et le relevé des encaissements
++ *   du mois ;
++ * - le rapport du vérificateur d'intégrité, sans anomalie.
++ *
++ * Le temps est figé à chaque geste, à une heure écrite avec son fuseau ;
++ * le registre signe avec une clé fixe, tirée d'une graine écrite ici, et
++ * jamais épinglée hors de ce test ; chaque uuid est tiré dans l'ordre
++ * d'une suite écrite ici. Restent seuls à varier d'une exécution à
++ * l'autre :
++ *
++ * - la signature, qu'ECDSA tire avec un aléa : le contenu et l'export
++ *   écrivent à sa place une marque, ⟦signature:chaîne:séquence⟧, que le
++ *   test remplace par la signature de cet enregistrement ; chaque
++ *   signature précédente est ainsi la signature de l'enregistrement
++ *   précédent de la même chaîne (null pour le premier) ;
++ * - les identifiants que tire la base, dont la séquence ne recule pas à
++ *   l'annulation de la transaction d'un test : la marque ⟦table:nom⟧, que
++ *   le test remplace par l'identifiant de la ligne qu'il a créée sous ce
++ *   nom.
++ *
++ * Ce test et ses fichiers ne changent pas pendant les lots de l'analyse
++ * statique (TY1 à PS2).
++ */
++class EmpreinteDeLaCaisseEtDesPdfTest extends TestCase
++{
++    use RefreshDatabase;
++
++    /**
++     * La graine de la clé de signature fixe du test : le scalaire privé de
++     * la clé ECDSA P-256 est son SHA-256.
++     */
++    private const GRAINE_DE_LA_CLE = 'PILIQI : clé de signature fixe du test d\'empreinte de la caisse et des PDF';
++
++    private const DOSSIER = 'tests/Fixtures/empreinte-de-la-caisse';
++
++    /**
++     * Les lignes que le test crée, par marque : ⟦table:nom⟧ => identifiant.
++     *
++     * @var array<string, int>
++     */
++    private array $identifiants = [];
++
++    public function test_la_caisse_et_les_pdf_rendent_au_caractere_pres_leur_empreinte_d_avant_l_analyse_statique(): void
++    {
++        $this->signerAvecLaCleFixe();
++        $this->tirerLesUuidsDansLOrdre();
++        $this->travelTo(self::aParis('2026-10-09 08:30:00'));
++        $magasin = $this->magasin();
++        $vendeur = self::auteur();
++        $this->nommer('users', 'vendeur', $vendeur->getKey());
++        $this->nommer('users', 'proprietaire', $this->proprietaireDe($magasin)->getKey());
++        $comptoir = $this->creerLeClientComptoir();
++        $atelier = $this->creer('clients', 'atelier', Client::factory()->professionnel()->create([
++            'nom' => 'Atelier Dupont SARL',
++            'adresse' => '8 rue des Tanneurs',
++            'complement_adresse' => null,
++            'code_postal' => '69001',
++            'ville' => 'Lyon',
++            'telephone' => '04 78 00 00 01',
++            'email' => 'compta@atelier-dupont.example',
++            'delai_paiement_jours' => 30,
++            'mode_paiement_prefere' => null,
++            'notes' => null,
++        ]));
++        $cafe = $this->creer('produits', 'cafe', $this->produit('CAF-250', 'Café moulu 250 g', '12.00', '20'));
++        $the = $this->creer('produits', 'the', $this->produit('THE-100', 'Thé vert 100 g', '6.50', '5.5'));
++        $coffret = $this->creer('produits', 'coffret', $this->produit('COF-DEG', 'Coffret dégustation', '45.00', '20'));
++        $livraison = $this->creer('services', 'livraison', Service::factory()->auPrixDe('15.00')->create(['nom' => 'Livraison sur rendez-vous']));
++
++        $this->travelTo(self::aParis('2026-10-09 09:30:00'));
++        $ticket = $this->creer('factures', 'ticket', app(EnregistrerVenteCaisseAction::class)->handle(
++            $vendeur,
++            $comptoir,
++            [['produit_id' => $cafe->id, 'quantite' => 2], ['produit_id' => $the->id, 'quantite' => 1]],
++            new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 1050), new PartDeReglement(ModePaiement::CarteBancaire, 2000, 'CB-0930')]),
++            jeton: (string) Str::uuid(),
++        ));
++        $this->nommerLesLignes('lignes_facture', 'ticket', $ticket->lignes()->orderBy('id')->pluck('id')->all());
++        $this->nommerLesLignes('paiements', 'ticket', $ticket->allocationsPaiement()->orderBy('id')->pluck('paiement_id')->all());
++
++        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
++        $facture = $this->creer('factures', 'facture', app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle(
++            $vendeur,
++            $atelier,
++            [['produit_id' => $coffret->id, 'quantite' => 3, 'remise_pourcentage' => '10'], ['service_id' => $livraison->id, 'quantite' => 1]],
++            ['conditions_paiement' => null, 'notes' => 'Livraison prévue le 15/10/2026.'],
++        ), jeton: (string) Str::uuid()));
++        $this->nommerLesLignes('lignes_facture', 'facture', $facture->lignes()->orderBy('id')->pluck('id')->all());
++
++        $this->travelTo(self::aParis('2026-10-09 10:45:00'));
++        $virement = $this->creer('paiements', 'virement', app(EnregistrerPaiementAction::class)->handle(
++            $vendeur,
++            $atelier,
++            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '50.00', 'reference' => 'VIR-2026-0042', 'recu_le' => '2026-10-09'],
++            [['facture_id' => $facture->id, 'montant' => '50.00']],
++            (string) Str::uuid(),
++        ));
++
++        $this->travelTo(self::aParis('2026-10-09 11:00:00'));
++        $contrePassation = $this->creer('paiements', 'contre_passation', app(ContrePasserPaiementAction::class)->handle($vendeur, $virement, 'Virement saisi deux fois', (string) Str::uuid()));
++
++        $this->travelTo(self::aParis('2026-10-09 11:30:00'));
++        $bonDAvoir = $this->creer('avoirs', 'bon_d_avoir', app(EnregistrerAvoirAction::class)->handle($vendeur, $comptoir, [['ligne_facture_id' => $this->identifiants['⟦lignes_facture:ticket_1⟧'], 'quantite' => 1]], 'Retour du client', (string) Str::uuid()));
++        $this->nommerLesLignes('lignes_avoir', 'bon_d_avoir', $bonDAvoir->lignes()->orderBy('id')->pluck('id')->all());
++
++        $this->travelTo(self::aParis('2026-10-09 14:00:00'));
++        $avoir = $this->creer('avoirs', 'avoir', app(EnregistrerAvoirAction::class)->handle($vendeur, $atelier, [['ligne_facture_id' => $this->identifiants['⟦lignes_facture:facture_1⟧'], 'quantite' => 1]], 'Coffret abîmé', (string) Str::uuid()));
++        $this->nommerLesLignes('lignes_avoir', 'avoir', $avoir->lignes()->orderBy('id')->pluck('id')->all());
++
++        $this->travelTo(self::aParis('2026-10-09 15:00:00'));
++        $devis = $this->creer('devis', 'devis', app(EmettreDevisAction::class)->handle($vendeur, app(CreerDevisAction::class)->handle(
++            $vendeur,
++            $atelier,
++            [['produit_id' => $coffret->id, 'quantite' => 2], ['service_id' => $livraison->id, 'quantite' => 1]],
++            ['notes' => 'Devis valable pour une livraison en novembre.'],
++        ), (string) Str::uuid()));
++
++        $this->travelTo(self::aParis('2026-10-09 16:00:00'));
++        $fournisseur = $this->creer('fournisseurs', 'grossiste', Fournisseur::factory()->create([
++            'nom' => 'Grossiste du Rhône',
++            'siret' => '40000000600017',
++            'numero_tva' => 'FR32400000006',
++            'adresse' => '3 quai Perrache',
++            'complement_adresse' => null,
++            'code_postal' => '69002',
++            'ville' => 'Lyon',
++            'telephone' => '04 72 00 00 02',
++            'email' => 'commandes@grossiste-du-rhone.example',
++        ]));
++        $achat = $this->creer('factures_achat', 'achat', app(ValiderFactureAchatAction::class)->handle($vendeur, app(CreerFactureAchatAction::class)->handle(
++            $vendeur,
++            $fournisseur,
++            [['produit_id' => $cafe->id, 'quantite' => 10, 'prix_unitaire_ht' => '4.25'], ['produit_id' => $the->id, 'quantite' => 6, 'prix_unitaire_ht' => '2.10']],
++            ['date_facture' => '2026-10-08', 'numero_fournisseur' => 'GR-2026-118'],
++        ), (string) Str::uuid()));
++
++        $this->travelTo(self::aParis('2026-10-09 17:30:00'));
++        $releve = $this->creer('clotures_caisse_personnelles', 'releve', app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur, (string) Str::uuid()));
++
++        $this->travelTo(self::aParis('2026-10-09 19:00:00'));
++        $cloture = $this->creer('clotures_caisse', 'cloture', app(CloturerCaisseAction::class)->handle($vendeur, $magasin, '2026-10-09'));
++
++        $this->travelTo(self::aParis('2026-10-09 19:05:00'));
++        $exporter = app(ExporterJournalDesEvenementsAction::class)->handle($vendeur, '2026-10-09', '2026-10-09');
++        $flux = fopen('php://memory', 'w+b');
++        $exporter($flux);
++        rewind($flux);
++        $journal = (string) stream_get_contents($flux);
++        fclose($flux);
++
++        $this->travelTo(self::aParis('2026-10-09 19:10:00'));
++        $recus = RecuPaiement::query()->orderBy('id')->get();
++        $this->assertCount(2, $recus);
++        [$recuDuVirement, $recuDeLaContrePassation] = [$recus[0], $recus[1]];
++        $this->nommer('recus_paiement', 'virement', $recuDuVirement->getKey());
++        $this->nommer('recus_paiement', 'contre_passation', $recuDeLaContrePassation->getKey());
++        $this->assertSame([$virement->getKey()], $recuDuVirement->paiements()->pluck('id')->all());
++        $this->assertSame([$contrePassation->getKey()], $recuDeLaContrePassation->paiements()->pluck('id')->all());
++
++        $pdf = [
++            'ticket' => $this->pdf(app(FacturePdfGenerator::class)->nomFichier($ticket), app(FacturePdfGenerator::class)->generer($ticket->fresh())),
++            'facture' => $this->pdf(app(FacturePdfGenerator::class)->nomFichier($facture), app(FacturePdfGenerator::class)->generer($facture->fresh())),
++            'bon-d-avoir' => $this->pdf(app(AvoirPdfGenerator::class)->nomFichier($bonDAvoir), app(AvoirPdfGenerator::class)->generer($bonDAvoir->fresh())),
++            'avoir' => $this->pdf(app(AvoirPdfGenerator::class)->nomFichier($avoir), app(AvoirPdfGenerator::class)->generer($avoir->fresh())),
++            'recu-du-virement' => $this->pdf(app(RecuPaiementPdfGenerator::class)->nomFichier($recuDuVirement), app(RecuPaiementPdfGenerator::class)->generer($recuDuVirement->fresh())),
++            'recu-de-la-contre-passation' => $this->pdf(app(RecuPaiementPdfGenerator::class)->nomFichier($recuDeLaContrePassation), app(RecuPaiementPdfGenerator::class)->generer($recuDeLaContrePassation->fresh())),
++            'devis' => $this->pdf(app(DevisPdfGenerator::class)->nomFichier($devis), app(DevisPdfGenerator::class)->generer($devis->fresh()->load('client', 'lignes', 'magasin'))),
++            'fiche-de-saisie' => $this->pdf('fiche-de-saisie-'.$achat->numero.'.pdf', app(FicheDeSaisiePdfGenerator::class)->generer($achat->fresh())),
++            'ticket-z' => $this->pdf(app(ClotureCaissePdfGenerator::class)->nomFichier($cloture), app(ClotureCaissePdfGenerator::class)->generer($cloture->fresh())),
++            'releve-des-encaissements' => $this->pdf('encaissements-LYON1-2026-10.pdf', app(ReleveDesEncaissementsPdfGenerator::class)->generer($vendeur, $magasin, '2026-10', '2026-10-01', '2026-10-31')),
++        ];
++
++        $enregistrements = EnregistrementFiscal::query()->orderBy('id')->get();
++        $signatures = [];
++        $precedentes = [];
++        $signaturesDesPrecedents = [];
++        $derniereDeLaChaine = [];
++        foreach ($enregistrements as $enregistrement) {
++            $chaine = $enregistrement->chaine->value;
++            $signatures["⟦signature:{$chaine}:{$enregistrement->sequence}⟧"] = $enregistrement->signature;
++            $precedentes["{$chaine}:{$enregistrement->sequence}"] = $enregistrement->signature_precedente;
++            $signaturesDesPrecedents["{$chaine}:{$enregistrement->sequence}"] = $derniereDeLaChaine[$chaine] ?? null;
++            $derniereDeLaChaine[$chaine] = $enregistrement->signature;
++        }
++        $rapport = app(VerificateurIntegrite::class)->verifier($magasin);
++
++        $this->assertSame($signaturesDesPrecedents, $precedentes);
++
++        $obtenu = [
++            'registre' => $enregistrements->map(fn (EnregistrementFiscal $enregistrement): string => $enregistrement->contenu)->implode("\n")."\n",
++            'journal-des-evenements' => $journal,
++            'releve-de-caisse' => self::enJson($releve->fresh()->getAttributes()),
++            'cloture-du-jour' => self::enJson($cloture->fresh()->getAttributes()),
++            'apercu-e-reporting' => self::enJson(app(EReportingDesParticuliers::class)->apercu($cloture->fresh())),
++            'verification' => self::enJson([
++                'conforme' => $rapport->estConforme(),
++                'anomalies' => $rapport->nombreDAnomalies(),
++                'enregistrements_verifies' => $rapport->enregistrementsVerifies(),
++                'points_de_reprise' => $rapport->pointsDeReprise(),
++            ]),
++            ...array_combine(array_map(fn (string $nom): string => "pdf/{$nom}", array_keys($pdf)), $pdf),
++        ];
++
++        $this->assertSame($this->empreinte(array_keys($obtenu), $signatures), $obtenu);
++    }
++
++    /**
++     * Le registre signe avec la clé fixe du test, seule épinglée : celle
++     * que tirent les tests au hasard n'y entre pas, et son cle_id, signé
++     * dans chaque enregistrement, est toujours le même.
++     */
++    private function signerAvecLaCleFixe(): void
++    {
++        $cle = openssl_pkey_new(['ec' => ['curve_name' => 'prime256v1', 'd' => hash('sha256', self::GRAINE_DE_LA_CLE, true)]]);
++        $this->assertNotFalse($cle);
++        $this->assertTrue(openssl_pkey_export($cle, $clePrivee));
++        $details = openssl_pkey_get_details($cle);
++        $this->assertIsArray($details);
++
++        config([
++            'caisse_securisee.cle_privee' => base64_encode($clePrivee),
++            'caisse_securisee.phrase_secrete' => null,
++            'caisse_securisee.cles_publiques' => ['empreinte.pem' => $details['key']],
++        ]);
++        $this->app->forgetScopedInstances();
++    }
++
++    /**
++     * Chaque uuid, du magasin, de la société, d'un compte ou d'un jeton de
++     * demande, est le suivant d'une suite écrite ici, dans l'ordre où le
++     * code le tire.
++     */
++    private function tirerLesUuidsDansLOrdre(): void
++    {
++        $rang = 0;
++        Str::createUuidsUsing(function () use (&$rang): UuidInterface {
++            return Uuid::fromString(sprintf('00000000-0000-4000-8000-%012d', ++$rang));
++        });
++    }
++
++    /**
++     * Le magasin LYON1 « Ma Boutique », à Lyon, d'une société validée à
++     * l'identité écrite en clair, magasin actif.
++     */
++    private function magasin(): Magasin
++    {
++        $magasin = Magasin::factory()
++            ->avecLaSociete([
++                'siren' => '100000009',
++                'raison_sociale' => 'Les Délices de Jeanne',
++                'forme_juridique' => FormeJuridique::Sas,
++                'capital_social' => '10000.00',
++                'immatriculation' => 'RCS Lyon',
++                'numero_tva' => 'FR88100000009',
++                'siege_adresse' => '1 rue de la République',
++                'siege_complement_adresse' => null,
++                'siege_code_postal' => '69002',
++                'siege_ville' => 'Lyon',
++            ])
++            ->create([
++                'code' => 'LYON1',
++                'nom' => 'Ma Boutique',
++                'siret' => '10000000900017',
++                'adresse' => '12 rue Mercière',
++                'complement_adresse' => null,
++                'code_postal' => '69002',
++                'ville' => 'Lyon',
++                'email' => 'contact@ma-boutique.example',
++                'telephone' => '04 72 00 00 00',
++            ]);
++        app(TenantContext::class)->set($magasin);
++        $this->nommer('magasins', 'lyon1', $magasin->getKey());
++        $this->nommer('societes', 'societe', (int) $magasin->societe_id);
++
++        return $magasin;
++    }
++
++    /**
++     * Le client comptoir du magasin, tel que la création d'un établissement
++     * le crée (voir CreerEtablissementAction).
++     */
++    private function creerLeClientComptoir(): Client
++    {
++        return $this->creer('clients', 'comptoir', Client::forceCreate([
++            'nom' => Client::NOM_COMPTOIR,
++            'type_client' => TypeClient::Particulier,
++            'est_comptoir' => true,
++        ]));
++    }
++
++    private function produit(string $reference, string $nom, string $prixTtc, string $tauxTva): Produit
++    {
++        return Produit::factory()->create([
++            'reference' => $reference,
++            'code_barres' => null,
++            'nom' => $nom,
++            'taille' => null,
++            'couleur' => null,
++            'cmup_ht' => '0',
++            'prix_vente_ttc' => $prixTtc,
++            'taux_tva' => $tauxTva,
++            'suivi_stock' => false,
++            'seuil_alerte' => 0,
++        ]);
++    }
++
++    /**
++     * Nomme la ligne du modèle que le test vient de créer : ⟦table:nom⟧.
++     *
++     * @template TModele of Model
++     *
++     * @param  TModele  $modele
++     * @return TModele
++     */
++    private function creer(string $table, string $nom, Model $modele): Model
++    {
++        $this->nommer($table, $nom, $modele->getKey());
++
++        return $modele;
++    }
++
++    private function nommer(string $table, string $nom, int $identifiant): void
++    {
++        $this->identifiants["⟦{$table}:{$nom}⟧"] = $identifiant;
++    }
++
++    /**
++     * @param  list<int>  $identifiants  dans leur ordre
++     */
++    private function nommerLesLignes(string $table, string $document, array $identifiants): void
++    {
++        foreach (array_values($identifiants) as $rang => $identifiant) {
++            $this->nommer($table, $document.'_'.($rang + 1), $identifiant);
++        }
++    }
++
++    /**
++     * Le nom du fichier, puis le texte de chaque page, un texte par ligne.
++     */
++    private function pdf(string $nom, PdfDocument $pdf): string
++    {
++        $texte = "fichier : {$nom}\n";
++
++        foreach ($this->pagesDuPdf($pdf->output()) as $rang => $page) {
++            $texte .= sprintf("--- page %d (%s)\n", $rang + 1, $page['format']);
++
++            foreach ($page['textes'] as $morceau) {
++                $texte .= $morceau['texte']."\n";
++            }
++        }
++
++        return $texte;
++    }
++
++    private static function enJson(mixed $valeur): string
++    {
++        return json_encode($valeur, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
++    }
++
++    /**
++     * L'empreinte relevée de chacun de ces fichiers, ses marques remplacées
++     * par les identifiants de cette exécution et les signatures de son
++     * registre.
++     *
++     * @param  list<string>  $fichiers
++     * @param  array<string, string>  $signatures
++     * @return array<string, string>
++     */
++    private function empreinte(array $fichiers, array $signatures): array
++    {
++        $marques = [...array_map('strval', $this->identifiants), ...$signatures];
++        $empreinte = [];
++
++        foreach ($fichiers as $fichier) {
++            $releve = (string) file_get_contents(base_path(self::DOSSIER."/{$fichier}.txt"));
++            $empreinte[$fichier] = strtr($releve, $marques);
++        }
++
++        return $empreinte;
++    }
++}
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/apercu-e-reporting.txt b/tests/Fixtures/empreinte-de-la-caisse/apercu-e-reporting.txt
+new file mode 100644
+index 0000000..86b3440
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/apercu-e-reporting.txt
+@@ -0,0 +1,24 @@
++{
++    "journee": "2026-10-09",
++    "demonstration": false,
++    "transactions": [
++        {
++            "categorie": "TLB1",
++            "taux": 2000,
++            "ht": 1000,
++            "tva": 200,
++            "motif": null,
++            "remarque": null
++        },
++        {
++            "categorie": "TLB1",
++            "taux": 550,
++            "ht": 616,
++            "tva": 34,
++            "motif": null,
++            "remarque": null
++        }
++    ],
++    "encaissementsDeServices": [],
++    "encaissementsARepartir": []
++}
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/cloture-du-jour.txt b/tests/Fixtures/empreinte-de-la-caisse/cloture-du-jour.txt
+new file mode 100644
+index 0000000..7ca03dd
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/cloture-du-jour.txt
+@@ -0,0 +1,19 @@
++{
++    "id": ⟦clotures_caisse:cloture⟧,
++    "magasin_id": ⟦magasins:lyon1⟧,
++    "cree_par": ⟦users:vendeur⟧,
++    "cree_par_nom": "Responsable de test",
++    "numero": "Z-LYON1-2026-000001",
++    "date_cloture": "2026-10-09",
++    "nombre_ventes": 1,
++    "nombre_avoirs": 1,
++    "total_ht": "16.16",
++    "total_tva": "2.34",
++    "total_ttc": "18.50",
++    "recapitulatif": "{\"ventes_particuliers\":{\"nombre\":1,\"ht\":2616,\"tva\":434,\"ttc\":3050,\"par_taux\":[{\"taux\":2000,\"ht\":2000,\"tva\":400,\"ttc\":2400},{\"taux\":550,\"ht\":616,\"tva\":34,\"ttc\":650}]},\"avoirs_particuliers\":{\"nombre\":1,\"ht\":-1000,\"tva\":-200,\"ttc\":-1200,\"par_taux\":[{\"taux\":2000,\"ht\":-1000,\"tva\":-200,\"ttc\":-1200}]},\"factures_professionnels\":{\"nombre\":1,\"ht\":11375,\"tva\":2275,\"ttc\":13650,\"par_taux\":[{\"taux\":2000,\"ht\":11375,\"tva\":2275,\"ttc\":13650}]},\"avoirs_professionnels\":{\"nombre\":1,\"ht\":-3375,\"tva\":-675,\"ttc\":-4050,\"par_taux\":[{\"taux\":2000,\"ht\":-3375,\"tva\":-675,\"ttc\":-4050}]},\"encaissements\":[{\"mode\":\"especes\",\"libelle\":\"Esp\\u00e8ces\",\"paiements\":1,\"contre_passations\":0,\"montant\":1050},{\"mode\":\"carte_bancaire\",\"libelle\":\"Carte bancaire\",\"paiements\":1,\"contre_passations\":0,\"montant\":2000},{\"mode\":\"cheque\",\"libelle\":\"Ch\\u00e8que\",\"paiements\":0,\"contre_passations\":0,\"montant\":0},{\"mode\":\"virement\",\"libelle\":\"Virement\",\"paiements\":1,\"contre_passations\":1,\"montant\":0},{\"mode\":\"prelevement\",\"libelle\":\"Pr\\u00e9l\\u00e8vement\",\"paiements\":0,\"contre_passations\":0,\"montant\":0}],\"credit_avoir_impute\":4050,\"grands_totaux\":{\"perpetuel_reel\":11450,\"perpetuel_absolu\":21950}}",
++    "derniere_sequence_vente": 4,
++    "derniere_sequence_encaissement": 4,
++    "cloturee_a": "2026-10-09 17:00:00",
++    "created_at": "2026-10-09 17:00:00",
++    "updated_at": "2026-10-09 17:00:00"
++}
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/journal-des-evenements.txt b/tests/Fixtures/empreinte-de-la-caisse/journal-des-evenements.txt
+new file mode 100644
+index 0000000..12dcc9e
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/journal-des-evenements.txt
+@@ -0,0 +1,5 @@
++﻿Séquence;"Horodatage (heure de Paris)";"Horodatage signé (UTC)";Code;Libellé;Opérateur;Détails;"Adresse IP";Navigateur;Document;"Signature précédente";Signature;Algorithme;"Clé (cle_id)";"Version du module";"Contenu signé"
++1;"09/10/2026 09:30:00";20261009073000Z;260;"Initialisation du registre fiscal du magasin";"Responsable de test (n° ⟦users:vendeur⟧)";;;;;;⟦signature:evenement:1⟧;ES256;07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80;1.5;"{""format"":1,""magasin"":{""uuid"":""00000000-0000-4000-8000-000000000003"",""siren"":""100000009"",""siret"":""10000000900017""},""caisse"":""00000000-0000-4000-8000-000000000003"",""chaine"":""evenement"",""sequence"":1,""type"":""260"",""horodatage"":""20261009073000Z"",""operateur"":{""id"":⟦users:vendeur⟧,""nom"":""Responsable de test""},""version_module"":""1.5"",""cle_id"":""07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80"",""signature_precedente"":null,""document"":null,""donnees"":{""code"":260,""libelle"":""Initialisation du registre fiscal du magasin"",""details"":[]}}"
++2;"09/10/2026 11:30:00";20261009093000Z;190;"Annulation de ticket (avoir sur des tickets de caisse)";"Responsable de test (n° ⟦users:vendeur⟧)";"{""avoir"":""AV-LYON1-2026-000001"",""tickets"":[""TK-LYON1-2026-000001""],""montant_ttc"":-1200,""sequence_vente"":3,""motif"":""Retour du client""}";;;"Avoir (identifiant interne ⟦avoirs:bon_d_avoir⟧)";⟦signature:evenement:1⟧;⟦signature:evenement:2⟧;ES256;07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80;1.5;"{""format"":1,""magasin"":{""uuid"":""00000000-0000-4000-8000-000000000003"",""siren"":""100000009"",""siret"":""10000000900017""},""caisse"":""00000000-0000-4000-8000-000000000003"",""chaine"":""evenement"",""sequence"":2,""type"":""190"",""horodatage"":""20261009093000Z"",""operateur"":{""id"":⟦users:vendeur⟧,""nom"":""Responsable de test""},""version_module"":""1.5"",""cle_id"":""07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80"",""signature_precedente"":""⟦signature:evenement:1⟧"",""document"":{""type"":""avoir"",""id"":⟦avoirs:bon_d_avoir⟧},""donnees"":{""code"":190,""libelle"":""Annulation de ticket (avoir sur des tickets de caisse)"",""details"":{""avoir"":""AV-LYON1-2026-000001"",""tickets"":[""TK-LYON1-2026-000001""],""montant_ttc"":-1200,""sequence_vente"":3,""motif"":""Retour du client""}}}"
++3;"09/10/2026 19:00:00";20261009170000Z;50;"Clôture de période (journée)";"Responsable de test (n° ⟦users:vendeur⟧)";"{""numero"":""Z-LYON1-2026-000001"",""journee"":""2026-10-09"",""nombre_ventes"":1,""nombre_avoirs"":1,""total_ht"":1616,""total_tva"":234,""total_ttc"":1850,""encaissements"":{""especes"":1050,""carte_bancaire"":2000,""cheque"":0,""virement"":0,""prelevement"":0},""credit_avoir_impute"":4050,""grands_totaux"":{""perpetuel_reel"":11450,""perpetuel_absolu"":21950}}";;;"Clôture Z-LYON1-2026-000001";⟦signature:evenement:2⟧;⟦signature:evenement:3⟧;ES256;07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80;1.5;"{""format"":1,""magasin"":{""uuid"":""00000000-0000-4000-8000-000000000003"",""siren"":""100000009"",""siret"":""10000000900017""},""caisse"":""00000000-0000-4000-8000-000000000003"",""chaine"":""evenement"",""sequence"":3,""type"":""50"",""horodatage"":""20261009170000Z"",""operateur"":{""id"":⟦users:vendeur⟧,""nom"":""Responsable de test""},""version_module"":""1.5"",""cle_id"":""07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80"",""signature_precedente"":""⟦signature:evenement:2⟧"",""document"":{""type"":""cloture_caisse"",""id"":⟦clotures_caisse:cloture⟧},""donnees"":{""code"":50,""libelle"":""Clôture de période (journée)"",""details"":{""numero"":""Z-LYON1-2026-000001"",""journee"":""2026-10-09"",""nombre_ventes"":1,""nombre_avoirs"":1,""total_ht"":1616,""total_tva"":234,""total_ttc"":1850,""encaissements"":{""especes"":1050,""carte_bancaire"":2000,""cheque"":0,""virement"":0,""prelevement"":0},""credit_avoir_impute"":4050,""grands_totaux"":{""perpetuel_reel"":11450,""perpetuel_absolu"":21950}}}}"
++4;"09/10/2026 19:05:00";20261009170500Z;110;"Export de données";"Responsable de test (n° ⟦users:vendeur⟧)";"{""export"":""journal_des_evenements"",""format"":""csv"",""du"":""2026-10-09"",""au"":""2026-10-09""}";;;;⟦signature:evenement:3⟧;⟦signature:evenement:4⟧;ES256;07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80;1.5;"{""format"":1,""magasin"":{""uuid"":""00000000-0000-4000-8000-000000000003"",""siren"":""100000009"",""siret"":""10000000900017""},""caisse"":""00000000-0000-4000-8000-000000000003"",""chaine"":""evenement"",""sequence"":4,""type"":""110"",""horodatage"":""20261009170500Z"",""operateur"":{""id"":⟦users:vendeur⟧,""nom"":""Responsable de test""},""version_module"":""1.5"",""cle_id"":""07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80"",""signature_precedente"":""⟦signature:evenement:3⟧"",""document"":null,""donnees"":{""code"":110,""libelle"":""Export de données"",""details"":{""export"":""journal_des_evenements"",""format"":""csv"",""du"":""2026-10-09"",""au"":""2026-10-09""}}}"
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
+new file mode 100644
+index 0000000..a254854
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/avoir.txt
+@@ -0,0 +1,58 @@
++fichier : avoir-AV-LYON1-2026-000002.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Avoir
++AV-LYON1-2026-000002
++Émis le 09/10/2026
++Sur facture FAC-LYON1-2026-000001 du 09/10/2026
++ÉMIS À
++Atelier Dupont SARL
++8 rue des Tanneurs
++69001 Lyon
++SIREN : 123456789
++SIRET : 12345678900011
++N° TVA : FR32123456789
++RÉFÉRENCE
++DÉSIGNATION
++FACTURE D'ORIGINE
++QTÉ
++PU HT
++REMISE
++TAUX
++TOTAL HT
++COF-DEG
++Coffret dégustation
++FAC-LYON1-2026-000001
++1
++37,50 €
++10 %
++20 %
++33,75 €
++Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 +
++taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier
++retour solde la ligne au centime. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché
++peut donc différer du total de la ligne.
++TAUX TVA
++BASE HT
++TVA
++TOTAL TTC
++20 %
++33,75 €
++6,75 €
++40,50 €
++Total HT
++-33,75 €
++Total TVA
++-6,75 €
++Total TTC
++-40,50 €
++Motif : Coffret abîmé
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Catégorie de l'opération : Livraison de biens
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt
+new file mode 100644
+index 0000000..a880873
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/bon-d-avoir.txt
+@@ -0,0 +1,52 @@
++fichier : avoir-AV-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Avoir
++AV-LYON1-2026-000001
++Émis le 09/10/2026
++Sur ticket de caisse TK-LYON1-2026-000001 du 09/10/2026
++ÉMIS À
++Client comptoir
++RÉFÉRENCE
++DÉSIGNATION
++FACTURE D'ORIGINE
++QTÉ
++PU TTC
++TAUX
++TOTAL TTC
++CAF-250
++Café moulu 250 g
++TK-LYON1-2026-000001
++1
++12,00 €
++20 %
++12,00 €
++Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 +
++taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier
++retour solde la ligne au centime. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché
++peut donc différer du total de la ligne.
++TAUX TVA
++BASE HT
++TVA
++TOTAL TTC
++20 %
++10,00 €
++2,00 €
++12,00 €
++Total HT
++-10,00 €
++Total TVA
++-2,00 €
++Total TTC
++-12,00 €
++Motif : Retour du client
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Catégorie de l'opération : Livraison de biens
++Ce n° vaut bon d'avoir de 12,00 € à présenter lors d'un prochain achat.
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
+new file mode 100644
+index 0000000..5e547e3
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/devis.txt
+@@ -0,0 +1,58 @@
++fichier : devis-DEV-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Devis
++DEV-LYON1-2026-000001
++Émis le 09/10/2026
++ÉTABLI POUR
++Atelier Dupont SARL
++8 rue des Tanneurs
++69001 Lyon
++SIREN : 123456789
++SIRET : 12345678900011
++N° TVA : FR32123456789
++RÉFÉRENCE
++DÉSIGNATION
++QTÉ
++PU HT
++TAUX
++TOTAL HT
++COF-DEG
++Coffret dégustation
++2
++37,50 €
++20 %
++75,00 €
++Livraison sur rendez-vous
++1
++12,50 €
++20 %
++12,50 €
++Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la
++différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du
++total de la ligne.
++TAUX TVA
++BASE HT
++TVA
++TOTAL TTC
++20 %
++87,50 €
++17,50 €
++105,00 €
++Total HT
++87,50 €
++Total TVA
++17,50 €
++Total TTC
++105,00 €
++Devis valable pour une livraison en novembre.
++Date et signature du client, précédées de la mention « Bon pour
++accord »
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
+new file mode 100644
+index 0000000..d66ce9c
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/facture.txt
+@@ -0,0 +1,63 @@
++fichier : facture-FAC-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Facture
++FAC-LYON1-2026-000001
++Émise le 09/10/2026
++Échéance le 08/11/2026
++FACTURÉ À
++Atelier Dupont SARL
++8 rue des Tanneurs
++69001 Lyon
++SIREN : 123456789
++SIRET : 12345678900011
++N° TVA : FR32123456789
++RÉFÉRENCE
++DÉSIGNATION
++QTÉ
++PU HT
++REMISE
++TAUX
++TOTAL HT
++COF-DEG
++Coffret dégustation
++3
++37,50 €
++10 %
++20 %
++101,25 €
++Livraison sur rendez-vous
++1
++12,50 €
++0 %
++20 %
++12,50 €
++Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la
++différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du
++total de la ligne.
++TAUX TVA
++BASE HT
++TVA
++TOTAL TTC
++20 %
++113,75 €
++22,75 €
++136,50 €
++Total HT
++113,75 €
++Total TVA
++22,75 €
++Total TTC
++136,50 €
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.
++Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.
++Pas d'escompte pour paiement anticipé.
++Catégorie de l'opération : Livraison de biens et prestation de services
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/fiche-de-saisie.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/fiche-de-saisie.txt
+new file mode 100644
+index 0000000..a74b8b1
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/fiche-de-saisie.txt
+@@ -0,0 +1,54 @@
++fichier : fiche-de-saisie-FA-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Saisie PILIQI — l'original est la facture du fournisseur
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Facture d'achat
++FA-LYON1-2026-000001
++N° du fournisseur : GR-2026-118
++Facture du 08/10/2026
++Saisie manuelle
++FOURNISSEUR
++Grossiste du Rhône
++SIRET 40000000600017
++N° de TVA FR32400000006
++RÉFÉRENCE
++DÉSIGNATION
++QUANTITÉ
++PU HT
++TVA
++TOTAL HT
++CAF-250
++Café moulu 250 g
++10
++4,25 €
++20 %
++42,50 €
++THE-100
++Thé vert 100 g
++6
++2,10 €
++5,5 %
++12,60 €
++TAUX
++BASE HT
++TVA
++20 %
++42,50 €
++8,50 €
++5,5 %
++12,60 €
++0,69 €
++Total HT
++55,10 €
++Total TVA
++9,19 €
++Total TTC
++64,29 €
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/recu-de-la-contre-passation.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/recu-de-la-contre-passation.txt
+new file mode 100644
+index 0000000..eeb59c9
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/recu-de-la-contre-passation.txt
+@@ -0,0 +1,39 @@
++fichier : recu-RP-LYON1-2026-000002.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Contre-passation de paiement
++RP-LYON1-2026-000002
++Contre-passation du 09/10/2026
++CLIENT
++Atelier Dupont SARL
++8 rue des Tanneurs
++69001 Lyon
++SIREN : 123456789
++SIRET : 12345678900011
++N° TVA : FR32123456789
++PAIEMENT CONTRE-PASSÉ
++DATE
++MODE
++RÉFÉRENCE
++MONTANT
++09/10/2026
++Virement
++VIR-2026-0042
++-50,00 €
++Total contre-passé
++-50,00 €
++DOCUMENT RÉGLÉ
++MONTANT IMPUTÉ
++RESTANT DÛ APRÈS CET ENCAISSEMENT
++Facture FAC-LYON1-2026-000001
++-50,00 €
++136,50 €
++Ce reçu n'est pas une facture.
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/recu-du-virement.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/recu-du-virement.txt
+new file mode 100644
+index 0000000..149221c
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/recu-du-virement.txt
+@@ -0,0 +1,39 @@
++fichier : recu-RP-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Reçu de paiement
++RP-LYON1-2026-000001
++Encaissement du 09/10/2026
++CLIENT
++Atelier Dupont SARL
++8 rue des Tanneurs
++69001 Lyon
++SIREN : 123456789
++SIRET : 12345678900011
++N° TVA : FR32123456789
++RÈGLEMENT
++DATE
++MODE
++RÉFÉRENCE
++MONTANT
++09/10/2026
++Virement
++VIR-2026-0042
++50,00 €
++Total encaissé
++50,00 €
++DOCUMENT RÉGLÉ
++MONTANT IMPUTÉ
++RESTANT DÛ APRÈS CET ENCAISSEMENT
++Facture FAC-LYON1-2026-000001
++50,00 €
++86,50 €
++Ce reçu n'est pas une facture.
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/releve-des-encaissements.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/releve-des-encaissements.txt
+new file mode 100644
+index 0000000..864af8a
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/releve-des-encaissements.txt
+@@ -0,0 +1,58 @@
++fichier : encaissements-LYON1-2026-10.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Relevé des encaissements
++Octobre 2026
++Du 01/10/2026 au 31/10/2026
++MODE DE PAIEMENT
++PAIEMENTS
++CONTRE-PASSATIONS
++MONTANT ENCAISSÉ
++Espèces
++1
++0
++10,50 €
++Carte bancaire
++1
++0
++20,00 €
++Virement
++1
++1
++0,00 €
++Total encaissé
++30,50 €
++Crédit d'avoir utilisé (n'entre pas dans les encaissements)
++40,50 €
++JOUR
++MODE
++RÉFÉRENCE
++DOCUMENTS RÉGLÉS
++MONTANT
++09/10/2026
++Espèces
++TK-LYON1-2026-000001
++10,50 €
++09/10/2026
++Carte bancaire
++CB-0930
++TK-LYON1-2026-000001
++20,00 €
++09/10/2026
++Virement
++VIR-2026-0042
++FAC-LYON1-2026-000001
++50,00 €
++09/10/2026
++Virement (contre-passation)
++VIR-2026-0042
++FAC-LYON1-2026-000001
++-50,00 €
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/ticket-z.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/ticket-z.txt
+new file mode 100644
+index 0000000..a268110
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/ticket-z.txt
+@@ -0,0 +1,97 @@
++fichier : Z-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Clôture du jour (ticket Z)
++Z-LYON1-2026-000001
++Journée du 09/10/2026
++Clôturée le 09/10/2026 à 19:00
++Déclenchée par Responsable de test
++VENTES ET AVOIRS
++NOMBRE
++TOTAL HT
++TVA
++TOTAL TTC
++Ventes aux particuliers (tickets)
++1
++26,16 €
++4,34 €
++30,50 €
++dont TVA à 20 %
++20,00 €
++4,00 €
++24,00 €
++dont TVA à 5,5 %
++6,16 €
++0,34 €
++6,50 €
++Avoirs sur des tickets
++1
++-10,00 €
++-2,00 €
++-12,00 €
++dont TVA à 20 %
++-10,00 €
++-2,00 €
++-12,00 €
++Net des ventes aux particuliers (base de l'e-reporting)
++16,16 €
++2,34 €
++18,50 €
++Factures aux professionnels (pour information)
++1
++113,75 €
++22,75 €
++136,50 €
++dont TVA à 20 %
++113,75 €
++22,75 €
++136,50 €
++Avoirs aux professionnels (pour information)
++1
++-33,75 €
++-6,75 €
++-40,50 €
++dont TVA à 20 %
++-33,75 €
++-6,75 €
++-40,50 €
++ENCAISSEMENTS PAR MODE
++PAIEMENTS
++CONTRE-PASSATIONS
++MONTANT ENCAISSÉ
++Espèces
++1
++0
++10,50 €
++Carte bancaire
++1
++0
++20,00 €
++Chèque
++0
++0
++0,00 €
++Virement
++1
++1
++0,00 €
++Prélèvement
++0
++0
++0,00 €
++Total encaissé
++30,50 €
++Crédit d'avoir utilisé (n'entre pas dans les encaissements)
++40,50 €
++Grand total perpétuel réel
++114,50 €
++Grand total perpétuel absolu
++219,50 €
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt b/tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt
+new file mode 100644
+index 0000000..b162b51
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/pdf/ticket.txt
+@@ -0,0 +1,70 @@
++fichier : ticket-TK-LYON1-2026-000001.pdf
++--- page 1 (0.000 0.000 595.280 841.890)
++Ma Boutique
++12 rue Mercière
++69002 Lyon
++FR
++SIRET : 10000000900017
++Tél. 04 72 00 00 00 · contact@ma-boutique.example
++Ticket de caisse
++TK-LYON1-2026-000001
++Émise le 09/10/2026
++CLIENT
++Client comptoir
++RÉFÉRENCE
++DÉSIGNATION
++QTÉ
++PU TTC
++TAUX
++TOTAL TTC
++CAF-250
++Café moulu 250 g
++2
++12,00 €
++20 %
++24,00 €
++THE-100
++Thé vert 100 g
++1
++6,50 €
++5,5 %
++6,50 €
++Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la
++différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du
++total de la ligne.
++TAUX TVA
++BASE HT
++TVA
++TOTAL TTC
++20 %
++20,00 €
++4,00 €
++24,00 €
++5,5 %
++6,16 €
++0,34 €
++6,50 €
++RÈGLEMENTS
++DATE
++MODE
++RÉFÉRENCE
++MONTANT
++09/10/2026
++Espèces
++10,50 €
++09/10/2026
++Carte bancaire
++CB-0930
++20,00 €
++Restant dû à l'émission
++0,00 €
++Total HT
++26,16 €
++Total TVA
++4,34 €
++Total TTC
++30,50 €
++Les Délices de Jeanne SAS au capital de 10 000,00 € · Siège social : 1 rue de la République, 69002 Lyon · SIREN : 100000009 · RCS Lyon · TVA intracommunautaire :
++FR88100000009
++Catégorie de l'opération : Livraison de biens
++Page 1 sur 1
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/registre.txt b/tests/Fixtures/empreinte-de-la-caisse/registre.txt
+new file mode 100644
+index 0000000..c826832
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/registre.txt
+@@ -0,0 +1,12 @@
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"evenement","sequence":1,"type":"260","horodatage":"20261009073000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":null,"document":null,"donnees":{"code":260,"libelle":"Initialisation du registre fiscal du magasin","details":[]}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"encaissement","sequence":1,"type":"paiement","horodatage":"20261009073000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":null,"document":{"type":"paiement","id":⟦paiements:ticket_1⟧},"donnees":{"paiement":{"client_id":⟦clients:comptoir⟧,"mode":"especes","montant":1050,"reference":null,"notes":null,"recu_le":"2026-10-09","cree_par":⟦users:vendeur⟧},"contre_passe":null,"client":{"id":⟦clients:comptoir⟧,"nom":"Client comptoir","type_client":"particulier","comptoir":true,"siret":null,"numero_tva":null,"adresse":null,"complement_adresse":null,"code_postal":null,"ville":null,"pays":"FR","email":null,"telephone":null},"allocations":[{"facture_id":⟦factures:ticket⟧,"numero":"TK-LYON1-2026-000001","montant":1050}],"credits_imputes":[]}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"encaissement","sequence":2,"type":"paiement","horodatage":"20261009073000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:encaissement:1⟧","document":{"type":"paiement","id":⟦paiements:ticket_2⟧},"donnees":{"paiement":{"client_id":⟦clients:comptoir⟧,"mode":"carte_bancaire","montant":2000,"reference":"CB-0930","notes":null,"recu_le":"2026-10-09","cree_par":⟦users:vendeur⟧},"contre_passe":null,"client":{"id":⟦clients:comptoir⟧,"nom":"Client comptoir","type_client":"particulier","comptoir":true,"siret":null,"numero_tva":null,"adresse":null,"complement_adresse":null,"code_postal":null,"ville":null,"pays":"FR","email":null,"telephone":null},"allocations":[{"facture_id":⟦factures:ticket⟧,"numero":"TK-LYON1-2026-000001","montant":2000}],"credits_imputes":[]}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"vente","sequence":1,"type":"ticket","horodatage":"20261009073000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":null,"gt":{"montant":3050,"perpetuel_reel":3050,"perpetuel_absolu":3050},"document":{"type":"facture","id":⟦factures:ticket⟧},"donnees":{"document":{"numero":"TK-LYON1-2026-000001","date_emission":"2026-10-09T09:30:00+02:00","client":{"id":⟦clients:comptoir⟧,"comptoir":true,"type_client":"particulier","nom":"Client comptoir","adresse":null,"complement_adresse":null,"code_postal":null,"ville":null,"pays":"FR","siren":null,"siret":null,"numero_tva":null,"identifiant_etranger":null,"etabli_en_france":true},"franchise_en_base":false,"nature_operation":"vente_france","livraison":{"adresse":null,"complement":null,"code_postal":null,"ville":null,"pays":null,"date":null,"transport_par":null},"consultation_vies_id":null,"cree_par":⟦users:vendeur⟧,"devis_id":null,"facture_rectifiee_id":null,"devise":"EUR","date_echeance":"2026-11-08","conditions_paiement":null,"notes":null,"lignes":[{"ordre":0,"nature":"bien","produit_id":⟦produits:cafe⟧,"service_id":null,"reference":"CAF-250","description":"Café moulu 250 g","quantite":2,"prix_unitaire_ht":10000000,"prix_unitaire_ttc":1200,"taux_tva":2000,"taux_tva_du_prix":2000,"remise":0,"ht":2000,"tva":400,"ttc":2400},{"ordre":1,"nature":"bien","produit_id":⟦produits:the⟧,"service_id":null,"reference":"THE-100","description":"Thé vert 100 g","quantite":1,"prix_unitaire_ht":6161137,"prix_unitaire_ttc":650,"taux_tva":550,"taux_tva_du_prix":550,"remise":0,"ht":616,"tva":34,"ttc":650}],"ventilation":[{"taux":2000,"ht":2000,"tva":400,"ttc":2400},{"taux":550,"ht":616,"tva":34,"ttc":650}],"totaux":{"ht":2616,"tva":434,"ttc":3050}},"contexte":{"emetteur":{"nom":"Ma Boutique","raison_sociale":"Les Délices de Jeanne","forme_juridique":"SAS","entrepreneur_individuel":false,"capital_social":1000000,"capital_variable":false,"siren":"100000009","siret":"10000000900017","immatriculation":"RCS Lyon","numero_tva":"FR88100000009","adresse":"12 rue Mercière","complement_adresse":null,"code_postal":"69002","ville":"Lyon","pays":"FR","siege":{"adresse":"1 rue de la République","complement_adresse":null,"code_postal":"69002","ville":"Lyon"},"email":"contact@ma-boutique.example","telephone":"04 72 00 00 00","regime_tva":null,"option_debits_tva":false,"mentions":{"penalites_retard":"Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.","indemnite_recouvrement":"Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.","escompte":"Pas d'escompte pour paiement anticipé."},"assurance":{"assureur":null,"adresse":null,"contrat":null,"couverture":null}},"categorie_operation":"livraison_de_biens","mentions":["Catégorie de l'opération : Livraison de biens"],"consultation_vies":null,"reglements":[{"paiement_id":⟦paiements:ticket_1⟧,"mode":"especes","reference":null,"montant":1050},{"paiement_id":⟦paiements:ticket_2⟧,"mode":"carte_bancaire","reference":"CB-0930","montant":2000}],"credits_avoir":[]}}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"vente","sequence":2,"type":"facture","horodatage":"20261009081500Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:vente:1⟧","gt":{"montant":13650,"perpetuel_reel":16700,"perpetuel_absolu":16700},"document":{"type":"facture","id":⟦factures:facture⟧},"donnees":{"document":{"numero":"FAC-LYON1-2026-000001","date_emission":"2026-10-09T10:15:00+02:00","client":{"id":⟦clients:atelier⟧,"comptoir":false,"type_client":"professionnel","nom":"Atelier Dupont SARL","adresse":"8 rue des Tanneurs","complement_adresse":null,"code_postal":"69001","ville":"Lyon","pays":"FR","siren":"123456789","siret":"12345678900011","numero_tva":"FR32123456789","identifiant_etranger":null,"etabli_en_france":true},"franchise_en_base":false,"nature_operation":"vente_france","livraison":{"adresse":null,"complement":null,"code_postal":null,"ville":null,"pays":null,"date":null,"transport_par":null},"consultation_vies_id":null,"cree_par":⟦users:vendeur⟧,"devis_id":null,"facture_rectifiee_id":null,"devise":"EUR","date_echeance":"2026-11-08","conditions_paiement":null,"notes":"Livraison prévue le 15/10/2026.","lignes":[{"ordre":0,"nature":"bien","produit_id":⟦produits:coffret⟧,"service_id":null,"reference":"COF-DEG","description":"Coffret dégustation","quantite":3,"prix_unitaire_ht":37500000,"prix_unitaire_ttc":4500,"taux_tva":2000,"taux_tva_du_prix":2000,"remise":1000,"ht":10125,"tva":2025,"ttc":12150},{"ordre":1,"nature":"service","produit_id":null,"service_id":⟦services:livraison⟧,"reference":null,"description":"Livraison sur rendez-vous","quantite":1,"prix_unitaire_ht":12500000,"prix_unitaire_ttc":1500,"taux_tva":2000,"taux_tva_du_prix":2000,"remise":0,"ht":1250,"tva":250,"ttc":1500}],"ventilation":[{"taux":2000,"ht":11375,"tva":2275,"ttc":13650}],"totaux":{"ht":11375,"tva":2275,"ttc":13650}},"contexte":{"emetteur":{"nom":"Ma Boutique","raison_sociale":"Les Délices de Jeanne","forme_juridique":"SAS","entrepreneur_individuel":false,"capital_social":1000000,"capital_variable":false,"siren":"100000009","siret":"10000000900017","immatriculation":"RCS Lyon","numero_tva":"FR88100000009","adresse":"12 rue Mercière","complement_adresse":null,"code_postal":"69002","ville":"Lyon","pays":"FR","siege":{"adresse":"1 rue de la République","complement_adresse":null,"code_postal":"69002","ville":"Lyon"},"email":"contact@ma-boutique.example","telephone":"04 72 00 00 00","regime_tva":null,"option_debits_tva":false,"mentions":{"penalites_retard":"Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.","indemnite_recouvrement":"Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.","escompte":"Pas d'escompte pour paiement anticipé."},"assurance":{"assureur":null,"adresse":null,"contrat":null,"couverture":null}},"categorie_operation":"les_deux","mentions":["Catégorie de l'opération : Livraison de biens et prestation de services"],"consultation_vies":null,"reglements":[],"credits_avoir":[]}}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"encaissement","sequence":3,"type":"paiement","horodatage":"20261009084500Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:encaissement:2⟧","document":{"type":"paiement","id":⟦paiements:virement⟧},"donnees":{"paiement":{"client_id":⟦clients:atelier⟧,"mode":"virement","montant":5000,"reference":"VIR-2026-0042","notes":null,"recu_le":"2026-10-09","cree_par":⟦users:vendeur⟧},"contre_passe":null,"client":{"id":⟦clients:atelier⟧,"nom":"Atelier Dupont SARL","type_client":"professionnel","comptoir":false,"siret":"12345678900011","numero_tva":"FR32123456789","adresse":"8 rue des Tanneurs","complement_adresse":null,"code_postal":"69001","ville":"Lyon","pays":"FR","email":"compta@atelier-dupont.example","telephone":"04 78 00 00 01"},"allocations":[{"facture_id":⟦factures:facture⟧,"numero":"FAC-LYON1-2026-000001","montant":5000}],"credits_imputes":[]}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"encaissement","sequence":4,"type":"contre_passation","horodatage":"20261009090000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:encaissement:3⟧","document":{"type":"paiement","id":⟦paiements:contre_passation⟧},"donnees":{"paiement":{"client_id":⟦clients:atelier⟧,"mode":"virement","montant":-5000,"reference":"VIR-2026-0042","notes":"Virement saisi deux fois","recu_le":"2026-10-09","cree_par":⟦users:vendeur⟧},"contre_passe":{"paiement_id":⟦paiements:virement⟧,"sequence":3},"client":{"id":⟦clients:atelier⟧,"nom":"Atelier Dupont SARL","type_client":"professionnel","comptoir":false,"siret":"12345678900011","numero_tva":"FR32123456789","adresse":"8 rue des Tanneurs","complement_adresse":null,"code_postal":"69001","ville":"Lyon","pays":"FR","email":"compta@atelier-dupont.example","telephone":"04 78 00 00 01"},"allocations":[{"facture_id":⟦factures:facture⟧,"numero":"FAC-LYON1-2026-000001","montant":-5000}],"credits_imputes":[]}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"vente","sequence":3,"type":"avoir","horodatage":"20261009093000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:vente:2⟧","gt":{"montant":-1200,"perpetuel_reel":15500,"perpetuel_absolu":17900},"document":{"type":"avoir","id":⟦avoirs:bon_d_avoir⟧},"donnees":{"document":{"numero":"AV-LYON1-2026-000001","date_emission":"2026-10-09T11:30:00+02:00","client":{"id":⟦clients:comptoir⟧,"comptoir":true,"type_client":"particulier","nom":"Client comptoir","adresse":null,"complement_adresse":null,"code_postal":null,"ville":null,"pays":"FR","siren":null,"siret":null,"numero_tva":null,"identifiant_etranger":null,"etabli_en_france":true},"franchise_en_base":false,"nature_operation":"vente_france","regularisation":false,"cree_par":⟦users:vendeur⟧,"devise":"EUR","motif":"Retour du client","corrige":"ticket","documents_corriges":[{"numero":"TK-LYON1-2026-000001","date_emission":"2026-10-09"}],"lignes":[{"ordre":0,"nature":"bien","produit_id":⟦produits:cafe⟧,"reference":"CAF-250","description":"Café moulu 250 g","quantite":-1,"prix_unitaire_ht":10000000,"prix_unitaire_ttc":1200,"taux_tva":2000,"taux_tva_du_prix":2000,"remise":0,"ht":-1000,"tva":-200,"ttc":-1200,"origine":{"ligne_facture_id":⟦lignes_facture:ticket_1⟧,"facture_id":⟦factures:ticket⟧,"numero":"TK-LYON1-2026-000001"}}],"ventilation":[{"taux":2000,"ht":-1000,"tva":-200,"ttc":-1200}],"totaux":{"ht":-1000,"tva":-200,"ttc":-1200}},"contexte":{"emetteur":{"nom":"Ma Boutique","raison_sociale":"Les Délices de Jeanne","forme_juridique":"SAS","entrepreneur_individuel":false,"capital_social":1000000,"capital_variable":false,"siren":"100000009","siret":"10000000900017","immatriculation":"RCS Lyon","numero_tva":"FR88100000009","adresse":"12 rue Mercière","complement_adresse":null,"code_postal":"69002","ville":"Lyon","pays":"FR","siege":{"adresse":"1 rue de la République","complement_adresse":null,"code_postal":"69002","ville":"Lyon"},"email":"contact@ma-boutique.example","telephone":"04 72 00 00 00","regime_tva":null,"option_debits_tva":false,"mentions":{"penalites_retard":"Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.","indemnite_recouvrement":"Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.","escompte":"Pas d'escompte pour paiement anticipé."},"assurance":{"assureur":null,"adresse":null,"contrat":null,"couverture":null}},"categorie_operation":"livraison_de_biens","mentions":["Catégorie de l'opération : Livraison de biens"],"imputations":[],"bon_d_avoir":"Ce n° vaut bon d'avoir de 12,00 € à présenter lors d'un prochain achat.","regularisation":null}}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"evenement","sequence":2,"type":"190","horodatage":"20261009093000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:evenement:1⟧","document":{"type":"avoir","id":⟦avoirs:bon_d_avoir⟧},"donnees":{"code":190,"libelle":"Annulation de ticket (avoir sur des tickets de caisse)","details":{"avoir":"AV-LYON1-2026-000001","tickets":["TK-LYON1-2026-000001"],"montant_ttc":-1200,"sequence_vente":3,"motif":"Retour du client"}}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"vente","sequence":4,"type":"avoir","horodatage":"20261009120000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:vente:3⟧","gt":{"montant":-4050,"perpetuel_reel":11450,"perpetuel_absolu":21950},"document":{"type":"avoir","id":⟦avoirs:avoir⟧},"donnees":{"document":{"numero":"AV-LYON1-2026-000002","date_emission":"2026-10-09T14:00:00+02:00","client":{"id":⟦clients:atelier⟧,"comptoir":false,"type_client":"professionnel","nom":"Atelier Dupont SARL","adresse":"8 rue des Tanneurs","complement_adresse":null,"code_postal":"69001","ville":"Lyon","pays":"FR","siren":"123456789","siret":"12345678900011","numero_tva":"FR32123456789","identifiant_etranger":null,"etabli_en_france":true},"franchise_en_base":false,"nature_operation":"vente_france","regularisation":false,"cree_par":⟦users:vendeur⟧,"devise":"EUR","motif":"Coffret abîmé","corrige":"facture","documents_corriges":[{"numero":"FAC-LYON1-2026-000001","date_emission":"2026-10-09"}],"lignes":[{"ordre":0,"nature":"bien","produit_id":⟦produits:coffret⟧,"reference":"COF-DEG","description":"Coffret dégustation","quantite":-1,"prix_unitaire_ht":37500000,"prix_unitaire_ttc":4500,"taux_tva":2000,"taux_tva_du_prix":2000,"remise":1000,"ht":-3375,"tva":-675,"ttc":-4050,"origine":{"ligne_facture_id":⟦lignes_facture:facture_1⟧,"facture_id":⟦factures:facture⟧,"numero":"FAC-LYON1-2026-000001"}}],"ventilation":[{"taux":2000,"ht":-3375,"tva":-675,"ttc":-4050}],"totaux":{"ht":-3375,"tva":-675,"ttc":-4050}},"contexte":{"emetteur":{"nom":"Ma Boutique","raison_sociale":"Les Délices de Jeanne","forme_juridique":"SAS","entrepreneur_individuel":false,"capital_social":1000000,"capital_variable":false,"siren":"100000009","siret":"10000000900017","immatriculation":"RCS Lyon","numero_tva":"FR88100000009","adresse":"12 rue Mercière","complement_adresse":null,"code_postal":"69002","ville":"Lyon","pays":"FR","siege":{"adresse":"1 rue de la République","complement_adresse":null,"code_postal":"69002","ville":"Lyon"},"email":"contact@ma-boutique.example","telephone":"04 72 00 00 00","regime_tva":null,"option_debits_tva":false,"mentions":{"penalites_retard":"Pénalités de retard : trois fois le taux d'intérêt légal, exigibles dès le lendemain de la date d'échéance.","indemnite_recouvrement":"Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.","escompte":"Pas d'escompte pour paiement anticipé."},"assurance":{"assureur":null,"adresse":null,"contrat":null,"couverture":null}},"categorie_operation":"livraison_de_biens","mentions":["Catégorie de l'opération : Livraison de biens"],"imputations":[{"facture_id":⟦factures:facture⟧,"numero":"FAC-LYON1-2026-000001","montant":4050}],"bon_d_avoir":null,"regularisation":null}}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"evenement","sequence":3,"type":"50","horodatage":"20261009170000Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:evenement:2⟧","document":{"type":"cloture_caisse","id":⟦clotures_caisse:cloture⟧},"donnees":{"code":50,"libelle":"Clôture de période (journée)","details":{"numero":"Z-LYON1-2026-000001","journee":"2026-10-09","nombre_ventes":1,"nombre_avoirs":1,"total_ht":1616,"total_tva":234,"total_ttc":1850,"encaissements":{"especes":1050,"carte_bancaire":2000,"cheque":0,"virement":0,"prelevement":0},"credit_avoir_impute":4050,"grands_totaux":{"perpetuel_reel":11450,"perpetuel_absolu":21950}}}}
++{"format":1,"magasin":{"uuid":"00000000-0000-4000-8000-000000000003","siren":"100000009","siret":"10000000900017"},"caisse":"00000000-0000-4000-8000-000000000003","chaine":"evenement","sequence":4,"type":"110","horodatage":"20261009170500Z","operateur":{"id":⟦users:vendeur⟧,"nom":"Responsable de test"},"version_module":"1.5","cle_id":"07d68315237927be0eba7fa4bdd8c15a2a7a50d02a56f7341f984a60f4524d80","signature_precedente":"⟦signature:evenement:3⟧","document":null,"donnees":{"code":110,"libelle":"Export de données","details":{"export":"journal_des_evenements","format":"csv","du":"2026-10-09","au":"2026-10-09"}}}
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/releve-de-caisse.txt b/tests/Fixtures/empreinte-de-la-caisse/releve-de-caisse.txt
+new file mode 100644
+index 0000000..e982df0
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/releve-de-caisse.txt
+@@ -0,0 +1,21 @@
++{
++    "id": ⟦clotures_caisse_personnelles:releve⟧,
++    "magasin_id": ⟦magasins:lyon1⟧,
++    "vendeur_id": ⟦users:vendeur⟧,
++    "vendeur_nom": "Responsable de test",
++    "mode_fermeture": "vendeur",
++    "fermee_par": ⟦users:vendeur⟧,
++    "fermee_par_nom": "Responsable de test",
++    "periode_debut": "2026-10-08 22:00:00",
++    "jusqu_au": "2026-10-09 15:30:00",
++    "cloturee_a": "2026-10-09 15:30:00",
++    "nombre_ventes": 2,
++    "total_ht": "139.91",
++    "total_tva": "27.09",
++    "total_ttc": "167.00",
++    "encaissements": "{\"virement\":\"0.00\",\"especes\":\"10.50\",\"carte_bancaire\":\"20.00\"}",
++    "credit_avoir": "40.50",
++    "reste_du": "96.00",
++    "created_at": "2026-10-09 15:30:00",
++    "updated_at": "2026-10-09 15:30:00"
++}
+diff --git a/tests/Fixtures/empreinte-de-la-caisse/verification.txt b/tests/Fixtures/empreinte-de-la-caisse/verification.txt
+new file mode 100644
+index 0000000..258e587
+--- /dev/null
++++ b/tests/Fixtures/empreinte-de-la-caisse/verification.txt
+@@ -0,0 +1,23 @@
++{
++    "conforme": true,
++    "anomalies": 0,
++    "enregistrements_verifies": {
++        "vente": 4,
++        "encaissement": 4,
++        "evenement": 4
++    },
++    "points_de_reprise": {
++        "vente": {
++            "sequence": 4,
++            "signature": "⟦signature:vente:4⟧"
++        },
++        "encaissement": {
++            "sequence": 4,
++            "signature": "⟦signature:encaissement:4⟧"
++        },
++        "evenement": {
++            "sequence": 4,
++            "signature": "⟦signature:evenement:4⟧"
++        }
++    }
++}
+-- 
+2.43.0
+

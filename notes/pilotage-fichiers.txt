@@ -117,6 +117,8 @@ export/decision-ex.md
 reprises/PASSATION-2026-11-03.md
 reprises/lot-QA-travail-non-commite.patch
 reprises/lot-QA-commits-locaux.patch
+reprises/lot-TY1-commits-locaux.patch
+reprises/lot-TY1-travail-non-commite.patch
 reprises/args-course-passation-2026-11-03.json
 reprises/args-course-passation-2026-11-07.json
 fichiers/decision-fi.md

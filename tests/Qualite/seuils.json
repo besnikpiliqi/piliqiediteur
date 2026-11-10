@@ -2,7 +2,17 @@
     "analyse_statique": {
         "niveau": 6,
         "chemins": [
-            "app"
+            "app",
+            "bootstrap",
+            "config",
+            "database",
+            "routes",
+            "tests/Qualite"
+        ],
+        "exclusions": [
+            "bootstrap/cache",
+            "tests/Qualite/Psalm",
+            "tests/Qualite/Temoins"
         ],
         "stubs": [
             "tests/Qualite/macros.stub"

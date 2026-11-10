@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use Illuminate\Console\Command;
 use Illuminate\Database\Seeder;
 
 /**
@@ -12,8 +13,22 @@ use Illuminate\Database\Seeder;
  */
 class DatabaseSeeder extends Seeder
 {
+    /**
+     * La commande de la console qui lance le semis (db:seed), qui la donne
+     * par setCommand() ; aucune quand le semeur est lancé autrement.
+     * Seeder::$command se dit toujours présente, mais reste vide jusque-là.
+     */
+    private ?Command $commande = null;
+
+    public function setCommand(Command $command): static
+    {
+        $this->commande = $command;
+
+        return parent::setCommand($command);
+    }
+
     public function run(): void
     {
-        $this->command?->info('Aucune donnée de démonstration : créez une société depuis la page d\'inscription (/app/register).');
+        $this->commande?->info('Aucune donnée de démonstration : créez une société depuis la page d\'inscription (/app/register).');
     }
 }

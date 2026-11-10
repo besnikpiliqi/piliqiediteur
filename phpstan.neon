@@ -4,6 +4,15 @@ includes:
 parameters:
     paths:
         - app
+        - routes
+        - bootstrap
+        - config
+        - database
+        - tests/Qualite
+    excludePaths:
+        - bootstrap/cache
+        - tests/Qualite/Psalm
+        - tests/Qualite/Temoins (?)
     level: 6
     tmpDir: storage/framework/cache/phpstan
     parseModelCastsMethod: true

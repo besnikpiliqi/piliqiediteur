@@ -1,10 +1,10 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 19:50 UTC par pilotage-sync.sh : « heures ».
+Mis à jour le 11/11/2026 à 20:29 UTC par pilotage-sync.sh : « Après le lot CALC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `b21124f`. Commits locaux pas encore poussés :
+Tête poussée : `cba222d`. Commits locaux pas encore poussés :
 
 ```
 ```
@@ -12,6 +12,7 @@ Tête poussée : `b21124f`. Commits locaux pas encore poussés :
 Derniers commits poussés :
 
 ```
+cba222d Relecture du lot CALC de la série 8
 b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'il est enregistré (lot CALC)
 71a217a Passe à la méthode rapide : la suite une fois par lot, l'analyse statique et la mutation à la fin
 5dc11a1 Relecture du lot TY2 de l’analyse statique
@@ -31,17 +32,11 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
 5946e69 Arrête les mutants survivants connus des calculs et des droits (lot TY1 2/n)
 2c55bad Ajoute le test d'empreinte de la caisse et des PDF (lot TY1 1/n)
 b93aeff Relecture du lot PG de la série 8
-d8deaf9 Mute en entier chaque fichier sensible changé par l'envoi (CI, lot PG)
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/Catalogue/Services/BaremePrixDeVente.php
- M app/Domain/Facturation/Rules/MontantAuCentime.php
- M app/Filament/App/Pages/ParametresPrixDeVente.php
- M tests/Feature/Filament/ParametresPrixDeVenteTest.php
- M tests/Unit/BaremePrixDeVenteTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -54,4 +49,6 @@ CALC:implementation-2
 CALC:relecture1
 CALC:relecture2
 CALC:correction
+CALC:poussee
+CALC:notes
 ```

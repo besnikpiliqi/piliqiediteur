@@ -13272,6 +13272,47 @@
    "refs": [
     "T42"
    ]
+  },
+  {
+   "id": "Q389",
+   "serie": "Points de l'onglet « Ce qui reste à trancher » (11/11)",
+   "date_utc": "2026-11-11 vers 00:10",
+   "date_paris": "11/11/2026 vers 01 h 10",
+   "code": "T43",
+   "question": "Choix d'écran du lot NAV-2 : couleur de sélection, numéros cliquables. Ces choix d'écran vous conviennent-ils : la ligne choisie en teinte violette légère, au texte lisible, et tout numéro de document affiché cliquable, pas seulement sous « Crédit appliqué » ? Ma proposition : la ligne choisie en teinte violette légère, au texte bien lisible (contraste vérifié par un test), et tout numéro de document affiché devient un lien quand on peut voir ce document.",
+   "mots": "oui",
+   "decision": "La ligne choisie d'une liste ou d'une fenêtre de sélection prend une teinte violette légère, au texte bien lisible, et tout numéro de document affiché devient un lien vers ce document pour qui peut le voir.",
+   "theme": "Écrans",
+   "statut": "a-appliquer",
+   "statut_detail": "Lot NAV-2 de la chaîne, avec des tests en navigateur (constats C2 et C5 de ses consignes).",
+   "sources": [
+    "document « PILIQI — Ce qui reste à trancher », onglet 1, colonne « Votre réponse » du tableau « Le plus urgent » (rev 81)",
+    "nouvelle-session/navigateur/constats-editeur.md (C2, C5)"
+   ],
+   "refs": [
+    "T43"
+   ]
+  },
+  {
+   "id": "Q390",
+   "serie": "Points de l'onglet « Ce qui reste à trancher » (11/11)",
+   "date_utc": "2026-11-11 entre 00:10 et 00:30",
+   "date_paris": "11/11/2026 entre 01 h 10 et 01 h 30",
+   "code": "T44",
+   "question": "Cabinet : une seule case « voir toutes » pour factures et clôtures. Votre idée du 01/11 (le comptable voit toutes les factures) devient une case unique « voir toutes », factures et clôtures. Cette forme vous convient-elle ? Ma proposition : une case « Factures : voir toutes celles du magasin », et de même pour les clôtures ; rien ne change pour les comptes d'une société.",
+   "mots": "quand la societe soit lié avec / l'expert comptable alors la societe / doit poivoir avoir plusieurs case pour / cocher selon par ex: ce comptable peut voir / et analyser et telecharger de tous les magasin ou que pour pour les magasin qui doit les cocher par magasin, donc il doit appuyer tout les magasins ou à cocher par magasin et quoi peut faire. donc meme la societe doit avoir les case pour lui permetrre de voir quelles menus du magasin ou de la societe car peut etre la societe veut pas que son comptable voit tout.",
+   "decision": "Le propriétaire de la société règle par des cases ce que voit son cabinet : les magasins (tous, présents et futurs, d'un clic, ou une sélection cochée magasin par magasin) et, menu par menu, ce que le comptable peut voir, analyser et télécharger, dans les magasins comme dans l'espace de la société. Les cases « Factures : voir toutes celles du magasin » et « Clôtures de caisse : voir toutes celles du magasin » font partie de ces cases.",
+   "theme": "Cabinets d'expertise comptable",
+   "statut": "a-appliquer",
+   "statut_detail": "Lot EC2 de la chaîne (§ 5 ter de sa décision) ; la case des analyses prendra effet avec l'étape 6. Question de suite : T104, en haut de « Le plus urgent ».",
+   "sources": [
+    "document « PILIQI — Ce qui reste à trancher », onglet 1, colonne « Votre réponse » du tableau « Le plus urgent » (rev 111 à 466)",
+    "nouvelle-session/ec2/decision-expert-comptable-societe.md (§ 5 ter)"
+   ],
+   "refs": [
+    "T44",
+    "T104"
+   ]
   }
  ]
 }

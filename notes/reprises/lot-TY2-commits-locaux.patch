@@ -1,0 +1,2377 @@
+From f0a961d5f7edd412f5e453ed4c47bc611e674aea Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 11 Nov 2026 01:31:19 +0000
+Subject: [PATCH] =?UTF-8?q?Type=20les=20valeurs=20lues=20du=20socle=20:=20?=
+ =?UTF-8?q?commandes,=20requ=C3=AAtes,=20r=C3=A9glages,=20int=C3=A9gration?=
+ =?UTF-8?q?s=20(Larastan=20niveaux=209=20et=2010,=20lot=20TY2=201/n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cahier de l'analyse statique, § 4.2, TY2 point 1 : niveaux 9 et 10,
+  par domaine. Ce commit corrige, pour les commandes, les contrôleurs,
+  l'intergiciel, les réponses HTTP, les fournisseurs de services, les
+  intégrations (INPI, INSEE, VIES, courrier recommandé factice), les
+  fabriques, les aides de lecture de Tenancy/Support et
+  tests/Qualite/qualite.php, les erreurs des niveaux 9 et 10 : sur
+  l'arbre reçu (niveau 8 à 0 erreur), Larastan rendait 918 erreurs au
+  niveau 9 et 1 507 au niveau 10 ; il en reste 807 et 1 328 après ce
+  commit (111 du niveau 9 et 179 du niveau 10 corrigées, celles du
+  niveau 9 comprises). phpstan.neon reste au niveau 8 jusqu'au commit
+  qui fait passer le niveau 9 à 0 erreur, et le monte avec seuils.json.
+- Aides de lecture communes, chacune testée pour chaque refus (§ 6.5) :
+  CleDuModele::de() (la clé d'un enregistrement en base, l'entier
+  qu'Eloquent rend ; un modèle sans clé entière, qui n'est pas en base,
+  est refusé au lieu d'une clé convertie en 0 ; CleDuModeleTest) ;
+  Reglage::texte(), texteOuNul(), entier(), tableau() (un réglage lu
+  pour ce que son fichier de configuration garantit ; absent ou d'un
+  autre type, refusé par une exception qui le nomme ; ReglageTest) ;
+  ValeurSimple::enTexte() et enEntier() (une valeur simple saisie ou
+  lue sans type, lue comme (string) et (int) la lisaient sous chaque
+  forme que le navigateur, Livewire et la base rendent : « 12 », 12,
+  « », null, « 0 », « 1 », true, false, 1.5, un texte libre ; un
+  tableau ou un objet est refusé ; ValeurSimpleTest) ;
+  ValeursLues::texteOuNul(), tableau() et instance() (un texte ou
+  rien, un tableau, un objet d'une classe ou d'une classe qui en
+  hérite, là où une méthode de Laravel, de Filament ou de Livewire ne
+  déclare pas son type ; ValeursLuesTest). Aucune de ces exceptions
+  n'est une LogicException : elles remontent jusqu'au journal de
+  l'application, jamais comme le refus d'un geste.
+- Erreurs corrigées : les clés des modèles lues par CleDuModele (au
+  lieu de (int) getKey() ou de getKey() dans un texte) ; les réglages
+  lus par Reglage (app.name, les durées de conservation, les adresses
+  et les délais des registres, le dossier des clés publiques) ; le
+  nombre de lignes effacées par delete() d'Eloquent, les colonnes de
+  pluck(), value() et max() lus par ValeursLues ; les champs validés
+  d'une requête (règles required et string) lus par
+  ValeursLues::texteDe() ; le premier message d'une validation refusée
+  lu par ValeursLues::texteOuNul() ; le disque des envois de Livewire
+  vérifié par instanceof Filesystem ; la réponse du parent de
+  MenerUnCabinetASonEspace vérifiée par ValeursLues::instance() ; le
+  suivant des intergiciels déclaré Closure(Request): Response, ce que
+  Laravel lui fait rendre ; la connexion PostgreSQL créée par
+  AppServiceProvider::connexionPostgres(), typée PDO|(Closure(): PDO) ;
+  la règle « exists » d'un choix dans le magasin et la portée
+  « proposables » vérifiées par ValeursLues::instance() ; les réponses
+  de l'INPI lues par InpiRne::au(), qui suit un chemin comme
+  $donnees['a']['b'] ?? null ; les courriers du service factice lus par
+  FauxServiceEnvoiRecommande::courriers() ; le PDF d'un courrier
+  factice décodé par ResultatDePhp::texte() ; les lignes d'un panier de
+  la fabrique et les attributs des fabriques lus par ValeursLues ;
+  FicheLue lit ses attributs par array_intersect_key(), ce que fait
+  Arr::only(), en gardant leurs clés en texte ; qualite.php lit
+  parties.php, le journal JSON d'Infection, infection.json5 et le
+  rapport de Psalm par des lectures typées (contenuDe(), tableauLu(),
+  texteLu(), entierLu(), parties(), mutantsDuJournal(),
+  cheminsDeSecurite()) et vérifie chaque fichier de glob_recursif() par
+  instanceof SplFileInfo ; ses sorties sont identiques sur les mêmes
+  entrées (sensibles, sensibles-changes, configuration-sensibles,
+  mutation, flux), et OutilDeQualiteTest prouve maintenant les
+  commandes flux et mutation.
+- Changements des six sortes du § 6.2 :
+  (a) aucune valeur par défaut ajoutée ; InpiRne::siege() : avant
+  $personne['identite']['entreprise'] ?? [], après InpiRne::au(), qui
+  rend null pour un maillon absent (la dénomination lue reste nulle
+  dans les deux cas : un tableau vide n'a pas de dénomination) ;
+  (b) InpiRne::siege() : avant $adresse = is_array($personne) ? ... :
+  null, puis le refus d'une adresse qui n'est pas un tableau ; après le
+  refus d'une personne qui n'est pas un tableau, puis celui de
+  l'adresse (même résultat pour chaque valeur) ;
+  CloreInscriptionsSansCode et MarquerFacturesEnRetard : avant
+  pluck()->each(function (int ...)), après foreach sur les mêmes
+  valeurs, dans le même ordre (les identifiants lus d'abord par
+  ValeursLues::entiers(), le numéro de chaque facture par
+  ValeursLues::texte(), au lieu des types des paramètres de la
+  fonction) ;
+  (c) RattachementAuCabinetController : avant (int) $compte->societe_id
+  !== (int) $societe->getKey(), après $compte->societe_id !==
+  CleDuModele::de($societe) (societe_id a le cast integer de User :
+  un entier ou null, que la comparaison à une clé positive traite
+  comme (int) le faisait) ;
+  (d) aucune ;
+  (e) AccepterLInvitationDuCabinetController et
+  ConfirmerInscriptionController : avant (string) $requete->input(...),
+  après ValeurSimple::enTexte(...) ; RegleDuMotDePasse : avant
+  (string) $value, après ValeurSimple::enTexte($value) ;
+  AppServiceProvider::regleDuChoixDansLeMagasin() : avant (string)
+  $component->getState() === (string) $fiche->getOriginal(...), après
+  ValeurSimple::enTexte() des deux côtés ; ReponseAUnDocumentDisparu :
+  avant (string) data_get($composant, 'snapshot') et la classe du
+  document telle quelle, après ValeurSimple::enTexte() (même résultat
+  pour un texte, un nombre, un booléen ou rien ; un tableau, que seule
+  une requête forgée envoie, est refusé comme (string) le refusait par
+  une erreur) ; CodeDuCourrierController : la confirmation facultative
+  du mot de passe, avant (string) ($donnees['password_confirmation'] ??
+  ''), après ValeurSimple::enTexte($donnees['password_confirmation'] ??
+  null) (« » quand elle manque ou est nulle, comme avant) ;
+  VerificationServiceProvider : le pilote inconnu nommé dans son refus
+  par ValeurSimple::enTexte() (même texte qu'avant) ;
+  (f) aucune exception nouvelle qui arrête le traitement des autres
+  magasins ou sociétés : les valeurs vérifiées dans les commandes
+  planifiées sont toujours du type attendu (la clé d'un modèle lu en
+  base, le nombre de lignes effacées par delete(), le chemin des envois
+  de Livewire) ; les commandes qui traitent les magasins un par un
+  (PurgerActionsTraitees, PurgerTraces, PurgerJournalAudit,
+  PurgerVerifications, CloreInscriptionsSansCode) gardent leur
+  rattrapage de chaque échec.
+- Conversions et valeurs par défaut déjà présentes sur des lignes
+  changées pour une autre raison (§ 7, points 2 et 3) : (string)
+  $requete->ip() (une adresse ou null), les ?? null de InpiRne::au()
+  (la lecture qu'il remplace), le ?? [] des courriers du service
+  factice et (string) preg_replace() dans qualite.php.
+- Aucune règle métier ne change ; aucun test existant ne change.
+  Tests ajoutés : CleDuModeleTest, ReglageTest, ValeurSimpleTest, cinq
+  cas de ValeursLuesTest, et deux cas d'OutilDeQualiteTest (flux,
+  mutation).
+- Montants décimaux (§ 6.7) : aucun changé.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K3593fBCSfG8EcbWrZryb6
+---
+ .../Commands/CloreInscriptionsSansCode.php    |  25 +--
+ .../Commands/DiagnostiquerCaisseSecurisee.php |   3 +-
+ .../Commands/Editeur/ConsulterLesPieces.php   |   6 +-
+ .../Commands/Editeur/ProcedureDeLEditeur.php  |   6 +-
+ .../Commands/EffacerPiecesVerification.php    |   9 +-
+ .../EffacerTelechargementsDeDocuments.php     |   3 +-
+ .../ExpirerInvitationsDesCabinets.php         |   5 +-
+ .../FermerDemonstrationsInactives.php         |   3 +-
+ app/Console/Commands/GenererCleFiscale.php    |   3 +-
+ .../Commands/MarquerFacturesEnRetard.php      |  12 +-
+ .../Commands/PurgerActionsTraitees.php        |   6 +-
+ .../Commands/PurgerDemandesInscription.php    |   5 +-
+ .../Commands/PurgerInvitationsDesCabinets.php |   5 +-
+ app/Console/Commands/PurgerJournalAudit.php   |   3 +-
+ app/Console/Commands/PurgerTraces.php         |   3 +-
+ app/Console/Commands/PurgerVerifications.php  |   9 +-
+ .../Commands/VerifierIntegriteFiscale.php     |   3 +-
+ app/Console/Commands/VerifierJournalAudit.php |   5 +-
+ .../Support/AvertissementsDuCodeDActivite.php |   2 +-
+ app/Domain/Tenancy/Support/CleDuModele.php    |  33 ++++
+ app/Domain/Tenancy/Support/FicheLue.php       |   7 +-
+ .../Tenancy/Support/MotDePasseRedemande.php   |   2 +-
+ app/Domain/Tenancy/Support/Reglage.php        |  67 +++++++
+ .../Tenancy/Support/RegleDuMotDePasse.php     |   2 +-
+ app/Domain/Tenancy/Support/ValeurSimple.php   |  47 +++++
+ app/Domain/Tenancy/Support/ValeursLues.php    |  50 ++++-
+ ...AccepterLInvitationDuCabinetController.php |   9 +-
+ .../Controllers/CodeDuCourrierController.php  |  16 +-
+ .../ConfirmerInscriptionController.php        |   6 +-
+ .../ConfirmerNouvelleAdresseController.php    |   3 +-
+ .../RattachementAuCabinetController.php       |   3 +-
+ .../BindTenantContextFromFilamentTenant.php   |   3 +
+ .../Middleware/ExigerSonPropreMotDePasse.php  |   3 +
+ .../JournaliserOuvertureDeSession.php         |   3 +
+ .../Middleware/MenerUnCabinetASonEspace.php   |   3 +-
+ .../Middleware/MenerUnCompteSansMagasin.php   |   3 +
+ .../Responses/ReponseAUnDocumentDisparu.php   |   9 +-
+ .../FauxServiceEnvoiRecommande.php            |  35 +++-
+ app/Integrations/Rne/InpiRne.php              |  46 ++++-
+ app/Integrations/Sirene/InseeSirene.php       |   5 +-
+ app/Integrations/Vies/ClientVies.php          |   5 +-
+ app/Providers/AppServiceProvider.php          |  37 +++-
+ app/Providers/VerificationServiceProvider.php |   3 +-
+ .../ClotureCaissePersonnelleFactory.php       |   3 +-
+ database/factories/PanierCaisseFactory.php    |  20 +-
+ database/factories/SocieteFactory.php         |   3 +-
+ database/factories/UserFactory.php            |   3 +-
+ tests/Feature/Qualite/OutilDeQualiteTest.php  |  44 +++++
+ tests/Feature/Tenancy/CleDuModeleTest.php     |  37 ++++
+ tests/Feature/Tenancy/ReglageTest.php         |  60 ++++++
+ tests/Qualite/qualite.php                     | 176 ++++++++++++++++--
+ tests/Unit/ValeurSimpleTest.php               |  76 ++++++++
+ tests/Unit/ValeursLuesTest.php                |  76 ++++++++
+ 53 files changed, 878 insertions(+), 136 deletions(-)
+ create mode 100644 app/Domain/Tenancy/Support/CleDuModele.php
+ create mode 100644 app/Domain/Tenancy/Support/Reglage.php
+ create mode 100644 app/Domain/Tenancy/Support/ValeurSimple.php
+ create mode 100644 tests/Feature/Tenancy/CleDuModeleTest.php
+ create mode 100644 tests/Feature/Tenancy/ReglageTest.php
+ create mode 100644 tests/Unit/ValeurSimpleTest.php
+
+diff --git a/app/Console/Commands/CloreInscriptionsSansCode.php b/app/Console/Commands/CloreInscriptionsSansCode.php
+index 60ac169..c798f66 100644
+--- a/app/Console/Commands/CloreInscriptionsSansCode.php
++++ b/app/Console/Commands/CloreInscriptionsSansCode.php
+@@ -8,11 +8,13 @@
+ use App\Domain\Tenancy\Enums\StatutSociete;
+ use App\Domain\Tenancy\Models\CodeConfirmation;
+ use App\Domain\Tenancy\Models\Societe;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonImmutable;
+ use Carbon\CarbonInterval;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
++use Illuminate\Database\Query\Builder;
+ use Throwable;
+ 
+ /**
+@@ -36,25 +38,26 @@ public function handle(CloreLInscriptionAction $clore): int
+         $closes = 0;
+         $enEchec = 0;
+ 
+-        Societe::query()
++        $societes = Societe::query()
+             ->whereNull('validee_le')
+             ->whereNull('close_le')
+             ->where('statut', '<>', StatutSociete::Revoquee->value)
+             ->where('created_at', '<=', $limite)
+-            ->whereNotExists(fn ($courriers) => $courriers->from((new CodeConfirmation)->getTable())
++            ->whereNotExists(fn (Builder $courriers): Builder => $courriers->from((new CodeConfirmation)->getTable())
+                 ->whereColumn('codes_confirmation.societe_id', 'societes.id')
+                 ->where('codes_confirmation.motif', MotifCode::Verification->value)
+                 ->where('codes_confirmation.envoye_le', '>', $limite))
+             ->orderBy('id')
+-            ->pluck('id')
+-            ->each(function (int $societeId) use ($clore, $limite, &$closes, &$enEchec): void {
+-                try {
+-                    $closes += $clore->cloreSansCode(Societe::query()->findOrFail($societeId), $limite) ? 1 : 0;
+-                } catch (Throwable $erreur) {
+-                    report($erreur);
+-                    $enEchec++;
+-                }
+-            });
++            ->pluck('id');
++
++        foreach (ValeursLues::entiers($societes) as $societeId) {
++            try {
++                $closes += $clore->cloreSansCode(Societe::query()->findOrFail($societeId), $limite) ? 1 : 0;
++            } catch (Throwable $erreur) {
++                report($erreur);
++                $enEchec++;
++            }
++        }
+ 
+         $this->info("{$closes} inscription(s) close(s).");
+ 
+diff --git a/app/Console/Commands/DiagnostiquerCaisseSecurisee.php b/app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+index b832d34..e1dd419 100644
+--- a/app/Console/Commands/DiagnostiquerCaisseSecurisee.php
++++ b/app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+@@ -7,6 +7,7 @@
+ use App\Domain\Calendrier\Calendrier;
+ use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
+ use App\Domain\Tenancy\Services\JournalAudit;
++use App\Domain\Tenancy\Support\Reglage;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -115,7 +116,7 @@ private function controlerClesEpinglees(SignataireFiscal $signataire): string
+         $cleIds = array_keys($signataire->clesEpinglees());
+ 
+         if ($cleIds === []) {
+-            throw new RuntimeException('Aucune clé publique épinglée dans '.config('caisse_securisee.dossier_cles_publiques').'.');
++            throw new RuntimeException('Aucune clé publique épinglée dans '.Reglage::texte('caisse_securisee.dossier_cles_publiques').'.');
+         }
+ 
+         return implode(', ', $cleIds);
+diff --git a/app/Console/Commands/Editeur/ConsulterLesPieces.php b/app/Console/Commands/Editeur/ConsulterLesPieces.php
+index 4198ac8..5e44058 100644
+--- a/app/Console/Commands/Editeur/ConsulterLesPieces.php
++++ b/app/Console/Commands/Editeur/ConsulterLesPieces.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Tenancy\Services\JournalAudit;
+ use App\Domain\Tenancy\Services\PiecesDeVerification;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+@@ -60,8 +61,9 @@ protected function executer(Societe $societe, InterventionDeLEditeur $editeur):
+ 
+         try {
+             foreach ($pieces as $piece) {
+-                File::put("{$dossier}/piece-{$piece->getKey()}-{$piece->type->value}", app(PiecesDeVerification::class)->dechiffrer($piece));
+-                chmod("{$dossier}/piece-{$piece->getKey()}-{$piece->type->value}", 0600);
++                $fichier = "{$dossier}/piece-".CleDuModele::de($piece)."-{$piece->type->value}";
++                File::put($fichier, app(PiecesDeVerification::class)->dechiffrer($piece));
++                chmod($fichier, 0600);
+             }
+ 
+             app(TenantContext::class)->runAsSociete($societe, fn () => app(JournalAudit::class)->inscrire(ActionAuditee::PiecesConsultees, null, null, null, [
+diff --git a/app/Console/Commands/Editeur/ProcedureDeLEditeur.php b/app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+index b9dfa27..3ba94f0 100644
+--- a/app/Console/Commands/Editeur/ProcedureDeLEditeur.php
++++ b/app/Console/Commands/Editeur/ProcedureDeLEditeur.php
+@@ -7,7 +7,9 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\CodeMagasin;
+ use App\Domain\Tenancy\Services\RegistreDesOperateurs;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Illuminate\Console\Command;
+ use LogicException;
+ 
+@@ -97,7 +99,7 @@ public function handle(RegistreDesOperateurs $operateurs): int
+             return self::FAILURE;
+         }
+ 
+-        foreach ([$this->getDescription(), "Société n° {$societe->getKey()} — {$societe->getFilamentName()} — SIREN {$societe->siren}", ...$this->resume($societe)] as $ligne) {
++        foreach ([$this->getDescription(), 'Société n° '.CleDuModele::de($societe)." — {$societe->getFilamentName()} — SIREN {$societe->siren}", ...$this->resume($societe)] as $ligne) {
+             $this->line($ligne);
+         }
+ 
+@@ -121,7 +123,7 @@ public function handle(RegistreDesOperateurs $operateurs): int
+ 
+             for ($rang = 1; $rang <= $this->operateursExiges(); $rang++) {
+                 $suffixe = $this->operateursExiges() === 1 ? '' : ($rang === 1 ? ' (premier)' : ' (second)');
+-                $operateur = $operateurs->authentifier($this->ask("Nom de l'opérateur{$suffixe}"), $this->secret("Secret de l'opérateur{$suffixe}"));
++                $operateur = $operateurs->authentifier(ValeursLues::texteOuNul($this->ask("Nom de l'opérateur{$suffixe}")), ValeursLues::texteOuNul($this->secret("Secret de l'opérateur{$suffixe}")));
+ 
+                 if (in_array($operateur, $authentifies, true)) {
+                     throw new VerificationRefuseeException(self::MESSAGE_MEME_OPERATEUR);
+diff --git a/app/Console/Commands/EffacerPiecesVerification.php b/app/Console/Commands/EffacerPiecesVerification.php
+index 9892323..cb4f960 100644
+--- a/app/Console/Commands/EffacerPiecesVerification.php
++++ b/app/Console/Commands/EffacerPiecesVerification.php
+@@ -8,13 +8,16 @@
+ use App\Domain\Tenancy\Scopes\SocieteScope;
+ use App\Domain\Tenancy\Services\PiecesDeVerification;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonInterval;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
++use Illuminate\Contracts\Filesystem\Filesystem;
+ use Illuminate\Support\Facades\File;
+ use Illuminate\Support\Facades\Log;
+ use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
++use RuntimeException;
+ 
+ /**
+  * Chaque heure (voir bootstrap/app.php), efface ce qui ne doit pas rester
+@@ -70,9 +73,13 @@ public function handle(PiecesDeVerification $pieces, TenantContext $tenantContex
+     private function effacerLesEnvoisAbandonnes(): int
+     {
+         $stockage = FileUploadConfiguration::storage();
++
++        if (! $stockage instanceof Filesystem) {
++            throw new RuntimeException('Le disque des envois de Livewire n\'est pas un disque de fichiers : '.get_debug_type($stockage).'.');
++        }
+         $limite = now()->subMinutes(self::MINUTES_ENTRE_DEUX_PASSAGES)->getTimestamp();
+ 
+-        $abandonnes = array_filter($stockage->allFiles(FileUploadConfiguration::path()), fn (string $fichier): bool => $stockage->exists($fichier) && $stockage->lastModified($fichier) <= $limite);
++        $abandonnes = array_filter($stockage->allFiles(ValeursLues::texte(FileUploadConfiguration::path())), fn (string $fichier): bool => $stockage->exists($fichier) && $stockage->lastModified($fichier) <= $limite);
+ 
+         foreach ($abandonnes as $fichier) {
+             $stockage->delete($fichier);
+diff --git a/app/Console/Commands/EffacerTelechargementsDeDocuments.php b/app/Console/Commands/EffacerTelechargementsDeDocuments.php
+index e5f2524..2d81b33 100644
+--- a/app/Console/Commands/EffacerTelechargementsDeDocuments.php
++++ b/app/Console/Commands/EffacerTelechargementsDeDocuments.php
+@@ -6,6 +6,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Models\User;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+@@ -43,7 +44,7 @@ public function handle(TenantContext $contexte): int
+                         DatabaseNotification::query()
+                             ->where('notifiable_type', (new User)->getMorphClass())
+                             ->where('notifiable_id', $telechargement->demande_par)
+-                            ->where('data->telechargement_id', (int) $telechargement->getKey())
++                            ->where('data->telechargement_id', CleDuModele::de($telechargement))
+                             ->delete();
+                         $telechargement->delete();
+ 
+diff --git a/app/Console/Commands/ExpirerInvitationsDesCabinets.php b/app/Console/Commands/ExpirerInvitationsDesCabinets.php
+index 761a6a2..242fa42 100644
+--- a/app/Console/Commands/ExpirerInvitationsDesCabinets.php
++++ b/app/Console/Commands/ExpirerInvitationsDesCabinets.php
+@@ -11,6 +11,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\JournalAudit;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -46,7 +47,7 @@ public function handle(JournalAudit $journalAudit, RetirerLaDemandeDeLienAction
+                         if ($invitation->expire_le->isPast()) {
+                             $invitation->forceFill(['etat' => EtatInvitation::Expiree, 'close_le' => now()])->save();
+                         } elseif (Societe::sirenPris((string) $invitation->siren)) {
+-                            $caduques[] = (int) $invitation->getKey();
++                            $caduques[] = CleDuModele::de($invitation);
+                         }
+                     });
+ 
+@@ -54,7 +55,7 @@ public function handle(JournalAudit $journalAudit, RetirerLaDemandeDeLienAction
+             }));
+ 
+             foreach ($caduques as $invitationId) {
+-                (new RendreCaduquesLesInvitationsDuSiren('', 0))->rendreCaduque($invitationId, (int) $cabinetId);
++                (new RendreCaduquesLesInvitationsDuSiren('', 0))->rendreCaduque($invitationId, CleDuModele::de($cabinet));
+             }
+         }
+ 
+diff --git a/app/Console/Commands/FermerDemonstrationsInactives.php b/app/Console/Commands/FermerDemonstrationsInactives.php
+index 6163bb5..079351a 100644
+--- a/app/Console/Commands/FermerDemonstrationsInactives.php
++++ b/app/Console/Commands/FermerDemonstrationsInactives.php
+@@ -11,6 +11,7 @@
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Models\PeriodeActivite;
+ use App\Domain\Tenancy\Scopes\MagasinScope;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonImmutable;
+ use Carbon\CarbonInterval;
+ use Illuminate\Console\Attributes\Description;
+@@ -79,7 +80,7 @@ private static function estInactiveDepuis(Magasin $demonstration, CarbonImmutabl
+             ->whereIn('chaine', [ChaineFiscale::Vente->value, ChaineFiscale::Encaissement->value])
+             ->max('horodatage');
+ 
+-        return collect([$ouverture, $derniereOperation === null ? null : Instant::depuisLaBase($derniereOperation)])
++        return collect([$ouverture, $derniereOperation === null ? null : Instant::depuisLaBase(ValeursLues::texte($derniereOperation))])
+             ->filter()
+             ->every(fn (CarbonImmutable $instant): bool => $instant->lessThan($limite));
+     }
+diff --git a/app/Console/Commands/GenererCleFiscale.php b/app/Console/Commands/GenererCleFiscale.php
+index a4b7144..9015e36 100644
+--- a/app/Console/Commands/GenererCleFiscale.php
++++ b/app/Console/Commands/GenererCleFiscale.php
+@@ -3,6 +3,7 @@
+ namespace App\Console\Commands;
+ 
+ use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
++use App\Domain\Tenancy\Support\Reglage;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -27,7 +28,7 @@ class GenererCleFiscale extends Command
+ {
+     public function handle(): int
+     {
+-        $dossier = (string) config('caisse_securisee.dossier_cles_publiques');
++        $dossier = Reglage::texte('caisse_securisee.dossier_cles_publiques');
+         $paire = SignataireFiscal::genererUnePaire();
+         $fichier = $dossier.DIRECTORY_SEPARATOR.$paire['cle_id'].'.pem';
+ 
+diff --git a/app/Console/Commands/MarquerFacturesEnRetard.php b/app/Console/Commands/MarquerFacturesEnRetard.php
+index a0898fd..230688e 100644
+--- a/app/Console/Commands/MarquerFacturesEnRetard.php
++++ b/app/Console/Commands/MarquerFacturesEnRetard.php
+@@ -7,6 +7,7 @@
+ use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -65,12 +66,11 @@ private function marquerLesFacturesDe(Magasin $magasin): int
+ 
+         $marquees = [];
+ 
+-        $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
+-            ->each(function (string $numero, int $id) use ($echues, &$marquees): void {
+-                if ($echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1) {
+-                    $marquees[] = $numero;
+-                }
+-            });
++        foreach ($echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id') as $id => $numero) {
++            if ($echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1) {
++                $marquees[] = ValeursLues::texte($numero);
++            }
++        }
+ 
+         if ($marquees !== []) {
+             Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees));
+diff --git a/app/Console/Commands/PurgerActionsTraitees.php b/app/Console/Commands/PurgerActionsTraitees.php
+index bfdb489..8918d06 100644
+--- a/app/Console/Commands/PurgerActionsTraitees.php
++++ b/app/Console/Commands/PurgerActionsTraitees.php
+@@ -6,6 +6,8 @@
+ use App\Domain\Tenancy\Models\ActionTraitee;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\Reglage;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonInterval;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+@@ -33,7 +35,7 @@ class PurgerActionsTraitees extends Command
+ 
+     public function handle(TenantContext $tenantContext): int
+     {
+-        $limite = Calendrier::deParis()->decaler(now(), CarbonInterval::days(-config('conservation.actions_traitees_en_jours')));
++        $limite = Calendrier::deParis()->decaler(now(), CarbonInterval::days(-Reglage::entier('conservation.actions_traitees_en_jours')));
+         $effaces = 0;
+         $enEchec = 0;
+ 
+@@ -46,7 +48,7 @@ public function handle(TenantContext $tenantContext): int
+                         $lot = ActionTraitee::query()->where('created_at', '<', $limite)->orderBy('id')->limit(self::LOT)->pluck('id');
+ 
+                         if ($lot->isNotEmpty()) {
+-                            $effaces += ActionTraitee::query()->whereKey($lot->all())->delete();
++                            $effaces += ValeursLues::entier(ActionTraitee::query()->whereKey($lot->all())->delete());
+                         }
+                     } while ($lot->count() === self::LOT);
+ 
+diff --git a/app/Console/Commands/PurgerDemandesInscription.php b/app/Console/Commands/PurgerDemandesInscription.php
+index 9fa8a24..7b5fc2a 100644
+--- a/app/Console/Commands/PurgerDemandesInscription.php
++++ b/app/Console/Commands/PurgerDemandesInscription.php
+@@ -3,6 +3,7 @@
+ namespace App\Console\Commands;
+ 
+ use App\Domain\Tenancy\Models\DemandeInscription;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -20,9 +21,9 @@ class PurgerDemandesInscription extends Command
+ {
+     public function handle(): int
+     {
+-        $effacees = DemandeInscription::query()
++        $effacees = ValeursLues::entier(DemandeInscription::query()
+             ->where('expire_le', '<=', now()->subHours(DemandeInscription::EFFACEMENT_APRES_EXPIRATION_EN_HEURES))
+-            ->delete();
++            ->delete());
+ 
+         $this->info("{$effacees} demande(s) d'inscription effacée(s).");
+ 
+diff --git a/app/Console/Commands/PurgerInvitationsDesCabinets.php b/app/Console/Commands/PurgerInvitationsDesCabinets.php
+index 7e76e7a..d68a029 100644
+--- a/app/Console/Commands/PurgerInvitationsDesCabinets.php
++++ b/app/Console/Commands/PurgerInvitationsDesCabinets.php
+@@ -7,6 +7,7 @@
+ use App\Domain\Calendrier\Calendrier;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonInterval;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+@@ -34,11 +35,11 @@ public function handle(): int
+         $effacees = 0;
+ 
+         foreach ($cabinets as $cabinetId) {
+-            $effacees += app(TenantContext::class)->runAsSociete(Societe::query()->whereKey($cabinetId)->firstOrFail(), fn (): int => InvitationCabinet::query()
++            $effacees += app(TenantContext::class)->runAsSociete(Societe::query()->whereKey($cabinetId)->firstOrFail(), fn (): int => ValeursLues::entier(InvitationCabinet::query()
+                 ->where(fn ($invitations) => $invitations
+                     ->where(fn ($closes) => $closes->where('etat', '<>', EtatInvitation::Refusee->value)->where('close_le', '<=', now()->subHours(self::HEURES_APRES_LA_FIN)))
+                     ->orWhere(fn ($refusees) => $refusees->where('etat', EtatInvitation::Refusee->value)->where('close_le', '<=', Calendrier::deParis()->decaler(now(), CarbonInterval::days(-self::JOURS_APRES_UN_REFUS)))))
+-                ->delete());
++                ->delete()));
+         }
+ 
+         $this->info("{$effacees} invitation(s) effacée(s).");
+diff --git a/app/Console/Commands/PurgerJournalAudit.php b/app/Console/Commands/PurgerJournalAudit.php
+index b9445c9..5aa32ff 100644
+--- a/app/Console/Commands/PurgerJournalAudit.php
++++ b/app/Console/Commands/PurgerJournalAudit.php
+@@ -9,6 +9,7 @@
+ use App\Domain\Tenancy\Models\TeteJournalAudit;
+ use App\Domain\Tenancy\Models\TraceAudit;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -104,7 +105,7 @@ private function purgerLaSociete(Societe $societe): int
+                 TraceAudit::query()->whereIn('entree_audit_id', $identifiants)->delete();
+                 $tete->forceFill(['reprise_sequence' => $derniere->sequence, 'reprise_empreinte' => $derniere->empreinte])->save();
+ 
+-                return EntreeAudit::query()->whereKey($identifiants)->delete();
++                return ValeursLues::entier(EntreeAudit::query()->whereKey($identifiants)->delete());
+             });
+         }
+ 
+diff --git a/app/Console/Commands/PurgerTraces.php b/app/Console/Commands/PurgerTraces.php
+index d4100cf..8747b0a 100644
+--- a/app/Console/Commands/PurgerTraces.php
++++ b/app/Console/Commands/PurgerTraces.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Models\TraceAudit;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Carbon\CarbonImmutable;
+ use Closure;
+ use Illuminate\Console\Attributes\Description;
+@@ -106,7 +107,7 @@ private function effacerLesTracesExpirees(Closure $traces, string $cle, CarbonIm
+                 ->pluck($cle);
+ 
+             if ($lot->isNotEmpty()) {
+-                $effacees += $expirees()->whereKey($lot->all())->delete();
++                $effacees += ValeursLues::entier($expirees()->whereKey($lot->all())->delete());
+             }
+         } while ($lot->count() === self::LOT);
+ 
+diff --git a/app/Console/Commands/PurgerVerifications.php b/app/Console/Commands/PurgerVerifications.php
+index 9d81a4f..64c50e8 100644
+--- a/app/Console/Commands/PurgerVerifications.php
++++ b/app/Console/Commands/PurgerVerifications.php
+@@ -7,6 +7,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Models\VerificationSociete;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -49,12 +50,12 @@ public function handle(TenantContext $tenantContext): int
+             ->orderBy('id')
+             ->each(function (Societe $societe) use ($tenantContext, &$effacees, &$enEchec): void {
+                 try {
+-                    $effacees += $tenantContext->runAsSociete($societe, fn (): int => DB::transaction(fn (): int => VerificationSociete::query()
++                    $effacees += $tenantContext->runAsSociete($societe, fn (): int => DB::transaction(fn (): int => ValeursLues::entier(VerificationSociete::query()
+                         ->whereRaw(DeclencheursDeProtection::conditionDeFinDeLaRelation('verifications_societe'))
+-                        ->delete()
+-                        + CodeConfirmation::query()
++                        ->delete())
++                        + ValeursLues::entier(CodeConfirmation::query()
+                             ->whereRaw(DeclencheursDeProtection::conditionDExpiration('conserver_jusqu_au'))
+-                            ->delete()));
++                            ->delete())));
+                 } catch (Throwable $exception) {
+                     report($exception);
+                     $enEchec++;
+diff --git a/app/Console/Commands/VerifierIntegriteFiscale.php b/app/Console/Commands/VerifierIntegriteFiscale.php
+index e87cfb5..aa20cf3 100644
+--- a/app/Console/Commands/VerifierIntegriteFiscale.php
++++ b/app/Console/Commands/VerifierIntegriteFiscale.php
+@@ -8,6 +8,7 @@
+ use App\Domain\Calendrier\Calendrier;
+ use App\Domain\Tenancy\Models\Magasin;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use Closure;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+@@ -39,7 +40,7 @@ class VerifierIntegriteFiscale extends Command
+      */
+     public static function jourDeLaVerificationComplete(Magasin $magasin): int
+     {
+-        return ($magasin->getKey() - 1) % 28 + 1;
++        return (CleDuModele::de($magasin) - 1) % 28 + 1;
+     }
+ 
+     public function handle(TenantContext $tenantContext, VerifierIntegriteAction $verifier): int
+diff --git a/app/Console/Commands/VerifierJournalAudit.php b/app/Console/Commands/VerifierJournalAudit.php
+index db781fe..42f6ac8 100644
+--- a/app/Console/Commands/VerifierJournalAudit.php
++++ b/app/Console/Commands/VerifierJournalAudit.php
+@@ -4,6 +4,7 @@
+ 
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\VerificateurJournalAudit;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use Illuminate\Console\Attributes\Description;
+ use Illuminate\Console\Attributes\Signature;
+ use Illuminate\Console\Command;
+@@ -33,7 +34,7 @@ public function handle(VerificateurJournalAudit $verificateur): int
+ 
+         foreach ($societes as $societe) {
+             foreach ($verificateur->verifier($societe) as $anomalie) {
+-                $this->error("Société n° {$societe->getKey()} : {$anomalie}");
++                $this->error('Société n° '.CleDuModele::de($societe)." : {$anomalie}");
+                 $anomalies++;
+             }
+         }
+@@ -64,6 +65,6 @@ private function societesAVerifier(): Collection
+             default => null,
+         };
+ 
+-        return $societe === null ? collect() : collect([$societe]);
++        return new Collection($societe === null ? [] : [$societe]);
+     }
+ }
+diff --git a/app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php b/app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
+index 08dd030..73f7ab9 100644
+--- a/app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
++++ b/app/Domain/Tenancy/Support/AvertissementsDuCodeDActivite.php
+@@ -60,7 +60,7 @@ private static function avertissements(?string $code, ?string $nomenclature, str
+ 
+         $division = (int) $morceaux[1];
+         $groupe = "{$morceaux[1]}.{$morceaux[2]}";
+-        $application = config('app.name');
++        $application = Reglage::texte('app.name');
+         $sansLeCabinet = [TypeDActivite::Commerce, TypeDActivite::Services];
+         $entre = static fn (int $de, int $a): bool => $division >= $de && $division <= $a;
+         $table = [
+diff --git a/app/Domain/Tenancy/Support/CleDuModele.php b/app/Domain/Tenancy/Support/CleDuModele.php
+new file mode 100644
+index 0000000..256c28f
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/CleDuModele.php
+@@ -0,0 +1,33 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use Illuminate\Database\Eloquent\Model;
++use UnexpectedValueException;
++
++/**
++ * La clé d'un enregistrement lu ou écrit en base, là où le code s'en sert
++ * comme d'un entier (une comparaison stricte, un identifiant inscrit au
++ * journal d'audit ou dans un message) : un entier, la clé
++ * auto-incrémentée de chaque table du logiciel, qu'Eloquent rend en
++ * entier (voir Model::getCasts()). Un modèle sans clé entière (qui n'est
++ * pas encore en base) est une erreur du code, refusée par une exception,
++ * au lieu d'une clé convertie en 0 ; jamais le refus d'un geste (une
++ * LogicException, que les écrans montrent à la personne, voir
++ * GereLesExceptionsMetier) : elle remonte jusqu'au journal de
++ * l'application.
++ */
++final class CleDuModele
++{
++    public const REFUS = 'Un enregistrement %s n\'a pas de clé entière : %s.';
++
++    /**
++     * @throws UnexpectedValueException une clé qui n'est pas un entier
++     */
++    public static function de(Model $modele): int
++    {
++        $cle = $modele->getKey();
++
++        return is_int($cle) ? $cle : throw new UnexpectedValueException(sprintf(self::REFUS, $modele::class, get_debug_type($cle)));
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/FicheLue.php b/app/Domain/Tenancy/Support/FicheLue.php
+index 0c8693e..3a9e514 100644
+--- a/app/Domain/Tenancy/Support/FicheLue.php
++++ b/app/Domain/Tenancy/Support/FicheLue.php
+@@ -3,7 +3,6 @@
+ namespace App\Domain\Tenancy\Support;
+ 
+ use Illuminate\Database\Eloquent\Model;
+-use Illuminate\Support\Arr;
+ use LogicException;
+ use UnitEnum;
+ 
+@@ -63,7 +62,7 @@ private function __construct(
+      */
+     public static function de(Model $fiche, ?array $attributs = null): self
+     {
+-        return new self($fiche::class, Arr::only($fiche->getRawOriginal(), self::modifiables($fiche, $attributs)));
++        return new self($fiche::class, array_intersect_key($fiche->getRawOriginal(), array_flip(self::modifiables($fiche, $attributs))));
+     }
+ 
+     /**
+@@ -79,7 +78,7 @@ public static function de(Model $fiche, ?array $attributs = null): self
+      */
+     public static function depuis(string $modele, array $valeurs, ?array $attributs = null): self
+     {
+-        return new self($modele, Arr::only($valeurs, self::modifiables(new $modele, $attributs)));
++        return new self($modele, array_intersect_key($valeurs, array_flip(self::modifiables(new $modele, $attributs))));
+     }
+ 
+     /**
+@@ -131,7 +130,7 @@ public function corrections(array $saisie): array
+         $lue = $this->fiche();
+ 
+         return array_filter(
+-            Arr::only($saisie, array_keys($this->valeurs)),
++            array_intersect_key($saisie, $this->valeurs),
+             fn (mixed $valeur, string $attribut): bool => ! self::egales($this->valeurSaisie($attribut, $valeur), $lue->getAttribute($attribut)),
+             ARRAY_FILTER_USE_BOTH,
+         );
+diff --git a/app/Domain/Tenancy/Support/MotDePasseRedemande.php b/app/Domain/Tenancy/Support/MotDePasseRedemande.php
+index 2fcdcdd..11f7e16 100644
+--- a/app/Domain/Tenancy/Support/MotDePasseRedemande.php
++++ b/app/Domain/Tenancy/Support/MotDePasseRedemande.php
+@@ -26,7 +26,7 @@ final class MotDePasseRedemande
+      */
+     public static function exiger(User $auteur, #[SensitiveParameter] string $motDePasse): void
+     {
+-        if (! Hash::check($motDePasse, (string) User::query()->whereKey($auteur->getKey())->value('password'))) {
++        if (! Hash::check($motDePasse, ValeursLues::texte(User::query()->whereKey($auteur->getKey())->value('password')))) {
+             throw new LogicException(self::MESSAGE);
+         }
+     }
+diff --git a/app/Domain/Tenancy/Support/Reglage.php b/app/Domain/Tenancy/Support/Reglage.php
+new file mode 100644
+index 0000000..7f90443
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/Reglage.php
+@@ -0,0 +1,67 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use UnexpectedValueException;
++
++/**
++ * Un réglage de l'application (config()), lu pour ce que son fichier de
++ * configuration garantit : un texte, un texte facultatif (une variable
++ * d'environnement qui peut manquer), un entier (une durée, une limite que
++ * le fichier convertit lui-même) ou un tableau. Un réglage d'un autre type
++ * (absent, ou mal écrit dans le fichier ou dans l'environnement) est
++ * refusé par une exception qui le nomme, au lieu d'être converti ou
++ * utilisé pour ce qu'il n'est pas.
++ */
++final class Reglage
++{
++    public const REFUS_TEXTE = 'Le réglage « %s » n\'est pas un texte : %s.';
++
++    public const REFUS_TEXTE_OU_NUL = 'Le réglage « %s » n\'est ni un texte ni vide : %s.';
++
++    public const REFUS_ENTIER = 'Le réglage « %s » n\'est pas un entier : %s.';
++
++    public const REFUS_TABLEAU = 'Le réglage « %s » n\'est pas un tableau : %s.';
++
++    /**
++     * @throws UnexpectedValueException un réglage qui n'est pas un texte
++     */
++    public static function texte(string $cle): string
++    {
++        $valeur = config($cle);
++
++        return is_string($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TEXTE, $cle, get_debug_type($valeur)));
++    }
++
++    /**
++     * @throws UnexpectedValueException un réglage ni texte ni nul
++     */
++    public static function texteOuNul(string $cle): ?string
++    {
++        $valeur = config($cle);
++
++        return $valeur === null || is_string($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TEXTE_OU_NUL, $cle, get_debug_type($valeur)));
++    }
++
++    /**
++     * @throws UnexpectedValueException un réglage qui n'est pas un entier
++     */
++    public static function entier(string $cle): int
++    {
++        $valeur = config($cle);
++
++        return is_int($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_ENTIER, $cle, get_debug_type($valeur)));
++    }
++
++    /**
++     * @return array<array-key, mixed>
++     *
++     * @throws UnexpectedValueException un réglage qui n'est pas un tableau
++     */
++    public static function tableau(string $cle): array
++    {
++        $valeur = config($cle);
++
++        return is_array($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TABLEAU, $cle, get_debug_type($valeur)));
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/RegleDuMotDePasse.php b/app/Domain/Tenancy/Support/RegleDuMotDePasse.php
+index 0a1dbb4..e08fe7b 100644
+--- a/app/Domain/Tenancy/Support/RegleDuMotDePasse.php
++++ b/app/Domain/Tenancy/Support/RegleDuMotDePasse.php
+@@ -42,7 +42,7 @@ public function __construct(private readonly ?string $identifiant) {}
+ 
+     public function validate(string $attribute, mixed $value, Closure $fail): void
+     {
+-        foreach (self::reproches((string) $value, $this->identifiant) as $reproche) {
++        foreach (self::reproches(ValeurSimple::enTexte($value), $this->identifiant) as $reproche) {
+             $fail($reproche);
+         }
+     }
+diff --git a/app/Domain/Tenancy/Support/ValeurSimple.php b/app/Domain/Tenancy/Support/ValeurSimple.php
+new file mode 100644
+index 0000000..2e0fe98
+--- /dev/null
++++ b/app/Domain/Tenancy/Support/ValeurSimple.php
+@@ -0,0 +1,47 @@
++<?php
++
++namespace App\Domain\Tenancy\Support;
++
++use UnexpectedValueException;
++
++/**
++ * Une valeur simple (un texte, un nombre, un booléen ou rien), lue en
++ * texte ou en entier comme le code la lisait par une conversion : une
++ * valeur saisie dans un écran (un champ d'un formulaire de Filament, lu
++ * par $get ou dans $data, une propriété d'un composant Livewire, un champ
++ * d'une requête) ou lue sans type (l'état d'origine d'une fiche, une
++ * variable d'environnement). Sous chaque forme que le navigateur, Livewire
++ * et la base rendent vraiment, elle donne le même résultat que (string)
++ * ou (int) : « 12 » et 12 rendent 12, un champ vide ou rien rend « » ou
++ * 0. Un tableau ou un objet, que seule une requête forgée envoie à la
++ * place d'une valeur simple, est refusé par une exception, au lieu d'être
++ * converti (« Array », 1).
++ */
++final class ValeurSimple
++{
++    public const REFUS = 'Une valeur lue n\'est pas une valeur simple : %s.';
++
++    /**
++     * @throws UnexpectedValueException un tableau ou un objet
++     */
++    public static function enTexte(mixed $valeur): string
++    {
++        return (string) self::simple($valeur);
++    }
++
++    /**
++     * @throws UnexpectedValueException un tableau ou un objet
++     */
++    public static function enEntier(mixed $valeur): int
++    {
++        return (int) self::simple($valeur);
++    }
++
++    /**
++     * @throws UnexpectedValueException un tableau ou un objet
++     */
++    private static function simple(mixed $valeur): int|string|float|bool|null
++    {
++        return $valeur === null || is_scalar($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS, get_debug_type($valeur)));
++    }
++}
+diff --git a/app/Domain/Tenancy/Support/ValeursLues.php b/app/Domain/Tenancy/Support/ValeursLues.php
+index eedc5c3..c221a75 100644
+--- a/app/Domain/Tenancy/Support/ValeursLues.php
++++ b/app/Domain/Tenancy/Support/ValeursLues.php
+@@ -10,11 +10,12 @@
+  * écrite, une liste passée à une macro, une option d'une commande, une
+  * variable d'environnement, un montant que le code écrit en texte), lues
+  * pour ce que leur source garantit : un texte, un entier, un booléen, un
+- * tableau ou un nombre écrit en texte, ou une liste de textes ou
+- * d'entiers, dans leur ordre. Une autre valeur (une colonne nulle, un champ
+- * absent, ou d'un autre type que celui que le code attend) est refusée par
+- * une exception, au lieu d'être utilisée pour ce qu'elle n'est pas. La clé
+- * d'une fiche saisie dans un écran se lit par cle().
++ * tableau, un objet d'une classe ou un nombre écrit en texte, ou une liste
++ * de textes ou d'entiers, dans leur ordre. Une autre valeur (une colonne
++ * nulle, un champ absent, ou d'un autre type que celui que le code
++ * attend) est refusée par une exception, au lieu d'être utilisée pour ce
++ * qu'elle n'est pas. La clé d'une fiche saisie dans un écran se lit par
++ * cle().
+  */
+ final class ValeursLues
+ {
+@@ -32,6 +33,8 @@ final class ValeursLues
+ 
+     public const REFUS_CLE = 'Une clé saisie n\'est pas une seule clé : %s.';
+ 
++    public const REFUS_INSTANCE = 'Une valeur lue n\'est pas un objet %s : %s.';
++
+     /**
+      * Le texte de ce champ d'un tableau lu (une colonne JSON que le code a
+      * écrite).
+@@ -92,6 +95,43 @@ public static function texte(mixed $valeur): string
+         return is_string($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TEXTE, get_debug_type($valeur)));
+     }
+ 
++    /**
++     * Un texte, ou null quand la valeur est nulle.
++     *
++     * @throws UnexpectedValueException une valeur ni texte ni nulle
++     */
++    public static function texteOuNul(mixed $valeur): ?string
++    {
++        return $valeur === null ? null : self::texte($valeur);
++    }
++
++    /**
++     * @return array<array-key, mixed>
++     *
++     * @throws UnexpectedValueException une valeur qui n'est pas un tableau
++     */
++    public static function tableau(mixed $valeur): array
++    {
++        return is_array($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_TABLEAU, get_debug_type($valeur)));
++    }
++
++    /**
++     * Un objet de cette classe (ou d'une classe qui en hérite), là où le
++     * code n'a de lui qu'une valeur sans type : ce que rend une méthode de
++     * Laravel, de Filament ou de Livewire qui ne déclare pas son type.
++     *
++     * @template TObjet of object
++     *
++     * @param  class-string<TObjet>  $classe
++     * @return TObjet
++     *
++     * @throws UnexpectedValueException une valeur d'une autre classe, ou qui n'est pas un objet
++     */
++    public static function instance(mixed $valeur, string $classe): object
++    {
++        return $valeur instanceof $classe ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_INSTANCE, $classe, get_debug_type($valeur)));
++    }
++
+     /**
+      * @throws UnexpectedValueException une valeur qui n'est pas un entier
+      */
+diff --git a/app/Http/Controllers/AccepterLInvitationDuCabinetController.php b/app/Http/Controllers/AccepterLInvitationDuCabinetController.php
+index e6987b4..0b6aff1 100644
+--- a/app/Http/Controllers/AccepterLInvitationDuCabinetController.php
++++ b/app/Http/Controllers/AccepterLInvitationDuCabinetController.php
+@@ -13,6 +13,7 @@
+ use App\Domain\Tenancy\Services\ControleSirene;
+ use App\Domain\Tenancy\Services\SuiviDesConnexions;
+ use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
++use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Filament\EspaceDeLaSociete;
+ use Illuminate\Http\RedirectResponse;
+ use Illuminate\Http\Request;
+@@ -60,13 +61,13 @@ public function afficher(string $jeton): Response
+ 
+     public function accepter(Request $requete, string $jeton, AccepterLInvitationAction $accepter, SuiviDesConnexions $suivi): Response|RedirectResponse
+     {
+-        $type = TypeDActivite::tryFrom((string) $requete->input('type_activite'));
++        $type = TypeDActivite::tryFrom(ValeurSimple::enTexte($requete->input('type_activite')));
+ 
+         try {
+             $proprietaire = $accepter->handle($jeton, [
+-                'password' => (string) $requete->input('password'),
+-                'password_confirmation' => (string) $requete->input('password_confirmation'),
+-                'type_activite' => (string) $requete->input('type_activite'),
++                'password' => ValeurSimple::enTexte($requete->input('password')),
++                'password_confirmation' => ValeurSimple::enTexte($requete->input('password_confirmation')),
++                'type_activite' => ValeurSimple::enTexte($requete->input('type_activite')),
+                 'choix_definitif' => $requete->boolean('choix_definitif'),
+             ]);
+         } catch (InvitationInvalideException) {
+diff --git a/app/Http/Controllers/CodeDuCourrierController.php b/app/Http/Controllers/CodeDuCourrierController.php
+index 9387aa7..89b8e75 100644
+--- a/app/Http/Controllers/CodeDuCourrierController.php
++++ b/app/Http/Controllers/CodeDuCourrierController.php
+@@ -4,6 +4,8 @@
+ 
+ use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
+ use App\Domain\Tenancy\Enums\MotifCode;
++use App\Domain\Tenancy\Support\ValeurSimple;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Filament\EspaceDeLaSociete;
+ use App\Models\User;
+ use Filament\Notifications\Notification;
+@@ -66,11 +68,11 @@ public function saisir(Request $requete, SaisirCodeDeConfirmationAction $saisir)
+             ], attributes: self::NOMS_DES_CHAMPS)->validate();
+ 
+             $proprietaire = $saisir->handle(
+-                self::siren($donnees['siren']),
+-                $donnees['code'],
+-                $donnees['email'],
+-                $donnees['password'],
+-                (string) ($donnees['password_confirmation'] ?? ''),
++                self::siren(ValeursLues::texteDe($donnees, 'siren')),
++                ValeursLues::texteDe($donnees, 'code'),
++                ValeursLues::texteDe($donnees, 'email'),
++                ValeursLues::texteDe($donnees, 'password'),
++                ValeurSimple::enTexte($donnees['password_confirmation'] ?? null),
+                 (string) $requete->ip(),
+             );
+         } catch (ValidationException $refus) {
+@@ -90,7 +92,7 @@ public function saisir(Request $requete, SaisirCodeDeConfirmationAction $saisir)
+                 ->title('Confirmez votre adresse de connexion')
+                 ->body($proprietaire->nouvelle_adresse !== null
+                     ? "Un lien valable 24 heures vient d'être envoyé à {$proprietaire->nouvelle_adresse} : suivez-le en étant connecté à ce compte pour en faire votre adresse de connexion. {$identifiant}"
+-                    : 'Le lien de confirmation n\'a pas pu être envoyé à '.User::normaliserEmail($donnees['email'])." : saisissez cette adresse dans votre profil et enregistrez pour en recevoir un. {$identifiant}")
++                    : 'Le lien de confirmation n\'a pas pu être envoyé à '.User::normaliserEmail(ValeursLues::texteDe($donnees, 'email'))." : saisissez cette adresse dans votre profil et enregistrez pour en recevoir un. {$identifiant}")
+                 ->warning()
+                 ->persistent()
+                 ->send();
+@@ -106,7 +108,7 @@ public function saisirProcedure(Request $requete, string $objet, SaisirCodeDeCon
+ 
+         try {
+             $donnees = Validator::make($requete->all(), self::reglesDuCode(), attributes: self::NOMS_DES_CHAMPS)->validate();
+-            $saisir->saisirUnCodeDeProcedure(self::siren($donnees['siren']), $motif, $donnees['code'], (string) $requete->ip());
++            $saisir->saisirUnCodeDeProcedure(self::siren(ValeursLues::texteDe($donnees, 'siren')), $motif, ValeursLues::texteDe($donnees, 'code'), (string) $requete->ip());
+         } catch (ValidationException $refus) {
+             return redirect()->route('code.procedure.afficher', ['objet' => $motif->value])
+                 ->withErrors($refus->errors())
+diff --git a/app/Http/Controllers/ConfirmerInscriptionController.php b/app/Http/Controllers/ConfirmerInscriptionController.php
+index 3b64128..c2abfe6 100644
+--- a/app/Http/Controllers/ConfirmerInscriptionController.php
++++ b/app/Http/Controllers/ConfirmerInscriptionController.php
+@@ -7,6 +7,8 @@
+ use App\Domain\Tenancy\Models\DemandeInscription;
+ use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
+ use App\Domain\Tenancy\Support\ValeurRequise;
++use App\Domain\Tenancy\Support\ValeurSimple;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Filament\EspaceDeLaSociete;
+ use Illuminate\Http\RedirectResponse;
+ use Illuminate\Http\Request;
+@@ -83,7 +85,7 @@ public function confirmer(Request $requete, string $jeton, CreerSocieteAction $c
+             return $this->page($jeton, null, null, null);
+         }
+ 
+-        $type = TypeDActivite::tryFrom((string) $requete->input('type_activite'));
++        $type = TypeDActivite::tryFrom(ValeurSimple::enTexte($requete->input('type_activite')));
+ 
+         if ($type === null) {
+             return $this->page($jeton, $demande, self::MESSAGE_TYPE_A_CHOISIR, null);
+@@ -117,7 +119,7 @@ public function confirmer(Request $requete, string $jeton, CreerSocieteAction $c
+                 return $creerSociete->handle($donnees['siren'], $type, $demande->email, $donnees['mot_de_passe']);
+             });
+         } catch (ValidationException $refus) {
+-            return $this->page($jeton, $demande, collect($refus->errors())->flatten()->first(), $type);
++            return $this->page($jeton, $demande, ValeursLues::texteOuNul(collect($refus->errors())->flatten()->first()), $type);
+         }
+ 
+         if ($societe === null) {
+diff --git a/app/Http/Controllers/ConfirmerNouvelleAdresseController.php b/app/Http/Controllers/ConfirmerNouvelleAdresseController.php
+index d873411..9fe5d28 100644
+--- a/app/Http/Controllers/ConfirmerNouvelleAdresseController.php
++++ b/app/Http/Controllers/ConfirmerNouvelleAdresseController.php
+@@ -3,6 +3,7 @@
+ namespace App\Http\Controllers;
+ 
+ use App\Domain\Tenancy\Actions\ConfirmerNouvelleAdresseAction;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Filament\Facades\Filament;
+ use Illuminate\Auth\Access\AuthorizationException;
+ use Illuminate\Http\Request;
+@@ -42,7 +43,7 @@ public function confirmer(Request $requete, string $jeton, ConfirmerNouvelleAdre
+         try {
+             $compte = $confirmer->handle($jeton, Auth::user());
+         } catch (AuthorizationException|ValidationException $refus) {
+-            $message = $refus instanceof ValidationException ? collect($refus->errors())->flatten()->first() : $refus->getMessage();
++            $message = $refus instanceof ValidationException ? ValeursLues::texteOuNul(collect($refus->errors())->flatten()->first()) : $refus->getMessage();
+ 
+             return $message === ConfirmerNouvelleAdresseAction::MESSAGE_CONNEXION_REQUISE
+                 ? $this->pageDeConnexion($requete, $jeton, erreur: true)
+diff --git a/app/Http/Controllers/RattachementAuCabinetController.php b/app/Http/Controllers/RattachementAuCabinetController.php
+index dfcd1d4..4dcc3d2 100644
+--- a/app/Http/Controllers/RattachementAuCabinetController.php
++++ b/app/Http/Controllers/RattachementAuCabinetController.php
+@@ -5,6 +5,7 @@
+ use App\Domain\Cabinets\Models\LienCabinet;
+ use App\Domain\Tenancy\Enums\StatutSociete;
+ use App\Domain\Tenancy\Models\Societe;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Filament\Societe\Pages\RattachementDUnCabinet;
+ use App\Models\User;
+ use Filament\Facades\Filament;
+@@ -56,7 +57,7 @@ public function ouvrir(Request $requete, string $jeton): Response|RedirectRespon
+ 
+         $societe = Societe::query()->whereKey($lien->societe_id)->firstOrFail(['id', 'uuid', 'close_le', 'statut']);
+ 
+-        if (! $compte->estProprietaire() || ! $compte->peutAgir() || (int) $compte->societe_id !== (int) $societe->getKey() || $societe->close_le !== null || $societe->statut === StatutSociete::Revoquee) {
++        if (! $compte->estProprietaire() || ! $compte->peutAgir() || $compte->societe_id !== CleDuModele::de($societe) || $societe->close_le !== null || $societe->statut === StatutSociete::Revoquee) {
+             return $this->neutre(self::MESSAGE_AUTRE_COMPTE, 403);
+         }
+ 
+diff --git a/app/Http/Middleware/BindTenantContextFromFilamentTenant.php b/app/Http/Middleware/BindTenantContextFromFilamentTenant.php
+index ebe66c9..821f56f 100644
+--- a/app/Http/Middleware/BindTenantContextFromFilamentTenant.php
++++ b/app/Http/Middleware/BindTenantContextFromFilamentTenant.php
+@@ -25,6 +25,9 @@
+  */
+ class BindTenantContextFromFilamentTenant
+ {
++    /**
++     * @param  Closure(Request): Response  $next
++     */
+     public function handle(Request $request, Closure $next): Response
+     {
+         $tenant = Filament::getTenant();
+diff --git a/app/Http/Middleware/ExigerSonPropreMotDePasse.php b/app/Http/Middleware/ExigerSonPropreMotDePasse.php
+index 9dc0d4f..96b03eb 100644
+--- a/app/Http/Middleware/ExigerSonPropreMotDePasse.php
++++ b/app/Http/Middleware/ExigerSonPropreMotDePasse.php
+@@ -34,6 +34,9 @@ class ExigerSonPropreMotDePasse
+      */
+     public const A_LA_CONNEXION = 'doit_choisir_son_mot_de_passe';
+ 
++    /**
++     * @param  Closure(Request): Response  $next
++     */
+     public function handle(Request $request, Closure $next): Response
+     {
+         $compte = $request->user();
+diff --git a/app/Http/Middleware/JournaliserOuvertureDeSession.php b/app/Http/Middleware/JournaliserOuvertureDeSession.php
+index 6f4edfa..f3297b2 100644
+--- a/app/Http/Middleware/JournaliserOuvertureDeSession.php
++++ b/app/Http/Middleware/JournaliserOuvertureDeSession.php
+@@ -32,6 +32,9 @@
+  */
+ class JournaliserOuvertureDeSession
+ {
++    /**
++     * @param  Closure(Request): Response  $next
++     */
+     public function handle(Request $request, Closure $next): Response
+     {
+         $contexte = app(TenantContext::class);
+diff --git a/app/Http/Middleware/MenerUnCabinetASonEspace.php b/app/Http/Middleware/MenerUnCabinetASonEspace.php
+index 5662e8d..4a14123 100644
+--- a/app/Http/Middleware/MenerUnCabinetASonEspace.php
++++ b/app/Http/Middleware/MenerUnCabinetASonEspace.php
+@@ -2,6 +2,7 @@
+ 
+ namespace App\Http\Middleware;
+ 
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Filament\EspaceDeLaSociete;
+ use App\Models\User;
+ use Closure;
+@@ -38,7 +39,7 @@ public function handle($request, Closure $next, ...$guards): Response
+             return redirect()->to(EspaceDeLaSociete::accueil($compte->societe));
+         }
+ 
+-        return parent::handle($request, $next, ...$guards);
++        return ValeursLues::instance(parent::handle($request, $next, ...$guards), Response::class);
+     }
+ 
+     /**
+diff --git a/app/Http/Middleware/MenerUnCompteSansMagasin.php b/app/Http/Middleware/MenerUnCompteSansMagasin.php
+index ecbd3c5..c7d58d1 100644
+--- a/app/Http/Middleware/MenerUnCompteSansMagasin.php
++++ b/app/Http/Middleware/MenerUnCompteSansMagasin.php
+@@ -25,6 +25,9 @@
+  */
+ class MenerUnCompteSansMagasin
+ {
++    /**
++     * @param  Closure(Request): Response  $next
++     */
+     public function handle(Request $request, Closure $next): Response
+     {
+         $compte = $request->user();
+diff --git a/app/Http/Responses/ReponseAUnDocumentDisparu.php b/app/Http/Responses/ReponseAUnDocumentDisparu.php
+index 2d7b81b..c111779 100644
+--- a/app/Http/Responses/ReponseAUnDocumentDisparu.php
++++ b/app/Http/Responses/ReponseAUnDocumentDisparu.php
+@@ -2,6 +2,8 @@
+ 
+ namespace App\Http\Responses;
+ 
++use App\Domain\Tenancy\Support\ValeurSimple;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use Filament\Facades\Filament;
+ use Filament\Notifications\Notification;
+ use Filament\Resources\Pages\Page;
+@@ -82,7 +84,7 @@ public static function pour(NotFoundHttpException $exception, Request $request):
+      */
+     public static function message(string $modele): string
+     {
+-        return defined("{$modele}::REFUS_INTROUVABLE") ? constant("{$modele}::REFUS_INTROUVABLE") : self::MESSAGE;
++        return defined("{$modele}::REFUS_INTROUVABLE") ? ValeursLues::texte(constant("{$modele}::REFUS_INTROUVABLE")) : self::MESSAGE;
+     }
+ 
+     /**
+@@ -99,14 +101,15 @@ public static function message(string $modele): string
+      */
+     private static function pageDuDocument(mixed $composant, ModelNotFoundException $introuvable): ?string
+     {
+-        $instantane = json_decode((string) data_get($composant, 'snapshot'), true);
++        $instantane = json_decode(ValeurSimple::enTexte(data_get($composant, 'snapshot')), true);
+         $document = data_get($instantane, 'data.record.1');
+ 
+         if (! is_array($instantane) || ! is_array($document) || ($document['s'] ?? null) !== 'mdl' || ! isset($document['class'], $document['key'])) {
+             return null;
+         }
+ 
+-        $modele = Relation::getMorphedModel($document['class']) ?? $document['class'];
++        $classe = ValeurSimple::enTexte($document['class']);
++        $modele = Relation::getMorphedModel($classe) ?? $classe;
+ 
+         try {
+             Checksum::verify($instantane);
+diff --git a/app/Integrations/EnvoiRecommande/FauxServiceEnvoiRecommande.php b/app/Integrations/EnvoiRecommande/FauxServiceEnvoiRecommande.php
+index cbd2211..b277ed2 100644
+--- a/app/Integrations/EnvoiRecommande/FauxServiceEnvoiRecommande.php
++++ b/app/Integrations/EnvoiRecommande/FauxServiceEnvoiRecommande.php
+@@ -2,6 +2,8 @@
+ 
+ namespace App\Integrations\EnvoiRecommande;
+ 
++use App\Domain\Tenancy\Support\ResultatDePhp;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
+ use Illuminate\Support\Facades\Cache;
+ use Illuminate\Support\Facades\Log;
+@@ -48,7 +50,7 @@ public function envoyerCourrier(DestinataireDuCourrier $destinataire, string $pd
+         }
+ 
+         $reference = 'faux-'.Str::lower(Str::random(16));
+-        Cache::forever(self::CLE_DU_CACHE, [...Cache::get(self::CLE_DU_CACHE, []), $reference => [
++        Cache::forever(self::CLE_DU_CACHE, [...self::courriers(), $reference => [
+             'destinataire' => $destinataire->enTableau(),
+             'pdf' => base64_encode($pdf),
+             'remise_en_personne' => $remiseEnPersonne,
+@@ -70,7 +72,7 @@ public function suivre(string $reference): SuiviDEnvoi
+             throw new EnvoiRecommandeIndisponibleException;
+         }
+ 
+-        return SuiviDEnvoi::depuisLeRappel(Cache::get(self::CLE_DU_CACHE, [])[$reference]['suivi'] ?? []);
++        return SuiviDEnvoi::depuisLeRappel(ValeursLues::tableau(self::courriers()[$reference]['suivi'] ?? []));
+     }
+ 
+     /**
+@@ -81,11 +83,11 @@ public function suivre(string $reference): SuiviDEnvoi
+     public function envois(): array
+     {
+         return array_map(fn (array $envoi): array => [
+-            'destinataire' => DestinataireDuCourrier::depuisTableau($envoi['destinataire']),
+-            'pdf' => (string) base64_decode($envoi['pdf'], true),
+-            'remise_en_personne' => $envoi['remise_en_personne'],
+-            'suivi' => SuiviDEnvoi::depuisLeRappel($envoi['suivi']),
+-        ], Cache::get(self::CLE_DU_CACHE, []));
++            'destinataire' => DestinataireDuCourrier::depuisTableau(ValeursLues::tableauDe($envoi, 'destinataire')),
++            'pdf' => ResultatDePhp::texte(base64_decode(ValeursLues::texteDe($envoi, 'pdf'), true), 'Le décodage du PDF d\'un courrier factice'),
++            'remise_en_personne' => ValeursLues::booleenDe($envoi, 'remise_en_personne'),
++            'suivi' => SuiviDEnvoi::depuisLeRappel(ValeursLues::tableauDe($envoi, 'suivi')),
++        ], self::courriers());
+     }
+ 
+     /**
+@@ -111,8 +113,25 @@ public function rendreInjoignable(bool $injoignable = true): void
+ 
+     private function suivreLePli(string $reference, string $statut): void
+     {
+-        $envois = Cache::get(self::CLE_DU_CACHE, []);
++        $envois = self::courriers();
+         $envois[$reference]['suivi'] = ['statut' => $statut];
+         Cache::forever(self::CLE_DU_CACHE, $envois);
+     }
++
++    /**
++     * Les courriers que le service factice garde dans le cache, par
++     * référence, tels qu'il les y a écrits.
++     *
++     * @return array<string, array<array-key, mixed>>
++     */
++    private static function courriers(): array
++    {
++        $courriers = [];
++
++        foreach (ValeursLues::tableau(Cache::get(self::CLE_DU_CACHE, [])) as $reference => $courrier) {
++            $courriers[ValeursLues::texte($reference)] = ValeursLues::tableau($courrier);
++        }
++
++        return $courriers;
++    }
+ }
+diff --git a/app/Integrations/Rne/InpiRne.php b/app/Integrations/Rne/InpiRne.php
+index eb528bf..f297a4d 100644
+--- a/app/Integrations/Rne/InpiRne.php
++++ b/app/Integrations/Rne/InpiRne.php
+@@ -2,6 +2,7 @@
+ 
+ namespace App\Integrations\Rne;
+ 
++use App\Domain\Tenancy\Support\Reglage;
+ use App\Integrations\EnvoiRecommande\AdressePostale;
+ use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
+ use Closure;
+@@ -67,13 +68,13 @@ public function representants(string $siren): array
+             return [];
+         }
+ 
+-        $entrepreneur = $contenu['personnePhysique']['identite']['entrepreneur']['descriptionPersonne'] ?? null;
++        $entrepreneur = self::au($contenu, 'personnePhysique', 'identite', 'entrepreneur', 'descriptionPersonne');
+ 
+         if (is_array($entrepreneur)) {
+             return [$this->personnePhysique($entrepreneur, 'Entrepreneur individuel', true, null)];
+         }
+ 
+-        $pouvoirs = $contenu['personneMorale']['composition']['pouvoirs'] ?? null;
++        $pouvoirs = self::au($contenu, 'personneMorale', 'composition', 'pouvoirs');
+ 
+         if (! is_array($pouvoirs)) {
+             throw $this->illisible();
+@@ -109,7 +110,7 @@ public function identite(string $siren): ?IdentiteRne
+         }
+ 
+         $morale = is_array($contenu['personneMorale'] ?? null);
+-        $identite = $morale ? ($contenu['personneMorale']['identite'] ?? null) : ($contenu['personnePhysique']['identite'] ?? null);
++        $identite = $morale ? self::au($contenu, 'personneMorale', 'identite') : self::au($contenu, 'personnePhysique', 'identite');
+         $entreprise = is_array($identite) && is_array($identite['entreprise'] ?? null) ? $identite['entreprise'] : [];
+         $description = $morale && is_array($identite) && is_array($identite['description'] ?? null) ? $identite['description'] : [];
+         $categorie = $this->texte($entreprise, 'formeJuridique');
+@@ -136,7 +137,12 @@ public function identite(string $siren): ?IdentiteRne
+     private function siege(array $contenu): ?AdressePostale
+     {
+         $personne = $contenu['personneMorale'] ?? $contenu['personnePhysique'] ?? null;
+-        $adresse = is_array($personne) ? ($personne['adresseEntreprise']['adresse'] ?? null) : null;
++
++        if (! is_array($personne)) {
++            return null;
++        }
++
++        $adresse = self::au($personne, 'adresseEntreprise', 'adresse');
+ 
+         if (! is_array($adresse)) {
+             return null;
+@@ -150,7 +156,7 @@ private function siege(array $contenu): ?AdressePostale
+             return null;
+         }
+ 
+-        $identite = $personne['identite']['entreprise'] ?? [];
++        $identite = self::au($personne, 'identite', 'entreprise');
+ 
+         return new AdressePostale(
+             denomination: is_array($identite) ? $this->texte($identite, 'denomination') : null,
+@@ -184,7 +190,7 @@ private function representant(mixed $pouvoir): RepresentantRne
+             return new RepresentantRne($denomination, null, [], null, self::libelleDuRole($role), $represente, $sirenDuDirigeant, $debut);
+         }
+ 
+-        $personne = $pouvoir['individu']['descriptionPersonne'] ?? null;
++        $personne = self::au($pouvoir, 'individu', 'descriptionPersonne');
+ 
+         if (! is_array($personne)) {
+             throw $this->illisible();
+@@ -235,7 +241,7 @@ private function formalite(string $siren): ?array
+             return null;
+         }
+ 
+-        $contenu = $this->lire($reponse)['formality']['content'] ?? null;
++        $contenu = self::au($this->lire($reponse), 'formality', 'content');
+ 
+         return is_array($contenu) ? $contenu : throw $this->illisible();
+     }
+@@ -274,8 +280,8 @@ private function jeton(): string
+     private function envoyer(Closure $requete): Response
+     {
+         try {
+-            return $requete(Http::baseUrl(config('services.rne.url'))
+-                ->timeout(config('services.rne.delai'))
++            return $requete(Http::baseUrl(Reglage::texte('services.rne.url'))
++                ->timeout(Reglage::entier('services.rne.delai'))
+                 ->connectTimeout(5)
+                 ->acceptJson()
+                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false));
+@@ -302,6 +308,28 @@ private function lire(Response $reponse): array
+         return $reponse->json();
+     }
+ 
++    /**
++     * La valeur au bout de ce chemin dans une réponse du registre, ou null
++     * quand un maillon manque ou n'est pas un tableau, comme la lecture
++     * $donnees['a']['b'] ?? null.
++     *
++     * @param  array<array-key, mixed>  $donnees
++     */
++    private static function au(array $donnees, string ...$cles): mixed
++    {
++        $valeur = $donnees;
++
++        foreach ($cles as $cle) {
++            if (! is_array($valeur) || ! array_key_exists($cle, $valeur)) {
++                return null;
++            }
++
++            $valeur = $valeur[$cle];
++        }
++
++        return $valeur;
++    }
++
+     private function illisible(): RneIndisponibleException
+     {
+         Log::warning('RNE : réponse illisible du registre national des entreprises.');
+diff --git a/app/Integrations/Sirene/InseeSirene.php b/app/Integrations/Sirene/InseeSirene.php
+index cdb0f01..e6c92a5 100644
+--- a/app/Integrations/Sirene/InseeSirene.php
++++ b/app/Integrations/Sirene/InseeSirene.php
+@@ -3,6 +3,7 @@
+ namespace App\Integrations\Sirene;
+ 
+ use App\Domain\Calendrier\Calendrier;
++use App\Domain\Tenancy\Support\Reglage;
+ use App\Integrations\Sirene\Contracts\RepertoireSirene;
+ use Illuminate\Http\Client\ConnectionException;
+ use Illuminate\Http\Client\Response;
+@@ -204,9 +205,9 @@ private function consulter(string $chemin, array $parametres = []): ?array
+         }
+ 
+         try {
+-            $reponse = Http::baseUrl(config('services.sirene.url'))
++            $reponse = Http::baseUrl(Reglage::texte('services.sirene.url'))
+                 ->withHeaders(['X-INSEE-Api-Key-Integration' => $cle])
+-                ->timeout(config('services.sirene.delai'))
++                ->timeout(Reglage::entier('services.sirene.delai'))
+                 ->connectTimeout(5)
+                 ->acceptJson()
+                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false)
+diff --git a/app/Integrations/Vies/ClientVies.php b/app/Integrations/Vies/ClientVies.php
+index dc51b22..0f4fd44 100644
+--- a/app/Integrations/Vies/ClientVies.php
++++ b/app/Integrations/Vies/ClientVies.php
+@@ -4,6 +4,7 @@
+ 
+ use App\Domain\Facturation\Services\NumeroTva;
+ use App\Domain\Facturation\Services\TerritoireFiscal;
++use App\Domain\Tenancy\Support\Reglage;
+ use App\Domain\Tenancy\Support\ValeurRequise;
+ use Illuminate\Http\Client\ConnectionException;
+ use Illuminate\Http\Client\Response;
+@@ -63,8 +64,8 @@ public function verifier(string $numeroTva, ?string $numeroTvaDemandeur): Result
+         }
+ 
+         try {
+-            $reponse = Http::baseUrl(config('services.vies.url'))
+-                ->timeout(config('services.vies.delai'))
++            $reponse = Http::baseUrl(Reglage::texte('services.vies.url'))
++                ->timeout(Reglage::entier('services.vies.delai'))
+                 ->connectTimeout(5)
+                 ->acceptJson()
+                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false)
+diff --git a/app/Providers/AppServiceProvider.php b/app/Providers/AppServiceProvider.php
+index b56ea40..327d1a1 100644
+--- a/app/Providers/AppServiceProvider.php
++++ b/app/Providers/AppServiceProvider.php
+@@ -35,6 +35,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\FournisseurDesComptes;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Http\Responses\ReponseDeConnexion;
+ use App\Models\User;
+@@ -62,6 +63,7 @@
+ use App\Policies\RecuPaiementPolicy;
+ use App\Policies\ServicePolicy;
+ use App\Policies\SocietePolicy;
++use Closure;
+ use Filament\Facades\Filament;
+ use Filament\Forms\Components\CheckboxList;
+ use Filament\Forms\Components\Field;
+@@ -92,6 +94,7 @@
+ use Illuminate\Validation\Rules\Exists;
+ use Illuminate\Validation\Validator as ValidatorDeLaravel;
+ use LogicException;
++use PDO;
+ use RuntimeException;
+ 
+ class AppServiceProvider extends ServiceProvider
+@@ -132,11 +135,11 @@ public function register(): void
+         $this->app->scoped(RegistreFiscal::class);
+         $this->app->scoped(OrigineDesProduits::class);
+         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
+-        Connection::resolverFor('pgsql', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres => new ConnexionPostgres($pdo, $base, $prefixe, $configuration));
++        Connection::resolverFor('pgsql', self::connexionPostgres(...));
+ 
+         foreach (self::PILOTES_REFUSES as $pilote) {
+             Connection::resolverFor($pilote, static fn (mixed $pdo, string $base, string $prefixe, array $configuration): never => throw new RuntimeException(
+-                "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « {$configuration['name']} » utilise le pilote « {$pilote} ». "
++                'PILIQI ne fonctionne qu\'avec PostgreSQL (17 ou 18) : la connexion « '.ValeursLues::texteDe($configuration, 'name')." » utilise le pilote « {$pilote} ». "
+                 .'Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), videz la configuration en cache (php artisan config:clear), puis recommencez.',
+             ));
+         }
+@@ -192,7 +195,7 @@ public function boot(): void
+         Gate::policy(InvitationCabinet::class, InvitationCabinetPolicy::class);
+         Gate::policy(EntreeAudit::class, EntreeAuditPolicy::class);
+ 
+-        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app->make('hash'), $config['model']));
++        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app->make('hash'), ValeursLues::texteDe($config, 'model')));
+ 
+         $this->nommerLesModelesPolymorphes();
+         $this->declarerLaSaisieEnDirect();
+@@ -309,6 +312,19 @@ private function nommerLesChampsDansLesMessages(): void
+         });
+     }
+ 
++    /**
++     * La connexion PostgreSQL de PILIQI (voir ConnexionPostgres), que
++     * Laravel crée avec le PDO de la base, ou la fonction qui l'ouvre à sa
++     * première requête.
++     *
++     * @param  PDO|(Closure(): PDO)  $pdo
++     * @param  array<array-key, mixed>  $configuration
++     */
++    private static function connexionPostgres(PDO|Closure $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres
++    {
++        return new ConnexionPostgres($pdo, $base, $prefixe, $configuration);
++    }
++
+     /**
+      * Le message d'une règle de date (after, before...) écrit la date
+      * comparée comme on l'écrit en français (« postérieure ou égale au
+@@ -322,13 +338,14 @@ private function ecrireLesDatesEnFrancaisDansLesMessages(): void
+     {
+         foreach (['after', 'after_or_equal', 'before', 'before_or_equal', 'date_equals'] as $regle) {
+             Validator::replacer($regle, static function (string $message, string $attribute, string $rule, array $parameters, ValidatorDeLaravel $validator): string {
+-                $jour = Calendrier::jourValide(substr($parameters[0], 0, 10));
++                $date = ValeursLues::texte($parameters[0]);
++                $jour = Calendrier::jourValide(substr($date, 0, 10));
+ 
+                 if ($jour === null) {
+-                    return str_replace(':date', $validator->getDisplayableAttribute($parameters[0]), $message);
++                    return str_replace(':date', $validator->getDisplayableAttribute($date), $message);
+                 }
+ 
+-                $heure = substr($parameters[0], 11, 5);
++                $heure = substr($date, 11, 5);
+ 
+                 return str_replace(':date', Calendrier::afficherJour($jour, 'd/m/Y').(in_array($heure, ['', '00:00'], true) ? '' : ' à '.$heure), $message);
+             });
+@@ -369,9 +386,9 @@ private function limiterLesChoixAuMagasin(): void
+             return $this->relationship(
+                 $relation,
+                 $attributAffiche,
+-                static fn (Builder $query, Select $component, ?Model $record): Builder => $query->scopes(['proposables' => [
++                static fn (Builder $query, Select $component, ?Model $record): Builder => ValeursLues::instance($query->scopes(['proposables' => [
+                     $record?->getOriginal(AppServiceProvider::relationDuChoix($component)->getForeignKeyName()),
+-                ]]),
++                ]]), Builder::class),
+             )->getSearchResultsUsing(static function (Select $component, string $search) use ($attributAffiche, $colonnesDeRecherche): array {
+                 $relation = Relation::noConstraints(static fn (): BelongsTo => AppServiceProvider::relationDuChoix($component));
+                 $cle = $relation->getRelated()->getKeyName();
+@@ -406,11 +423,11 @@ private static function regleDuChoixDansLeMagasin(Select $component): ?Exists
+         $fiche = $relation->getParent();
+ 
+         if (! method_exists($modele, 'regleExisteDansLeMagasin')
+-            || ($fiche->exists && (string) $component->getState() === (string) $fiche->getOriginal($relation->getForeignKeyName()))) {
++            || ($fiche->exists && ValeurSimple::enTexte($component->getState()) === ValeurSimple::enTexte($fiche->getOriginal($relation->getForeignKeyName())))) {
+             return null;
+         }
+ 
+-        return $modele::regleExisteDansLeMagasin();
++        return ValeursLues::instance($modele::regleExisteDansLeMagasin(), Exists::class);
+     }
+ 
+     /**
+diff --git a/app/Providers/VerificationServiceProvider.php b/app/Providers/VerificationServiceProvider.php
+index c120b18..e50dba7 100644
+--- a/app/Providers/VerificationServiceProvider.php
++++ b/app/Providers/VerificationServiceProvider.php
+@@ -2,6 +2,7 @@
+ 
+ namespace App\Providers;
+ 
++use App\Domain\Tenancy\Support\ValeurSimple;
+ use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
+ use App\Integrations\EnvoiRecommande\FauxServiceEnvoiRecommande;
+ use App\Integrations\Ordre\AnnuaireTenuParLEditeur;
+@@ -89,7 +90,7 @@ private function pilote(string $service): string
+         if (! is_string($pilote) || ! isset(self::PILOTES[$service][$pilote])) {
+             $connus = implode(' ou ', array_keys(self::PILOTES[$service]));
+ 
+-            throw new RuntimeException("Pilote inconnu pour {$service} : « {$pilote} » ({$connus}).");
++            throw new RuntimeException("Pilote inconnu pour {$service} : « ".ValeurSimple::enTexte($pilote)." » ({$connus}).");
+         }
+ 
+         return $pilote;
+diff --git a/database/factories/ClotureCaissePersonnelleFactory.php b/database/factories/ClotureCaissePersonnelleFactory.php
+index fa983f5..2ad46a5 100644
+--- a/database/factories/ClotureCaissePersonnelleFactory.php
++++ b/database/factories/ClotureCaissePersonnelleFactory.php
+@@ -4,6 +4,7 @@
+ 
+ use App\Domain\Facturation\Enums\ModeFermetureCaisse;
+ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Factories\Factory;
+ 
+@@ -21,7 +22,7 @@ public function definition(): array
+         return [
+             'vendeur_id' => User::factory(),
+             'mode_fermeture' => ModeFermetureCaisse::Vendeur,
+-            'fermee_par' => static fn (array $attributs): int => $attributs['vendeur_id'],
++            'fermee_par' => static fn (array $attributs): int => ValeursLues::entier($attributs['vendeur_id']),
+             'periode_debut' => now()->subHours(4),
+             'jusqu_au' => now(),
+             'cloturee_a' => now(),
+diff --git a/database/factories/PanierCaisseFactory.php b/database/factories/PanierCaisseFactory.php
+index f04f427..cf719bf 100644
+--- a/database/factories/PanierCaisseFactory.php
++++ b/database/factories/PanierCaisseFactory.php
+@@ -6,6 +6,7 @@
+ use App\Domain\Facturation\Models\PanierCaisse;
+ use App\Domain\Facturation\Services\CalculateurLigne;
+ use App\Domain\Facturation\Services\LignesRetirees;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Factories\Factory;
+ use Illuminate\Support\Str;
+@@ -26,7 +27,7 @@ public function definition(): array
+             'user_id' => User::factory(),
+             'jeton' => fn (): string => (string) Str::uuid(),
+             'lignes' => fn (): array => self::lignesDu(Produit::factory()->create(), 1),
+-            'prix_arretes' => fn (array $attributs): array => self::prixArretesDes($attributs['lignes']),
++            'prix_arretes' => fn (array $attributs): array => self::prixArretesDes(ValeursLues::tableauDe($attributs, 'lignes')),
+         ];
+     }
+ 
+@@ -36,17 +37,22 @@ public function avecLeProduit(Produit $produit, int $quantite): static
+     }
+ 
+     /**
+-     * Le prix de chaque ligne, arrêté pour tous ses articles.
++     * Le prix de chaque ligne, arrêté pour tous ses articles, par la clé
++     * de la ligne.
+      *
+-     * @param  array<string, array<string, mixed>>  $lignes
++     * @param  array<array-key, mixed>  $lignes  les lignes du panier, chacune un tableau
+      * @return array<string, list<array{prix_unitaire_ttc: int|null, quantite: int}>>
+      */
+     private static function prixArretesDes(array $lignes): array
+     {
+-        return array_map(
+-            fn (array $ligne): array => [['prix_unitaire_ttc' => app(LignesRetirees::class)->prixEnCentimes($ligne['prix_unitaire_ttc']), 'quantite' => $ligne['quantite']]],
+-            $lignes,
+-        );
++        $prix = [];
++
++        foreach ($lignes as $cle => $ligne) {
++            $ligne = ValeursLues::tableau($ligne);
++            $prix[ValeursLues::texte($cle)] = [['prix_unitaire_ttc' => app(LignesRetirees::class)->prixEnCentimes($ligne['prix_unitaire_ttc']), 'quantite' => ValeursLues::entier($ligne['quantite'])]];
++        }
++
++        return $prix;
+     }
+ 
+     /**
+diff --git a/database/factories/SocieteFactory.php b/database/factories/SocieteFactory.php
+index 13a4e0c..267f28a 100644
+--- a/database/factories/SocieteFactory.php
++++ b/database/factories/SocieteFactory.php
+@@ -6,6 +6,7 @@
+ use App\Domain\Tenancy\Enums\TypeDActivite;
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\IdentifiantsInsee;
++use App\Domain\Tenancy\Support\ValeursLues;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Factories\Factory;
+ 
+@@ -86,7 +87,7 @@ public function validee(): static
+     public function commeApresLInscription(): static
+     {
+         return $this->state(fn (array $attributs): array => [
+-            'raison_sociale' => "SOCIETE FICTIVE {$attributs['siren']}",
++            'raison_sociale' => 'SOCIETE FICTIVE '.ValeursLues::texteDe($attributs, 'siren'),
+             'categorie_juridique_insee' => '5710',
+             'forme_juridique' => FormeJuridique::Sas,
+             'capital_social' => null,
+diff --git a/database/factories/UserFactory.php b/database/factories/UserFactory.php
+index ae27910..6cae4e8 100644
+--- a/database/factories/UserFactory.php
++++ b/database/factories/UserFactory.php
+@@ -10,6 +10,7 @@
+ use App\Domain\Tenancy\Models\Societe;
+ use App\Domain\Tenancy\Services\GenerateurDIdentifiants;
+ use App\Domain\Tenancy\Services\TenantContext;
++use App\Domain\Tenancy\Support\CleDuModele;
+ use App\Models\User;
+ use Illuminate\Database\Eloquent\Factories\Factory;
+ use Illuminate\Support\Facades\Hash;
+@@ -84,7 +85,7 @@ public function membreDe(Magasin $magasin): static
+             'role_societe' => RoleSociete::Membre,
+             'email' => null,
+             'email_verified_at' => null,
+-        ])->afterCreating(fn (User $compte) => self::attribuerLIdentifiant($compte, (int) $magasin->getKey()));
++        ])->afterCreating(fn (User $compte) => self::attribuerLIdentifiant($compte, CleDuModele::de($magasin)));
+     }
+ 
+     /**
+diff --git a/tests/Feature/Qualite/OutilDeQualiteTest.php b/tests/Feature/Qualite/OutilDeQualiteTest.php
+index a5f0732..8d0a0ea 100644
+--- a/tests/Feature/Qualite/OutilDeQualiteTest.php
++++ b/tests/Feature/Qualite/OutilDeQualiteTest.php
+@@ -185,6 +185,50 @@ public function test_le_temoin_de_l_analyse_des_flux_exige_exactement_les_chemin
+         $this->assertStringContainsString('chemin en trop : tests/Qualite/Psalm/Temoin/Temoin.php:2 TaintedSql', $sortie);
+     }
+ 
++    /**
++     * Le contrôle des flux ne compte que les chemins de sécurité d'un
++     * rapport de Psalm, chacun avec son fichier, sa ligne, son type et son
++     * message.
++     */
++    public function test_le_controle_des_flux_ne_compte_que_les_chemins_de_securite(): void
++    {
++        $autre = ['type' => 'MixedArgument', 'file_name' => $this->depot.'/app/Autre.php', 'line_from' => 3, 'message' => 'valeur sans type'];
++        $chemin = ['type' => 'TaintedSql', 'file_name' => $this->depot.'/app/Requete.php', 'line_from' => 4, 'message' => 'saisie dans une requête', 'is_security' => true];
++
++        [$code, $sortie] = $this->lancer('flux', $this->ecrire('psalm.json', json_encode([$autre, $chemin], JSON_THROW_ON_ERROR)));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString($this->depot.'/app/Requete.php:4 TaintedSql : saisie dans une requête', $sortie);
++        $this->assertStringNotContainsString('MixedArgument', $sortie);
++
++        [$code, $sortie] = $this->lancer('flux', $this->ecrire('psalm.json', json_encode([$autre], JSON_THROW_ON_ERROR)));
++        $this->assertSame(0, $code, $sortie);
++        $this->assertStringContainsString('Aucun chemin', $sortie);
++    }
++
++    /**
++     * Le contrôle de la mutation range chaque mutant du journal JSON
++     * d'Infection dans sa partie et liste ceux qu'aucun test n'arrête ; un
++     * mutant sans son mutateur rend le journal illisible.
++     */
++    public function test_le_controle_de_la_mutation_lit_chaque_mutant_du_journal_d_infection(): void
++    {
++        $mutant = fn (string $fichier, int $ligne, string $mutateur): array => ['mutator' => ['mutatorName' => $mutateur, 'originalFilePath' => $this->depot.'/'.$fichier, 'originalStartLine' => $ligne], 'processOutput' => 'Tests: 2, Assertions: 4, Failures: 1.'];
++
++        [$code, $sortie] = $this->lancer('mutation', $this->ecrire('infection.json', json_encode([
++            'killed' => [$mutant('app/Domain/Facturation/Services/CalculateurLigne.php', 12, 'Plus')],
++            'escaped' => [$mutant('app/Policies/FacturePolicy.php', 30, 'Minus')],
++            'uncovered' => [['mutator' => ['mutatorName' => 'Identical', 'originalFilePath' => $this->depot.'/app/Policies/FacturePolicy.php', 'originalStartLine' => 31]]],
++        ], JSON_THROW_ON_ERROR)));
++        $this->assertSame(0, $code, $sortie);
++        $this->assertStringContainsString('| calculs | 1 | 0 | 0 | 0 | 0 | 100.0 % | — |', $sortie);
++        $this->assertStringContainsString('| droits_et_isolation | 0 | 0 | 1 | 1 | 0 | 0.0 % | — |', $sortie);
++        $this->assertStringContainsString("- app/Policies/FacturePolicy.php:30 Minus\n- app/Policies/FacturePolicy.php:31 Identical", $sortie);
++
++        [$code, $sortie] = $this->lancer('mutation', $this->ecrire('infection.json', json_encode(['killed' => [['processOutput' => '']]], JSON_THROW_ON_ERROR)));
++        $this->assertSame(1, $code, $sortie);
++        $this->assertStringContainsString('Échec : Le mutateur d\'un mutant « killed » du journal d\'Infection n\'est pas un tableau : null.', $sortie);
++    }
++
+     public function test_les_seuils_sans_leur_ancien_fichier_ecrivent_l_usage_et_sortent_avec_le_code_2(): void
+     {
+         [$code, $sortie] = $this->lancer('seuils');
+diff --git a/tests/Feature/Tenancy/CleDuModeleTest.php b/tests/Feature/Tenancy/CleDuModeleTest.php
+new file mode 100644
+index 0000000..63af822
+--- /dev/null
++++ b/tests/Feature/Tenancy/CleDuModeleTest.php
+@@ -0,0 +1,37 @@
++<?php
++
++namespace Tests\Feature\Tenancy;
++
++use App\Domain\Tenancy\Models\Magasin;
++use App\Domain\Tenancy\Support\CleDuModele;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Tests\TestCase;
++use UnexpectedValueException;
++
++/**
++ * La clé d'un enregistrement (voir CleDuModele) : l'entier qu'Eloquent
++ * rend pour un enregistrement en base, même lue en texte ; un modèle qui
++ * n'est pas en base est refusé.
++ */
++class CleDuModeleTest extends TestCase
++{
++    use RefreshDatabase;
++
++    public function test_la_cle_d_un_enregistrement_en_base_est_rendue_en_entier(): void
++    {
++        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
++        $cle = $magasin->getKey();
++
++        $this->assertIsInt($cle);
++        $this->assertSame($cle, CleDuModele::de($magasin));
++        $this->assertSame($cle, CleDuModele::de((new Magasin)->setRawAttributes(['id' => (string) $cle])));
++    }
++
++    public function test_un_modele_qui_n_est_pas_en_base_est_refuse(): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(CleDuModele::REFUS, Magasin::class, 'null'));
++
++        CleDuModele::de(new Magasin);
++    }
++}
+diff --git a/tests/Feature/Tenancy/ReglageTest.php b/tests/Feature/Tenancy/ReglageTest.php
+new file mode 100644
+index 0000000..67c3f9c
+--- /dev/null
++++ b/tests/Feature/Tenancy/ReglageTest.php
+@@ -0,0 +1,60 @@
++<?php
++
++namespace Tests\Feature\Tenancy;
++
++use App\Domain\Tenancy\Support\Reglage;
++use PHPUnit\Framework\Attributes\DataProvider;
++use Tests\TestCase;
++use UnexpectedValueException;
++
++/**
++ * Un réglage de l'application (voir Reglage) : rendu tel que son fichier
++ * de configuration l'écrit quand il est du type attendu ; absent ou d'un
++ * autre type, il est refusé par une exception qui le nomme.
++ */
++class ReglageTest extends TestCase
++{
++    public function test_un_reglage_du_type_attendu_est_rendu_tel_quel(): void
++    {
++        config(['piliqi.essai' => ['texte' => '0', 'vide' => null, 'entier' => 0, 'tableau' => ['a' => 1]]]);
++
++        $this->assertSame('0', Reglage::texte('piliqi.essai.texte'));
++        $this->assertSame('0', Reglage::texteOuNul('piliqi.essai.texte'));
++        $this->assertNull(Reglage::texteOuNul('piliqi.essai.vide'));
++        $this->assertSame(0, Reglage::entier('piliqi.essai.entier'));
++        $this->assertSame(['a' => 1], Reglage::tableau('piliqi.essai.tableau'));
++    }
++
++    /**
++     * Un entier écrit en texte (une variable d'environnement que le fichier
++     * ne convertit pas) n'est pas un entier, et un réglage absent n'est
++     * d'aucun type.
++     *
++     * @return array<string, array{callable(string): mixed, string, string}>
++     */
++    public static function reglagesRefuses(): array
++    {
++        return [
++            'texte absent' => [Reglage::texte(...), 'absent', sprintf(Reglage::REFUS_TEXTE, 'piliqi.essai.absent', 'null')],
++            'texte qui est un entier' => [Reglage::texte(...), 'entier', sprintf(Reglage::REFUS_TEXTE, 'piliqi.essai.entier', 'int')],
++            'texte facultatif qui est un booléen' => [Reglage::texteOuNul(...), 'booleen', sprintf(Reglage::REFUS_TEXTE_OU_NUL, 'piliqi.essai.booleen', 'bool')],
++            'entier écrit en texte' => [Reglage::entier(...), 'texte', sprintf(Reglage::REFUS_ENTIER, 'piliqi.essai.texte', 'string')],
++            'entier absent' => [Reglage::entier(...), 'absent', sprintf(Reglage::REFUS_ENTIER, 'piliqi.essai.absent', 'null')],
++            'tableau qui est un texte' => [Reglage::tableau(...), 'texte', sprintf(Reglage::REFUS_TABLEAU, 'piliqi.essai.texte', 'string')],
++        ];
++    }
++
++    /**
++     * @param  callable(string): mixed  $lecture
++     */
++    #[DataProvider('reglagesRefuses')]
++    public function test_un_reglage_absent_ou_d_un_autre_type_est_refuse(callable $lecture, string $cle, string $refus): void
++    {
++        config(['piliqi.essai' => ['texte' => '30', 'entier' => 30, 'booleen' => false]]);
++
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage($refus);
++
++        $lecture("piliqi.essai.{$cle}");
++    }
++}
+diff --git a/tests/Qualite/qualite.php b/tests/Qualite/qualite.php
+index 0ce4c55..561dce5 100644
+--- a/tests/Qualite/qualite.php
++++ b/tests/Qualite/qualite.php
+@@ -98,6 +98,87 @@ function section(array $seuils, string $cle): array
+     return $section;
+ }
+ 
++/**
++ * Le contenu de ce fichier, que l'outil lit (un rapport, un journal, une
++ * configuration) : un fichier illisible est refusé.
++ */
++function contenuDe(string $fichier): string
++{
++    $contenu = file_get_contents($fichier);
++
++    if ($contenu === false) {
++        throw new RuntimeException("Fichier illisible : {$fichier}.");
++    }
++
++    return $contenu;
++}
++
++/**
++ * Une valeur lue dans un fichier que l'outil ne fait que lire (un rapport,
++ * un journal, une configuration), là où il attend un tableau : une valeur
++ * d'un autre type est refusée, au lieu d'être utilisée pour ce qu'elle
++ * n'est pas.
++ *
++ * @param  string  $quoi  ce qu'est la valeur (« le journal d'Infection »)
++ * @return array<array-key, mixed>
++ */
++function tableauLu(mixed $valeur, string $quoi): array
++{
++    if (! is_array($valeur)) {
++        throw new RuntimeException(ucfirst($quoi).' n\'est pas un tableau : '.get_debug_type($valeur).'.');
++    }
++
++    return $valeur;
++}
++
++/**
++ * La même lecture, là où l'outil attend un texte.
++ *
++ * @param  string  $quoi  ce qu'est la valeur
++ */
++function texteLu(mixed $valeur, string $quoi): string
++{
++    if (! is_string($valeur)) {
++        throw new RuntimeException(ucfirst($quoi).' n\'est pas un texte : '.get_debug_type($valeur).'.');
++    }
++
++    return $valeur;
++}
++
++/**
++ * La même lecture, là où l'outil attend un entier.
++ *
++ * @param  string  $quoi  ce qu'est la valeur
++ */
++function entierLu(mixed $valeur, string $quoi): int
++{
++    if (! is_int($valeur)) {
++        throw new RuntimeException(ucfirst($quoi).' n\'est pas un entier : '.get_debug_type($valeur).'.');
++    }
++
++    return $valeur;
++}
++
++/**
++ * Les grandes parties du logiciel (parties.php), chacune avec ses chemins.
++ *
++ * @return array<string, list<string>>
++ */
++function parties(): array
++{
++    $parties = [];
++
++    foreach (tableauLu(require __DIR__.'/parties.php', 'parties.php') as $partie => $chemins) {
++        if (! is_string($partie)) {
++            throw new RuntimeException("parties.php : chaque partie se nomme par un texte, pas par {$partie}.");
++        }
++
++        $parties[$partie] = listeDeChaines($chemins, "parties.php, partie {$partie},");
++    }
++
++    return $parties;
++}
++
+ /**
+  * Les seuils d'un outil par partie (couverture, mutation), chacun un
+  * nombre de points de pourcentage, entier ou décimal, tel que seuils.json
+@@ -157,7 +238,7 @@ function partieDe(string $fichier): string
+ {
+     $relatif = relatifAuDepot($fichier);
+ 
+-    foreach (require __DIR__.'/parties.php' as $partie => $chemins) {
++    foreach (parties() as $partie => $chemins) {
+         foreach ($chemins as $chemin) {
+             if (str_starts_with($relatif, $chemin)) {
+                 return $partie;
+@@ -335,10 +416,37 @@ function mutantsNonConclus(string $journalTexte): array
+     return array_map(fn (array $morceau): array => [$morceau[1], (int) $morceau[2], $morceau[3]], $morceaux);
+ }
+ 
++/**
++ * Les mutants de cet état du journal JSON d'Infection (killed, escaped…),
++ * chacun avec ce que le contrôle en lit : son fichier, sa ligne, son
++ * mutateur et la sortie de ses tests, vide quand le journal n'en donne
++ * pas. Un état absent n'a aucun mutant.
++ *
++ * @param  array<array-key, mixed>  $donnees  le journal JSON d'Infection
++ * @return list<array{fichier: string, ligne: int, mutateur: string, sortie: string}>
++ */
++function mutantsDuJournal(array $donnees, string $etat): array
++{
++    $mutants = [];
++
++    foreach (tableauLu($donnees[$etat] ?? [], "la liste « {$etat} » du journal d'Infection") as $mutant) {
++        $mutant = tableauLu($mutant, "un mutant « {$etat} » du journal d'Infection");
++        $mutateur = tableauLu($mutant['mutator'] ?? null, "le mutateur d'un mutant « {$etat} » du journal d'Infection");
++        $mutants[] = [
++            'fichier' => texteLu($mutateur['originalFilePath'] ?? null, "le fichier d'un mutant « {$etat} » du journal d'Infection"),
++            'ligne' => entierLu($mutateur['originalStartLine'] ?? null, "la ligne d'un mutant « {$etat} » du journal d'Infection"),
++            'mutateur' => texteLu($mutateur['mutatorName'] ?? null, "le nom du mutateur d'un mutant « {$etat} » du journal d'Infection"),
++            'sortie' => texteLu($mutant['processOutput'] ?? '', "la sortie des tests d'un mutant « {$etat} » du journal d'Infection"),
++        ];
++    }
++
++    return $mutants;
++}
++
+ function mutation(string $journal, ?string $rapport): int
+ {
+-    $donnees = json_decode((string) file_get_contents($journal), true, flags: JSON_THROW_ON_ERROR);
+-    $sansTest = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => preg_match('/Test file ".*" not found/', (string) ($mutant['processOutput'] ?? '')) === 1);
++    $donnees = tableauLu(json_decode(contenuDe($journal), true, flags: JSON_THROW_ON_ERROR), "le journal d'Infection {$journal}");
++    $sansTest = array_filter(mutantsDuJournal($donnees, 'killed'), fn (array $mutant): bool => preg_match('/Test file ".*" not found/', $mutant['sortie']) === 1);
+ 
+     if ($sansTest !== []) {
+         echo count($sansTest)." mutants comptés comme tués n'ont lancé aucun test : Infection n'a pas trouvé leurs fichiers dans le rapport JUnit. Ce rapport doit venir de paratest (PHPUnit), pas de php artisan test (Pest) : voir README.\n";
+@@ -346,7 +454,7 @@ function mutation(string $journal, ?string $rapport): int
+         return 1;
+     }
+ 
+-    $testsPasses = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => str_contains((string) ($mutant['processOutput'] ?? ''), '"result":"passed"'));
++    $testsPasses = array_filter(mutantsDuJournal($donnees, 'killed'), fn (array $mutant): bool => str_contains($mutant['sortie'], '"result":"passed"'));
+ 
+     if ($testsPasses !== []) {
+         echo count($testsPasses)." mutants comptés comme tués ont pourtant passé tous leurs tests : PHPUnit a écrit son résumé pour un agent de code (variables AI_AGENT, CLAUDECODE ou CLAUDE_CODE), qu'Infection ne lit pas. Relancez Infection sans elles (env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE) : voir README.\n";
+@@ -359,8 +467,8 @@ function mutation(string $journal, ?string $rapport): int
+     $mutants = [];
+ 
+     foreach ($etats as $cle => $etat) {
+-        foreach ($donnees[$cle] ?? [] as $mutant) {
+-            $mutants[] = [$etat, $mutant['mutator']['originalFilePath'], $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']];
++        foreach (mutantsDuJournal($donnees, $cle) as $mutant) {
++            $mutants[] = [$etat, $mutant['fichier'], $mutant['ligne'], $mutant['mutateur']];
+         }
+     }
+ 
+@@ -947,11 +1055,11 @@ function consignesQuiFontTairePhpstan(string $chemin, array $exclusions): array
+ 
+ function sensibles(): int
+ {
+-    $parties = require __DIR__.'/parties.php';
++    $parties = parties();
+     $chemins = [];
+ 
+     foreach (PARTIES_SENSIBLES as $partie) {
+-        array_push($chemins, ...$parties[$partie]);
++        array_push($chemins, ...$parties[$partie] ?? throw new RuntimeException("parties.php n'a pas la partie sensible {$partie}."));
+     }
+ 
+     echo implode("\n", $chemins), "\n";
+@@ -1002,6 +1110,10 @@ function glob_recursif(string $dossier): array
+     $fichiers = [];
+ 
+     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS)) as $fichier) {
++        if (! $fichier instanceof SplFileInfo) {
++            throw new RuntimeException("Le parcours de {$dossier} ne rend pas un fichier : ".get_debug_type($fichier).'.');
++        }
++
+         if ($fichier->isFile() && str_ends_with($fichier->getFilename(), '.php')) {
+             $fichiers[] = $fichier->getPathname();
+         }
+@@ -1012,11 +1124,11 @@ function glob_recursif(string $dossier): array
+ 
+ function configurationSensibles(string $destination): int
+ {
+-    $configuration = json_decode((string) preg_replace('#^\s*//.*$#m', '', (string) file_get_contents(RACINE.'/infection.json5')), true, flags: JSON_THROW_ON_ERROR);
++    $configuration = tableauLu(json_decode((string) preg_replace('#^\s*//.*$#m', '', contenuDe(RACINE.'/infection.json5')), true, flags: JSON_THROW_ON_ERROR), 'infection.json5');
+     $configuration['$schema'] = RACINE.'/vendor/infection/infection/resources/schema.json';
+     $configuration['source'] = ['directories' => [RACINE.'/app'], 'excludes' => exclusionsHorsDesPartiesSensibles()];
+-    $configuration['tmpDir'] = RACINE.'/'.$configuration['tmpDir'];
+-    $configuration['logs'] = array_map(fn (string $journal): string => RACINE.'/'.$journal, $configuration['logs']);
++    $configuration['tmpDir'] = RACINE.'/'.texteLu($configuration['tmpDir'] ?? null, 'le tmpDir de infection.json5');
++    $configuration['logs'] = array_map(fn (mixed $journal): string => RACINE.'/'.texteLu($journal, 'un journal de infection.json5'), tableauLu($configuration['logs'] ?? null, 'les journaux de infection.json5'));
+     $configuration['phpUnit'] = ['configDir' => RACINE];
+     file_put_contents($destination, json_encode($configuration, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n");
+ 
+@@ -1038,11 +1150,38 @@ function sensiblesChanges(string $base): int
+  * donnée venue de l'extérieur qui atteint, sans contrôle, une requête SQL,
+  * une page, un fichier, une commande, une redirection ou un e-mail) ?
+  *
+- * @param  array<string, mixed>  $probleme
++ * @param  array<array-key, mixed>  $probleme
+  */
+ function estUnCheminDeSecurite(array $probleme): bool
+ {
+-    return ($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted');
++    return ($probleme['is_security'] ?? false) === true || str_starts_with(texteLu($probleme['type'] ?? null, "le type d'un problème du rapport de Psalm"), 'Tainted');
++}
++
++/**
++ * Les chemins de sécurité d'un rapport JSON de Psalm (voir
++ * estUnCheminDeSecurite()), dans son ordre, chacun avec ce que le contrôle
++ * en lit : son fichier, sa ligne, son type et son message.
++ *
++ * @return list<array{fichier: string, ligne: int, type: string, message: string}>
++ */
++function cheminsDeSecurite(string $rapport): array
++{
++    $chemins = [];
++
++    foreach (tableauLu(json_decode(contenuDe($rapport), true, flags: JSON_THROW_ON_ERROR), "le rapport de Psalm {$rapport}") as $probleme) {
++        $probleme = tableauLu($probleme, "un problème du rapport de Psalm {$rapport}");
++
++        if (estUnCheminDeSecurite($probleme)) {
++            $chemins[] = [
++                'fichier' => texteLu($probleme['file_name'] ?? null, "le fichier d'un chemin du rapport de Psalm"),
++                'ligne' => entierLu($probleme['line_from'] ?? null, "la ligne d'un chemin du rapport de Psalm"),
++                'type' => texteLu($probleme['type'], "le type d'un chemin du rapport de Psalm"),
++                'message' => texteLu($probleme['message'] ?? null, "le message d'un chemin du rapport de Psalm"),
++            ];
++        }
++    }
++
++    return $chemins;
+ }
+ 
+ /**
+@@ -1059,10 +1198,7 @@ function flux(string $rapport): int
+         return 1;
+     }
+ 
+-    $chemins = array_values(array_filter(
+-        json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR),
+-        estUnCheminDeSecurite(...),
+-    ));
++    $chemins = cheminsDeSecurite($rapport);
+ 
+     if ($chemins === []) {
+         echo "Aucun chemin d'une donnée venue de l'extérieur sans contrôle.\n";
+@@ -1073,7 +1209,7 @@ function flux(string $rapport): int
+     echo "Chemins d'une donnée venue de l'extérieur sans contrôle :\n";
+ 
+     foreach ($chemins as $chemin) {
+-        echo sprintf("  %s:%d %s : %s\n", $chemin['file_name'], $chemin['line_from'], $chemin['type'], $chemin['message']);
++        echo sprintf("  %s:%d %s : %s\n", $chemin['fichier'], $chemin['ligne'], $chemin['type'], $chemin['message']);
+     }
+ 
+     return 1;
+@@ -1093,8 +1229,8 @@ function cheminsDuRapport(string $rapport): ?array
+ 
+     $chemins = [];
+ 
+-    foreach (array_filter(json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR), estUnCheminDeSecurite(...)) as $probleme) {
+-        $chemins[] = sprintf('%s:%d %s', relatifAuDepot((string) $probleme['file_name']), $probleme['line_from'], $probleme['type']);
++    foreach (cheminsDeSecurite($rapport) as $chemin) {
++        $chemins[] = sprintf('%s:%d %s', relatifAuDepot($chemin['fichier']), $chemin['ligne'], $chemin['type']);
+     }
+ 
+     sort($chemins);
+diff --git a/tests/Unit/ValeurSimpleTest.php b/tests/Unit/ValeurSimpleTest.php
+new file mode 100644
+index 0000000..28febec
+--- /dev/null
++++ b/tests/Unit/ValeurSimpleTest.php
+@@ -0,0 +1,76 @@
++<?php
++
++namespace Tests\Unit;
++
++use App\Domain\Tenancy\Support\ValeurSimple;
++use ArrayIterator;
++use PHPUnit\Framework\Attributes\DataProvider;
++use PHPUnit\Framework\TestCase;
++use UnexpectedValueException;
++
++/**
++ * Une valeur simple lue en texte ou en entier (voir ValeurSimple) : sous
++ * chaque forme que le navigateur, Livewire et la base rendent vraiment,
++ * le résultat d'une conversion ; un tableau ou un objet est refusé.
++ */
++class ValeurSimpleTest extends TestCase
++{
++    /**
++     * Chaque forme, avec le texte et l'entier attendus : ceux de (string)
++     * et de (int).
++     *
++     * @return array<string, array{mixed, string, int}>
++     */
++    public static function formesSaisies(): array
++    {
++        return [
++            'clé en texte' => ['12', '12', 12],
++            'clé en nombre' => [12, '12', 12],
++            'champ vide' => ['', '', 0],
++            'rien' => [null, '', 0],
++            'zéro en texte' => ['0', '0', 0],
++            'un en texte' => ['1', '1', 1],
++            'case cochée' => [true, '1', 1],
++            'case décochée' => [false, '', 0],
++            'nombre décimal' => [1.5, '1.5', 1],
++            'texte libre' => ['abc', 'abc', 0],
++        ];
++    }
++
++    #[DataProvider('formesSaisies')]
++    public function test_une_valeur_simple_est_lue_comme_la_lisait_une_conversion(mixed $valeur, string $texte, int $entier): void
++    {
++        $this->assertSame($texte, ValeurSimple::enTexte($valeur));
++        $this->assertSame($entier, ValeurSimple::enEntier($valeur));
++    }
++
++    /**
++     * @return array<string, array{mixed, string}>
++     */
++    public static function pasDesValeursSimples(): array
++    {
++        return [
++            'tableau de clés' => [['12', '13'], 'array'],
++            'tableau vide' => [[], 'array'],
++            'objet' => [new ArrayIterator(['12']), ArrayIterator::class],
++        ];
++    }
++
++    #[DataProvider('pasDesValeursSimples')]
++    public function test_un_tableau_ou_un_objet_est_refuse_en_texte(mixed $valeur, string $type): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeurSimple::REFUS, $type));
++
++        ValeurSimple::enTexte($valeur);
++    }
++
++    #[DataProvider('pasDesValeursSimples')]
++    public function test_un_tableau_ou_un_objet_est_refuse_en_entier(mixed $valeur, string $type): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeurSimple::REFUS, $type));
++
++        ValeurSimple::enEntier($valeur);
++    }
++}
+diff --git a/tests/Unit/ValeursLuesTest.php b/tests/Unit/ValeursLuesTest.php
+index b167b96..fb55ac8 100644
+--- a/tests/Unit/ValeursLuesTest.php
++++ b/tests/Unit/ValeursLuesTest.php
+@@ -4,8 +4,10 @@
+ 
+ use App\Domain\Tenancy\Support\ValeursLues;
+ use ArrayIterator;
++use EmptyIterator;
+ use PHPUnit\Framework\Attributes\DataProvider;
+ use PHPUnit\Framework\TestCase;
++use RecursiveArrayIterator;
+ use UnexpectedValueException;
+ 
+ /**
+@@ -231,4 +233,78 @@ public function test_une_liste_qui_contient_une_autre_valeur_est_refusee(): void
+ 
+         $this->assertSame([sprintf(ValeursLues::REFUS_TEXTE, 'null'), sprintf(ValeursLues::REFUS_ENTIER, 'string')], $refus);
+     }
++
++    public function test_un_texte_facultatif_est_rendu_tel_quel_ou_nul(): void
++    {
++        $this->assertSame('0', ValeursLues::texteOuNul('0'));
++        $this->assertSame('', ValeursLues::texteOuNul(''));
++        $this->assertNull(ValeursLues::texteOuNul(null));
++    }
++
++    public function test_un_texte_facultatif_d_un_autre_type_est_refuse(): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_TEXTE, 'int'));
++
++        ValeursLues::texteOuNul(0);
++    }
++
++    public function test_un_tableau_est_rendu_tel_quel(): void
++    {
++        $this->assertSame(['ville' => 'Lyon', 3 => null], ValeursLues::tableau(['ville' => 'Lyon', 3 => null]));
++        $this->assertSame([], ValeursLues::tableau([]));
++    }
++
++    /**
++     * Un itérable (une collection) n'est pas un tableau.
++     *
++     * @return array<string, array{mixed, string}>
++     */
++    public static function pasDesTableaux(): array
++    {
++        return [
++            'nul' => [null, 'null'],
++            'texte' => ['Lyon', 'string'],
++            'itérable' => [new ArrayIterator(['Lyon']), ArrayIterator::class],
++        ];
++    }
++
++    #[DataProvider('pasDesTableaux')]
++    public function test_une_valeur_qui_n_est_pas_un_tableau_est_refusee(mixed $valeur, string $type): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_TABLEAU, $type));
++
++        ValeursLues::tableau($valeur);
++    }
++
++    public function test_un_objet_de_la_classe_attendue_ou_d_une_classe_qui_en_herite_est_rendu_tel_quel(): void
++    {
++        $iterateur = new ArrayIterator([12]);
++        $recursif = new RecursiveArrayIterator([12]);
++
++        $this->assertSame($iterateur, ValeursLues::instance($iterateur, ArrayIterator::class));
++        $this->assertSame($recursif, ValeursLues::instance($recursif, ArrayIterator::class));
++    }
++
++    /**
++     * @return array<string, array{mixed, string}>
++     */
++    public static function pasDesIterateurs(): array
++    {
++        return [
++            'nul' => [null, 'null'],
++            'tableau' => [[12], 'array'],
++            'objet d\'une autre classe' => [new EmptyIterator, EmptyIterator::class],
++        ];
++    }
++
++    #[DataProvider('pasDesIterateurs')]
++    public function test_une_valeur_qui_n_est_pas_un_objet_de_la_classe_attendue_est_refusee(mixed $valeur, string $type): void
++    {
++        $this->expectException(UnexpectedValueException::class);
++        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_INSTANCE, ArrayIterator::class, $type));
++
++        ValeursLues::instance($valeur, ArrayIterator::class);
++    }
+ }
+-- 
+2.43.0
+

@@ -119,6 +119,8 @@ reprises/lot-QA-travail-non-commite.patch
 reprises/lot-QA-commits-locaux.patch
 reprises/lot-TY1-commits-locaux.patch
 reprises/lot-TY1-travail-non-commite.patch
+reprises/lot-TY2-commits-locaux.patch
+reprises/lot-TY2-travail-non-commite.patch
 reprises/args-course-passation-2026-11-03.json
 reprises/args-course-passation-2026-11-07.json
 fichiers/decision-fi.md

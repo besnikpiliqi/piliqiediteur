@@ -274,7 +274,7 @@ Exemples : 000 000 943 (actif, 69.20Z) passe, avec la dénomination « CABINET P
 - Rien ne change pour les comptes de la société (vendeurs, observateurs, administrateurs), pour qui « les siennes » garde son sens.
 - Le tableau de bord du cabinet et l'alerte des factures à encaisser lisent toujours « voir les factures de toute l'équipe » (`CLAUDE.md`), désormais accordé par la seule case des factures.
 - Tests : la fenêtre et l'e-mail montrent une seule case ou un seul libellé par paire ; cocher la case accorde les deux permissions et la décocher retire les deux ; la garde refuse en base une paire incomplète (insertion directe), pour un cabinet comme pour une déclaration ; un compte d'un cabinet à qui la case des factures est accordée voit toutes les factures du magasin, et sans elle aucune.
-
+- **Complété le 11/11/2026 par la décision, § 5 ter** (réponse de l'éditeur à T44) : en plus de cette case unique, le propriétaire choisit les magasins que voit le cabinet et règle les cases menu par menu, dans les magasins et pour la société ; ce paragraphe prime.
 
 ### R24 — Une société validée par l'invitation de son cabinet ne voit ni l'étape du courrier ni celle de la démonstration (décision § 5.5 ; message de l'éditeur du 01/11/2026, 22 h 00)
 

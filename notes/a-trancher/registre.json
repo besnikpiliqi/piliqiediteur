@@ -716,7 +716,7 @@
    "titre": "Choix d'écran du lot NAV-2 : couleur de sélection, numéros cliquables",
    "question": "Ces choix vous conviennent-ils : ligne choisie en teinte violette légère au texte lisible, et tout numéro de document affiché cliquable, pas seulement sous « Crédit appliqué » ?",
    "qui": "vous",
-   "etat": "applique-a-confirmer",
+   "etat": "tranche",
    "proposition": "Appliqués au lot NAV-2, contraste vérifié par un test ; dites-le avant ce lot si vous préférez autre chose.",
    "bloquant": "lot NAV-2",
    "sources": [
@@ -724,7 +724,14 @@
     "notes/historique/DIRECTIVES.md:478",
     "a-trancher/conversation-1.txt (03/11 00:54 UTC)"
    ],
-   "citation": "Tient (lot NAV-2 ; généralisé à tout numéro de document affiché, choix de Claude)"
+   "citation": "Tient (lot NAV-2 ; généralisé à tout numéro de document affiché, choix de Claude)",
+   "reponse": {
+    "date_utc": "2026-11-11 vers 00:10",
+    "date_paris": "11/11/2026 vers 01 h 10",
+    "mots": "oui",
+    "decision": "La ligne choisie d'une liste ou d'une fenêtre de sélection prend une teinte violette légère, au texte bien lisible, et tout numéro de document affiché devient un lien vers ce document pour qui peut le voir.",
+    "ou": "Lot NAV-2 (constats C2 et C5 de navigateur/constats-editeur.md) ; onglet « Mes questions et vos réponses », Q389."
+   }
   },
   {
    "id": "T44",
@@ -732,7 +739,7 @@
    "titre": "Cabinet : une seule case « voir toutes » pour factures et clôtures",
    "question": "Votre idée du 01/11 (le comptable voit toutes les factures) devient une case unique « voir toutes », factures et clôtures. Cette forme vous convient-elle ?",
    "qui": "vous",
-   "etat": "applique-a-confirmer",
+   "etat": "tranche",
    "proposition": "Case « Factures : voir toutes celles du magasin », de même pour les clôtures ; rien ne change pour les comptes d'une société.",
    "bloquant": "lot EC2",
    "sources": [
@@ -741,7 +748,14 @@
     "notes/historique/DIRECTIVES.md:451",
     "a-trancher/conversation-1.txt (01/11 20:30 et 20:31 UTC)"
    ],
-   "citation": "Choix de Claude, que l'éditeur peut contester : pour un cabinet lié et pour l'expert-comptable déclaré, « Factures : voir (les siennes) » et « Factures : voir celles de toute l'équipe » deviennent une seule case"
+   "citation": "Choix de Claude, que l'éditeur peut contester : pour un cabinet lié et pour l'expert-comptable déclaré, « Factures : voir (les siennes) » et « Factures : voir celles de toute l'équipe » deviennent une seule case",
+   "reponse": {
+    "date_utc": "2026-11-11 entre 00:10 et 00:30",
+    "date_paris": "11/11/2026 entre 01 h 10 et 01 h 30",
+    "mots": "quand la societe soit lié avec / l'expert comptable alors la societe / doit poivoir avoir plusieurs case pour / cocher selon par ex: ce comptable peut voir / et analyser et telecharger de tous les magasin ou que pour pour les magasin qui doit les cocher par magasin, donc il doit appuyer tout les magasins ou à cocher par magasin et quoi peut faire. donc meme la societe doit avoir les case pour lui permetrre de voir quelles menus du magasin ou de la societe car peut etre la societe veut pas que son comptable voit tout.",
+    "decision": "Le propriétaire de la société règle par des cases ce que voit son cabinet : les magasins (tous, présents et futurs, d'un clic, ou une sélection cochée magasin par magasin) et, menu par menu, ce que le comptable peut voir, analyser et télécharger, dans les magasins comme dans l'espace de la société. Les cases « Factures : voir toutes celles du magasin » et « Clôtures de caisse : voir toutes celles du magasin » font partie de ces cases.",
+    "ou": "Lot EC2 (ec2/decision-expert-comptable-societe.md, § 5 ter) ; onglet « Mes questions et vos réponses », Q390 ; question de suite T104."
+   }
   },
   {
    "id": "T45",
@@ -1715,12 +1729,27 @@
     "notes/pilotage-reprise/README.md:310"
    ],
    "citation": "Proposé à l'éditeur, à faire seulement s'il le confirme : une commande `composer run dev` propre à PILIQI, sans Node, qui lance serve, queue:listen et schedule:work ensemble."
+  },
+  {
+   "id": "T104",
+   "section": "produit",
+   "titre": "Cabinet : les mêmes cases pour tous les magasins choisis ?",
+   "question": "Suite de votre réponse à T44 : vous choisissez les magasins que voit votre comptable (tous, ou cochés un à un) et ce qu'il y voit, menu par menu. Ces cases valent-elles pour tous les magasins choisis, ou se règlent-elles magasin par magasin ?",
+   "qui": "vous",
+   "etat": "ouvert",
+   "proposition": "Une seule liste de cases, valable dans tous les magasins choisis, comme pour un administrateur : plus simple à régler et à relire. Pour les magasins : « Tous les magasins, présents et futurs », ou une sélection. Par défaut, comme aujourd'hui : tous les magasins et toutes les consultations, sauf le téléchargement des documents par période, que vous seul cochez.",
+   "bloquant": "lot EC2",
+   "sources": [
+    "nouvelle-session/ec2/decision-expert-comptable-societe.md (§ 5 ter)",
+    "document « PILIQI — Ce qui reste à trancher », onglet 1, rev 469"
+   ],
+   "citation": "Question de suite de la réponse de l'éditeur à T44 (11/11/2026)"
   }
  ],
  "urgent": [
   {
-   "id": "T44",
-   "pourquoi": "Le lot EC2 construit cette case unique : une objection après lui obligerait à refaire le lot."
+   "id": "T104",
+   "pourquoi": "Le lot EC2 construit ces cases ; sans réponse avant lui, il applique ma proposition."
   },
   {
    "id": "T45",

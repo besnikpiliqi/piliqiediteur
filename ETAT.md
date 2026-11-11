@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 01:07 UTC par pilotage-sync.sh : « Après le lot TY1 ».
+Mis à jour le 11/11/2026 à 02:07 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `9f46860`. Commits locaux pas encore poussés :
 
 ```
+f0a961d Type les valeurs lues du socle : commandes, requêtes, réglages, intégrations (Larastan niveaux 9 et 10, lot TY2 1/n)
 ```
 
 Derniers commits poussés :
@@ -37,6 +38,66 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M app/Console/Commands/EffacerPiecesVerification.php
+ M app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
+ M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
+ M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
+ M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
+ M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
+ M app/Domain/Cabinets/Actions/InviterSonCabinetACreerSonEspaceAction.php
+ M app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
+ M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
+ M app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
+ M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
+ M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
+ M app/Domain/Cabinets/Enums/ResultatDInvitation.php
+ M app/Domain/Cabinets/Jobs/RendreCaduquesLesInvitationsDuSiren.php
+ M app/Domain/Cabinets/Mail/DemandeDeRattachementMail.php
+ M app/Domain/Cabinets/Mail/InvitationACreerUnEspaceMail.php
+ M app/Domain/Cabinets/Mail/InvitationDuCabinetMail.php
+ M app/Domain/Cabinets/Notifications/AvisDuCabinet.php
+ M app/Domain/Cabinets/Services/AccesDesCabinets.php
+ M app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
+ M app/Domain/Cabinets/Support/IdentiteDansLeJournal.php
+ M app/Domain/CaisseSecurisee/Actions/ExporterJournalDesEvenementsAction.php
+ M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
+ M app/Domain/CaisseSecurisee/Concerns/JournaliseSesParametresDeConformite.php
+ M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
+ M app/Domain/CaisseSecurisee/Services/ContenuFiscal.php
+ M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
+ M app/Domain/CaisseSecurisee/Services/SignataireFiscal.php
+ M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
+ M app/Domain/CaisseSecurisee/Support/MagasinsOuvertsParLaSession.php
+ M app/Domain/Calendrier/Calendrier.php
+ M app/Domain/Calendrier/Casts/Instant.php
+ M app/Domain/Calendrier/Casts/JourCivil.php
+ M app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
+ M app/Domain/Tenancy/Actions/AccepterLaTransmissionDeLaProprieteAction.php
+ M app/Domain/Tenancy/Actions/AnnulerCessionAction.php
+ M app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php
+ M app/Domain/Tenancy/Actions/ChangerSiretAction.php
+ M app/Domain/Tenancy/Actions/ChoisirEtablissementPrincipalAction.php
+ M app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
+ M app/Domain/Tenancy/Actions/ConfirmerNouvelleAdresseAction.php
+ M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
+ M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
+ M app/Domain/Tenancy/Actions/CreerMembreAction.php
+ M app/Domain/Tenancy/Actions/CreerSocieteAction.php
+ M app/Domain/Tenancy/Actions/DemanderLaTransmissionDeLaProprieteAction.php
+ M app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
+ M app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
+ M app/Domain/Tenancy/Actions/DeposerUnePieceAction.php
+ M app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php
+ M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
+ M app/Domain/Tenancy/Actions/ModifierIdentiteSocieteAction.php
+ M app/Domain/Tenancy/Actions/ModifierLesParametresDuMagasinAction.php
+ M app/Domain/Tenancy/Actions/ModifierParametresFiscauxSocieteAction.php
+ M app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
+ M app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
+ M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
+ M app/Domain/Tenancy/Concerns/BelongsToSociete.php
+ M app/Domain/Tenancy/Concerns/FigeLeNomDeSesAuteurs.php
+ M app/Domain/Tenancy/Enums/CategorieAudit.php
 ```
 
 ## Dernière course de la chaîne
@@ -65,4 +126,5 @@ TY1:correction
 TY1:poussee
 TY1:fiche
 TY1:notes
+TY2:implementation
 ```

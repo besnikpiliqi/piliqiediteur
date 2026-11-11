@@ -187,6 +187,12 @@ Même machine : 4 processeurs, 16 Go de mémoire, environ 8 Go de disque libres.
    - ce partage ne change rien à ce qui est muté ni aux seuils. Une tâche annulée pour dépassement de durée ne se règle jamais en réduisant ce qu'elle contrôle.
 6. **Périmètre élargi** (§ 4.1, point 7), puis niveau 7, puis niveau 8. Chaque niveau donne un ou plusieurs commits, par domaine (Facturation, Tenancy, Filament…), chacun vert.
 
+**Nombre de commits, à partir de TY2 (décision de Claude du 11/11/2026, après TY1)** : chaque commit demande la suite PostgreSQL complète (25 à 30 min, § 3.3). TY1 en a fait douze : plus de 5 h de suites sur ses 9 h de travail, ce que l'éditeur a trouvé trop long. À partir de TY2, chaque lot fait le moins de commits possible, sans découpage par domaine :
+- TY2 : un commit pour tout le reste des niveaux 9 et 10 (après le 1/n déjà commité, gardé tel quel), puis un pour les `@var` en ligne et leur refus ;
+- TY3 : un seul commit ;
+- PS1 et PS2 : un seul commit chacun, ou deux si un palier change plus de fichiers qu'une relecture ne peut en lire d'un bloc.
+Entre deux commits, seulement Larastan, Psalm et les tests ciblés des fichiers touchés. Avant chaque commit, la suite PostgreSQL complète, comme le veut le protocole de `CLAUDE.md` ; avant le dernier, les vérifications finales (§ 6.5). Le travail suit toujours l'ordre des niveaux et des domaines ; seuls les commits sont regroupés.
+
 **TY2** :
 1. Niveau 9, puis niveau 10.
 2. **Les `@var` en ligne déjà présents dans le périmètre.** Au 09/11/2026, il y en a 54 : 27 devant une affectation (comme `AjouteDesLignesDeVente.php`, ligne 798) et 27 devant un `return` (comme `TableauDeBordDuCabinet.php`, ligne 71 : `/** @var Societe */ return Filament::getTenant();`). Chacun est remplacé par une vérification réelle : `instanceof` et exception explicite.
@@ -345,7 +351,7 @@ Rien d'autre ne se désactive : aucun `@psalm-suppress`, `@psalm-ignore-nullable
 6. `errorLevel="2"` : tout est signalé comme « error », sauf ce que le niveau 2 range en « info », surtout les `Mixed…`.
 7. `seuils.json` et `qualite.php` pour Psalm (§ 5.4).
 
-Chaque palier donne un ou plusieurs commits, chacun vert.
+Un seul commit pour tout PS1, ou un par palier seulement si un palier est trop gros pour être relu d'un bloc ; chacun vert (§ 4.2, « Nombre de commits »).
 
 **PS2** :
 1. Niveau 1.

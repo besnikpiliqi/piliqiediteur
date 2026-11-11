@@ -22,6 +22,8 @@ Message de l'éditeur : « et là il faut que les factures sur Crédit appliqué
 - un ticket est nommé « Ticket » et une facture « Facture » (aujourd'hui « Facture TK-… » pour un ticket) ;
 - test en navigateur : le clic sur chaque numéro ouvre le bon document ; un vendeur qui ne voit pas ce document ne reçoit pas de lien.
 
+**Confirmé par l'éditeur le 11/11/2026 vers 00 h 10 UTC** (point T43 du document « Ce qui reste à trancher », réponse « oui ») : tout numéro de document affiché devient un lien vers ce document pour qui peut le voir.
+
 ## C3 — PDF des factures et des tickets : les modes de paiement ne se voient pas (02/11/2026, vers 10 h 30 et 10 h 45 UTC ; lot NAV-2, sauf si le diagnostic désigne un défaut à corriger plus tôt)
 
 **Traité par le lot TR** (`tr/decision-tr.md`, § 4, réponses de l'éditeur « r1 = oui, r2 = oui » du 02/11 vers 22 h 10 UTC) : bloc à gauche des totaux, « Émettre et encaisser », reçu de paiement. Le lot NAV-2 le teste seulement en navigateur.
@@ -72,6 +74,8 @@ Piste (à vérifier en navigateur, ne pas croire) : `app/Filament/App/Livewire/S
 - le même style pour toute rangée « choisie » des fenêtres de sélection (produits, clients, services, retours cherchés par numéro, et toute autre liste où l'on coche des rangées), en clair et en sombre ;
 - test en navigateur, en mode clair et en mode sombre : choisir un produit, puis survoler sa rangée ; le contraste entre le texte et le fond de la rangée (couleurs calculées par le navigateur) atteint au moins 4,5 pour 1 (niveau AA des règles d'accessibilité WCAG) ; même test pour la fenêtre des clients ;
 - À faire sur le PC de l'éditeur : à dire dans « laisses » (a priori `php artisan filament:assets` si une feuille CSS est ajoutée, puis rien d'autre que git pull).
+
+**Confirmé par l'éditeur le 11/11/2026 vers 00 h 10 UTC** (point T43 du document « Ce qui reste à trancher », réponse « oui ») : la rangée choisie prend une teinte violette légère, celle de la couleur principale du panneau, au texte bien lisible.
 
 ## C6 — Tests en navigateur sur le PC de l'éditeur (Windows, XAMPP, Node 26) : deux échecs propres à Windows (03/11/2026 vers 03 h 35 UTC ; lot NAV-2, ou le lot en cours à la reprise)
 

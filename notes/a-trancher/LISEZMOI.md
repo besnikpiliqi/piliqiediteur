@@ -9,9 +9,11 @@
   `points` (T1 à T103 : 29 expert-comptable, 11 juridique et administration, 46 produit, 17 technique et comptes ;
   `etat` = `applique-a-confirmer` ou `ouvert` ; `sources` et `citation` pour retrouver l'origine),
   `urgent` (11 ; T43 ajouté à la main dans le document, soit 12), `tranche` (61), `ecartes` (106, avec la raison).
+  Au 11/11 vers 02 h 10 UTC : T41 à T44 tranchés (états `tranche`, avec `reponse`), T104 ajouté (question de suite de T44),
+  `urgent` = T104, T45, T58, T59, T61, T62, T63, T1, T2 ; la même mise à jour est faite dans `scratchpad/a-trancher/resultat/final.json`.
 - `generer.py registre.json <dossier>` réécrit les six sections en Markdown (s2 à s7) ; il sert à refaire une section,
   pas à la réécrire par-dessus des réponses de l'éditeur : relire le document d'abord.
-- Tenue à jour : chaque nouveau point dit à l'éditeur s'ajoute le jour même (numéro suivant : T104) ;
+- Tenue à jour : chaque nouveau point dit à l'éditeur s'ajoute le jour même (numéro suivant : T105) ;
   chaque réponse (conversation, colonne « Votre réponse », commentaire) passe dans « Déjà tranché », dans
   `historique/DIRECTIVES.md` et dans ce registre. Les commentaires ne réveillent pas la session : chaque point de
   suivi relit le document depuis la dernière révision connue (`read` avec `sinceRev`) et ses commentaires
@@ -84,5 +86,12 @@
 
 ## Où ajouter une nouvelle question (D60, 10/11/2026 à 23 h 56 et 23 h 59 UTC)
 
-- « Le plus urgent », en haut de l'onglet 1, est un tableau (`mb4cajnjtng.85849`) : N° | Ma question | Ma proposition | Votre réponse (vide) | Pourquoi maintenant. Toute nouvelle question posée à l'éditeur s'y ajoute EN HAUT, avec le numéro suivant (T104…), ma vraie proposition et la case « Votre réponse » vide ; elle peut aussi figurer dans le tableau de sa section, et va aussi dans l'onglet « À faire vérifier par un professionnel » si un professionnel doit la vérifier (D59).
+- « Le plus urgent », en haut de l'onglet 1, est un tableau (`mb4cajnjtng.85849`) : N° | Ma question | Ma proposition | Votre réponse (vide) | Pourquoi maintenant. Toute nouvelle question posée à l'éditeur s'y ajoute EN HAUT, avec le numéro suivant (T105…), ma vraie proposition et la case « Votre réponse » vide ; elle peut aussi figurer dans le tableau de sa section, et va aussi dans l'onglet « À faire vérifier par un professionnel » si un professionnel doit la vérifier (D59).
 - Une réponse écrite dans ce tableau, dans le tableau d'une section, dans une ligne qu'il ajoute lui-même ou dans la conversation vaut réponse : la ligne quitte les tableaux de l'onglet 1, passe dans la série du jour de « Mes questions et vos réponses », et la consigne va au lot qui l'applique.
+
+## Révisions connues du document (pour les points de suivi)
+
+- 11/11 vers 02 h 10 UTC : onglet 1 au rev 469 (T43 et T44 retirés des deux tableaux, T104 en haut de « Le plus urgent » et du tableau
+  « Avant les prochains lots de la chaîne (NAV-2, EC2) », exemple « T45 : oui », 390 réponses) ; onglet « À faire vérifier » au rev 1 ;
+  onglet 2 au rev 22 ; onglet 3 au rev 35 (T43 = Q389 et T44 = Q390 dans la série du 11/11 ; 390 réponses, dont 127 à appliquer).
+- Commentaires : dernier n° connu 526 (fils de T43 et T44, résolus par l'éditeur le 11/11 à 00 h 06 et 00 h 28 UTC).

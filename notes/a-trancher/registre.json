@@ -771,7 +771,11 @@
     "notes/ec2/decision-expert-comptable-societe.md:38",
     "notes/historique/DIRECTIVES.md:485"
    ],
-   "citation": "J'y ai ajouté ses demandes de lien encore ouvertes, qui sont de même nature ; dites-le-moi si vous ne voulez que les invitations."
+   "citation": "J'y ai ajouté ses demandes de lien encore ouvertes, qui sont de même nature ; dites-le-moi si vous ne voulez que les invitations.",
+   "statut": "tranche",
+   "reponse_editeur": "« les liens doivent restés bloqué / pendant que le cabinet et suspendu / donc les clients des cabinet ne peuvent pas accepter son invitation pendant ce temps mais les client peuvent refuser s ils veulent »",
+   "decision": "Tant qu'un cabinet est suspendu, ses liens restent bloqués : aucun client ne peut accepter une invitation ou une demande de lien de ce cabinet ; le client peut la refuser. Le propriétaire du cabinet peut toujours retirer ses invitations et ses demandes de lien ouvertes (oui du 09/11).",
+   "date_reponse": "2026-11-11"
   },
   {
    "id": "T46",

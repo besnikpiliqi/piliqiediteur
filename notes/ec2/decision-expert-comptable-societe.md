@@ -62,3 +62,10 @@ Ce que ce lot fait, en plus de R23, qui reste :
 ## 6. Ce qui reste à trancher
 
 Le cahier des charges (`ec2/cahier-des-charges.md`) liste chaque point que ces choix ne règlent pas ; ceux qui touchent une règle métier sont soumis à l'éditeur avant le lot, les autres sont des choix de Claude listés dans le cahier, que l'éditeur peut contester.
+
+
+## 5 quater. Cabinet suspendu : ses invitations et ses demandes de lien (T45, réponse de l'éditeur du 11/11/2026 vers 10 h 15 UTC)
+
+- Vos mots : « les liens doivent restés bloqué / pendant que le cabinet et suspendu / donc les clients des cabinet ne peuvent pas accepter son invitation pendant ce temps mais les client peuvent refuser s ils veulent »
+- Décision : Tant qu'un cabinet est suspendu, ses liens restent bloqués : aucun client ne peut accepter une invitation ou une demande de lien de ce cabinet ; le client peut la refuser. Le propriétaire du cabinet peut toujours retirer ses invitations et ses demandes de lien ouvertes (oui du 09/11).
+- Ce que fait le lot EC2 : pendant la suspension d'un cabinet, l'acceptation d'une invitation ou d'une demande de lien venant de ce cabinet est refusée (écran et base), avec un message qui dit que le cabinet est suspendu ; le refus par le client reste possible ; le retrait par le propriétaire du cabinet reste possible ; les liens existants restent sans accès (règle de CLAUDE.md) ; tests de chacun de ces cas.

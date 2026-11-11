@@ -1684,3 +1684,47 @@ Ecoute toi t’es en train de perdre trop de temps et fais vraiment très peu d�
 
 Tu fait comme tu as dir « Ma recommandation : garder « max » seulement pour CALC (les calculs d’argent) et passer tous les autres lots à « extra ». Et pour les relectures je suis pas trop sur de passer à un seul car eux peuvent trouver des problèmes non? Dit moi e c’est pas tres naissessaire.
 
+## 176. 2026-11-11 10:03 UTC
+
+la mtn avec cette nouvelle methode alore reste combien de temps pour finir tout le logiciel
+
+## 177. 2026-11-11 10:08 UTC
+
+il faut que tu mette dans la fiche ce qui doit etre apliquer à la fin dont ce que tu dis "Larastan et Psalm au plus strict, tests de mutation, tests en navigateur de tous les écrans, configuration de production" ca c'est bien mais t as oublié faketime qu on a laissé pour la fin. donc tu creer un nouveau tab pour ce qu on va apliquer à la fin et que je moi je les vois et toi tu te base sur ca pour la fin du logiciel
+
+## 178. 2026-11-11 10:17 UTC
+
+pour le T58 je vois que ta proposition est  à confirmer avec comptable "Aucun mouvement de stock, compensation jamais déclarée comme encaissement, avoir et facture dans la même journée de caisse, refus d'un ticket déjà transformé ou repris (à faire confirmer aussi par un expert-comptable)." mais cette question je vois pas dans "À faire vérifier par un professionnel" . pourquoi tu fait comme ca? je t ai dit tout ce qui est comptable ou juriste etc tu mets la et tu note par comme T58 donc pour savoir tout de suite de quoi est à confirmer?!!
+
+## 179. 2026-11-11 10:20 UTC
+
+<!-- attach -->
+
+> dans l’onglet des professionnels, la colonne N° ne montrait que « P16 (11/10/2026) ». Le renvoi vers T58 était caché tout au bout du texte de la question, dans « Voir aussi : T58… » ;
+
+> dans l’onglet 1, la ligne T58 ne disait pas qu’elle se trouvait aussi en P16.
+
+
+
+non mais il faut qe tu mettes tous à part pour tranchar un par un et non complet car je me perd
+
+## 180. 2026-11-11 10:23 UTC
+
+oui
+
+## 181. 2026-11-11 10:37 UTC
+
+PS C:\xampp\htdocs\piliqiediteur-v2> git pull
+
+error: Your local changes to the following files would be overwritten by merge:
+
+        .gitignore
+
+        phpunit.xml
+
+Please commit your changes or stash them before you merge.
+
+Aborting
+
+Updating 0d373963..71a217ab
+

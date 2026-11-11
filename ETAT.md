@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 09:54 UTC par pilotage-sync.sh : « D63 : méthode rapide, nouvelle chaîne ».
+Mis à jour le 11/11/2026 à 09:58 UTC par pilotage-sync.sh : « D63 rangée dans le document ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

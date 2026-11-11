@@ -207,5 +207,6 @@ serie9-rapide.js
 reprises/args-chaine-rapide-2026-11-11.json
 reprises/lot-CALC-commits-locaux.patch
 reprises/lot-CALC-travail-non-commite.patch
+reprises/lot-FI-commits-locaux.patch
 reprises/lot-FI-travail-non-commite.patch
 reprises/lot-FI-travail-non-commite-complet.patch

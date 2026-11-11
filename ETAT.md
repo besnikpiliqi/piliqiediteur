@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 23:45 UTC par pilotage-sync.sh : « Reprise après redémarrage du conteneur (FI:correction) ».
+Mis à jour le 11/11/2026 à 23:58 UTC par pilotage-sync.sh : « Point de suivi 23:58 UTC : réponses de l'éditeur dans l'onglet professionnel ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -53,6 +53,8 @@ b93aeff Relecture du lot PG de la série 8
  M app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php
  M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
  M tests/Browser/Parcours/PiecesDuFournisseurTest.php
+ M tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php
+ M tests/Browser/Support/Navigation.php
  M tests/Browser/inventaire-des-actions.php
  M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php

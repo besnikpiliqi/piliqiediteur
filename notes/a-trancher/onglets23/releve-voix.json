@@ -5081,6 +5081,24 @@
     "pilotage-reprise/notes/historique/messages-editeur.md (message du 10/11 à 23 h 56 UTC)"
    ],
    "refs": []
+  },
+  {
+   "id": "V238",
+   "date_utc": "2026-11-11 03:05 UTC",
+   "date_paris": "11/11/2026",
+   "heure_paris": "vers 04 h 05",
+   "theme": "Façon de travailler",
+   "code": "D61",
+   "titre": "Le moins de commits possible dans chaque lot, jusqu'à la fin du logiciel",
+   "decision": "Chaque lot fait en général un commit pour son travail, puis celui de la correction des relectures ; un commit de plus seulement quand une règle l'exige (défaut réel trouvé en route, CI rouge, diff trop gros pour être relu d'un bloc). La suite complète des tests passe toujours avant chaque commit. (D61)",
+   "mots": "« il a fait quoi le TY1 car il a pris trop de temps !! », puis « donc tu fait pour tout jusqu à la fin du logiciel par 2 commit c est ca? »",
+   "statut": "appliquee",
+   "statut_detail": "TY2 la suit depuis le 11/11 à 03 h 05 ; chaque lot suivant la lit dans les consignes de la chaîne au début de son travail.",
+   "sources": [
+    "historique/DIRECTIVES.md, § 1.4, D61",
+    "qualite/decision-statique.md, § 4.2 « Nombre de commits »"
+   ],
+   "refs": []
   }
  ],
  "questions": [

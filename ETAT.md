@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 11:48 UTC par pilotage-sync.sh : « registre : forme de l'entrée B ».
+Mis à jour le 11/11/2026 à 11:48 UTC par pilotage-sync.sh : « registre : mots de l'éditeur ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

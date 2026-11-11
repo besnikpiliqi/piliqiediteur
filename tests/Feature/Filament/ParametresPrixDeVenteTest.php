@@ -51,7 +51,7 @@ class ParametresPrixDeVenteTest extends TestCase
 
         $bareme = $magasin->fresh()->baremePrixDeVenteActif();
         $this->assertSame(BaremePrixDeVente::parDefaut()->paliers, $bareme->paliers);
-        $this->assertSame([80.0, true], [$bareme->beneficeAuDela, $bareme->arrondiX9]);
+        $this->assertSame([8000, true], [$bareme->beneficeAuDela, $bareme->arrondiX9]);
     }
 
     /**
@@ -81,7 +81,7 @@ class ParametresPrixDeVenteTest extends TestCase
             ->assertCount('data.paliers', 1)
             ->call('save');
 
-        $this->assertSame([['jusqu_a' => 10.0, 'benefice' => 20.0]], $magasin->fresh()->baremePrixDeVenteActif()->paliers);
+        $this->assertSame([['jusqu_a' => 1000, 'benefice' => 2000]], $magasin->fresh()->baremePrixDeVenteActif()->paliers);
     }
 
     /**
@@ -105,9 +105,9 @@ class ParametresPrixDeVenteTest extends TestCase
 
         $bareme = $magasin->fresh()->baremePrixDeVenteActif();
         $this->assertSame([
-            ['jusqu_a' => 5.0, 'benefice' => 12.0],
-            ['jusqu_a' => 50.0, 'benefice' => 25.0],
-            ['jusqu_a' => 200.0, 'benefice' => 40.0],
+            ['jusqu_a' => 500, 'benefice' => 1200],
+            ['jusqu_a' => 5000, 'benefice' => 2500],
+            ['jusqu_a' => 20000, 'benefice' => 4000],
         ], $bareme->paliers);
         $this->assertNull($bareme->beneficeAuDela);
 
@@ -273,7 +273,7 @@ class ParametresPrixDeVenteTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
         $page = Livewire::test(ParametresPrixDeVente::class);
         $autrePage = Livewire::test(ParametresPrixDeVente::class);
-        $bareme = new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 5.0]], 20.0, false);
+        $bareme = new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 500]], 2000, false);
 
         Magasin::query()->findOrFail($magasin->id)->update(['bareme_prix_vente' => $bareme]);
         $page->fillForm(['actif' => true])->call('save')->assertNotified(ParametresPrixDeVente::AUTRES_PARAMETRES_CHANGES)->assertFormSet(['benefice_au_dela' => 20.0]);

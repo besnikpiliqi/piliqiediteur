@@ -515,20 +515,20 @@ class ClientResource extends Resource
     {
         $solde = self::soldeCrediteurDe($clientId);
 
-        return $solde === null ? null : self::enEvidence('Crédit disponible pour ce client : '.number_format($solde, 2, ',', ' ').' € (sera appliqué automatiquement).');
+        return $solde === null ? null : self::enEvidence('Crédit disponible pour ce client : '.app(CalculateurLigne::class)->enEuros($solde).' (sera appliqué automatiquement).');
     }
 
     /**
-     * Le crédit d'avoir disponible du client (voir Client::soldeCrediteur()),
-     * null quand il n'en a pas.
+     * Le crédit d'avoir disponible du client, en centimes (voir
+     * Client::soldeCrediteurEnCentimes()), null quand il n'en a pas.
      */
-    private static function soldeCrediteurDe(mixed $clientId): ?float
+    private static function soldeCrediteurDe(mixed $clientId): ?int
     {
         if (blank($clientId)) {
             return null;
         }
 
-        $solde = Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first()?->soldeCrediteur();
+        $solde = Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first()?->soldeCrediteurEnCentimes();
 
         return $solde !== null && $solde > 0 ? $solde : null;
     }

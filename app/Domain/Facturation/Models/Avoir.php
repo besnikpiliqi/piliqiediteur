@@ -368,15 +368,6 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le crédit de l'avoir qui reste à imputer, en euros, pour l'afficher
-     * (voir AvoirResource) ; tout calcul se fait sur creditEnCentimes().
-     */
-    public function montantNonAlloue(): float
-    {
-        return (float) app(CalculateurLigne::class)->enDecimal($this->creditEnCentimes());
-    }
-
-    /**
      * Le crédit de l'avoir qui reste à imputer, en centimes : son total TTC
      * moins ce qu'il a imputé, contre-passations déduites ; rien tant qu'il
      * n'est pas émis. Un avoir émis n'est jamais remboursé (B5). À son

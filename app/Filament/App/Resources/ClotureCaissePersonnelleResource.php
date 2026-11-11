@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 use App\Models\User;
@@ -112,7 +113,7 @@ class ClotureCaissePersonnelleResource extends Resource
                 Tables\Columns\TextColumn::make('total_ttc')->label('TTC vendu')->money('EUR'),
                 Tables\Columns\TextColumn::make('total_encaisse')
                     ->label('Encaissé')
-                    ->state(fn (ClotureCaissePersonnelle $record): float => $record->totalEncaisse())
+                    ->state(fn (ClotureCaissePersonnelle $record): string => app(CalculateurLigne::class)->enDecimal($record->totalEncaisseEnCentimes()))
                     ->money('EUR'),
                 Tables\Columns\TextColumn::make('encaissements')
                     ->label('Par mode de paiement')

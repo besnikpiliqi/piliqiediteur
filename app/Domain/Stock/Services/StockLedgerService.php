@@ -28,7 +28,11 @@ use LogicException;
  * son stock (voir sortirPourCession()).
  *
  * Le stock est valorisé au coût moyen unitaire pondéré (CMUP, voir
- * Produit::$cmup_ht), recalculé après chaque entrée achetée (voir
+ * Produit::$cmup_ht), au dix-millième d'euro : chaque coût que ce service
+ * reçoit, garde ou calcule est un entier en dix-millièmes d'euro (voir
+ * CalculateurLigne::coutMoyenPondere()), lu dans sa colonne par
+ * CalculateurLigne::enDixMilliemes() et écrit par enDecimalAuDixMillieme().
+ * Il est recalculé après chaque entrée achetée (voir
  * receptionner()), après l'entrée d'un inventaire d'ouverture, à son coût
  * saisi (voir entrerALInventaireDOuverture()), et après chaque retour au
  * fournisseur, qui sort au coût de sa ligne d'achat (voir
@@ -52,8 +56,10 @@ class StockLedgerService
      * vide ou négatif ne pèse rien, le CMUP repart alors du coût de
      * l'entrée -- comme pour un produit qui ne suit pas son stock, dont le
      * coût est celui du dernier achat.
+     *
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
      */
-    public function receptionner(Produit $produit, int $quantite, float $coutUnitaireHt, Model $source, string $note): ?MouvementStock
+    public function receptionner(Produit $produit, int $quantite, int $coutUnitaireHt, Model $source, string $note): ?MouvementStock
     {
         return $this->entrerAuCout($produit, TypeMouvementStock::ReceptionAchat, $quantite, $coutUnitaireHt, $source, $note);
     }
@@ -66,8 +72,10 @@ class StockLedgerService
      * coût, pour qu'une réception corrigée après coup rejoue cette entrée
      * telle quelle (voir cmupRejoue()). Un produit qui ne suit pas son
      * stock prend seulement ce coût, sans mouvement.
+     *
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
      */
-    public function entrerALInventaireDOuverture(Produit $produit, int $quantite, float $coutUnitaireHt, Model $source, string $note): ?MouvementStock
+    public function entrerALInventaireDOuverture(Produit $produit, int $quantite, int $coutUnitaireHt, Model $source, string $note): ?MouvementStock
     {
         return $this->entrerAuCout($produit, TypeMouvementStock::InventaireOuverture, $quantite, $coutUnitaireHt, $source, $note, $coutUnitaireHt);
     }
@@ -78,9 +86,10 @@ class StockLedgerService
      * et de cette entrée, pondérée par leurs quantités ; un produit qui ne
      * suit pas son stock prend ce coût, sans mouvement.
      *
-     * @param  float|null  $coutGardeDansLeMouvement  le coût que le mouvement retient (inventaire d'ouverture) ; null pour une réception, rejouée depuis ses lignes d'achat
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
+     * @param  int|null  $coutGardeDansLeMouvement  le coût que le mouvement retient (inventaire d'ouverture), en dix-millièmes d'euro ; null pour une réception, rejouée depuis ses lignes d'achat
      */
-    private function entrerAuCout(Produit $produit, TypeMouvementStock $type, int $quantite, float $coutUnitaireHt, Model $source, string $note, ?float $coutGardeDansLeMouvement = null): ?MouvementStock
+    private function entrerAuCout(Produit $produit, TypeMouvementStock $type, int $quantite, int $coutUnitaireHt, Model $source, string $note, ?int $coutGardeDansLeMouvement = null): ?MouvementStock
     {
         $this->verifierLaQuantite($quantite);
 
@@ -95,7 +104,7 @@ class StockLedgerService
 
             $this->changerLeCmup($produit, $produitVerrouille, $this->cmupApresUneEntree(
                 $produitVerrouille->stock_quantite,
-                (float) $produitVerrouille->cmup_ht,
+                $this->calculateur->enDixMilliemes($produitVerrouille->cmup_ht),
                 $quantite,
                 $coutUnitaireHt,
             ));
@@ -131,7 +140,7 @@ class StockLedgerService
      * pas son stock n'a pas de quantités à pondérer : il coûte sa dernière
      * ligne achetée (voir coutDeLaDerniereLigneAchetee()).
      *
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: float}>>  $lotsDesReceptions  les lignes de chaque réception du produit (par identifiant de sa source), de la plus ancienne à la plus récente
+     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions  les lignes de chaque réception du produit (par identifiant de sa source), de la plus ancienne à la plus récente, chaque coût en dix-millièmes d'euro
      */
     public function corrigerUneReception(
         Produit $produit,
@@ -177,8 +186,10 @@ class StockLedgerService
      * stock restant, le CMUP ne change pas ; un stock ne vaut jamais moins
      * que rien. Le mouvement garde ce coût de sortie, pour qu'une réception
      * corrigée après coup rejoue le retour tel quel (voir cmupRejoue()).
+     *
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
      */
-    public function retournerAuFournisseur(Produit $produit, int $quantite, float $coutUnitaireHt, Model $source, string $note): MouvementStock
+    public function retournerAuFournisseur(Produit $produit, int $quantite, int $coutUnitaireHt, Model $source, string $note): MouvementStock
     {
         $this->verifierLeMouvement($produit, $quantite);
 
@@ -186,7 +197,7 @@ class StockLedgerService
             $produitVerrouille = $this->verrouiller($produit);
             $cmup = $this->calculateur->coutMoyenApresUneSortie(
                 max($produitVerrouille->stock_quantite, 0),
-                (float) $produitVerrouille->cmup_ht,
+                $this->calculateur->enDixMilliemes($produitVerrouille->cmup_ht),
                 $quantite,
                 $coutUnitaireHt,
             );
@@ -247,7 +258,7 @@ class StockLedgerService
                 return null;
             }
 
-            return $this->appliquer($produit, TypeMouvementStock::SortieCession, $produitVerrouille->stock_quantite, $source, $note, (float) $produitVerrouille->cmup_ht);
+            return $this->appliquer($produit, TypeMouvementStock::SortieCession, $produitVerrouille->stock_quantite, $source, $note, $this->calculateur->enDixMilliemes($produitVerrouille->cmup_ht));
         });
     }
 
@@ -267,7 +278,9 @@ class StockLedgerService
             throw new InvalidArgumentException('Seule une sortie de cession de ce produit rentre à l\'annulation de la cession.');
         }
 
-        return $this->entrerAuCout($produit, TypeMouvementStock::EntreeAnnulationCession, $sortie->quantite, (float) $sortie->cout_unitaire_ht, $source, $note, (float) $sortie->cout_unitaire_ht);
+        $cout = $this->calculateur->enDixMilliemes($sortie->cout_unitaire_ht);
+
+        return $this->entrerAuCout($produit, TypeMouvementStock::EntreeAnnulationCession, $sortie->quantite, $cout, $source, $note, $cout);
     }
 
     /**
@@ -346,7 +359,7 @@ class StockLedgerService
     }
 
     /**
-     * @param  float|null  $coutUnitaireHt  le coût d'entrée d'un inventaire d'ouverture (voir entrerALInventaireDOuverture()), le coût de sortie d'un retour fournisseur (voir retournerAuFournisseur()) ou d'une sortie de cession (voir sortirPourCession())
+     * @param  int|null  $coutUnitaireHt  le coût d'entrée d'un inventaire d'ouverture (voir entrerALInventaireDOuverture()), le coût de sortie d'un retour fournisseur (voir retournerAuFournisseur()) ou d'une sortie de cession (voir sortirPourCession()), en dix-millièmes d'euro
      */
     private function appliquer(
         Produit $produit,
@@ -354,7 +367,7 @@ class StockLedgerService
         int $quantite,
         ?Model $source,
         ?string $note,
-        ?float $coutUnitaireHt = null,
+        ?int $coutUnitaireHt = null,
     ): MouvementStock {
         return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $coutUnitaireHt) {
             $produitVerrouille = $this->verrouiller($produit);
@@ -365,7 +378,7 @@ class StockLedgerService
                 'produit_id' => $produitVerrouille->id,
                 'type' => $type,
                 'quantite' => $quantite,
-                'cout_unitaire_ht' => $coutUnitaireHt,
+                'cout_unitaire_ht' => $coutUnitaireHt === null ? null : $this->calculateur->enDecimalAuDixMillieme($coutUnitaireHt),
                 'source_type' => $source?->getMorphClass(),
                 'source_id' => $source?->getKey(),
                 'survenu_le' => now(),
@@ -413,12 +426,13 @@ class StockLedgerService
      * achetée, comme pour un produit qui ne suit pas son stock.
      *
      * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: float}>>  $lotsDesReceptions
+     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions  chaque coût en dix-millièmes d'euro
+     * @return int|null en dix-millièmes d'euro
      */
-    private function cmupRejoue(Produit $produit, Collection $grandLivre, string $typeDeReception, array $lotsDesReceptions): ?float
+    private function cmupRejoue(Produit $produit, Collection $grandLivre, string $typeDeReception, array $lotsDesReceptions): ?int
     {
         $stock = $produit->stock_quantite - $this->variationTotale($grandLivre);
-        $cmup = (float) $produit->cmup_ht;
+        $cmup = $this->calculateur->enDixMilliemes($produit->cmup_ht);
         $receptionsVues = [];
         $uneEntreeAPese = false;
 
@@ -427,11 +441,11 @@ class StockLedgerService
 
             if ($receptionId === null) {
                 if ($mouvement->type === TypeMouvementStock::RetourFournisseur) {
-                    $cmup = $this->calculateur->coutMoyenApresUneSortie(max($stock, 0), $cmup, $mouvement->quantite, (float) $mouvement->cout_unitaire_ht) ?? $cmup;
+                    $cmup = $this->calculateur->coutMoyenApresUneSortie(max($stock, 0), $cmup, $mouvement->quantite, $this->calculateur->enDixMilliemes($mouvement->cout_unitaire_ht)) ?? $cmup;
                 }
 
                 if ($mouvement->type === TypeMouvementStock::InventaireOuverture) {
-                    $cmup = $this->cmupApresUneEntree($stock, $cmup, $mouvement->quantite, (float) $mouvement->cout_unitaire_ht);
+                    $cmup = $this->cmupApresUneEntree($stock, $cmup, $mouvement->quantite, $this->calculateur->enDixMilliemes($mouvement->cout_unitaire_ht));
                     $uneEntreeAPese = true;
                 }
 
@@ -465,19 +479,24 @@ class StockLedgerService
     }
 
     /**
-     * Le coût de la dernière ligne de la réception la plus récente, null
-     * s'il n'y en a aucune.
+     * Le coût de la dernière ligne de la réception la plus récente, en
+     * dix-millièmes d'euro, null s'il n'y en a aucune.
      *
-     * @param  array<int|string, list<array{quantite: int, cout_unitaire: float}>>  $lotsDesReceptions
+     * @param  array<int|string, list<array{quantite: int, cout_unitaire: int}>>  $lotsDesReceptions
      */
-    private function coutDeLaDerniereLigneAchetee(array $lotsDesReceptions): ?float
+    private function coutDeLaDerniereLigneAchetee(array $lotsDesReceptions): ?int
     {
         $derniereReception = end($lotsDesReceptions);
 
-        return $derniereReception === false || $derniereReception === [] ? null : (float) end($derniereReception)['cout_unitaire'];
+        return $derniereReception === false || $derniereReception === [] ? null : end($derniereReception)['cout_unitaire'];
     }
 
-    private function cmupApresUneEntree(int $stock, float $cmup, int $quantite, float $coutUnitaireHt): float
+    /**
+     * @param  int  $cmup  en dix-millièmes d'euro
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
+     * @return int en dix-millièmes d'euro
+     */
+    private function cmupApresUneEntree(int $stock, int $cmup, int $quantite, int $coutUnitaireHt): int
     {
         return $this->calculateur->coutMoyenPondere([
             ['quantite' => max($stock, 0), 'cout_unitaire' => $cmup],
@@ -517,9 +536,12 @@ class StockLedgerService
         return Produit::withTrashed()->whereKey($produit->getKey())->lockForUpdate()->firstOrFail();
     }
 
-    private function changerLeCmup(Produit $produit, Produit $produitVerrouille, float $cmup): void
+    /**
+     * @param  int  $cmup  en dix-millièmes d'euro
+     */
+    private function changerLeCmup(Produit $produit, Produit $produitVerrouille, int $cmup): void
     {
-        $produitVerrouille->forceFill(['cmup_ht' => $cmup])->save();
+        $produitVerrouille->forceFill(['cmup_ht' => $this->calculateur->enDecimalAuDixMillieme($cmup)])->save();
         $produit->setAttribute('cmup_ht', $produitVerrouille->cmup_ht);
         $produit->syncOriginalAttribute('cmup_ht');
     }

@@ -180,13 +180,24 @@ class ProduitResource extends Resource
     }
 
     /**
-     * Le taux de TVA saisi, ou null tant que le champ est vide : un champ
-     * vidé n'est ni un taux de 0 % ni le taux par défaut, et rien ne se
-     * calcule sans lui.
+     * Le taux de TVA saisi, en centièmes de point, lu au centième comme son
+     * enregistrement (voir SaisieDecimale::enCentiemes()) ; null tant que
+     * le champ est vide ou n'est pas un nombre : un champ vidé n'est ni un
+     * taux de 0 % ni le taux par défaut, et rien ne se calcule sans lui.
      */
-    public static function tauxDeTvaSaisi(mixed $taux): ?float
+    public static function tauxDeTvaSaisi(mixed $taux): ?int
     {
-        return filled($taux) ? (float) ValeurSimple::simple($taux) : null;
+        $taux = ValeurSimple::simple($taux);
+
+        if (blank($taux)) {
+            return null;
+        }
+
+        try {
+            return SaisieDecimale::enCentiemes($taux);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**
@@ -206,7 +217,7 @@ class ProduitResource extends Resource
 
         try {
             $prixUnitaireTtc = SaisieDecimale::enCentiemes($get('prix_vente_ttc'));
-            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, SaisieDecimale::enCentiemes($tauxTva));
+            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
         } catch (InvalidArgumentException) {
             return null;
         }

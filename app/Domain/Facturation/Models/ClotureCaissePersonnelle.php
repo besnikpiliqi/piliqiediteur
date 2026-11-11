@@ -137,9 +137,10 @@ class ClotureCaissePersonnelle extends Model
     }
 
     /**
-     * Le total encaissé, tous modes confondus, contre-passations déduites.
+     * Le total encaissé, tous modes confondus, contre-passations déduites,
+     * en centimes.
      */
-    public function totalEncaisse(): float
+    public function totalEncaisseEnCentimes(): int
     {
         return app(CalculateurLigne::class)->sommer(ValeursLues::textes($this->encaissements));
     }
@@ -152,10 +153,11 @@ class ClotureCaissePersonnelle extends Model
      */
     public function encaissementsEnClair(): array
     {
+        $calculateur = app(CalculateurLigne::class);
         $lignes = [];
 
         foreach ($this->encaissements as $mode => $montant) {
-            $lignes[] = ModePaiement::from(ValeursLues::texte($mode))->getLabel().' : '.number_format((float) ValeursLues::texte($montant), 2, ',', ' ').' €';
+            $lignes[] = ModePaiement::from(ValeursLues::texte($mode))->getLabel().' : '.$calculateur->enEuros($calculateur->enCentiemes(ValeursLues::texte($montant)));
         }
 
         return $lignes;

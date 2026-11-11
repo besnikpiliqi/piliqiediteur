@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Notifications;
 
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
 use Filament\Notifications\Notification as NotificationFilament;
 
@@ -24,11 +25,12 @@ class StockDuMagasinCede extends NotificationDuMagasin
 
     protected function contenu(): NotificationFilament
     {
-        $valeur = number_format((float) $this->valeurHt, 2, ',', ' ');
+        $calculateur = app(CalculateurLigne::class);
+        $valeur = $calculateur->enEuros($calculateur->enCentiemes($this->valeurHt));
 
         return NotificationFilament::make()
             ->title('Magasin cédé : valeur du stock sorti')
-            ->body("Valeur du stock au coût moyen : {$valeur} € HT. À rapprocher du prix de cession prévu à l'acte et à faire vérifier par votre expert-comptable (transmission d'universalité, art. 257 bis du CGI, ou vente du stock à facturer)."
+            ->body("Valeur du stock au coût moyen : {$valeur} HT. À rapprocher du prix de cession prévu à l'acte et à faire vérifier par votre expert-comptable (transmission d'universalité, art. 257 bis du CGI, ou vente du stock à facturer)."
                 .($this->produitsEnStockNegatif === [] ? '' : ' Produits restés en stock négatif, sans mouvement : '.implode(', ', $this->produitsEnStockNegatif).'.'))
             ->icon('heroicon-o-building-storefront')
             ->warning();

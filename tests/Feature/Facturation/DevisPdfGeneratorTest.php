@@ -83,15 +83,19 @@ class DevisPdfGeneratorTest extends TestCase
 
     /**
      * Tout devis se calcule comme sa facture, pour un professionnel comme
-     * pour un particulier, et porte la même note sous ses lignes (point
-     * 15), avec la phrase de l'arrondi des prix unitaires (décision de
-     * l'éditeur du 25/10/2026). Si la fiche du client devient
-     * professionnelle après son envoi, il se réimprime tel qu'il a été
-     * établi : client sans identifiant.
+     * pour un particulier, et l'explique sous ses lignes (point 15) : le
+     * devis à un professionnel, qui montre le PU HT tel qu'il est
+     * enregistré, dit que la quantité x ce PU HT retombe sur le total HT
+     * de la ligne à moins de deux centimes près (décision de l'éditeur du
+     * 09/11/2026) ; le devis à un particulier, que ses prix unitaires sont
+     * affichés arrondis au centime (décision de l'éditeur du 25/10/2026).
+     * Si la fiche du client devient professionnelle après son envoi, il se
+     * réimprime tel qu'il a été établi : client sans identifiant, avec la
+     * note d'un devis à un particulier.
      */
     public function test_tout_devis_explique_le_calcul_de_ses_lignes_et_se_reimprime_tel_qu_etabli(): void
     {
-        $note = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
+        $calcul = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
         $devisProfessionnel = $this->devisEnvoye();
         $client = Client::factory()->create(['nom' => 'Jean Ancien']);
         $devisParticulier = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
@@ -99,8 +103,11 @@ class DevisPdfGeneratorTest extends TestCase
 
         $renduParticulier = $this->compacte(app(DevisPdfGenerator::class)->html($devisParticulier->fresh()->load('client', 'lignes', 'magasin')));
 
-        $this->assertStringContainsString($note, app(DevisPdfGenerator::class)->html($devisProfessionnel->load('client', 'lignes', 'magasin')));
-        $this->assertStringContainsString($note, $renduParticulier);
+        $this->assertStringContainsString(
+            e($calcul.' Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.'),
+            app(DevisPdfGenerator::class)->html($devisProfessionnel->load('client', 'lignes', 'magasin')),
+        );
+        $this->assertStringContainsString(e($calcul.' Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.'), $renduParticulier);
         $this->assertStringContainsString('<div class="bloc-client"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></div>', $renduParticulier);
     }
 

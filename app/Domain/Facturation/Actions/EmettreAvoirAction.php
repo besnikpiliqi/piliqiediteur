@@ -195,6 +195,6 @@ class EmettreAvoirAction
             $lignesArretees[] = $ligneAvoir->only(['montant_ht', 'montant_tva', 'montant_ttc']);
         }
 
-        $avoir->forceFill($this->calculateur->totaliser($lignesArretees));
+        $avoir->forceFill($this->calculateur->enDecimaux($this->calculateur->totaliser($lignesArretees)));
     }
 }

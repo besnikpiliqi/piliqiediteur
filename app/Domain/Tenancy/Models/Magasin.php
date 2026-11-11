@@ -15,6 +15,7 @@ use App\Domain\Facturation\Enums\TerritoireTva;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\Territoire;
@@ -726,11 +727,14 @@ class Magasin extends Model implements HasName
      * librement (B2) : le taux normal de son territoire, 20 % en métropole,
      * 8,5 % en Guadeloupe, en Martinique ou à La Réunion. Un magasin sans
      * territoire, qui ne vend pas encore, retombe sur celui de la
-     * métropole.
+     * métropole. Écrit comme une colonne de taux (« 20.00 », « 8.50 »), à
+     * la place d'un taux saisi ou enregistré.
+     *
+     * @return numeric-string
      */
-    public function tauxTvaParDefaut(): float
+    public function tauxTvaParDefaut(): string
     {
-        return ($this->territoireTva() ?? TerritoireTva::Metropole)->tauxNormal();
+        return app(CalculateurLigne::class)->enDecimal(($this->territoireTva() ?? TerritoireTva::Metropole)->tauxNormal());
     }
 
     /**

@@ -172,7 +172,7 @@ class CreerAvoirAction
                 'franchise_en_base' => $premiere->franchise_en_base,
                 'nature_operation' => $premiere->nature_operation,
                 'regularisation' => $regularisation,
-                ...$this->calculateurLigne->totaliser($lignesDeLAvoir),
+                ...$this->calculateurLigne->enDecimaux($this->calculateurLigne->totaliser($lignesDeLAvoir)),
             ])->save();
 
             foreach ($lignesDeLAvoir as $ligne) {

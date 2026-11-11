@@ -373,7 +373,7 @@ class CaisseTest extends TestCase
         app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
-        $this->assertSame(10.0, $client->soldeCrediteur());
+        $this->assertSame(1000, $client->soldeCrediteurEnCentimes());
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)->set('data.client_id', $client->id);
@@ -394,9 +394,9 @@ class CaisseTest extends TestCase
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         $this->assertSame(StatutFacture::Payee, $facture->statut);
-        $this->assertSame(10.0, $facture->montantCrediteParAvoir());
-        $this->assertSame(40.0, $facture->montantPaye());
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(1000, $facture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(4000, $facture->montantPayeEnCentimes());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -583,6 +583,30 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * À la caisse, tout prix unitaire de vente montré en lecture reste au
+     * centime, même pour un client professionnel, dont la facture
+     * imprimera son PU HT tel qu'il est enregistré (décision de l'éditeur
+     * du 09/11/2026) : le champ du PU HT de 4 écrans à 65,00 € TTC à 20 %,
+     * ajoutés avant le choix du client, montre 54.17, et celui de 3 câbles
+     * à 9,99 € TTC, ajoutés après, 8.33 (8,325 €).
+     */
+    public function test_a_la_caisse_le_pu_ht_reste_au_centime_meme_pour_un_professionnel(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $professionnel = Client::factory()->professionnel()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Écran', 'prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $caisse = Livewire::test(Caisse::class)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $ecran->id, 'quantite' => 4]])
+            ->set('data.client_id', $professionnel->id)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->id, 'quantite' => 3]]);
+
+        $this->assertSame(['54.17', '8.33'], array_values(array_column($caisse->get('data.lignes'), 'prix_unitaire_ht')));
+        $caisse->assertSee('Total HT 241,64 € · TVA 48,33 € · Total TTC 289,97 €');
+    }
+
+    /**
      * Point 12 : aucune ligne ne montre de total sous elle, ni son HT ni sa
      * TVA, qui dépendent des autres lignes de son taux ; seuls les totaux
      * du document s'affichent. Deux lignes de 25,00 € montrent 50,00 €
@@ -640,7 +664,7 @@ class CaisseTest extends TestCase
 
         $facture = Facture::query()->where('client_id', $professionnel->id)->sole();
         $this->assertSame(['95.11', '17.29', '112.40'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertSame(112.4, $facture->montantPaye());
+        $this->assertSame(11240, $facture->montantPayeEnCentimes());
     }
 
     /**
@@ -1802,15 +1826,15 @@ class CaisseTest extends TestCase
             ->assertSee('12,00 €')
             ->assertFormSet(["parts.{$especes}.montant" => '8.00'])
             ->set("data.parts.{$especes}.montant_recu", '10')
-            ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === 8.0)
+            ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === '8.00')
             ->call('encaisser')
             ->assertHasNoFormErrors()
             ->assertNotified('Vente encaissée : facture TK-MABOUT-2026-000002');
 
         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000002')->sole();
-        $this->assertSame([StatutFacture::Payee, 12.0, 8.0, 0.0], [$ticket->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 1200, 800, 0], [$ticket->statut, $ticket->montantCrediteParAvoirEnCentimes(), $ticket->montantPayeEnCentimes(), $ticket->montantRestantEnCentimes()]);
         $this->assertSame([[ModePaiement::Especes, '8.00']], $ticket->allocationsPaiement->map(fn ($allocation): array => [$allocation->paiement->mode_paiement, $allocation->montant_alloue])->all());
-        $this->assertSame(0.0, $bon->fresh()->montantNonAlloue());
+        $this->assertSame(0, $bon->fresh()->creditEnCentimes());
         $this->assertSame([['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 1200]], $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte']['credits_avoir']);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
@@ -1841,7 +1865,7 @@ class CaisseTest extends TestCase
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
         $vente = self::vendreAuComptant(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->assertSame(12.0, $martin->soldeCrediteur());
+        $this->assertSame(1200, $martin->soldeCrediteurEnCentimes());
         $caisse = Livewire::test(Caisse::class);
 
         $part = $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
@@ -1880,7 +1904,7 @@ class CaisseTest extends TestCase
 
         $caisse
             ->assertFormSet(["parts.{$especes}.montant" => '20.00'])
-            ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === 20.0);
+            ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === '20.00');
         $this->assertSame([$especes], array_keys($caisse->get('data.parts')));
     }
 
@@ -1940,8 +1964,8 @@ class CaisseTest extends TestCase
 
         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000003')->sole();
         $this->assertSame([$martin->id, 'Mme Martin'], [(int) $ticket->client_id, $ticket->client_nom]);
-        $this->assertSame([StatutFacture::Payee, 15.0, 0.0, 0.0], [$ticket->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
-        $this->assertSame([7.0, 0.0], [$bon->fresh()->montantNonAlloue(), $martin->soldeCrediteur()]);
+        $this->assertSame([StatutFacture::Payee, 1500, 0, 0], [$ticket->statut, $ticket->montantCrediteParAvoirEnCentimes(), $ticket->montantPayeEnCentimes(), $ticket->montantRestantEnCentimes()]);
+        $this->assertSame([700, 0], [$bon->fresh()->creditEnCentimes(), $martin->soldeCrediteurEnCentimes()]);
         $this->assertSame(2, Paiement::query()->count());
         $this->assertSame(
             [['avoir_id' => $avoirDeMartin->id, 'numero' => 'AV-MABOUT-2026-000002', 'montant' => 1000], ['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 500]],

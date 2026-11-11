@@ -86,23 +86,25 @@ class TerritoireTest extends TestCase
     }
 
     /**
-     * @return array<string, array{Territoire, TerritoireTva, float}>
+     * Les taux en centièmes de point : 2000 pour 20 %.
+     *
+     * @return array<string, array{Territoire, TerritoireTva, int}>
      */
     public static function territoiresDeTva(): array
     {
         return [
-            'métropole' => [Territoire::Metropole, TerritoireTva::Metropole, 20.0],
-            'Corse' => [Territoire::Corse, TerritoireTva::Corse, 20.0],
-            'Guadeloupe' => [Territoire::Guadeloupe, TerritoireTva::AntillesReunion, 8.5],
-            'Martinique' => [Territoire::Martinique, TerritoireTva::AntillesReunion, 8.5],
-            'La Réunion' => [Territoire::Reunion, TerritoireTva::AntillesReunion, 8.5],
-            'Guyane' => [Territoire::Guyane, TerritoireTva::GuyaneMayotte, 0.0],
-            'Mayotte' => [Territoire::Mayotte, TerritoireTva::GuyaneMayotte, 0.0],
+            'métropole' => [Territoire::Metropole, TerritoireTva::Metropole, 2000],
+            'Corse' => [Territoire::Corse, TerritoireTva::Corse, 2000],
+            'Guadeloupe' => [Territoire::Guadeloupe, TerritoireTva::AntillesReunion, 850],
+            'Martinique' => [Territoire::Martinique, TerritoireTva::AntillesReunion, 850],
+            'La Réunion' => [Territoire::Reunion, TerritoireTva::AntillesReunion, 850],
+            'Guyane' => [Territoire::Guyane, TerritoireTva::GuyaneMayotte, 0],
+            'Mayotte' => [Territoire::Mayotte, TerritoireTva::GuyaneMayotte, 0],
         ];
     }
 
     #[DataProvider('territoiresDeTva')]
-    public function test_chaque_territoire_donne_son_territoire_de_tva_et_son_taux(Territoire $territoire, TerritoireTva $tva, float $taux): void
+    public function test_chaque_territoire_donne_son_territoire_de_tva_et_son_taux(Territoire $territoire, TerritoireTva $tva, int $taux): void
     {
         $this->assertSame($tva, $territoire->tva());
         $this->assertSame($taux, $territoire->tva()->tauxNormal());

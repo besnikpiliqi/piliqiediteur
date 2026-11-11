@@ -141,9 +141,9 @@ test('le vendeur émet et encaisse en partie un ticket depuis la liste des factu
         ->soumettre('Émettre et encaisser')
         ->voir('Partiellement payée');
 
-    [$statut, $restant] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+    [$statut, $restant] = app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$ticket->fresh()->statut, $ticket->fresh()->montantRestantEnCentimes()]);
     expect($statut)->toBe(StatutFacture::PartiellementPayee)
-        ->and($restant)->toBe(7.0)
+        ->and($restant)->toBe(700)
         ->and(paiementsDeLaFacture($societe->magasin, $ticket))->toBe([[ModePaiement::Especes->value, '5.00']]);
 });
 

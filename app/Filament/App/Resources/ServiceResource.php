@@ -111,7 +111,7 @@ class ServiceResource extends Resource
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(100)
-                ->default(fn (): string => (string) (float) app(TenantContext::class)->magasin()->tauxTvaParDefaut())
+                ->default(fn (): string => CalculateurLigne::centiemesDansUnChamp(app(CalculateurLigne::class)->enCentiemes(app(TenantContext::class)->magasin()->tauxTvaParDefaut())))
                 ->requiredWith('prix_ttc'),
         ]);
     }

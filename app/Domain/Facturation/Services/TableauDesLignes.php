@@ -34,11 +34,15 @@ use Illuminate\Support\Number;
  * La TVA et le TTC de chaque taux sont dans le tableau qui suit (voir
  * documents/pdf/totaux). La remise n'apparaît que si une ligne en a une.
  * Le PU HT, enregistré au millionième d'euro (voir
- * CalculateurLigne::prixUnitaireHtExact()), s'imprime arrondi au centime,
- * comme le PU TTC (voir CalculateurLigne::prixUnitaireAffiche()) : 54,17 €
- * pour 54,166667 €. La quantité x le prix imprimé peut donc s'écarter du
- * total de la ligne, calculé sans arrondi intermédiaire, ce qu'explique la
- * note de calcul imprimée sous les lignes (voir MentionsFiscales::calcul()).
+ * CalculateurLigne::prixUnitaireHtExact()), s'imprime tel qu'il est
+ * enregistré, sans zéro inutile au-delà du centime (voir
+ * CalculateurLigne::prixUnitaireExact(), décision de l'éditeur du
+ * 09/11/2026) : 54,166667 €, 0,825 €, 45,00 € ; la quantité x ce prix,
+ * remise déduite, retombe sur le total HT de la ligne à moins de deux
+ * centimes près. Le PU TTC s'imprime au centime (voir
+ * CalculateurLigne::prixUnitaireAffiche()). Les totaux se calculent depuis
+ * les prix TTC, sans arrondi intermédiaire, ce qu'explique la note de
+ * calcul imprimée sous les lignes (voir MentionsFiscales::calcul()).
  * Un avoir indique la facture de chaque ligne, son numéro entier sur une
  * seule ligne. Rien ne se recalcule : chaque montant est celui de la ligne
  * enregistrée.
@@ -101,10 +105,10 @@ final readonly class TableauDesLignes
     public static function pour(Facture|Avoir|Devis $document): self
     {
         $calculateur = app(CalculateurLigne::class);
-        $enTtc = ! $document->estPourUnProfessionnel() && ! ContexteDeVente::documentRetireLaTvaDuPrix($document);
+        $enTtc = ! ContexteDeVente::documentMontreLePuHt($document);
         $avecFactureDOrigine = $document instanceof Avoir;
         $avecRemise = $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $calculateur->enCentiemes($ligne->remise_pourcentage) !== 0);
-        $pourcentage = fn (mixed $valeur): string => Number::format((float) ValeurSimple::simple($valeur), maxPrecision: 2, locale: 'fr').' %';
+        $pourcentage = fn (mixed $valeur): string => CalculateurLigne::tauxEnTexte(SaisieDecimale::enCentiemes(ValeurSimple::simple($valeur)));
 
         $titres = [
             ['titre' => 'Référence', 'montant' => false],
@@ -123,7 +127,7 @@ final readonly class TableauDesLignes
             'factureDOrigine' => $ligne instanceof LigneAvoir ? ($ligne->ligneFacture?->facture->numero ?? '—') : null,
             'montants' => array_values(array_filter([
                 ResultatDePhp::texte(Number::format($ligne->quantite, locale: 'fr'), 'Le format de la quantité'),
-                $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($enTtc ? $ligne->prix_unitaire_ttc : $ligne->prix_unitaire_ht)),
+                $enTtc ? $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)) : $calculateur->prixUnitaireExact($calculateur->enMillioniemes($ligne->prix_unitaire_ht)),
                 $avecRemise ? $pourcentage($ligne->remise_pourcentage) : null,
                 $pourcentage($ligne->taux_tva),
                 $calculateur->enEuros($calculateur->enCentiemes($enTtc ? $ligne->montant_ttc : $ligne->montant_ht)),

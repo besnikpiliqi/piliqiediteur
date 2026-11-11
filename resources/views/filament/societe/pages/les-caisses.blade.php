@@ -1,6 +1,7 @@
 {{-- Voir LesCaisses. --}}
 <x-filament-panels::page>
-    @php($euros = fn (float|string $montant): string => number_format((float) $montant, 2, ',', ' ').' €')
+    @php($calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class))
+    @php($euros = fn (string $montant): string => $calculateur->enEuros($calculateur->enCentiemes($montant)))
 
     <x-filament::section>
         <label class="flex flex-wrap items-center gap-3">
@@ -54,7 +55,7 @@
                                 <td class="py-1 pe-3 text-end">{{ $releve->nombre_ventes }}</td>
                                 <td class="py-1 pe-3 text-end">{{ $euros($releve->total_ttc) }}</td>
                                 <td class="py-1 pe-3">
-                                    {{ $euros($releve->totalEncaisse()) }}
+                                    {{ $calculateur->enEuros($releve->totalEncaisseEnCentimes()) }}
                                     @if ($releve->encaissementsEnClair() !== [])
                                         ({{ implode(' ; ', $releve->encaissementsEnClair()) }})
                                     @endif

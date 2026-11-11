@@ -15,6 +15,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -88,16 +89,16 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $premiereFacture = $this->vendreEnCaisse($client, $produit, 1);
         $this->emettreAvoirPourClient($client, $premiereFacture, 1);
 
-        $this->assertSame(60.0, $client->soldeCrediteur());
+        $this->assertSame(6000, $client->soldeCrediteurEnCentimes());
 
         // Nouvel achat de même montant : couvert intégralement et
         // automatiquement, sans aucune action du vendeur.
         $nouvelleFacture = $this->emettreFacture($client, $produit, 1);
 
         $this->assertSame(StatutFacture::Payee, $nouvelleFacture->statut);
-        $this->assertSame(0.0, $nouvelleFacture->montantRestant());
-        $this->assertSame(60.0, $nouvelleFacture->montantCrediteParAvoir());
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(0, $nouvelleFacture->montantRestantEnCentimes());
+        $this->assertSame(6000, $nouvelleFacture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 
     public function test_un_credit_partiel_laisse_un_solde_restant_a_payer_normalement(): void
@@ -114,9 +115,9 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $nouvelleFacture = $this->emettreFacture($client, $produitPlusCher, 1);
 
         $this->assertSame(StatutFacture::PartiellementPayee, $nouvelleFacture->statut);
-        $this->assertSame(30.0, $nouvelleFacture->montantCrediteParAvoir());
-        $this->assertSame(30.0, $nouvelleFacture->montantRestant());
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(3000, $nouvelleFacture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(3000, $nouvelleFacture->montantRestantEnCentimes());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
 
         // Le reliquat se règle ensuite normalement, comme un paiement classique.
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
@@ -160,10 +161,10 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $nouvelleFacture = $this->emettreFacture($client, $produitNouvelAchat, 1);
 
         $this->assertSame(StatutFacture::Payee, $nouvelleFacture->statut);
-        $this->assertSame(18.0, $nouvelleFacture->montantCrediteParAvoir());
-        $this->assertSame(0.0, $avoirAncien->fresh()->montantNonAlloue());
-        $this->assertSame(6.0, $avoirRecent->fresh()->montantNonAlloue());
-        $this->assertSame(6.0, $client->soldeCrediteur());
+        $this->assertSame(1800, $nouvelleFacture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(0, $avoirAncien->fresh()->creditEnCentimes());
+        $this->assertSame(600, $avoirRecent->fresh()->creditEnCentimes());
+        $this->assertSame(600, $client->soldeCrediteurEnCentimes());
     }
 
     public function test_sans_avoir_disponible_le_statut_de_la_facture_nest_pas_modifie(): void
@@ -174,8 +175,8 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 1);
 
         $this->assertSame(StatutFacture::Emise, $facture->statut);
-        $this->assertSame(0.0, $facture->montantCrediteParAvoir());
-        $this->assertSame((float) $facture->total_ttc, $facture->montantRestant());
+        $this->assertSame(0, $facture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(app(CalculateurLigne::class)->enCentiemes($facture->total_ttc), $facture->montantRestantEnCentimes());
     }
 
     /**
@@ -192,13 +193,13 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $factureA = $this->vendreEnCaisse($clientA, $produit, 1);
         $this->emettreAvoirPourClient($clientA, $factureA, 1);
 
-        $this->assertSame(60.0, $clientA->soldeCrediteur());
+        $this->assertSame(6000, $clientA->soldeCrediteurEnCentimes());
 
         $factureB = $this->emettreFacture($clientB, $produit, 1);
 
         $this->assertSame(StatutFacture::Emise, $factureB->statut);
-        $this->assertSame(0.0, $factureB->montantCrediteParAvoir());
-        $this->assertSame(60.0, $clientA->soldeCrediteur());
+        $this->assertSame(0, $factureB->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(6000, $clientA->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -225,7 +226,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $premiereFacture = $this->vendreEnCaisse($clientComptoir, $produit, 1);
         $this->emettreAvoirPourClient($clientComptoir, $premiereFacture, 1);
 
-        $this->assertSame(0.0, $clientComptoir->soldeCrediteur());
+        $this->assertSame(0, $clientComptoir->soldeCrediteurEnCentimes());
 
         // Nouvel achat comptoir du même montant : ne doit JAMAIS être couvert
         // automatiquement par ce crédit, le client suivant au comptoir
@@ -233,7 +234,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $nouvelleFacture = $this->emettreFacture($clientComptoir, $produit, 1);
 
         $this->assertSame(StatutFacture::Emise, $nouvelleFacture->statut);
-        $this->assertSame(0.0, $nouvelleFacture->montantCrediteParAvoir());
-        $this->assertSame(0.0, $clientComptoir->soldeCrediteur());
+        $this->assertSame(0, $nouvelleFacture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(0, $clientComptoir->soldeCrediteurEnCentimes());
     }
 }

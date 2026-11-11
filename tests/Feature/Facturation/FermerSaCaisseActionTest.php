@@ -238,7 +238,7 @@ class FermerSaCaisseActionTest extends TestCase
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
-        $this->assertSame(0.0, $avoir->montantNonAlloue());
+        $this->assertSame(0, $avoir->creditEnCentimes());
         $this->assertSame(2, $cloture->nombre_ventes);
         $this->assertSame(['180.00', [], '120.00', '60.00'], [$cloture->total_ttc, $cloture->encaissements, $cloture->credit_avoir, $cloture->reste_du]);
         $this->assertContains($venteCorrigee->id, $cloture->factures()->pluck('factures.id')->all());
@@ -263,7 +263,7 @@ class FermerSaCaisseActionTest extends TestCase
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $ticketRepris->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $ancienTicket = $this->emettreUnDocument(Client::factory()->create(['nom' => 'Durand']), 45);
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $this->assertSame(30.0, $martin->soldeCrediteur());
+        $this->assertSame(3000, $martin->soldeCrediteurEnCentimes());
 
         $this->vendreAuComptoir($martin, 60);
         $this->emettreUnDocument(Client::factory()->professionnel()->create(), 120);
@@ -273,7 +273,7 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame(2, $cloture->nombre_ventes);
         $this->assertSame(['150.00', '30.00', '180.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertSame(['especes' => '30.00', 'carte_bancaire' => '45.00'], $cloture->fresh()->encaissements);
-        $this->assertSame(75.0, $cloture->fresh()->totalEncaisse());
+        $this->assertSame(7500, $cloture->fresh()->totalEncaisseEnCentimes());
         $this->assertSame(['30.00', '120.00'], [$cloture->credit_avoir, $cloture->reste_du]);
     }
 

@@ -115,7 +115,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->assertSame([[$facture->id, '-100.00']], $contrePassation->allocations->map(fn ($allocation): array => [$allocation->facture_id, $allocation->montant_alloue])->all());
         $facture->refresh();
         $this->assertSame(['83.33', '16.67', '100.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertSame([StatutFacture::Emise, 0.0, 100.0], [$facture->statut, $facture->montantPaye(), $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 0, 10000], [$facture->statut, $facture->montantPayeEnCentimes(), $facture->montantRestantEnCentimes()]);
         $this->assertSame(['100.00', null], [$errone->fresh()->montant, $errone->fresh()->contre_passe_paiement_id]);
         $this->assertTrue($errone->fresh()->contrePassation->is($contrePassation));
     }
@@ -130,7 +130,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->payer($client, '10.00', [$facture->id => '10.00']);
 
         $facture->refresh();
-        $this->assertSame([StatutFacture::PartiellementPayee, 10.0, 90.0], [$facture->statut, $facture->montantPaye(), $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 1000, 9000], [$facture->statut, $facture->montantPayeEnCentimes(), $facture->montantRestantEnCentimes()]);
     }
 
     public function test_une_facture_echue_rouverte_par_la_contre_passation_est_en_retard(): void
@@ -144,7 +144,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
         $this->contrePasser($errone);
 
-        $this->assertSame([StatutFacture::EnRetard, 100.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::EnRetard, 10000], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
     }
 
     public function test_une_facture_envoyee_au_client_rouverte_par_la_contre_passation_redevient_envoyee(): void
@@ -158,7 +158,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
         $this->contrePasser($errone);
 
-        $this->assertSame([StatutFacture::Envoyee, 100.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Envoyee, 10000], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
     }
 
     public function test_un_paiement_reparti_sur_deux_factures_les_rouvre_toutes_les_deux(): void
@@ -172,8 +172,8 @@ class ContrePasserPaiementActionTest extends TestCase
         $contrePassation = $this->contrePasser($errone);
 
         $this->assertSame([[$premiere->id, '-60.00'], [$seconde->id, '-40.00']], $contrePassation->allocations->sortBy('id')->map(fn ($allocation): array => [$allocation->facture_id, $allocation->montant_alloue])->values()->all());
-        $this->assertSame([StatutFacture::Emise, 60.0], [$premiere->fresh()->statut, $premiere->fresh()->montantRestant()]);
-        $this->assertSame([StatutFacture::Emise, 40.0], [$seconde->fresh()->statut, $seconde->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 6000], [$premiere->fresh()->statut, $premiere->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame([StatutFacture::Emise, 4000], [$seconde->fresh()->statut, $seconde->fresh()->montantRestantEnCentimes()]);
     }
 
     public function test_un_paiement_ne_se_contre_passe_qu_une_fois(): void
@@ -187,7 +187,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->assertThrows(fn () => $this->contrePasser($errone), LogicException::class, 'Ce paiement a déjà été contre-passé.');
 
         $this->assertSame(2, Paiement::query()->count());
-        $this->assertSame(100.0, $facture->fresh()->montantRestant());
+        $this->assertSame(10000, $facture->fresh()->montantRestantEnCentimes());
     }
 
     public function test_une_contre_passation_ne_se_contre_passe_pas(): void
@@ -311,16 +311,16 @@ class ContrePasserPaiementActionTest extends TestCase
         $facture = $this->facture($client);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->assertSame(90.0, $client->soldeCrediteur());
+        $this->assertSame(9000, $client->soldeCrediteurEnCentimes());
 
         $contrePassation = $this->contrePasser($errone);
         $bon = $this->payer($client, '10.00', [$facture->id => '10.00']);
 
         $facture->refresh();
-        $this->assertSame([StatutFacture::Payee, 10.0, 90.0, 0.0], [$facture->statut, $facture->montantPaye(), $facture->montantCrediteParAvoir(), $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 1000, 9000, 0], [$facture->statut, $facture->montantPayeEnCentimes(), $facture->montantCrediteParAvoirEnCentimes(), $facture->montantRestantEnCentimes()]);
         $this->assertSame([[$avoir->id, $facture->id, '90.00']], $contrePassation->creditsImputes->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->all());
         $this->assertSame([], $bon->creditsImputes->all());
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
         $this->assertSame([[
             'avoir_id' => $avoir->id,
             'avoir_numero' => 'AV-LYON1-2026-000001',
@@ -375,7 +375,7 @@ class ContrePasserPaiementActionTest extends TestCase
             'montant' => -2000,
         ]], $this->donneesSignees($contrePassation)['credits_imputes']);
         $ticket->refresh();
-        $this->assertSame([StatutFacture::Emise, 0.0, 0.0, 50.0], [$ticket->statut, $ticket->montantPaye(), $ticket->montantCrediteParAvoir(), $ticket->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 0, 0, 5000], [$ticket->statut, $ticket->montantPayeEnCentimes(), $ticket->montantCrediteParAvoirEnCentimes(), $ticket->montantRestantEnCentimes()]);
         $this->assertSame(2000, $bon->fresh()->creditEnCentimes());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
@@ -423,7 +423,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]]));
         $errone = $this->payer($client, '80.00', [$facture->id => '80.00']);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]]);
-        $this->assertSame([StatutFacture::Payee, 30.0], [$facture->fresh()->statut, $avoir->fresh()->montantNonAlloue()]);
+        $this->assertSame([StatutFacture::Payee, 3000], [$facture->fresh()->statut, $avoir->fresh()->creditEnCentimes()]);
 
         $contrePassation = $this->contrePasser($errone);
         $bon = $this->payer($client, '50.00', [$facture->id => '50.00']);
@@ -433,7 +433,7 @@ class ContrePasserPaiementActionTest extends TestCase
             $avoir->allocations()->orderBy('id')->get()->map(fn ($allocation): array => [$allocation->paiement_id, $allocation->montant_alloue])->all(),
         );
         $this->assertSame([], $bon->creditsImputes->all());
-        $this->assertSame([StatutFacture::Payee, 0.0, 0.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant(), $avoir->fresh()->montantNonAlloue()]);
+        $this->assertSame([StatutFacture::Payee, 0, 0], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes(), $avoir->fresh()->creditEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
@@ -465,6 +465,6 @@ class ContrePasserPaiementActionTest extends TestCase
         );
         $this->assertSame([], $bon->creditsImputes->all());
         $this->assertSame([StatutFacture::Payee, StatutFacture::Payee], [$ancienne->fresh()->statut, $recente->fresh()->statut]);
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 }

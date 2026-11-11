@@ -321,8 +321,8 @@ class FactureResourceTest extends TestCase
         $nouvelleFacture = $nouvelleFacture->fresh();
 
         $this->assertSame(StatutFacture::PartiellementPayee, $nouvelleFacture->statut);
-        $this->assertSame(0.0, $nouvelleFacture->montantPaye());
-        $this->assertSame(10.0, $nouvelleFacture->montantCrediteParAvoir());
+        $this->assertSame(0, $nouvelleFacture->montantPayeEnCentimes());
+        $this->assertSame(1000, $nouvelleFacture->montantCrediteParAvoirEnCentimes());
 
         // On passe la clé, pas le modèle déjà chargé : assertTableColumnStateSet
         // ne re-résout la ligne via la requête de la table (et donc ses
@@ -376,13 +376,13 @@ class FactureResourceTest extends TestCase
         $nouvelleFacture = $nouvelleFacture->fresh();
 
         $this->assertSame(StatutFacture::PartiellementPayee, $nouvelleFacture->statut);
-        $this->assertSame(0.0, $nouvelleFacture->montantPaye());
-        $this->assertSame(13.0, $nouvelleFacture->montantCrediteParAvoir());
-        $this->assertSame(48.2, $nouvelleFacture->montantRestant());
+        $this->assertSame(0, $nouvelleFacture->montantPayeEnCentimes());
+        $this->assertSame(1300, $nouvelleFacture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(4820, $nouvelleFacture->montantRestantEnCentimes());
 
         // "0,00 €" ne doit apparaître nulle part sur la fiche : avant la
         // correction, c'est précisément la valeur affichée par le champ
-        // "Payé" (montantPaye() seul, sans le crédit), alors que le statut
+        // "Payé" (montantPayeEnCentimes() seul, sans le crédit), alors que le statut
         // "Partiellement payée" prouve qu'une partie du montant est bien
         // réglée. Aucun des autres montants de cette fiche (13,00 / 10,83 /
         // 2,17 / 51,00 / 10,20 / 61,20 / 48,20) ne se termine par "0,00",
@@ -843,8 +843,8 @@ class FactureResourceTest extends TestCase
         $facture = Facture::query()->sole();
         $this->assertSame(['51.15', '8.85', '60.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertEqualsCanonicalizing([
-            ['taux_tva' => '20.00', 'montant_ht' => 41.67, 'montant_tva' => 8.33, 'montant_ttc' => 50.0],
-            ['taux_tva' => '5.50', 'montant_ht' => 9.48, 'montant_tva' => 0.52, 'montant_ttc' => 10.0],
+            ['taux_tva' => '20.00', 'montant_ht' => '41.67', 'montant_tva' => '8.33', 'montant_ttc' => '50.00'],
+            ['taux_tva' => '5.50', 'montant_ht' => '9.48', 'montant_tva' => '0.52', 'montant_ttc' => '10.00'],
         ], $facture->ventilation_tva);
     }
 
@@ -877,8 +877,8 @@ class FactureResourceTest extends TestCase
 
         $this->assertSame(['85.00', '15.00', '100.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 75.0, 'montant_tva' => 15.0, 'montant_ttc' => 90.0],
-            ['taux_tva' => '0.00', 'montant_ht' => 10.0, 'montant_tva' => 0.0, 'montant_ttc' => 10.0],
+            ['taux_tva' => '20.00', 'montant_ht' => '75.00', 'montant_tva' => '15.00', 'montant_ttc' => '90.00'],
+            ['taux_tva' => '0.00', 'montant_ht' => '10.00', 'montant_tva' => '0.00', 'montant_ttc' => '10.00'],
         ], $facture->ventilation_tva);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
@@ -930,66 +930,164 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * La fiche montre le PU HT de chaque ligne arrondi au centime (décision
-     * de l'éditeur du 25/10/2026), comme son PU TTC, et le total de la
-     * ligne tel qu'il est enregistré : 0,83 € pour un article à 1,00 € TTC
-     * à 20 % (PU HT enregistré 0,833333 €), dont les 1 000 font 833,33 €
-     * HT ; 100,00 € pour un écran à 120,00 € TTC. Sous les lignes, la note
-     * de calcul dit que les prix unitaires sont affichés arrondis au
-     * centime.
+     * La fiche d'une facture à un professionnel montre le PU HT de chaque
+     * ligne tel qu'il est enregistré, sans zéro inutile au-delà du centime
+     * (décision de l'éditeur du 09/11/2026, qui remplace pour ces documents
+     * l'affichage au centime du 25/10/2026), son PU TTC au centime, et le
+     * total de la ligne tel qu'il est enregistré : 0,833333 € pour un
+     * article à 1,00 € TTC à 20 %, dont les 1 000 font 833,33 € HT ;
+     * 100,00 € pour un écran à 120,00 € TTC. Sous les lignes, la note de
+     * calcul dit que la quantité x le PU HT retombe sur le total HT de la
+     * ligne à moins de deux centimes près.
      */
-    public function test_la_fiche_montre_le_pu_ht_au_centime(): void
+    public function test_la_fiche_d_une_facture_a_un_professionnel_montre_le_pu_ht_tel_qu_il_est_enregistre(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $responsable = $this->responsableDeTest($magasin);
-        $this->actingAs($responsable);
-        Filament::setTenant($magasin);
-        $vis = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
-
-        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
-            ['produit_id' => $vis->id, 'quantite' => 1000],
-            ['produit_id' => $ecran->id, 'quantite' => 1],
-        ]);
+        $facture = $this->factureDeVisEtDEcran(professionnel: true);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeInOrder(['0,833333 €', '1,00 €', '833,33', '100,00 €', '120,00 €', '100,00'])
+            ->assertDontSee('0,83 €')
+            ->assertSee('Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.');
+    }
+
+    /**
+     * La fiche d'un ticket, vendu à un particulier, montre son PU HT
+     * arrondi au centime, comme tout prix unitaire de vente montré en
+     * lecture (décision de l'éditeur du 25/10/2026, que celle du 09/11/2026
+     * garde pour ces documents) : 0,83 € pour un PU HT enregistré de
+     * 0,833333 €. Sous les lignes, la note de calcul dit que les prix
+     * unitaires sont affichés arrondis au centime.
+     */
+    public function test_la_fiche_d_un_ticket_montre_le_pu_ht_au_centime(): void
+    {
+        $ticket = $this->factureDeVisEtDEcran(professionnel: false);
+
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
             ->assertSeeInOrder(['0,83 €', '1,00 €', '833,33', '100,00 €', '120,00 €', '100,00'])
             ->assertDontSee('0,833333')
             ->assertSee('Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.');
     }
 
     /**
-     * Seul un champ où un prix se saisit le montre tel qu'il est
-     * enregistré (décision de l'éditeur du 25/10/2026) : le brouillon de 4
-     * articles à 65,00 € TTC à 20 % rouvert garde 65.00 dans le champ de
-     * son PU TTC ; le champ de son PU HT, qui ne se saisit pas, montre
-     * 54.17 (65 ÷ 1,2 = 54,166667), comme sa fiche, 54,17 € ; le brouillon
-     * réenregistré garde son PU HT au millionième et son total.
+     * 1 000 vis à 1,00 € TTC et un écran à 120,00 € TTC, à 20 %, vendus à
+     * un professionnel ou à un particulier.
      */
-    public function test_le_champ_du_pu_ht_montre_le_centime_et_la_ligne_garde_le_millionieme(): void
+    private function factureDeVisEtDEcran(bool $professionnel): Facture
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
-        $ecran = Produit::factory()->create(['prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
-            ['produit_id' => $ecran->id, 'quantite' => 4],
+        $vis = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(CreerFactureAction::class)->handle(self::auteur(), $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), [
+            ['produit_id' => $vis->id, 'quantite' => 1000],
+            ['produit_id' => $ecran->id, 'quantite' => 1],
         ]);
+    }
+
+    /**
+     * Le champ du PU HT d'une ligne, qui ne se saisit pas, le montre comme
+     * le document le montre (décision de l'éditeur du 09/11/2026, qui
+     * remplace pour ces documents l'affichage au centime du 25/10/2026) :
+     * le brouillon d'une facture à un professionnel de 4 articles à
+     * 65,00 € TTC à 20 % rouvert montre 54.166667 (65 ÷ 1,2), tel que la
+     * ligne l'enregistre et que sa fiche l'affiche, 54,166667 € ; le champ
+     * de son PU TTC, où le prix se saisit, le montre tel qu'il est
+     * enregistré, 65.00 ; le brouillon réenregistré garde son PU HT au
+     * millionième et son total.
+     */
+    public function test_le_champ_du_pu_ht_d_une_facture_a_un_professionnel_montre_le_millionieme_que_la_ligne_garde(): void
+    {
+        $facture = $this->brouillonDeQuatreEcrans(professionnel: true);
 
         $formulaire = Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()]);
         $cle = array_key_first($formulaire->get('data.lignes'));
         $formulaire
             ->assertFormFieldIsDisabled("lignes.{$cle}.prix_unitaire_ht")
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.166667')
             ->assertFormFieldIsEnabled("lignes.{$cle}.prix_unitaire_ttc")
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '65.00')
             ->call('save')
             ->assertHasNoFormErrors();
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeInOrder(['54,166667 €', '65,00 €', '216,67'])
+            ->assertDontSee('54,17 €');
+        $this->assertSame(['54.166667', '216.67', '260.00'], [$facture->lignes()->sole()->prix_unitaire_ht, $facture->fresh()->total_ht, $facture->fresh()->total_ttc]);
+    }
+
+    /**
+     * Le brouillon d'un ticket, à un particulier, rouvert montre le PU HT
+     * au centime dans le champ qui ne se saisit pas, 54.17 pour 54,166667 €,
+     * comme sa fiche, 54,17 € (décision de l'éditeur du 25/10/2026, que
+     * celle du 09/11/2026 garde pour ces documents) ; le brouillon
+     * réenregistré garde son PU HT au millionième et son total.
+     */
+    public function test_le_champ_du_pu_ht_d_un_ticket_montre_le_centime_et_la_ligne_garde_le_millionieme(): void
+    {
+        $ticket = $this->brouillonDeQuatreEcrans(professionnel: false);
+
+        $formulaire = Livewire::test(EditFacture::class, ['record' => $ticket->getRouteKey()]);
+        $cle = array_key_first($formulaire->get('data.lignes'));
+        $formulaire
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '65.00')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
             ->assertSeeInOrder(['54,17 €', '65,00 €', '216,67'])
             ->assertDontSee('54,166667');
-        $this->assertSame(['54.166667', '216.67', '260.00'], [$facture->lignes()->sole()->prix_unitaire_ht, $facture->fresh()->total_ht, $facture->fresh()->total_ttc]);
+        $this->assertSame(['54.166667', '216.67', '260.00'], [$ticket->lignes()->sole()->prix_unitaire_ht, $ticket->fresh()->total_ht, $ticket->fresh()->total_ttc]);
+    }
+
+    /**
+     * Le champ du PU HT d'une ligne suit la vente que le formulaire saisit
+     * (décision de l'éditeur du 09/11/2026) : au centime pour un
+     * particulier, tel qu'il sera enregistré dès que le client choisi est
+     * un professionnel, de nouveau au centime pour un particulier, puis tel
+     * qu'il sera enregistré quand la vente de ce particulier sort de la TVA
+     * française (un export, qui se paie hors taxe), et au centime quand elle
+     * y revient.
+     */
+    public function test_le_champ_du_pu_ht_suit_le_client_et_la_nature_de_la_vente(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $particulier = Client::factory()->create();
+        $professionnel = Client::factory()->professionnel()->create();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $formulaire = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $particulier->id]);
+        $cle = array_key_first($formulaire->get('data.lignes'));
+
+        $formulaire
+            ->set("data.lignes.{$cle}.produit_id", $ecran->id)
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
+            ->set('data.client_id', $professionnel->id)
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.166667')
+            ->set('data.client_id', $particulier->id)
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17')
+            ->set('data.nature_operation', NatureOperation::ExportHorsUe->value)
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.166667')
+            ->set('data.nature_operation', NatureOperation::VenteEnFrance->value)
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '54.17');
+    }
+
+    /**
+     * Le brouillon de 4 écrans à 65,00 € TTC à 20 % d'un professionnel ou
+     * d'un particulier.
+     */
+    private function brouillonDeQuatreEcrans(bool $professionnel): Facture
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => '65.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(CreerFactureAction::class)->handle(self::auteur(), $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), [
+            ['produit_id' => $ecran->id, 'quantite' => 4],
+        ]);
     }
 
     /**

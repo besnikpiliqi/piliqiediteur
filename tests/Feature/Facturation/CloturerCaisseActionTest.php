@@ -213,7 +213,7 @@ class CloturerCaisseActionTest extends TestCase
         $this->assertSame(1, $cloture->nombre_avoirs);
         $this->assertSame(['50.00', '10.00', '60.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 50.0, 'montant_tva' => 10.0, 'montant_ttc' => 60.0],
+            ['taux_tva' => '20.00', 'montant_ht' => '50.00', 'montant_tva' => '10.00', 'montant_ttc' => '60.00'],
         ], $cloture->ventilation_tva);
         $this->assertSame($cloture->id, $avoir->fresh()->cloture_caisse_id);
     }

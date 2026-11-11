@@ -101,9 +101,9 @@ class AnnulerCessionAction
                 $produit = Produit::withTrashed()->findOrFail($sortie->produit_id);
                 $this->stock->rentrerApresAnnulationDeCession($produit, $sortie, $verrouille, 'Annulation de la cession du magasin');
 
-                return $this->calculateur->valeurAuCoutMoyen($sortie->quantite, (float) $sortie->cout_unitaire_ht, (float) $produit->taux_tva);
+                return $this->calculateur->valeurAuCoutMoyen($sortie->quantite, $this->calculateur->enDixMilliemes($sortie->cout_unitaire_ht), $this->calculateur->enCentiemes($produit->taux_tva));
             });
-            $valeur = $this->calculateur->totaliser($rentrees);
+            $valeurHt = array_sum($rentrees->map(fn (array $valeur): int => $valeur['montant_ht'])->all());
 
             $verrouille->annulerSaCessionParLaProcedure($motif);
             $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
@@ -115,7 +115,7 @@ class AnnulerCessionAction
             $this->journalAudit->inscrire(ActionAuditee::CessionAnnulee, null, $verrouille, ['motif' => MotifFermeture::Cession->value], [
                 'motif' => $motif->value,
                 'produits_rentres' => $sorties->count(),
-                'valeur_stock_rentre_ht' => number_format($valeur['total_ht'], 2, '.', ''),
+                'valeur_stock_rentre_ht' => $this->calculateur->enDecimal($valeurHt),
             ], $verrouille, $editeur);
 
             return $motif;

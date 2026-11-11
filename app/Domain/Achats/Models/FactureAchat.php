@@ -102,9 +102,9 @@ class FactureAchat extends Model
         });
 
         static::saving(function (FactureAchat $factureAchat) {
-            $escompte = (float) $factureAchat->escompte_pourcentage;
+            $escompte = $factureAchat->escompte_pourcentage === null ? 0 : app(CalculateurLigne::class)->enCentiemes($factureAchat->escompte_pourcentage);
 
-            if ($escompte < 0 || $escompte > 100) {
+            if ($escompte < 0 || $escompte > 10000) {
                 throw new InvalidArgumentException('L\'escompte doit être compris entre 0 et 100 %.');
             }
         });

@@ -363,7 +363,7 @@ trait AjouteDesLignesDAchat
                 $montants = self::montantsDeLaLigneDAchat($get, $component);
 
                 return ValeurSimple::enTexte($get('quantite') ?? 0).' x '.self::prixDAchatEnTexte($get('prix_unitaire_ht')).' HT'
-                    .(filled($get('remise_pourcentage')) && (float) ValeurSimple::simple($get('remise_pourcentage')) > 0 ? ' remisé de '.self::pourcentageEnTexte(ValeurSimple::enTexteOuNul($get('remise_pourcentage'))).' %' : '')
+                    .(filled($get('remise_pourcentage')) && self::remiseSaisie($get) > 0 ? ' remisé de '.self::pourcentageEnTexte(ValeurSimple::enTexteOuNul($get('remise_pourcentage'))).' %' : '')
                     .' = '.self::montantEnTexte($montants['montant_ht_calcule']).' HT'
                     .($montants['montant_ht'] !== $montants['montant_ht_calcule'] ? ' ; HT de la facture : '.self::montantEnTexte($montants['montant_ht']) : '')
                     .' + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
@@ -424,13 +424,13 @@ trait AjouteDesLignesDAchat
     /**
      * Un prix d'achat tel qu'il s'affiche : tel qu'il est saisi, sans zéro
      * inutile au-delà du centime (« 0,1234 € », voir
-     * CalculateurLigne::prixDAchatAffiche()) ; « — » tant qu'il n'est pas un
+     * CalculateurLigne::prixUnitaireExact()) ; « — » tant qu'il n'est pas un
      * prix lisible.
      */
     private static function prixDAchatEnTexte(mixed $prix): string
     {
         try {
-            return app(CalculateurLigne::class)->prixDAchatAffiche(SaisieDecimale::enMillioniemes($prix));
+            return app(CalculateurLigne::class)->prixUnitaireExact(SaisieDecimale::enMillioniemes($prix));
         } catch (InvalidArgumentException) {
             return '—';
         }
@@ -439,13 +439,13 @@ trait AjouteDesLignesDAchat
     /**
      * Un prix d'achat tel que le garde la ligne et que le montre le champ où
      * il se saisit : « 0.1234 », « 12.50 » (voir
-     * CalculateurLigne::prixDAchatEnDecimal()) ; une saisie illisible reste
+     * CalculateurLigne::prixUnitaireExactEnDecimal()) ; une saisie illisible reste
      * telle quelle, que l'enregistrement refuse avec son motif.
      */
     private static function prixDAchatDansLeChamp(mixed $prix): mixed
     {
         try {
-            return app(CalculateurLigne::class)->prixDAchatEnDecimal(SaisieDecimale::enMillioniemes($prix));
+            return app(CalculateurLigne::class)->prixUnitaireExactEnDecimal(SaisieDecimale::enMillioniemes($prix));
         } catch (InvalidArgumentException) {
             return $prix;
         }
@@ -475,14 +475,14 @@ trait AjouteDesLignesDAchat
                 try {
                     $calculateur = app(CalculateurLigne::class);
                     $benefice = $calculateur->beneficeUnitaire(
-                        (float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('produit.prix_vente_ttc')), SaisieDecimale::enCentiemes($tauxTva))),
+                        $calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('produit.prix_vente_ttc')), $tauxTva),
                         self::prixDAchatNet($get),
                     );
                 } catch (InvalidArgumentException) {
                     return $vente;
                 }
 
-                return $vente.' · bénéfice '.self::montantEnTexte($benefice).' HT par article';
+                return $vente.' · bénéfice '.$calculateur->enEuros($benefice).' HT par article';
             });
     }
 
@@ -672,8 +672,9 @@ trait AjouteDesLignesDAchat
             }
 
             if ($prix !== null) {
-                $set('prix_vente_ttc', self::prixEnTexte($prix['prix_vente_ttc']));
-                $set('prix_vente_propose', self::prixEnTexte($prix['prix_vente_ttc']));
+                $prixDeVente = app(CalculateurLigne::class)->enDecimal($prix['prix_vente_ttc']);
+                $set('prix_vente_ttc', $prixDeVente);
+                $set('prix_vente_propose', $prixDeVente);
 
                 return;
             }
@@ -685,7 +686,7 @@ trait AjouteDesLignesDAchat
             if (filled($get('prix_vente_propose')) && $get('prix_vente_ttc') === $get('prix_vente_propose')) {
                 $produit = filled($get('produit_id')) ? Produit::withTrashed()->whereKey(ValeursLues::cle($get('produit_id')))->first() : null;
 
-                $set('prix_vente_ttc', $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc));
+                $set('prix_vente_ttc', $produit === null ? null : self::prixEnTexte($produit->prix_vente_ttc));
             }
 
             $set('prix_vente_propose', null);
@@ -708,14 +709,14 @@ trait AjouteDesLignesDAchat
         try {
             $calculateur = app(CalculateurLigne::class);
             $benefice = $calculateur->beneficeUnitaire(
-                (float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('prix_vente_ttc')), SaisieDecimale::enCentiemes($tauxTva))),
+                $calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('prix_vente_ttc')), $tauxTva),
                 self::prixDAchatNet($get),
             );
         } catch (InvalidArgumentException) {
             return $detail;
         }
 
-        return $detail.' · bénéfice '.number_format($benefice, 2, ',', ' ').' € HT par article';
+        return $detail.' · bénéfice '.$calculateur->enEuros($benefice).' HT par article';
     }
 
     /**
@@ -748,14 +749,31 @@ trait AjouteDesLignesDAchat
     }
 
     /**
-     * Ce que coûte un article, remise de la ligne déduite, sans arrondi
-     * (voir CalculateurLigne::coutUnitaireNet()).
+     * Ce que coûte un article, remise de la ligne déduite, au dix-millième
+     * d'euro (voir CalculateurLigne::coutUnitaireNet()).
      *
-     * @throws InvalidArgumentException tant que le prix d'achat n'est pas lisible
+     * @throws InvalidArgumentException tant que le prix d'achat n'est pas lisible, ou une remise hors de 0-100 %
      */
-    private static function prixDAchatNet(Get $get): float
+    private static function prixDAchatNet(Get $get): int
     {
-        return app(CalculateurLigne::class)->coutUnitaireNet(ValeurSimple::enTexte($get('prix_unitaire_ht')), (float) ValeurSimple::simple($get('remise_pourcentage') ?? 0));
+        return app(CalculateurLigne::class)->coutUnitaireNet(SaisieDecimale::enMillioniemes(ValeurSimple::enTexte($get('prix_unitaire_ht'))), self::remiseSaisie($get));
+    }
+
+    /**
+     * La remise saisie de la ligne, en centièmes de point, lue au centième
+     * comme son enregistrement (voir SaisieDecimale::enCentiemes()) : un
+     * champ vide ou une saisie qui n'est pas encore un nombre valent 0, le
+     * temps de la corriger.
+     */
+    private static function remiseSaisie(Get $get): int
+    {
+        $remise = ValeurSimple::simple($get('remise_pourcentage'));
+
+        try {
+            return blank($remise) ? 0 : SaisieDecimale::enCentiemes($remise);
+        } catch (InvalidArgumentException) {
+            return 0;
+        }
     }
 
     /**
@@ -792,7 +810,7 @@ trait AjouteDesLignesDAchat
             'nom' => $produit?->nom,
             'taille' => $produit?->taille,
             'couleur' => $produit?->couleur,
-            'prix_vente_ttc' => blank($produit?->prix_vente_ttc) ? null : self::prixEnTexte((float) $produit->prix_vente_ttc),
+            'prix_vente_ttc' => blank($produit?->prix_vente_ttc) ? null : self::prixEnTexte($produit->prix_vente_ttc),
             'taux_tva' => self::pourcentageEnTexte($produit->taux_tva ?? app(TenantContext::class)->magasin()->tauxTvaParDefaut()),
             'suivi_stock' => $produit->suivi_stock ?? true,
             'seuil_alerte' => $produit->seuil_alerte ?? 0,
@@ -819,7 +837,8 @@ trait AjouteDesLignesDAchat
             default => FicheLue::de($produit),
         };
         $valeursDuProduit = [...($ficheLue === null ? [] : self::valeursDuProduit($ficheLue->fiche())), ...array_intersect_key($data, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT))];
-        $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte((float) ValeurSimple::simple($valeursDuProduit['prix_vente_ttc']));
+        $prixDeVente = ValeurSimple::simple($valeursDuProduit['prix_vente_ttc']);
+        $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte(blank($prixDeVente) ? 0 : $prixDeVente);
 
         return [
             'produit_id' => $produit?->id,

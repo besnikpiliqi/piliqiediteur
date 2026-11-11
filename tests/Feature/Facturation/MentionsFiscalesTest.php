@@ -21,9 +21,12 @@ use Tests\TestCase;
  * La note de calcul que les PDF impriment sous les lignes d'une vente et
  * que sa fiche affiche (voir MentionsFiscales::calcul()) : chacune de ses
  * variantes, vente ou retour, avec ou sans TVA française, garde son
- * explication et se termine par la phrase de l'arrondi des prix unitaires
- * (décision de l'éditeur du 25/10/2026) ; une vente en franchise en base
- * n'en a pas.
+ * explication et se termine par la phrase des prix unitaires de son
+ * document : tels qu'ils sont enregistrés sur une facture ou un avoir à
+ * un professionnel et sur une vente sans TVA française, qui montrent le
+ * PU HT (décision de l'éditeur du 09/11/2026), arrondis au centime sur un
+ * ticket et un avoir sur ticket (décision de l'éditeur du 25/10/2026) ;
+ * une vente en franchise en base n'en a pas.
  */
 class MentionsFiscalesTest extends TestCase
 {
@@ -31,23 +34,35 @@ class MentionsFiscalesTest extends TestCase
 
     private const PRIX_UNITAIRES_AU_CENTIME = 'Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
 
-    public function test_chaque_variante_de_la_note_de_calcul_finit_par_la_phrase_de_l_arrondi_des_prix_unitaires(): void
+    private const PU_HT_TEL_QU_ENREGISTRE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.';
+
+    public function test_chaque_variante_de_la_note_de_calcul_finit_par_la_phrase_des_prix_unitaires_de_son_document(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
-        $client = Client::factory()->create();
-        $vente = $this->emettre($client, []);
-        $export = $this->emettre($client, [
+        $particulier = Client::factory()->create();
+        $professionnel = Client::factory()->professionnel()->create();
+        $ticket = $this->emettre($particulier, []);
+        $facture = $this->emettre($professionnel, []);
+        $export = $this->emettre($particulier, [
             'nature_operation' => NatureOperation::ExportHorsUe,
             'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
         ]);
 
-        $notes = array_map(app(MentionsFiscales::class)->calcul(...), [$vente, $this->rendreUnArticle($client, $vente), $export, $this->rendreUnArticle($client, $export)]);
+        $notes = array_map(app(MentionsFiscales::class)->calcul(...), [
+            $ticket, $this->rendreUnArticle($particulier, $ticket),
+            $facture, $this->rendreUnArticle($professionnel, $facture),
+            $export, $this->rendreUnArticle($particulier, $export),
+        ]);
 
+        $vente = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. ';
+        $retour = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. ';
         $this->assertSame([
-            'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence. '.self::PRIX_UNITAIRES_AU_CENTIME,
-            'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. '.self::PRIX_UNITAIRES_AU_CENTIME,
-            'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC sans la TVA française de son taux (HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes) ; un autre service, à son prix sans TVA. '.self::PRIX_UNITAIRES_AU_CENTIME,
-            'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. '.self::PRIX_UNITAIRES_AU_CENTIME,
+            $vente.self::PRIX_UNITAIRES_AU_CENTIME,
+            $retour.self::PRIX_UNITAIRES_AU_CENTIME,
+            $vente.self::PU_HT_TEL_QU_ENREGISTRE,
+            $retour.self::PU_HT_TEL_QU_ENREGISTRE,
+            'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC sans la TVA française de son taux (HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes) ; un autre service, à son prix sans TVA. '.self::PU_HT_TEL_QU_ENREGISTRE,
+            'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime. '.self::PU_HT_TEL_QU_ENREGISTRE,
         ], $notes);
     }
 
@@ -63,7 +78,8 @@ class MentionsFiscalesTest extends TestCase
     }
 
     /**
-     * Un ticket de 3 articles à 7,00 € TTC à 20 %.
+     * Une vente de 3 articles à 7,00 € TTC à 20 % : un ticket, ou la
+     * facture d'un client professionnel.
      *
      * @param  array<string, mixed>  $attributs
      */

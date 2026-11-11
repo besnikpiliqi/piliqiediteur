@@ -395,7 +395,7 @@ class FactureAchatResourceTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
         $magasin->update([
             'prix_vente_automatique' => true,
-            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 99.0, 'benefice' => 50.0]], null, false),
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 9900, 'benefice' => 5000]], null, false),
         ]);
         $produit = Produit::factory()->create(['cmup_ht' => 100, 'prix_vente_ttc' => 200, 'taux_tva' => 20]);
         $component = Livewire::test(CreateFactureAchat::class)
@@ -450,7 +450,7 @@ class FactureAchatResourceTest extends TestCase
     {
         $this->connecterLeProprietaire()->update([
             'prix_vente_automatique' => true,
-            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 5.0]], null, false),
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 500]], null, false),
         ]);
         $component = Livewire::test(CreateFactureAchat::class)
             ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id, 'date_facture' => '2026-01-15'])

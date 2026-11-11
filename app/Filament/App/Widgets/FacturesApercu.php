@@ -4,6 +4,7 @@ namespace App\Filament\App\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ChiffreDAffaires;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
@@ -59,7 +60,7 @@ class FacturesApercu extends BaseWidget
     private function statPourPeriode(string $libelle, string $du, string $au): Stat
     {
         $net = app(ChiffreDAffaires::class)->netSurPeriode(self::calendrierDuMagasin(), $du, $au, $this->voitLesVentesDeToutLEquipe() ? null : auth()->user());
-        $euros = fn (float $montant): string => number_format($montant, 2, ',', ' ').' €';
+        $euros = app(CalculateurLigne::class)->enEuros(...);
         $nombres = $net['factures'].($net['factures'] > 1 ? ' factures' : ' facture')
             .($net['avoirs'] > 0 ? ', '.$net['avoirs'].($net['avoirs'] > 1 ? ' avoirs' : ' avoir') : '');
 

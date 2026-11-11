@@ -278,7 +278,7 @@ trait SaisitUnReglementEnParts
                 ->visible(fn (Get $get): bool => ! $estAvoir($get))
                 // À l'émission d'un brouillon, un montant à zéro ne règle
                 // rien, comme un montant vide (voir partsPayees()).
-                ->minValue(fn (?Model $record): float => self::estUnBrouillon($record) ? 0.0 : 0.01)
+                ->minValue(fn (?Model $record): string => self::estUnBrouillon($record) ? '0' : '0.01')
                 ->maxValue(Caisse::MONTANT_MAXIMUM)
                 ->validationMessages(['min' => fn (?Model $record): string => self::estUnBrouillon($record) ? self::MONTANT_NEGATIF : PartDeReglement::MONTANT_NON_POSITIF])
                 ->rule(fn (): Closure => function (string $attribute, mixed $montant, Closure $echec): void {
@@ -302,7 +302,7 @@ trait SaisitUnReglementEnParts
                 // Facultatif (sert à calculer la monnaie), mais s'il est
                 // saisi il doit couvrir la part en espèces : sinon la vente
                 // serait enregistrée payée avec un tiroir-caisse en manque.
-                ->minValue(fn (Get $get): float => (self::montantEnCentimes($get('montant')) ?? 0) / 100)
+                ->minValue(fn (Get $get): string => app(CalculateurLigne::class)->enDecimal(self::montantEnCentimes($get('montant')) ?? 0))
                 ->maxValue(Caisse::MONTANT_MAXIMUM)
                 ->validationMessages(['min' => 'Le montant reçu ne couvre pas la part en espèces.'])
                 ->saisieEnDirect()

@@ -303,10 +303,10 @@ class FermerMagasinAction
             ->filter(fn (Produit $produit): bool => $produit->stock_quantite > 0)
             ->map(fn (Produit $produit): array => [$produit, $this->stock->sortirPourCession($produit, $magasin, 'Cession du magasin')])
             ->filter(fn (array $sortie): bool => $sortie[1] !== null);
-        $valeur = $this->calculateur->totaliser($sorties->map(fn (array $sortie): array => $this->valeur(...$sortie)));
+        $valeurHt = array_sum($sorties->map(fn (array $sortie): int => $this->valeur(...$sortie)['montant_ht'])->all());
 
         return [
-            'valeur_stock_sorti_ht' => number_format($valeur['total_ht'], 2, '.', ''),
+            'valeur_stock_sorti_ht' => $this->calculateur->enDecimal($valeurHt),
             'produits_sortis' => $sorties->count(),
             'produits_en_stock_negatif' => array_values($produits
                 ->filter(fn (Produit $produit): bool => $produit->stock_quantite < 0)
@@ -328,10 +328,10 @@ class FermerMagasinAction
     }
 
     /**
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int} en centimes
      */
     private function valeur(Produit $produit, MouvementStock $sortie): array
     {
-        return $this->calculateur->valeurAuCoutMoyen($sortie->quantite, (float) $sortie->cout_unitaire_ht, (float) $produit->taux_tva);
+        return $this->calculateur->valeurAuCoutMoyen($sortie->quantite, $this->calculateur->enDixMilliemes($sortie->cout_unitaire_ht), $this->calculateur->enCentiemes($produit->taux_tva));
     }
 }

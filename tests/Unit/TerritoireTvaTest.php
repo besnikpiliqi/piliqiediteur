@@ -9,20 +9,22 @@ use PHPUnit\Framework\TestCase;
 class TerritoireTvaTest extends TestCase
 {
     /**
-     * @return array<string, array{TerritoireTva, float}>
+     * Les taux en centièmes de point : 2000 pour 20 %.
+     *
+     * @return array<string, array{TerritoireTva, int}>
      */
     public static function tauxNormaux(): array
     {
         return [
-            'métropole' => [TerritoireTva::Metropole, 20.0],
-            'Corse' => [TerritoireTva::Corse, 20.0],
-            'Guadeloupe, Martinique et La Réunion' => [TerritoireTva::AntillesReunion, 8.5],
-            'Guyane et Mayotte' => [TerritoireTva::GuyaneMayotte, 0.0],
+            'métropole' => [TerritoireTva::Metropole, 2000],
+            'Corse' => [TerritoireTva::Corse, 2000],
+            'Guadeloupe, Martinique et La Réunion' => [TerritoireTva::AntillesReunion, 850],
+            'Guyane et Mayotte' => [TerritoireTva::GuyaneMayotte, 0],
         ];
     }
 
     #[DataProvider('tauxNormaux')]
-    public function test_le_taux_propose_est_le_taux_normal_du_territoire(TerritoireTva $territoire, float $attendu): void
+    public function test_le_taux_propose_est_le_taux_normal_du_territoire(TerritoireTva $territoire, int $attendu): void
     {
         $this->assertSame($attendu, $territoire->tauxNormal());
     }

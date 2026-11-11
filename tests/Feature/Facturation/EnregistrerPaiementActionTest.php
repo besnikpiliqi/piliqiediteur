@@ -64,8 +64,8 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $facture->refresh();
         $this->assertSame(StatutFacture::Payee, $facture->statut);
-        $this->assertSame(0.0, $facture->montantRestant());
-        $this->assertSame(120.0, $facture->montantPaye());
+        $this->assertSame(0, $facture->montantRestantEnCentimes());
+        $this->assertSame(12000, $facture->montantPayeEnCentimes());
     }
 
     public function test_un_paiement_partiel_passe_la_facture_au_statut_partiellement_payee_puis_payee_au_complement(): void
@@ -83,7 +83,7 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $facture->refresh();
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->statut);
-        $this->assertSame(70.0, $facture->montantRestant());
+        $this->assertSame(7000, $facture->montantRestantEnCentimes());
 
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
@@ -95,7 +95,7 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $facture->refresh();
         $this->assertSame(StatutFacture::Payee, $facture->statut);
-        $this->assertSame(0.0, $facture->montantRestant());
+        $this->assertSame(0, $facture->montantRestantEnCentimes());
     }
 
     public function test_un_paiement_peut_regler_plusieurs_factures_du_meme_client_a_la_fois(): void
@@ -138,7 +138,7 @@ class EnregistrerPaiementActionTest extends TestCase
         );
 
         $this->assertSame([0, 0, $registreAvant], [Paiement::query()->count(), PaiementAllocation::query()->count(), EnregistrementFiscal::query()->count()]);
-        $this->assertSame([StatutFacture::Emise, 120.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 12000], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
     }
 
     public function test_un_montant_recu_egal_au_total_impute_sur_deux_factures_les_regle_toutes_les_deux(): void
@@ -157,8 +157,8 @@ class EnregistrerPaiementActionTest extends TestCase
         ]);
 
         $this->assertSame('170.00', $paiement->montant);
-        $this->assertSame([StatutFacture::Payee, 0.0], [$premiere->fresh()->statut, $premiere->fresh()->montantRestant()]);
-        $this->assertSame([StatutFacture::Payee, 0.0], [$seconde->fresh()->statut, $seconde->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0], [$premiere->fresh()->statut, $premiere->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame([StatutFacture::Payee, 0], [$seconde->fresh()->statut, $seconde->fresh()->montantRestantEnCentimes()]);
     }
 
     public function test_un_paiement_sans_aucune_facture_est_refuse(): void
@@ -215,7 +215,7 @@ class EnregistrerPaiementActionTest extends TestCase
     }
 
     /**
-     * Le client comptoir n'a jamais de crédit (voir Client::soldeCrediteur()) :
+     * Le client comptoir n'a jamais de crédit (voir Client::soldeCrediteurEnCentimes()) :
      * l'avoir d'un ticket anonyme ne s'impute pas sur le paiement d'un autre
      * ticket anonyme.
      */
@@ -231,8 +231,8 @@ class EnregistrerPaiementActionTest extends TestCase
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => Calendrier::deParis()->aujourdhui()], [['facture_id' => $ticket->id, 'montant' => '10.00']]);
 
         $this->assertSame(0, $paiement->creditsImputes()->count());
-        $this->assertSame([StatutFacture::PartiellementPayee, 110.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
-        $this->assertSame(120.0, $avoir->fresh()->montantNonAlloue());
+        $this->assertSame([StatutFacture::PartiellementPayee, 11000], [$ticket->fresh()->statut, $ticket->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame(12000, $avoir->fresh()->creditEnCentimes());
     }
 
     public function test_impossible_dallouer_plus_que_le_solde_restant_dune_facture(): void

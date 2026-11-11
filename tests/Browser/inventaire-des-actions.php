@@ -676,6 +676,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes suit',
         ]],
         'filtre:statut' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -727,6 +728,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire change le client d’un devis, et le PU HT des lignes suit',
         ]],
     ],
     'app/Filament/App/Resources/DevisResource/Pages/ListDevis.php' => [
@@ -1192,6 +1194,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le collaborateur du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
         ]],
         'action:view' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1202,7 +1205,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'champ:client_id' => ['lot' => 'NAV-2', 'tests' => []],
+        'champ:client_id' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/PuHtExactTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes suit : tel qu’il est enregistré pour un professionnel, au centime pour un particulier',
+        ]],
         'filtre:a_encaisser' => ['lot' => 'NAV-2', 'tests' => []],
         'filtre:preuves_a_fournir' => ['lot' => 'NAV-2', 'tests' => []],
         'filtre:statut' => ['lot' => 'NAV-2', 'tests' => [
@@ -1260,6 +1265,8 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes se montre tel qu’il sera enregistré',
+            'tests/Browser/Parcours/PuHtExactTest.php › le vendeur change le client de son brouillon, et le PU HT des lignes suit : tel qu’il est enregistré pour un professionnel, au centime pour un particulier',
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/ListFactures.php' => [
@@ -1335,6 +1342,8 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel',
+            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
     ],
@@ -2046,7 +2055,9 @@ return [
         ]],
     ],
     'app/Filament/Concerns/ChoisitLaNatureDeLOperation.php' => [
-        'champ:nature_operation' => ['lot' => 'NAV-2', 'tests' => []],
+        'champ:nature_operation' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/PuHtExactTest.php › le responsable fait sortir de la TVA française la vente d’un particulier, et le PU HT des lignes se montre tel qu’il sera enregistré',
+        ]],
     ],
     'app/Filament/Concerns/GereLesComptes.php' => [
         'champ:mode' => ['lot' => 'NAV-3', 'tests' => []],

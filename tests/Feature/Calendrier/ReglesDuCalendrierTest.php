@@ -141,6 +141,9 @@ class ReglesDuCalendrierTest extends TestCase
         'app/Domain/CaisseSecurisee/Support/DeclencheursDeProtection.php' => [
             'AT TIME ZONE \'UTC\'' => 'les déclencheurs de purge comparent déjà à l\'heure UTC du serveur de base',
         ],
+        'app/Domain/Facturation/Services/SaisieDecimale.php' => [
+            'BigDecimal::parse($texte, NumberSyntax::SCIENTIFIC' => 'lecture d\'un nombre écrit en notation scientifique, jamais d\'une date',
+        ],
     ];
 
     /**

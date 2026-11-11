@@ -14,6 +14,7 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
@@ -40,9 +41,13 @@ use InvalidArgumentException;
  *
  * Changer de nature peut faire entrer la vente dans la TVA française ou
  * l'en faire sortir : le prix saisi d'un service change alors de sens, et
- * se convertit (voir lignesAuxPrixDeLaNature()). Un document rouvert dans
- * une nature que son client ou le régime de la société ne permettent plus
- * revient à la vente en France (voir natureARouvrir()).
+ * se convertit (voir lignesAuxPrixDeLaNature()). Changer de client ou de
+ * nature peut aussi changer la façon dont les lignes montrent leur PU HT :
+ * tel qu'il sera enregistré pour un professionnel ou sans TVA française,
+ * au centime pour un particulier (voir
+ * AjouteDesLignesDeVente::montrerLesPuHtDeLaVente()). Un document rouvert
+ * dans une nature que son client ou le régime de la société ne permettent
+ * plus revient à la vente en France (voir natureARouvrir()).
  *
  * La section « Livraison » n'apparaît que pour des biens qui partent hors
  * de France, préremplie avec l'adresse du client : son pays est
@@ -79,6 +84,7 @@ trait ChoisitLaNatureDeLOperation
             ->helperText(fn (Get $get): string => self::aideDeLaNature(NatureOperation::depuisSaisie($get('nature_operation'))))
             ->afterStateUpdated(function (Get $get, Set $set, mixed $old): void {
                 self::convertirLesPrixDesServices($get, $set, NatureOperation::depuisSaisie($old));
+                DevisResource::montrerLesPuHtDeLaVente($get, $set);
                 self::preremplirLaLivraison($get, $set);
             })
             ->columnSpanFull();
@@ -120,8 +126,10 @@ trait ChoisitLaNatureDeLOperation
     /**
      * Le client choisi change les natures proposées : une nature qu'il ne
      * peut plus choisir (un particulier après un professionnel) revient à
-     * la vente en France, avec le prix de ses services converti, et une
-     * livraison encore vide prend son adresse.
+     * la vente en France, avec le prix de ses services converti, les lignes
+     * montrent leur PU HT comme la vente de ce client le montre (voir
+     * AjouteDesLignesDeVente::montrerLesPuHtDeLaVente()), et une livraison
+     * encore vide prend son adresse.
      */
     public static function ajusterLaNatureAuClient(Get $get, Set $set): void
     {
@@ -132,6 +140,7 @@ trait ChoisitLaNatureDeLOperation
             self::convertirLesPrixDesServices($get, $set, $nature);
         }
 
+        DevisResource::montrerLesPuHtDeLaVente($get, $set);
         self::preremplirLaLivraison($get, $set);
     }
 
@@ -291,14 +300,14 @@ trait ChoisitLaNatureDeLOperation
 
                 [$prixConverti, $tauxConverti] = $reference ?? [$sansTvaApres
                     ? $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($prix, $taux))
-                    : number_format($calculateur->prixUnitaireTtcDepuisHt((float) $calculateur->enDecimal($prix), (float) $calculateur->enDecimal($taux)), 2, '.', ''), $calculateur->enDecimal($taux)];
+                    : $calculateur->enDecimal($calculateur->prixUnitaireTtcDepuisHt($prix, $taux)), $calculateur->enDecimal($taux)];
             } catch (InvalidArgumentException) {
                 continue;
             }
 
             // Présentés comme un prix relu en base (cast decimal:2), "15.00",
             // et un taux tel qu'on l'écrit dans le champ, "20".
-            $lignes[$cle] = [...$ligne, 'prix_unitaire_ttc' => $prixConverti, 'taux_tva' => (string) (float) $tauxConverti];
+            $lignes[$cle] = [...$ligne, 'prix_unitaire_ttc' => $prixConverti, 'taux_tva' => CalculateurLigne::centiemesDansUnChamp(SaisieDecimale::enCentiemes($tauxConverti))];
             $converties = true;
         }
 

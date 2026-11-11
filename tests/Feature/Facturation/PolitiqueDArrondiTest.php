@@ -155,7 +155,7 @@ class PolitiqueDArrondiTest extends TestCase
             ->assertDontSee('41,66');
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($ticket->date_emission));
         $this->assertSame(['41.67', '8.33', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
-        $this->assertSame(['ht' => 41.67, 'tva' => 8.33, 'ttc' => 50.0, 'factures' => 1, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode($magasin->calendrier(), Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
+        $this->assertSame(['ht' => 4167, 'tva' => 833, 'ttc' => 5000, 'factures' => 1, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode($magasin->calendrier(), Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
         Livewire::test(FacturesApercu::class)->assertSeeInOrder(['Cette semaine', '41,67 € HT', '50,00 € TTC · 1 facture']);
     }
 
@@ -229,7 +229,9 @@ class PolitiqueDArrondiTest extends TestCase
      * 54,17 € = 216,68 €. Les quatre lignes de 1 reçoivent le HT arrondi du
      * cumul de leurs TTC : 54,17 € (65,00 ÷ 1,2 = 54,1666...), 54,16 €
      * (108,33 - 54,17), 54,17 € (162,50 - 108,33) et 54,17 € (216,67 -
-     * 162,50). Chaque ligne enregistre et signe son PU HT exact, 54,166667 €.
+     * 162,50). Chaque ligne enregistre et signe son PU HT exact, 54,166667 €,
+     * que la facture à un professionnel imprime tel quel (décision de
+     * l'éditeur du 09/11/2026), et le ticket son PU TTC, 65,00 €.
      *
      * @return array<string, array{list<int>, bool, list<list<string>>}>
      */
@@ -270,7 +272,7 @@ class PolitiqueDArrondiTest extends TestCase
         $this->assertStringContainsString('216,67 €', $pdf);
         $this->assertStringContainsString('43,33 €', $pdf);
         $this->assertStringNotContainsString('216,68 €', $pdf);
-        $this->assertStringContainsString($professionnel ? '54,17 €' : '65,00 €', $pdf);
+        $this->assertStringContainsString($professionnel ? '54,166667 €' : '65,00 €', $pdf);
     }
 
     /**
@@ -291,7 +293,7 @@ class PolitiqueDArrondiTest extends TestCase
         $this->assertSame(['20.83', '4.17', '25.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['20.83', '4.17', '25.00'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
         $this->assertSame(['41.66', '8.34', '50.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
-        $this->assertSame(['ht' => 41.66, 'tva' => 8.34, 'ttc' => 50.0, 'factures' => 2, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode($magasin->calendrier(), Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
+        $this->assertSame(['ht' => 4166, 'tva' => 834, 'ttc' => 5000, 'factures' => 2, 'avoirs' => 0], app(ChiffreDAffaires::class)->netSurPeriode($magasin->calendrier(), Calendrier::deParis()->aujourdhui(), Calendrier::deParis()->aujourdhui()));
     }
 
     /**
@@ -312,7 +314,7 @@ class PolitiqueDArrondiTest extends TestCase
 
         foreach ([$ticket, $facture] as $vente) {
             $this->assertSame([['20.83', '4.17', '25.00'], ['20.84', '4.16', '25.00'], ['8.32', '1.67', '9.99']], $this->montantsDesLignes($vente));
-            $this->assertSame([['taux_tva' => '20.00', 'montant_ht' => 49.99, 'montant_tva' => 10.0, 'montant_ttc' => 59.99]], $vente->ventilation_tva);
+            $this->assertSame([['taux_tva' => '20.00', 'montant_ht' => '49.99', 'montant_tva' => '10.00', 'montant_ttc' => '59.99']], $vente->ventilation_tva);
             $this->assertSame(['49.99', '10.00', '59.99'], [$vente->total_ht, $vente->total_tva, $vente->total_ttc]);
         }
         $this->assertStringStartsWith('TK-', $ticket->numero);
@@ -407,8 +409,8 @@ class PolitiqueDArrondiTest extends TestCase
         );
         $this->assertSame(['59.49', '10.51', '70.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 50.01, 'montant_tva' => 9.99, 'montant_ttc' => 60.0],
-            ['taux_tva' => '5.50', 'montant_ht' => 9.48, 'montant_tva' => 0.52, 'montant_ttc' => 10.0],
+            ['taux_tva' => '20.00', 'montant_ht' => '50.01', 'montant_tva' => '9.99', 'montant_ttc' => '60.00'],
+            ['taux_tva' => '5.50', 'montant_ht' => '9.48', 'montant_tva' => '0.52', 'montant_ttc' => '10.00'],
         ], $cloture->ventilation_tva);
     }
 

@@ -22,7 +22,6 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Domain\Tenancy\Support\ValeurRequise;
-use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use DateTimeInterface;
@@ -189,7 +188,7 @@ final class RecapitulatifDesDocuments
                 $fournisseur = ValeurRequise::de(($achat instanceof FactureAchat ? $achat : ValeurRequise::de($achat->factureAchat, 'la facture d\'achat de l\'avoir fournisseur'))->fournisseur, 'le fournisseur de la facture d\'achat');
 
                 return array_values($achat->taux->map(fn (TauxFactureAchat|TauxAvoirFournisseur $taux): array => self::ligne($document, [
-                    'taux' => self::taux($taux->taux_tva),
+                    'taux' => self::taux($this->calculateur->enCentiemes($taux->taux_tva)),
                     'ht' => $this->calculateur->enCentiemes($taux->base_ht),
                     'tva' => $this->calculateur->enCentiemes($taux->montant_tva),
                     'ttc' => $this->calculateur->enCentiemes($taux->base_ht) + $this->calculateur->enCentiemes($taux->montant_tva),
@@ -199,7 +198,7 @@ final class RecapitulatifDesDocuments
 
                 return $nets === []
                     ? [self::ligne($document, ['ht' => 0, 'tva' => 0, 'ttc' => 0])]
-                    : array_map(fn (array $taux): array => self::ligne($document, [...$taux, 'taux' => self::taux($taux['taux'] / 100)]), $nets);
+                    : array_map(fn (array $taux): array => self::ligne($document, [...$taux, 'taux' => self::taux($taux['taux'])]), $nets);
             case TypeDeDocumentTelechargeable::Encaissements:
                 return array_map(
                     fn (array $encaisse): array => self::ligne($document, ['ttc' => $encaisse['ttc']], mode: $encaisse['mode']),
@@ -276,10 +275,10 @@ final class RecapitulatifDesDocuments
     private function parTaux(Collection $lignes): Collection
     {
         return $lignes
-            ->groupBy(fn (LigneFacture|LigneAvoir $ligne): string => number_format((float) $ligne->taux_tva, 2, '.', ''))
-            ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
+            ->groupBy(fn (LigneFacture|LigneAvoir $ligne): string => $this->calculateur->enDecimal($this->calculateur->enCentiemes($ligne->taux_tva)))
+            ->sortKeysUsing(fn (string $a, string $b): int => $this->calculateur->enCentiemes($b) <=> $this->calculateur->enCentiemes($a))
             ->map(fn (Collection $duTaux, string $taux): array => [
-                'taux' => self::taux($taux),
+                'taux' => self::taux($this->calculateur->enCentiemes($taux)),
                 'ht' => (int) $duTaux->sum(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ht)),
                 'tva' => (int) $duTaux->sum(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_tva)),
                 'ttc' => (int) $duTaux->sum(fn (LigneFacture|LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)),
@@ -335,11 +334,11 @@ final class RecapitulatifDesDocuments
     }
 
     /**
-     * Un taux tel qu'il s'écrit : « 20 », « 5,5 ».
+     * Un taux en centièmes de point tel qu'il s'écrit : « 20 », « 5,5 ».
      */
-    private static function taux(mixed $taux): string
+    private static function taux(int $taux): string
     {
-        return str_replace('.', ',', rtrim(rtrim(number_format((float) ValeurSimple::simple($taux), 2, '.', ''), '0'), '.'));
+        return str_replace('.', ',', CalculateurLigne::centiemesDansUnChamp($taux));
     }
 
     /**

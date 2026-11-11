@@ -105,18 +105,18 @@ class LigneAchat extends Model
      * CalculateurLigne::coutUnitaireDuHt()). Le coût d'achat d'un stock se
      * compte après remises, rabais et escomptes (PCG art. 213-31) ; c'est à
      * ce coût que la ligne entre en stock et compte dans le CMUP du produit
-     * (voir StockLedgerService::receptionner()).
+     * (voir StockLedgerService::receptionner()). En dix-millièmes d'euro.
      */
-    public function coutUnitaireHt(): float
+    public function coutUnitaireHt(): int
     {
         $calculateur = app(CalculateurLigne::class);
-        $escompte = (float) ValeurRequise::de($this->factureAchat, 'la facture d\'achat de la ligne')->escompte_pourcentage;
+        $escompte = $calculateur->enCentiemes(ValeurRequise::de($this->factureAchat, 'la facture d\'achat de la ligne')->escompte_pourcentage);
 
         if ($this->montant_ht_saisi !== null) {
             return $calculateur->coutUnitaireDuHt($calculateur->enCentiemes($this->montant_ht_saisi), $this->quantite, $escompte);
         }
 
-        return $calculateur->coutUnitaireNet(ValeurRequise::de($this->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), (float) $this->remise_pourcentage, $escompte);
+        return $calculateur->coutUnitaireNet($calculateur->enMillioniemes(ValeurRequise::de($this->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat')), $calculateur->enCentiemes($this->remise_pourcentage), $escompte);
     }
 
     /**

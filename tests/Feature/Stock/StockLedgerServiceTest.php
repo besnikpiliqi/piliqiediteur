@@ -56,7 +56,7 @@ class StockLedgerServiceTest extends TestCase
     {
         $produit = Produit::factory()->create(['stock_quantite' => 10, 'cmup_ht' => 5]);
 
-        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 5.0, AvoirFournisseur::factory()->create(), 'Retour');
+        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 50000, AvoirFournisseur::factory()->create(), 'Retour');
 
         $this->assertSame(6, $produit->fresh()->stock_quantite);
     }
@@ -74,8 +74,8 @@ class StockLedgerServiceTest extends TestCase
         $quatreRetournes = $this->produitRecuDeuxFois();
         $stock = app(StockLedgerService::class);
 
-        $mouvement = $stock->retournerAuFournisseur($tousRetournes, 10, 10.0, AvoirFournisseur::factory()->create(), 'Retour');
-        $stock->retournerAuFournisseur($quatreRetournes, 4, 10.0, AvoirFournisseur::factory()->create(), 'Retour');
+        $mouvement = $stock->retournerAuFournisseur($tousRetournes, 10, 100000, AvoirFournisseur::factory()->create(), 'Retour');
+        $stock->retournerAuFournisseur($quatreRetournes, 4, 100000, AvoirFournisseur::factory()->create(), 'Retour');
 
         $this->assertSame([10, '2.0000'], [$tousRetournes->fresh()->stock_quantite, $tousRetournes->fresh()->cmup_ht]);
         $this->assertSame([TypeMouvementStock::RetourFournisseur, 10, '10.0000'], [$mouvement->type, $mouvement->quantite, $mouvement->fresh()->cout_unitaire_ht]);
@@ -92,13 +92,13 @@ class StockLedgerServiceTest extends TestCase
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 1]);
         $stock = app(StockLedgerService::class);
-        $stock->receptionner($produit, 3, 1.0, FactureAchat::factory()->create(), 'Réception');
+        $stock->receptionner($produit, 3, 10000, FactureAchat::factory()->create(), 'Réception');
         $reception = FactureAchat::factory()->create();
-        $stock->receptionner($produit, 3, 2.0, $reception, 'Réception');
-        $stock->receptionner($produit, 1, 2.0, $reception, 'Réception');
+        $stock->receptionner($produit, 3, 20000, $reception, 'Réception');
+        $stock->receptionner($produit, 1, 20000, $reception, 'Réception');
         $this->assertSame('1.5714', $produit->fresh()->cmup_ht);
 
-        $stock->retournerAuFournisseur($produit, 1, 2.0, AvoirFournisseur::factory()->create(), 'Retour');
+        $stock->retournerAuFournisseur($produit, 1, 20000, AvoirFournisseur::factory()->create(), 'Retour');
 
         $this->assertSame([6, '1.5000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
     }
@@ -110,9 +110,9 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_retour_de_tout_le_stock_garde_le_cmup(): void
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 3]);
-        app(StockLedgerService::class)->receptionner($produit, 5, 3.0, FactureAchat::factory()->create(), 'Réception');
+        app(StockLedgerService::class)->receptionner($produit, 5, 30000, FactureAchat::factory()->create(), 'Réception');
 
-        app(StockLedgerService::class)->retournerAuFournisseur($produit, 5, 3.0, AvoirFournisseur::factory()->create(), 'Retour');
+        app(StockLedgerService::class)->retournerAuFournisseur($produit, 5, 30000, AvoirFournisseur::factory()->create(), 'Retour');
 
         $this->assertSame([0, '3.0000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
     }
@@ -127,7 +127,7 @@ class StockLedgerServiceTest extends TestCase
         $produit = $this->produitRecuDeuxFois();
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 15);
 
-        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 10.0, AvoirFournisseur::factory()->create(), 'Retour');
+        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 100000, AvoirFournisseur::factory()->create(), 'Retour');
 
         $this->assertSame([1, '0.0000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
     }
@@ -407,8 +407,8 @@ class StockLedgerServiceTest extends TestCase
     private function produitRecuDeuxFois(): Produit
     {
         $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 2]);
-        app(StockLedgerService::class)->receptionner($produit, 10, 2.0, FactureAchat::factory()->create(), 'Réception');
-        app(StockLedgerService::class)->receptionner($produit, 10, 10.0, FactureAchat::factory()->create(), 'Réception');
+        app(StockLedgerService::class)->receptionner($produit, 10, 20000, FactureAchat::factory()->create(), 'Réception');
+        app(StockLedgerService::class)->receptionner($produit, 10, 100000, FactureAchat::factory()->create(), 'Réception');
 
         return $produit;
     }

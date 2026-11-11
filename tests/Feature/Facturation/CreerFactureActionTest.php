@@ -356,8 +356,8 @@ class CreerFactureActionTest extends TestCase
         ]));
 
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 0.25, 'montant_tva' => 0.05, 'montant_ttc' => 0.3],
-            ['taux_tva' => '5.50', 'montant_ht' => 11.94, 'montant_tva' => 0.66, 'montant_ttc' => 12.6],
+            ['taux_tva' => '20.00', 'montant_ht' => '0.25', 'montant_tva' => '0.05', 'montant_ttc' => '0.30'],
+            ['taux_tva' => '5.50', 'montant_ht' => '11.94', 'montant_tva' => '0.66', 'montant_ttc' => '12.60'],
         ], $facture->ventilation_tva);
         $this->assertSame(['12.19', '0.71', '12.90'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }

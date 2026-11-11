@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -127,7 +128,7 @@ class PaiementResource extends Resource
                         $totalImpute = self::totalImpute($get('allocations'));
 
                         if ($montant !== null && $totalImpute !== null && $montant !== $totalImpute) {
-                            $echec(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros($montant), self::enEuros($totalImpute)));
+                            $echec(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', app(CalculateurLigne::class)->enEuros($montant), app(CalculateurLigne::class)->enEuros($totalImpute)));
                         }
                     }),
                 TextInput::make('reference')->label('Référence')->maxLength(100),
@@ -166,9 +167,9 @@ class PaiementResource extends Resource
                                         ->where('client_id', $clientId)
                                         ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
                                         ->get()
-                                        ->filter(fn (Facture $facture) => $facture->montantRestant() > 0)
+                                        ->filter(fn (Facture $facture) => $facture->montantRestantEnCentimes() > 0)
                                         ->mapWithKeys(fn (Facture $facture) => [
-                                            $facture->id => "{$facture->numero} — restant : ".self::enEuros($facture->montantRestant()),
+                                            $facture->id => "{$facture->numero} — restant : ".app(CalculateurLigne::class)->enEuros($facture->montantRestantEnCentimes()),
                                         ]);
                                 })
                                 ->searchable()
@@ -178,9 +179,9 @@ class PaiementResource extends Resource
                                 // le crédit d'avoir du client y est déjà
                                 // imputé (voir ImputationDuCredit).
                                 ->afterStateUpdated(function (mixed $state, Set $set): void {
-                                    $montantRestant = self::factureVisible($state)?->montantRestant();
+                                    $montantRestant = self::factureVisible($state)?->montantRestantEnCentimes();
 
-                                    $set('montant', $montantRestant !== null && $montantRestant > 0 ? $montantRestant : null);
+                                    $set('montant', $montantRestant !== null && $montantRestant > 0 ? CalculateurLigne::centiemesDansUnChamp($montantRestant) : null);
                                 }),
                             TextInput::make('montant')
                                 ->label('Montant imputé')
@@ -192,7 +193,11 @@ class PaiementResource extends Resource
                                 // ne devient pas un crédit (contrairement à
                                 // un avoir), seule une imputation partielle
                                 // (acompte) reste permise.
-                                ->maxValue(fn (Get $get): float => self::factureVisible($get('facture_id'))?->montantRestant() ?? Caisse::MONTANT_MAXIMUM),
+                                ->maxValue(function (Get $get): string {
+                                    $montantRestant = self::factureVisible($get('facture_id'))?->montantRestantEnCentimes();
+
+                                    return $montantRestant === null ? Caisse::MONTANT_MAXIMUM : app(CalculateurLigne::class)->enDecimal($montantRestant);
+                                }),
                         ])
                         ->columns(2)
                         ->defaultItems(1)
@@ -205,7 +210,7 @@ class PaiementResource extends Resource
                             $montant = self::montantSaisi($get('montant'));
                             $totalImpute = self::totalImpute($get('allocations'));
 
-                            return $montant === null || $totalImpute === null ? '—' : self::enEuros(app(CalculateurLigne::class)->soustraire($montant, $totalImpute));
+                            return $montant === null || $totalImpute === null ? '—' : app(CalculateurLigne::class)->enEuros($montant - $totalImpute);
                         }),
                 ]),
         ]);
@@ -224,47 +229,41 @@ class PaiementResource extends Resource
     }
 
     /**
-     * Un montant saisi, au centime ; null s'il n'est pas un nombre ou s'il
-     * sort des limites (voir Caisse::MONTANT_MAXIMUM), que sa propre règle
-     * refuse.
+     * Un montant saisi, en centimes, lu au centime comme son enregistrement
+     * (voir SaisieDecimale::enCentiemes()) ; null s'il n'est pas un nombre
+     * ou s'il sort des limites (voir Caisse::MONTANT_MAXIMUM_EN_CENTIMES),
+     * que sa propre règle refuse.
      */
-    private static function montantSaisi(mixed $valeur): ?float
+    private static function montantSaisi(mixed $valeur): ?int
     {
-        if (! is_numeric($valeur) || abs((float) $valeur) > Caisse::MONTANT_MAXIMUM) {
+        if (! is_numeric($valeur)) {
             return null;
         }
 
-        return app(CalculateurLigne::class)->arrondirAuCentime((float) $valeur);
+        try {
+            $centimes = SaisieDecimale::enCentiemes($valeur);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+
+        return abs($centimes) > Caisse::MONTANT_MAXIMUM_EN_CENTIMES ? null : $centimes;
     }
 
     /**
-     * Le total des montants imputés saisis, au centime ; une saisie qui
+     * Le total des montants imputés saisis, en centimes ; une saisie qui
      * n'est pas un nombre n'y compte pas (sa propre règle la refuse). Null
      * quand une saisie sort des limites : aucun total ne s'en déduit.
      *
      * @param  mixed  $allocations  les lignes du répétiteur
      */
-    private static function totalImpute(mixed $allocations): ?float
+    private static function totalImpute(mixed $allocations): ?int
     {
         $montantsSaisis = collect(is_array($allocations) ? $allocations : [])
             ->pluck('montant')
             ->filter(fn (mixed $montant): bool => is_numeric($montant))
-            ->map(fn (mixed $montant): ?float => self::montantSaisi($montant));
+            ->map(fn (mixed $montant): ?int => self::montantSaisi($montant));
 
-        if ($montantsSaisis->contains(null)) {
-            return null;
-        }
-
-        try {
-            return app(CalculateurLigne::class)->sommer($montantsSaisis);
-        } catch (InvalidArgumentException) {
-            return null;
-        }
-    }
-
-    private static function enEuros(float $montant): string
-    {
-        return number_format($montant, 2, ',', ' ').' €';
+        return $montantsSaisis->contains(null) ? null : array_sum($montantsSaisis->all());
     }
 
     /**
@@ -283,7 +282,7 @@ class PaiementResource extends Resource
             ->map(fn (AvoirAllocation $credit): string => sprintf('%s (%s)', ValeurRequise::de($credit->avoir, 'l\'avoir de l\'imputation')->numero, $calculateur->enEuros($calculateur->enCentiemes($credit->montant_alloue))));
         $phrases = [sprintf(
             'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues.',
-            self::enEuros((float) $paiement->montant),
+            $calculateur->enEuros($calculateur->enCentiemes($paiement->montant)),
             $paiement->mode_paiement->getLabel(),
             Calendrier::afficherJour($paiement->recu_le, 'd/m/Y'),
         )];
@@ -311,7 +310,7 @@ class PaiementResource extends Resource
                 Tables\Columns\TextColumn::make('mode_paiement')->label('Mode')->badge(),
                 Tables\Columns\TextColumn::make('montant')
                     ->money('EUR')
-                    ->color(fn (Paiement $record): ?string => (float) $record->montant < 0 ? 'danger' : null)
+                    ->color(fn (Paiement $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant) < 0 ? 'danger' : null)
                     ->sortable(),
                 Tables\Columns\TextColumn::make('correction')
                     ->label('Correction')

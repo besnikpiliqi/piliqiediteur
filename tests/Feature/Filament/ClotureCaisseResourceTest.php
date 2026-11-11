@@ -444,8 +444,8 @@ class ClotureCaisseResourceTest extends TestCase
 
         $this->assertSame(['76.67', '13.33', '90.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 66.67, 'montant_tva' => 13.33, 'montant_ttc' => 80.0],
-            ['taux_tva' => '0.00', 'montant_ht' => 10.0, 'montant_tva' => 0.0, 'montant_ttc' => 10.0],
+            ['taux_tva' => '20.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33', 'montant_ttc' => '80.00'],
+            ['taux_tva' => '0.00', 'montant_ht' => '10.00', 'montant_tva' => '0.00', 'montant_ttc' => '10.00'],
         ], $cloture->ventilation_tva);
 
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])

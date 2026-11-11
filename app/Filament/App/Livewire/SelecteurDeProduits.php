@@ -365,8 +365,9 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
     public function resumeDeLaSelection(array $choisis): string
     {
         $calculateur = app(CalculateurLigne::class);
+        $contexte = DevisResource::contexteDeVente($this->clientId, $this->nature);
         $totaux = DevisResource::apercuDesLignes(
-            array_map(fn (array $choisi): array => DevisResource::ligneDuProduit($choisi['produit'], $choisi['quantite']), $choisis),
+            array_map(fn (array $choisi): array => DevisResource::ligneDuProduit($choisi['produit'], $choisi['quantite'], $contexte), $choisis),
             $this->clientId,
             $this->nature,
         )->totaux;

@@ -96,8 +96,8 @@ class ImputerAvoirSurSesFacturesActionConcurrenceTest extends TestCase
             AvoirAllocation::query()->where('facture_id', $impayee->id)->orderBy('id')->get()->map(fn (AvoirAllocation $allocation): array => [$allocation->avoir_id, $allocation->montant_alloue])->all(),
         );
         $impayee->refresh();
-        $this->assertSame([StatutFacture::Payee, 120.0, 0.0], [$impayee->statut, $impayee->montantCrediteParAvoir(), $impayee->montantRestant()]);
-        $this->assertSame([0.0, 80.0, 80.0], [$premier->fresh()->montantNonAlloue(), $second->montantNonAlloue(), $dupont->soldeCrediteur()]);
+        $this->assertSame([StatutFacture::Payee, 12000, 0], [$impayee->statut, $impayee->montantCrediteParAvoirEnCentimes(), $impayee->montantRestantEnCentimes()]);
+        $this->assertSame([0, 8000, 8000], [$premier->fresh()->creditEnCentimes(), $second->creditEnCentimes(), $dupont->soldeCrediteurEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 }

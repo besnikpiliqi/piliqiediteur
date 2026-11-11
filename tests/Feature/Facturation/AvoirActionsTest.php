@@ -650,7 +650,7 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(['833.33', '166.67', '1000.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame(['416.67', '83.33', '500.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['416.66', '83.34', '500.00'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
-        $this->assertSame(0.0, $facture->fresh()->montantRestant());
+        $this->assertSame(0, $facture->fresh()->montantRestantEnCentimes());
     }
 
     /**

@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
+use InvalidArgumentException;
 
 /**
  * Les remises et les prix dérogatoires d'une vente (R2) : une ligne
@@ -180,8 +181,14 @@ class DerogationsDePrix
         return $this->calculateur->prixUnitaireAffiche($this->calculateur->enMillioniemes($prix));
     }
 
+    /**
+     * Une remise lue au centième de point (voir SaisieDecimale::enCentiemes())
+     * telle qu'elle s'écrit : « 10 », « 5,5 ».
+     *
+     * @throws InvalidArgumentException
+     */
     private static function pourcentage(mixed $pourcentage): string
     {
-        return str_replace('.', ',', (string) (float) ValeurSimple::simple($pourcentage));
+        return str_replace('.', ',', CalculateurLigne::centiemesDansUnChamp(SaisieDecimale::enCentiemes(ValeurSimple::simple($pourcentage))));
     }
 }

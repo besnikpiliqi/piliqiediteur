@@ -22,6 +22,7 @@ use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\RecusDePaiement;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -103,8 +104,8 @@ class EnregistrerPaiementAction
     ) {}
 
     /**
-     * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
-     * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
+     * @param  array{mode_paiement: string, montant: int|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement  le montant saisi, lu au centime par SaisieDecimale
+     * @param  array<int, array{facture_id: int|string, montant: int|string}>  $allocations  chaque montant saisi, lu au centime par SaisieDecimale
      * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      * @param  list<Avoir>  $bonsDAvoir  les bons d'avoir présentés pour le ticket du client comptoir que règle ce paiement, relus sous le verrou du registre
      * @param  RecuPaiement|null  $recu  le reçu de l'encaissement en plusieurs modes dont ce paiement est une part, qui l'a ouvert et le clôt
@@ -125,22 +126,22 @@ class EnregistrerPaiementAction
             throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
         }
 
-        $montant = $this->calculateur->arrondirAuCentime((float) $donneesPaiement['montant']);
+        $montant = SaisieDecimale::enCentiemes($donneesPaiement['montant']);
         $imputations = $this->imputationsDemandees($allocations);
-        $totalImpute = $this->calculateur->sommer($imputations);
+        $totalImpute = array_sum($imputations);
 
         if ($montant <= 0) {
             throw new LogicException('Le montant reçu doit être strictement positif.');
         }
 
         if ($montant !== $totalImpute) {
-            throw new LogicException(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros($montant), self::enEuros($totalImpute)));
+            throw new LogicException(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', $this->calculateur->enEuros($montant), $this->calculateur->enEuros($totalImpute)));
         }
 
         $parametres = [
             'client_id' => $client->getKey(),
             'paiement' => $donneesPaiement,
-            'imputations' => array_map(fn (float $montantImpute): string => number_format($montantImpute, 2, '.', ''), $imputations),
+            'imputations' => $this->calculateur->enDecimaux($imputations),
         ];
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, Paiement::class, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin, $recu, $aLEmission, $recuLe) {
@@ -169,8 +170,9 @@ class EnregistrerPaiementAction
     }
 
     /**
-     * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
-     * @param  array<int, float>  $imputations
+     * @param  array{mode_paiement: string, montant: int|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
+     * @param  int  $montant  en centimes
+     * @param  array<int, int>  $imputations  en centimes, par identifiant de facture
      * @param  list<Avoir>  $bonsDAvoir
      * @param  RecuPaiement|null  $recu  le reçu que le paiement désigne, aucun pour un paiement reçu à l'émission
      *
@@ -179,12 +181,12 @@ class EnregistrerPaiementAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, float $montant, array $imputations, array $bonsDAvoir, ?RecuPaiement $recu): Paiement
+    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, int $montant, array $imputations, array $bonsDAvoir, ?RecuPaiement $recu): Paiement
     {
         $paiement = new Paiement([
             ...$donneesPaiement,
             'client_id' => $client->getKey(),
-            'montant' => $montant,
+            'montant' => $this->calculateur->enDecimal($montant),
         ]);
         $paiement->forceFill(['cree_par' => $compte->getKey(), 'recu_paiement_id' => $recu?->getKey()])->save();
 
@@ -201,7 +203,7 @@ class EnregistrerPaiementAction
             PaiementAllocation::create([
                 'paiement_id' => $paiement->id,
                 'facture_id' => $facture->id,
-                'montant_alloue' => $montantImpute,
+                'montant_alloue' => $this->calculateur->enDecimal($montantImpute),
             ]);
 
             $facture->constaterUnReglement();
@@ -214,12 +216,12 @@ class EnregistrerPaiementAction
     }
 
     /**
-     * Le montant à imputer sur chaque facture, au centime, par identifiant
+     * Le montant à imputer sur chaque facture, en centimes, par identifiant
      * de facture : au moins une facture, chacune une seule fois, pour un
      * montant strictement positif.
      *
-     * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
-     * @return array<int, float>
+     * @param  array<int, array{facture_id: int|string, montant: int|string}>  $allocations
+     * @return array<int, int>
      *
      * @throws LogicException
      */
@@ -233,7 +235,7 @@ class EnregistrerPaiementAction
 
         foreach ($allocations as $allocation) {
             $factureId = (int) $allocation['facture_id'];
-            $montantImpute = $this->calculateur->arrondirAuCentime((float) $allocation['montant']);
+            $montantImpute = SaisieDecimale::enCentiemes($allocation['montant']);
 
             if ($montantImpute <= 0) {
                 throw new LogicException('Le montant imputé sur une facture doit être strictement positif.');
@@ -251,11 +253,11 @@ class EnregistrerPaiementAction
 
     /**
      * La facture, relue sous verrou, est une facture émise de CE client qui
-     * doit encore au moins ce montant.
+     * doit encore au moins ce montant, en centimes.
      *
      * @throws LogicException
      */
-    private function verifierQuElleAttendCeReglement(Facture $facture, Client $client, float $montantImpute): void
+    private function verifierQuElleAttendCeReglement(Facture $facture, Client $client, int $montantImpute): void
     {
         if ((int) $facture->client_id !== $client->getKey()) {
             throw new LogicException("La facture {$facture->numero} n'appartient pas au client de ce paiement.");
@@ -269,10 +271,10 @@ class EnregistrerPaiementAction
             throw new LogicException("Impossible d'encaisser un paiement sur une facture au statut [{$facture->statut->value}].");
         }
 
-        $resteDu = $facture->montantRestant();
+        $resteDu = $facture->montantRestantEnCentimes();
 
         if ($montantImpute > $resteDu) {
-            throw new LogicException(sprintf('Le montant imputé sur la facture %s (%s) dépasse ce qui en reste dû (%s).', $facture->numero, self::enEuros($montantImpute), self::enEuros($resteDu)));
+            throw new LogicException(sprintf('Le montant imputé sur la facture %s (%s) dépasse ce qui en reste dû (%s).', $facture->numero, $this->calculateur->enEuros($montantImpute), $this->calculateur->enEuros($resteDu)));
         }
     }
 
@@ -311,10 +313,5 @@ class EnregistrerPaiementAction
                 'montant_alloue' => $this->calculateur->enDecimal($montant),
             ]);
         }
-    }
-
-    private static function enEuros(float $montant): string
-    {
-        return number_format($montant, 2, ',', ' ').' €';
     }
 }

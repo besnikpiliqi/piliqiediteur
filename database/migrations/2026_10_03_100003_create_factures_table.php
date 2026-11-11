@@ -116,9 +116,10 @@ return new class extends Migration
             $table->decimal('total_ttc', 12, 2)->default(0);
             // Ni montant payé ni reste dû ne sont stockés : ils se
             // recalculent depuis les imputations de paiement et d'avoir de
-            // la facture (voir Facture::montantPaye(),
-            // montantCrediteParAvoir() et montantRestant()), qui ne se
-            // modifient ni ne se suppriment.
+            // la facture (voir Facture::montantPayeEnCentimes(),
+            // montantCrediteParAvoirEnCentimes() et
+            // montantRestantEnCentimes()), qui ne se modifient ni ne se
+            // suppriment.
             $table->timestamps();
             // PAS de softDeletes() ici, volontairement : une facture
             // numérotée ne se supprime jamais (obligation légale de

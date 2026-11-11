@@ -231,7 +231,7 @@ class InventaireOuvertureResource extends Resource
                         TextEntry::make('quantite')->label('Quantité'),
                         TextEntry::make('cout_unitaire_ht')
                             ->label('Coût unitaire HT')
-                            ->formatStateUsing(fn (string $state): string => $calculateur->prixDAchatAffiche($calculateur->enMillioniemes($state))),
+                            ->formatStateUsing(fn (string $state): string => $calculateur->prixUnitaireExact($calculateur->enMillioniemes($state))),
                         TextEntry::make('valeur_ht')
                             ->label('Valeur du stock HT')
                             ->money('EUR')

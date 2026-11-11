@@ -1232,7 +1232,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $client = Client::factory()->create();
         $ticket = $this->encaisser($client, [[$this->produit('ART', 100), 1]], ModePaiement::CarteBancaire);
-        $this->assertSame(100.0, $ticket->montantPaye());
+        $this->assertSame(10000, $ticket->montantPayeEnCentimes());
 
         app(OperateurCourant::class)->pendantLeSysteme(fn () => DB::transaction(function () use ($magasin, $client, $ticket): void {
             app(RegistreFiscal::class)->verrouiller($magasin);

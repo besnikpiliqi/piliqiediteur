@@ -50,7 +50,7 @@ class CreatePaiement extends CreateRecord
         $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
         $allocations = array_values(array_map(fn (array $allocation): array => [
             'facture_id' => ValeurSimple::enEntier($allocation['facture_id']),
-            'montant' => (float) ValeurSimple::simple($allocation['montant']),
+            'montant' => ValeurSimple::enTexte($allocation['montant']),
         ], ValeursLues::lignes($data['allocations'])));
 
         foreach (Facture::query()->whereKey(array_column($allocations, 'facture_id'))->get() as $facture) {

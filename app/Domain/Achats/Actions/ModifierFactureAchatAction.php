@@ -254,7 +254,7 @@ class ModifierFactureAchatAction
      * chacune a réellement payé (voir LigneAchat::coutUnitaireHt()), de la
      * réception la plus ancienne à la plus récente.
      *
-     * @return array<int, list<array{quantite: int, cout_unitaire: float}>>
+     * @return array<int, list<array{quantite: int, cout_unitaire: int}>> chaque coût en dix-millièmes d'euro
      */
     private function lotsDesReceptions(Produit $produit): array
     {

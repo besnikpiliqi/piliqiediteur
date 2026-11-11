@@ -38,7 +38,12 @@ use Tests\TestCase;
  * clôturée. Après chaque cas, ce qui doit toujours tenir tient :
  *
  * - chaque document totalise exactement ses lignes, et la TVA de chaque
- *   ligne vaut son TTC moins son HT, jamais négative ;
+ *   ligne vaut son TTC moins son HT, jamais négative ; sa TVA est la somme
+ *   exacte des TVA de ses taux et son TTC son HT plus sa TVA (règles
+ *   BR-CO-10, BR-CO-14 et BR-CO-15 de la norme européenne de la facture
+ *   électronique), et la TVA de chaque taux d'un ticket ou d'une facture
+ *   s'écarte d'au plus un centime de sa base x taux (BR-CO-17 tolère
+ *   1 €) ;
  * - un avoir ne rend jamais plus qu'une ligne, en quantité, en HT ni en
  *   TVA, ni plus que la facture ;
  * - chaque paiement vaut le total qu'il impute, et rien n'est réglé
@@ -295,6 +300,8 @@ class VentesAuHasardTest extends TestCase
             $this->assertSame($centimes($document->total_ttc), $lignes->sum(fn (LigneFacture|LigneAvoir $ligne): int => $centimes($ligne->montant_ttc)), "{$document->numero} : TTC différent de ses lignes.");
             $this->assertSame($centimes($document->total_ht), $lignes->sum(fn (LigneFacture|LigneAvoir $ligne): int => $centimes($ligne->montant_ht)), "{$document->numero} : HT différent de ses lignes.");
             $this->assertSame($centimes($document->total_tva), $lignes->sum(fn (LigneFacture|LigneAvoir $ligne): int => $centimes($ligne->montant_tva)), "{$document->numero} : TVA différente de ses lignes.");
+            $this->assertSame($centimes($document->total_tva), array_sum(array_map(fn (array $taux): int => $centimes($taux['montant_tva']), $document->ventilation_tva)), "{$document->numero} : TVA différente de la somme de ses taux (BR-CO-14).");
+            $this->assertSame($centimes($document->total_ht) + $centimes($document->total_tva), $centimes($document->total_ttc), "{$document->numero} : TTC différent de HT + TVA (BR-CO-15).");
 
             foreach ($lignes as $ligne) {
                 $this->assertSame($centimes($ligne->montant_ttc) - $centimes($ligne->montant_ht), $centimes($ligne->montant_tva), "{$document->numero} : TVA d'une ligne différente de son TTC moins son HT.");
@@ -315,6 +322,11 @@ class VentesAuHasardTest extends TestCase
 
         foreach ($factures as $facture) {
             $this->assertGreaterThanOrEqual(0, $facture->resteDuEnCentimes(), "{$facture->numero} : réglée au-delà de ce qu'elle doit.");
+
+            foreach ($facture->ventilation_tva as $taux) {
+                $base = $centimes($taux['montant_ht']);
+                $this->assertLessThanOrEqual(1, abs($centimes($taux['montant_tva']) - intdiv(2 * $base * $centimes($taux['taux_tva']) + 10000, 20000)), "{$facture->numero} : la TVA à {$taux['taux_tva']} % s'écarte de plus d'un centime de sa base x taux (BR-CO-17).");
+            }
         }
 
         foreach ($this->produits as $produit) {

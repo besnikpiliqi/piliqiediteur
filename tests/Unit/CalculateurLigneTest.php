@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use Closure;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -136,8 +137,10 @@ class CalculateurLigneTest extends TestCase
     {
         $calculateur = new CalculateurLigne;
 
-        $this->assertSame(['montant_ht' => 90.0, 'montant_tva' => 18.0, 'montant_ttc' => 108.0], $calculateur->valeurAuCoutMoyen(2000, 0.045, 20));
-        $this->assertSame(['montant_ht' => 21.45, 'montant_tva' => 4.29, 'montant_ttc' => 25.74], $calculateur->valeurAuCoutMoyen(1, 21.4545, 20));
+        // Coût moyen en dix-millièmes d'euro, taux en centièmes de point,
+        // valeur en centimes : 2 000 x 0,045 € = 90,00 € HT.
+        $this->assertSame(['montant_ht' => 9000, 'montant_tva' => 1800, 'montant_ttc' => 10800], $calculateur->valeurAuCoutMoyen(2000, 450, 2000));
+        $this->assertSame(['montant_ht' => 2145, 'montant_tva' => 429, 'montant_ttc' => 2574], $calculateur->valeurAuCoutMoyen(1, 214545, 2000));
     }
 
     /**
@@ -699,19 +702,57 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * 8.325 vaut réellement 8.32499999... en binaire : un arrondi naïf
-     * donnerait 8,32 au lieu de 8,33.
+     * Le PU HT d'un document qui le montre (facture, avoir sur facture ou
+     * devis à un professionnel, vente sans TVA française) s'affiche tel
+     * qu'il est enregistré, jusqu'à six décimales, sans zéro inutile
+     * au-delà de deux, les milliers séparés par une espace comme tout
+     * montant (décision de l'éditeur du 09/11/2026) : les sept exemples de
+     * la décision, de 10,00 €, 9,99 €, 12,66 €, 1 249,00 € et 54,00 € TTC à
+     * 20 %, de 15,90 € TTC à 5,5 % et de 0,99 € TTC à 20 %. Le champ d'une
+     * ligne de leur formulaire, où il ne se saisit pas, l'écrit de même,
+     * avec un point et sans espace.
      */
-    public function test_arrondir_au_centime_ne_tombe_pas_dans_le_piege_du_flottant(): void
+    public function test_un_pu_ht_s_affiche_tel_qu_il_est_enregistre_sans_zero_inutile_au_dela_de_deux_decimales(): void
     {
-        $this->assertSame(8.33, $this->calculateur()->arrondirAuCentime(8.325));
+        $calculateur = $this->calculateur();
+        $millioniemes = [
+            $calculateur->prixUnitaireHtExact(1000, 2000),
+            $calculateur->prixUnitaireHtExact(999, 2000),
+            $calculateur->prixUnitaireHtExact(1266, 2000),
+            $calculateur->prixUnitaireHtExact(1590, 550),
+            $calculateur->prixUnitaireHtExact(99, 2000),
+            $calculateur->prixUnitaireHtExact(124900, 2000),
+            $calculateur->prixUnitaireHtExact(5400, 2000),
+        ];
+
+        $this->assertSame([8333333, 8325000, 10550000, 15071090, 825000, 1040833333, 45000000], $millioniemes);
+        $this->assertSame(
+            ['8,333333 €', '8,325 €', '10,55 €', '15,07109 €', '0,825 €', '1 040,833333 €', '45,00 €'],
+            array_map($calculateur->prixUnitaireExact(...), $millioniemes),
+        );
+        $this->assertSame(
+            ['8.333333', '8.325', '10.55', '15.07109', '0.825', '1040.833333', '45.00'],
+            array_map($calculateur->prixUnitaireExactEnDecimal(...), $millioniemes),
+        );
+    }
+
+    /**
+     * 8.325 vaut réellement 8.32499999... en binaire : un arrondi naïf
+     * donnerait 8,32 au lieu de 8,33. Un montant saisi se lit au centime
+     * par ses chiffres (voir SaisieDecimale), écrit en texte comme transmis
+     * en flottant par un écran.
+     */
+    public function test_un_montant_saisi_s_arrondit_au_centime_sans_le_piege_du_flottant(): void
+    {
+        $this->assertSame(833, SaisieDecimale::enCentiemes('8.325'));
+        $this->assertSame(833, SaisieDecimale::enCentiemes(8.325));
     }
 
     public function test_totaliser_ne_derive_jamais_meme_sur_un_grand_nombre_de_lignes(): void
     {
         $total = $this->calculateur()->totaliser(array_fill(0, 1000, ['montant_ht' => '0.08', 'montant_tva' => '0.02', 'montant_ttc' => '0.10']));
 
-        $this->assertSame(100.0, $total['total_ttc']);
+        $this->assertSame(10000, $total['total_ttc']);
     }
 
     /**
@@ -724,14 +765,14 @@ class CalculateurLigneTest extends TestCase
     {
         return [
             'taux négatif (TTC vers HT)' => [fn (CalculateurLigne $c) => $c->prixUnitaireHtDepuisTtc(1000, -10000), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
-            'taux négatif (HT vers TTC)' => [fn (CalculateurLigne $c) => $c->prixUnitaireTtcDepuisHt(10, -5), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'taux négatif (HT vers TTC)' => [fn (CalculateurLigne $c) => $c->prixUnitaireTtcDepuisHt(1000, -500), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'taux au-delà de 100 % (achat)' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([self::ligneDAchat(1000, 1, 15000)]), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
-            'taux au-delà de 100 % (prix de vente)' => [fn (CalculateurLigne $c) => $c->prixTtcArrondi(10, 150), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'taux au-delà de 100 % (prix de vente)' => [fn (CalculateurLigne $c) => $c->prixTtcArrondi(100000, 15000), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'remise négative' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([self::ligneDeVente(1200, 1, 2000, -1000)]), 'La remise doit être comprise entre 0 et 100 %.'],
             'remise au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([self::ligneDAchat(1000, 1, 2000, 15000)]), 'La remise doit être comprise entre 0 et 100 %.'],
-            'escompte au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->coutUnitaireNet(10, 0, 150), 'La remise doit être comprise entre 0 et 100 %.'],
-            'montant reçu absurde' => [fn (CalculateurLigne $c) => $c->soustraire('100000000000000000', 40), 'Montant hors limites.'],
-            'paiement absurde' => [fn (CalculateurLigne $c) => $c->arrondirAuCentime(1e17), 'Montant hors limites.'],
+            'escompte au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->coutUnitaireNet(10000000, 0, 15000), 'La remise doit être comprise entre 0 et 100 %.'],
+            'montant reçu absurde' => [fn (CalculateurLigne $c) => $c->sommer(['100000000000000000', '40']), 'Montant hors limites.'],
+            'paiement absurde' => [fn (CalculateurLigne $c) => SaisieDecimale::enCentiemes(1e17), 'Montant hors limites.'],
             'prix x quantité qui déborde (achat)' => [fn (CalculateurLigne $c) => $c->chiffrerUnAchat([self::ligneDAchat(999999999999, 999999)]), 'Montant hors limites.'],
             'taux au-delà de 100 % (vente)' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([self::ligneDeVente(1000, 1, 15000)]), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'remise au-delà de 100 % (vente)' => [fn (CalculateurLigne $c) => $c->chiffrerUneVente([self::ligneDeVente(1000, 1, 2000, 15000)]), 'La remise doit être comprise entre 0 et 100 %.'],
@@ -776,12 +817,14 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_le_cout_net_dun_article_achete_ne_sarrondit_pas_au_centime(): void
     {
-        $this->assertSame(1.003, $this->calculateur()->coutUnitaireNet(1.18, 15));
-        $this->assertSame(7.3471, $this->calculateur()->coutUnitaireNet(8.33, 10, 2));
-        $this->assertSame(88.2, $this->calculateur()->coutUnitaireNet(90, 0, 2));
-        $this->assertSame(0.0, $this->calculateur()->coutUnitaireNet(90, 100));
-        $this->assertSame(9999999999.99, $this->calculateur()->coutUnitaireNet(9999999999.99, 0));
-        $this->assertSame(8074999999.9919, $this->calculateur()->coutUnitaireNet(9999999999.99, 15, 5));
+        // PU HT en millionièmes d'euro, remise et escompte en centièmes de
+        // point, coût en dix-millièmes d'euro.
+        $this->assertSame(10030, $this->calculateur()->coutUnitaireNet(1180000, 1500));
+        $this->assertSame(73471, $this->calculateur()->coutUnitaireNet(8330000, 1000, 200));
+        $this->assertSame(882000, $this->calculateur()->coutUnitaireNet(90000000, 0, 200));
+        $this->assertSame(0, $this->calculateur()->coutUnitaireNet(90000000, 10000));
+        $this->assertSame(99999999999900, $this->calculateur()->coutUnitaireNet(9999999999990000, 0));
+        $this->assertSame(80749999999919, $this->calculateur()->coutUnitaireNet(9999999999990000, 1500, 500));
     }
 
     /**
@@ -791,8 +834,10 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_le_benefice_dun_article_ne_sarrondit_qu_une_fois(): void
     {
-        $this->assertSame(10.0, $this->calculateur()->beneficeUnitaire(11.00, 1.005));
-        $this->assertSame(9.53, $this->calculateur()->beneficeUnitaire(10.00, 0.47));
+        // Prix de vente HT en centimes, coût en dix-millièmes d'euro,
+        // bénéfice en centimes.
+        $this->assertSame(1000, $this->calculateur()->beneficeUnitaire(1100, 10050));
+        $this->assertSame(953, $this->calculateur()->beneficeUnitaire(1000, 4700));
     }
 
     /**
@@ -822,9 +867,11 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_le_prix_de_vente_ttc_ne_sarrondit_qu_une_fois(): void
     {
-        $this->assertSame(1.21, $this->calculateur()->prixTtcArrondi(1.0042, 20));
-        $this->assertSame(60.0, $this->calculateur()->prixTtcArrondi(54.1663, 20, pasCentimes: 1000));
-        $this->assertSame(70.0, $this->calculateur()->prixTtcArrondi(54.1667, 20, pasCentimes: 1000));
+        // Prix HT en dix-millièmes d'euro, taux en centièmes de point, prix
+        // TTC en centimes.
+        $this->assertSame(121, $this->calculateur()->prixTtcArrondi(10042, 2000));
+        $this->assertSame(6000, $this->calculateur()->prixTtcArrondi(541663, 2000, pasCentimes: 1000));
+        $this->assertSame(7000, $this->calculateur()->prixTtcArrondi(541667, 2000, pasCentimes: 1000));
     }
 
     /**
@@ -835,21 +882,22 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_le_cout_moyen_pondere_compte_les_lots_offerts_a_zero(): void
     {
-        $this->assertSame(3.0, $this->calculateur()->coutMoyenPondere([['quantite' => 10, 'cout_unitaire' => 2], ['quantite' => 20, 'cout_unitaire' => '3.5']]));
-        $this->assertSame(1.5714, $this->calculateur()->coutMoyenPondere([['quantite' => 3, 'cout_unitaire' => 1], ['quantite' => 4, 'cout_unitaire' => 2]]));
-        $this->assertSame(0.0, $this->calculateur()->coutMoyenPondere([['quantite' => 0, 'cout_unitaire' => 5], ['quantite' => 10, 'cout_unitaire' => 0]]));
-        $this->assertNull($this->calculateur()->coutMoyenPondere([['quantite' => 0, 'cout_unitaire' => 5]]));
+        // Coûts en dix-millièmes d'euro.
+        $this->assertSame(30000, $this->calculateur()->coutMoyenPondere([['quantite' => 10, 'cout_unitaire' => 20000], ['quantite' => 20, 'cout_unitaire' => 35000]]));
+        $this->assertSame(15714, $this->calculateur()->coutMoyenPondere([['quantite' => 3, 'cout_unitaire' => 10000], ['quantite' => 4, 'cout_unitaire' => 20000]]));
+        $this->assertSame(0, $this->calculateur()->coutMoyenPondere([['quantite' => 0, 'cout_unitaire' => 50000], ['quantite' => 10, 'cout_unitaire' => 0]]));
+        $this->assertNull($this->calculateur()->coutMoyenPondere([['quantite' => 0, 'cout_unitaire' => 50000]]));
         $this->assertNull($this->calculateur()->coutMoyenPondere([]));
     }
 
     public function test_un_lot_de_quantite_ou_de_cout_negatif_est_refuse(): void
     {
         $this->assertRefuse(
-            fn () => $this->calculateur()->coutMoyenPondere([['quantite' => -1, 'cout_unitaire' => 5], ['quantite' => 10, 'cout_unitaire' => 5]]),
+            fn () => $this->calculateur()->coutMoyenPondere([['quantite' => -1, 'cout_unitaire' => 50000], ['quantite' => 10, 'cout_unitaire' => 50000]]),
             'Un lot de stock ne peut avoir ni quantité ni coût négatif.',
         );
         $this->assertRefuse(
-            fn () => $this->calculateur()->coutMoyenPondere([['quantite' => 10, 'cout_unitaire' => -0.5]]),
+            fn () => $this->calculateur()->coutMoyenPondere([['quantite' => 10, 'cout_unitaire' => -5000]]),
             'Un lot de stock ne peut avoir ni quantité ni coût négatif.',
         );
     }
@@ -858,43 +906,44 @@ class CalculateurLigneTest extends TestCase
      * Le coût moyen du stock restant après un retour au fournisseur, au
      * coût de la ligne retournée : (stock x coût moyen - quantité x coût) /
      * (stock - quantité), au dix-millième, arrondi une seule fois. Sans
-     * stock restant, aucun ; une valeur restante négative vaut 0 €.
+     * stock restant, aucun ; une valeur restante négative vaut 0 €. Coûts
+     * en dix-millièmes d'euro.
      *
-     * @return array<string, array{int, float, int, float, float|null}>
+     * @return array<string, array{int, int, int, int, int|null}>
      */
     public static function sortiesAUnAutreCout(): array
     {
         return [
-            'les 10 articles à 10 € d\'un stock de 20 à 6 €' => [20, 6.0, 10, 10.0, 2.0],
-            '4 articles à 10 € d\'un stock de 20 à 6 €' => [20, 6.0, 4, 10.0, 5.0],
-            '8,9998 € pour 6 articles' => [7, 1.5714, 1, 2.0, 1.5],
-            'tout le stock' => [5, 3.0, 5, 3.0, null],
-            'plus que le stock' => [5, 3.0, 6, 3.0, null],
-            'une valeur restante de -10 €' => [5, 6.0, 4, 10.0, 0.0],
+            'les 10 articles à 10 € d\'un stock de 20 à 6 €' => [20, 60000, 10, 100000, 20000],
+            '4 articles à 10 € d\'un stock de 20 à 6 €' => [20, 60000, 4, 100000, 50000],
+            '8,9998 € pour 6 articles' => [7, 15714, 1, 20000, 15000],
+            'tout le stock' => [5, 30000, 5, 30000, null],
+            'plus que le stock' => [5, 30000, 6, 30000, null],
+            'une valeur restante de -10 €' => [5, 60000, 4, 100000, 0],
         ];
     }
 
     #[DataProvider('sortiesAUnAutreCout')]
-    public function test_le_cout_moyen_apres_une_sortie_a_un_autre_cout(int $stock, float $coutMoyen, int $quantite, float $coutUnitaire, ?float $attendu): void
+    public function test_le_cout_moyen_apres_une_sortie_a_un_autre_cout(int $stock, int $coutMoyen, int $quantite, int $coutUnitaire, ?int $attendu): void
     {
         $this->assertSame($attendu, $this->calculateur()->coutMoyenApresUneSortie($stock, $coutMoyen, $quantite, $coutUnitaire));
     }
 
     /**
-     * @return array<string, array{int, float, int, float}>
+     * @return array<string, array{int, int, int, int}>
      */
     public static function sortiesImpossibles(): array
     {
         return [
-            'stock négatif' => [-1, 6.0, 1, 10.0],
-            'quantité négative' => [20, 6.0, -1, 10.0],
-            'coût moyen négatif' => [20, -6.0, 1, 10.0],
-            'coût de sortie négatif' => [20, 6.0, 1, -10.0],
+            'stock négatif' => [-1, 60000, 1, 100000],
+            'quantité négative' => [20, 60000, -1, 100000],
+            'coût moyen négatif' => [20, -60000, 1, 100000],
+            'coût de sortie négatif' => [20, 60000, 1, -100000],
         ];
     }
 
     #[DataProvider('sortiesImpossibles')]
-    public function test_une_sortie_de_quantite_ou_de_cout_negatif_est_refusee(int $stock, float $coutMoyen, int $quantite, float $coutUnitaire): void
+    public function test_une_sortie_de_quantite_ou_de_cout_negatif_est_refusee(int $stock, int $coutMoyen, int $quantite, int $coutUnitaire): void
     {
         $this->assertRefuse(
             fn () => $this->calculateur()->coutMoyenApresUneSortie($stock, $coutMoyen, $quantite, $coutUnitaire),
@@ -902,13 +951,20 @@ class CalculateurLigneTest extends TestCase
         );
     }
 
-    public function test_sommer_et_soustraire_comptent_au_centime_exact(): void
+    /**
+     * Une somme de montants écrits comme leurs colonnes se fait en centimes
+     * entiers : 0,10 + 0,20 font exactement 0,30 € (0.1 + 0.2 vaudrait
+     * 0.30000000000000004 en flottants) ; un entier compte des euros ; rien
+     * ou un texte vide comptent zéro. Une différence se fait sur ces
+     * centimes.
+     */
+    public function test_sommer_compte_au_centime_exact(): void
     {
-        $this->assertSame(0.3, $this->calculateur()->sommer([0.1, 0.2]));
-        $this->assertSame(100.0, $this->calculateur()->sommer(array_fill(0, 1000, '0.10')));
-        $this->assertSame(16.67, $this->calculateur()->soustraire(50, 33.33));
-        $this->assertSame(-10.0, $this->calculateur()->soustraire('40.00', '30.00', 20));
-        $this->assertSame(0.0, $this->calculateur()->sommer([null, '']));
+        $this->assertSame(30, $this->calculateur()->sommer(['0.10', '0.20']));
+        $this->assertSame(10000, $this->calculateur()->sommer(array_fill(0, 1000, '0.10')));
+        $this->assertSame(1667, $this->calculateur()->sommer([50]) - $this->calculateur()->sommer(['33.33']));
+        $this->assertSame(-1000, $this->calculateur()->sommer(['40.00']) - $this->calculateur()->sommer(['30.00', 20]));
+        $this->assertSame(0, $this->calculateur()->sommer([null, '']));
     }
 
     /**

@@ -259,7 +259,7 @@ class PaiementResourceTest extends TestCase
             ->assertHasNoTableActionErrors();
 
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
-        $this->assertSame(70.0, $facture->fresh()->montantRestant());
+        $this->assertSame(7000, $facture->fresh()->montantRestantEnCentimes());
     }
 
     /**
@@ -556,7 +556,7 @@ class PaiementResourceTest extends TestCase
 
         $formulaire->assertForbidden();
         $this->assertSame(0, Paiement::query()->count());
-        $this->assertSame([StatutFacture::Emise, 120.0], [$factureDeA->fresh()->statut, $factureDeA->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 12000], [$factureDeA->fresh()->statut, $factureDeA->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -660,8 +660,8 @@ class PaiementResourceTest extends TestCase
 
         $paiement = Paiement::query()->sole();
         $this->assertSame([$client->id, '170.00'], [$paiement->client_id, $paiement->montant]);
-        $this->assertSame([StatutFacture::Payee, 0.0], [$factureA->fresh()->statut, $factureA->fresh()->montantRestant()]);
-        $this->assertSame([StatutFacture::Payee, 0.0], [$factureB->fresh()->statut, $factureB->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0], [$factureA->fresh()->statut, $factureA->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame([StatutFacture::Payee, 0], [$factureB->fresh()->statut, $factureB->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -763,7 +763,7 @@ class PaiementResourceTest extends TestCase
 
         $contrePassation = Paiement::query()->whereKeyNot($errone->id)->sole();
         $this->assertSame([$errone->id, '-120.00', 'Saisi sur le mauvais client'], [$contrePassation->contre_passe_paiement_id, $contrePassation->montant, $contrePassation->notes]);
-        $this->assertSame([StatutFacture::Emise, 120.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 12000], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
         Livewire::test(ListPaiements::class)
             ->assertTableColumnStateSet('correction', 'Contre-passé', $errone->getKey())
             ->assertTableColumnStateSet('correction', 'Contre-passation', $contrePassation->getKey())
@@ -843,7 +843,7 @@ class PaiementResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         ['client' => $client, 'factures' => [$facture]] = $this->clientDontLeCreditSImputeALaContrePassation([120]);
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
         $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
         $part = array_key_first($liste->get('mountedTableActionsData.0.parts'));
 
@@ -855,7 +855,7 @@ class PaiementResourceTest extends TestCase
             ->assertHasNoTableActionErrors();
 
         $facture->refresh();
-        $this->assertSame([StatutFacture::Payee, 84.0, 36.0, 0.0], [$facture->statut, $facture->montantPaye(), $facture->montantCrediteParAvoir(), $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 8400, 3600, 0], [$facture->statut, $facture->montantPayeEnCentimes(), $facture->montantCrediteParAvoirEnCentimes(), $facture->montantRestantEnCentimes()]);
     }
 
     /**
@@ -870,8 +870,8 @@ class PaiementResourceTest extends TestCase
 
         Livewire::test(ListFactures::class)->assertTableActionHidden('encaisser', $facture);
 
-        $this->assertSame([StatutFacture::Payee, 0.0, 30.0], [$facture->fresh()->statut, $facture->fresh()->montantPaye(), $facture->fresh()->montantCrediteParAvoir()]);
-        $this->assertSame(6.0, $client->soldeCrediteur());
+        $this->assertSame([StatutFacture::Payee, 0, 3000], [$facture->fresh()->statut, $facture->fresh()->montantPayeEnCentimes(), $facture->fresh()->montantCrediteParAvoirEnCentimes()]);
+        $this->assertSame(600, $client->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -898,8 +898,8 @@ class PaiementResourceTest extends TestCase
 
         $paiement = Paiement::query()->where('montant', '204.00')->sole();
         $this->assertSame([], $paiement->creditsImputes->all());
-        $this->assertSame([StatutFacture::Payee, 84.0, 36.0], [$premiere->fresh()->statut, $premiere->fresh()->montantPaye(), $premiere->fresh()->montantCrediteParAvoir()]);
-        $this->assertSame([StatutFacture::Payee, 120.0, 0.0], [$seconde->fresh()->statut, $seconde->fresh()->montantPaye(), $seconde->fresh()->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 8400, 3600], [$premiere->fresh()->statut, $premiere->fresh()->montantPayeEnCentimes(), $premiere->fresh()->montantCrediteParAvoirEnCentimes()]);
+        $this->assertSame([StatutFacture::Payee, 12000, 0], [$seconde->fresh()->statut, $seconde->fresh()->montantPayeEnCentimes(), $seconde->fresh()->montantCrediteParAvoirEnCentimes()]);
     }
 
     /**
@@ -973,7 +973,7 @@ class PaiementResourceTest extends TestCase
             ->assertSee(Avoir::BON_D_AVOIR_SANS_PART_PAYEE);
 
         $this->assertSame([$paiementsAvant, (int) ($montantDuBon * 100)], [Paiement::query()->count(), $bon->fresh()->creditEnCentimes()]);
-        $this->assertSame([StatutFacture::Emise, 20.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 2000], [$ticket->fresh()->statut, $ticket->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -999,7 +999,7 @@ class PaiementResourceTest extends TestCase
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 
-        $this->assertSame([StatutFacture::Payee, 10.0, 10.0], [$ticket->fresh()->statut, $ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 1000, 1000], [$ticket->fresh()->statut, $ticket->fresh()->montantPayeEnCentimes(), $ticket->fresh()->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame(0, $bon->fresh()->creditEnCentimes());
     }
 

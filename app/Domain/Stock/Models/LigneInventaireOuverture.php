@@ -4,6 +4,7 @@ namespace App\Domain\Stock\Models;
 
 use App\Domain\Achats\Casts\PrixDAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
@@ -60,7 +61,7 @@ class LigneInventaireOuverture extends Model
                 throw new InvalidArgumentException('La quantité doit être un nombre entier d\'articles, au moins 1.');
             }
 
-            if ((float) $ligne->cout_unitaire_ht < 0) {
+            if ($ligne->cout_unitaire_ht !== null && SaisieDecimale::enMillioniemes($ligne->cout_unitaire_ht) < 0) {
                 throw new InvalidArgumentException('Le coût unitaire d\'un produit ne peut pas être négatif.');
             }
 

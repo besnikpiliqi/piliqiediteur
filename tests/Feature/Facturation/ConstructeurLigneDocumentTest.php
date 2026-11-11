@@ -36,7 +36,7 @@ class ConstructeurLigneDocumentTest extends TestCase
             'vide' => ['produit_id' => null, 'quantite' => 1],
             'prix_a_saisir' => ['service_id' => $service->id, 'prix_unitaire_ttc' => '', 'quantite' => 1],
             'quantite_a_virgule' => ['produit_id' => $produit->id, 'quantite' => '1.5'],
-        ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
+        ], new ContexteDeVente(TypeClient::Particulier, false, '20.00'));
 
         $this->assertSame(['ecran'], array_keys($apercu->lignes));
         $this->assertSame(['20.00', '30.00', '6.00', '36.00'], [
@@ -60,7 +60,7 @@ class ConstructeurLigneDocumentTest extends TestCase
 
         $apercu = app(ConstructeurLigneDocument::class)->apercu([
             ['produit_id' => $produitAutreMagasin->id, 'quantite' => 1],
-        ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
+        ], new ContexteDeVente(TypeClient::Particulier, false, '20.00'));
 
         $this->assertSame([], $apercu->lignes);
         $this->assertSame('0.00', $apercu->totaux['total_ttc']);
@@ -82,7 +82,7 @@ class ConstructeurLigneDocumentTest extends TestCase
             'vide' => ['produit_id' => null, 'quantite' => 1],
             'deuxieme' => ['produit_id' => $produit->id, 'quantite' => 1],
             'troisieme' => ['produit_id' => $produit->id, 'quantite' => 1],
-        ], new ContexteDeVente(TypeClient::Professionnel, false, 20.0));
+        ], new ContexteDeVente(TypeClient::Professionnel, false, '20.00'));
 
         $this->assertSame(
             ['premiere' => ['0.08', '0.02', '0.10'], 'deuxieme' => ['0.09', '0.01', '0.10'], 'troisieme' => ['0.08', '0.02', '0.10']],
@@ -102,7 +102,7 @@ class ConstructeurLigneDocumentTest extends TestCase
 
         $apercu = app(ConstructeurLigneDocument::class)->apercu(
             array_fill(0, 20, ['service_id' => $service->id, 'prix_unitaire_ttc' => '9999999999.99', 'taux_tva' => '100', 'quantite' => 99]),
-            new ContexteDeVente(TypeClient::Professionnel, false, 20.0),
+            new ContexteDeVente(TypeClient::Professionnel, false, '20.00'),
         );
 
         $this->assertSame([], $apercu->lignes);
@@ -124,7 +124,7 @@ class ConstructeurLigneDocumentTest extends TestCase
         $document = app(ConstructeurLigneDocument::class)->construireToutes([
             'b7' => ['produit_id' => (string) $produit->id, 'quantite' => '2', 'remise_pourcentage' => '100'],
             'a3' => ['service_id' => (string) $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => '0'],
-        ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
+        ], new ContexteDeVente(TypeClient::Particulier, false, '20.00'));
 
         $this->assertSame([
             [0, 'Cahier', 'CAH-1', '0.00'],
@@ -144,7 +144,7 @@ class ConstructeurLigneDocumentTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => '12.00']);
         $sansPrix = Service::factory()->create(['nom' => 'Conseil']);
-        $contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+        $contexte = new ContexteDeVente(TypeClient::Particulier, false, '20.00');
         $construire = fn (array $ligne) => app(ConstructeurLigneDocument::class)->construireToutes([$ligne], $contexte);
 
         $this->assertThrows(fn () => $construire(['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ttc' => '-0.01']), InvalidArgumentException::class, 'Le PU TTC d\'une ligne ne peut pas être négatif.');
@@ -169,7 +169,7 @@ class ConstructeurLigneDocumentTest extends TestCase
             'premiere' => ['produit_id' => $produit->id, 'quantite' => 1],
             'remise_impossible' => ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => '150'],
             'seconde' => ['produit_id' => $produit->id, 'quantite' => 2],
-        ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
+        ], new ContexteDeVente(TypeClient::Particulier, false, '20.00'));
 
         $this->assertSame(['premiere' => 0, 'seconde' => 2], array_map(fn (array $ligne): int => $ligne['ordre'], $apercu->lignes));
         $this->assertSame('36.00', $apercu->totaux['total_ttc']);
@@ -206,7 +206,7 @@ class ConstructeurLigneDocumentTest extends TestCase
     {
         $this->magasinAuxFichesUnEtDouze();
         $lignes = ['choisie' => [$champ => 12, 'quantite' => 1], 'forgee' => [$champ => $identifiant, 'quantite' => 1]];
-        $contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+        $contexte = new ContexteDeVente(TypeClient::Particulier, false, '20.00');
 
         $apercu = app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte);
         $document = app(ConstructeurLigneDocument::class)->construireToutes($lignes, $contexte);
@@ -243,7 +243,7 @@ class ConstructeurLigneDocumentTest extends TestCase
     {
         $this->magasinAuxFichesUnEtDouze();
         $forgee = [$champ => $identifiant, 'quantite' => 1];
-        $contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+        $contexte = new ContexteDeVente(TypeClient::Particulier, false, '20.00');
 
         $apercu = app(ConstructeurLigneDocument::class)->apercu(['choisie' => [$champ => 1, 'quantite' => 1], 'forgee' => $forgee], $contexte);
 

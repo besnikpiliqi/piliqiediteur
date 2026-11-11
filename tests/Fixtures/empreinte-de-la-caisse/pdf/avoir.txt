@@ -35,8 +35,8 @@ FAC-LYON1-2026-000001
 33,75 €
 Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d'une ligne rendus jusqu'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 +
 taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier
-retour solde la ligne au centime. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché
-peut donc différer du total de la ligne.
+retour solde la ligne au centime. Les prix unitaires HT sont affichés tels qu'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT,
+remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.
 TAUX TVA
 BASE HT
 TVA

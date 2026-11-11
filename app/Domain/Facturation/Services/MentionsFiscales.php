@@ -67,6 +67,8 @@ class MentionsFiscales
 
     private const PRIX_UNITAIRES_AU_CENTIME = 'Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du total de la ligne.';
 
+    private const PU_HT_TEL_QU_ENREGISTRE = 'Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne à moins de deux centimes près.';
+
     /**
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), figé au dernier envoi d'un devis (voir Devis::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon et pour le document qu'on émet (voir ContenuFiscal)
      * @return list<string>
@@ -154,14 +156,23 @@ class MentionsFiscales
      * dit que ses produits, et ses services à leur prix de référence, se
      * comptent au prix de leur catalogue sans la TVA de leur taux, et ses
      * autres services à leur prix sans TVA. Chacune de ces explications
-     * ajoute que les prix unitaires s'affichent arrondis au centime (voir
-     * CalculateurLigne::prixUnitaireAffiche()) et que les totaux se
-     * calculent sans arrondi intermédiaire (décision de l'éditeur du
-     * 25/10/2026) : 4 x 65,00 € TTC à 20 % font 216,67 € HT, quand 4 x le
-     * PU HT affiché, 54,17 €, ferait 216,68 €. Rien en franchise en base,
-     * où le HT est le prix TTC, sans TVA, et le PU HT celui, au centime,
-     * du PU TTC. Une explication, pas une mention : elle ne se signe pas
-     * avec le document (voir ContenuFiscal).
+     * ajoute que les totaux se calculent sans arrondi intermédiaire, et
+     * l'écart qui peut en résulter : sur un document qui montre le PU HT
+     * tel qu'il est enregistré -- facture, avoir sur facture ou devis à un
+     * professionnel, vente sans TVA française (voir
+     * ContexteDeVente::documentMontreLePuHt() et
+     * CalculateurLigne::prixUnitaireExact(), décision de l'éditeur du
+     * 09/11/2026) --, que la quantité x ce PU HT, remise déduite, retombe
+     * sur le total HT de la ligne à moins de deux centimes près ; sur un
+     * ticket, un avoir sur ticket ou un devis à un particulier, que les
+     * prix unitaires s'affichent arrondis au centime (voir
+     * CalculateurLigne::prixUnitaireAffiche()), si bien que la quantité x le
+     * prix affiché peut différer du total de la ligne (décision de
+     * l'éditeur du 25/10/2026) : 4 x 65,00 € TTC à 20 % font 216,67 € HT,
+     * quand 4 x le PU HT arrondi, 54,17 €, ferait 216,68 €. Rien en
+     * franchise en base, où le HT est le prix TTC, sans TVA, et le PU HT
+     * celui, au centime, du PU TTC. Une explication, pas une mention : elle
+     * ne se signe pas avec le document (voir ContenuFiscal).
      */
     public function calcul(Facture|Avoir|Devis $document): ?string
     {
@@ -169,10 +180,11 @@ class MentionsFiscales
             return null;
         }
 
-        $calcul = ContexteDeVente::documentRetireLaTvaDuPrix($document)
+        $sansTvaFrancaise = ContexteDeVente::documentRetireLaTvaDuPrix($document);
+        $calcul = $sansTvaFrancaise
             ? ($document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA)
             : ($document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE);
 
-        return $calcul.' '.self::PRIX_UNITAIRES_AU_CENTIME;
+        return $calcul.' '.(ContexteDeVente::documentMontreLePuHt($document) ? self::PU_HT_TEL_QU_ENREGISTRE : self::PRIX_UNITAIRES_AU_CENTIME);
     }
 }

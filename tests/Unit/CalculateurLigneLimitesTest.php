@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use Closure;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -91,7 +92,7 @@ class CalculateurLigneLimitesTest extends TestCase
         $this->assertRefuse(fn () => $c->chiffrerUneVente([self::ligneDeVente(50_000_000_000_000), self::ligneDeVente(50_000_000_000_000)]), 'Montant hors limites.');
         $this->assertRefuse(fn () => $c->chiffrerUneVente([[...self::ligneDeVente(1000), 'taux_tva_du_prix' => self::BORNE_DES_CENTIMES]]), 'Montant hors limites.');
         $this->assertRefuse(fn () => $c->chiffrerUnAchat([self::ligneDAchat(100_000_000_000_000_000, 10, 2000, 1000)]), 'Montant hors limites.');
-        $this->assertRefuse(fn () => $c->arrondirAuCentime(1e12), 'Montant hors limites.');
+        $this->assertRefuse(fn () => SaisieDecimale::enCentiemes(1e12), 'Montant hors limites.');
         $this->assertSame(99_999_999_999_999, $c->chiffrerUneVente([self::ligneDeVente(99_999_999_999_999, 1, 0)])['total']['montant_ttc']);
     }
 
@@ -282,17 +283,19 @@ class CalculateurLigneLimitesTest extends TestCase
     {
         $c = $this->calculateur();
 
-        $this->assertSame(10000.0, $c->coutUnitaireNet(10000, 0));
-        $this->assertSame(7044287790.6719, $c->coutUnitaireNet(8911180000.85, 15, 7));
-        $this->assertSame(5993357535.4109, $c->coutUnitaireNet(9035666418.53, 33, 1));
-        $this->assertSame(1576248545.9273, $c->coutUnitaireNet(7005549093.01, 75, 10));
-        $this->assertSame(76774.77, $c->beneficeUnitaire(77416.16, 641.3893));
-        $this->assertSame(3.389, $c->coutMoyenPondere([['quantite' => 41, 'cout_unitaire' => 2.0943], ['quantite' => 14, 'cout_unitaire' => 9.8097], ['quantite' => 21, 'cout_unitaire' => 1.6361]]));
-        $this->assertSame(['montant_ht' => 100.0, 'montant_tva' => 20.0, 'montant_ttc' => 120.0], $c->valeurAuCoutMoyen(1, 100.0, 20));
-        $this->assertSame(['montant_ht' => 10000.0, 'montant_tva' => 2000.0, 'montant_ttc' => 12000.0], $c->valeurAuCoutMoyen(100, 100.0, 20));
-        $this->assertSame(219.9, $c->prixTtcArrondi(183.254, 20));
-        $this->assertSame(20.0, $c->prixTtcArrondi(10.0, 100));
-        $this->assertRefuse(fn () => $c->valeurAuCoutMoyen(1, 100.0, 101), 'Le taux de TVA doit être compris entre 0 et 100 %.');
+        // PU HT en millionièmes, coûts en dix-millièmes, montants en
+        // centimes, taux, remises et escomptes en centièmes de point.
+        $this->assertSame(100000000, $c->coutUnitaireNet(10000000000, 0));
+        $this->assertSame(70442877906719, $c->coutUnitaireNet(8911180000850000, 1500, 700));
+        $this->assertSame(59933575354109, $c->coutUnitaireNet(9035666418530000, 3300, 100));
+        $this->assertSame(15762485459273, $c->coutUnitaireNet(7005549093010000, 7500, 1000));
+        $this->assertSame(7677477, $c->beneficeUnitaire(7741616, 6413893));
+        $this->assertSame(33890, $c->coutMoyenPondere([['quantite' => 41, 'cout_unitaire' => 20943], ['quantite' => 14, 'cout_unitaire' => 98097], ['quantite' => 21, 'cout_unitaire' => 16361]]));
+        $this->assertSame(['montant_ht' => 10000, 'montant_tva' => 2000, 'montant_ttc' => 12000], $c->valeurAuCoutMoyen(1, 1000000, 2000));
+        $this->assertSame(['montant_ht' => 1000000, 'montant_tva' => 200000, 'montant_ttc' => 1200000], $c->valeurAuCoutMoyen(100, 1000000, 2000));
+        $this->assertSame(21990, $c->prixTtcArrondi(1832540, 2000));
+        $this->assertSame(2000, $c->prixTtcArrondi(100000, 10000));
+        $this->assertRefuse(fn () => $c->valeurAuCoutMoyen(1, 1000000, 10100), 'Le taux de TVA doit être compris entre 0 et 100 %.');
     }
 
     /**
@@ -308,14 +311,14 @@ class CalculateurLigneLimitesTest extends TestCase
     {
         $c = $this->calculateur();
 
-        $this->assertSame([3.3333, 3.25, 0.6667], [$c->coutUnitaireDuHt(1000, 3), $c->coutUnitaireDuHt(1000, 3, 2.5), $c->coutUnitaireDuHt(200, 3)]);
+        $this->assertSame([33333, 32500, 6667], [$c->coutUnitaireDuHt(1000, 3), $c->coutUnitaireDuHt(1000, 3, 250), $c->coutUnitaireDuHt(200, 3)]);
         $this->assertSame(
             ['0,1234 €', '1 234,50 €', '-12,50 €', '-0,1234 €', '0,00 €', '1 000 000,00 €', '999 999,999999 €'],
-            array_map($c->prixDAchatAffiche(...), [123400, 1234500000, -12500000, -123400, 0, 1_000_000_000_000, 999_999_999_999]),
+            array_map($c->prixUnitaireExact(...), [123400, 1234500000, -12500000, -123400, 0, 1_000_000_000_000, 999_999_999_999]),
         );
         $this->assertSame(
             ['0.1234', '12.50', '8.333333', '-0.05', '0.00'],
-            array_map($c->prixDAchatEnDecimal(...), [123400, 12500000, 8333333, -50000, 0]),
+            array_map($c->prixUnitaireExactEnDecimal(...), [123400, 12500000, 8333333, -50000, 0]),
         );
     }
 
@@ -329,26 +332,27 @@ class CalculateurLigneLimitesTest extends TestCase
     {
         $c = $this->calculateur();
 
-        $this->assertNull($c->coutMoyenApresUneSortie(0, 6.0, 0, 10.0));
-        $this->assertSame(6.0, $c->coutMoyenApresUneSortie(20, 6.0, 0, 10.0));
-        $this->assertSame(4.0, $c->coutMoyenApresUneSortie(10, 2.0, 5, 0.0));
-        $this->assertSame(0.0, $c->coutMoyenApresUneSortie(10, 0.0, 5, 0.0));
+        $this->assertNull($c->coutMoyenApresUneSortie(0, 60000, 0, 100000));
+        $this->assertSame(60000, $c->coutMoyenApresUneSortie(20, 60000, 0, 100000));
+        $this->assertSame(40000, $c->coutMoyenApresUneSortie(10, 20000, 5, 0));
+        $this->assertSame(0, $c->coutMoyenApresUneSortie(10, 0, 5, 0));
     }
 
     /**
-     * Un montant reçu absent compte pour 0 € ; le pré-arrondi à six
-     * décimales d'une conversion en centimes n'arrondit qu'au demi-centime
-     * pile : 0,004999995 € (bruit sous le millionième) vaut 1 centime,
-     * 0,0049999652 € (plus d'un millionième sous le demi-centime) n'en vaut
-     * aucun.
+     * Un montant reçu absent compte pour 0 € ; une conversion en centimes
+     * n'arrondit qu'au demi-centime pile, lu chiffre à chiffre :
+     * 0,0049999652 € (sous le demi-centime) n'en vaut aucun ; un nombre
+     * transmis en flottant se lit d'abord à six décimales, qui effacent son
+     * bruit binaire : 0,004999995 € (bruit sous le millionième) vaut
+     * 1 centime.
      */
     public function test_les_conversions_en_centimes_arrondissent_au_bon_endroit(): void
     {
         $c = $this->calculateur();
 
-        $this->assertSame(-12.5, $c->soustraire(null, '12.50'));
-        $this->assertSame(0.01, $c->arrondirAuCentime(0.004999995));
-        $this->assertSame(0.0, $c->arrondirAuCentime(0.0049999652));
+        $this->assertSame(-1250, $c->sommer([null]) - $c->sommer(['12.50']));
+        $this->assertSame(1, SaisieDecimale::enCentiemes(0.004999995));
+        $this->assertSame(0, SaisieDecimale::enCentiemes('0.0049999652'));
     }
 
     /**
@@ -384,10 +388,10 @@ class CalculateurLigneLimitesTest extends TestCase
     {
         $c = $this->calculateur();
 
-        $this->assertSame([0.0, 0.0, 1.5], [
-            $c->coutMoyenApresUneSortie(2, 0.0, 1, 0.0),
-            $c->coutMoyenApresUneSortie(2, 1.0, 1, 5.0),
-            $c->coutMoyenApresUneSortie(2, 2.0, 1, 2.5),
+        $this->assertSame([0, 0, 15000], [
+            $c->coutMoyenApresUneSortie(2, 0, 1, 0),
+            $c->coutMoyenApresUneSortie(2, 10000, 1, 50000),
+            $c->coutMoyenApresUneSortie(2, 20000, 1, 25000),
         ]);
     }
 }

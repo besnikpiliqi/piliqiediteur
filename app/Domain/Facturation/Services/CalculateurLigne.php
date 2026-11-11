@@ -60,19 +60,26 @@ use UnexpectedValueException;
  *    taux), au millionième d'euro (prixUnitaireHtExact()) : 1 000
  *    articles à 1,00 € TTC à 20 % ont un PU HT de 0,833333 €, et 1 000 x
  *    0,833333 retombe à moins de deux centimes sur les 833,33 € HT de la
- *    ligne. Documents et écrans l'affichent arrondi au centime, 0,83 €
- *    (prixUnitaireAffiche()), sans jamais calculer sur ce prix affiché :
- *    4 x 65,00 € TTC à 20 % font 216,67 € HT, et non 4 x 54,17 € =
- *    216,68 € ; la note de calcul du document l'explique.
+ *    ligne. Les documents qui montrent le PU HT (factures, avoirs sur
+ *    facture et devis à un professionnel, ventes sans TVA française)
+ *    l'affichent tel qu'il est enregistré, 0,833333 €
+ *    (prixUnitaireExact(), décision de l'éditeur du 09/11/2026) ; tout
+ *    autre prix unitaire de vente montré en lecture s'affiche arrondi au
+ *    centime, 0,83 € (prixUnitaireAffiche()). Aucun montant ne se calcule
+ *    sur un prix affiché : 4 x 65,00 € TTC à 20 % font 216,67 € HT, et non
+ *    4 x 54,17 € = 216,68 € ; la note de calcul du document l'explique.
  *
- * Ces calculs n'acceptent que des entiers (centimes, millionièmes d'euro
- * d'un PU HT, nombre d'articles, centièmes de point de taux et de remise)
- * et refusent un nombre à virgule : un flottant comme 8.325 vaut
- * réellement 8,32499999..., et un seul centime d'écart avec le montant
- * transmis à l'administration suffit à faire rejeter une facture. Une
- * saisie se lit en centièmes par SaisieDecimale, une colonne décimale par
- * enCentiemes(), le PU HT d'une ligne de vente ou d'achat par
- * enMillioniemes().
+ * Ces calculs n'acceptent et ne rendent que des entiers, chacun dans son
+ * unité : centimes d'un montant, dix-millièmes d'euro d'un coût d'achat
+ * ou d'un coût moyen, millionièmes d'euro d'un PU HT, nombre d'articles,
+ * centièmes de point d'un taux, d'une remise ou d'un escompte. Aucun
+ * nombre à virgule flottante n'y entre ni n'en sort : un flottant comme
+ * 8.325 vaut réellement 8,32499999..., et un seul centime d'écart avec le
+ * montant transmis à l'administration suffit à faire rejeter une
+ * facture. Une saisie se lit par SaisieDecimale, une colonne décimale par
+ * enCentiemes(), enDixMilliemes() ou enMillioniemes(), et un entier
+ * s'écrit dans sa colonne par enDecimal(), enDecimalAuDixMillieme() ou
+ * enDecimalAuMillionieme().
  */
 class CalculateurLigne
 {
@@ -81,7 +88,7 @@ class CalculateurLigne
      * 9 999 999 999,99 €, soit 1e12 centimes) : un montant absurde est
      * refusé plutôt que converti.
      */
-    private const UNITES_MAXIMUM = 1e14;
+    private const UNITES_MAXIMUM = 100_000_000_000_000;
 
     /**
      * La même borne pour un prix unitaire en millionièmes d'euro (voir
@@ -386,20 +393,22 @@ class CalculateurLigne
      * HT de la ligne (voir chiffrerUnAchat()) : ce HT ÷ la quantité, moins
      * l'escompte de la facture, au dix-millième d'euro comme le CMUP qu'il
      * alimente, arrondi une seule fois -- 10,00 € HT pour 3 articles font
-     * 3,3333 € chacun.
+     * 3,3333 € chacun (33333).
      *
      * @param  int  $htCentimes  le HT de la ligne, en centimes
+     * @param  int  $escompteCentiemes  l'escompte de la facture, en centièmes de point
+     * @return int en dix-millièmes d'euro
      *
      * @throws InvalidArgumentException
      */
-    public function coutUnitaireDuHt(int $htCentimes, int $quantite, float $escomptePourcentage = 0.0): float
+    public function coutUnitaireDuHt(int $htCentimes, int $quantite, int $escompteCentiemes = 0): int
     {
         $quantite = $this->quantite(['quantite' => $quantite]);
         $ht = $this->entier(['montant_ht' => $htCentimes], 'montant_ht');
 
         // HT x (100 % - escompte) en centièmes de point, soit au plus 10^18
         // : en dix-millièmes d'euro, ÷ (100 x quantité).
-        return $this->diviserArrondi($this->multiplier($ht, 10000 - $this->remiseEnCentiemes($escomptePourcentage)), $this->multiplier(100, $quantite)) / 10000;
+        return $this->diviserArrondi($this->multiplier($ht, 10000 - $this->remise(['remise_pourcentage' => $escompteCentiemes])), $this->multiplier(100, $quantite));
     }
 
     /**
@@ -455,13 +464,24 @@ class CalculateurLigne
             + $this->diviserArrondi(($ttcEnMillioniemes % $diviseur) * 10000, $diviseur);
     }
 
-    public function prixUnitaireTtcDepuisHt(float $prixUnitaireHt, float $tauxTva): float
+    /**
+     * Un prix HT au centime avec sa TVA : HT + HT x taux, la TVA arrondie
+     * une fois au centime le plus proche -- 16,67 € HT à 20 % font
+     * 20,00 € TTC. Le prix d'un service qui revient dans la TVA française,
+     * quand une vente sans TVA française y revient (voir
+     * ChoisitLaNatureDeLOperation).
+     *
+     * @param  int  $prixUnitaireHt  en centimes
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireTtcDepuisHt(int $prixUnitaireHt, int $tauxTva): int
     {
-        $this->verifierTauxTva($tauxTva);
+        $ht = $this->entier(['prix_unitaire_ht' => $prixUnitaireHt], 'prix_unitaire_ht');
 
-        $htCentimes = $this->versUnites($prixUnitaireHt, 100);
-
-        return $this->centimesVersMontant($htCentimes + $this->diviserArrondi($this->multiplier($htCentimes, $this->versUnites($tauxTva, 100)), 10000));
+        return $ht + $this->tvaDuHt($ht, $this->taux(['taux_tva' => $tauxTva], 'taux_tva'));
     }
 
     /**
@@ -471,27 +491,21 @@ class CalculateurLigne
      * proche (au centime, ou à la dizaine d'euros pour un prix en X9).
      * C'est le seul prix arrondi, lors de l'enregistrement du produit.
      *
+     * @param  int  $prixHt  en dix-millièmes d'euro
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en centimes
+     *
      * @throws InvalidArgumentException
      */
-    public function prixTtcArrondi(float $prixHt, float $tauxTva, int $pasCentimes = 1): float
+    public function prixTtcArrondi(int $prixHt, int $tauxTva, int $pasCentimes = 1): int
     {
-        $this->verifierTauxTva($tauxTva);
+        $taux = $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
 
         // Dix-millièmes d'euro x (100 % + taux) en centièmes de point :
         // 10^-8 €, soit 10^6 par centime.
-        $prixExact = $this->multiplier($this->versUnites($prixHt, 10000), 10000 + $this->versUnites($tauxTva, 100));
+        $prixExact = $this->multiplier($this->entier(['prix_ht' => $prixHt], 'prix_ht'), 10000 + $taux);
 
-        return $this->multiplier($this->diviserArrondi($prixExact, $this->multiplier(1_000_000, $pasCentimes)), $pasCentimes) / 100;
-    }
-
-    /**
-     * Ramène un prix saisi au centime, exactement comme il sera enregistré
-     * (colonnes decimal(12,2)) : le calcul doit porter sur la valeur
-     * stockée, jamais sur une saisie plus précise que ce qui est conservé.
-     */
-    public function arrondirAuCentime(float $montant): float
-    {
-        return $this->centimesVersMontant($this->versUnites($montant, 100));
+        return $this->multiplier($this->diviserArrondi($prixExact, $this->multiplier(1_000_000, $pasCentimes)), $pasCentimes);
     }
 
     /**
@@ -500,19 +514,23 @@ class CalculateurLigne
      * centime -- 2 000 articles à 0,045 € valent 90,00 € HT, pas 2 000 x
      * 0,05 €. La TVA se calcule sur ce montant HT.
      *
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     * @param  int  $coutMoyenHt  en dix-millièmes d'euro
+     * @param  int  $tauxTva  en centièmes de point
+     * @return array{montant_ht: int, montant_tva: int, montant_ttc: int} en centimes
+     *
+     * @throws InvalidArgumentException
      */
-    public function valeurAuCoutMoyen(int $quantite, float $coutMoyenHt, float $tauxTva): array
+    public function valeurAuCoutMoyen(int $quantite, int $coutMoyenHt, int $tauxTva): array
     {
-        $this->verifierTauxTva($tauxTva);
+        $taux = $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
 
-        $htCentimes = $this->diviserArrondi($this->multiplier($this->versUnites($coutMoyenHt, 10000), $quantite), 100);
-        $tvaCentimes = $this->diviserArrondi($this->multiplier($htCentimes, $this->versUnites($tauxTva, 100)), 10000);
+        $htCentimes = $this->borne($this->diviserArrondi($this->multiplier($this->entier(['cout' => $coutMoyenHt], 'cout'), $quantite), 100));
+        $tvaCentimes = $this->tvaDuHt($htCentimes, $taux);
 
         return [
-            'montant_ht' => $this->centimesVersMontant($htCentimes),
-            'montant_tva' => $this->centimesVersMontant($tvaCentimes),
-            'montant_ttc' => $this->centimesVersMontant($htCentimes + $tvaCentimes),
+            'montant_ht' => $htCentimes,
+            'montant_tva' => $tvaCentimes,
+            'montant_ttc' => $htCentimes + $tvaCentimes,
         ];
     }
 
@@ -524,36 +542,42 @@ class CalculateurLigne
      * 1,18 € remisé de 15 % coûte 1,003 €, et 3 articles valent bien les
      * 3,01 € HT de la ligne, pas 3 x 1,00 € ; 0,1234 € coûte 0,1234 €.
      *
-     * @param  float|string  $prixUnitaireHt  écrit comme sa colonne (« 0.1234 »), ou un nombre lu à six décimales
+     * @param  int  $prixUnitaireHt  en millionièmes d'euro (voir enMillioniemes() et SaisieDecimale::enMillioniemes())
+     * @param  int  $remise  la remise de la ligne, en centièmes de point
+     * @param  int  $escompte  l'escompte de la facture, en centièmes de point
+     * @return int en dix-millièmes d'euro
      *
      * @throws InvalidArgumentException
      */
-    public function coutUnitaireNet(float|string $prixUnitaireHt, float $remisePourcentage, float $escomptePourcentage = 0.0): float
+    public function coutUnitaireNet(int $prixUnitaireHt, int $remise, int $escompte = 0): int
     {
         // (100 % - remise) x (100 % - escompte), en (centièmes de point)²,
         // soit au plus 10^8. Le coût vaut millionièmes x facteur / 10^10,
         // au dix-millième ; les millionièmes sont découpés autour de 10^10
         // pour que le produit ne déborde jamais, avec un seul arrondi.
-        $facteur = (10000 - $this->remiseEnCentiemes($remisePourcentage)) * (10000 - $this->remiseEnCentiemes($escomptePourcentage));
-        $millioniemes = SaisieDecimale::enMillioniemes($prixUnitaireHt);
+        $facteur = (10000 - $this->remise(['remise_pourcentage' => $remise])) * (10000 - $this->remise(['remise_pourcentage' => $escompte]));
 
-        $coutDixMilliemes = $this->multiplier(intdiv($millioniemes, 10_000_000_000), $facteur)
-            + $this->diviserArrondi($this->multiplier($millioniemes % 10_000_000_000, $facteur), 10_000_000_000);
-
-        return $coutDixMilliemes / 10000;
+        return $this->multiplier(intdiv($prixUnitaireHt, 10_000_000_000), $facteur)
+            + $this->diviserArrondi($this->multiplier($prixUnitaireHt % 10_000_000_000, $facteur), 10_000_000_000);
     }
 
     /**
      * Ce que rapporte un article : son prix de vente HT moins son coût
      * d'achat exact (voir coutUnitaireNet()), arrondi une seule fois au
      * centime -- 11,00 € - 1,005 € = 9,995 € -> 10,00 €.
+     *
+     * @param  int  $prixVenteHt  en centimes
+     * @param  int  $coutUnitaireHt  en dix-millièmes d'euro
+     * @return int en centimes
+     *
+     * @throws InvalidArgumentException
      */
-    public function beneficeUnitaire(float $prixVenteHt, float $coutUnitaireHt): float
+    public function beneficeUnitaire(int $prixVenteHt, int $coutUnitaireHt): int
     {
-        return $this->centimesVersMontant($this->diviserArrondi(
-            $this->versUnites($prixVenteHt, 10000) - $this->versUnites($coutUnitaireHt, 10000),
+        return $this->diviserArrondi(
+            $this->multiplier($this->entier(['prix' => $prixVenteHt], 'prix'), 100) - $this->entier(['cout' => $coutUnitaireHt], 'cout'),
             100,
-        ));
+        );
     }
 
     /**
@@ -572,32 +596,24 @@ class CalculateurLigne
     }
 
     /**
-     * Un coût moyen (voir coutMoyenPondere()) tel qu'il est enregistré,
-     * au dix-millième d'euro.
-     */
-    public function arrondirAuDixMillieme(float $montant): float
-    {
-        return $this->versUnites($montant, 10000) / 10000;
-    }
-
-    /**
      * Coût unitaire moyen de lots (quantité, coût unitaire) pondéré par
      * leurs quantités, au dix-millième d'euro : Σ(quantité x coût) /
      * Σ quantité. Des lots de coût nul (marchandise offerte) coûtent 0 ;
      * des lots qui ne pèsent rien (aucun article) n'ont pas de coût moyen :
      * null. Une quantité ou un coût négatif n'a pas de sens.
      *
-     * @param  iterable<array{quantite: int, cout_unitaire: float|string}>  $lots
+     * @param  iterable<array{quantite: int, cout_unitaire: int}>  $lots  chaque coût en dix-millièmes d'euro
+     * @return int|null en dix-millièmes d'euro
      *
      * @throws InvalidArgumentException
      */
-    public function coutMoyenPondere(iterable $lots): ?float
+    public function coutMoyenPondere(iterable $lots): ?int
     {
         $quantiteTotale = 0;
         $valeurTotaleDixMilliemes = 0;
 
         foreach ($lots as $lot) {
-            $coutDixMilliemes = $this->versUnites((float) $lot['cout_unitaire'], 10000);
+            $coutDixMilliemes = $this->entier($lot, 'cout_unitaire');
 
             if ($lot['quantite'] < 0 || $coutDixMilliemes < 0) {
                 throw new InvalidArgumentException('Un lot de stock ne peut avoir ni quantité ni coût négatif.');
@@ -611,7 +627,7 @@ class CalculateurLigne
             return null;
         }
 
-        return $this->diviserArrondi($valeurTotaleDixMilliemes, $quantiteTotale) / 10000;
+        return $this->diviserArrondi($valeurTotaleDixMilliemes, $quantiteTotale);
     }
 
     /**
@@ -627,12 +643,16 @@ class CalculateurLigne
      * 0 € -- 5 articles à 6 € dont 4 retournés à 10 € : le dernier vaut 0 €,
      * pas -10 €. Une quantité ou un coût négatif n'a pas de sens.
      *
+     * @param  int  $coutMoyen  en dix-millièmes d'euro
+     * @param  int  $coutUnitaire  en dix-millièmes d'euro
+     * @return int|null en dix-millièmes d'euro
+     *
      * @throws InvalidArgumentException
      */
-    public function coutMoyenApresUneSortie(int $stock, float $coutMoyen, int $quantite, float $coutUnitaire): ?float
+    public function coutMoyenApresUneSortie(int $stock, int $coutMoyen, int $quantite, int $coutUnitaire): ?int
     {
-        $coutMoyenDixMilliemes = $this->versUnites($coutMoyen, 10000);
-        $coutUnitaireDixMilliemes = $this->versUnites($coutUnitaire, 10000);
+        $coutMoyenDixMilliemes = $this->entier(['cout' => $coutMoyen], 'cout');
+        $coutUnitaireDixMilliemes = $this->entier(['cout' => $coutUnitaire], 'cout');
 
         if ($stock < 0 || $quantite < 0 || $coutMoyenDixMilliemes < 0 || $coutUnitaireDixMilliemes < 0) {
             throw new InvalidArgumentException('Un lot de stock ne peut avoir ni quantité ni coût négatif.');
@@ -647,19 +667,21 @@ class CalculateurLigne
         $valeurRestanteDixMilliemes = $this->multiplier($coutMoyenDixMilliemes, $stock) - $this->multiplier($coutUnitaireDixMilliemes, $quantite);
 
         // La valeur d'un stock ne descend jamais sous 0 €.
-        return $this->diviserArrondi(max(0, $valeurRestanteDixMilliemes), $reste) / 10000;
+        return $this->diviserArrondi(max(0, $valeurRestanteDixMilliemes), $reste);
     }
 
     /**
      * Les sommes des HT, des TVA et des TTC de ces lignes, tableaux ou
-     * lignes enregistrées.
-     *
-     * Chaque montant est une valeur simple, lue comme (float) la lit.
+     * lignes enregistrées, en centimes : chaque montant est écrit comme sa
+     * colonne (« 41.67 », voir enCentiemes()), et la somme se fait en
+     * entiers, jamais en flottants ni par la base. Pour les enregistrer
+     * dans les colonnes d'un document, voir enDecimaux().
      *
      * @param  iterable<array{montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}|\ArrayAccess<string, mixed>>  $lignes
-     * @return array{total_ht: float, total_tva: float, total_ttc: float}
+     * @return array{total_ht: int, total_tva: int, total_ttc: int}
      *
      * @throws UnexpectedValueException un montant qui n'est pas une valeur simple
+     * @throws InvalidArgumentException un montant qui n'est pas écrit comme sa colonne
      */
     public function totaliser(iterable $lignes): array
     {
@@ -668,15 +690,15 @@ class CalculateurLigne
         $totalTtcCentimes = 0;
 
         foreach ($lignes as $ligne) {
-            $totalHtCentimes += $this->versUnites((float) ValeurSimple::simple($ligne['montant_ht']), 100);
-            $totalTvaCentimes += $this->versUnites((float) ValeurSimple::simple($ligne['montant_tva']), 100);
-            $totalTtcCentimes += $this->versUnites((float) ValeurSimple::simple($ligne['montant_ttc']), 100);
+            $totalHtCentimes = $this->borne($totalHtCentimes + $this->enCentiemes(ValeurSimple::simple($ligne['montant_ht'])));
+            $totalTvaCentimes = $this->borne($totalTvaCentimes + $this->enCentiemes(ValeurSimple::simple($ligne['montant_tva'])));
+            $totalTtcCentimes = $this->borne($totalTtcCentimes + $this->enCentiemes(ValeurSimple::simple($ligne['montant_ttc'])));
         }
 
         return [
-            'total_ht' => $this->centimesVersMontant($totalHtCentimes),
-            'total_tva' => $this->centimesVersMontant($totalTvaCentimes),
-            'total_ttc' => $this->centimesVersMontant($totalTtcCentimes),
+            'total_ht' => $totalHtCentimes,
+            'total_tva' => $totalTvaCentimes,
+            'total_ttc' => $totalTtcCentimes,
         ];
     }
 
@@ -684,10 +706,13 @@ class CalculateurLigne
      * Cumul de documents déjà totalisés (tickets en attente de clôture,
      * chiffre d'affaires, relevé « Fermer ma caisse ») : les mêmes sommes
      * séparées des HT, des TVA et des TTC qu'entre les lignes d'un
-     * document.
+     * document, en centimes.
      *
-     * @param  iterable<array{total_ht: float|string, total_tva: float|string, total_ttc: float|string}|\ArrayAccess<string, mixed>>  $documents
-     * @return array{total_ht: float, total_tva: float, total_ttc: float}
+     * @param  iterable<array{total_ht: string, total_tva: string, total_ttc: string}|\ArrayAccess<string, mixed>>  $documents
+     * @return array{total_ht: int, total_tva: int, total_ttc: int}
+     *
+     * @throws UnexpectedValueException
+     * @throws InvalidArgumentException
      */
     public function cumuler(iterable $documents): array
     {
@@ -706,48 +731,62 @@ class CalculateurLigne
 
     /**
      * Des totaux moins ceux des documents qui les corrigent (les ventes
-     * d'une journée de caisse moins ses avoirs), au centime, séparément
+     * d'une journée de caisse moins ses avoirs), en centimes, séparément
      * pour les HT, les TVA et les TTC.
      *
-     * @param  array{total_ht: float, total_tva: float, total_ttc: float}  $totaux
-     * @param  array{total_ht: float, total_tva: float, total_ttc: float}  $totauxDeduits
-     * @return array{total_ht: float, total_tva: float, total_ttc: float}
+     * @param  array{total_ht: int, total_tva: int, total_ttc: int}  $totaux
+     * @param  array{total_ht: int, total_tva: int, total_ttc: int}  $totauxDeduits
+     * @return array{total_ht: int, total_tva: int, total_ttc: int}
+     *
+     * @throws InvalidArgumentException
      */
     public function deduire(array $totaux, array $totauxDeduits): array
     {
         return [
-            'total_ht' => $this->soustraire($totaux['total_ht'], $totauxDeduits['total_ht']),
-            'total_tva' => $this->soustraire($totaux['total_tva'], $totauxDeduits['total_tva']),
-            'total_ttc' => $this->soustraire($totaux['total_ttc'], $totauxDeduits['total_ttc']),
+            'total_ht' => $this->borne($totaux['total_ht'] - $totauxDeduits['total_ht']),
+            'total_tva' => $this->borne($totaux['total_tva'] - $totauxDeduits['total_tva']),
+            'total_ttc' => $this->borne($totaux['total_ttc'] - $totauxDeduits['total_ttc']),
         ];
     }
 
     /**
-     * Somme exacte de montants au centime (paiements, crédits d'avoir...),
-     * en centimes -- jamais une somme de flottants.
+     * Somme exacte de montants écrits comme leurs colonnes (paiements,
+     * crédits d'avoir...), en centimes : chaque montant lu par
+     * enCentiemes(), rien ou un texte vide comptant pour zéro -- jamais une
+     * somme de flottants.
      *
-     * @param  iterable<float|int|string|null>  $montants
+     * @param  iterable<int|string|null>  $montants
+     *
+     * @throws InvalidArgumentException
      */
-    public function sommer(iterable $montants): float
+    public function sommer(iterable $montants): int
     {
         $totalCentimes = 0;
 
         foreach ($montants as $montant) {
-            $totalCentimes += $this->versUnites((float) $montant, 100);
+            if ($montant !== null && $montant !== '') {
+                $totalCentimes = $this->borne($totalCentimes + $this->enCentiemes($montant));
+            }
         }
 
-        return $this->centimesVersMontant($totalCentimes);
+        return $totalCentimes;
     }
 
     /**
-     * Un montant moins ceux qui en sont déduits, au centime exact (reste à
-     * payer, crédit encore disponible, monnaie à rendre).
+     * Des montants en centimes écrits comme leurs colonnes (voir
+     * enDecimal()), sous les mêmes clés : les totaux d'un document à
+     * enregistrer (voir totaliser()).
+     *
+     * @template TCle of array-key
+     *
+     * @param  array<TCle, int>  $centimes
+     * @return array<TCle, numeric-string>
+     *
+     * @throws InvalidArgumentException
      */
-    public function soustraire(float|int|string|null $montant, float|int|string|null ...$montantsDeduits): float
+    public function enDecimaux(array $centimes): array
     {
-        return $this->centimesVersMontant(
-            $this->versUnites((float) $montant, 100) - $this->versUnites($this->sommer($montantsDeduits), 100),
-        );
+        return array_map($this->enDecimal(...), $centimes);
     }
 
     /**
@@ -782,6 +821,8 @@ class CalculateurLigne
     /**
      * L'inverse d'enCentiemes() : 12000 s'écrit « 120.00 », -5 s'écrit
      * « -0.05 », comme le cast decimal:2.
+     *
+     * @return numeric-string
      *
      * @throws InvalidArgumentException
      */
@@ -839,6 +880,8 @@ class CalculateurLigne
      * L'inverse d'enMillioniemes(), comme le cast decimal:6 : 833333
      * s'écrit « 0.833333 », 10000000 « 10.000000 ».
      *
+     * @return numeric-string
+     *
      * @throws InvalidArgumentException
      */
     public function enDecimalAuMillionieme(int $millioniemes): string
@@ -848,6 +891,42 @@ class CalculateurLigne
         }
 
         return sprintf('%s%d.%06d', $millioniemes < 0 ? '-' : '', intdiv(abs($millioniemes), 1_000_000), abs($millioniemes) % 1_000_000);
+    }
+
+    /**
+     * Un coût enregistré au dix-millième d'euro (decimal(14,4), lu en
+     * chaîne par le cast decimal:4 : le coût moyen d'un produit, le coût
+     * d'un mouvement de stock), en dix-millièmes entiers : « 3.3333 » vaut
+     * 33333, un entier compte des euros (2 vaut 20000). Mêmes règles
+     * qu'enCentiemes() : une écriture décimale exacte, quatre décimales au
+     * plus, jamais un flottant, et la même borne, en dix-millièmes.
+     *
+     * @param  mixed  $valeur  une chaîne décimale ou un entier ; toute autre valeur est refusée
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDixMilliemes(mixed $valeur): int
+    {
+        if (! is_int($valeur)) {
+            return $this->lireUneEcriture($valeur, 4, 'Coût illisible : une chaîne décimale exacte (quatre décimales au plus) ou un entier est attendu.');
+        }
+
+        return $this->borne($this->multiplier($valeur, 10000));
+    }
+
+    /**
+     * L'inverse d'enDixMilliemes(), comme le cast decimal:4 : 33333
+     * s'écrit « 3.3333 », 20000 « 2.0000 ».
+     *
+     * @return numeric-string
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimalAuDixMillieme(int $dixMilliemes): string
+    {
+        $this->borne($dixMilliemes);
+
+        return sprintf('%s%d.%04d', $dixMilliemes < 0 ? '-' : '', intdiv(abs($dixMilliemes), 10000), abs($dixMilliemes) % 10000);
     }
 
     /**
@@ -873,14 +952,17 @@ class CalculateurLigne
     /**
      * La mise en forme de tout prix unitaire de vente que montre en lecture
      * un document, une fiche, une liste, une aide, un message ou la caisse,
-     * PU HT comme PU TTC, prix de vente, prix de référence, et du coût moyen
-     * d'un produit : arrondi au centime (voir prixUnitaireAuCentime()),
-     * écrit comme un montant (voir enEuros()) : « 54,17 € », « 0,83 € »,
-     * « 1 000,00 € ». Un prix enregistré au centime s'y écrit tel quel. Un
-     * champ où le prix ne se saisit pas le montre de même au centime (voir
+     * PU TTC, prix de vente, prix de référence, PU HT d'un ticket ou d'un
+     * document à un particulier, et du coût moyen d'un produit : arrondi au
+     * centime (voir prixUnitaireAuCentime()), écrit comme un montant (voir
+     * enEuros()) : « 54,17 € », « 0,83 € », « 1 000,00 € ». Un prix
+     * enregistré au centime s'y écrit tel quel. Un champ où le prix ne se
+     * saisit pas le montre de même au centime (voir
      * prixUnitaireDansUnChamp()) ; un champ où il se saisit, tel qu'il est
-     * enregistré. Un prix d'achat s'affiche tel qu'il est enregistré (voir
-     * prixDAchatAffiche()).
+     * enregistré. Le PU HT d'un document qui le montre (facture, avoir sur
+     * facture ou devis à un professionnel, vente sans TVA française) et un
+     * prix d'achat s'affichent tels qu'ils sont enregistrés (voir
+     * prixUnitaireExact()).
      *
      * @throws InvalidArgumentException
      */
@@ -890,15 +972,20 @@ class CalculateurLigne
     }
 
     /**
-     * Un PU HT d'achat ou un coût d'inventaire d'ouverture en millionièmes,
-     * écrit tel qu'il est enregistré (décision de l'éditeur du 02/11/2026,
-     * T2), sans zéro inutile au-delà du centime, comme le relit sa colonne
-     * (voir PrixDAchat) et le montre un champ où il se saisit : « 0.1234 »,
-     * « 12.50 », « 8.333333 ».
+     * Un prix unitaire en millionièmes écrit tel qu'il est enregistré, sans
+     * zéro inutile au-delà du centime, comme le relit sa colonne (voir
+     * PrixDAchat) et le montre un champ : « 0.1234 », « 12.50 »,
+     * « 8.333333 ». Le PU HT d'une ligne d'achat ou un coût d'inventaire
+     * d'ouverture, où il se saisit (décision de l'éditeur du 02/11/2026,
+     * T2), et le PU HT d'une ligne de vente dans le formulaire d'un
+     * document qui le montre, où il ne se saisit pas (décision de l'éditeur
+     * du 09/11/2026, voir prixUnitaireExact()).
+     *
+     * @return numeric-string
      *
      * @throws InvalidArgumentException
      */
-    public function prixDAchatEnDecimal(int $millioniemes): string
+    public function prixUnitaireExactEnDecimal(int $millioniemes): string
     {
         $decimal = $this->enDecimalAuMillionieme($millioniemes);
         [$entiers, $decimales] = explode('.', $decimal);
@@ -907,18 +994,26 @@ class CalculateurLigne
     }
 
     /**
-     * Un PU HT d'achat ou un coût d'inventaire d'ouverture tel que le
-     * montrent en lecture les fiches, les listes, les aides et les messages
-     * des achats (décision de l'éditeur du 02/11/2026, T2) : tel qu'il est
-     * enregistré, sans zéro inutile au-delà du centime, écrit comme un
-     * montant : « 0,1234 € », « 12,50 € », « 1 234,50 € ». Il ne s'arrondit
-     * jamais au centime : 1 000 x 0,1234 € font bien 123,40 € HT.
+     * La seule mise en forme d'un prix unitaire montré tel qu'il est
+     * enregistré, jusqu'à six décimales, sans zéro inutile au-delà du
+     * centime, écrit comme un montant : « 8,333333 € », « 8,325 € »,
+     * « 0,825 € », « 1 040,833333 € », « 45,00 € ». Il ne s'arrondit jamais
+     * au centime : la quantité x ce prix, remise déduite, retombe sur le
+     * total HT de la ligne à moins de deux centimes près (voir
+     * prixUnitaireHtExact()). C'est le PU HT d'une ligne de vente sur les
+     * documents qui le montrent, leur PDF, leur fiche et les lignes de leur
+     * formulaire -- factures, avoirs sur facture et devis à un
+     * professionnel, ventes sans TVA française (décision de l'éditeur du
+     * 09/11/2026) --, le même prix que la facture électronique transmet ; et
+     * le PU HT d'un achat ou le coût d'un inventaire d'ouverture dans les
+     * fiches, les listes, les aides et les messages des achats (décision de
+     * l'éditeur du 02/11/2026, T2) : 1 000 x 0,1234 € font bien 123,40 € HT.
      *
      * @throws InvalidArgumentException
      */
-    public function prixDAchatAffiche(int $millioniemes): string
+    public function prixUnitaireExact(int $millioniemes): string
     {
-        [, $decimales] = explode('.', $this->prixDAchatEnDecimal($millioniemes));
+        [, $decimales] = explode('.', $this->prixUnitaireExactEnDecimal($millioniemes));
 
         return self::ecrireEnEuros($millioniemes, 1_000_000, $decimales);
     }
@@ -937,32 +1032,6 @@ class CalculateurLigne
     public function prixUnitaireDansUnChamp(int $millioniemes): string
     {
         return $this->enDecimal($this->prixUnitaireAuCentime($millioniemes));
-    }
-
-    /**
-     * Une remise (ou un escompte) en centièmes de point : hors de 0-100 %,
-     * elle n'existe pas.
-     *
-     * @throws InvalidArgumentException
-     */
-    private function remiseEnCentiemes(float $remisePourcentage): int
-    {
-        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
-            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-        }
-
-        return $this->versUnites($remisePourcentage, 100);
-    }
-
-    /**
-     * Un taux hors de 0-100 % n'existe pas -- et -100 % diviserait par
-     * zéro en passant du TTC au HT.
-     */
-    private function verifierTauxTva(float $tauxTva): void
-    {
-        if ($tauxTva < 0 || $tauxTva > 100) {
-            throw new InvalidArgumentException('Le taux de TVA doit être compris entre 0 et 100 %.');
-        }
     }
 
     /**
@@ -1142,11 +1211,27 @@ class CalculateurLigne
     }
 
     /**
-     * Un taux en centièmes de point tel qu'il s'écrit : « 20 % », « 5,5 % ».
+     * Un taux ou une remise en centièmes de point tel qu'il s'écrit à
+     * l'écran et sur les documents, sans zéro inutile : « 20 % »,
+     * « 5,5 % », « 2,1 % », « 0,05 % ».
      */
     public static function tauxEnTexte(int $taux): string
     {
-        return str_replace('.', ',', (string) ($taux / 100)).' %';
+        return str_replace('.', ',', self::centiemesDansUnChamp($taux)).' %';
+    }
+
+    /**
+     * Un nombre en centièmes -- un taux ou une remise en centièmes de
+     * point, un montant du barème des prix de vente en centimes -- tel que
+     * l'écrit un champ où il se saisit, sans zéro inutile, avec un point :
+     * « 20 », « 5.5 », « 0 », « 12.34 » ; comme le relit la saisie (voir
+     * SaisieDecimale::enCentiemes()).
+     */
+    public static function centiemesDansUnChamp(int $centiemes): string
+    {
+        $decimales = rtrim(sprintf('%02d', abs($centiemes) % 100), '0');
+
+        return ($centiemes < 0 ? '-' : '').intdiv(abs($centiemes), 100).($decimales === '' ? '' : '.'.$decimales);
     }
 
     /**
@@ -1239,7 +1324,7 @@ class CalculateurLigne
 
     /**
      * Un montant tel qu'un écran l'écrit (voir enEuros() et
-     * prixDAchatAffiche()) : son signe, ses euros entiers, les milliers
+     * prixUnitaireExact()) : son signe, ses euros entiers, les milliers
      * séparés par une espace, une virgule, ses décimales telles qu'elles
      * s'écrivent, puis « € ».
      */
@@ -1415,26 +1500,6 @@ class CalculateurLigne
     }
 
     /**
-     * Le pré-arrondi à 6 décimales efface le bruit binaire du flottant
-     * (8.325 * 100 = 832.4999999999999) avant l'arrondi final, sans
-     * dépendre de la façon dont round() traite lui-même ce cas limite.
-     *
-     * Un montant absurde (des milliards de milliards) est refusé plutôt
-     * que converti : au-delà, l'entier déborderait en silence (PHP 8.3) ou
-     * lèverait une erreur (PHP 8.5).
-     */
-    private function versUnites(float $valeur, int $facteur): int
-    {
-        $unites = round(round($valeur * $facteur, 6));
-
-        if (! is_finite($unites) || abs($unites) >= self::UNITES_MAXIMUM) {
-            throw new InvalidArgumentException('Montant hors limites.');
-        }
-
-        return (int) $unites;
-    }
-
-    /**
      * Division entière arrondie au plus proche (demi vers l'extérieur),
      * sans jamais passer par un flottant.
      */
@@ -1447,10 +1512,5 @@ class CalculateurLigne
         }
 
         return $quotient;
-    }
-
-    private function centimesVersMontant(int $centimes): float
-    {
-        return $centimes / 100;
     }
 }

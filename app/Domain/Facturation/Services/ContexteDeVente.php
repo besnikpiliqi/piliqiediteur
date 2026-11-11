@@ -34,10 +34,13 @@ use LogicException;
  */
 final readonly class ContexteDeVente
 {
+    /**
+     * @param  string  $tauxTvaParDefaut  écrit comme une colonne de taux (« 20.00 », voir Magasin::tauxTvaParDefaut())
+     */
     public function __construct(
         public TypeClient $typeClient,
         public bool $franchiseEnBase,
-        public float $tauxTvaParDefaut,
+        public string $tauxTvaParDefaut,
         public NatureOperation $natureOperation = NatureOperation::VenteEnFrance,
     ) {}
 
@@ -129,6 +132,30 @@ final readonly class ContexteDeVente
     public static function documentRetireLaTvaDuPrix(Facture|Avoir|Devis $document): bool
     {
         return self::sansTvaFrancaise($document->franchise_en_base, $document->nature_operation);
+    }
+
+    /**
+     * Les lignes de cette vente montrent-elles le PU HT, tel qu'il est
+     * enregistré (décision de l'éditeur du 09/11/2026, voir
+     * CalculateurLigne::prixUnitaireExact()) ? Une facture ou un devis à un
+     * professionnel, et toute vente sans TVA française, qui se paie hors
+     * taxe (voir retireLaTvaDuPrix()) ; un ticket ou un devis à un
+     * particulier montre le PU TTC, et son PU HT, au centime.
+     */
+    public function montreLePuHt(): bool
+    {
+        return $this->typeClient === TypeClient::Professionnel || $this->retireLaTvaDuPrix();
+    }
+
+    /**
+     * Le document montre-t-il le PU HT (voir montreLePuHt()), d'après le
+     * type de client, la franchise et la nature qu'il a notés ? Ses PDF,
+     * sa fiche et sa note de calcul le lisent ici (voir TableauDesLignes et
+     * MentionsFiscales::calcul()), un avoir comme sa facture.
+     */
+    public static function documentMontreLePuHt(Facture|Avoir|Devis $document): bool
+    {
+        return $document->estPourUnProfessionnel() || self::documentRetireLaTvaDuPrix($document);
     }
 
     /**

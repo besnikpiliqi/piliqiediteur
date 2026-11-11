@@ -61,6 +61,7 @@ class CalculsAuHasardTest extends TestCase
                 }
 
                 self::verifierLesSommes($calcul);
+                self::verifierLaTvaDeChaqueTaux($calcul);
             },
             fn (array $lignes): iterable => self::lignesReduites($lignes),
             isoler: false,
@@ -201,7 +202,11 @@ class CalculsAuHasardTest extends TestCase
 
     /**
      * Chaque total d'un taux et du document est la somme exacte de ses
-     * lignes, et chaque TTC son HT plus sa TVA.
+     * lignes, et chaque TTC son HT plus sa TVA : les totaux que contrôlent
+     * les règles de la norme européenne de la facture électronique, au
+     * centime, sans tolérance -- le HT du document est la somme de ses
+     * lignes (BR-CO-10), sa TVA la somme de ses taux (BR-CO-14), son TTC son
+     * HT plus sa TVA (BR-CO-15).
      *
      * @param  array{lignes: list<array{montant_ht: int, montant_tva: int, montant_ttc: int}>, taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>, total: array{montant_ht: int, montant_tva: int, montant_ttc: int}}  $calcul
      */
@@ -213,6 +218,21 @@ class CalculsAuHasardTest extends TestCase
         }
 
         Assert::assertSame($calcul['total']['montant_ht'] + $calcul['total']['montant_tva'], $calcul['total']['montant_ttc']);
+    }
+
+    /**
+     * La TVA de chaque taux d'une vente, calculée une fois sur son TTC,
+     * s'écarte d'au plus un centime de sa base x taux, arrondie au centime
+     * (BR-CO-17, qui tolère 1 €). Celle d'un achat est celle qu'écrit la
+     * facture du fournisseur.
+     *
+     * @param  array{taux: array<int, array{montant_ht: int, montant_tva: int, montant_ttc: int}>}  $calcul
+     */
+    private static function verifierLaTvaDeChaqueTaux(array $calcul): void
+    {
+        foreach ($calcul['taux'] as $taux => $montants) {
+            Assert::assertLessThanOrEqual(1, abs($montants['montant_tva'] - self::arrondi($montants['montant_ht'] * $taux, 10000)), "BR-CO-17 : la TVA à {$taux} centièmes de point s'écarte de plus d'un centime de sa base x taux");
+        }
     }
 
     /**

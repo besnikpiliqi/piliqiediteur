@@ -31,7 +31,7 @@ class DerogationsDePrixTest extends TestCase
         parent::setUp();
 
         app(TenantContext::class)->set(Magasin::factory()->create());
-        $this->contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+        $this->contexte = new ContexteDeVente(TypeClient::Particulier, false, '20.00');
     }
 
     public function test_seules_les_lignes_derogatoires_ont_leur_phrase_dans_l_ordre_des_lignes(): void

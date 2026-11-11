@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -141,12 +142,13 @@ class ListClotureCaissePersonnelles extends ListRecords
      */
     private static function recapitulatif(ClotureCaissePersonnelle $releve, string $possessif): HtmlString
     {
-        $euros = fn (float|string $montant): string => number_format((float) $montant, 2, ',', ' ').' €';
+        $calculateur = app(CalculateurLigne::class);
+        $euros = fn (string $montant): string => $calculateur->enEuros($calculateur->enCentiemes($montant));
         $encaissements = $releve->encaissementsEnClair() === [] ? 'aucun' : implode(' ; ', $releve->encaissementsEnClair());
         $ses = $possessif === 'votre' ? 'vos' : 'ses';
         $lignes = [
             'TTC vendu : '.$euros($releve->total_ttc).' ('.$releve->nombre_ventes.($releve->nombre_ventes > 1 ? ' ventes' : ' vente').')',
-            'Encaissé : '.$euros($releve->totalEncaisse()).' (par mode : '.$encaissements.')',
+            'Encaissé : '.$calculateur->enEuros($releve->totalEncaisseEnCentimes()).' (par mode : '.$encaissements.')',
             'Crédit d\'avoir utilisé : '.$euros($releve->credit_avoir),
             'Reste dû : '.$euros($releve->reste_du),
             "Ce relevé compte {$ses} ventes et {$ses} paiements qu'aucune fermeture n'a encore comptés, y compris ceux d'un jour précédent. Il part de {$possessif} dernière fermeture de caisse (ou du début de la journée si c'est la première), ou de {$possessif} plus ancienne opération non comptée si elle est antérieure. Ceci ne clôture pas la journée du magasin.",

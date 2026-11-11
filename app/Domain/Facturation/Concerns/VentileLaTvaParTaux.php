@@ -25,7 +25,7 @@ use Illuminate\Support\Collection;
 trait VentileLaTvaParTaux
 {
     /**
-     * @return Attribute<list<array{taux_tva: string, montant_ht: float, montant_tva: float, montant_ttc: float}>, never>
+     * @return Attribute<list<array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>, never>
      */
     protected function ventilationTva(): Attribute
     {
@@ -83,22 +83,28 @@ trait VentileLaTvaParTaux
     }
 
     /**
+     * Les lignes réunies par taux, du plus fort au plus faible : chaque
+     * montant la somme exacte de ses lignes, en centimes (voir
+     * CalculateurLigne::totaliser()), écrite comme sa colonne (« 41.67 »).
+     *
      * @param  Collection<int, array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>  $lignes
-     * @return list<array{taux_tva: string, montant_ht: float, montant_tva: float, montant_ttc: float}>
+     * @return list<array{taux_tva: string, montant_ht: string, montant_tva: string, montant_ttc: string}>
      */
     private static function ventilerParTaux(Collection $lignes): array
     {
+        $calculateur = app(CalculateurLigne::class);
+
         return array_values($lignes
-            ->groupBy(fn (array $ligne): string => number_format((float) $ligne['taux_tva'], 2, '.', ''))
-            ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
-            ->map(function (Collection $lignesDuTaux, string $tauxTva): array {
-                $totaux = app(CalculateurLigne::class)->totaliser($lignesDuTaux);
+            ->groupBy(fn (array $ligne): string => $calculateur->enDecimal($calculateur->enCentiemes($ligne['taux_tva'])))
+            ->sortKeysUsing(fn (string $a, string $b): int => $calculateur->enCentiemes($b) <=> $calculateur->enCentiemes($a))
+            ->map(function (Collection $lignesDuTaux, string $tauxTva) use ($calculateur): array {
+                $totaux = $calculateur->totaliser($lignesDuTaux);
 
                 return [
                     'taux_tva' => $tauxTva,
-                    'montant_ht' => $totaux['total_ht'],
-                    'montant_tva' => $totaux['total_tva'],
-                    'montant_ttc' => $totaux['total_ttc'],
+                    'montant_ht' => $calculateur->enDecimal($totaux['total_ht']),
+                    'montant_tva' => $calculateur->enDecimal($totaux['total_tva']),
+                    'montant_ttc' => $calculateur->enDecimal($totaux['total_ttc']),
                 ];
             })
             ->all());

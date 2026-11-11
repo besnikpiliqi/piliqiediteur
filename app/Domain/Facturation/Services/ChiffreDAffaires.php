@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
  * ventes qu'ils corrigent -- un retour du 2 novembre sur une vente
  * d'octobre se déduit en novembre, comme dans la clôture de la journée
  * (voir CloturerCaisseAction). Les HT, les TVA et les TTC se cumulent
- * séparément, au centime, tels qu'enregistrés sur les documents (voir
+ * séparément, en centimes, tels qu'enregistrés sur les documents (voir
  * CalculateurLigne::cumuler() et deduire()).
  *
  * Pour un vendeur (B16, « Mes ventes ») : ses ventes, moins les lignes
@@ -36,7 +36,7 @@ class ChiffreDAffaires
      * Le net du jour $du au jour $au de ce calendrier, celui du magasin
      * actif, compris, avec le nombre de ventes et celui des avoirs déduits.
      *
-     * @return array{ht: float, tva: float, ttc: float, factures: int, avoirs: int}
+     * @return array{ht: int, tva: int, ttc: int, factures: int, avoirs: int} les montants en centimes
      */
     public function netSurPeriode(Calendrier $calendrier, string $du, string $au, ?User $vendeur = null): array
     {
@@ -62,7 +62,7 @@ class ChiffreDAffaires
     }
 
     /**
-     * @return array{0: array{total_ht: float, total_tva: float, total_ttc: float}, 1: int}
+     * @return array{0: array{total_ht: int, total_tva: int, total_ttc: int}, 1: int}
      */
     private function avoirsDuMagasin(Calendrier $calendrier, string $du, string $au): array
     {
@@ -75,7 +75,7 @@ class ChiffreDAffaires
      * Les lignes d'avoir émises sur la période qui corrigent des ventes du
      * vendeur, et le nombre d'avoirs qui les portent.
      *
-     * @return array{0: array{total_ht: float, total_tva: float, total_ttc: float}, 1: int}
+     * @return array{0: array{total_ht: int, total_tva: int, total_ttc: int}, 1: int}
      */
     private function avoirsSurLesVentesDe(Calendrier $calendrier, User $vendeur, string $du, string $au): array
     {

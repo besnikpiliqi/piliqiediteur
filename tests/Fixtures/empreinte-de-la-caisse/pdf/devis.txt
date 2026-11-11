@@ -34,8 +34,8 @@ Livraison sur rendez-vous
 20 %
 12,50 €
 Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la
-différence. Les prix unitaires sont affichés arrondis au centime et les totaux calculés sans arrondi intermédiaire : la quantité × le prix unitaire affiché peut donc différer du
-total de la ligne.
+différence. Les prix unitaires HT sont affichés tels qu'ils sont enregistrés et les totaux calculés sans arrondi intermédiaire : la quantité × le PU HT, remise déduite, retombe
+sur le total HT de la ligne à moins de deux centimes près.
 TAUX TVA
 BASE HT
 TVA

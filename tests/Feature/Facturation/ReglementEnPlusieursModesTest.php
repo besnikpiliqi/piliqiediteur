@@ -157,7 +157,7 @@ class ReglementEnPlusieursModesTest extends TestCase
 
         $ticket = self::vendre($this->comptoir(), self::article(80), [new PartDeReglement(ModePaiement::Especes, 3000), new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero]);
 
-        $this->assertSame([StatutFacture::Payee, 60.0, 20.0], [$ticket->statut, $ticket->montantPaye(), $ticket->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 6000, 2000], [$ticket->statut, $ticket->montantPayeEnCentimes(), $ticket->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame([['especes', '30.00'], ['carte_bancaire', '30.00']], self::paiementsDe($ticket));
         $this->assertSame(0, $bon->fresh()->creditEnCentimes());
         $this->assertSame([['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 2000]], $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte']['credits_avoir']);
@@ -177,7 +177,7 @@ class ReglementEnPlusieursModesTest extends TestCase
 
         $ticket = self::vendre(Client::factory()->create(), self::article(25), [], [$premier->numero, $second->numero]);
 
-        $this->assertSame([StatutFacture::Payee, 0.0, 25.0], [$ticket->statut, $ticket->montantPaye(), $ticket->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 0, 2500], [$ticket->statut, $ticket->montantPayeEnCentimes(), $ticket->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame([[$premier->id, '12.00'], [$second->id, '13.00']], $ticket->allocationsAvoir()->orderBy('id')->get()->map(fn (AvoirAllocation $allocation): array => [$allocation->avoir_id, $allocation->montant_alloue])->all());
         $this->assertSame([0, 700], [$premier->fresh()->creditEnCentimes(), $second->fresh()->creditEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
@@ -199,7 +199,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         $ticket = self::vendre($martin, self::article(80), [new PartDeReglement(ModePaiement::Especes, 6000)]);
 
         $this->assertSame([8000, 2000, 6000], [$apercu->total, $apercu->creditDuClient, $apercu->resteARepartir]);
-        $this->assertSame([StatutFacture::Payee, 60.0, 20.0], [$ticket->statut, $ticket->montantPaye(), $ticket->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 6000, 2000], [$ticket->statut, $ticket->montantPayeEnCentimes(), $ticket->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame([['avoir_id' => $avoir->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 2000]], $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte']['credits_avoir']);
     }
 
@@ -226,7 +226,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         );
 
         $this->assertSame([$factures, $paiements], [Facture::query()->count(), Paiement::query()->count()]);
-        $this->assertSame(20.0, $autreVente->fresh()->montantCrediteParAvoir());
+        $this->assertSame(2000, $autreVente->fresh()->montantCrediteParAvoirEnCentimes());
     }
 
     /**
@@ -269,7 +269,7 @@ class ReglementEnPlusieursModesTest extends TestCase
 
         $this->assertSame([['especes', '40.00'], ['carte_bancaire', '60.00']], self::paiementsDe($facture));
         $this->assertSame(['2026-10-08', '2026-10-08'], Paiement::query()->orderBy('id')->get()->map(fn (Paiement $paiement): string => $paiement->recu_le)->all());
-        $this->assertSame([StatutFacture::Payee, 0.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 
@@ -289,7 +289,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         );
         app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $facture, [new PartDeReglement(ModePaiement::Cheque, 3000)], [], '2026-10-09');
 
-        $this->assertSame([StatutFacture::PartiellementPayee, 70.0, 1], [$facture->fresh()->statut, $facture->fresh()->montantRestant(), Paiement::query()->count()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 7000, 1], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes(), Paiement::query()->count()]);
     }
 
     /**
@@ -334,7 +334,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         $this->assertSame($ticket->id, $rejoue->id);
         $this->assertSame(1, Facture::query()->whereKeyNot($facture->getKey())->count());
         $this->assertSame(4, Paiement::query()->count());
-        $this->assertSame([StatutFacture::PartiellementPayee, 20.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 2000], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -365,7 +365,7 @@ class ReglementEnPlusieursModesTest extends TestCase
 
         $ticket = self::vendre($this->comptoir(), self::article(30), [], [$bon->numero]);
 
-        $this->assertSame([StatutFacture::Payee, 0.0, 30.0], [$ticket->statut, $ticket->montantPaye(), $ticket->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 0, 3000], [$ticket->statut, $ticket->montantPayeEnCentimes(), $ticket->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame($paiementsAvant, Paiement::query()->count());
         $this->assertSame([[null, '30.00']], $ticket->allocationsAvoir()->get()->map(fn (AvoirAllocation $allocation): array => [$allocation->paiement_id, $allocation->montant_alloue])->all());
         $this->assertSame([], $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte']['reglements']);
@@ -415,7 +415,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [' av-mabout-2026-000001 '], '2026-10-09');
 
         $paiement = Paiement::query()->where('montant', '30.00')->sole();
-        $this->assertSame([StatutFacture::Payee, 30.0, 20.0], [$ticket->fresh()->statut, $ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir()]);
+        $this->assertSame([StatutFacture::Payee, 3000, 2000], [$ticket->fresh()->statut, $ticket->fresh()->montantPayeEnCentimes(), $ticket->fresh()->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame([[$bon->id, $paiement->id, '20.00']], $ticket->allocationsAvoir()->get()->map(fn (AvoirAllocation $allocation): array => [$allocation->avoir_id, $allocation->paiement_id, $allocation->montant_alloue])->all());
         $this->assertSame(0, $bon->fresh()->creditEnCentimes());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
@@ -440,7 +440,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         $this->assertThrows(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [], [$bon->numero], '2026-10-09'), LogicException::class, Avoir::BON_D_AVOIR_SANS_PART_PAYEE);
 
         $this->assertSame([$paiementsAvant, 2000], [Paiement::query()->count(), $bon->fresh()->creditEnCentimes()]);
-        $this->assertSame([50.0, 50.0], [$facture->fresh()->montantRestant(), $ticket->fresh()->montantRestant()]);
+        $this->assertSame([5000, 5000], [$facture->fresh()->montantRestantEnCentimes(), $ticket->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -479,7 +479,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         );
 
         $this->assertSame([$paiementsAvant, (int) ($montantDuBon * 100)], [Paiement::query()->count(), $bon->fresh()->creditEnCentimes()]);
-        $this->assertSame([StatutFacture::Emise, 20.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 2000], [$ticket->fresh()->statut, $ticket->fresh()->montantRestantEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 
@@ -498,13 +498,13 @@ class ReglementEnPlusieursModesTest extends TestCase
     public static function partsContrePassees(): array
     {
         return [
-            'la carte, qui signe le bon' => [ModePaiement::CarteBancaire, 40.0, 2000],
-            'les espèces' => [ModePaiement::Especes, 10.0, 0],
+            'la carte, qui signe le bon' => [ModePaiement::CarteBancaire, 4000, 2000],
+            'les espèces' => [ModePaiement::Especes, 1000, 0],
         ];
     }
 
     #[DataProvider('partsContrePassees')]
-    public function test_contre_passer_la_part_qui_signe_le_bon_le_rend_et_contre_passer_une_autre_part_le_laisse_impute(ModePaiement $partErronee, float $resteDu, int $creditDuBon): void
+    public function test_contre_passer_la_part_qui_signe_le_bon_le_rend_et_contre_passer_une_autre_part_le_laisse_impute(ModePaiement $partErronee, int $resteDu, int $creditDuBon): void
     {
         $magasin = $this->magasin();
         $bon = $this->bonDAvoir(20);
@@ -516,7 +516,7 @@ class ReglementEnPlusieursModesTest extends TestCase
 
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiementErrone, 'Saisi dans le mauvais mode');
 
-        $this->assertSame([$resteDu, $creditDuBon], [$ticket->fresh()->montantRestant(), $bon->fresh()->creditEnCentimes()]);
+        $this->assertSame([$resteDu, $creditDuBon], [$ticket->fresh()->montantRestantEnCentimes(), $bon->fresh()->creditEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 }

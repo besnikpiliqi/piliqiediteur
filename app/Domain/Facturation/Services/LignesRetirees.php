@@ -63,7 +63,7 @@ class LignesRetirees
         }
 
         try {
-            return $this->calculateur->enCentiemes(number_format((float) $prix, 2, '.', ''));
+            return SaisieDecimale::enCentiemes($prix);
         } catch (InvalidArgumentException) {
             return null;
         }

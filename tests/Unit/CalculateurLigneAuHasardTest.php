@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use PHPUnit\Framework\TestCase;
@@ -106,9 +107,9 @@ class CalculateurLigneAuHasardTest extends TestCase
 
         foreach (self::TAUX as $taux) {
             for ($htCentimes = 1; $htCentimes <= 10000; $htCentimes++) {
-                $ttc = $this->calculateur()->prixUnitaireTtcDepuisHt($htCentimes / 100, (float) $taux);
+                $ttc = $this->calculateur()->prixUnitaireTtcDepuisHt($htCentimes, $this->centiemes($taux));
 
-                $this->assertSame($this->ttcDepuisHtAttendu($htCentimes, $taux), $this->enCentimes($ttc), "HT {$this->texte($htCentimes)} à {$taux} %");
+                $this->assertSame($this->ttcDepuisHtAttendu($htCentimes, $taux), $ttc, "HT {$this->texte($htCentimes)} à {$taux} %");
                 $verifications++;
             }
         }
@@ -119,7 +120,9 @@ class CalculateurLigneAuHasardTest extends TestCase
     /**
      * Tous les montants à demi-centime de 0,005 € à 100,005 € (le piège du
      * flottant : 8.325 vaut 8.32499999... en binaire), ainsi que leurs
-     * voisins juste en dessous et au-dessus.
+     * voisins juste en dessous et au-dessus, lus au centime comme toute
+     * saisie (voir SaisieDecimale::enCentiemes()), écrits en texte comme
+     * transmis en flottant par un écran.
      */
     public function test_larrondi_au_centime_est_exact_sur_tous_les_demi_centimes_jusqua_100_euros(): void
     {
@@ -129,7 +132,8 @@ class CalculateurLigneAuHasardTest extends TestCase
             foreach ([4 => $centimes, 5 => $centimes + 1, 6 => $centimes + 1] as $milliemeFinal => $attendu) {
                 $texte = sprintf('%d.%02d%d', intdiv($centimes, 100), $centimes % 100, $milliemeFinal);
 
-                $this->assertSame($attendu, $this->enCentimes($this->calculateur()->arrondirAuCentime((float) $texte)), $texte);
+                $this->assertSame($attendu, SaisieDecimale::enCentiemes($texte), $texte);
+                $this->assertSame($attendu, SaisieDecimale::enCentiemes((float) $texte), "{$texte} en flottant");
                 $verifications++;
             }
         }
@@ -306,8 +310,8 @@ class CalculateurLigneAuHasardTest extends TestCase
                 array_sum(array_column($montants, 'montant_ht')),
                 array_sum(array_column($montants, 'montant_tva')),
                 array_sum(array_column($montants, 'montant_ttc')),
-            ], [$this->enCentimes($totaux['total_ht']), $this->enCentimes($totaux['total_tva']), $this->enCentimes($totaux['total_ttc'])], $cas);
-            $this->assertSame($this->enCentimes($totaux['total_ttc']), $this->enCentimes($totaux['total_ht']) + $this->enCentimes($totaux['total_tva']), $cas);
+            ], [$totaux['total_ht'], $totaux['total_tva'], $totaux['total_ttc']], $cas);
+            $this->assertSame($totaux['total_ttc'], $totaux['total_ht'] + $totaux['total_tva'], $cas);
         }
     }
 
@@ -474,11 +478,6 @@ class CalculateurLigneAuHasardTest extends TestCase
     private function centiemes(string $taux): int
     {
         return BigDecimal::of($taux)->multipliedBy(100)->toInt();
-    }
-
-    private function enCentimes(float $montant): int
-    {
-        return (int) round($montant * 100);
     }
 
     private function texte(int $centimes): string

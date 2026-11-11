@@ -125,7 +125,7 @@ class ConstructeurLigneInventaire
                 'description' => $produit->nom,
                 'reference' => $produit->reference,
                 'quantite' => $quantite,
-                'cout_unitaire_ht' => $this->calculateur->prixDAchatEnDecimal($cout),
+                'cout_unitaire_ht' => $this->calculateur->prixUnitaireExactEnDecimal($cout),
                 'suivi_stock' => $suiviStock,
                 'valeur_ht' => $this->calculateur->enDecimal($valeur),
                 'ordre' => $ordre,

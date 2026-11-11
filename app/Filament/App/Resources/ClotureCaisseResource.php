@@ -98,10 +98,10 @@ class ClotureCaisseResource extends Resource
      * Ce que la clôture de ces journées regroupera, avec les mêmes
      * critères que CloturerCaisseAction : les ventes au comptoir de chaque
      * journée et les avoirs du même jour, pas encore clôturés, et leur
-     * total net TTC.
+     * total net TTC, en centimes.
      *
      * @param  Collection<int, string>  $journees
-     * @return array{ventes: int, avoirs: int, total_ttc: float}
+     * @return array{ventes: int, avoirs: int, total_ttc: int}
      */
     public static function enAttenteDeCloture(Collection $journees): array
     {

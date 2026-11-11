@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -459,7 +460,7 @@ class AvoirResource extends Resource
                 FactureResource::ventilationTvaEntry(),
                 // Un avoir n'est jamais remboursé par ce logiciel (pas
                 // d'intégration bancaire) : tant qu'il reste du crédit non
-                // imputé (voir Avoir::montantNonAlloue()), ce doit être
+                // imputé (voir Avoir::creditEnCentimes()), ce doit être
                 // visible ici aussi, pas seulement sur la fiche du client ;
                 // celui d'un avoir au client comptoir est son bon d'avoir,
                 // celui d'un avoir de régularisation reste réservé à la
@@ -470,9 +471,9 @@ class AvoirResource extends Resource
                         $record->estUneRegularisation() => 'Crédit réservé à sa facture rectificative',
                         default => 'Crédit encore disponible',
                     })
-                    ->state(fn (Avoir $record) => $record->montantNonAlloue())
+                    ->state(fn (Avoir $record): string => app(CalculateurLigne::class)->enDecimal($record->creditEnCentimes()))
                     ->money('EUR')
-                    ->visible(fn (Avoir $record) => $record->montantNonAlloue() > 0),
+                    ->visible(fn (Avoir $record) => $record->creditEnCentimes() > 0),
             ])->columns(4),
 
             // Un avoir de régularisation ne rend rien au stock (voir
@@ -495,7 +496,7 @@ class AvoirResource extends Resource
                             TextEntry::make('montant_alloue')
                                 ->label('Montant crédité')
                                 ->money('EUR')
-                                ->color(fn (AvoirAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
+                                ->color(fn (AvoirAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
                         ])
                         ->columns(2),
                 ]),

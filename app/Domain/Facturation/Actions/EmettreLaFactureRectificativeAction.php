@@ -136,7 +136,7 @@ class EmettreLaFactureRectificativeAction
             'livraison_pays' => $origine->livraison_pays,
             'livraison_date' => $origine->livraison_date ?? $origine->magasin->calendrier()->jourDe(ValeurRequise::de($origine->date_emission, 'la date d\'émission de la facture rectifiée')),
             'transport_par' => $origine->transport_par,
-            ...$this->calculateur->totaliser($lignes),
+            ...$this->calculateur->enDecimaux($this->calculateur->totaliser($lignes)),
         ])->save();
 
         foreach ($lignes as $ligne) {

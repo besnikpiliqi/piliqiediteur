@@ -9,8 +9,8 @@ use App\Domain\Catalogue\Enums\OrigineProduit;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\OrigineDesProduits;
 use App\Domain\Facturation\Enums\TypeDocument;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
@@ -90,7 +90,6 @@ class ValiderInventaireOuvertureAction
         private readonly OperateurCourant $operateur,
         private readonly ActionsUniques $actionsUniques,
         private readonly JournalAudit $journalAudit,
-        private readonly CalculateurLigne $calculateur,
     ) {}
 
     /**
@@ -163,7 +162,7 @@ class ValiderInventaireOuvertureAction
         ])->save();
 
         foreach ($lignes as $ligne) {
-            $this->stock->entrerALInventaireDOuverture(ValeurRequise::de($ligne->produit, 'le produit de la ligne validée'), $ligne->quantite, $this->calculateur->arrondirAuDixMillieme((float) $ligne->cout_unitaire_ht), $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
+            $this->stock->entrerALInventaireDOuverture(ValeurRequise::de($ligne->produit, 'le produit de la ligne validée'), $ligne->quantite, SaisieDecimale::enDixMilliemes(ValeurRequise::de($ligne->cout_unitaire_ht, 'le coût unitaire de la ligne validée')), $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
         }
 
         $this->journalAudit->inscrire(ActionAuditee::InventaireOuvertureValide, $compte, $magasin, null, [

@@ -119,7 +119,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
         $mail->assertSeeInHtml("Veuillez trouver ci-joint notre facture {$facture->numero} d'un montant de 120,00 € TTC, déjà réglée.", escape: false);
         $mail->assertDontSeeInHtml('à régler');
-        $this->assertSame(['2026-11-08', 0.0], [$facture->date_echeance, $facture->montantRestant()]);
+        $this->assertSame(['2026-11-08', 0], [$facture->date_echeance, $facture->montantRestantEnCentimes()]);
     }
 
     /**

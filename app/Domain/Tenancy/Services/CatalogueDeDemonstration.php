@@ -68,8 +68,10 @@ class CatalogueDeDemonstration
      * d'achat validée, datée du jour du magasin, qui crée trois produits et
      * leur stock ; fictive, elle n'a pas de pièce du fournisseur, et en
      * porte la marque, comme une vraie saisie sans sa pièce.
+     *
+     * @param  string  $taux  écrit comme une colonne de taux (« 20.00 »)
      */
-    private function remplirLesArticles(User $auteur, float $taux, string $aujourdhui): void
+    private function remplirLesArticles(User $auteur, string $taux, string $aujourdhui): void
     {
         $fournisseur = Fournisseur::query()->create(['nom' => 'Grossiste de démonstration', 'pays' => 'FR']);
 

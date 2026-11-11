@@ -376,7 +376,7 @@ class AchatsEtStockAuHasardTest extends TestCase
             $this->assertSame($cmup, self::enDixMilliemes($produit->cmup_ht), "Le coût moyen de {$produit->nom} n'est pas celui de ses entrées et sorties.");
             $this->assertSame(
                 self::diviserArrondi(max($stock, 0) * $cmup, 100),
-                (int) round($calculateur->valeurAuCoutMoyen($stock, (float) $produit->cmup_ht, (float) $produit->taux_tva)['montant_ht'] * 100),
+                $calculateur->valeurAuCoutMoyen($stock, self::enDixMilliemes($produit->cmup_ht), $centimes($produit->taux_tva))['montant_ht'],
                 "La valeur HT du stock de {$produit->nom} n'est pas son stock au coût moyen.",
             );
         }

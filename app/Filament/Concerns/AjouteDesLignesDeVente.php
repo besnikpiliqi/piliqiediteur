@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
 use Closure;
@@ -238,8 +239,11 @@ trait AjouteDesLignesDeVente
      * centime, comme il se saisit : son prix de référence sans sa TVA (voir
      * Service::prixDeReferenceDans()), ou l'autre prix saisi, déjà sans
      * TVA. Le PU HT d'une ligne, enregistré au millionième d'euro (voir
-     * CalculateurLigne::prixUnitaireHtExact()), se montre au centime (voir
-     * CalculateurLigne::prixUnitaireDansUnChamp()).
+     * CalculateurLigne::prixUnitaireHtExact()), se montre comme cette vente
+     * le montre, pour son client d'aujourd'hui et sa nature (voir
+     * puHtDansLeChamp()) ; celui d'une ligne de produit se reprend du PU TTC
+     * et du taux de sa fiche une fois le formulaire rempli (voir
+     * champsPrixDeLigne()).
      *
      * @return list<array<string, mixed>>
      */
@@ -248,6 +252,7 @@ trait AjouteDesLignesDeVente
         $tauxImpose = $document->franchise_en_base || $document->nature_operation->exonere();
         $prixSansTva = ContexteDeVente::documentRetireLaTvaDuPrix($document);
         $calculateur = app(CalculateurLigne::class);
+        $contexte = self::contexteDeVente($document->client_id, $document->nature_operation);
 
         return array_values($document->lignes->loadMissing('service')->map(fn (LigneFacture|LigneDevis $ligne): array => [
             'produit_id' => $ligne->produit_id,
@@ -255,7 +260,7 @@ trait AjouteDesLignesDeVente
             'description' => $ligne->description,
             'reference' => $ligne->reference,
             'quantite' => $ligne->quantite,
-            'prix_unitaire_ht' => $calculateur->prixUnitaireDansUnChamp($calculateur->enMillioniemes($ligne->prix_unitaire_ht)),
+            'prix_unitaire_ht' => self::puHtDansLeChamp($calculateur->enMillioniemes($ligne->prix_unitaire_ht), $contexte),
             'prix_unitaire_ttc' => $prixSansTva && $ligne->service_id !== null
                 ? $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix)))
                 : $ligne->prix_unitaire_ttc,
@@ -295,7 +300,7 @@ trait AjouteDesLignesDeVente
                 ->live()
                 ->columnSpan(2)
                 ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->afterStateUpdated(function (?int $state, mixed $old, Set $set) {
+                ->afterStateUpdated(function (?int $state, mixed $old, Get $get, Set $set) {
                     $produit = $state ? Produit::find($state) : null;
 
                     if ($produit === null) {
@@ -315,7 +320,7 @@ trait AjouteDesLignesDeVente
                         return;
                     }
 
-                    $ligne = self::ligneDuProduit($produit);
+                    $ligne = self::ligneDuProduit($produit, 1, self::contexteDuChamp($get));
 
                     foreach (['description', 'reference', 'prix_unitaire_ttc', 'prix_unitaire_ht', 'taux_tva'] as $champ) {
                         $set($champ, $ligne[$champ]);
@@ -351,7 +356,7 @@ trait AjouteDesLignesDeVente
                         return;
                     }
 
-                    $ligne = self::ligneAuPrixDuCatalogue(self::ligneSaisie($get), self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation'))));
+                    $ligne = self::ligneAuPrixDuCatalogue(self::ligneSaisie($get), self::contexteDuChamp($get));
 
                     foreach (['prix_unitaire_ttc', 'prix_unitaire_ht', 'taux_tva'] as $champ) {
                         $set($champ, $ligne[$champ]);
@@ -382,9 +387,11 @@ trait AjouteDesLignesDeVente
      * et se montre tel qu'il est enregistré. Le PU HT n'en est que la
      * conversion, que la ligne enregistrera au millionième d'euro (voir
      * ConstructeurLigneDocument) : son champ, qui ne se saisit pas et ne
-     * part pas avec le formulaire, le montre arrondi au centime, comme tout
-     * prix unitaire montré en lecture (voir
-     * CalculateurLigne::prixUnitaireDansUnChamp()), 54.17 pour 54,166667 €.
+     * part pas avec le formulaire, le montre comme la vente le montre (voir
+     * puHtDansLeChamp()), tel qu'il sera enregistré sur une facture ou un
+     * devis à un professionnel et sur une vente sans TVA française, 54.166667
+     * pour 54,166667 €, sinon arrondi au centime, comme tout prix unitaire
+     * montré en lecture, 54.17.
      *
      * Le taux d'une ligne de produit est celui de sa fiche (voir
      * ConstructeurLigneDocument) : affiché, il ne se modifie pas et ne
@@ -426,7 +433,7 @@ trait AjouteDesLignesDeVente
                         return;
                     }
 
-                    self::suivreLePrixUnitaireHt($state, $get('taux_tva'), $set);
+                    self::suivreLePrixUnitaireHt($state, $get('taux_tva'), self::contexteDuChamp($get), $set);
                 }),
             TextInput::make('taux_tva')
                 ->label('TVA %')
@@ -490,18 +497,83 @@ trait AjouteDesLignesDeVente
      * Le PU HT d'une ligne de produit, affiché à côté de son PU TTC : sa
      * conversion au taux de la ligne, que la ligne enregistrera au
      * millionième d'euro (voir CalculateurLigne::prixUnitaireHtExact()),
-     * montrée au centime (voir CalculateurLigne::prixUnitaireDansUnChamp()).
-     * Une saisie qui n'est pas encore un prix ou un taux valable ne change
+     * montrée comme cette vente la montre (voir puHtDansLeChamp()). Une
+     * saisie qui n'est pas encore un prix ou un taux valable ne change
      * rien.
      */
-    private static function suivreLePrixUnitaireHt(mixed $prixUnitaireTtc, mixed $tauxTva, Set $set): void
+    private static function suivreLePrixUnitaireHt(mixed $prixUnitaireTtc, mixed $tauxTva, ContexteDeVente $contexte, Set $set): void
+    {
+        $puHt = self::puHtDeLaSaisie($prixUnitaireTtc, $tauxTva, $contexte);
+
+        if ($puHt !== null) {
+            $set('prix_unitaire_ht', $puHt);
+        }
+    }
+
+    /**
+     * Le PU HT que montre le champ d'une ligne de produit pour ce PU TTC et
+     * ce taux saisis (voir puHtDansLeChamp()) ; aucun tant qu'ils ne sont
+     * pas un prix ou un taux valable (voir leur validation).
+     */
+    private static function puHtDeLaSaisie(mixed $prixUnitaireTtc, mixed $tauxTva, ContexteDeVente $contexte): ?string
+    {
+        try {
+            return self::puHtDansLeChamp(app(CalculateurLigne::class)->prixUnitaireHtExact(SaisieDecimale::enCentiemes($prixUnitaireTtc), SaisieDecimale::enCentiemes($tauxTva)), $contexte);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * Le PU HT d'une ligne, en millionièmes d'euro, tel que le montre son
+     * champ, qui ne se saisit pas (voir champsPrixDeLigne()) : sur une
+     * facture ou un devis à un professionnel et sur une vente sans TVA
+     * française (voir ContexteDeVente::montreLePuHt()), tel que la ligne
+     * l'enregistre, sans zéro inutile au-delà du centime, comme leurs PDF
+     * et leur fiche l'impriment (voir CalculateurLigne::prixUnitaireExact()
+     * et prixUnitaireExactEnDecimal(), décision de l'éditeur du
+     * 09/11/2026), « 8.333333 », « 45.00 » ; sur un ticket ou un devis à un
+     * particulier, et à la caisse, où tout prix unitaire de vente montré en
+     * lecture reste au centime (même décision), arrondi au centime (voir
+     * CalculateurLigne::prixUnitaireDansUnChamp()), « 8.33 ».
+     */
+    private static function puHtDansLeChamp(int $millioniemes, ContexteDeVente $contexte): string
     {
         $calculateur = app(CalculateurLigne::class);
 
-        try {
-            $set('prix_unitaire_ht', $calculateur->prixUnitaireDansUnChamp($calculateur->prixUnitaireHtExact(SaisieDecimale::enCentiemes($prixUnitaireTtc), SaisieDecimale::enCentiemes($tauxTva))));
-        } catch (InvalidArgumentException) {
-            // Prix ou taux hors limites (voir leur validation) : rien à convertir.
+        return $contexte->montreLePuHt() && ! Livewire::current() instanceof Caisse
+            ? $calculateur->prixUnitaireExactEnDecimal($millioniemes)
+            : $calculateur->prixUnitaireDansUnChamp($millioniemes);
+    }
+
+    /**
+     * Le client ou la nature de l'opération d'une facture ou d'un devis
+     * viennent de changer (voir ChoisitLaNatureDeLOperation) : le PU HT de
+     * chaque ligne de produit se montre de nouveau comme cette vente le
+     * montre (voir puHtDansLeChamp()), tel qu'il sera enregistré pour un
+     * professionnel ou sans TVA française, au centime pour un particulier.
+     * $get et $set lisent et écrivent le formulaire au niveau du document.
+     */
+    public static function montrerLesPuHtDeLaVente(Get $get, Set $set): void
+    {
+        $lignes = $get('lignes');
+
+        if (! is_array($lignes)) {
+            return;
+        }
+
+        $contexte = self::contexteDeVente($get('client_id'), $get('nature_operation'));
+
+        foreach ($lignes as $cle => $ligne) {
+            if (! is_array($ligne) || filled($ligne['service_id'] ?? null) || blank($ligne['prix_unitaire_ttc'] ?? null)) {
+                continue;
+            }
+
+            $puHt = self::puHtDeLaSaisie($ligne['prix_unitaire_ttc'], $ligne['taux_tva'] ?? null, $contexte);
+
+            if ($puHt !== null) {
+                $set("lignes.{$cle}.prix_unitaire_ht", $puHt);
+            }
         }
     }
 
@@ -537,7 +609,7 @@ trait AjouteDesLignesDeVente
             return $lignes;
         }
 
-        $contexte = self::contexteDeVente($clientId, NatureOperation::depuisSaisie($nature));
+        $contexte = self::contexteDeVente($clientId, $nature);
         $refusees = app(DerogationsDePrix::class)->introduites(
             $document?->lignes->map(fn (LigneFacture|LigneDevis $ligne): array => $ligne->attributesToArray())->all() ?? [],
             app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte)->lignes,
@@ -571,10 +643,10 @@ trait AjouteDesLignesDeVente
             return [
                 ...$ligne,
                 'prix_unitaire_ttc' => $produit->prix_vente_ttc,
-                'prix_unitaire_ht' => $calculateur->prixUnitaireDansUnChamp($calculateur->prixUnitaireHtExact(
+                'prix_unitaire_ht' => self::puHtDansLeChamp($calculateur->prixUnitaireHtExact(
                     $calculateur->enCentiemes($produit->prix_vente_ttc),
                     $contexte->franchiseEnBase ? 0 : $calculateur->enCentiemes($produit->taux_tva),
-                )),
+                ), $contexte),
             ];
         }
 
@@ -602,7 +674,7 @@ trait AjouteDesLignesDeVente
         $set('taux_tva', self::pourcentageEnTexte($tauxTva));
 
         if (filled($get('prix_unitaire_ttc'))) {
-            self::suivreLePrixUnitaireHt($get('prix_unitaire_ttc'), $tauxTva, $set);
+            self::suivreLePrixUnitaireHt($get('prix_unitaire_ttc'), $tauxTva, self::contexteDuChamp($get), $set);
         }
     }
 
@@ -613,7 +685,28 @@ trait AjouteDesLignesDeVente
      */
     private static function venteSansTvaFrancaise(Get $get): bool
     {
-        return self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation')))->retireLaTvaDuPrix();
+        return self::contexteDuChamp($get)->retireLaTvaDuPrix();
+    }
+
+    /**
+     * La vente de la ligne d'un champ (voir contexteDeVente()) : $get lit
+     * le formulaire depuis l'un des champs de la ligne.
+     */
+    private static function contexteDuChamp(Get $get): ContexteDeVente
+    {
+        return self::contexteDeVente($get('../../client_id'), $get('../../nature_operation'));
+    }
+
+    /**
+     * La vente du formulaire de la page (voir contexteDeVente()), lu tel
+     * qu'il est saisi.
+     */
+    private static function contexteDuFormulaire(HasForms $livewire): ContexteDeVente
+    {
+        $etat = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getRawState();
+        $etat = is_array($etat) ? $etat : $etat->toArray();
+
+        return self::contexteDeVente($etat['client_id'] ?? null, $etat['nature_operation'] ?? null);
     }
 
     protected static function documentDesLignesSaisies(Get $get): DocumentChiffre
@@ -624,11 +717,14 @@ trait AjouteDesLignesDeVente
     /**
      * Le client choisi s'il est du magasin actif (MagasinScope), archivé
      * compris, et le magasin actif, dont le régime de TVA et le territoire
-     * décident du calcul, avec la nature choisie ; lus une seule fois par
-     * requête de la page pour le même client et la même nature.
+     * décident du calcul, avec la nature choisie (la vente en France sans
+     * nature connue, voir NatureOperation::depuisSaisie()) ; lus une seule
+     * fois par requête de la page pour le même client et la même nature.
      */
-    private static function contexteDeVente(mixed $clientId, NatureOperation $nature = NatureOperation::VenteEnFrance): ContexteDeVente
+    public static function contexteDeVente(mixed $clientId, mixed $nature = null): ContexteDeVente
     {
+        $nature = NatureOperation::depuisSaisie($nature);
+
         return self::calculUneFoisParRequete('contexte:'.hash('xxh128', serialize([$clientId, $nature->value])), function () use ($clientId, $nature): ContexteDeVente {
             $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
 
@@ -712,18 +808,18 @@ trait AjouteDesLignesDeVente
     }
 
     /**
-     * La ligne qui vend ce produit au prix de sa fiche, comme quand on le
-     * choisit dans une ligne : sa description, sa référence, son PU TTC,
-     * son taux (0 % en franchise en base) et le PU HT qui en découle,
-     * montré au centime (voir CalculateurLigne::prixUnitaireDansUnChamp()),
-     * sans remise.
+     * La ligne qui vend ce produit au prix de sa fiche dans cette vente,
+     * comme quand on le choisit dans une ligne : sa description, sa
+     * référence, son PU TTC, son taux (0 % en franchise en base) et le PU HT
+     * qui en découle, montré comme cette vente le montre (voir
+     * puHtDansLeChamp()), sans remise.
      *
      * @return array{produit_id: int, service_id: null, description: string, reference: string, quantite: int, prix_unitaire_ttc: string, prix_unitaire_ht: string, taux_tva: string, remise_pourcentage: string}
      */
-    public static function ligneDuProduit(Produit $produit, int $quantite = 1): array
+    public static function ligneDuProduit(Produit $produit, int $quantite, ContexteDeVente $contexte): array
     {
         $calculateur = app(CalculateurLigne::class);
-        $tauxTva = self::magasin()->societe->estEnFranchiseDeTva() ? '0' : self::pourcentageEnTexte($produit->taux_tva);
+        $tauxTva = $contexte->franchiseEnBase ? '0' : self::pourcentageEnTexte($produit->taux_tva);
 
         return [
             'produit_id' => CleDuModele::de($produit),
@@ -732,7 +828,7 @@ trait AjouteDesLignesDeVente
             'reference' => $produit->reference,
             'quantite' => $quantite,
             'prix_unitaire_ttc' => $produit->prix_vente_ttc,
-            'prix_unitaire_ht' => $calculateur->prixUnitaireDansUnChamp($calculateur->prixUnitaireHtExact($calculateur->enCentiemes($produit->prix_vente_ttc), SaisieDecimale::enCentiemes($tauxTva))),
+            'prix_unitaire_ht' => self::puHtDansLeChamp($calculateur->prixUnitaireHtExact($calculateur->enCentiemes($produit->prix_vente_ttc), SaisieDecimale::enCentiemes($tauxTva)), $contexte),
             'taux_tva' => $tauxTva,
             'remise_pourcentage' => '0',
         ];
@@ -804,6 +900,7 @@ trait AjouteDesLignesDeVente
 
         try {
             $choisis = self::produitsChoisis($selection);
+            $contexte = self::contexteDuFormulaire($livewire);
             $lignes = [];
             $nouveaux = [];
 
@@ -817,7 +914,7 @@ trait AjouteDesLignesDeVente
                 $cle = self::ligneSansDerogationDuProduit($lignes, $produit);
 
                 if ($cle === null) {
-                    $nouveaux[] = self::ligneDuProduit($produit, $quantite);
+                    $nouveaux[] = self::ligneDuProduit($produit, $quantite, $contexte);
 
                     continue;
                 }
@@ -1090,10 +1187,7 @@ trait AjouteDesLignesDeVente
         // Seulement ceux que la personne peut vendre : un identifiant envoyé
         // sans passer par les cases à cocher n'ajoute rien.
         $services = self::servicesVendables()->whereKey($identifiants)->get()->keyBy('id');
-        $formulaire = $livewire->getForm('form') ?? throw new LogicException('Le formulaire de la vente est introuvable.');
-        $etat = $formulaire->getRawState();
-        $etat = is_array($etat) ? $etat : $etat->toArray();
-        $contexte = self::contexteDeVente($etat['client_id'] ?? null, NatureOperation::depuisSaisie($etat['nature_operation'] ?? null));
+        $contexte = self::contexteDuFormulaire($livewire);
 
         // Dans l'ordre où le vendeur les a cochés ; le nouveau service en
         // dernier, une seule fois même s'il était déjà coché. Un service à

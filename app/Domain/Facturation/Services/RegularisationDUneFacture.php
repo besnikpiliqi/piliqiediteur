@@ -232,9 +232,9 @@ class RegularisationDUneFacture
                 continue;
             }
 
-            $reste = fn (string $colonne): string => ValeursLues::nombre($this->calculateur->enDecimal(
+            $reste = fn (string $colonne): string => $this->calculateur->enDecimal(
                 $this->calculateur->enCentiemes($ligne->getAttribute($colonne)) - (int) $creditees->sum(fn (LigneAvoir $creditee): int => $this->calculateur->enCentiemes($creditee->getAttribute($colonne))),
-            ));
+            );
 
             $lignes[] = [
                 'produit_id' => $ligne->produit_id,

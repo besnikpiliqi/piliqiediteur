@@ -87,7 +87,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $this->assertStringContainsString("Le montant imputé sur la facture {$ticket->numero} (60,00 €) dépasse ce qui en reste dû (40,00 €).", $resultat->errorOutput());
         $this->assertSame([$premier->id], Paiement::query()->pluck('id')->all());
         $this->assertSame(['60.00'], PaiementAllocation::query()->where('facture_id', $factureId)->pluck('montant_alloue')->all());
-        $this->assertSame([StatutFacture::PartiellementPayee, 60.0, 40.0], [$ticket->fresh()->statut, $ticket->fresh()->montantPaye(), $ticket->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 6000, 4000], [$ticket->fresh()->statut, $ticket->fresh()->montantPayeEnCentimes(), $ticket->fresh()->montantRestantEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
@@ -110,7 +110,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $this->assertFalse($resultat->successful());
         $this->assertStringContainsString('Ce paiement a déjà été contre-passé.', $resultat->errorOutput());
         $this->assertSame(['-60.00', '60.00'], Paiement::query()->orderBy('montant')->pluck('montant')->all());
-        $this->assertSame([StatutFacture::Emise, 100.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 10000], [$ticket->fresh()->statut, $ticket->fresh()->montantRestantEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
@@ -131,7 +131,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $rouverte = self::emettreUneFacture((int) $client->id, Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false])->id);
         $paiementErrone = self::payer((int) $client->id, $rouverte->id, '100.00');
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $reprise->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->assertSame([0.0, 12.0], [$rouverte->fresh()->montantRestant(), $client->soldeCrediteur()]);
+        $this->assertSame([0, 1200], [$rouverte->fresh()->montantRestantEnCentimes(), $client->soldeCrediteurEnCentimes()]);
         $magasinId = $magasin->id;
         $clientId = (int) $client->id;
         $produitId = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id;
@@ -151,9 +151,9 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
             [[$rouverte->id, $contrePassation->id, '12.00']],
             AvoirAllocation::query()->where('avoir_id', $avoir->id)->get()->map(fn (AvoirAllocation $credit): array => [$credit->facture_id, $credit->paiement_id, $credit->montant_alloue])->all(),
         );
-        $this->assertSame([StatutFacture::PartiellementPayee, 0.0, 12.0, 88.0], [$rouverte->fresh()->statut, $rouverte->fresh()->montantPaye(), $rouverte->fresh()->montantCrediteParAvoir(), $rouverte->fresh()->montantRestant()]);
-        $this->assertSame([StatutFacture::Emise, 0.0, 20.0], [$nouvelle->statut, $nouvelle->montantCrediteParAvoir(), $nouvelle->montantRestant()]);
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame([StatutFacture::PartiellementPayee, 0, 1200, 8800], [$rouverte->fresh()->statut, $rouverte->fresh()->montantPayeEnCentimes(), $rouverte->fresh()->montantCrediteParAvoirEnCentimes(), $rouverte->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame([StatutFacture::Emise, 0, 2000], [$nouvelle->statut, $nouvelle->montantCrediteParAvoirEnCentimes(), $nouvelle->montantRestantEnCentimes()]);
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 }

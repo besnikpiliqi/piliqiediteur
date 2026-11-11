@@ -2,6 +2,10 @@
 
 namespace App\Domain\Facturation\Enums;
 
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
+use InvalidArgumentException;
+
 /**
  * Le territoire de TVA où un magasin établi en France vend : il fixe son
  * taux normal, proposé par défaut (20 % en métropole et en Corse, 8,5 % en
@@ -26,30 +30,31 @@ enum TerritoireTva: string
     case GuyaneMayotte = 'guyane_mayotte';
 
     /**
-     * Le taux proposé par défaut pour une vente (B2).
+     * Le taux proposé par défaut pour une vente (B2), en centièmes de
+     * point : 2000 pour 20 %.
      */
-    public function tauxNormal(): float
+    public function tauxNormal(): int
     {
         return match ($this) {
-            self::Metropole, self::Corse => 20.0,
-            self::AntillesReunion => 8.5,
-            self::GuyaneMayotte => 0.0,
+            self::Metropole, self::Corse => 2000,
+            self::AntillesReunion => 850,
+            self::GuyaneMayotte => 0,
         };
     }
 
     /**
      * Les taux en vigueur sur le territoire, du plus fort au plus faible
-     * (art. 278 à 281 nonies, 296 et 297 du CGI).
+     * (art. 278 à 281 nonies, 296 et 297 du CGI), en centièmes de point.
      *
-     * @return list<float>
+     * @return list<int>
      */
     public function tauxEnVigueur(): array
     {
         return match ($this) {
-            self::Metropole => [20.0, 10.0, 5.5, 2.1],
-            self::Corse => [20.0, 13.0, 10.0, 5.5, 2.1, 0.9],
-            self::AntillesReunion => [8.5, 2.1, 1.75, 1.05],
-            self::GuyaneMayotte => [0.0],
+            self::Metropole => [2000, 1000, 550, 210],
+            self::Corse => [2000, 1300, 1000, 550, 210, 90],
+            self::AntillesReunion => [850, 210, 175, 105],
+            self::GuyaneMayotte => [0],
         };
     }
 
@@ -69,21 +74,20 @@ enum TerritoireTva: string
     /**
      * Le taux se saisit librement (B2) : un taux saisi qui n'est pas en
      * vigueur sur le territoire n'est pas refusé, une aide invite seulement
-     * à vérifier la saisie (X8). Rien tant que le taux n'est pas un nombre.
+     * à vérifier la saisie (X8). Rien tant que le taux n'est pas un nombre,
+     * lu au centième comme toute saisie (voir SaisieDecimale::enCentiemes()).
      */
     public function aideSiTauxInhabituel(mixed $taux): ?string
     {
-        if (! is_numeric($taux)) {
+        try {
+            if (! is_numeric($taux) || in_array(SaisieDecimale::enCentiemes($taux), $this->tauxEnVigueur(), true)) {
+                return null;
+            }
+        } catch (InvalidArgumentException) {
             return null;
         }
 
-        $enCentiemes = fn (float $pourcentage): int => (int) round($pourcentage * 100);
-
-        if (in_array($enCentiemes((float) $taux), array_map($enCentiemes, $this->tauxEnVigueur()), true)) {
-            return null;
-        }
-
-        $enVigueur = implode(' ; ', array_map(fn (float $pourcentage): string => str_replace('.', ',', (string) $pourcentage), $this->tauxEnVigueur()));
+        $enVigueur = implode(' ; ', array_map(fn (int $pourcentage): string => str_replace('.', ',', CalculateurLigne::centiemesDansUnChamp($pourcentage)), $this->tauxEnVigueur()));
 
         return "Taux inhabituel pour un magasin {$this->lieu()} (en vigueur : {$enVigueur} %) : vérifiez votre saisie.";
     }

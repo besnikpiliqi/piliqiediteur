@@ -127,7 +127,7 @@ class DocumentMail extends Mailable
         return match (true) {
             $document instanceof RecuPaiement => $this->introductionDuRecu($document),
             $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de ".self::montant($document).'.',
-            $document instanceof Facture && $document->montantRestant() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document).', déjà réglée.',
+            $document instanceof Facture && $document->montantRestantEnCentimes() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document).', déjà réglée.',
             $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de ".self::montant($document)
                 .($document->date_echeance ? ', à régler au plus tard le '.Calendrier::afficherJour($document->date_echeance, 'd/m/Y').'.' : '.'),
             $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de ".self::montant($document)
@@ -142,7 +142,9 @@ class DocumentMail extends Mailable
      */
     private static function montant(Facture|Devis|Avoir $document): string
     {
-        return number_format((float) $document->total_ttc, 2, ',', ' ').' € TTC';
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->enEuros($calculateur->enCentiemes($document->total_ttc)).' TTC';
     }
 
     /**

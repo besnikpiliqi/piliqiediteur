@@ -59,17 +59,18 @@ class ValeurStockApercu extends BaseWidget
         $nombreEpuises = $produitsSuivis->filter(fn (Produit $produit): bool => ! $produit->trashed() && $produit->stock_quantite <= 0)->count();
 
         $calculateur = app(CalculateurLigne::class);
-        $valeur = $calculateur->totaliser($produitsEnStock->map(
-            fn (Produit $produit): array => $calculateur->valeurAuCoutMoyen($produit->stock_quantite, (float) $produit->cmup_ht, (float) $produit->taux_tva),
-        ));
+        $valeurs = $produitsEnStock->map(
+            fn (Produit $produit): array => $calculateur->valeurAuCoutMoyen($produit->stock_quantite, $calculateur->enDixMilliemes($produit->cmup_ht), $calculateur->enCentiemes($produit->taux_tva)),
+        );
+        $total = fn (string $montant): int => array_sum(array_column($valeurs->all(), $montant));
 
         return [
-            Stat::make('Valeur du stock', number_format($valeur['total_ttc'], 2, ',', ' ').' € TTC')
+            Stat::make('Valeur du stock', $calculateur->enEuros($total('montant_ttc')).' TTC')
                 ->description(sprintf(
-                    '%s unités en stock · %s € HT · %s € TVA',
+                    '%s unités en stock · %s HT · %s TVA',
                     Number::format($produitsEnStock->sum(fn (Produit $produit): int => $produit->stock_quantite), locale: Reglage::texte('app.locale')),
-                    number_format($valeur['total_ht'], 2, ',', ' '),
-                    number_format($valeur['total_tva'], 2, ',', ' '),
+                    $calculateur->enEuros($total('montant_ht')),
+                    $calculateur->enEuros($total('montant_tva')),
                 ))
                 ->color('success'),
             Stat::make('Références épuisées', (string) $nombreEpuises)

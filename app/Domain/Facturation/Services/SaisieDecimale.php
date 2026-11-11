@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Facturation\Services;
 
+use Brick\Math\BigDecimal;
+use Brick\Math\Exception\MathException;
+use Brick\Math\NumberSyntax;
+use Brick\Math\RoundingMode;
 use InvalidArgumentException;
 
 /**
@@ -14,13 +18,19 @@ use InvalidArgumentException;
  *
  * Une saisie plus précise que le centième s'arrondit une seule fois au
  * plus proche, un demi en s'éloignant de zéro (« 8.325 » vaut 833), comme
- * l'enregistrement dans une colonne decimal(12,2) ou decimal(5,2). Un
- * montant ou un prix d'achat recopié de la facture d'un fournisseur ne
- * s'arrondit jamais : un montant au centime, un prix d'achat à six
- * décimales au plus, et une saisie plus précise est refusée (voir
- * montantAuCentime() et enMillioniemes()). Un nombre transmis à virgule
- * flottante (un formulaire, un test) se lit par son écriture décimale à
- * six décimales, qui efface le bruit binaire (8.325 vaut réellement
+ * l'enregistrement dans une colonne decimal(12,2) ou decimal(5,2) ; un
+ * coût, de même au dix-millième d'euro, comme une colonne decimal(14,4)
+ * (voir enDixMilliemes()). Un montant ou un prix d'achat recopié de la
+ * facture d'un fournisseur ne s'arrondit jamais : un montant au centime,
+ * un prix d'achat à six décimales au plus, et une saisie plus précise est
+ * refusée (voir montantAuCentime() et enMillioniemes()).
+ *
+ * Une saisie se lit par ses chiffres, jamais par un nombre à virgule
+ * flottante : une écriture scientifique (« 1e3 ») passe par BigDecimal
+ * (brick/math), exacte, ramenée à six décimales. Un nombre qui arrive
+ * déjà à virgule flottante, que seul un composant de l'écran ou un test
+ * peut transmettre, se lit aussitôt par son écriture décimale à six
+ * décimales, qui efface le bruit binaire (8.325 vaut réellement
  * 8,32499999999999982...) : c'est la seule porte d'entrée d'un tel
  * nombre, que le calcul lui-même refuse. Une valeur qui n'est pas un
  * nombre est refusée, jamais lue comme zéro.
@@ -44,19 +54,39 @@ final class SaisieDecimale
     public const REFUS_MONTANT_TROP_PRECIS = 'Un montant s\'écrit au centime, avec deux décimales au plus.';
 
     /**
+     * Le plus de chiffres qu'une écriture scientifique développe : bien
+     * au-delà des douze chiffres entiers et des six décimales de toute
+     * colonne, assez peu pour qu'une saisie comme « 1e1000000000 » ne
+     * s'écrive jamais en entier.
+     */
+    private const CHIFFRES_D_UNE_ECRITURE_SCIENTIFIQUE = 40;
+
+    /**
      * @throws InvalidArgumentException
      */
     public static function enCentiemes(mixed $saisie): int
     {
-        [$negatif, $entiers, $decimales] = self::lire($saisie);
+        $centiemes = self::arrondie($saisie, 2);
 
-        $centiemes = self::enUnites($entiers, $decimales, 2) + (($decimales[2] ?? '0') >= '5' ? 1 : 0);
-
-        if ($centiemes >= self::CENTIEMES_MAXIMUM) {
+        if (abs($centiemes) >= self::CENTIEMES_MAXIMUM) {
             throw new InvalidArgumentException('Montant hors limites.');
         }
 
-        return $negatif ? -$centiemes : $centiemes;
+        return $centiemes;
+    }
+
+    /**
+     * Un coût saisi, ou relu d'une colonne decimal(14,4) (le coût moyen
+     * d'un produit, le coût d'un mouvement de stock), en dix-millièmes
+     * d'euro : arrondi une seule fois au dix-millième le plus proche, un
+     * demi en s'éloignant de zéro -- « 1.003 » vaut 10030, « 0.12345 »
+     * vaut 1235 -- comme une saisie au centième (voir enCentiemes()).
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function enDixMilliemes(mixed $saisie): int
+    {
+        return self::arrondie($saisie, 4);
     }
 
     /**
@@ -128,16 +158,7 @@ final class SaisieDecimale
                 throw new InvalidArgumentException("« {$texte} » n'est pas un nombre.");
             }
 
-            // Notation scientifique (« 1e3 ») : son écriture décimale. Un
-            // nombre trop grand pour un flottant (« 1e400 ») n'en a pas, et
-            // sprintf l'écrirait « INF », qui se lirait zéro.
-            $nombre = (float) $texte;
-
-            if (! is_finite($nombre)) {
-                throw new InvalidArgumentException('Montant hors limites.');
-            }
-
-            $texte = sprintf('%.6F', $nombre);
+            $texte = self::ecritureDecimale($texte);
         }
 
         // Le point ajouté donne toujours une partie décimale, vide quand la
@@ -152,6 +173,42 @@ final class SaisieDecimale
         }
 
         return [str_starts_with($texte, '-'), $entiers, $decimales];
+    }
+
+    /**
+     * Une saisie en unités de 10^-$nombreDeDecimales, arrondie une seule
+     * fois à la plus proche, un demi en s'éloignant de zéro : la décimale
+     * qui suit la dernière gardée décide seule de l'arrondi, les suivantes
+     * ne pouvant que l'éloigner du demi.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function arrondie(mixed $saisie, int $nombreDeDecimales): int
+    {
+        [$negatif, $entiers, $decimales] = self::lire($saisie);
+
+        $unites = self::enUnites($entiers, $decimales, $nombreDeDecimales) + (($decimales[$nombreDeDecimales] ?? '0') >= '5' ? 1 : 0);
+
+        return $negatif ? -$unites : $unites;
+    }
+
+    /**
+     * L'écriture décimale d'un nombre écrit en notation scientifique, que
+     * PHP reconnaît comme un nombre (« 1e3 », « -2.5E1 », « +12 ») : lu
+     * exactement par BigDecimal, sans passer par un nombre à virgule
+     * flottante, et ramené à six décimales, un demi en s'éloignant de zéro.
+     * Un nombre que ses chiffres feraient dépasser toute colonne (« 1e400 »)
+     * est refusé, jamais lu zéro.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function ecritureDecimale(string $texte): string
+    {
+        try {
+            return (string) BigDecimal::parse($texte, NumberSyntax::SCIENTIFIC, self::CHIFFRES_D_UNE_ECRITURE_SCIENTIFIQUE)->toScale(6, RoundingMode::HalfUp);
+        } catch (MathException) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
     }
 
     /**

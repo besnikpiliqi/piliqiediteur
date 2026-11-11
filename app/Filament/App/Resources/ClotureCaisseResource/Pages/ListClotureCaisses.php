@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -178,12 +179,12 @@ class ListClotureCaisses extends ListRecords
 
         foreach ($journees as $journee) {
             $enAttente = ClotureCaisseResource::enAttenteDeCloture(collect([$journee]));
-            $total = number_format($enAttente['total_ttc'], 2, ',', ' ');
+            $total = app(CalculateurLigne::class)->enEuros($enAttente['total_ttc']);
 
             $paragraphes[] = Calendrier::afficherJour($journee, 'd/m/Y').' : '.match (true) {
                 $enAttente['ventes'] === 0 && $enAttente['avoirs'] === 0 => 'aucune vente au comptoir, la clôture sera créée à zéro.',
-                $enAttente['avoirs'] === 0 => "{$enAttente['ventes']} vente(s) au comptoir pour un total de {$total} €.",
-                default => "{$enAttente['ventes']} vente(s) au comptoir et {$enAttente['avoirs']} avoir(s) déduit(s), pour un total net de {$total} €.",
+                $enAttente['avoirs'] === 0 => "{$enAttente['ventes']} vente(s) au comptoir pour un total de {$total}.",
+                default => "{$enAttente['ventes']} vente(s) au comptoir et {$enAttente['avoirs']} avoir(s) déduit(s), pour un total net de {$total}.",
             };
         }
 

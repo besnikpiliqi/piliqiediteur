@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -112,6 +113,6 @@ class ConformiteApercu extends BaseWidget
 
     private static function enEuros(int $centimes): string
     {
-        return number_format($centimes / 100, 2, ',', ' ').' €';
+        return app(CalculateurLigne::class)->enEuros($centimes);
     }
 }

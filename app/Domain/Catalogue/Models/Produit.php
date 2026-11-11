@@ -22,7 +22,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
-use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Database\Factories\ProduitFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -433,11 +432,14 @@ class Produit extends Model
      */
     private function verifierQueSesPrixNeSontPasNegatifs(): void
     {
-        if ((float) $this->prix_vente_ttc < 0) {
+        $prix = $this->getAttributes()['prix_vente_ttc'] ?? null;
+        $cout = $this->getAttributes()['cmup_ht'] ?? null;
+
+        if (filled($prix) && SaisieDecimale::enCentiemes($prix) < 0) {
             throw new InvalidArgumentException('Le prix de vente d\'un produit ne peut pas être négatif.');
         }
 
-        if ((float) $this->cmup_ht < 0) {
+        if (filled($cout) && SaisieDecimale::enDixMilliemes($cout) < 0) {
             throw new InvalidArgumentException('Le coût d\'achat d\'un produit ne peut pas être négatif.');
         }
     }
@@ -453,18 +455,20 @@ class Produit extends Model
     private function arrondirLePrixDeVente(): void
     {
         if ($this->isDirty('prix_vente_ttc') && filled($this->prix_vente_ttc)) {
-            $this->prix_vente_ttc = ValeursLues::nombre(app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($this->getAttributes()['prix_vente_ttc'])));
+            $this->prix_vente_ttc = app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($this->getAttributes()['prix_vente_ttc']));
         }
     }
 
     /**
      * Le CMUP est enregistré au dix-millième d'euro, comme il sera relu
-     * (cast decimal:4).
+     * (cast decimal:4) : arrondi une fois, un demi en s'éloignant de zéro.
      */
     private function arrondirLeCmup(): void
     {
+        $cout = $this->getAttributes()['cmup_ht'] ?? null;
+
         if ($this->isDirty('cmup_ht')) {
-            $this->cmup_ht = app(CalculateurLigne::class)->arrondirAuDixMillieme((float) $this->cmup_ht);
+            $this->cmup_ht = app(CalculateurLigne::class)->enDecimalAuDixMillieme(blank($cout) ? 0 : SaisieDecimale::enDixMilliemes($cout));
         }
     }
 

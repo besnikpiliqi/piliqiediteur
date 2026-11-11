@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
@@ -49,11 +50,11 @@ class VentesEnAttenteApercu extends BaseWidget
         return [
             Stat::make('Ventes en attente de clôture', (string) $enAttente['ventes'])
                 ->description(sprintf(
-                    '%s %s · %s%s € au total',
+                    '%s %s · %s%s au total',
                     $journees->count() > 1 ? 'Journées du' : 'Journée du',
                     ClotureCaisseResource::libelleDesJournees($journees),
                     $enAttente['avoirs'] === 0 ? '' : "{$enAttente['avoirs']} avoir(s) déduit(s) · ",
-                    number_format($enAttente['total_ttc'], 2, ',', ' '),
+                    app(CalculateurLigne::class)->enEuros($enAttente['total_ttc']),
                 ))
                 ->color($enAttente['ventes'] === 0 && $enAttente['avoirs'] === 0 ? 'gray' : 'warning'),
         ];

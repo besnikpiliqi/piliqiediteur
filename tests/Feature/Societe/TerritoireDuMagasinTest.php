@@ -89,7 +89,7 @@ class TerritoireDuMagasinTest extends TestCase
     {
         $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE);
 
-        $this->assertSame([Territoire::Martinique, TerritoireTva::AntillesReunion, 8.5], [$magasin->territoire, $magasin->territoireTva(), $magasin->tauxTvaParDefaut()]);
+        $this->assertSame([Territoire::Martinique, TerritoireTva::AntillesReunion, '8.50'], [$magasin->territoire, $magasin->territoireTva(), $magasin->tauxTvaParDefaut()]);
         $this->assertSame('martinique', $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinCree)[0]->nouvelles_valeurs['territoire']);
         $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
         Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()])->assertSee('Martinique');
@@ -105,7 +105,7 @@ class TerritoireDuMagasinTest extends TestCase
     {
         $magasin = $this->ouvrirUneSocieteSituee(self::FORT_DE_FRANCE, ['siren' => FauxRepertoireSirene::SIREN_DIFFUSION_PARTIELLE]);
 
-        $this->assertSame([Territoire::Martinique, null, 8.5], [$magasin->territoire, $magasin->code_postal, $magasin->tauxTvaParDefaut()]);
+        $this->assertSame([Territoire::Martinique, null, '8.50'], [$magasin->territoire, $magasin->code_postal, $magasin->tauxTvaParDefaut()]);
 
         $this->modifier($magasin, ['adresse' => '12 rue Victor Hugo', 'code_postal' => '97200', 'ville' => 'Fort-de-France']);
         $this->assertThrows(
@@ -416,7 +416,7 @@ class TerritoireDuMagasinTest extends TestCase
 
         $this->corrigerLeTerritoire($magasin)->expectsOutputToContain("Territoire du magasin {$magasin->code} corrigé : Guadeloupe.")->assertSuccessful();
 
-        $this->assertSame([Territoire::Guadeloupe, 8.5], [$magasin->fresh()->territoire, $magasin->fresh()->tauxTvaParDefaut()]);
+        $this->assertSame([Territoire::Guadeloupe, '8.50'], [$magasin->fresh()->territoire, $magasin->fresh()->tauxTvaParDefaut()]);
         $this->assertSame([['martinique', 'guadeloupe']], array_map(fn (array $details): array => [$details['ancienne_valeur'], $details['nouvelle_valeur']], $this->changementsDeTerritoire($magasin)));
         $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::TerritoireCorrige)[0];
         $this->assertSame([['territoire' => 'martinique'], ['territoire' => 'guadeloupe'], 'editeur', null], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, $entree->origine, $entree->auteur_id]);
@@ -504,7 +504,7 @@ class TerritoireDuMagasinTest extends TestCase
             ->call('create')
             ->assertHasNoFormErrors();
         $nouveau = $magasin->societe->magasins()->where('nom', 'Boutique de Pointe-à-Pitre')->sole();
-        $this->assertSame([$magasin->siret, Territoire::Guadeloupe, 8.5], [$nouveau->siret, $nouveau->territoire, $nouveau->tauxTvaParDefaut()]);
+        $this->assertSame([$magasin->siret, Territoire::Guadeloupe, '8.50'], [$nouveau->siret, $nouveau->territoire, $nouveau->tauxTvaParDefaut()]);
         $this->assertNotSame($magasin->code, $nouveau->code);
         $this->assertSame(
             [[$magasin->id, true, LibererLeSiretAction::MOTIF_TERRITOIRE_MAL_LU], [$nouveau->id, false, null]],

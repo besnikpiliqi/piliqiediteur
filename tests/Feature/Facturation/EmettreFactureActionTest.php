@@ -221,7 +221,7 @@ class EmettreFactureActionTest extends TestCase
 
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
-        $this->assertSame([StatutFacture::Payee, '0.00', 0.0, 0.0], [$facture->statut, $facture->total_ttc, $facture->montantPaye(), $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, '0.00', 0, 0], [$facture->statut, $facture->total_ttc, $facture->montantPayeEnCentimes(), $facture->montantRestantEnCentimes()]);
         $this->assertSame(0, Paiement::query()->count());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
@@ -247,7 +247,7 @@ class EmettreFactureActionTest extends TestCase
         }
 
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
-        $this->assertSame([12.0, 12.0], [$avoirDeMartin->fresh()->montantNonAlloue(), $martin->soldeCrediteur()]);
+        $this->assertSame([1200, 1200], [$avoirDeMartin->fresh()->creditEnCentimes(), $martin->soldeCrediteurEnCentimes()]);
     }
 
     /**
@@ -277,7 +277,7 @@ class EmettreFactureActionTest extends TestCase
         }
 
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
-        $this->assertSame(12.0, app(TenantContext::class)->runAs($autreMagasin, fn (): float => $bonDeLAutreMagasin->fresh()->montantNonAlloue()));
+        $this->assertSame(1200, app(TenantContext::class)->runAs($autreMagasin, fn (): int => $bonDeLAutreMagasin->fresh()->creditEnCentimes()));
     }
 
     public function test_impossible_demettre_une_facture_sans_lignes(): void

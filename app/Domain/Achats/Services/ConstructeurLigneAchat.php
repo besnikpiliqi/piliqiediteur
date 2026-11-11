@@ -265,7 +265,7 @@ class ConstructeurLigneAchat
             $produit = new Produit(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit')));
 
             if (blank($produit->prix_vente_ttc)) {
-                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, ValeurRequise::de($ligne->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), (float) $ligne->remise_pourcentage, (float) $produit->taux_tva)
+                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, ValeurRequise::de($ligne->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), $ligne->remise_pourcentage, $produit)
                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
             }
 
@@ -439,7 +439,7 @@ class ConstructeurLigneAchat
     {
         $ligne = [
             'quantite' => QuantiteEntiere::depuisSaisie($quantite),
-            'prix_unitaire_ht' => $this->calculateur->prixDAchatEnDecimal(SaisieDecimale::enMillioniemes($prixUnitaireHt)),
+            'prix_unitaire_ht' => $this->calculateur->prixUnitaireExactEnDecimal(SaisieDecimale::enMillioniemes($prixUnitaireHt)),
             'taux_tva' => $this->calculateur->enDecimal(SaisieDecimale::enCentiemes($tauxTva)),
             'remise_pourcentage' => $this->calculateur->enDecimal(filled($remise) ? SaisieDecimale::enCentiemes($remise) : 0),
             'montant_ht_saisi' => filled($montantHt) ? $this->calculateur->enDecimal(SaisieDecimale::montantAuCentime($montantHt)) : null,
@@ -483,7 +483,7 @@ class ConstructeurLigneAchat
         // (voir verifierLesNouveauxProduits()).
         if (! $produit->exists) {
             if (blank($produit->prix_vente_ttc)) {
-                $prixDuBareme = $this->prixDuBareme($factureAchat->magasin, $prix['prix_unitaire_ht'], (float) $prix['remise_pourcentage'], (float) $produit->taux_tva);
+                $prixDuBareme = $this->prixDuBareme($factureAchat->magasin, $prix['prix_unitaire_ht'], $prix['remise_pourcentage'], $produit);
 
                 if ($prixDuBareme !== null) {
                     $produit->prix_vente_ttc = $prixDuBareme;
@@ -506,12 +506,24 @@ class ConstructeurLigneAchat
 
     /**
      * Le prix de vente TTC que le barème actif du magasin prévoit pour ce
-     * prix d'achat, remise déduite (voir BaremePrixDeVente::prixDeVente()) ;
-     * null sans barème actif ou au-delà de son dernier palier.
+     * prix d'achat, remise déduite (voir BaremePrixDeVente::prixDeVente()),
+     * au taux de la fiche du produit (aucun taux saisi compte pour 0 %),
+     * écrit comme sa colonne (« 59.00 ») ; null sans barème actif ou
+     * au-delà de son dernier palier.
+     *
+     * @param  string  $prixUnitaireHt  écrit comme sa colonne (voir PrixDAchat)
+     * @param  string  $remise  écrite comme sa colonne (« 10.00 »)
+     *
+     * @throws InvalidArgumentException
      */
-    private function prixDuBareme(Magasin $magasin, string $prixUnitaireHt, float $remise, float $tauxTva): ?float
+    private function prixDuBareme(Magasin $magasin, string $prixUnitaireHt, string $remise, Produit $produit): ?string
     {
-        return $magasin->baremePrixDeVenteActif()?->prixDeVente($this->calculateur->coutUnitaireNet($prixUnitaireHt, $remise), $tauxTva)['prix_vente_ttc'] ?? null;
+        $prix = $magasin->baremePrixDeVenteActif()?->prixDeVente(
+            $this->calculateur->coutUnitaireNet($this->calculateur->enMillioniemes($prixUnitaireHt), $this->calculateur->enCentiemes($remise)),
+            blank($produit->taux_tva) ? 0 : $this->calculateur->enCentiemes($produit->taux_tva),
+        );
+
+        return $prix === null ? null : $this->calculateur->enDecimal($prix['prix_vente_ttc']);
     }
 
     /**

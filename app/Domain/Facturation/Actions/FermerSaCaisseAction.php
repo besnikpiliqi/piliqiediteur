@@ -198,10 +198,12 @@ class FermerSaCaisseAction
             'jusqu_au' => $jusquAu,
             'cloturee_a' => now(),
             'nombre_ventes' => $factures->count(),
-            ...$this->calculateur->cumuler($factures),
+            ...$this->calculateur->enDecimaux($this->calculateur->cumuler($factures)),
             'encaissements' => $this->encaissementsParMode($paiements),
-            'credit_avoir' => $this->calculateur->sommer($factures->map(fn (Facture $facture): float => $facture->montantCrediteParAvoir())),
-            'reste_du' => $this->calculateur->sommer($factures->map(fn (Facture $facture): float => $facture->montantRestant())),
+            ...$this->calculateur->enDecimaux([
+                'credit_avoir' => array_sum($factures->map(fn (Facture $facture): int => $facture->montantCrediteParAvoirEnCentimes())->all()),
+                'reste_du' => array_sum($factures->map(fn (Facture $facture): int => $facture->montantRestantEnCentimes())->all()),
+            ]),
         ]);
     }
 

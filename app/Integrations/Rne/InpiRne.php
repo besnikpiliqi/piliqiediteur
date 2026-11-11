@@ -2,6 +2,8 @@
 
 namespace App\Integrations\Rne;
 
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\EnvoiRecommande\AdressePostale;
@@ -12,6 +14,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -121,7 +124,7 @@ class InpiRne implements RegistreNationalDesEntreprises
         return new IdentiteRne(
             denomination: $morale ? $this->texte($entreprise, 'denomination') : null,
             categorieJuridique: $categorie !== null && preg_match('/^\d{4}$/', $categorie) === 1 ? $categorie : null,
-            capital: $capital !== null && is_numeric($capital) ? number_format((float) $capital, 2, '.', '') : null,
+            capital: $this->capital($capital),
             deviseCapital: $this->texte($description, 'deviseCapital'),
             capitalVariable: is_bool($description['capitalVariable'] ?? null) ? $description['capitalVariable'] : null,
             immatriculation: $morale && $greffe !== null ? mb_substr("RCS {$greffe}", 0, 100) : null,
@@ -309,6 +312,26 @@ class InpiRne implements RegistreNationalDesEntreprises
         Log::warning('RNE : réponse illisible du registre national des entreprises.');
 
         return new RneIndisponibleException;
+    }
+
+    /**
+     * Le capital social que publie le registre, écrit comme sa colonne
+     * (« 1000.00 »), au centime comme toute saisie (voir
+     * SaisieDecimale::enCentiemes()) : rien quand le registre n'écrit pas
+     * un nombre, ou un nombre qu'aucune colonne ne garderait, que le
+     * propriétaire complète.
+     */
+    private function capital(?string $capital): ?string
+    {
+        if ($capital === null || ! is_numeric($capital)) {
+            return null;
+        }
+
+        try {
+            return app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($capital));
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

@@ -16,9 +16,9 @@ use UnexpectedValueException;
  * 0. Un tableau ou un objet, que seule une requête forgée envoie à la
  * place d'une valeur simple, est refusé par une exception, au lieu d'être
  * converti (« Array », 1). simple() rend la valeur elle-même, pour la
- * conversion que le code lui applique déjà (un montant saisi lu par
- * (float), une case lue par (bool)) ou pour une fonction qui accepte toute
- * valeur simple.
+ * lecture que le code lui applique ensuite (un montant saisi lu par
+ * SaisieDecimale, jamais par un nombre à virgule flottante ; une case lue
+ * par (bool)) ou pour une fonction qui accepte toute valeur simple.
  */
 final class ValeurSimple
 {

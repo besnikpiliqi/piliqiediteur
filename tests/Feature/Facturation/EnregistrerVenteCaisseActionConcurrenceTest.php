@@ -101,8 +101,8 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, Calendrier::deParis()->jourDe($premiere->date_emission));
         $this->assertSame(['102.30', '17.70', '120.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertEqualsCanonicalizing([
-            ['taux_tva' => '20.00', 'montant_ht' => 83.34, 'montant_tva' => 16.66, 'montant_ttc' => 100.0],
-            ['taux_tva' => '5.50', 'montant_ht' => 18.96, 'montant_tva' => 1.04, 'montant_ttc' => 20.0],
+            ['taux_tva' => '20.00', 'montant_ht' => '83.34', 'montant_tva' => '16.66', 'montant_ttc' => '100.00'],
+            ['taux_tva' => '5.50', 'montant_ht' => '18.96', 'montant_tva' => '1.04', 'montant_ttc' => '20.00'],
         ], $cloture->ventilation_tva);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
@@ -133,7 +133,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $this->assertStringContainsString('Ce bon d\'avoir est introuvable ou déjà utilisé.', $resultat->errorOutput());
         $this->assertSame([$ticket->id, $premiere->id], Facture::query()->orderBy('id')->pluck('id')->all());
         $this->assertSame(['12.00'], AvoirAllocation::query()->where('avoir_id', $bon->id)->pluck('montant_alloue')->all());
-        $this->assertSame([12.0, 8.0, 0.0], [$premiere->montantCrediteParAvoir(), $premiere->montantPaye(), $bon->fresh()->montantNonAlloue()]);
+        $this->assertSame([1200, 800, 0], [$premiere->montantCrediteParAvoirEnCentimes(), $premiere->montantPayeEnCentimes(), $bon->fresh()->creditEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 
@@ -171,8 +171,8 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $this->assertStringContainsString('Le total à payer a changé (crédit d\'avoir du client) : 12,00 € à répartir.', $resultat->errorOutput());
         $this->assertSame([$achatRendu->id, $premiere->id], Facture::query()->orderBy('id')->pluck('id')->all());
         $this->assertSame(['12.00'], AvoirAllocation::query()->where('avoir_id', $avoir->id)->pluck('montant_alloue')->all());
-        $this->assertSame([StatutFacture::Payee, 12.0, 8.0, 0.0], [$premiere->statut, $premiere->montantCrediteParAvoir(), $premiere->montantPaye(), $premiere->montantRestant()]);
-        $this->assertSame([0.0, 0.0], [$avoir->fresh()->montantNonAlloue(), $martin->soldeCrediteur()]);
+        $this->assertSame([StatutFacture::Payee, 1200, 800, 0], [$premiere->statut, $premiere->montantCrediteParAvoirEnCentimes(), $premiere->montantPayeEnCentimes(), $premiere->montantRestantEnCentimes()]);
+        $this->assertSame([0, 0], [$avoir->fresh()->creditEnCentimes(), $martin->soldeCrediteurEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 }

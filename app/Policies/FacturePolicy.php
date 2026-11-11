@@ -106,7 +106,7 @@ class FacturePolicy extends MagasinPolicy
         return $this->view($user, $facture)
             && $user->can(PermissionRegistry::PAIEMENT_CREER)
             && $facture->statut->attendUnReglement()
-            && $facture->montantRestant() > 0;
+            && $facture->montantRestantEnCentimes() > 0;
     }
 
     /**

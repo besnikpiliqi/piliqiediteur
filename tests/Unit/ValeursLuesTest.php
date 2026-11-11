@@ -18,14 +18,12 @@ use UnexpectedValueException;
  */
 class ValeursLuesTest extends TestCase
 {
-    public function test_un_texte_un_entier_et_un_nombre_ecrit_en_texte_sont_rendus_tels_quels(): void
+    public function test_un_texte_et_un_entier_sont_rendus_tels_quels(): void
     {
         $this->assertSame('0', ValeursLues::texte('0'));
         $this->assertSame('', ValeursLues::texte(''));
         $this->assertSame(0, ValeursLues::entier(0));
         $this->assertSame(-12, ValeursLues::entier(-12));
-        $this->assertSame('120.00', ValeursLues::nombre('120.00'));
-        $this->assertSame('-0.05', ValeursLues::nombre('-0.05'));
     }
 
     /**
@@ -74,28 +72,6 @@ class ValeursLuesTest extends TestCase
         $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_ENTIER, $type));
 
         ValeursLues::entier($valeur);
-    }
-
-    /**
-     * @return array<string, array{string}>
-     */
-    public static function pasDesNombres(): array
-    {
-        return [
-            'vide' => [''],
-            'virgule décimale' => ['12,50'],
-            'monnaie' => ['12.50 €'],
-            'lettres' => ['douze'],
-        ];
-    }
-
-    #[DataProvider('pasDesNombres')]
-    public function test_un_texte_qui_n_est_pas_un_nombre_est_refuse(string $texte): void
-    {
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_NOMBRE, $texte));
-
-        ValeursLues::nombre($texte);
     }
 
     /**

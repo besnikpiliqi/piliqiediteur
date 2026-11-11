@@ -130,7 +130,7 @@ class ReimputationALaContrePassationTest extends TestCase
         $contrePassation = $this->contrePasser($virement);
 
         $facture->refresh();
-        $this->assertSame([StatutFacture::Payee, 0.0, 100.0, 0.0], [$facture->statut, $facture->montantPaye(), $facture->montantCrediteParAvoir(), $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0, 10000, 0], [$facture->statut, $facture->montantPayeEnCentimes(), $facture->montantCrediteParAvoirEnCentimes(), $facture->montantRestantEnCentimes()]);
         $this->assertSame([[$avoir->id, $facture->id, '100.00']], self::creditsImputesPar($contrePassation));
         $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
@@ -158,8 +158,8 @@ class ReimputationALaContrePassationTest extends TestCase
         $contrePassation = $this->contrePasser($virement);
 
         $this->assertSame([[$avoirDe30->id, $f1->id, '30.00'], [$avoirDe50->id, $f1->id, '30.00'], [$avoirDe50->id, $f2->id, '20.00']], self::creditsImputesPar($contrePassation));
-        $this->assertSame([StatutFacture::Payee, 0.0], [$f1->fresh()->statut, $f1->fresh()->montantRestant()]);
-        $this->assertSame([StatutFacture::PartiellementPayee, 20.0], [$f2->fresh()->statut, $f2->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0], [$f1->fresh()->statut, $f1->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 2000], [$f2->fresh()->statut, $f2->fresh()->montantRestantEnCentimes()]);
         $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 
@@ -216,8 +216,8 @@ class ReimputationALaContrePassationTest extends TestCase
         $contrePassation = $this->contrePasser($virement);
 
         $this->assertSame([[$avoir->id, $f2->id, '20.00']], self::creditsImputesPar($contrePassation));
-        $this->assertSame([StatutFacture::Emise, 60.0], [$f1->fresh()->statut, $f1->fresh()->montantRestant()]);
-        $this->assertSame([StatutFacture::PartiellementPayee, 20.0], [$f2->fresh()->statut, $f2->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 6000], [$f1->fresh()->statut, $f1->fresh()->montantRestantEnCentimes()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 2000], [$f2->fresh()->statut, $f2->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -274,7 +274,7 @@ class ReimputationALaContrePassationTest extends TestCase
 
         $this->assertSame([[$retourPartiel->id, $ticket->id, '25.00']], self::creditsImputesPar($contrePassation));
         $this->assertSame([2000, 0], [$bon->fresh()->creditEnCentimes(), $retourPartiel->fresh()->creditEnCentimes()]);
-        $this->assertSame([25.0, 30.0], [$ticket->fresh()->montantRestant(), $resteDu->fresh()->montantRestant()]);
+        $this->assertSame([2500, 3000], [$ticket->fresh()->montantRestantEnCentimes(), $resteDu->fresh()->montantRestantEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 
@@ -294,7 +294,7 @@ class ReimputationALaContrePassationTest extends TestCase
 
         $this->assertSame(0, AvoirAllocation::query()->count());
         $this->assertSame([], self::donneesSignees($contrePassation)['credits_imputes']);
-        $this->assertSame([StatutFacture::Emise, 100.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Emise, 10000], [$facture->fresh()->statut, $facture->fresh()->montantRestantEnCentimes()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 

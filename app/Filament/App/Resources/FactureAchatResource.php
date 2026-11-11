@@ -174,7 +174,7 @@ class FactureAchatResource extends Resource
                     ->label('Escompte obtenu')
                     ->numeric(maxDecimalPlaces: 2)
                     ->suffix(' %')
-                    ->visible(fn (FactureAchat $record) => (float) $record->escompte_pourcentage > 0),
+                    ->visible(fn (FactureAchat $record) => app(CalculateurLigne::class)->enCentiemes($record->escompte_pourcentage) > 0),
             ])->columns(3),
 
             self::sectionDesPieces(),

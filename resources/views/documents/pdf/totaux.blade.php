@@ -23,7 +23,9 @@
 @php
     $signe ??= '';
     $ventilation = $document->ventilation_tva;
-    $estUnTauxZero = fn (array $taux): bool => app(\App\Domain\Facturation\Services\CalculateurLigne::class)->enCentiemes($taux['taux_tva']) === 0;
+    $calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class);
+    $euros = fn (string $montant): string => $calculateur->enEuros($calculateur->enCentiemes($montant));
+    $estUnTauxZero = fn (array $taux): bool => $calculateur->enCentiemes($taux['taux_tva']) === 0;
     $motif = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->motifDuTauxZero($document);
     $avecMotif = $motif !== null && collect($ventilation)->contains($estUnTauxZero);
 @endphp
@@ -43,13 +45,13 @@
     <tbody>
         @foreach($ventilation as $taux)
             <tr>
-                <td>{{ \Illuminate\Support\Number::format((float) $taux['taux_tva'], maxPrecision: 2, locale: 'fr') }} %</td>
+                <td>{{ \App\Domain\Facturation\Services\CalculateurLigne::tauxEnTexte($calculateur->enCentiemes($taux['taux_tva'])) }}</td>
                 @if($avecMotif)
                     <td class="motif">{{ $estUnTauxZero($taux) ? $motif : '' }}</td>
                 @endif
-                <td class="montant">{{ number_format($taux['montant_ht'], 2, ',', ' ') }} €</td>
-                <td class="montant">{{ number_format($taux['montant_tva'], 2, ',', ' ') }} €</td>
-                <td class="montant">{{ number_format($taux['montant_ttc'], 2, ',', ' ') }} €</td>
+                <td class="montant">{{ $euros($taux['montant_ht']) }}</td>
+                <td class="montant">{{ $euros($taux['montant_tva']) }}</td>
+                <td class="montant">{{ $euros($taux['montant_ttc']) }}</td>
             </tr>
         @endforeach
     </tbody>
@@ -66,15 +68,15 @@
             <table class="totaux">
                 <tr>
                     <td class="libelle">Total HT</td>
-                    <td class="montant">{{ $signe }}{{ number_format((float) $document->total_ht, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ $signe }}{{ $euros($document->total_ht) }}</td>
                 </tr>
                 <tr>
                     <td class="libelle">Total TVA</td>
-                    <td class="montant">{{ $signe }}{{ number_format((float) $document->total_tva, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ $signe }}{{ $euros($document->total_tva) }}</td>
                 </tr>
                 <tr class="total-ttc">
                     <td class="libelle">Total TTC</td>
-                    <td class="montant">{{ $signe }}{{ number_format((float) $document->total_ttc, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ $signe }}{{ $euros($document->total_ttc) }}</td>
                 </tr>
             </table>
         </td>

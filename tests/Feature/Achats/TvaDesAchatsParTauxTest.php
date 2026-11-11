@@ -104,16 +104,17 @@ class TvaDesAchatsParTauxTest extends TestCase
     /**
      * La TVA n'entre ni dans le coût d'un article ni dans le coût moyen :
      * avec l'escompte de 2 % de la facture, chaque article à 10,01 € HT
-     * entre en stock à 9,8098 € (10,01 x 0,98), que sa ligne porte 2,00 € ou
-     * 2,01 € de TVA ; le livre, à 10,01 € remisés de 10 % puis escomptés, à
-     * 8,8288 € (10,01 x 0,9 x 0,98 = 8,82882).
+     * entre en stock à 9,8098 € (10,01 x 0,98, soit 98 098 dix-millièmes
+     * d'euro), que sa ligne porte 2,00 € ou 2,01 € de TVA ; le livre, à
+     * 10,01 € remisés de 10 % puis escomptés, à 8,8288 € (10,01 x 0,9 x 0,98
+     * = 8,82882).
      */
     public function test_le_cout_unitaire_et_le_cout_moyen_ne_changent_pas(): void
     {
         $factureAchat = $this->acheterTroisArticlesEtUnLivre(['escompte_pourcentage' => 2]);
         $lignes = $factureAchat->lignes()->orderBy('ordre')->with('produit', 'factureAchat')->get();
 
-        $this->assertSame([9.8098, 9.8098, 9.8098, 8.8288], $lignes->map(fn (object $ligne): float => $ligne->coutUnitaireHt())->all());
+        $this->assertSame([98098, 98098, 98098, 88288], $lignes->map(fn (object $ligne): int => $ligne->coutUnitaireHt())->all());
         $this->assertSame(
             [['9.8098', 1], ['9.8098', 1], ['9.8098', 1], ['8.8288', 3]],
             $lignes->map(fn (object $ligne): array => [$ligne->produit->fresh()->cmup_ht, $ligne->produit->mouvementsStock()->where('type', TypeMouvementStock::ReceptionAchat)->sole()->quantite])->all(),

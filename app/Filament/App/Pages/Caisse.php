@@ -147,9 +147,15 @@ class Caisse extends Page implements HasForms
     protected static string $view = 'filament.app.pages.caisse';
 
     /**
-     * Plus grand montant que les colonnes decimal(12,2) peuvent enregistrer.
+     * Plus grand montant que les colonnes decimal(12,2) peuvent enregistrer,
+     * écrit comme une colonne, pour la règle d'un champ (« max: »).
      */
-    public const MONTANT_MAXIMUM = 9999999999.99;
+    public const MONTANT_MAXIMUM = '9999999999.99';
+
+    /**
+     * Le même montant, en centimes.
+     */
+    public const MONTANT_MAXIMUM_EN_CENTIMES = 999_999_999_999;
 
     /**
      * @var array<string, mixed>

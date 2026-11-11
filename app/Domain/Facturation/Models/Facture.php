@@ -660,7 +660,11 @@ class Facture extends Model implements DocumentEnvoyable
             : $this->lignes()->creditables()->exists();
     }
 
-    public function montantPaye(): float
+    /**
+     * Ce que les paiements imputés sur cette facture ont réglé, en
+     * centimes, contre-passations déduites, relu en base à chaque appel.
+     */
+    public function montantPayeEnCentimes(): int
     {
         return app(CalculateurLigne::class)->sommer(ValeursLues::textes($this->allocationsPaiement()->pluck('montant_alloue')));
     }
@@ -674,9 +678,10 @@ class Facture extends Model implements DocumentEnvoyable
      * EnregistrerPaiementAction) ou par la contre-passation d'un paiement
      * qui l'a rouverte (voir ContrePasserPaiementAction), moins celui
      * qu'une contre-passation a rendu -- jamais un paiement réellement
-     * encaissé, mais il réduit le solde dû exactement de la même façon.
+     * encaissé, mais il réduit le solde dû exactement de la même façon. En
+     * centimes, relu en base à chaque appel.
      */
-    public function montantCrediteParAvoir(): float
+    public function montantCrediteParAvoirEnCentimes(): int
     {
         return app(CalculateurLigne::class)->sommer(ValeursLues::textes($this->allocationsAvoir()->pluck('montant_alloue')));
     }
@@ -684,8 +689,8 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Ce qui a réglé la facture à son émission, relu dans son contenu
      * signé, que son PDF imprime (Q5) ; rien pour un brouillon. Ce qu'elle
-     * reçoit ensuite se lit dans ses imputations (voir montantPaye() et
-     * montantCrediteParAvoir()).
+     * reçoit ensuite se lit dans ses imputations (voir
+     * montantPayeEnCentimes() et montantCrediteParAvoirEnCentimes()).
      *
      * @throws DocumentSansEnregistrementSigneException
      */
@@ -697,9 +702,15 @@ class Facture extends Model implements DocumentEnvoyable
         );
     }
 
-    public function montantRestant(): float
+    /**
+     * Ce qu'il reste à régler, en centimes : son total TTC moins ses
+     * paiements et son crédit d'avoir, relus en base à chaque appel (voir
+     * resteDuEnCentimes(), qui lit les imputations chargées avec une liste
+     * de factures).
+     */
+    public function montantRestantEnCentimes(): int
     {
-        return app(CalculateurLigne::class)->soustraire($this->total_ttc, $this->montantPaye(), $this->montantCrediteParAvoir());
+        return app(CalculateurLigne::class)->enCentiemes($this->total_ttc) - $this->montantPayeEnCentimes() - $this->montantCrediteParAvoirEnCentimes();
     }
 
     /**
@@ -739,11 +750,10 @@ class Facture extends Model implements DocumentEnvoyable
      */
     public function constaterUnReglement(): void
     {
-        $calculateur = app(CalculateurLigne::class);
         $nouveauStatut = match (true) {
-            $this->montantRestant() <= 0.0 => StatutFacture::Payee,
+            $this->montantRestantEnCentimes() <= 0 => StatutFacture::Payee,
             $this->estEchue() => StatutFacture::EnRetard,
-            $calculateur->sommer([$this->montantPaye(), $this->montantCrediteParAvoir()]) > 0.0 => StatutFacture::PartiellementPayee,
+            $this->montantPayeEnCentimes() + $this->montantCrediteParAvoirEnCentimes() > 0 => StatutFacture::PartiellementPayee,
             $this->envois()->where('statut', '!=', StatutEnvoi::Echec)->exists() => StatutFacture::Envoyee,
             default => StatutFacture::Emise,
         };
@@ -783,7 +793,7 @@ class Facture extends Model implements DocumentEnvoyable
     {
         return $this->statut->attendUnReglement()
             && $this->estEchue()
-            && $this->montantRestant() > 0;
+            && $this->montantRestantEnCentimes() > 0;
     }
 
     /**
@@ -830,12 +840,12 @@ class Facture extends Model implements DocumentEnvoyable
      */
     public function messageDeRelance(): string
     {
-        $euros = fn (float $montant): string => number_format($montant, 2, ',', ' ').' €';
+        $calculateur = app(CalculateurLigne::class);
         [$document, $accord] = $this->estPourUnProfessionnel() ? ['la facture', 'e'] : ['le ticket de caisse', ''];
 
-        return "Sauf erreur de notre part, {$document} {$this->numero} d'un montant de {$euros((float) $this->total_ttc)} TTC, "
+        return "Sauf erreur de notre part, {$document} {$this->numero} d'un montant de {$calculateur->enEuros($calculateur->enCentiemes($this->total_ttc))} TTC, "
             ."arrivé{$accord} à échéance le ".Calendrier::afficherJour(ValeurRequise::de($this->date_echeance, 'l\'échéance de la facture en retard'), 'd/m/Y').", n'est pas entièrement réglé{$accord} : "
-            ."il reste {$euros($this->montantRestant())} à payer.\n"
+            ."il reste {$calculateur->enEuros($this->montantRestantEnCentimes())} à payer.\n"
             .'Nous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais. '
             ."Si vous l'avez réglé{$accord} entre-temps, merci de ne pas tenir compte de ce message.";
     }

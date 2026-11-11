@@ -362,7 +362,7 @@ final readonly class Emetteur
         $siegeAuMagasin = $siege !== [] && self::normaliser($siege) === self::normaliser($adresse);
         $capital = $this->capitalSocial === null || $this->estEntrepreneurIndividuel
             ? null
-            : ($this->capitalVariable ? 'à capital variable, ' : '').'au capital de '.number_format($this->capitalSocial / 100, 2, ',', ' ').' €';
+            : ($this->capitalVariable ? 'à capital variable, ' : '').'au capital de '.app(CalculateurLigne::class)->enEuros($this->capitalSocial);
 
         return array_values(array_filter([
             implode(' ', array_filter([$this->denominationImprimee(), $this->formeJuridique, $capital], filled(...))),

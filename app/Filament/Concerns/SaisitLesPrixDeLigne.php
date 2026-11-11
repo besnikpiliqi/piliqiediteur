@@ -41,7 +41,7 @@ trait SaisitLesPrixDeLigne
                 $document = self::documentDesLignesSaisies($get);
                 $rangees = $parTaux && count($document->parTaux) > 1
                     ? array_map(
-                        fn (string $taux, array $montants): string => 'À '.str_replace('.', ',', self::pourcentageEnTexte($taux)).' % : '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA = '.self::montantEnTexte($montants['montant_ttc']).' TTC',
+                        fn (string $taux, array $montants): string => 'À '.CalculateurLigne::tauxEnTexte(SaisieDecimale::enCentiemes($taux)).' : '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA = '.self::montantEnTexte($montants['montant_ttc']).' TTC',
                         array_keys($document->parTaux),
                         $document->parTaux,
                     )
@@ -56,11 +56,14 @@ trait SaisitLesPrixDeLigne
     }
 
     /**
-     * Un montant tel qu'on le lit : « 1 234,50 € ».
+     * Un montant écrit comme sa colonne (« 1234.50 », voir DocumentChiffre)
+     * tel qu'on le lit : « 1 234,50 € ».
      */
-    private static function montantEnTexte(float|string $montant): string
+    private static function montantEnTexte(string $montant): string
     {
-        return number_format((float) $montant, 2, ',', ' ').' €';
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->enEuros($calculateur->enCentiemes($montant));
     }
 
     /**
@@ -100,20 +103,31 @@ trait SaisitLesPrixDeLigne
     }
 
     /**
-     * Même présentation qu'un prix relu en base (cast decimal:2) : "24.00",
-     * pas "24".
+     * Un prix saisi ou enregistré écrit comme le relit sa colonne (cast
+     * decimal:2) : "24.00", pas "24" ; au centime, comme son
+     * enregistrement (voir SaisieDecimale::enCentiemes()).
+     *
+     * @throws InvalidArgumentException un prix illisible
      */
-    protected static function prixEnTexte(float $prix): string
+    protected static function prixEnTexte(mixed $prix): string
     {
-        return number_format($prix, 2, '.', '');
+        return app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($prix));
     }
 
     /**
      * Un taux de TVA ou une remise tel qu'on l'écrit dans le champ : "20",
-     * "5.5", "0" -- jamais "20.00" comme le relit le cast decimal:2.
+     * "5.5", "0" -- jamais "20.00" comme le relit le cast decimal:2 (voir
+     * CalculateurLigne::centiemesDansUnChamp()), lu au centième comme son
+     * enregistrement (voir SaisieDecimale::enCentiemes()). Rien, un champ
+     * vide ou une saisie qui n'est pas encore un nombre (un libellé ou une
+     * aide suivent la saisie en cours) valent 0.
      */
-    public static function pourcentageEnTexte(float|string|null $pourcentage): string
+    public static function pourcentageEnTexte(int|string|null $pourcentage): string
     {
-        return (string) (float) $pourcentage;
+        try {
+            return CalculateurLigne::centiemesDansUnChamp($pourcentage === null || $pourcentage === '' ? 0 : SaisieDecimale::enCentiemes($pourcentage));
+        } catch (InvalidArgumentException) {
+            return '0';
+        }
     }
 }

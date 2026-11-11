@@ -71,8 +71,17 @@ class ParametresPrixDeVente extends Page implements HasForms
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
             ...ValeurRequise::de($magasin->bareme_prix_vente, 'le barème des prix de vente du magasin')->versTableau(),
-            'essai_taux_tva' => $magasin->tauxTvaParDefaut(),
+            'essai_taux_tva' => self::tauxDansLeChamp($magasin->tauxTvaParDefaut()),
         ]);
+    }
+
+    /**
+     * Un taux écrit comme sa colonne (« 20.00 ») tel que l'écrit le champ
+     * où il se saisit : « 20 » (voir CalculateurLigne::centiemesDansUnChamp()).
+     */
+    private static function tauxDansLeChamp(string $taux): string
+    {
+        return CalculateurLigne::centiemesDansUnChamp(app(CalculateurLigne::class)->enCentiemes($taux));
     }
 
     public function form(Form $form): Form
@@ -176,19 +185,21 @@ class ParametresPrixDeVente extends Page implements HasForms
 
         try {
             $calculateur = app(CalculateurLigne::class);
-            $prixAchatHt = (float) ValeurSimple::simple($get('essai_prix_achat_ht'));
+            // Le prix d'achat d'essai se lit comme un coût, au dix-millième
+            // d'euro (voir CalculateurLigne::coutUnitaireNet()).
+            $prixAchatHt = SaisieDecimale::enDixMilliemes(ValeurSimple::simple($get('essai_prix_achat_ht')));
             $prix = self::baremeSaisi($get)->prixDeVente($prixAchatHt, $tauxTva);
 
             if ($prix === null) {
                 return 'Aucun bénéfice prévu à ce prix d\'achat : le prix de vente se saisit à la main.';
             }
 
-            $beneficeReel = $calculateur->beneficeUnitaire((float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($prix['prix_vente_ttc']), SaisieDecimale::enCentiemes($tauxTva))), $prixAchatHt);
+            $beneficeReel = $calculateur->beneficeUnitaire($calculateur->prixUnitaireHtDepuisTtc($prix['prix_vente_ttc'], $tauxTva), $prixAchatHt);
             // Les prix s'écrivent comme tout prix unitaire montré en lecture
             // (voir CalculateurLigne::prixUnitaireAffiche()), les bénéfices
             // comme des montants.
             [$prixDeVente, $prixCible] = array_map(
-                fn (float $prixTtc): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal(SaisieDecimale::enCentiemes($prixTtc)))),
+                fn (int $prixTtc): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($calculateur->enDecimal($prixTtc))),
                 [$prix['prix_vente_ttc'], $prix['prix_cible_ttc']],
             );
         } catch (InvalidArgumentException) {
@@ -197,7 +208,7 @@ class ParametresPrixDeVente extends Page implements HasForms
 
         return $prixDeVente.' TTC'
             .($prixDeVente !== $prixCible ? ' (prix cible '.$prixCible.')' : '')
-            .' · bénéfice réel '.self::euros($beneficeReel).' HT (visé '.self::euros($prix['benefice']).')';
+            .' · bénéfice réel '.$calculateur->enEuros($beneficeReel).' HT (visé '.$calculateur->enEuros($prix['benefice']).')';
     }
 
     private static function baremeSaisi(Get $get): BaremePrixDeVente
@@ -210,11 +221,6 @@ class ParametresPrixDeVente extends Page implements HasForms
             'benefice_au_dela' => $get('benefice_au_dela'),
             'arrondi_x9' => (bool) $get('arrondi_x9'),
         ]);
-    }
-
-    private static function euros(float $montant): string
-    {
-        return number_format($montant, 2, ',', ' ').' €';
     }
 
     public function save(): void

@@ -16,7 +16,7 @@ use InvalidArgumentException;
  * (voir SaisieDecimale::enMillioniemes(), qui refuse une saisie plus
  * précise) et se relit tel qu'il est enregistré, sans zéro inutile au-delà
  * du centime : « 0.1234 », « 12.50 », « 8.333333 », « 2.10 » (voir
- * CalculateurLigne::prixDAchatEnDecimal()).
+ * CalculateurLigne::prixUnitaireExactEnDecimal()).
  *
  * @implements CastsAttributes<string|null, mixed>
  */
@@ -31,7 +31,7 @@ final class PrixDAchat implements CastsAttributes
             return null;
         }
 
-        return app(CalculateurLigne::class)->prixDAchatEnDecimal(SaisieDecimale::enMillioniemes($value));
+        return app(CalculateurLigne::class)->prixUnitaireExactEnDecimal(SaisieDecimale::enMillioniemes($value));
     }
 
     /**

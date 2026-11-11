@@ -109,7 +109,7 @@ class EmettreEtEncaisserTest extends TestCase
 
         $facture = self::emettreEtEncaisser($brouillon, [new PartDeReglement(ModePaiement::Virement, 10000, 'VIR-1')]);
 
-        $this->assertSame([StatutFacture::Payee, 'FAC-LYON1-2026-000001', 0.0], [$facture->statut, $facture->numero, $facture->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 'FAC-LYON1-2026-000001', 0], [$facture->statut, $facture->numero, $facture->montantRestantEnCentimes()]);
         $this->assertSame([['virement', '100.00', 'VIR-1', '2026-10-09']], self::paiementsDe($facture));
         $this->assertSame([['mode' => 'virement', 'reference' => 'VIR-1', 'montant' => 10000]], self::reglementsSignes($facture));
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
@@ -154,7 +154,7 @@ class EmettreEtEncaisserTest extends TestCase
 
         $facture = self::emettreEtEncaisser($brouillon, [new PartDeReglement(ModePaiement::Cheque, 4000, 'CHQ 1234567')]);
 
-        $this->assertSame([StatutFacture::PartiellementPayee, 60.0, '2026-11-08'], [$facture->statut, $facture->montantRestant(), $facture->date_echeance]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 6000, '2026-11-08'], [$facture->statut, $facture->montantRestantEnCentimes(), $facture->date_echeance]);
         $html = html_entity_decode(app(FacturePdfGenerator::class)->html($facture->fresh()), ENT_QUOTES);
         $this->assertStringContainsString('<td class="mode">Chèque</td>', $html);
         $this->assertStringContainsString('Restant dû à l\'émission', $html);
@@ -185,7 +185,7 @@ class EmettreEtEncaisserTest extends TestCase
 
         $facture = self::emettreEtEncaisser($brouillon, [new PartDeReglement(ModePaiement::CarteBancaire, 7000)]);
 
-        $this->assertSame(['FAC-LYON1-2026-000002', StatutFacture::Payee, 70.0, 30.0], [$facture->numero, $facture->statut, $facture->montantPaye(), $facture->montantCrediteParAvoir()]);
+        $this->assertSame(['FAC-LYON1-2026-000002', StatutFacture::Payee, 7000, 3000], [$facture->numero, $facture->statut, $facture->montantPayeEnCentimes(), $facture->montantCrediteParAvoirEnCentimes()]);
         $this->assertSame([['mode' => 'carte_bancaire', 'reference' => null, 'montant' => 7000]], self::reglementsSignes($facture));
         $this->assertSame([['numero' => Avoir::query()->sole()->numero, 'montant' => 3000]], array_map(
             fn (array $credit): array => array_intersect_key($credit, array_flip(['numero', 'montant'])),
@@ -206,7 +206,7 @@ class EmettreEtEncaisserTest extends TestCase
 
         $ticket = self::emettreEtEncaisser($brouillon, [], $vendeur);
 
-        $this->assertSame([StatutFacture::Emise, 30.0, 0], [$ticket->statut, $ticket->montantRestant(), Paiement::query()->count()]);
+        $this->assertSame([StatutFacture::Emise, 3000, 0], [$ticket->statut, $ticket->montantRestantEnCentimes(), Paiement::query()->count()]);
     }
 
     /**
@@ -395,7 +395,7 @@ class EmettreEtEncaisserTest extends TestCase
             ->assertHasNoActionErrors()
             ->assertSee('Partiellement payée');
 
-        $this->assertSame([StatutFacture::PartiellementPayee, 75.0], [$brouillon->fresh()->statut, $brouillon->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 7500], [$brouillon->fresh()->statut, $brouillon->fresh()->montantRestantEnCentimes()]);
     }
 
     /**
@@ -426,14 +426,14 @@ class EmettreEtEncaisserTest extends TestCase
             ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertSee('Émise');
-        $this->assertSame([StatutFacture::Emise, 100.0, []], [$depuisLaFiche->fresh()->statut, $depuisLaFiche->fresh()->montantRestant(), self::paiementsDe($depuisLaFiche->fresh())]);
+        $this->assertSame([StatutFacture::Emise, 10000, []], [$depuisLaFiche->fresh()->statut, $depuisLaFiche->fresh()->montantRestantEnCentimes(), self::paiementsDe($depuisLaFiche->fresh())]);
 
         $liste = Livewire::test(ListFactures::class)->mountTableAction('emettre_et_encaisser', $depuisLaListe);
         $part = (string) array_key_first($liste->get('mountedTableActionsData.0.parts'));
         $liste->set("mountedTableActionsData.0.parts.{$part}.montant", '0.00')
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
-        $this->assertSame([StatutFacture::Emise, 30.0, []], [$depuisLaListe->fresh()->statut, $depuisLaListe->fresh()->montantRestant(), self::paiementsDe($depuisLaListe->fresh())]);
+        $this->assertSame([StatutFacture::Emise, 3000, []], [$depuisLaListe->fresh()->statut, $depuisLaListe->fresh()->montantRestantEnCentimes(), self::paiementsDe($depuisLaListe->fresh())]);
 
         $encaisser = Livewire::test(ViewFacture::class, ['record' => $depuisLaListe->getRouteKey()])->mountAction('encaisser');
         $part = (string) array_key_first($encaisser->get('mountedActionsData.0.parts'));

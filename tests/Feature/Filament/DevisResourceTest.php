@@ -123,7 +123,7 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Le crédit disponible d'un client (voir Client::soldeCrediteur()) doit
+     * Le crédit disponible d'un client (voir Client::soldeCrediteurEnCentimes()) doit
      * être visible dès sa sélection, avant même de valider -- même si le
      * crédit sera de toute façon appliqué automatiquement à l'émission de
      * la future facture (voir AppliquerAvoirsDisponiblesAction).

@@ -493,7 +493,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $martinique = $this->societeAuSiege('97200', 'FORT-DE-FRANCE', '97209');
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($martinique);
 
-        $this->assertSame([Territoire::Martinique, 8.5], [$demonstration->territoire, $demonstration->tauxTvaParDefaut()]);
+        $this->assertSame([Territoire::Martinique, '8.50'], [$demonstration->territoire, $demonstration->tauxTvaParDefaut()]);
         app(TenantContext::class)->runAs($demonstration, fn () => $this->assertSame(['8.50'], Produit::query()->distinct()->pluck('taux_tva')->all()));
 
         $this->travelTo(self::aParis('2026-11-09 10:00:00'));

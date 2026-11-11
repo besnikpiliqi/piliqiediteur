@@ -52,7 +52,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $this->assertNotNull($facture->numero);
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
         $this->assertSame('120.00', $facture->total_ttc); // 2 x 50 HT, TVA 20%
-        $this->assertSame(0.0, $facture->fresh()->montantRestant());
+        $this->assertSame(0, $facture->fresh()->montantRestantEnCentimes());
     }
 
     public function test_encaisser_une_vente_decremente_le_stock(): void
@@ -117,7 +117,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         ]);
         app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
-        $this->assertSame(60.0, $client->soldeCrediteur());
+        $this->assertSame(6000, $client->soldeCrediteurEnCentimes());
 
         // Nouvel achat comptoir du même montant : intégralement couvert par
         // le crédit, sans aucun encaissement en espèces.
@@ -128,10 +128,10 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         );
 
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
-        $this->assertSame(60.0, $facture->fresh()->montantCrediteParAvoir());
-        $this->assertSame(0.0, $facture->fresh()->montantPaye());
+        $this->assertSame(6000, $facture->fresh()->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(0, $facture->fresh()->montantPayeEnCentimes());
         $this->assertSame(1, Paiement::query()->where('client_id', $client->id)->count(), 'Seul le premier achat a été encaissé.');
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 
     public function test_la_reference_de_paiement_est_enregistree(): void
@@ -234,9 +234,9 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
         $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: ['AV-MABOUT-2026-000001']);
 
-        $this->assertSame([StatutFacture::Payee, 20.0, 0.0, 0.0], [$ticket->fresh()->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 2000, 0, 0], [$ticket->fresh()->statut, $ticket->montantCrediteParAvoirEnCentimes(), $ticket->montantPayeEnCentimes(), $ticket->montantRestantEnCentimes()]);
         $this->assertSame(1, Paiement::query()->count());
-        $this->assertSame(10.0, $bon->fresh()->montantNonAlloue());
+        $this->assertSame(1000, $bon->fresh()->creditEnCentimes());
         $contexte = $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte'];
         $this->assertSame([[], [['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 2000]]], [$contexte['reglements'], $contexte['credits_avoir']]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());

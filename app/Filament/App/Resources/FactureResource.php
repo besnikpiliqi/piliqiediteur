@@ -269,7 +269,7 @@ class FactureResource extends Resource
                 self::ventilationTvaEntry(),
                 // Un avoir n'est jamais remboursé par ce logiciel : son
                 // crédit réduit le solde dû exactement comme un
-                // encaissement (voir Facture::montantRestant()), c'est
+                // encaissement (voir Facture::montantRestantEnCentimes()), c'est
                 // d'ailleurs lui qui explique le statut "Partiellement
                 // payée"/"Payée" d'une facture jamais réellement encaissée.
                 // Le séparer du "Payé" donnerait l'impression contradictoire
@@ -279,20 +279,20 @@ class FactureResource extends Resource
                 // part qui vient spécifiquement d'un avoir.
                 TextEntry::make('montant_paye')
                     ->label('Payé')
-                    ->state(fn (Facture $record) => app(CalculateurLigne::class)->sommer([$record->montantPaye(), $record->montantCrediteParAvoir()]))
+                    ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantPayeEnCentimes() + $record->montantCrediteParAvoirEnCentimes()))
                     ->money('EUR'),
                 TextEntry::make('montant_credite_par_avoir')
                     ->label('Crédité par avoir')
-                    ->state(fn (Facture $record) => $record->montantCrediteParAvoir())
+                    ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantCrediteParAvoirEnCentimes()))
                     ->money('EUR')
-                    ->visible(fn (Facture $record) => $record->montantCrediteParAvoir() > 0),
+                    ->visible(fn (Facture $record) => $record->montantCrediteParAvoirEnCentimes() > 0),
                 // La facture rectificative qui attend l'avoir de
                 // régularisation de la facture qu'elle rectifie n'attend
                 // aucun règlement (voir StatutFacture::EnAttenteDeRegularisation) :
                 // sa fiche le dit sous ce qu'il en reste dû.
                 TextEntry::make('montant_restant')
                     ->label('Restant dû')
-                    ->state(fn (Facture $record) => $record->montantRestant())
+                    ->state(fn (Facture $record): string => app(CalculateurLigne::class)->enDecimal($record->montantRestantEnCentimes()))
                     ->money('EUR')
                     ->helperText(fn (Facture $record): ?string => $record->statut === StatutFacture::EnAttenteDeRegularisation
                         ? sprintf(RegularisationDUneFacture::ATTENTE_DE_L_AVOIR, $record->factureRectifiee?->numero)
@@ -320,7 +320,7 @@ class FactureResource extends Resource
                         ->schema([
                             TextEntry::make('nature')
                                 ->label('Nature')
-                                ->state(fn (PaiementAllocation $record): string => (float) $record->montant_alloue < 0 ? 'Contre-passation' : 'Paiement')
+                                ->state(fn (PaiementAllocation $record): string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'Contre-passation' : 'Paiement')
                                 ->badge()
                                 ->color(fn (string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray'),
                             TextEntry::make('paiement.recu_le')->label('Reçu le')->jour(),
@@ -328,7 +328,7 @@ class FactureResource extends Resource
                             TextEntry::make('montant_alloue')
                                 ->label('Montant imputé')
                                 ->money('EUR')
-                                ->color(fn (PaiementAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
+                                ->color(fn (PaiementAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
                             TextEntry::make('recu')
                                 ->label('Reçu')
@@ -360,7 +360,7 @@ class FactureResource extends Resource
                             TextEntry::make('montant_alloue')
                                 ->label('Montant crédité')
                                 ->money('EUR')
-                                ->color(fn (AvoirAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
+                                ->color(fn (AvoirAllocation $record): ?string => app(CalculateurLigne::class)->enCentiemes($record->montant_alloue) < 0 ? 'danger' : null),
                         ])
                         ->columns(2),
                 ]),
@@ -416,7 +416,7 @@ class FactureResource extends Resource
                             TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')
                                 ->label('Crédité sur cette facture (TTC)')
-                                ->state(fn (Avoir $record) => app(CalculateurLigne::class)->sommer($record->lignes->map(fn (LigneAvoir $ligne) => $ligne->montant_ttc)))
+                                ->state(fn (Avoir $record): string => app(CalculateurLigne::class)->enDecimal(app(CalculateurLigne::class)->sommer($record->lignes->map(fn (LigneAvoir $ligne): string => $ligne->montant_ttc))))
                                 ->money('EUR'),
                             // Le résumé (numéro/motif/total) ne dit pas CE QUI
                             // a été retourné : le détail des lignes créditées
@@ -578,11 +578,15 @@ class FactureResource extends Resource
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
      * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
      * CalculateurLigne). Le PU HT d'une vente, enregistré au millionième
-     * d'euro (voir CalculateurLigne::prixUnitaireHtExact()), s'affiche
-     * arrondi au centime, comme tout prix unitaire de vente (voir
-     * CalculateurLigne::prixUnitaireAffiche()) ; celui d'un achat, tel que
-     * le fournisseur l'écrit, s'affiche tel qu'il est enregistré (voir
-     * CalculateurLigne::prixDAchatAffiche()). Un achat n'a pas de PU TTC :
+     * d'euro (voir CalculateurLigne::prixUnitaireHtExact()), s'affiche tel
+     * qu'il est enregistré sur les documents qui le montrent -- facture,
+     * avoir sur facture ou devis à un professionnel, vente sans TVA
+     * française (décision de l'éditeur du 09/11/2026) -- comme celui d'un
+     * achat, tel que le fournisseur l'écrit (voir
+     * CalculateurLigne::prixUnitaireExact()) ; sur un ticket, un avoir sur
+     * ticket ou un devis à un particulier, arrondi au centime, comme tout
+     * prix unitaire de vente (voir CalculateurLigne::prixUnitaireAffiche()).
+     * Un achat n'a pas de PU TTC :
      * sa TVA est sa part de celle que la facture du fournisseur écrit pour
      * son taux (voir TvaDuFournisseur) ; le HT d'une ligne d'achat que la
      * facture écrit autrement que le calcul depuis le PU montre ce calcul
@@ -590,8 +594,8 @@ class FactureResource extends Resource
      * n'apparaît que si une ligne du document en a une : c'est elle qui
      * explique alors que PU x quantité diffère du total. Sur tout document
      * de vente soumis à la TVA, la note de calcul dit que le HT de chaque
-     * taux se calcule sur son TTC et se répartit sur les lignes, et que les
-     * prix unitaires s'affichent arrondis au centime (voir
+     * taux se calcule sur son TTC et se répartit sur les lignes, et l'écart
+     * qui peut en résulter avec la quantité x le prix unitaire affiché (voir
      * MentionsFiscales::calcul()).
      * La ligne d'une facture d'achat brouillon
      * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
@@ -619,14 +623,15 @@ class FactureResource extends Resource
             $document->loadMissing('lignes.produit');
         }
 
-        $avecRemise = ($estUnAchat || $estUneVente) && $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis|LigneAchat|LigneAvoirFournisseur $ligne): bool => (float) $ligne->remise_pourcentage != 0);
+        $calculateur = app(CalculateurLigne::class);
+        $avecRemise = ($estUnAchat || $estUneVente) && $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis|LigneAchat|LigneAvoirFournisseur $ligne): bool => $calculateur->enCentiemes($ligne->remise_pourcentage) !== 0);
         $sansTvaFrancaise = $estUneVente && ContexteDeVente::documentRetireLaTvaDuPrix($document);
         // Un produit, ou un service à son prix de référence : un prix du
         // catalogue dont la TVA est retirée (voir lignes.blade.php).
-        $prixCatalogueSansTvaFrancaise = fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0);
-        $calculateur = app(CalculateurLigne::class);
+        $prixCatalogueSansTvaFrancaise = fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || $calculateur->enCentiemes($ligne->taux_tva_du_prix) > 0);
         $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
-        $prixDAchat = fn (string $state): string => $calculateur->prixDAchatAffiche($calculateur->enMillioniemes($state));
+        $prixExact = fn (string $state): string => $calculateur->prixUnitaireExact($calculateur->enMillioniemes($state));
+        $montreLePuHtExact = $estUnAchat || ($estUneVente && ContexteDeVente::documentMontreLePuHt($document));
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -641,7 +646,7 @@ class FactureResource extends Resource
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')
-                    ->formatStateUsing($estUnAchat ? $prixDAchat : $prixUnitaire),
+                    ->formatStateUsing($montreLePuHtExact ? $prixExact : $prixUnitaire),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
                     ->state(fn (LigneFacture|LigneAvoir|LigneDevis $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
@@ -756,7 +761,7 @@ class FactureResource extends Resource
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 // Un avoir n'est jamais remboursé par ce logiciel : son
                 // crédit réduit le solde dû exactement comme un encaissement
-                // (voir Facture::montantRestant()), c'est d'ailleurs lui qui
+                // (voir Facture::montantRestantEnCentimes()), c'est d'ailleurs lui qui
                 // explique le statut "Partiellement payée"/"Payée" d'une
                 // facture jamais réellement encaissée. Le séparer du "Payé"
                 // ici donnerait l'impression contradictoire d'une facture

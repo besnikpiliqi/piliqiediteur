@@ -11,7 +11,6 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Support\CleDuModele;
@@ -228,15 +227,6 @@ class Client extends Model
         return $query->withTrashed()->where(fn ($clients) => $clients
             ->whereNull($this->getQualifiedDeletedAtColumn())
             ->orWhereHas('factures', fn (Builder $factures): Builder => $factures->whereIn('statut', StatutFacture::quiAttendentUnReglement())));
-    }
-
-    /**
-     * Crédit encore disponible pour ce client (voir
-     * soldeCrediteurEnCentimes()).
-     */
-    public function soldeCrediteur(): float
-    {
-        return (float) app(CalculateurLigne::class)->enDecimal($this->soldeCrediteurEnCentimes());
     }
 
     /**

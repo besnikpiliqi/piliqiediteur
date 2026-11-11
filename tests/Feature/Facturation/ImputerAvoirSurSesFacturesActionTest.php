@@ -107,13 +107,13 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
      * Ce qui est crédité par avoir, ce qui reste dû et le statut d'une
      * facture.
      *
-     * @return array{0: float, 1: float, 2: StatutFacture}
+     * @return array{0: int, 1: int, 2: StatutFacture} les montants en centimes
      */
     private function reglementDe(Facture $facture): array
     {
         $facture->refresh();
 
-        return [$facture->montantCrediteParAvoir(), $facture->montantRestant(), $facture->statut];
+        return [$facture->montantCrediteParAvoirEnCentimes(), $facture->montantRestantEnCentimes(), $facture->statut];
     }
 
     public function test_un_avoir_reduit_le_reste_a_payer_de_sa_facture_impayee(): void
@@ -126,10 +126,10 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $facture->refresh();
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->statut);
-        $this->assertSame(60.0, $facture->montantCrediteParAvoir());
-        $this->assertSame(120.0, $facture->montantRestant());
-        $this->assertSame(0.0, $avoir->fresh()->montantNonAlloue());
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame(6000, $facture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(12000, $facture->montantRestantEnCentimes());
+        $this->assertSame(0, $avoir->fresh()->creditEnCentimes());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -149,7 +149,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $facture->refresh();
         $this->assertSame(StatutFacture::EnRetard, $facture->statut);
-        $this->assertSame(120.0, $facture->montantRestant());
+        $this->assertSame(12000, $facture->montantRestantEnCentimes());
     }
 
     public function test_seul_l_excedent_sur_le_reste_a_payer_devient_un_credit_pour_le_client(): void
@@ -163,10 +163,10 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $facture->refresh();
         $this->assertSame(StatutFacture::Payee, $facture->statut);
-        $this->assertSame(30.0, $facture->montantCrediteParAvoir());
-        $this->assertSame(0.0, $facture->montantRestant());
-        $this->assertSame(30.0, $avoir->fresh()->montantNonAlloue());
-        $this->assertSame(30.0, $client->soldeCrediteur());
+        $this->assertSame(3000, $facture->montantCrediteParAvoirEnCentimes());
+        $this->assertSame(0, $facture->montantRestantEnCentimes());
+        $this->assertSame(3000, $avoir->fresh()->creditEnCentimes());
+        $this->assertSame(3000, $client->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -187,10 +187,10 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $avoir = $this->emettreAvoir($client, [[$factureImpayee, 1], [$factureReglee, 1]]);
 
         $this->assertSame(['90.00'], AvoirAllocation::query()->where('facture_id', $factureImpayee->id)->pluck('montant_alloue')->all());
-        $this->assertSame([90.0, 30.0, StatutFacture::PartiellementPayee], $this->reglementDe($factureImpayee));
-        $this->assertSame([0.0, 0.0, StatutFacture::Payee], $this->reglementDe($factureReglee));
-        $this->assertSame(0.0, $avoir->fresh()->montantNonAlloue());
-        $this->assertSame(0.0, $client->soldeCrediteur());
+        $this->assertSame([9000, 3000, StatutFacture::PartiellementPayee], $this->reglementDe($factureImpayee));
+        $this->assertSame([0, 0, StatutFacture::Payee], $this->reglementDe($factureReglee));
+        $this->assertSame(0, $avoir->fresh()->creditEnCentimes());
+        $this->assertSame(0, $client->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -208,9 +208,9 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $avoir = $this->avoirTotalDu('2026-10-09', $f0);
 
         $this->assertSame(['83.33', '16.67', '100.00'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
-        $this->assertSame([100.0, 20.0, StatutFacture::PartiellementPayee], $this->reglementDe($f1));
-        $this->assertSame([0.0, 50.0, StatutFacture::Emise], $this->reglementDe($f2));
-        $this->assertSame(0.0, $dupont->soldeCrediteur());
+        $this->assertSame([10000, 2000, StatutFacture::PartiellementPayee], $this->reglementDe($f1));
+        $this->assertSame([0, 5000, StatutFacture::Emise], $this->reglementDe($f2));
+        $this->assertSame(0, $dupont->soldeCrediteurEnCentimes());
         $this->assertSame([['facture_id' => $f1->id, 'numero' => 'FAC-LYON1-2026-000002', 'montant' => 10000]], $this->imputationsSignees($avoir));
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
@@ -225,9 +225,9 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $avoir = $this->avoirTotalDu('2026-10-09', $f0);
 
-        $this->assertSame([120.0, 0.0, StatutFacture::Payee], $this->reglementDe($f1));
-        $this->assertSame([30.0, 20.0, StatutFacture::PartiellementPayee], $this->reglementDe($f2));
-        $this->assertSame(0.0, $dupont->soldeCrediteur());
+        $this->assertSame([12000, 0, StatutFacture::Payee], $this->reglementDe($f1));
+        $this->assertSame([3000, 2000, StatutFacture::PartiellementPayee], $this->reglementDe($f2));
+        $this->assertSame(0, $dupont->soldeCrediteurEnCentimes());
         $this->assertSame([
             ['facture_id' => $f1->id, 'numero' => 'FAC-LYON1-2026-000002', 'montant' => 12000],
             ['facture_id' => $f2->id, 'numero' => 'FAC-LYON1-2026-000003', 'montant' => 3000],
@@ -243,10 +243,10 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $avoir = $this->avoirTotalDu('2026-10-09', $f1);
 
-        $this->assertSame([20.0, 0.0, StatutFacture::Payee], $this->reglementDe($f1));
-        $this->assertSame([50.0, 0.0, StatutFacture::Payee], $this->reglementDe($f2));
-        $this->assertSame(50.0, $avoir->fresh()->montantNonAlloue());
-        $this->assertSame(50.0, $dupont->soldeCrediteur());
+        $this->assertSame([2000, 0, StatutFacture::Payee], $this->reglementDe($f1));
+        $this->assertSame([5000, 0, StatutFacture::Payee], $this->reglementDe($f2));
+        $this->assertSame(5000, $avoir->fresh()->creditEnCentimes());
+        $this->assertSame(5000, $dupont->soldeCrediteurEnCentimes());
         $this->assertSame([
             ['facture_id' => $f1->id, 'numero' => 'FAC-LYON1-2026-000001', 'montant' => 2000],
             ['facture_id' => $f2->id, 'numero' => 'FAC-LYON1-2026-000002', 'montant' => 5000],
@@ -269,7 +269,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $this->avoirTotalDu('2026-10-09', $f0);
 
-        $this->assertSame([100.0, 20.0, StatutFacture::EnRetard], $this->reglementDe($f1));
+        $this->assertSame([10000, 2000, StatutFacture::EnRetard], $this->reglementDe($f1));
     }
 
     /**
@@ -288,8 +288,8 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
         $avoir = $this->avoirTotalDu('2026-10-09', $ticketPaye);
 
-        $this->assertSame([0.0, 20.0, StatutFacture::Emise], $this->reglementDe($ticketImpaye));
-        $this->assertSame(12.0, $avoir->fresh()->montantNonAlloue());
+        $this->assertSame([0, 2000, StatutFacture::Emise], $this->reglementDe($ticketImpaye));
+        $this->assertSame(1200, $avoir->fresh()->creditEnCentimes());
         $this->assertSame([], $this->imputationsSignees($avoir));
     }
 
@@ -305,10 +305,10 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $avoir = $this->avoirTotalDu('2026-10-09', $f0);
 
         $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
-        $this->assertSame([0.0, 50.0, StatutFacture::Emise], $this->reglementDe($factureDeMartin));
+        $this->assertSame([0, 5000, StatutFacture::Emise], $this->reglementDe($factureDeMartin));
         $this->assertSame(0, AvoirAllocation::query()->count());
-        $this->assertSame(100.0, $avoir->fresh()->montantNonAlloue());
-        $this->assertSame(100.0, $dupont->soldeCrediteur());
+        $this->assertSame(10000, $avoir->fresh()->creditEnCentimes());
+        $this->assertSame(10000, $dupont->soldeCrediteurEnCentimes());
     }
 
     /**
@@ -330,7 +330,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $avoir = $this->avoirTotalDu('2026-10-09', $f0);
 
         $this->assertFalse(DB::table('avoir_allocations')->where('facture_id', $factureDeB->id)->exists());
-        $this->assertSame(100.0, $avoir->fresh()->montantNonAlloue());
-        $this->assertSame(100.0, $dupont->soldeCrediteur());
+        $this->assertSame(10000, $avoir->fresh()->creditEnCentimes());
+        $this->assertSame(10000, $dupont->soldeCrediteurEnCentimes());
     }
 }

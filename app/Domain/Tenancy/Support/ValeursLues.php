@@ -24,8 +24,6 @@ final class ValeursLues
 
     public const REFUS_ENTIER = 'Une valeur lue n\'est pas un entier : %s.';
 
-    public const REFUS_NOMBRE = 'Un texte lu n\'est pas un nombre : « %s ».';
-
     public const REFUS_BOOLEEN = 'Une valeur lue n\'est ni vraie ni fausse : %s.';
 
     public const REFUS_TABLEAU = 'Une valeur lue n\'est pas un tableau : %s.';
@@ -278,19 +276,6 @@ final class ValeursLues
         $cle = self::cle($valeur) ?? '';
 
         return is_int($cle) || is_string($cle) ? $cle : (int) $cle;
-    }
-
-    /**
-     * Un nombre écrit en texte (« 120.00 »), tel que PHP le reconnaît
-     * (is_numeric()), sans le convertir.
-     *
-     * @return numeric-string
-     *
-     * @throws UnexpectedValueException un texte qui n'est pas un nombre
-     */
-    public static function nombre(string $valeur): string
-    {
-        return is_numeric($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_NOMBRE, $valeur));
     }
 
     /**

@@ -178,7 +178,9 @@ class Service extends Model
             throw new InvalidArgumentException('Le prix de référence d\'un service et son taux de TVA se fixent ensemble.');
         }
 
-        if ($this->prix_ttc !== null && ((float) $this->prix_ttc < 0 || (float) $this->taux_tva < 0 || (float) $this->taux_tva > 100)) {
+        $calculateur = app(CalculateurLigne::class);
+
+        if ($this->prix_ttc !== null && ($calculateur->enCentiemes($this->prix_ttc) < 0 || $calculateur->enCentiemes($this->taux_tva) < 0 || $calculateur->enCentiemes($this->taux_tva) > 10000)) {
             throw new InvalidArgumentException('Le prix de référence d\'un service n\'est jamais négatif, et son taux de TVA reste entre 0 et 100 %.');
         }
     }

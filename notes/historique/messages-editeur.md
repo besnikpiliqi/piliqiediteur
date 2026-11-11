@@ -1664,3 +1664,23 @@ oui
 
 « 1 et 2 »
 
+## 171. 2026-11-11 09:08 UTC
+
+Qu’est ce que va faire le ty2 et ty3. Quel code font
+
+## 172. 2026-11-11 09:20 UTC
+
+Dit moi larastan et psalm ont trouvé combien d’erreur depuis le début quand ils sont la sur le logiciel ?
+
+## 173. 2026-11-11 09:25 UTC
+
+Et combien de temps ont pris tout ça
+
+## 174. 2026-11-11 09:34 UTC
+
+Ecoute toi t’es en train de perdre trop de temps et fais vraiment très peu d’avancement. Qunad tu a commencé à creer le logiciel debut octobre là tu a construit tres rapidement une grande partie et la depuis 2 semaine tu construit vraiment tres peu à cause de ces choses. Donc il faut que change ta méthode pour que tu finisse le logiciel très rapidement. Toi t as ajouté trop de choses. Par exemple sera mieux que les tests se font une fois à la fin d’un lot ou tu laisses que pour github qui fasse les tests à la fin de chaque lot. Et tu enlèves par exemple larastan et psalm, dont ceux tu gardes juste pour la fin du logiciel pour trouver ces failles ou erreur et pas faire mille fois à chaque lot. Donc tu fais comme tu as fait au début du logiciel
+
+## 175. 2026-11-11 09:50 UTC
+
+Tu fait comme tu as dir « Ma recommandation : garder « max » seulement pour CALC (les calculs d’argent) et passer tous les autres lots à « extra ». Et pour les relectures je suis pas trop sur de passer à un seul car eux peuvent trouver des problèmes non? Dit moi e c’est pas tres naissessaire.
+

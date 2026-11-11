@@ -1,19 +1,21 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 08:16 UTC par pilotage-sync.sh : « Point de suivi 08:15 : TY2 en relecture ».
+Mis à jour le 11/11/2026 à 09:54 UTC par pilotage-sync.sh : « D63 : méthode rapide, nouvelle chaîne ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `9f46860`. Commits locaux pas encore poussés :
+Tête poussée : `71a217a`. Commits locaux pas encore poussés :
 
 ```
-b9dd057 Vérifie les types que donnaient les commentaires en ligne, et refuse ces commentaires au contrôle des seuils (lot TY2, types en ligne)
-c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type sont vérifiées (lot TY2, niveaux 9 et 10)
 ```
 
 Derniers commits poussés :
 
 ```
+71a217a Passe à la méthode rapide : la suite une fois par lot, l'analyse statique et la mutation à la fin
+5dc11a1 Relecture du lot TY2 de l’analyse statique
+b9dd057 Vérifie les types que donnaient les commentaires en ligne, et refuse ces commentaires au contrôle des seuils (lot TY2, types en ligne)
+c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type sont vérifiées (lot TY2, niveaux 9 et 10)
 9f46860 Relecture du lot TY1 de l’analyse statique
 8546296 Couvre les lignes retouchées par le typage et retire une fonction sans appelant (lot TY1 12/n)
 5ff0152 Type les valeurs requises des écrans, et passe Larastan au niveau 8 (lot TY1 11/n)
@@ -30,10 +32,6 @@ d8d2ee3 Contrôle les seuils de l'analyse statique par ses paramètres effectifs
 b93aeff Relecture du lot PG de la série 8
 d8deaf9 Mute en entier chaque fichier sensible changé par l'envoi (CI, lot PG)
 4e6d832 Prouve chaque protection de la base par un test qui échoue sans elle (lot PG)
-50d39d1 Dit vrai sur les ventes dans l'avis de l'identité incomplète (constat C7)
-ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
-7f4d7ae Résout le verrou de Psalm pour PHP 8.3.16 (CI, analyse des flux)
-6c7b3d1 Relecture du lot QA des outils de qualité
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
@@ -43,31 +41,8 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 
 ## Dernière course de la chaîne
 
-Course `wf_54289edd-a97`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-QA:implementation
-QA:relecture1
-QA:relecture2
-QA:correction
-QA:poussee
-QA:fiche
-QA:notes
-PG:implementation
-PG:relecture1
-PG:relecture2
-PG:correction
-PG:poussee
-PG:fiche
-PG:notes
-TY1:implementation
-TY1:relecture1
-TY1:relecture2
-TY1:correction
-TY1:poussee
-TY1:fiche
-TY1:notes
-TY2:implementation
-TY2:relecture1
-TY2:relecture2
+CALC:implementation
 ```

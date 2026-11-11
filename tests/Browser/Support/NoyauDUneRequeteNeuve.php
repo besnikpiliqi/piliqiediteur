@@ -26,7 +26,10 @@ use Symfony\Component\HttpFoundation\Response;
  * - les gardes d'authentification, qui sinon garderaient le compte d'une
  *   requête précédente, même pour une autre session ;
  * - la session, relue de la base à chaque requête au lieu de garder en
- *   mémoire les clés d'une session précédente ;
+ *   mémoire les clés d'une session précédente, celle aussi que lit la garde
+ *   d'authentification (session.store, que le conteneur garde sinon depuis
+ *   la première requête du test : un second navigateur y trouverait le
+ *   compte connecté dans le premier) ;
  * - les témoins mis en file, qui sinon repartiraient avec chaque réponse ;
  * - les rappels du conteneur à la résolution d'un service, tels qu'au
  *   démarrage de l'application : chaque panneau de Filament qui démarre
@@ -34,6 +37,10 @@ use Symfony\Component\HttpFoundation\Response;
  *   que chaque requête suivante rejouerait, si bien qu'une page de l'espace
  *   d'une société recevrait les crochets du panneau des magasins.
  * Il fait aussi ce que le serveur du module ne fait pas :
+ * - les témoins de la requête se lisent dans son en-tête Cookie comme PHP
+ *   les lit : le serveur du module n'en transmet aucun dès qu'un nom
+ *   contient un crochet (« postes_reconnus[0] »), quand PHP range ce
+ *   témoin en tableau sous « postes_reconnus » ;
  * - le corps d'un formulaire multipart/form-data (un fichier envoyé, comme
  *   Livewire le fait pour un champ de fichier) se lit en champs et en
  *   fichiers, comme PHP le ferait : le serveur du module ne lit que les
@@ -71,7 +78,10 @@ final class NoyauDUneRequeteNeuve implements Kernel
      */
     private array $fichiersEnvoyes = [];
 
-    public function __construct(private readonly Kernel $noyau)
+    /**
+     * @param  Closure(): array<string, mixed>  $temoinsDuTest  les témoins que le test pose lui-même (withCookie), qui l'emportent sur ceux du navigateur, comme sur le serveur du module
+     */
+    public function __construct(private readonly Kernel $noyau, private readonly Closure $temoinsDuTest)
     {
         $this->rappelsDuDemarrage = (fn (): array => [$this->resolvingCallbacks, $this->afterResolvingCallbacks])->call($noyau->getApplication());
     }
@@ -96,7 +106,9 @@ final class NoyauDUneRequeteNeuve implements Kernel
         Facade::clearResolvedInstances();
         $application->make('auth')->forgetGuards();
         $application->make('session')->forgetDrivers();
+        $application->forgetInstance('session.store');
         $application->make('cookie')->flushQueuedCookies();
+        $this->lireLesTemoins($request);
         $this->lireLeFormulaireMultipart($request);
 
         $reponse = $this->enEntier($this->noyau->handle($request));
@@ -156,6 +168,44 @@ final class NoyauDUneRequeteNeuve implements Kernel
     public function getApplication(): Application
     {
         return $this->noyau->getApplication();
+    }
+
+    /**
+     * Les témoins de l'en-tête Cookie, rangés dans la requête comme PHP les
+     * range ($_COOKIE) : séparés par « ; », chaque nom sans les espaces qui
+     * le précèdent et sans décodage, chaque valeur décodée sans faire d'un
+     * « + » une espace (rawurldecode), un nom en tableau rangé par PHP
+     * lui-même (parse_str, qui suit ses règles des noms de variables), et,
+     * pour un nom ordinaire déjà lu, le premier gardé ; puis les témoins que
+     * le test pose lui-même. Une requête sans en-tête Cookie garde ceux
+     * qu'elle porte.
+     */
+    private function lireLesTemoins(Request $requete): void
+    {
+        $entetes = $requete->headers->all('cookie');
+        $paires = [];
+        $lus = [];
+
+        if ($entetes === []) {
+            return;
+        }
+
+        foreach (explode(';', implode(';', $entetes)) as $temoin) {
+            [$nom, $valeur] = array_pad(explode('=', ltrim($temoin, " \t\n\r\v\f"), 2), 2, '');
+            $nom = rawurlencode($nom);
+            parse_str($nom.'=', $seul);
+            $base = array_key_first($seul);
+
+            if ($base === null || (isset($lus[$base]) && ! is_array($seul[$base]))) {
+                continue;
+            }
+
+            $lus[$base] = true;
+            $paires[] = $nom.'='.rawurlencode(rawurldecode($valeur));
+        }
+
+        parse_str(implode('&', $paires), $temoins);
+        $requete->cookies->replace(array_replace($temoins, ($this->temoinsDuTest)()));
     }
 
     /**

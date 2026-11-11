@@ -1178,16 +1178,6 @@ class FactureResource extends Resource
     }
 
     /**
-     * Une livraison intracommunautaire ou une prestation autoliquidée ne
-     * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
-     * même, par la dernière vérification du jour (voir
-     * ControleNatureOperation::consultationDuJour()) : quand aucune
-     * vérification d'aujourd'hui ne l'a trouvé valide, ou que la dernière
-     * l'a trouvé inconnu, l'émission interroge d'abord VIES, hors de toute
-     * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
-     * n'est émis, et le refus le dit.
-     */
-    /**
      * Le paiement d'une imputation de la fiche : sa clé étrangère ne
      * manque jamais (voir ValeurRequise).
      */
@@ -1205,6 +1195,16 @@ class FactureResource extends Resource
         return ValeurRequise::de(self::paiementDe($allocation)->recuPaiement, 'le reçu du paiement');
     }
 
+    /**
+     * Une livraison intracommunautaire ou une prestation autoliquidée ne
+     * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
+     * même, par la dernière vérification du jour (voir
+     * ControleNatureOperation::consultationDuJour()) : quand aucune
+     * vérification d'aujourd'hui ne l'a trouvé valide, ou que la dernière
+     * l'a trouvé inconnu, l'émission interroge d'abord VIES, hors de toute
+     * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
+     * n'est émis, et le refus le dit.
+     */
     private static function verifierLeNumeroTvaSurViesSiBesoin(Facture $facture): void
     {
         $client = ValeurRequise::de($facture->client, 'le client de la facture');

@@ -120,6 +120,9 @@ return [
             'tests/Browser/AidesCommunesTest.php › le responsable se connecte par son identifiant et arrive au tableau de bord de son magasin',
             'tests/Browser/AidesCommunesTest.php › un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu',
             'tests/Browser/Parcours/InscriptionDUneSocieteTest.php › une société s’inscrit, confirme son lien, saisit le code de son courrier et crée son premier magasin',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans le magasin, avec des témoins de poste envoyés en tableau, le vendeur au mot de passe égal à son identifiant reçoit le refus ordinaire, et le responsable puis le propriétaire, par son adresse et par son identifiant, se connectent',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans l’espace de la société, avec des témoins de poste envoyés en tableau, l’administrateur au mot de passe égal à son identifiant reçoit le refus ordinaire, et l’administrateur qui a choisi le sien et le propriétaire se connectent',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › dans l’espace du cabinet, avec des témoins de poste envoyés en tableau, le collaborateur au mot de passe égal à son identifiant reçoit le refus ordinaire, et le collaborateur qui a choisi le sien et le propriétaire du cabinet se connectent',
         ]],
     ],
     'app/Filament/App/Pages/Auth/DemandeDeLien.php' => [
@@ -1556,6 +1559,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant',
         ]],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/AidesCommunesTest.php › un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu',
@@ -1563,6 +1567,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/TemoinsDePosteEnTableauTest.php › avec un témoin des postes reconnus envoyé en tableau, le propriétaire et le responsable ouvrent « Postes reconnus » et reconnaissent ce navigateur, que la liste dit ensuite « Ce navigateur » et où le vendeur se connecte avec son identifiant',
         ]],
     ],
     'app/Filament/App/Resources/ProduitResource.php' => [

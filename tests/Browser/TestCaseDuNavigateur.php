@@ -76,7 +76,7 @@ abstract class TestCaseDuNavigateur extends TestCase
 
         $this->travelTo(self::instantDuTest());
         config(['session.driver' => 'database']);
-        $this->app->extend(Kernel::class, fn (Kernel $noyau): Kernel => $noyau instanceof NoyauDUneRequeteNeuve ? $noyau : new NoyauDUneRequeteNeuve($noyau));
+        $this->app->extend(Kernel::class, fn (Kernel $noyau): Kernel => $noyau instanceof NoyauDUneRequeteNeuve ? $noyau : new NoyauDUneRequeteNeuve($noyau, fn (): array => $this->prepareCookiesForRequest()));
         $this->journal = new JournalDesReponses;
         Event::listen(RequestHandled::class, $this->journal->noter(...));
     }

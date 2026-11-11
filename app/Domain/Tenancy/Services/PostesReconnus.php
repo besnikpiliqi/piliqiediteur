@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\TemoinsEnTableau;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -44,7 +45,9 @@ final class PostesReconnus
      * Reconnaît le navigateur de cette requête comme un poste de ce magasin,
      * sous ce nom, par le propriétaire ou un responsable du magasin (voir
      * PorteeDesDroits::gereLEquipeDe()), relu sous le verrou de sa ligne ;
-     * le témoin du poste part avec la réponse.
+     * le témoin du poste part avec la réponse, qui efface tout témoin de ce
+     * nom envoyé en tableau, que PHP lirait à sa place (voir
+     * TemoinsEnTableau).
      *
      * @throws AuthorizationException
      * @throws ValidationException
@@ -65,6 +68,7 @@ final class PostesReconnus
         }));
 
         $jetons = array_slice([...array_values(array_diff($this->jetonsDuNavigateur($requete), [$jeton])), $jeton], -self::MAXIMUM_PAR_NAVIGATEUR);
+        TemoinsEnTableau::effacer($requete, self::TEMOIN);
         Cookie::queue(Cookie::forever(self::TEMOIN, json_encode($jetons, JSON_THROW_ON_ERROR), httpOnly: true, sameSite: 'lax'));
 
         return $poste;

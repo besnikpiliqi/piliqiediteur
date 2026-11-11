@@ -17,7 +17,8 @@ use PHPUnit\Framework\AssertionFailedError;
  * Les aides communes des tests en navigateur (voir TestCaseDuNavigateur,
  * Navigation et NoyauDUneRequeteNeuve) : la connexion de chaque compte, le
  * poste reconnu, les témoins que le navigateur garde quelle que soit
- * l'heure figée du serveur, l'envoi d'un fichier, et le filet qui fait
+ * l'heure figée du serveur et qu'il envoie, lus comme PHP les lit, l'envoi
+ * d'un fichier, et le filet qui fait
  * échouer un test à la moindre erreur du serveur, du JavaScript ou de la
  * console, ou à la moindre requête vers un autre site, que le navigateur
  * refuse.
@@ -54,6 +55,13 @@ test('le propriétaire se connecte par son adresse de connexion', function () {
     $onglet = $this->seConnecter($proprietaire, saisie: (string) $proprietaire->email);
 
     expect($onglet->chemin())->toStartWith('/app/'.$magasin->uuid);
+});
+
+test('un second navigateur ouvert dans le même test ne trouve pas connecté le compte du premier', function () {
+    $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique du Port']);
+    $this->seConnecter($this->responsable($magasin));
+
+    expect($this->naviguer('/app/login')->chemin())->toBe('/app/login');
 });
 
 test('un vendeur dont le mot de passe est encore son identifiant se connecte depuis un poste reconnu', function () {
@@ -117,6 +125,17 @@ test('un témoin posé pour longtemps reste dans le navigateur même daté depui
     $onglet->aller('/essai-oubli');
 
     expect($onglet->page()->evaluate('() => document.cookie'))->not->toContain('temoin_de_l_essai');
+});
+
+test('les témoins du navigateur arrivent à l’application comme PHP les lit, un nom en tableau compris', function () {
+    Route::get('/essai-temoins-lus', fn (Request $requete) => '<html><body><p id="temoins">'.e((string) json_encode($requete->cookies->all())).'</p></body></html>');
+    $onglet = $this->naviguer('/essai-temoins-lus');
+
+    $onglet->page()->evaluate('() => { document.cookie = "tableau[0]=1; path=/"; document.cookie = "tableau=2; path=/"; document.cookie = "point.espace=x%2By+z; path=/"; document.cookie = "simple=a; path=/"; }');
+    $onglet->aller('/essai-temoins-lus');
+
+    expect(json_decode((string) $onglet->page()->evaluate('() => document.getElementById("temoins").textContent'), true))
+        ->toBe(['tableau' => ['1'], 'point_espace' => 'x+y+z', 'simple' => 'a']);
 });
 
 test('un fichier envoyé par un formulaire arrive au serveur avec les autres champs', function () {

@@ -21,10 +21,11 @@
  *       statique (Larastan), que seuils.json enregistre telle que PHPStan
  *       la règle (niveau, chemins, exclusions, stubs, options, règles
  *       désactivées) et que phpstan.neon doit suivre exactement, sans rien
- *       relâcher ni cacher (voir refusDeLAnalyseStatique()). Une clé que
- *       l'ancien fichier n'a pas compte comme rien d'enregistré. Le PHPStan
- *       lancé est celui du dépôt (vendor/bin/phpstan), ou celui que nomme
- *       la variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
+ *       relâcher ni cacher, ni inclure d'autre fichier que l'extension de
+ *       Larastan (voir refusDeLAnalyseStatique()). Une clé que l'ancien
+ *       fichier n'a pas compte comme rien d'enregistré. Le PHPStan lancé
+ *       est celui du dépôt (vendor/bin/phpstan), ou celui que nomme la
+ *       variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
  *       outil, dans un dépôt temporaire).
  *   php tests/Qualite/qualite.php sensibles
  *       Les chemins des parties sensibles, un par ligne, à donner à
@@ -130,18 +131,26 @@ function seuilsParPartie(array $seuils, string $outil): array
  */
 function relatifAuDepot(string $fichier): string
 {
-    $fichier = str_replace('\\', '/', $fichier);
+    $nom = nomDansLeDepot($fichier);
+
+    if (! str_starts_with($nom, '/') && preg_match('#^[A-Za-z]:/#', $nom) !== 1) {
+        return $nom;
+    }
+
+    throw new RuntimeException('Fichier hors du dépôt '.RACINE." : {$nom}. Le rapport doit être lu dans le dépôt qui l'a produit.");
+}
+
+/**
+ * Ce chemin nommé depuis la racine du dépôt quand il y est, en entier
+ * sinon : un chemin, un stub ou un fichier de configuration de l'analyse
+ * statique hors du dépôt se nomme tel quel dans son refus.
+ */
+function nomDansLeDepot(string $chemin): string
+{
+    $chemin = str_replace('\\', '/', $chemin);
     $racine = str_replace('\\', '/', RACINE).'/';
 
-    if (str_starts_with($fichier, $racine)) {
-        return substr($fichier, strlen($racine));
-    }
-
-    if (! str_starts_with($fichier, '/') && preg_match('#^[A-Za-z]:/#', $fichier) !== 1) {
-        return $fichier;
-    }
-
-    throw new RuntimeException("Fichier hors du dépôt {$racine} : {$fichier}. Le rapport doit être lu dans le dépôt qui l'a produit.");
+    return str_starts_with($chemin, $racine) ? substr($chemin, strlen($racine)) : $chemin;
 }
 
 function partieDe(string $fichier): string
@@ -448,6 +457,18 @@ const EXCLUSIONS_PERMISES = ['bootstrap/cache', 'tests/Qualite/Psalm', 'tests/Qu
 const STUBS_PERMIS = ['tests/Qualite/macros.stub'];
 
 /**
+ * Les seuls fichiers de configuration que phpstan.neon peut inclure, les
+ * ensembles de règles (cahier de l'analyse statique, § 4.1, point 2),
+ * chacun par son chemin dans le dossier vendor du PHPStan que lance le
+ * contrôle (celui du dépôt) : l'extension de Larastan. Ce qu'ils incluent
+ * eux-mêmes les suit. Tout autre fichier inclus est refusé : la référence
+ * ne se bâtit qu'avec eux, si bien que ce qu'un autre fichier réglerait (un
+ * contrôle relâché, un stub, une classe aux propriétés libres) reste un
+ * écart de phpstan.neon, refusé comme tel.
+ */
+const INCLUSIONS_PERMISES = ['larastan/larastan/extension.neon'];
+
+/**
  * Les options de contrôle que phpstan.neon peut activer, liste fermée
  * (cahier de l'analyse statique, § 4.1, points 4 et 5), chacune avec la
  * valeur qui contrôle le plus : true, false pour
@@ -521,8 +542,10 @@ const PARAMETRES_HORS_COMPARAISON = [
  * paramètres effectifs, que PHPStan lit lui-même dans phpstan.neon
  * (dump-parameters : aucun lecteur NEON n'existe hors de son phar), et ses
  * paramètres de référence, ceux que donnent seuls son niveau et les
- * ensembles de règles que phpstan.neon inclut :
+ * ensembles de règles permis que phpstan.neon inclut (INCLUSIONS_PERMISES) :
  *
+ * - phpstan.neon n'inclut aucun autre fichier, directement ou non, que ces
+ *   ensembles de règles et ce qu'ils incluent eux-mêmes ;
  * - seuils.json (section analyse_statique) enregistre exactement ce que
  *   règle phpstan.neon : son niveau, ses chemins, ses exclusions (celles
  *   d'EXCLUSIONS_PERMISES seulement), ses stubs (STUBS_PERMIS), ses
@@ -550,8 +573,13 @@ function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
 {
     $configuration = RACINE.'/phpstan.neon';
     $effectifs = aplatir(parametresDePhpstan($configuration));
-    $reference = aplatir(parametresDePhpstan(configurationDeReference($effectifs, $configuration)));
-    $refus = [];
+    $inclus = fichiersInclus($effectifs, $configuration);
+    $configurationDeReference = configurationDeReference(array_values(array_filter($inclus, estUneInclusionPermise(...))), $effectifs['level'] ?? null);
+    $reference = aplatir(parametresDePhpstan($configurationDeReference));
+    $refus = array_map(
+        static fn (string $fichier): string => 'fichier inclus non permis : '.nomDansLeDepot($fichier),
+        array_values(array_diff($inclus, fichiersInclus($reference, $configurationDeReference))),
+    );
 
     $niveau = $enregistre['niveau'] ?? null;
     $ancienNiveau = $ancien['niveau'] ?? null;
@@ -696,9 +724,8 @@ function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
  */
 function parametresDePhpstan(string $configuration): array
 {
-    $phpstan = getenv('QUALITE_PHPSTAN');
     $environnement = array_diff_key(getenv(), array_flip(['AI_AGENT', 'CLAUDECODE', 'CLAUDE_CODE']));
-    $commande = [PHP_BINARY, is_string($phpstan) && $phpstan !== '' ? $phpstan : RACINE.'/vendor/bin/phpstan', 'dump-parameters', '--json', '--memory-limit=1G', '--configuration='.$configuration];
+    $commande = [PHP_BINARY, phpstan(), 'dump-parameters', '--json', '--memory-limit=1G', '--configuration='.$configuration];
     $processus = proc_open($commande, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tubes, RACINE, $environnement);
 
     if ($processus === false) {
@@ -725,31 +752,74 @@ function parametresDePhpstan(string $configuration): array
 }
 
 /**
- * Une configuration qui inclut les mêmes fichiers que celle-ci (ensembles
- * de règles et extensions, lus après elle dans allConfigFiles), au même
- * niveau, sans aucun autre paramètre : ce que PHPStan contrôle d'office à
- * ce niveau avec ces ensembles de règles. Écrite dans un fichier
- * temporaire, effacé à la fin de la commande.
- *
- * @param  array<string, mixed>  $effectifs  les paramètres effectifs aplatis de cette configuration
+ * Le PHPStan que lance le contrôle : celui du dépôt, ou celui que nomme
+ * QUALITE_PHPSTAN par son chemin absolu (les tests de cet outil, dans un
+ * dépôt temporaire). Son dossier vendor est celui des inclusions permises.
  */
-function configurationDeReference(array $effectifs, string $configuration): string
+function phpstan(): string
 {
-    $fichiers = listeDeChaines($effectifs['allConfigFiles'] ?? [], 'allConfigFiles');
+    $phpstan = getenv('QUALITE_PHPSTAN');
+
+    return is_string($phpstan) && $phpstan !== '' ? $phpstan : RACINE.'/vendor/bin/phpstan';
+}
+
+/**
+ * Les fichiers de configuration que cette configuration inclut, directement
+ * ou non, tels que PHPStan les a lus : ceux qui la suivent dans
+ * allConfigFiles, où chaque fichier précède ceux qu'il inclut (le schéma
+ * des paramètres et les fichiers des niveaux, que PHPStan lit de lui-même,
+ * la précèdent).
+ *
+ * @param  array<string, mixed>  $parametres  les paramètres effectifs aplatis de cette configuration
+ * @return list<string>
+ */
+function fichiersInclus(array $parametres, string $configuration): array
+{
+    $fichiers = listeDeChaines($parametres['allConfigFiles'] ?? [], 'allConfigFiles');
     $rang = array_search(realpath($configuration), $fichiers, true);
 
-    if ($rang === false || ! is_int($effectifs['level'] ?? null)) {
-        throw new RuntimeException("PHPStan ne dit ni le niveau ni les fichiers inclus de {$configuration}.");
+    if ($rang === false) {
+        throw new RuntimeException("PHPStan ne dit pas les fichiers inclus de {$configuration}.");
     }
 
-    $neon = "includes:\n";
+    return array_slice($fichiers, $rang + 1);
+}
 
-    foreach (array_slice($fichiers, $rang + 1) as $inclus) {
-        $neon .= "    - '".str_replace("'", "''", $inclus)."'\n";
+/**
+ * Ce fichier de configuration est-il l'une des inclusions permises
+ * (INCLUSIONS_PERMISES), dans le dossier vendor du PHPStan que lance le
+ * contrôle ?
+ */
+function estUneInclusionPermise(string $fichier): bool
+{
+    $reel = realpath($fichier);
+
+    return $reel !== false && in_array($reel, array_map(static fn (string $permise): string|false => realpath(dirname(phpstan(), 2).'/'.$permise), INCLUSIONS_PERMISES), true);
+}
+
+/**
+ * Une configuration qui n'inclut que ces fichiers (les inclusions permises
+ * de phpstan.neon), à ce niveau, sans aucun autre paramètre : ce que
+ * PHPStan contrôle d'office à ce niveau avec ces ensembles de règles.
+ * Écrite dans un fichier temporaire, effacé à la fin de la commande.
+ *
+ * @param  list<string>  $inclusions
+ */
+function configurationDeReference(array $inclusions, mixed $niveau): string
+{
+    if (! is_int($niveau)) {
+        throw new RuntimeException('PHPStan ne dit pas le niveau de phpstan.neon.');
     }
 
-    $reference = sys_get_temp_dir().'/piliqi-reference-'.getmypid().'-'.bin2hex(random_bytes(4)).'.neon';
-    file_put_contents($reference, $neon."\nparameters:\n    level: {$effectifs['level']}\n");
+    $dossier = realpath(sys_get_temp_dir());
+
+    if ($dossier === false) {
+        throw new RuntimeException('Le dossier temporaire '.sys_get_temp_dir().' est introuvable.');
+    }
+
+    $neon = $inclusions === [] ? '' : "includes:\n".implode('', array_map(static fn (string $inclus): string => "    - '".str_replace("'", "''", $inclus)."'\n", $inclusions))."\n";
+    $reference = $dossier.'/piliqi-reference-'.getmypid().'-'.bin2hex(random_bytes(4)).'.neon';
+    file_put_contents($reference, $neon."parameters:\n    level: {$niveau}\n");
     register_shutdown_function(static fn (): bool => ! is_file($reference) || unlink($reference));
 
     return $reference;
@@ -809,17 +879,18 @@ function listeTriee(mixed $valeurs, string $nom): array
 }
 
 /**
- * Ces chemins absolus, relatifs à la racine du dépôt, triés.
+ * Ces chemins absolus, nommés depuis la racine du dépôt (en entier hors du
+ * dépôt, voir nomDansLeDepot()), triés.
  *
  * @param  array<array-key, string>  $chemins
  * @return list<string>
  */
 function cheminsDuDepot(array $chemins): array
 {
-    $relatifs = array_map(relatifAuDepot(...), array_values($chemins));
-    sort($relatifs);
+    $noms = array_map(nomDansLeDepot(...), array_values($chemins));
+    sort($noms);
 
-    return $relatifs;
+    return $noms;
 }
 
 /**

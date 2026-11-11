@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Support\TemoinsEnTableau;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -40,7 +41,9 @@ final class PostesConnus
     /**
      * Retient ce navigateur comme un poste connu de ce compte, avec son
      * nonce s'il en avait déjà un : le témoin part avec la réponse, ce
-     * compte en dernier, les plus anciens sortant au-delà de 30 comptes.
+     * compte en dernier, les plus anciens sortant au-delà de 30 comptes ;
+     * elle efface tout témoin de ce nom envoyé en tableau, que PHP lirait à
+     * sa place (voir TemoinsEnTableau).
      */
     public function retenir(Request $requete, User $compte): void
     {
@@ -50,6 +53,7 @@ final class PostesConnus
         unset($postes[$cle]);
         $postes[$cle] = $nonce;
 
+        TemoinsEnTableau::effacer($requete, self::TEMOIN);
         Cookie::queue(Cookie::make(self::TEMOIN, json_encode(array_slice($postes, -self::MAXIMUM_PAR_NAVIGATEUR, preserve_keys: true), JSON_THROW_ON_ERROR), self::DUREE_EN_MINUTES, httpOnly: true, sameSite: 'lax'));
     }
 

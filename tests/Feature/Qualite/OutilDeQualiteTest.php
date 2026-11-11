@@ -318,6 +318,65 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringContainsString('noModelMake vaut false au lieu de true', $sortie);
     }
 
+    /**
+     * phpstan.neon n'inclut que l'extension de Larastan : un autre fichier
+     * inclus, ici un fichier du dépôt, est refusé, et ce qu'il relâche reste
+     * vu comme s'il était écrit dans phpstan.neon (il n'entre pas dans la
+     * référence) : un contrôle du niveau coupé, des stubs ajoutés, dans le
+     * dépôt ou hors de lui, une classe aux propriétés libres.
+     */
+    public function test_un_fichier_inclus_autre_que_l_extension_de_larastan_est_refuse_avec_chaque_relachement(): void
+    {
+        $horsDuDepot = dirname($this->depot).'/hors-du-depot.stub';
+        file_put_contents($horsDuDepot, "<?php\n");
+        $this->ecrire('tests/Qualite/relache.neon', "parameters:\n    checkNullables: false\n    stubFiles:\n        - autre.stub\n        - {$horsDuDepot}\n    universalObjectCratesClasses:\n        - App\\Models\\User\n");
+        $this->depotAnalyse(niveau: 8, inclusions: ['tests/Qualite/relache.neon']);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(niveau: 8));
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('fichier inclus non permis : tests/Qualite/relache.neon', $sortie);
+        $this->assertStringContainsString('checkNullables vaut false au lieu de true', $sortie);
+        $this->assertStringContainsString('stubs : phpstan.neon donne ["'.$horsDuDepot.'","tests/Qualite/autre.stub","tests/Qualite/macros.stub"], seuils.json enregistre ["tests/Qualite/macros.stub"]', $sortie);
+        $this->assertStringContainsString('universalObjectCratesClasses ajoute App\\Models\\User', $sortie);
+    }
+
+    /**
+     * Les stubs que charge phpstan.neon sont ceux que seuils.json
+     * enregistre, ni moins ni plus, même quand l'ancien seuils.json dit la
+     * même chose que le nouveau.
+     */
+    public function test_un_stub_que_phpstan_neon_charge_sans_que_seuils_json_l_enregistre_ou_l_inverse_est_refuse(): void
+    {
+        $this->depotAnalyse();
+        $this->ecrireLaConfiguration(stubs: []);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('stubs : phpstan.neon donne [], seuils.json enregistre ["tests/Qualite/macros.stub"]', $sortie);
+
+        $this->depotAnalyse(stubs: []);
+        $this->ecrireLaConfiguration();
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(stubs: []));
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('stubs : phpstan.neon donne ["tests/Qualite/macros.stub"], seuils.json enregistre []', $sortie);
+    }
+
+    /**
+     * Une règle que seuils.json enregistre désactivée l'est aussi dans
+     * phpstan.neon, même quand l'ancien seuils.json l'enregistrait déjà.
+     */
+    public function test_une_regle_que_seuils_json_enregistre_desactivee_sans_que_phpstan_neon_la_desactive_est_refusee(): void
+    {
+        $this->depotAnalyse(regles: ['strictRules.dynamicCallOnStaticMethod']);
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse(regles: ['strictRules.dynamicCallOnStaticMethod']));
+
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('règle strictRules.dynamicCallOnStaticMethod : seuils.json l\'enregistre désactivée, phpstan.neon donne null', $sortie);
+    }
+
     public function test_une_erreur_ignoree_ou_une_classe_aux_proprietes_libres_est_refusee(): void
     {
         $this->depotAnalyse(neon: "    ignoreErrors:\n        - '#.*#'\n    universalObjectCratesClasses:\n        - App\\Models\\User\n    reportUnmatchedIgnoredErrors: false\n");
@@ -383,15 +442,17 @@ class OutilDeQualiteTest extends TestCase
      * Le dépôt de test réglé pour l'analyse statique : son phpstan.neon,
      * son psalm.xml, le stub des macros et les dossiers analysés, et son
      * seuils.json qui enregistre ce réglage, sauf ce que le cas y change
-     * (le phpstan.neon seul).
+     * (le phpstan.neon seul : ses paramètres en plus, les fichiers qu'il
+     * inclut en plus de l'extension de Larastan).
      *
      * @param  list<string>  $chemins
      * @param  list<string>  $exclusions
      * @param  array<string, bool|string>  $options
      * @param  list<string>  $stubs
      * @param  list<string>  $regles
+     * @param  list<string>  $inclusions
      */
-    private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = [], string $neon = ''): void
+    private function depotAnalyse(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], array $options = ['parseModelCastsMethod' => true], array $stubs = ['tests/Qualite/macros.stub'], array $regles = [], string $neon = '', array $inclusions = []): void
     {
         foreach ([...$chemins, ...$exclusions] as $dossier) {
             (new Filesystem)->ensureDirectoryExists($this->depot.'/'.$dossier);
@@ -406,20 +467,26 @@ class OutilDeQualiteTest extends TestCase
             fn (string $option, bool|string $valeur): string => "    {$option}: ".(is_bool($valeur) ? ($valeur ? 'true' : 'false') : $valeur)."\n",
             array_keys($options),
             $options,
-        )).$neon, $stubs);
+        )).$neon, $stubs, $inclusions);
         $this->ecrire('tests/Qualite/seuils.json', json_encode($this->seuilsDeLAnalyse(options: $options, regles: $regles, stubs: $stubs, chemins: $chemins, exclusions: $exclusions, niveau: $niveau), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
     /**
+     * Le phpstan.neon du dépôt de test : il inclut l'extension de Larastan
+     * installée avec le PHPStan qui l'analyse (celui du dépôt), puis ces
+     * fichiers du dépôt de test.
+     *
      * @param  list<string>  $chemins
      * @param  list<string>  $exclusions
      * @param  list<string>  $stubs
+     * @param  list<string>  $inclusions
      */
-    private function ecrireLaConfiguration(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], string $options = "    parseModelCastsMethod: true\n", array $stubs = ['tests/Qualite/macros.stub']): void
+    private function ecrireLaConfiguration(int $niveau = 7, array $chemins = ['app', 'tests/Qualite'], array $exclusions = ['tests/Qualite/Psalm'], string $options = "    parseModelCastsMethod: true\n", array $stubs = ['tests/Qualite/macros.stub'], array $inclusions = []): void
     {
         $liste = fn (string $cle, array $valeurs): string => $valeurs === [] ? '' : "    {$cle}:\n".implode('', array_map(fn (string $valeur): string => "        - {$valeur}\n", $valeurs));
+        $inclus = [(string) realpath(__DIR__.'/../../../vendor/larastan/larastan/extension.neon'), ...$inclusions];
 
-        $this->ecrire('phpstan.neon', "includes:\n    - ".realpath(__DIR__.'/../../../vendor/larastan/larastan/extension.neon')."\n\nparameters:\n"
+        $this->ecrire('phpstan.neon', "includes:\n".implode('', array_map(fn (string $fichier): string => "    - {$fichier}\n", $inclus))."\nparameters:\n"
             .$liste('paths', $chemins).$liste('excludePaths', $exclusions)."    level: {$niveau}\n".$liste('stubFiles', $stubs).$options);
     }
 

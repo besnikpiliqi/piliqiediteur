@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 11:39 UTC par pilotage-sync.sh : « D66 appliquée : onglets 1 et À faire vérifier réécrits, une question par ligne ».
+Mis à jour le 11/11/2026 à 11:41 UTC par pilotage-sync.sh : « D66 : Voir aussi retirés (onglet 4 rev 56) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

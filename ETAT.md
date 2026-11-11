@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 02:40 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 11/11/2026 à 02:56 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,12 +41,14 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
  M app/Console/Commands/EffacerPiecesVerification.php
  M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
  M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
  M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
  M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
  M app/Domain/Achats/Models/AvoirFournisseur.php
  M app/Domain/Achats/Models/LigneAchat.php
  M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
  M app/Domain/Achats/Services/ConstructeurLigneAchat.php
+ M app/Domain/Achats/Services/MontantsDuFournisseur.php
  M app/Domain/Achats/Services/TvaDuFournisseur.php
  M app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
  M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
@@ -96,8 +98,6 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
  M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
  M app/Domain/Facturation/Concerns/NoteSaNatureDOperation.php
  M app/Domain/Facturation/Enums/CategorieOperation.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/Avoir.php
 ```
 
 ## Dernière course de la chaîne

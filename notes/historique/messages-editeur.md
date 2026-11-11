@@ -1598,3 +1598,13 @@ tu fait avec effort extra ultracode
 
 t104:Choix A (ma proposition) : une seule liste de cases pour tous les magasins choisis.
 
+## 161. 2026-11-11 02:42 UTC
+
+<!-- attach -->
+
+> La suite complète de tests passe toujours avant chaque commit, mais 2 fois au lieu d’une douzaine. Son travail d’avant le redémarrage est gardé (1 commit et 97 fichiers modifiés) et sauvegardé.
+
+
+
+donc t as bien apliqué 2 commit au lieu de 12. donc tu fait 2 commit comme t as dit
+

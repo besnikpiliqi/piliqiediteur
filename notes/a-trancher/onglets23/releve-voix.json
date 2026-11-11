@@ -13372,6 +13372,27 @@
     "nouvelle-session/serie8-lots.js, LOTS_SENSIBLES"
    ],
    "refs": []
+  },
+  {
+   "id": "Q393",
+   "serie": "Effort de la chaîne (11/11)",
+   "date_utc": "2026-11-11 03:40",
+   "date_paris": "11/11/2026 vers 04 h 40",
+   "code": "2",
+   "question": "Consommer moins sans toucher aux tests ni aux relectures. 1) Les sorties longues des outils vont dans un fichier ; l'agent ne lit que le résumé et les erreurs, en entier. 2) Chaque lot est écrit par plusieurs agents successifs, chacun avec une mémoire neuve et une note de passage, à partir de TY3. 3) Effort « extra » au lieu de « max » pour l'agent qui écrit le code de TY3, PS1 et PS2 (déconseillé). Ma proposition : 1 et 2 maintenant, 3 seulement si la limite arrête encore la chaîne.",
+   "mots": "« 1 et 2 »",
+   "decision": "Les sorties longues des outils sont écrites dans un fichier (l'agent ne lit que le résumé et chaque erreur en entier) ; à partir de TY3, chaque lot est écrit par des agents successifs avec une note de passage. L'effort reste « max » pour TY3, PS1 et PS2.",
+   "theme": "Façon de travailler",
+   "statut": "a-appliquer",
+   "statut_detail": "Règle 1 écrite dans les consignes que lit chaque lot (D62) ; règle 2 dans le script de la chaîne, prise en compte à la prochaine reprise de la course.",
+   "sources": [
+    "message de l'éditeur dans la conversation, le 11/11 vers 03 h 40 UTC",
+    "historique/DIRECTIVES.md, D62",
+    "nouvelle-session/serie8-lots.js, implementationEnParties"
+   ],
+   "refs": [
+    "D62"
+   ]
   }
  ]
 }

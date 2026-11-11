@@ -220,6 +220,44 @@ const COMMITS_DU_LOT = `Les commits de ce lot sont tous ceux qui ne sont pas enc
 const LOTS_SENSIBLES = ['A7', 'A7b', 'TR', 'PG', 'TY1', 'TY2', 'TY3', 'PS1', 'PS2', 'CALC', 'FI', 'AUD', 'DV', 'EC2', 'S9-L', '21']
 const effortDuLot = id => (LOTS_SENSIBLES.includes(id) ? 'max' : 'xhigh')
 
+// Travail par parties (décision de l'éditeur du 11/11/2026, « 1 et 2 », DIRECTIVES.md D62) : l'agent qui écrit un lot
+// relisait à chaque étape toute sa mémoire de travail, qui grossissait au fil du lot (TY1 : 1 562 étapes, environ
+// 500 000 mots relus à chaque étape). Un lot est donc écrit par des agents successifs, chacun avec une mémoire neuve,
+// qui se passent la main par une note de passage. Les lots déjà commencés avant cette décision gardent un seul agent.
+const UN_SEUL_AGENT = ['QA', 'PG', 'TY1', 'TY2']
+const MAX_PARTIES = 6
+const PARTIE = {
+  type: 'object',
+  properties: {
+    termine: { type: 'boolean' },
+    commit: { type: 'string' },
+    tests: { type: 'string' },
+    faits: { type: 'array', items: { type: 'string' } },
+    laisses: { type: 'array', items: { type: 'string' } },
+    resume: { type: 'string' },
+  },
+  required: ['termine', 'commit', 'tests', 'faits', 'laisses', 'resume'],
+}
+const consigneDesParties = (id, note, partie) => `TRAVAIL PAR PARTIES (décision de l'éditeur du 11/11/2026, pour consommer moins sans rien changer aux tests ni aux relectures ; ${S}/historique/DIRECTIVES.md, D62). Ce lot est écrit par plusieurs agents successifs, chacun avec une mémoire neuve, qui se passent la main par la note de passage ${note}. Tu es l'agent de la partie ${partie}.${partie > 1 ? ` Lis d'abord cette note en entier (ce qui est fait, ce qui reste, les choix pris, les pièges, les commandes lancées et leurs résultats), puis l'état du dépôt : tu continues le travail là où la partie précédente l'a laissé, sans rien refaire de ce qui est commité.` : ''}
+Arrête ta partie à un point propre dès que l'une de ces conditions est vraie, s'il reste du travail : (a) tu viens de faire un commit ; (b) tu as fait environ 300 actions (appels d'outils) dans cette partie. Point propre : aucun fichier laissé à moitié écrit ; Larastan et les tests ciblés des fichiers touchés passent, ou ce qui ne passe pas encore est noté. Avant de rendre la main, crée le dossier de la note si besoin (mkdir -p) et ajoute à la note, sans effacer les parties précédentes, une section « Partie ${partie} » : ce qui est fait (commits, fichiers), ce qui reste dans l'ordre, les choix pris et pourquoi, les pièges trouvés, les commandes lancées avec leur durée et leur code de sortie, et les fichiers où sont gardées les sorties longues. Rends alors termine=false, avec dans commit la plage des commits du lot déjà faits (vide s'il n'y en a pas) et dans resume un court résumé de ta partie.
+Quand tout le lot est fini (dernier commit fait, vérifications finales du cahier faites), rends termine=true avec le compte rendu de TOUT le lot, parties précédentes comprises (lis la note pour elles) : commit = la plage de tous les commits du lot, tests, faits et laisses de tout le lot.
+Rien ne change aux règles : la suite PostgreSQL complète au code 0 juste avant chaque commit, sur l'arbre exact du commit (protocole de CLAUDE.md, point 3), le moins de commits possible (D61), les sorties longues des outils dans un fichier dont tu ne lis que le résumé et chaque erreur en entier (D62).`
+async function implementationEnParties(lot, consigne) {
+  const note = `${S}/passages/${lot.id}.md`
+  for (let partie = 1; partie <= MAX_PARTIES; partie++) {
+    const r = await agent(`${REGLES}\n\n${TRAVAIL_COUPE}\n\n${consigneDesParties(lot.id, note, partie)}\n\n${consigne}`, { label: partie === 1 ? `${lot.id}:implementation` : `${lot.id}:implementation-${partie}`, phase: lot.phase, schema: PARTIE, effort: effortDuLot(lot.id) })
+    if (!r) {
+      return null
+    }
+    if (r.termine) {
+      return r
+    }
+    log(`Lot ${lot.id} : partie ${partie} rendue (${r.resume.slice(0, 160)}), la partie ${partie + 1} reprend par la note ${note}`)
+  }
+  log(`Lot ${lot.id} : ${MAX_PARTIES} parties sans fin du lot, arrêt pour inspection`)
+  return null
+}
+
 const resultats = []
 let phaseCourante = null
 for (const lot of LOTS) {
@@ -243,7 +281,9 @@ for (const lot of LOTS) {
   }
   const rapport = reprise
     ? { commit: reprise.commit, tests: 'implémentation commitée avant la reprise', faits: [], laisses: [], resume: `Lot repris après un arrêt : commits ${reprise.commit}` }
-    : await agent(`${REGLES}\n\n${TRAVAIL_COUPE}\n\n${consigne}`, { label: `${lot.id}:implementation`, phase: lot.phase, schema: RAPPORT, effort: effortDuLot(lot.id) })
+    : (UN_SEUL_AGENT.includes(lot.id)
+      ? await agent(`${REGLES}\n\n${TRAVAIL_COUPE}\n\n${consigne}`, { label: `${lot.id}:implementation`, phase: lot.phase, schema: RAPPORT, effort: effortDuLot(lot.id) })
+      : await implementationEnParties(lot, consigne))
   if (!rapport || !rapport.commit) {
     log(`Lot ${lot.id} : aucun commit, arrêt de la chaîne pour inspection`)
     resultats.push({ lot: lot.id, rapport, revues: null, correction: null, poussee: null })

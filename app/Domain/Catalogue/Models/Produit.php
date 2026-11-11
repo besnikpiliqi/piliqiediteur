@@ -484,21 +484,22 @@ class Produit extends Model
      * opérations sur les mêmes produits ne s'attendent jamais l'une
      * l'autre en sens inverse.
      *
-     * Chaque identifiant est une valeur simple, lue comme (int) la lit :
-     * celui d'une ligne relue en base, ou celui d'une ligne saisie (« 12 »
-     * ou 12) ; une ligne sans produit (rien, 0 ou « ») n'en verrouille
-     * aucun.
+     * Les identifiants vides (rien, « », 0, « 0 », faux ou un tableau vide)
+     * sont écartés avant d'être lus : une ligne sans produit n'en verrouille
+     * aucun. Chacun des autres est une valeur simple, lue comme (int) la
+     * lit : celui d'une ligne relue en base, ou celui d'une ligne saisie
+     * (« 12 » ou 12).
      *
      * @param  iterable<array-key, mixed>  $identifiants
      * @return Collection<int, Produit>
      *
-     * @throws UnexpectedValueException un identifiant qui n'est pas une valeur simple
+     * @throws UnexpectedValueException un identifiant qui n'est pas une valeur simple (un tableau qui n'est pas vide, un objet)
      */
     public static function verrouillerPourLeStock(iterable $identifiants): Collection
     {
         $identifiants = collect($identifiants)
-            ->map(fn (mixed $identifiant): int => ValeurSimple::enEntier($identifiant))
             ->filter()
+            ->map(fn (mixed $identifiant): int => ValeurSimple::enEntier($identifiant))
             ->unique()
             ->sort()
             ->values();

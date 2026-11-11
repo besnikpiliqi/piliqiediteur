@@ -262,6 +262,22 @@ class ProduitTest extends TestCase
     }
 
     /**
+     * Les identifiants vides (rien, « », 0, « 0 » ou un tableau vide) sont
+     * écartés avant d'être lus : ils ne désignent aucun produit, et seul le
+     * produit désigné, en texte comme en entier, est verrouillé et rendu.
+     */
+    public function test_le_verrou_du_stock_ecarte_les_identifiants_vides_et_rend_le_seul_produit_designe(): void
+    {
+        $produit = Produit::factory()->create();
+
+        $parTexte = Produit::verrouillerPourLeStock(['0', 0, '', null, [], (string) $produit->id]);
+        $parEntier = Produit::verrouillerPourLeStock(['0', 0, '', null, [], $produit->id]);
+
+        $this->assertSame([$produit->id], $parTexte->modelKeys());
+        $this->assertSame([$produit->id], $parEntier->modelKeys());
+    }
+
+    /**
      * Le fournisseur d'un produit, archivé compris, reste dans la base.
      */
     public function test_le_fournisseur_d_un_produit_ne_s_efface_jamais_de_la_base(): void

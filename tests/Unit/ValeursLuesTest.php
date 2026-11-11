@@ -138,6 +138,46 @@ class ValeursLuesTest extends TestCase
         ValeursLues::cle($valeur);
     }
 
+    /**
+     * Une clé saisie se cherche parmi des fiches rangées sous leur clé
+     * comme PHP lit une clé de tableau : un entier ou un texte tel quel
+     * (PHP lit lui-même « 12 » comme la clé 12), un nombre décimal privé de
+     * ses décimales, un booléen à 1 ou 0, et rien au texte vide.
+     *
+     * @return array<string, array{mixed, int|string}>
+     */
+    public static function clesDeTableau(): array
+    {
+        return [
+            'un entier' => [12, 12],
+            'un texte' => ['12', '12'],
+            'un texte entouré d\'espaces' => [' 12 ', ' 12 '],
+            'le texte « 0 »' => ['0', '0'],
+            'un texte vide' => ['', ''],
+            'rien' => [null, ''],
+            'vrai' => [true, 1],
+            'faux' => [false, 0],
+            'un décimal sans partie décimale' => [12.0, 12],
+            'un décimal' => [12.5, 12],
+            'un décimal négatif' => [-1.5, -1],
+        ];
+    }
+
+    #[DataProvider('clesDeTableau')]
+    public function test_une_cle_saisie_se_lit_comme_la_cle_de_tableau_que_php_en_fait(mixed $valeur, int|string $cle): void
+    {
+        $this->assertSame($cle, ValeursLues::cleDeTableau($valeur));
+    }
+
+    #[DataProvider('pasDesCles')]
+    public function test_une_cle_de_tableau_qui_n_est_pas_une_seule_cle_est_refusee(mixed $valeur, string $type): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage(sprintf(ValeursLues::REFUS_CLE, $type));
+
+        ValeursLues::cleDeTableau($valeur);
+    }
+
     public function test_les_champs_d_un_tableau_lu_sont_rendus_tels_quels(): void
     {
         $tableau = ['nom' => 'Caisse 1', 'complement' => null, 'personne_morale' => false, 'adresse' => ['ville' => 'Lyon']];

@@ -185,11 +185,11 @@ class ConstructeurLigneDocument
     private function construire(array $donnees, int $ordre, ContexteDeVente $contexte, Collection $produits, Collection $services): array
     {
         $produit = filled($donnees['produit_id'] ?? null)
-            ? (self::ficheDesignee($produits, $donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [ValeursLues::entierOuTexte($donnees['produit_id'])]))
+            ? (self::ficheDesignee($produits, $donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [ValeursLues::cleDeTableau($donnees['produit_id'])]))
             : null;
 
         $service = filled($donnees['service_id'] ?? null)
-            ? (self::ficheDesignee($services, $donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [ValeursLues::entierOuTexte($donnees['service_id'])]))
+            ? (self::ficheDesignee($services, $donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [ValeursLues::cleDeTableau($donnees['service_id'])]))
             : null;
 
         if ($produit !== null && $service !== null) {
@@ -273,21 +273,24 @@ class ConstructeurLigneDocument
 
     /**
      * La fiche que désigne l'identifiant d'une ligne, cherché parmi celles
-     * du catalogue comme une clé de tableau : un entier, ou un texte qui
-     * l'écrit comme PHP écrit un entier (« 12 », jamais « +12 », « 012 »
-     * ni « 12 » suivi d'une espace) ; null quand aucune ne porte cet
-     * identifiant, comme le rend Collection::get().
+     * du catalogue sous la clé de tableau que PHP en fait, comme le fait
+     * Collection::get() (voir ValeursLues::cleDeTableau()) : un entier, ou
+     * un texte qui l'écrit comme PHP écrit un entier (« 12 », jamais
+     * « +12 », « 012 » ni « 12 » suivi d'une espace) ; un booléen ou un
+     * nombre décimal, que seule une requête forgée envoie, sous l'entier
+     * que PHP en fait (vrai désigne la fiche 1, 12,5 la fiche 12) ; null
+     * quand aucune ne porte cette clé.
      *
      * @template TFiche of Produit|Service
      *
      * @param  Collection<int, TFiche>  $fiches
      * @return TFiche|null
      *
-     * @throws UnexpectedValueException un identifiant qui n'est ni un entier ni un texte
+     * @throws UnexpectedValueException un identifiant qui n'est pas une seule clé (un tableau, un objet)
      */
     private static function ficheDesignee(Collection $fiches, mixed $identifiant): Produit|Service|null
     {
-        return $fiches->all()[ValeursLues::entierOuTexte($identifiant)] ?? null;
+        return $fiches->all()[ValeursLues::cleDeTableau($identifiant)] ?? null;
     }
 
     /**

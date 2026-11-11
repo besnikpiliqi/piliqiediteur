@@ -15,7 +15,8 @@ use UnexpectedValueException;
  * nulle, un champ absent, ou d'un autre type que celui que le code
  * attend) est refusée par une exception, au lieu d'être utilisée pour ce
  * qu'elle n'est pas. La clé d'une fiche saisie dans un écran se lit par
- * cle().
+ * cle(), et se cherche parmi des fiches rangées sous leur clé par
+ * cleDeTableau().
  */
 final class ValeursLues
 {
@@ -260,6 +261,23 @@ final class ValeursLues
     public static function cle(mixed $valeur): int|string|float|bool|null
     {
         return $valeur === null || is_scalar($valeur) ? $valeur : throw new UnexpectedValueException(sprintf(self::REFUS_CLE, get_debug_type($valeur)));
+    }
+
+    /**
+     * La clé de tableau que PHP fait d'une clé choisie dans un écran (voir
+     * cle()), pour la chercher parmi des fiches rangées sous leur clé comme
+     * la cherche Collection::get() : un entier ou un texte tel quel (PHP
+     * lit lui-même « 12 » comme la clé 12, mais pas « +12 », « 012 » ni
+     * « 12 » entouré d'espaces), un décimal privé de ses décimales (12,5
+     * se lit 12), un booléen à 1 ou 0, et rien au texte vide.
+     *
+     * @throws UnexpectedValueException un tableau ou un objet
+     */
+    public static function cleDeTableau(mixed $valeur): int|string
+    {
+        $cle = self::cle($valeur) ?? '';
+
+        return is_int($cle) || is_string($cle) ? $cle : (int) $cle;
     }
 
     /**

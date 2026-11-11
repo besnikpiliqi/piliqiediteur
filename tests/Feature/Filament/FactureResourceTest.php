@@ -602,6 +602,29 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Une ligne dont le produit est choisi par un booléen, que seule une
+     * requête forgée envoie, ne fait pas tomber la page : son aperçu compte
+     * la fiche que PHP lit sous cette clé, la fiche 1, avec l'autre ligne
+     * (voir ConstructeurLigneDocumentTest pour chaque forme).
+     */
+    public function test_une_ligne_au_produit_choisi_par_un_booleen_garde_la_page_et_compte_la_fiche_1(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        Produit::factory()->create(['id' => 1, 'prix_vente_ttc' => '10.00', 'taux_tva' => 20]);
+        Produit::factory()->create(['id' => 12, 'prix_vente_ttc' => '12.00', 'taux_tva' => 20]);
+        $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => Client::factory()->create()->id]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", 12)
+            ->set('data.lignes.forgee', ['produit_id' => true, 'quantite' => '1']);
+
+        $component->assertSee('Total HT 18,33 € · TVA 3,67 € · Total TTC 22,00 €');
+    }
+
+    /**
      * "5," ou "5." en route vers "5,5" n'est pas encore un nombre : le
      * navigateur l'envoie vide. Le taux d'un service -- seul taux qui se
      * saisit, celui d'un produit étant celui de sa fiche (C15) -- vide en

@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -172,5 +173,95 @@ class ConstructeurLigneDocumentTest extends TestCase
 
         $this->assertSame(['premiere' => 0, 'seconde' => 2], array_map(fn (array $ligne): int => $ligne['ordre'], $apercu->lignes));
         $this->assertSame('36.00', $apercu->totaux['total_ttc']);
+    }
+
+    /**
+     * Un identifiant que seule une requête forgée envoie à la place d'un
+     * choix (un booléen, un nombre décimal) désigne la fiche que PHP lit
+     * sous cette clé, comme la cherche Collection::get() : vrai et « 1 »
+     * la fiche 1, 12.0 et 12.5 la fiche 12, que l'autre ligne fait charger.
+     *
+     * @return array<string, array{string, mixed, int}>
+     */
+    public static function identifiantsLusCommeUneCle(): array
+    {
+        return [
+            'produit vrai' => ['produit_id', true, 1],
+            'produit « 1 »' => ['produit_id', '1', 1],
+            'produit 12.0' => ['produit_id', 12.0, 12],
+            'produit 12.5' => ['produit_id', 12.5, 12],
+            'service vrai' => ['service_id', true, 1],
+            'service « 1 »' => ['service_id', '1', 1],
+            'service 12.0' => ['service_id', 12.0, 12],
+            'service 12.5' => ['service_id', 12.5, 12],
+        ];
+    }
+
+    /**
+     * L'aperçu compte cette ligne avec sa fiche, et l'enregistrement la
+     * prend, sans autre erreur.
+     */
+    #[DataProvider('identifiantsLusCommeUneCle')]
+    public function test_la_ligne_d_un_identifiant_booleen_ou_decimal_prend_la_fiche_que_php_lit_sous_cette_cle(string $champ, mixed $identifiant, int $cle): void
+    {
+        $this->magasinAuxFichesUnEtDouze();
+        $lignes = ['choisie' => [$champ => 12, 'quantite' => 1], 'forgee' => [$champ => $identifiant, 'quantite' => 1]];
+        $contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+
+        $apercu = app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte);
+        $document = app(ConstructeurLigneDocument::class)->construireToutes($lignes, $contexte);
+
+        $this->assertSame(['choisie' => 12, 'forgee' => $cle], array_map(fn (array $ligne): int => $ligne[$champ], $apercu->lignes));
+        $this->assertSame([12, $cle], array_column($document->lignes, $champ));
+    }
+
+    /**
+     * Sans fiche chargée sous la clé que PHP en lit (faux se lit 0 ; 12.5 se
+     * lit 12, que seul un identifiant entier, ou un texte qui en écrit un,
+     * fait charger), la ligne est introuvable.
+     *
+     * @return array<string, array{string, class-string, mixed, int}>
+     */
+    public static function identifiantsSansFiche(): array
+    {
+        return [
+            'produit faux' => ['produit_id', Produit::class, false, 0],
+            'produit 12.5' => ['produit_id', Produit::class, 12.5, 12],
+            'service faux' => ['service_id', Service::class, false, 0],
+            'service 12.5' => ['service_id', Service::class, 12.5, 12],
+        ];
+    }
+
+    /**
+     * L'aperçu ignore cette ligne et garde les autres ; l'enregistrement la
+     * refuse comme une fiche introuvable, sous cette clé.
+     *
+     * @param  class-string  $modele
+     */
+    #[DataProvider('identifiantsSansFiche')]
+    public function test_la_ligne_d_un_identifiant_booleen_ou_decimal_sans_fiche_sous_sa_cle_est_ignoree_par_l_apercu_et_refusee_a_l_enregistrement(string $champ, string $modele, mixed $identifiant, int $cle): void
+    {
+        $this->magasinAuxFichesUnEtDouze();
+        $forgee = [$champ => $identifiant, 'quantite' => 1];
+        $contexte = new ContexteDeVente(TypeClient::Particulier, false, 20.0);
+
+        $apercu = app(ConstructeurLigneDocument::class)->apercu(['choisie' => [$champ => 1, 'quantite' => 1], 'forgee' => $forgee], $contexte);
+
+        $this->assertSame(['choisie'], array_keys($apercu->lignes));
+        $this->assertThrows(fn () => app(ConstructeurLigneDocument::class)->construireToutes([$forgee], $contexte), fn (ModelNotFoundException $introuvable): bool => $introuvable->getModel() === $modele && $introuvable->getIds() === [$cle]);
+    }
+
+    /**
+     * Le magasin actif, avec ses produits 1 et 12 et ses services 1 et 12,
+     * chacun à son prix : les fiches que désignent les clés 1 et 12.
+     */
+    private function magasinAuxFichesUnEtDouze(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+
+        foreach ([1 => '10.00', 12 => '12.00'] as $id => $prix) {
+            Produit::factory()->create(['id' => $id, 'prix_vente_ttc' => $prix, 'taux_tva' => 20]);
+            Service::factory()->auPrixDe($prix)->create(['id' => $id]);
+        }
     }
 }

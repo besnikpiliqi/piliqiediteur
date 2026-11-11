@@ -292,3 +292,4 @@
 - 11/11 10:47 UTC — CI de `71a217a` (D63) verte : courses 220 (envoi, 10:25) et 221 (PR, 10:46) ; course 218 de `5dc11a1` (TY2) encore en cours (tâche de mutation, lancée avant D63).
 - 11/11 vers 12 h 00 UTC : D66 appliquée au document (onglet 1 rev 611, onglet « À faire vérifier » rev 23, 288 questions, une par ligne) ; consigne du point de suivi de 12 h 05 mise à jour ; course 218 (TY2) : mutation encore en cours, sans effet sous D63.
 - 11/11 12 h 06 UTC : point de suivi : course wf_1d467e9e-93e active (CALC:implementation-2, agent a6f27b190bfd9604c, transcript à 12 h 05) ; CALC sauvegardé (130 entrées, write-tree 89e0857…) ; disque 7,6 Go libres.
+- 11/11 12 h 59 UTC : course 218 (5dc11a1, TY2) terminée verte, tâche de mutation comprise ; toute la CI de TY2 et de 71a217a est verte.

@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 12:09 UTC par pilotage-sync.sh : « Renvoi T58 coupé en 4 lignes (rev 617) ».
+Mis à jour le 11/11/2026 à 12:59 UTC par pilotage-sync.sh : « CI 218 verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `71a217a`. Commits locaux pas encore poussés :
 
 ```
+b21124f Calcule les montants sans virgule flottante et imprime le PU HT tel qu'il est enregistré (lot CALC)
 ```
 
 Derniers commits poussés :
@@ -37,66 +38,6 @@ d8deaf9 Mute en entier chaque fichier sensible changé par l'envoi (CI, lot PG)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M CLAUDE.md
- M README.md
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Casts/PrixDAchat.php
- M app/Domain/Achats/Models/FactureAchat.php
- M app/Domain/Achats/Models/LigneAchat.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Catalogue/Models/Service.php
- M app/Domain/Catalogue/Services/BaremePrixDeVente.php
- M app/Domain/Catalogue/Services/MargeDuCatalogue.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/CreerAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
- M app/Domain/Facturation/Concerns/VentileLaTvaParTaux.php
- M app/Domain/Facturation/Enums/TerritoireTva.php
- M app/Domain/Facturation/Mail/DocumentMail.php
- M app/Domain/Facturation/Models/Avoir.php
- M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
- M app/Domain/Facturation/Models/Facture.php
- M app/Domain/Facturation/Services/CalculateurLigne.php
- M app/Domain/Facturation/Services/ChiffreDAffaires.php
- M app/Domain/Facturation/Services/ContexteDeVente.php
- M app/Domain/Facturation/Services/DerogationsDePrix.php
- M app/Domain/Facturation/Services/Emetteur.php
- M app/Domain/Facturation/Services/LignesRetirees.php
- M app/Domain/Facturation/Services/MentionsFiscales.php
- M app/Domain/Facturation/Services/RecapitulatifDesDocuments.php
- M app/Domain/Facturation/Services/RegularisationDUneFacture.php
- M app/Domain/Facturation/Services/SaisieDecimale.php
- M app/Domain/Facturation/Services/TableauDesLignes.php
- M app/Domain/Stock/Actions/ValiderInventaireOuvertureAction.php
- M app/Domain/Stock/Models/LigneInventaireOuverture.php
- M app/Domain/Stock/Services/ConstructeurLigneInventaire.php
- M app/Domain/Stock/Services/StockLedgerService.php
- M app/Domain/Tenancy/Actions/AnnulerCessionAction.php
- M app/Domain/Tenancy/Actions/FermerMagasinAction.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Domain/Tenancy/Notifications/StockDuMagasinCede.php
- M app/Domain/Tenancy/Services/CatalogueDeDemonstration.php
- M app/Domain/Tenancy/Support/ValeurSimple.php
- M app/Domain/Tenancy/Support/ValeursLues.php
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Pages/Caisse.php
- M app/Filament/App/Pages/ParametresPrixDeVente.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/ClientResource.php
- M app/Filament/App/Resources/ClotureCaissePersonnelleResource.php
- M app/Filament/App/Resources/ClotureCaissePersonnelleResource/Pages/ListClotureCaissePersonnelles.php
- M app/Filament/App/Resources/ClotureCaisseResource.php
- M app/Filament/App/Resources/ClotureCaisseResource/Pages/ListClotureCaisses.php
- M app/Filament/App/Resources/ClotureCaisseResource/Widgets/VentesEnAttenteApercu.php
- M app/Filament/App/Resources/EnregistrementFiscalResource/Widgets/ConformiteApercu.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/InventaireOuvertureResource.php
- M app/Filament/App/Resources/PaiementResource.php
 ```
 
 ## Dernière course de la chaîne
@@ -106,4 +47,6 @@ Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus r�
 ```
 CALC:implementation
 CALC:implementation-2
+CALC:relecture1
+CALC:relecture2
 ```

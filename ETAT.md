@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 14:01 UTC par pilotage-sync.sh : « CI b21124f : panne apt, relance ».
+Mis à jour le 11/11/2026 à 14:12 UTC par pilotage-sync.sh : « CI b21124f : panne apt persistante, commentaire PR ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

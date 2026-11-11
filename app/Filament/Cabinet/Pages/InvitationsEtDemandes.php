@@ -15,6 +15,8 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
@@ -93,12 +95,12 @@ class InvitationsEtDemandes extends Page
             ->action(function (array $data): void {
                 static::executerSansCasser(function () use ($data): void {
                     try {
-                        $resultat = app(InviterUneEntrepriseAction::class)->handle(CompteConnecte::exiger(), $this->cabinet(), (string) $data['siren'], (string) $data['email'], (string) $data['mot_de_passe']);
+                        $resultat = app(InviterUneEntrepriseAction::class)->handle(CompteConnecte::exiger(), $this->cabinet(), ValeurSimple::enTexte($data['siren']), ValeurSimple::enTexte($data['email']), ValeurSimple::enTexte($data['mot_de_passe']));
                     } catch (ValidationException $refus) {
-                        throw new LogicException((string) collect($refus->errors())->flatten()->first());
+                        throw new LogicException($refus->validator->errors()->first());
                     }
 
-                    Notification::make()->title($resultat->message((string) $data['email']))->success()->send();
+                    Notification::make()->title($resultat->message(ValeurSimple::enTexte($data['email'])))->success()->send();
                 });
             });
     }
@@ -112,7 +114,7 @@ class InvitationsEtDemandes extends Page
             ->modalDescription('Le lien envoyé ne sert plus.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    $invitation = InvitationCabinet::query()->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
+                    $invitation = InvitationCabinet::query()->parUuid(ValeurSimple::enTexte($arguments['uuid'] ?? ''))->firstOrFail();
                     app(RetirerLInvitationAction::class)->handle(CompteConnecte::exiger(), $invitation);
                     Notification::make()->title('L\'invitation est retirée.')->success()->send();
                 });
@@ -128,7 +130,7 @@ class InvitationsEtDemandes extends Page
             ->modalDescription('Le lien de l\'e-mail ne sert plus.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    app(RetirerLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande((string) ($arguments['uuid'] ?? '')));
+                    app(RetirerLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande(ValeurSimple::enTexte($arguments['uuid'] ?? '')));
                     Notification::make()->title('La demande est retirée.')->success()->send();
                 });
             });
@@ -143,7 +145,7 @@ class InvitationsEtDemandes extends Page
             ->modalDescription('Ce client devient votre client, avec les autorisations de consultation par défaut, qu\'il réglera ensuite. Vous le confierez à vos collaborateurs.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    app(AccepterLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande((string) ($arguments['uuid'] ?? '')));
+                    app(AccepterLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande(ValeurSimple::enTexte($arguments['uuid'] ?? '')));
                     Notification::make()->title('Le lien est actif.')->success()->send();
                 });
             });
@@ -157,7 +159,7 @@ class InvitationsEtDemandes extends Page
             ->requiresConfirmation()
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    app(RefuserLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande((string) ($arguments['uuid'] ?? '')));
+                    app(RefuserLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $this->demande(ValeurSimple::enTexte($arguments['uuid'] ?? '')));
                     Notification::make()->title('La demande est refusée.')->success()->send();
                 });
             });
@@ -197,7 +199,7 @@ class InvitationsEtDemandes extends Page
             ->get(['id', 'uuid', 'societe_id', 'etat', 'demande_le', 'expire_le', 'repondu_le'])
             ->map(fn (LienCabinet $lien): array => [
                 'uuid' => (string) $lien->uuid,
-                'siren' => (string) Societe::query()->whereKey($lien->societe_id)->value('siren'),
+                'siren' => ValeursLues::texte(Societe::query()->whereKey($lien->societe_id)->value('siren')),
                 'demande_le' => $lien->demande_le,
                 'expire_le' => $lien->expire_le,
                 'en_cours' => $lien->estUneDemandeValable(),

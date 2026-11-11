@@ -11,7 +11,10 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
 use App\Filament\Societe\Resources\MembreResource\Pages;
@@ -31,6 +34,7 @@ use Filament\Infolists\Infolist;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnexpectedValueException;
 
 /**
  * Les comptes de la société, dans son espace d'administration (voir
@@ -231,7 +235,7 @@ class MembreResource extends RessourceDuPanneauSociete
         if ($resume === '' && $compte->estMembre()) {
             $magasin = $compte->magasinDeSonIdentifiant();
 
-            return $magasin !== null && array_key_exists((int) $magasin->getKey(), static::magasinsDeLaPortee()) ? "{$magasin->nom} (sans droit)" : '—';
+            return $magasin !== null && array_key_exists(CleDuModele::de($magasin), static::magasinsDeLaPortee()) ? "{$magasin->nom} (sans droit)" : '—';
         }
 
         return $resume ?: '—';
@@ -252,7 +256,7 @@ class MembreResource extends RessourceDuPanneauSociete
             return [];
         }
 
-        $portee = $auteur->magasinsDeSaPortee()->pluck('magasins.id')->map(fn ($id): int => (int) $id)->all();
+        $portee = ValeursLues::entiers($auteur->magasinsDeSaPortee()->pluck('magasins.id'));
 
         return array_values(Affectation::query()
             ->where('societe_id', $auteur->societe_id)
@@ -262,7 +266,7 @@ class MembreResource extends RessourceDuPanneauSociete
             ->orderBy('magasin_id')
             ->get()
             ->map(fn (Affectation $affectation): array => [
-                'affectation' => (int) $affectation->getKey(),
+                'affectation' => CleDuModele::de($affectation),
                 'magasin' => ValeurRequise::de($affectation->magasin, 'le magasin d\'une affectation à un magasin')->nom,
                 'role' => $affectation->role?->getLabel() ?? 'Administrateur',
                 'autorisations' => $auteur->estProprietaire() && $affectation->role !== RoleMagasin::Responsable
@@ -287,7 +291,7 @@ class MembreResource extends RessourceDuPanneauSociete
             return [];
         }
 
-        return $auteur->magasinsDeSaPortee()->orderBy('nom')->pluck('nom', 'magasins.id')->all();
+        return ValeursLues::textesParCle($auteur->magasinsDeSaPortee()->orderBy('nom')->pluck('nom', 'magasins.id'));
     }
 
     /**
@@ -322,7 +326,7 @@ class MembreResource extends RessourceDuPanneauSociete
                 ->required()
                 ->live()
                 ->afterStateUpdated(function (Set $set, mixed $state): void {
-                    $modele = RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut(static::societe()->type_activite) ?? [];
+                    $modele = RoleMagasin::tryFrom(ValeurSimple::enTexte($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut(static::societe()->type_activite) ?? [];
 
                     foreach (static::autorisationsAAfficher($modele, 'autorisations') as $champ => $cases) {
                         $set($champ, $cases);
@@ -349,9 +353,23 @@ class MembreResource extends RessourceDuPanneauSociete
      */
     public static function roleSaisi(array $data): array
     {
-        $role = $data['role'] instanceof RoleMagasin ? $data['role']->value : (string) $data['role'];
+        $role = $data['role'] instanceof RoleMagasin ? $data['role']->value : ValeurSimple::enTexte($data['role']);
 
-        return ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? array_values($data['autorisations_proprietaire'] ?? []) : static::autorisationsSaisies($data, 'autorisations')];
+        return ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? static::casesCochees($data, 'autorisations_proprietaire') : static::autorisationsSaisies($data, 'autorisations')];
+    }
+
+    /**
+     * Les magasins cochés pour un administrateur, ou aucun quand il a
+     * accès à tous les magasins, présents et futurs (« tous »).
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<int>|null
+     *
+     * @throws UnexpectedValueException des magasins qui ne sont pas une liste de cases
+     */
+    public static function magasinsSaisis(array $data): ?array
+    {
+        return $data['portee'] === 'tous' ? null : array_values(array_map(ValeurSimple::enEntier(...), ValeursLues::tableau($data['magasins'] ?? [])));
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
@@ -79,7 +80,7 @@ class FermerDemonstrationsInactives extends Command
             ->whereIn('chaine', [ChaineFiscale::Vente->value, ChaineFiscale::Encaissement->value])
             ->max('horodatage');
 
-        return collect([$ouverture, $derniereOperation === null ? null : Instant::depuisLaBase($derniereOperation)])
+        return collect([$ouverture, $derniereOperation === null ? null : Instant::depuisLaBase(ValeursLues::texte($derniereOperation))])
             ->filter()
             ->every(fn (CarbonImmutable $instant): bool => $instant->lessThan($limite));
     }

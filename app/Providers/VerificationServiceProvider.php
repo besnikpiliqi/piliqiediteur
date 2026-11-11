@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\EnvoiRecommande\FauxServiceEnvoiRecommande;
 use App\Integrations\Ordre\AnnuaireTenuParLEditeur;
@@ -89,7 +90,7 @@ class VerificationServiceProvider extends ServiceProvider
         if (! is_string($pilote) || ! isset(self::PILOTES[$service][$pilote])) {
             $connus = implode(' ou ', array_keys(self::PILOTES[$service]));
 
-            throw new RuntimeException("Pilote inconnu pour {$service} : « {$pilote} » ({$connus}).");
+            throw new RuntimeException("Pilote inconnu pour {$service} : « ".ValeurSimple::enTexte($pilote)." » ({$connus}).");
         }
 
         return $pilote;

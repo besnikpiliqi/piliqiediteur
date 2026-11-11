@@ -11,7 +11,9 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Closure;
 use Filament\Actions\Action;
@@ -146,10 +148,10 @@ trait GereLesComptes
                 $cible = $compte($record);
                 $enPresence = $data['mode'] === 'present';
 
-                self::exigerLeMotDePasseChoisi($enPresence ? (string) ($data['mot_de_passe'] ?? '') : null, $cible, $form);
+                self::exigerLeMotDePasseChoisi($enPresence ? ValeurSimple::enTexte($data['mot_de_passe'] ?? '') : null, $cible, $form);
 
                 static::executerLeGeste(function () use ($cible, $enPresence, $data): void {
-                    $redonne = app(RedonnerLAccesAction::class)->handle(self::auteur(), $cible, $enPresence, $enPresence ? (string) $data['mot_de_passe'] : null, (string) ($data['jeton'] ?? ''));
+                    $redonne = app(RedonnerLAccesAction::class)->handle(self::auteur(), $cible, $enPresence, $enPresence ? ValeurSimple::enTexte($data['mot_de_passe']) : null, ValeurSimple::enTexte($data['jeton'] ?? ''));
 
                     Notification::make()
                         ->title(match (true) {
@@ -258,10 +260,10 @@ trait GereLesComptes
                     return;
                 }
 
-                self::exigerLeMotDePasseChoisi((string) ($data['mot_de_passe'] ?? ''), $cible, $form);
+                self::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $cible, $form);
 
                 static::executerLeGeste(function () use ($cible, $data): void {
-                    app(RedonnerLAccesAction::class)->handle(self::auteur(), $cible, true, (string) $data['mot_de_passe'], (string) ($data['jeton'] ?? ''));
+                    app(RedonnerLAccesAction::class)->handle(self::auteur(), $cible, true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton'] ?? ''));
                     Notification::make()->title('Son mot de passe est enregistré : la personne se connecte avec son identifiant et ce mot de passe.')->success()->send();
                 });
             });
@@ -297,13 +299,7 @@ trait GereLesComptes
      */
     public static function champsDuNouveauMembre(Closure $magasin): array
     {
-        $anciens = function (Get $get, StatutCompte $statut) use ($magasin): Collection {
-            $leMagasin = $magasin($get);
-
-            return $leMagasin === null
-                ? collect()
-                : app(CreationDesComptes::class)->comptesDuMemeNom($leMagasin, (string) $get('name'))->filter(fn (User $compte): bool => $compte->statut === $statut)->values();
-        };
+        $anciens = fn (Get $get, StatutCompte $statut): Collection => self::anciensComptes($magasin($get), $get('name'), $statut);
 
         return [
             Hidden::make('jeton'),
@@ -315,11 +311,26 @@ trait GereLesComptes
             Radio::make('reprendre')
                 ->label('Un ancien compte porte ce nom dans ce magasin')
                 ->options(fn (Get $get): array => $anciens($get, StatutCompte::Retire)
-                    ->mapWithKeys(fn (User $compte): array => [(string) $compte->getKey() => "Réintégrer le compte retiré de {$compte->name} : son identifiant et son historique sont gardés"])
+                    ->mapWithKeys(fn (User $compte): array => [(string) CleDuModele::de($compte) => "Réintégrer le compte retiré de {$compte->name} : son identifiant et son historique sont gardés"])
                     ->all() + ['nouveau' => 'Créer un nouveau compte'])
                 ->required(fn (Get $get): bool => $anciens($get, StatutCompte::Retire)->isNotEmpty())
                 ->visible(fn (Get $get): bool => $anciens($get, StatutCompte::Retire)->isNotEmpty()),
         ];
+    }
+
+    /**
+     * Les anciens comptes de ce statut que la fenêtre de création propose
+     * de reprendre : ceux du magasin choisi qui portent le nom saisi (voir
+     * CreationDesComptes::comptesDuMemeNom()), aucun tant qu'aucun magasin
+     * n'est choisi.
+     *
+     * @return Collection<int, User>
+     */
+    private static function anciensComptes(?Magasin $magasin, mixed $nom, StatutCompte $statut): Collection
+    {
+        return $magasin === null
+            ? new Collection
+            : app(CreationDesComptes::class)->comptesDuMemeNom($magasin, ValeurSimple::enTexte($nom))->filter(fn (User $compte): bool => $compte->statut === $statut)->values();
     }
 
     /**
@@ -336,11 +347,11 @@ trait GereLesComptes
      */
     public static function creerOuReintegrerUnMembre(User $auteur, Magasin $magasin, array $data, RoleMagasin|string $role, ?array $autorisations): ?User
     {
-        $reprendre = (string) ($data['reprendre'] ?? 'nouveau');
+        $reprendre = ValeurSimple::enTexte($data['reprendre'] ?? 'nouveau');
 
         if ($reprendre !== 'nouveau' && $reprendre !== '') {
-            $ancien = app(CreationDesComptes::class)->comptesDuMemeNom($magasin, (string) $data['name'])
-                ->first(fn (User $compte): bool => (string) $compte->getKey() === $reprendre && $compte->estRetire())
+            $ancien = app(CreationDesComptes::class)->comptesDuMemeNom($magasin, ValeurSimple::enTexte($data['name']))
+                ->first(fn (User $compte): bool => (string) CleDuModele::de($compte) === $reprendre && $compte->estRetire())
                 ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
 
             app(ChangerStatutCompteAction::class)->reintegrer($auteur, $ancien, $role, $autorisations);
@@ -349,7 +360,7 @@ trait GereLesComptes
             return null;
         }
 
-        return app(CreerMembreAction::class)->handle($auteur, $magasin, ['name' => $data['name']], $role, $autorisations, filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null);
+        return app(CreerMembreAction::class)->handle($auteur, $magasin, ['name' => $data['name']], $role, $autorisations, filled($data['jeton'] ?? null) ? ValeurSimple::enTexte($data['jeton']) : null);
     }
 
     /**
@@ -390,7 +401,7 @@ trait GereLesComptes
         try {
             static::executerSansCasser($geste);
         } catch (ValidationException $refus) {
-            Notification::make()->title(implode(' ', array_merge(...array_values($refus->errors()))))->danger()->send();
+            Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
         }
     }
 

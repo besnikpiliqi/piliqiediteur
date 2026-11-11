@@ -4,6 +4,8 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
@@ -119,7 +121,7 @@ class CoordonneesMagasin extends Page implements HasForms
         $donnees = $this->form->getState();
         $saisie = [
             ...$donnees,
-            'references_acheteur' => array_values(array_unique(array_filter(array_map(trim(...), $donnees['references_acheteur'] ?? []), filled(...)))) ?: null,
+            'references_acheteur' => array_values(array_unique(array_filter(array_map(fn (mixed $reference): string => trim(ValeurSimple::enTexte($reference)), ValeursLues::tableau($donnees['references_acheteur'] ?? [])), filled(...)))) ?: null,
         ];
 
         $magasin = $this->enregistrerLesParametres($saisie, 'Coordonnées du magasin enregistrées');

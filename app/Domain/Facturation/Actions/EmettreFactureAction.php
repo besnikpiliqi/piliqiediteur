@@ -38,8 +38,10 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -311,7 +313,7 @@ class EmettreFactureAction
         $contenu = $this->contenuFiscal->document($facture);
         $this->registre->enregistrerVente(
             $typeDocument === TypeDocument::Facture ? 'facture' : 'ticket',
-            $contenu['document']['totaux']['ttc'],
+            ValeursLues::entierDe(ValeursLues::tableauDe(ValeursLues::tableauDe($contenu, 'document'), 'totaux'), 'ttc'),
             $contenu,
             $facture,
         );
@@ -427,7 +429,7 @@ class EmettreFactureAction
                 $compte,
                 ValeurRequise::de($facture->client, 'le client de la facture'),
                 ['mode_paiement' => $part->mode->value, 'montant' => $montant, 'reference' => $part->reference, 'recu_le' => $recuLe],
-                [['facture_id' => $facture->getKey(), 'montant' => $montant]],
+                [['facture_id' => CleDuModele::de($facture), 'montant' => $montant]],
                 aLEmission: true,
             );
         }

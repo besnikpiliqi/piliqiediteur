@@ -3,6 +3,8 @@
 namespace App\Filament\App\Resources\ClientResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\Concerns\SignaleUneLigneDisparue;
 use Filament\Actions;
@@ -32,7 +34,10 @@ class ListClients extends ListRecords
     {
         $enregistrements = $this->getTableRecords();
 
-        return ($this->credits ??= Client::creditsDAvoirEnCentimes($enregistrements instanceof Collection ? $enregistrements : $enregistrements->items()))[$client->getKey()] ?? 0;
+        return ($this->credits ??= Client::creditsDAvoirEnCentimes(array_map(
+            fn (mixed $client): Client => ValeursLues::instance($client, Client::class),
+            $enregistrements instanceof Collection ? $enregistrements->all() : $enregistrements->items(),
+        )))[CleDuModele::de($client)] ?? 0;
     }
 
     protected function getHeaderActions(): array

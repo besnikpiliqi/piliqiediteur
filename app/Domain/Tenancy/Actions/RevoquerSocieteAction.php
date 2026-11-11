@@ -35,8 +35,10 @@ use App\Domain\Tenancy\Services\PeriodesDActivite;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -204,10 +206,10 @@ class RevoquerSocieteAction
 
                 // null quand les magasins réels ont changé entre leur lecture
                 // et leurs verrous : tout reprend alors.
-                $resultat = $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $editeur) {
+                $revocation = function () use ($societe, $magasins, $editeur) {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
 
-                    if (array_map(intval(...), $verrouillee->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
+                    if (ValeursLues::entiers($verrouillee->magasinsReels()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return null;
                     }
 
@@ -222,7 +224,8 @@ class RevoquerSocieteAction
                     $this->finDesLiens->pourUnClientRevoque($verrouillee, $editeur);
 
                     return [...$this->revoquerSousVerrou($verrouillee, $editeur, $magasinsVerrouilles, $preuve), 'magasins' => $fermes];
-                }));
+                };
+                $resultat = $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrouDesMagasins($magasins, $revocation));
 
                 if ($resultat !== null) {
                     return $resultat;
@@ -249,7 +252,7 @@ class RevoquerSocieteAction
      */
     private function revoquerUnCabinet(Societe $cabinet, InterventionDeLEditeur $editeur): array
     {
-        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->operateur->pendantLeSysteme(fn () => DB::transaction(function () use ($cabinet, $editeur) {
+        $sousLesVerrous = function () use ($cabinet, $editeur) {
             $verrouille = Societe::query()->whereKey($cabinet->getKey())->lock('for no key update')->firstOrFail();
 
             if ($verrouille->statut === StatutSociete::Revoquee) {
@@ -261,7 +264,8 @@ class RevoquerSocieteAction
             User::query()->where('societe_id', $verrouille->getKey())->orderBy('id')->lock('for no key update')->get();
 
             return [...$this->revoquerSousVerrou($verrouille, $editeur, $verrouille->magasinsReels()->get(), $preuve), 'magasins' => []];
-        })));
+        };
+        $revocation = app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->operateur->pendantLeSysteme(fn () => DB::transaction($sousLesVerrous)));
 
         $liens = $this->acces->liensAMettreFin($cabinet, [EtatDuLien::Actif, ...EtatDuLien::demandes()]);
         $invitations = app(TenantContext::class)->runAsSociete($cabinet, fn () => InvitationCabinet::query()->where('etat', EtatInvitation::Ouverte->value)->orderBy('id')->get());
@@ -309,7 +313,7 @@ class RevoquerSocieteAction
 
                 if (! $magasin->estFerme()) {
                     $this->cloturerLesJournees->parLeSysteme($magasin, $instant->jour());
-                    $instants[(int) $magasin->getKey()] = $instant->utc;
+                    $instants[CleDuModele::de($magasin)] = $instant->utc;
                 }
 
                 if (PeriodeActivite::query()->where('magasin_id', $magasin->getKey())->whereNull('fin')->exists()) {
@@ -386,7 +390,7 @@ class RevoquerSocieteAction
             $this->journalAudit->inscrire(ActionAuditee::TransmissionAnnulee, null, null, null, [
                 'destinataire' => ['id' => $destinataire->getKey(), 'nom' => $destinataire->name],
             ], $demande, $editeur);
-            $destinataires[] = (int) $destinataire->getKey();
+            $destinataires[] = CleDuModele::de($destinataire);
         }
 
         return $destinataires;

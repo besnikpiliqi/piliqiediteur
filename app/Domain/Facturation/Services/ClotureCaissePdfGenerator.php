@@ -63,11 +63,11 @@ class ClotureCaissePdfGenerator
                 'ttc' => $euros($rubrique['ttc']),
                 'detail' => $rubrique['detail'],
             ], $cloture->rubriques()),
-            'encaissements' => array_map(fn (array $mode): array => [...$mode, 'montant' => $euros($mode['montant'])], $cloture->recapitulatif['encaissements']),
+            'encaissements' => array_map(fn (array $mode): array => [...$mode, 'montant' => $euros($mode['montant'])], $cloture->encaissementsParMode()),
             'totalEncaisse' => $euros($cloture->totalEncaisseEnCentimes()),
-            'creditAvoir' => $euros($cloture->recapitulatif['credit_avoir_impute']),
-            'grandTotalReel' => $euros($cloture->recapitulatif['grands_totaux']['perpetuel_reel']),
-            'grandTotalAbsolu' => $euros($cloture->recapitulatif['grands_totaux']['perpetuel_absolu']),
+            'creditAvoir' => $euros($cloture->creditAvoirImpute()),
+            'grandTotalReel' => $euros($cloture->grandsTotaux()['perpetuel_reel']),
+            'grandTotalAbsolu' => $euros($cloture->grandsTotaux()['perpetuel_absolu']),
         ])->render();
     }
 

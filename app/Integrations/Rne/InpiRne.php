@@ -2,6 +2,8 @@
 
 namespace App\Integrations\Rne;
 
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\EnvoiRecommande\AdressePostale;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use Closure;
@@ -67,13 +69,13 @@ class InpiRne implements RegistreNationalDesEntreprises
             return [];
         }
 
-        $entrepreneur = $contenu['personnePhysique']['identite']['entrepreneur']['descriptionPersonne'] ?? null;
+        $entrepreneur = ValeursLues::valeurAu($contenu, 'personnePhysique', 'identite', 'entrepreneur', 'descriptionPersonne');
 
         if (is_array($entrepreneur)) {
             return [$this->personnePhysique($entrepreneur, 'Entrepreneur individuel', true, null)];
         }
 
-        $pouvoirs = $contenu['personneMorale']['composition']['pouvoirs'] ?? null;
+        $pouvoirs = ValeursLues::valeurAu($contenu, 'personneMorale', 'composition', 'pouvoirs');
 
         if (! is_array($pouvoirs)) {
             throw $this->illisible();
@@ -109,7 +111,7 @@ class InpiRne implements RegistreNationalDesEntreprises
         }
 
         $morale = is_array($contenu['personneMorale'] ?? null);
-        $identite = $morale ? ($contenu['personneMorale']['identite'] ?? null) : ($contenu['personnePhysique']['identite'] ?? null);
+        $identite = $morale ? ValeursLues::valeurAu($contenu, 'personneMorale', 'identite') : ValeursLues::valeurAu($contenu, 'personnePhysique', 'identite');
         $entreprise = is_array($identite) && is_array($identite['entreprise'] ?? null) ? $identite['entreprise'] : [];
         $description = $morale && is_array($identite) && is_array($identite['description'] ?? null) ? $identite['description'] : [];
         $categorie = $this->texte($entreprise, 'formeJuridique');
@@ -136,7 +138,7 @@ class InpiRne implements RegistreNationalDesEntreprises
     private function siege(array $contenu): ?AdressePostale
     {
         $personne = $contenu['personneMorale'] ?? $contenu['personnePhysique'] ?? null;
-        $adresse = is_array($personne) ? ($personne['adresseEntreprise']['adresse'] ?? null) : null;
+        $adresse = ValeursLues::valeurAu($personne, 'adresseEntreprise', 'adresse');
 
         if (! is_array($adresse)) {
             return null;
@@ -150,7 +152,7 @@ class InpiRne implements RegistreNationalDesEntreprises
             return null;
         }
 
-        $identite = $personne['identite']['entreprise'] ?? [];
+        $identite = ValeursLues::valeurAu($personne, 'identite', 'entreprise');
 
         return new AdressePostale(
             denomination: is_array($identite) ? $this->texte($identite, 'denomination') : null,
@@ -184,7 +186,7 @@ class InpiRne implements RegistreNationalDesEntreprises
             return new RepresentantRne($denomination, null, [], null, self::libelleDuRole($role), $represente, $sirenDuDirigeant, $debut);
         }
 
-        $personne = $pouvoir['individu']['descriptionPersonne'] ?? null;
+        $personne = ValeursLues::valeurAu($pouvoir, 'individu', 'descriptionPersonne');
 
         if (! is_array($personne)) {
             throw $this->illisible();
@@ -235,7 +237,7 @@ class InpiRne implements RegistreNationalDesEntreprises
             return null;
         }
 
-        $contenu = $this->lire($reponse)['formality']['content'] ?? null;
+        $contenu = ValeursLues::valeurAu($this->lire($reponse), 'formality', 'content');
 
         return is_array($contenu) ? $contenu : throw $this->illisible();
     }
@@ -274,8 +276,8 @@ class InpiRne implements RegistreNationalDesEntreprises
     private function envoyer(Closure $requete): Response
     {
         try {
-            return $requete(Http::baseUrl(config('services.rne.url'))
-                ->timeout(config('services.rne.delai'))
+            return $requete(Http::baseUrl(Reglage::texte('services.rne.url'))
+                ->timeout(Reglage::entier('services.rne.delai'))
                 ->connectTimeout(5)
                 ->acceptJson()
                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false));

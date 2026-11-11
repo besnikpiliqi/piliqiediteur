@@ -25,8 +25,10 @@ use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
@@ -234,7 +236,7 @@ class FactureAchatResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withCount('pieces')
-            ->withExists(['avoirsFournisseur', 'lignes as lignes_retournables_exists' => fn (Builder $lignes): Builder => $lignes->scopes('retournables')]);
+            ->withExists(['avoirsFournisseur', 'lignes as lignes_retournables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('retournables'), Builder::class)]);
     }
 
     public static function table(Table $table): Table
@@ -278,7 +280,7 @@ class FactureAchatResource extends Resource
                     ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
                     ->form([self::champDuJeton()])
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && CompteConnecte::exiger()->can('valider', $record))
-                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']))),
+                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton'])))),
                 self::creerUnAvoirFournisseur(Tables\Actions\Action::make('avoir_fournisseur')),
             ])
             ->bulkActions([
@@ -438,7 +440,7 @@ class FactureAchatResource extends Resource
             ->visible(fn (?Model $record): bool => self::peutCreerUnAvoirFournisseur($record))
             ->action(function (?Model $record, array $data): void {
                 try {
-                    static::executerSansCasser(fn () => self::enregistrerLAvoirFournisseur($record, $data));
+                    static::executerSansCasser(fn () => self::enregistrerLAvoirFournisseur($record, ValeursLues::champs($data)));
                 } finally {
                     PieceDeposee::effacerLesEnvois($data['pieces'] ?? []);
                 }
@@ -594,7 +596,7 @@ class FactureAchatResource extends Resource
                 ->addable(false)
                 ->deletable(true)
                 ->default($factureAchat === null ? [] : self::lignesRetournables($factureAchat, $record instanceof LigneAchat ? $record : null))
-                ->afterStateUpdated(fn (Get $get, Set $set) => $set('taux', self::tauxDesRetours(array_values($get('lignes') ?? []), $get('taux') ?? [])))
+                ->afterStateUpdated(fn (Get $get, Set $set) => $set('taux', self::tauxDesRetours(array_values(ValeursLues::tableau($get('lignes') ?? [])), ValeursLues::tableau($get('taux') ?? []))))
                 ->visible(fn (Get $get): bool => $factureAchat !== null || filled($get('facture_achat_id'))),
             Repeater::make('taux')
                 ->label('TVA de la note d\'avoir du fournisseur')
@@ -602,7 +604,7 @@ class FactureAchatResource extends Resource
                 ->schema([
                     Hidden::make('taux_tva'),
                     TextInput::make('montant_tva')
-                        ->label(fn (Get $get): string => 'TVA à '.str_replace('.', ',', self::pourcentageEnTexte($get('taux_tva'))).' % sur la note d\'avoir')
+                        ->label(fn (Get $get): string => 'TVA à '.str_replace('.', ',', self::pourcentageEnTexte(ValeurSimple::enTexteOuNul($get('taux_tva')))).' % sur la note d\'avoir')
                         ->numeric()
                         ->minValue(0)
                         ->suffix('€')
@@ -783,10 +785,10 @@ class FactureAchatResource extends Resource
         $avoir = app(EnregistrerAvoirFournisseurAction::class)->handle(
             CompteConnecte::exiger(),
             $factureAchat,
-            array_values($data['lignes'] ?? []),
-            $data['motif'],
-            $data['numero_fournisseur'] ?? null,
-            $data['jeton'],
+            array_values(ValeursLues::lignes($data['lignes'] ?? [])),
+            ValeurSimple::enTexteOuNul($data['motif']),
+            ValeurSimple::enTexteOuNul($data['numero_fournisseur'] ?? null),
+            ValeurSimple::enTexteOuNul($data['jeton']),
             self::montantsDuFournisseur($data),
             PieceDeposee::lire($data['pieces'] ?? []),
         );
@@ -813,7 +815,7 @@ class FactureAchatResource extends Resource
             ->orderByDesc('rang_validation')
             ->limit(50)
             ->get()
-            ->mapWithKeys(fn (FactureAchat $facture): array => [$facture->getKey() => self::libelleDeLaFactureAchat($facture)])
+            ->mapWithKeys(fn (FactureAchat $facture): array => [CleDuModele::de($facture) => self::libelleDeLaFactureAchat($facture)])
             ->all();
     }
 
@@ -824,7 +826,7 @@ class FactureAchatResource extends Resource
      */
     private static function factureAchatRetournable(mixed $identifiant): ?FactureAchat
     {
-        return self::estUnIdentifiant($identifiant) ? FactureAchat::query()->retournables()->with('fournisseur')->find((int) $identifiant) : null;
+        return self::estUnIdentifiant($identifiant) ? FactureAchat::query()->retournables()->with('fournisseur')->find(ValeurSimple::enEntier($identifiant)) : null;
     }
 
     /**
@@ -834,7 +836,7 @@ class FactureAchatResource extends Resource
      */
     private static function ligneAchat(mixed $identifiant): ?LigneAchat
     {
-        return self::estUnIdentifiant($identifiant) ? LigneAchat::query()->with('produit')->find((int) $identifiant) : null;
+        return self::estUnIdentifiant($identifiant) ? LigneAchat::query()->with('produit')->find(ValeurSimple::enEntier($identifiant)) : null;
     }
 
     private static function estUnIdentifiant(mixed $valeur): bool
@@ -913,13 +915,13 @@ class FactureAchatResource extends Resource
             $lignes = collect(is_array($saisies) ? $saisies : [])
                 ->filter(fn (mixed $ligne): bool => is_array($ligne) && self::estUnIdentifiant($ligne['ligne_achat_id'] ?? null));
             $lignesDuProduit = LigneAchat::query()
-                ->whereIn('id', $lignes->map(fn (array $ligne): int => (int) $ligne['ligne_achat_id'])->values())
+                ->whereIn('id', $lignes->map(fn (array $ligne): int => ValeurSimple::enEntier($ligne['ligne_achat_id']))->values())
                 ->where('produit_id', $produit->id)
                 ->pluck('id')
                 ->all();
             $quantite = $lignes
-                ->filter(fn (array $ligne): bool => in_array((int) $ligne['ligne_achat_id'], $lignesDuProduit, true))
-                ->sum(fn (array $ligne): int => (int) ($ligne['quantite'] ?? 0));
+                ->filter(fn (array $ligne): bool => in_array(ValeurSimple::enEntier($ligne['ligne_achat_id']), $lignesDuProduit, true))
+                ->sum(fn (array $ligne): int => ValeurSimple::enEntier($ligne['quantite'] ?? 0));
 
             if ($quantite > $produit->stock_quantite) {
                 $fail(AvoirFournisseur::messageStockInsuffisant($produit, $quantite));

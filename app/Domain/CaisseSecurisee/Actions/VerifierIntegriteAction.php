@@ -17,6 +17,7 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -146,18 +147,25 @@ class VerifierIntegriteAction
             return null;
         }
 
-        $pointsDeReprise = $controle->contenuSigne()['donnees']['details']['points_de_reprise'] ?? null;
+        $pointsDeReprise = ValeursLues::valeurAu($controle->contenuSigne(), 'donnees', 'details', 'points_de_reprise');
 
         if (! is_array($pointsDeReprise)) {
             return null;
         }
 
+        $lus = [];
+
         foreach ($pointsDeReprise as $chaine => $pointDeReprise) {
-            if (ChaineFiscale::tryFrom((string) $chaine) === null || ! is_int($pointDeReprise['sequence'] ?? null) || ! is_string($pointDeReprise['signature'] ?? null)) {
+            $sequence = ValeursLues::valeurAu($pointDeReprise, 'sequence');
+            $signature = ValeursLues::valeurAu($pointDeReprise, 'signature');
+
+            if (ChaineFiscale::tryFrom((string) $chaine) === null || ! is_int($sequence) || ! is_string($signature)) {
                 return null;
             }
+
+            $lus[(string) $chaine] = ['sequence' => $sequence, 'signature' => $signature];
         }
 
-        return $pointsDeReprise;
+        return $lus;
     }
 }

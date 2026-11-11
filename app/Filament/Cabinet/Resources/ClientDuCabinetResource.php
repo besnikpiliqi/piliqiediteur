@@ -11,7 +11,9 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource\Pages;
 use App\Filament\Cabinet\RessourceDuPanneauCabinet;
@@ -132,7 +134,7 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             ->label('Confier')
             ->icon('heroicon-o-user-plus')
             ->visible(fn (LienCabinet $record): bool => auth()->user()?->can('confier', $record) ?? false)
-            ->fillForm(fn (LienCabinet $record): array => ['collaborateurs' => ClientConfie::query()->where('lien_id', $record->getKey())->pluck('user_id')->map(fn ($id): string => (string) $id)->all()])
+            ->fillForm(fn (LienCabinet $record): array => ['collaborateurs' => ClientConfie::query()->where('lien_id', $record->getKey())->pluck('user_id')->map(fn (mixed $id): string => (string) ValeursLues::entier($id))->all()])
             ->form([
                 CheckboxList::make('collaborateurs')
                     ->label('Collaborateurs qui suivent ce client')
@@ -147,14 +149,14 @@ class ClientDuCabinetResource extends RessourceDuPanneauCabinet
             ])
             ->action(function (array $data, LienCabinet $record): void {
                 static::executerSansCasser(function () use ($data, $record): void {
-                    $voulus = array_map(intval(...), $data['collaborateurs'] ?? []);
+                    $voulus = array_map(ValeurSimple::enEntier(...), ValeursLues::tableau($data['collaborateurs'] ?? []));
                     $collaborateurs = User::query()->where('societe_id', CompteConnecte::exiger()->societe_id)->where('role_societe', RoleSociete::Collaborateur->value)->where('statut', '<>', StatutCompte::Retire->value)->orderBy('id')->get();
 
                     foreach ($collaborateurs as $collaborateur) {
-                        $siens = ClientConfie::query()->where('user_id', $collaborateur->getKey())->pluck('lien_id')->map(fn ($id): int => (int) $id)->all();
-                        $apres = in_array((int) $collaborateur->getKey(), $voulus, true)
-                            ? array_values(array_unique([...$siens, (int) $record->getKey()]))
-                            : array_values(array_diff($siens, [(int) $record->getKey()]));
+                        $siens = ValeursLues::entiers(ClientConfie::query()->where('user_id', $collaborateur->getKey())->pluck('lien_id'));
+                        $apres = in_array(CleDuModele::de($collaborateur), $voulus, true)
+                            ? array_values(array_unique([...$siens, CleDuModele::de($record)]))
+                            : array_values(array_diff($siens, [CleDuModele::de($record)]));
 
                         if ($apres !== $siens) {
                             app(ConfierDesClientsAction::class)->handle(CompteConnecte::exiger(), $collaborateur, $apres);

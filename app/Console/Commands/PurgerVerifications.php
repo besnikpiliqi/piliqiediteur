@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -49,12 +50,12 @@ class PurgerVerifications extends Command
             ->orderBy('id')
             ->each(function (Societe $societe) use ($tenantContext, &$effacees, &$enEchec): void {
                 try {
-                    $effacees += $tenantContext->runAsSociete($societe, fn (): int => DB::transaction(fn (): int => VerificationSociete::query()
+                    $effacees += $tenantContext->runAsSociete($societe, fn (): int => DB::transaction(fn (): int => ValeursLues::entier(VerificationSociete::query()
                         ->whereRaw(DeclencheursDeProtection::conditionDeFinDeLaRelation('verifications_societe'))
-                        ->delete()
-                        + CodeConfirmation::query()
+                        ->delete())
+                        + ValeursLues::entier(CodeConfirmation::query()
                             ->whereRaw(DeclencheursDeProtection::conditionDExpiration('conserver_jusqu_au'))
-                            ->delete()));
+                            ->delete())));
                 } catch (Throwable $exception) {
                     report($exception);
                     $enEchec++;

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\Tenancy\Models\DemandeInscription;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -20,9 +21,9 @@ class PurgerDemandesInscription extends Command
 {
     public function handle(): int
     {
-        $effacees = DemandeInscription::query()
+        $effacees = ValeursLues::entier(DemandeInscription::query()
             ->where('expire_le', '<=', now()->subHours(DemandeInscription::EFFACEMENT_APRES_EXPIRATION_EN_HEURES))
-            ->delete();
+            ->delete());
 
         $this->info("{$effacees} demande(s) d'inscription effacée(s).");
 

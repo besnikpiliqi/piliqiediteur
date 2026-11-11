@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -85,9 +86,10 @@ class DeposerUnePieceAction
             }
         });
 
+        $cle = CleDuModele::de($societe);
         $this->alerteEditeur->alerter($societe, 'Pièces déposées pour un courrier recommandé non reçu', [
-            "Une pièce ({$type->getLabel()}) attend votre examen : php artisan editeur:societe:pieces {$societe->getKey()}",
-            "Ensuite, un nouveau courrier : php artisan editeur:societe:examiner {$societe->getKey()} ; ou la clôture de l'inscription : php artisan editeur:societe:clore {$societe->getKey()} --motif=refus",
+            "Une pièce ({$type->getLabel()}) attend votre examen : php artisan editeur:societe:pieces {$cle}",
+            "Ensuite, un nouveau courrier : php artisan editeur:societe:examiner {$cle} ; ou la clôture de l'inscription : php artisan editeur:societe:clore {$cle} --motif=refus",
         ]);
 
         return $piece;

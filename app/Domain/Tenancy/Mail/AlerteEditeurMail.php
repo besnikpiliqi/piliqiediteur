@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Mail;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -25,7 +26,7 @@ class AlerteEditeurMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: config('app.name').' — '.$this->objet);
+        return new Envelope(subject: Reglage::texte('app.name').' — '.$this->objet);
     }
 
     public function content(): Content

@@ -60,7 +60,7 @@ class EnregistrerAvoirFournisseurAction
     ) {}
 
     /**
-     * @param  array<array-key, array{ligne_achat_id: int|string, quantite: int|string, montant_ht?: float|string|null}>  $lignesSelectionnees
+     * @param  array<array-key, array<string, mixed>>  $lignesSelectionnees  chaque ligne choisie, telle que l'écran la saisit (ligne_achat_id, quantite, montant_ht), chaque valeur lue par sa vérification
      * @param  string|null  $numeroFournisseur  le n° de l'avoir chez le fournisseur, facultatif
      * @param  string|null  $jeton  le jeton de la demande (R3)
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la note d'avoir du fournisseur au niveau du document, et la confirmation des écarts

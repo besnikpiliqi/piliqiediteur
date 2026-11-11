@@ -20,6 +20,8 @@ use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
@@ -140,7 +142,7 @@ class ModifierFactureAction
         }
 
         $apres = array_values(array_map(
-            fn (array $ligne): array => $this->lignesRetirees->comparable($ligne['produit_id'], $ligne['service_id'], $ligne['description'], $ligne['quantite'], $ligne['prix_unitaire_ttc']),
+            fn (array $ligne): array => $this->lignesRetirees->comparable(ValeurSimple::enEntierOuNul($ligne['produit_id']), ValeurSimple::enEntierOuNul($ligne['service_id']), ValeurSimple::enTexteOuNul($ligne['description']), ValeursLues::entier($ligne['quantite']), $ligne['prix_unitaire_ttc']),
             $document->lignes,
         ));
 

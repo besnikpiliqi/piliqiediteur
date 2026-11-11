@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -99,6 +100,6 @@ class ChoisirEtablissementPrincipalAction
      */
     private static function designation(?Magasin $magasin): ?array
     {
-        return $magasin === null ? null : ['id' => $magasin->getKey(), 'nom' => $magasin->nom, 'siret' => $magasin->siret];
+        return $magasin === null ? null : ['id' => CleDuModele::de($magasin), 'nom' => $magasin->nom, 'siret' => $magasin->siret];
     }
 }

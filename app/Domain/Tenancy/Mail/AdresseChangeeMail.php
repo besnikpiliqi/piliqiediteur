@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Mail;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -21,7 +22,7 @@ class AdresseChangeeMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Votre adresse de connexion à '.config('app.name').' a changé');
+        return new Envelope(subject: 'Votre adresse de connexion à '.Reglage::texte('app.name').' a changé');
     }
 
     public function content(): Content

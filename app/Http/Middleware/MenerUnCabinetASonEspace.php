@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
 use Closure;
@@ -38,7 +39,7 @@ class MenerUnCabinetASonEspace extends Authenticate
             return redirect()->to(EspaceDeLaSociete::accueil($compte->societe));
         }
 
-        return parent::handle($request, $next, ...$guards);
+        return ValeursLues::instance(parent::handle($request, $next, ...$guards), Response::class);
     }
 
     /**

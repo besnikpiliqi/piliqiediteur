@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
@@ -79,7 +80,7 @@ class MettreFinAuLienAction
      */
     public function parLEditeur(LienCabinet $lien, MotifDeFinDuLien $motif, InterventionDeLEditeur $editeur, Societe $visee): void
     {
-        $this->terminer(null, $lien, $motif, $editeur, static fn (): null => null, (int) $visee->getKey() !== (int) $lien->societe_id, $visee);
+        $this->terminer(null, $lien, $motif, $editeur, static fn (): null => null, CleDuModele::de($visee) !== (int) $lien->societe_id, $visee);
     }
 
     /**
@@ -177,7 +178,7 @@ class MettreFinAuLienAction
         $cabinet = Societe::query()->findOrFail($lien->cabinet_id);
 
         foreach ($comptesDuCabinet as $compte) {
-            $compte->effacerLesAvisDesClients([(int) $client->getKey()]);
+            $compte->effacerLesAvisDesClients([CleDuModele::de($client)]);
 
             if ($compte->is($auteur)) {
                 continue;

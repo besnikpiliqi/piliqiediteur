@@ -16,6 +16,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Models\User;
@@ -32,6 +33,7 @@ use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use UnexpectedValueException;
 
 /**
  * La page « Cabinet comptable » de l'espace d'une société, pour son
@@ -114,9 +116,30 @@ class CabinetComptable extends Page implements HasForms
      */
     private function autorisationsCochees(): array
     {
-        $etat = $this->form->getState();
+        return self::autorisationsCocheesDans($this->form->getState());
+    }
 
-        return array_values(array_unique([...($etat['consultations'] ?? []), ...($etat['achats'] ?? []), ...($etat['telechargements'] ?? [])]));
+    /**
+     * Les autorisations cochées des trois groupes (consultations, achats
+     * et téléchargements) d'un formulaire, réunies, sans doublon, ici
+     * comme sur la page de rattachement.
+     *
+     * @param  array<array-key, mixed>  $etat
+     * @return list<string>
+     *
+     * @throws UnexpectedValueException un groupe qui n'est pas une liste de cases
+     */
+    public static function autorisationsCocheesDans(array $etat): array
+    {
+        $cochees = [];
+
+        foreach (['consultations', 'achats', 'telechargements'] as $groupe) {
+            foreach (ValeursLues::tableau($etat[$groupe] ?? []) as $autorisation) {
+                $cochees[] = ValeurSimple::enTexte($autorisation);
+            }
+        }
+
+        return array_values(array_unique($cochees));
     }
 
     public function societe(): Societe
@@ -200,7 +223,7 @@ class CabinetComptable extends Page implements HasForms
             ->requiresConfirmation()
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    $lien = LienCabinet::query()->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
+                    $lien = LienCabinet::query()->parUuid(ValeurSimple::enTexte($arguments['uuid'] ?? ''))->firstOrFail();
                     app(RetirerLaDemandeDeLienAction::class)->handle(CompteConnecte::exiger(), $lien);
                     Notification::make()->title('Votre demande est retirée.')->success()->send();
                 });
@@ -215,7 +238,7 @@ class CabinetComptable extends Page implements HasForms
             ->modalDescription('Le propriétaire de ce cabinet reçoit votre demande et y répond dans les 7 jours ; tant qu\'il ne l\'a pas acceptée, il n\'a aucun accès à votre société.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    $cabinet = app(RechercheDesCabinets::class)->pour($this->recherche)->firstWhere('uuid', (string) ($arguments['uuid'] ?? ''))
+                    $cabinet = app(RechercheDesCabinets::class)->pour($this->recherche)->firstWhere('uuid', ValeurSimple::enTexte($arguments['uuid'] ?? ''))
                         ?? throw new LogicException(DesignerUnCabinetAction::MESSAGE_CABINET_NON_LIABLE);
                     app(DesignerUnCabinetAction::class)->handle(CompteConnecte::exiger(), $this->societe(), Societe::query()->whereKey($cabinet->getKey())->firstOrFail());
                     Notification::make()->title('Votre demande est envoyée au cabinet.')->success()->send();
@@ -234,7 +257,7 @@ class CabinetComptable extends Page implements HasForms
             ])
             ->action(function (array $data): void {
                 static::executerSansCasser(function () use ($data): void {
-                    app(InviterSonCabinetACreerSonEspaceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), (string) $data['email']);
+                    app(InviterSonCabinetACreerSonEspaceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), ValeurSimple::enTexte($data['email']));
                     Notification::make()->title('L\'invitation est envoyée.')->success()->send();
                 });
             });
@@ -251,7 +274,7 @@ class CabinetComptable extends Page implements HasForms
     {
         return [
             'societe' => Societe::query()->whereKey($lien->cabinet_id)->firstOrFail(['id', 'siren', 'raison_sociale', 'siege_code_postal', 'siege_ville']),
-            'numero_ordre' => Cabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $lien->cabinet_id)->value('numero_ordre'),
+            'numero_ordre' => ValeursLues::texteOuNul(Cabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $lien->cabinet_id)->value('numero_ordre')),
         ];
     }
 

@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -115,7 +116,7 @@ class DiagnostiquerCaisseSecurisee extends Command
         $cleIds = array_keys($signataire->clesEpinglees());
 
         if ($cleIds === []) {
-            throw new RuntimeException('Aucune clé publique épinglée dans '.config('caisse_securisee.dossier_cles_publiques').'.');
+            throw new RuntimeException('Aucune clé publique épinglée dans '.Reglage::texte('caisse_securisee.dossier_cles_publiques').'.');
         }
 
         return implode(', ', $cleIds);

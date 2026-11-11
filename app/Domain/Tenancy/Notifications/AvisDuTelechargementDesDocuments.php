@@ -5,6 +5,8 @@ namespace App\Domain\Tenancy\Notifications;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification as NotificationFilament;
@@ -71,10 +73,10 @@ class AvisDuTelechargementDesDocuments extends Notification
 
         return [
             ...$notification->getDatabaseMessage(),
-            'telechargement_id' => (int) $telechargement->getKey(),
+            'telechargement_id' => CleDuModele::de($telechargement),
             'societe_id' => (int) $destinataire->societe_id,
             ...((int) $telechargement->societe_id === (int) $destinataire->societe_id ? [] : ['client_id' => (int) $telechargement->societe_id]),
-            ...(count($magasins) === 1 ? ['magasin_id' => (int) $magasins[0]] : []),
+            ...(count($magasins) === 1 ? ['magasin_id' => ValeursLues::entier($magasins[0])] : []),
         ];
     }
 }

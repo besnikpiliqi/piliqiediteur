@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -261,7 +262,7 @@ class EnregistrerPaiementAction
         }
 
         if ($facture->statut === StatutFacture::EnAttenteDeRegularisation) {
-            throw new LogicException(sprintf(RegularisationDUneFacture::REFUS_PAIEMENT_EN_ATTENTE, $facture->numero, $facture->factureRectifiee()->value('numero')));
+            throw new LogicException(sprintf(RegularisationDUneFacture::REFUS_PAIEMENT_EN_ATTENTE, $facture->numero, ValeursLues::texteOuNul($facture->factureRectifiee()->value('numero'))));
         }
 
         if (! $facture->statut->attendUnReglement()) {

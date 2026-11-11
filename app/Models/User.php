@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\UserFactory;
@@ -523,7 +524,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return [
             'statut' => $statut,
-            'statut_change_par' => $auteur === null ? null : (int) $auteur->getKey(),
+            'statut_change_par' => $auteur === null ? null : CleDuModele::de($auteur),
             'statut_decide_par_le_proprietaire' => $auteur?->estProprietaire() ?? false,
         ];
     }
@@ -686,7 +687,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return [];
         }
 
-        return $this->autorisationsParMagasin[$magasin->getKey()] ??= $this->autorisationsEnregistreesDans($magasin) ?? [];
+        return $this->autorisationsParMagasin[CleDuModele::de($magasin)] ??= $this->autorisationsEnregistreesDans($magasin) ?? [];
     }
 
     /**
@@ -855,7 +856,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return null;
         }
 
-        $cochees = $this->autorisationsParAffectation[$affectation->getKey()] ??= $affectation->autorisations();
+        $cochees = $this->autorisationsParAffectation[CleDuModele::de($affectation)] ??= $affectation->autorisations();
 
         return $affectation->role !== RoleMagasin::Responsable
             ? self::trieesDans($cochees, $duType)

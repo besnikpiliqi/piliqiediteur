@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
 use App\Filament\Concerns\MontreLeCompteCree;
 use App\Models\User;
@@ -53,12 +54,13 @@ class ListEquipeDuMagasin extends ListRecords
                 $cree = null;
 
                 EquipeDuMagasinResource::executerLeGeste(function () use ($data, &$cree): void {
+                    $saisie = ValeursLues::champs($data);
                     $cree = EquipeDuMagasinResource::creerOuReintegrerUnMembre(
                         $this->auteur(),
                         $this->magasin(),
-                        $data,
-                        $data['role'],
-                        EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'),
+                        $saisie,
+                        EquipeDuMagasinResource::roleChoisi($saisie),
+                        EquipeDuMagasinResource::autorisationsSaisies($saisie, 'autorisations'),
                     );
                 });
 

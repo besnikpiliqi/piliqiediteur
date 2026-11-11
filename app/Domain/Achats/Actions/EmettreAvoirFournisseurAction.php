@@ -26,10 +26,10 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -205,13 +205,13 @@ class EmettreAvoirFournisseurAction
                 throw new LogicException("La ligne \"{$ligneAchat->description}\" a été retournée ou vendue entre-temps : il ne reste que {$restante} article(s) à retourner.");
             }
 
-            $retours[$ligneAvoir->getKey()] = ['ligne_achat' => $ligneAchat, 'quantite' => $ligneAvoir->quantite, 'montant_ht_saisi' => $ligneAvoir->montant_ht_saisi];
+            $retours[CleDuModele::de($ligneAvoir)] = ['ligne_achat' => $ligneAchat, 'quantite' => $ligneAvoir->quantite, 'montant_ht_saisi' => $ligneAvoir->montant_ht_saisi];
         }
 
         $chiffre = $this->chiffrage->chiffrer($retours, $tvaEcrite);
 
         foreach ($avoirFournisseur->lignes as $ligneAvoir) {
-            $ligneAvoir->forceFill(Arr::only($chiffre->lignes[$ligneAvoir->getKey()], ['montant_ht', 'montant_tva', 'montant_ttc']))->save();
+            $ligneAvoir->forceFill(array_intersect_key($chiffre->lignes[CleDuModele::de($ligneAvoir)], array_flip(['montant_ht', 'montant_tva', 'montant_ttc'])))->save();
         }
 
         $avoirFournisseur->forceFill($chiffre->totaux);

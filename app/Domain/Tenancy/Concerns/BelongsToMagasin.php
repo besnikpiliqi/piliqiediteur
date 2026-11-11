@@ -5,7 +5,9 @@ namespace App\Domain\Tenancy\Concerns;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Validation\Rule;
@@ -42,8 +44,8 @@ trait BelongsToMagasin
     {
         static::addGlobalScope(new MagasinScope);
 
-        static::creating(function ($model) {
-            $model->magasin_id = app(TenantContext::class)->id();
+        static::creating(function (Model $model): void {
+            $model->setAttribute('magasin_id', app(TenantContext::class)->id());
         });
     }
 
@@ -88,7 +90,7 @@ trait BelongsToMagasin
         }
 
         return method_exists($modele, 'getDeletedAtColumn')
-            ? $regle->whereNull($modele->getDeletedAtColumn())
+            ? $regle->whereNull(ValeursLues::texte($modele->getDeletedAtColumn()))
             : $regle;
     }
 }

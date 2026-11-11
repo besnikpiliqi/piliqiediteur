@@ -6,6 +6,7 @@ use App\Domain\Cabinets\Actions\VerifierLOrdreAction;
 use App\Domain\Cabinets\Models\Cabinet;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Societe\Pages\VerificationSociete;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
 use Filament\Actions\Action;
@@ -81,7 +82,7 @@ class VerificationDuCabinet extends VerificationSociete
                 TextInput::make('conseil_regional')->label('Conseil régional')->required()->maxLength(100),
             ])
             ->action(fn (array $data) => static::executerSansCasser(function () use ($data): void {
-                app(VerifierLOrdreAction::class)->handle(CompteConnecte::exiger(), $this->societe(), $data);
+                app(VerifierLOrdreAction::class)->handle(CompteConnecte::exiger(), $this->societe(), ValeursLues::champs($data));
                 Notification::make()
                     ->title($this->annuaireAutomatique() ? 'Inscription à l\'Ordre vérifiée.' : 'Demande envoyée : l\'éditeur vérifie votre inscription et vous prévient.')
                     ->success()

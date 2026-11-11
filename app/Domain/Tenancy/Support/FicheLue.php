@@ -3,7 +3,6 @@
 namespace App\Domain\Tenancy\Support;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Arr;
 use LogicException;
 use UnitEnum;
 
@@ -63,7 +62,7 @@ final class FicheLue
      */
     public static function de(Model $fiche, ?array $attributs = null): self
     {
-        return new self($fiche::class, Arr::only($fiche->getRawOriginal(), self::modifiables($fiche, $attributs)));
+        return new self($fiche::class, array_intersect_key($fiche->getRawOriginal(), array_flip(self::modifiables($fiche, $attributs))));
     }
 
     /**
@@ -79,7 +78,7 @@ final class FicheLue
      */
     public static function depuis(string $modele, array $valeurs, ?array $attributs = null): self
     {
-        return new self($modele, Arr::only($valeurs, self::modifiables(new $modele, $attributs)));
+        return new self($modele, array_intersect_key($valeurs, array_flip(self::modifiables(new $modele, $attributs))));
     }
 
     /**
@@ -131,7 +130,7 @@ final class FicheLue
         $lue = $this->fiche();
 
         return array_filter(
-            Arr::only($saisie, array_keys($this->valeurs)),
+            array_intersect_key($saisie, $this->valeurs),
             fn (mixed $valeur, string $attribut): bool => ! self::egales($this->valeurSaisie($attribut, $valeur), $lue->getAttribute($attribut)),
             ARRAY_FILTER_USE_BOTH,
         );

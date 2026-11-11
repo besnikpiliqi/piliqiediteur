@@ -2,6 +2,7 @@
 
 namespace App\Domain\CaisseSecurisee\Support;
 
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Illuminate\Contracts\Session\Session;
 
 /**
@@ -26,7 +27,7 @@ final class MagasinsOuvertsParLaSession
      */
     public static function de(Session $session): array
     {
-        return array_values(array_map('intval', (array) $session->get(self::CLE, [])));
+        return array_values(array_map(ValeurSimple::enEntier(...), (array) $session->get(self::CLE, [])));
     }
 
     public static function contient(Session $session, int $magasinId): bool

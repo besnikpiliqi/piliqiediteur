@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Concerns;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Illuminate\Support\Str;
 
 /**
@@ -32,7 +33,7 @@ trait NoteSaNatureDOperation
     public function noterSaNatureDOperation(array $attributs): NatureOperation
     {
         $nature = $attributs['nature_operation'] ?? $this->nature_operation;
-        $nature = $nature instanceof NatureOperation ? $nature : NatureOperation::from((string) $nature);
+        $nature = $nature instanceof NatureOperation ? $nature : NatureOperation::from(ValeurSimple::enTexte($nature));
         $livree = $nature->exigeUneLivraison();
         $saisie = fn (string $champ): mixed => match (true) {
             ! $livree => null,
@@ -48,10 +49,10 @@ trait NoteSaNatureDOperation
             'livraison_complement' => $saisie('livraison_complement'),
             'livraison_code_postal' => $saisie('livraison_code_postal'),
             'livraison_ville' => $saisie('livraison_ville'),
-            'livraison_pays' => ($pays = $saisie('livraison_pays')) === null ? null : Str::upper($pays),
+            'livraison_pays' => ($pays = $saisie('livraison_pays')) === null ? null : Str::upper(ValeurSimple::enTexte($pays)),
             'livraison_date' => $saisie('livraison_date'),
             'transport_par' => $livree
-                ? ($nature->transportImpose() ?? ($transport instanceof TransportPar ? $transport : TransportPar::tryFrom((string) $transport)))
+                ? ($nature->transportImpose() ?? ($transport instanceof TransportPar ? $transport : TransportPar::tryFrom(ValeurSimple::enTexte($transport))))
                 : null,
         ]);
 

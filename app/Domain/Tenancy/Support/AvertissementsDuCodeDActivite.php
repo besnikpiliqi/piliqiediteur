@@ -60,7 +60,7 @@ final class AvertissementsDuCodeDActivite
 
         $division = (int) $morceaux[1];
         $groupe = "{$morceaux[1]}.{$morceaux[2]}";
-        $application = config('app.name');
+        $application = Reglage::texte('app.name');
         $sansLeCabinet = [TypeDActivite::Commerce, TypeDActivite::Services];
         $entre = static fn (int $de, int $a): bool => $division >= $de && $division <= $a;
         $table = [

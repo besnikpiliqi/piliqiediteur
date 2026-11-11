@@ -16,6 +16,7 @@ use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -137,7 +138,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
                 return;
             }
 
-            $chemin = $societe->getKey().'/'.Str::random(40).'.'.$telechargement->format->value;
+            $chemin = CleDuModele::de($societe).'/'.Str::random(40).'.'.$telechargement->format->value;
 
             try {
                 $this->ecrire($telechargement, $compte, $choisis, $chemin, $archive, $recapitulatif);
@@ -162,7 +163,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     private function marquerPret(TelechargementDeDocuments $telechargement, Societe $societe, User $compte, array $choisis, string $chemin, Collection $magasins, JournalAudit $journal): void
     {
         DB::transaction(function () use ($telechargement, $societe, $compte, $choisis, $chemin, $magasins, $journal): void {
-            Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
+            Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
             $relu = TelechargementDeDocuments::query()->whereKey($telechargement->getKey())->lockForUpdate()->firstOrFail();
 
             if ($relu->statut !== StatutDuTelechargement::EnPreparation) {
@@ -181,7 +182,7 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
             ])->save();
 
             $journal->inscrire(ActionAuditee::DocumentsTelecharges, $compte, null, null, [
-                'magasins' => $magasins->filter(fn (Magasin $magasin): bool => collect($choisis)->contains(fn (DocumentTrouve $document): bool => $document->magasinId === (int) $magasin->getKey()))
+                'magasins' => $magasins->filter(fn (Magasin $magasin): bool => collect($choisis)->contains(fn (DocumentTrouve $document): bool => $document->magasinId === CleDuModele::de($magasin)))
                     ->map(fn (Magasin $magasin): string => $magasin->code)
                     ->values()
                     ->all(),

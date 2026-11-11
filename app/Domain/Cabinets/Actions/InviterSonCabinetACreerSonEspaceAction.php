@@ -10,6 +10,8 @@ use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Mail;
@@ -47,11 +49,11 @@ class InviterSonCabinetACreerSonEspaceAction
      */
     public function handle(User $auteur, Societe $client, string $email): void
     {
-        $email = User::normaliserEmail(Validator::make(['email' => $email], ['email' => ['required', 'string', 'email', 'max:255']])->validate()['email']);
+        $email = User::normaliserEmail(ValeursLues::texteDe(Validator::make(['email' => $email], ['email' => ['required', 'string', 'email', 'max:255']])->validate(), 'email'));
         $auteurRelu = $this->journalDesDroits->exigerDansSaSociete($auteur, 'gererSonCabinet', $client);
         $this->debit->verifier($auteurRelu);
 
-        if (! RateLimiter::attempt("espace-cabinet:{$client->getKey()}", self::PAR_JOUR, static fn (): bool => true, 86400)) {
+        if (! RateLimiter::attempt('espace-cabinet:'.CleDuModele::de($client), self::PAR_JOUR, static fn (): bool => true, 86400)) {
             throw new LogicException(self::MESSAGE_TROP);
         }
 

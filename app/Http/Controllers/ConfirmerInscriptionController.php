@@ -7,6 +7,8 @@ use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\EspaceDeLaSociete;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -83,7 +85,7 @@ class ConfirmerInscriptionController
             return $this->page($jeton, null, null, null);
         }
 
-        $type = TypeDActivite::tryFrom((string) $requete->input('type_activite'));
+        $type = TypeDActivite::tryFrom(ValeurSimple::enTexte($requete->input('type_activite')));
 
         if ($type === null) {
             return $this->page($jeton, $demande, self::MESSAGE_TYPE_A_CHOISIR, null);
@@ -117,7 +119,7 @@ class ConfirmerInscriptionController
                 return $creerSociete->handle($donnees['siren'], $type, $demande->email, $donnees['mot_de_passe']);
             });
         } catch (ValidationException $refus) {
-            return $this->page($jeton, $demande, collect($refus->errors())->flatten()->first(), $type);
+            return $this->page($jeton, $demande, ValeursLues::texteOuNul(collect($refus->errors())->flatten()->first()), $type);
         }
 
         if ($societe === null) {

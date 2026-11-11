@@ -10,7 +10,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -88,7 +87,7 @@ class ModifierLesParametresDuMagasinAction
     {
         $parametres = self::parametresDe($autorisation);
         $lue = FicheLue::depuis(Magasin::class, $ficheLue, $parametres);
-        $corrections = $lue->corrections(Arr::only($saisie, $parametres));
+        $corrections = $lue->corrections(array_intersect_key($saisie, array_flip($parametres)));
 
         return DB::transaction(function () use ($auteur, $autorisation, $lue, $corrections): array {
             $magasin = app(TenantContext::class)->magasin();

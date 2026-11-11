@@ -12,6 +12,8 @@ use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -72,8 +74,8 @@ class TvaDuFournisseur
                 $this->calculateur->enCentiemes($document->tvaProposee($taux)),
                 $this->calculateur->enCentiemes($montants['montant_tva']),
                 array_values(array_map(fn (array $ligne): array => [
-                    'description' => $ligne['description'],
-                    'reference' => $ligne['reference'] ?? null,
+                    'description' => ValeurSimple::enTexte($ligne['description']),
+                    'reference' => ValeurSimple::enTexteOuNul($ligne['reference'] ?? null),
                     'ht_calcule' => $this->calculateur->enCentiemes($ligne['montant_ht_calcule']),
                     'ht_retenu' => $this->calculateur->enCentiemes($ligne['montant_ht']),
                 ], $lignes)),
@@ -112,7 +114,7 @@ class TvaDuFournisseur
     public function retenir(User $compte, FactureAchat|AvoirFournisseur $document, DocumentChiffre $chiffre, MontantsDuFournisseur $montants): void
     {
         $ecarts = $this->ecarts($chiffre);
-        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
+        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => ValeursLues::texte($taux->getAttribute('taux_tva')));
         $nouveaux = array_filter(
             $ecarts,
             fn (EcartsDUnTaux $ecart, string $taux): bool => $ecart->depasseLaTolerance() && $existants->get($taux)?->getAttribute('ecart_confirme_empreinte') !== $ecart->empreinte(),
@@ -167,7 +169,7 @@ class TvaDuFournisseur
      */
     private function enregistrerLesTaux(FactureAchat|AvoirFournisseur $document, array $ecarts, MontantsDuFournisseur $montants, ?callable $confirmation = null): void
     {
-        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => $taux->getAttribute('taux_tva'));
+        $existants = $document->taux()->get()->keyBy(fn (Model $taux): string => ValeursLues::texte($taux->getAttribute('taux_tva')));
         $ordre = 0;
 
         foreach ($ecarts as $taux => $ecart) {

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
+use App\Domain\Tenancy\Support\Reglage;
 
 /**
  * Les opérateurs de l'éditeur autorisés à lancer ses procédures
@@ -24,7 +25,7 @@ class RegistreDesOperateurs
      */
     public function authentifier(?string $nom, ?string $secret): string
     {
-        $empreinte = is_string($nom) ? (config('editeur.operateurs')[$nom] ?? null) : null;
+        $empreinte = is_string($nom) ? (Reglage::tableau('editeur.operateurs')[$nom] ?? null) : null;
 
         if (! is_string($empreinte) || ! is_string($secret) || $secret === ''
             || password_get_info($empreinte)['algoName'] !== 'argon2id'

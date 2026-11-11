@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -52,7 +53,7 @@ class LesCaisses extends Page
 
         return $compte instanceof User
             && $societe instanceof Societe
-            && (int) $compte->societe_id === (int) $societe->getKey()
+            && $compte->societe_id === CleDuModele::de($societe)
             && $compte->peutAdministrer()
             && app(CaissesDeLaSociete::class)->magasins($compte)->isNotEmpty();
     }

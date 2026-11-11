@@ -2,6 +2,8 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -24,7 +26,7 @@ trait MontreLeCompteCree
 
     public function compteCreeAction(): Action
     {
-        return static::getResource()::fenetreDuCompteCree(Action::make('compteCree'), fn (): ?int => $this->compteCreeId);
+        return ValeursLues::instance(static::getResource()::fenetreDuCompteCree(Action::make('compteCree'), fn (): ?int => $this->compteCreeId), Action::class);
     }
 
     /**
@@ -35,7 +37,7 @@ trait MontreLeCompteCree
      */
     protected function montrerLeCompteCree(User $cree): void
     {
-        $this->compteCreeId = (int) $cree->getKey();
+        $this->compteCreeId = CleDuModele::de($cree);
         $this->replaceMountedAction('compteCree');
 
         if ($this->getMountedAction() === null) {

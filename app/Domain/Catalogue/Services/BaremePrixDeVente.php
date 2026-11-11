@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Domain\Catalogue\Services;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Contracts\Database\Eloquent\Castable;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
+use UnexpectedValueException;
 
 /**
  * Le barème avec lequel un magasin fixe ses prix de vente (Paramètres >
@@ -71,18 +74,28 @@ final readonly class BaremePrixDeVente implements Castable
     }
 
     /**
-     * @param  array{paliers: list<array{jusqu_a: float|int|string, benefice: float|int|string}>, benefice_au_dela: float|int|string|null, arrondi_x9: bool}  $bareme
+     * Le barème d'un tableau : celui qu'écrit versTableau(), relu en base,
+     * ou celui que saisit la page des paramètres du prix de vente (voir
+     * ParametresPrixDeVente), chaque montant lu comme (float) le lisait.
+     *
+     * @param  array<array-key, mixed>  $bareme
+     *
+     * @throws UnexpectedValueException un champ absent, un palier qui n'est pas un tableau, ou une valeur qui n'est pas une valeur simple
      */
     public static function depuisTableau(array $bareme): self
     {
         $paliers = array_map(
-            fn (array $palier): array => ['jusqu_a' => (float) $palier['jusqu_a'], 'benefice' => (float) $palier['benefice']],
-            $bareme['paliers'],
+            fn (mixed $palier): array => [
+                'jusqu_a' => (float) ValeurSimple::simple(ValeursLues::champ(ValeursLues::tableau($palier), 'jusqu_a')),
+                'benefice' => (float) ValeurSimple::simple(ValeursLues::champ(ValeursLues::tableau($palier), 'benefice')),
+            ],
+            ValeursLues::tableauDe($bareme, 'paliers'),
         );
 
         usort($paliers, fn (array $a, array $b): int => $a['jusqu_a'] <=> $b['jusqu_a']);
+        $beneficeAuDela = ValeurSimple::simple(ValeursLues::champ($bareme, 'benefice_au_dela'));
 
-        return new self($paliers, filled($bareme['benefice_au_dela']) ? (float) $bareme['benefice_au_dela'] : null, (bool) $bareme['arrondi_x9']);
+        return new self($paliers, filled($beneficeAuDela) ? (float) $beneficeAuDela : null, (bool) ValeurSimple::simple(ValeursLues::champ($bareme, 'arrondi_x9')));
     }
 
     /**
@@ -154,7 +167,7 @@ final readonly class BaremePrixDeVente implements Castable
         {
             public function get(Model $model, string $key, mixed $value, array $attributes): ?BaremePrixDeVente
             {
-                return $value === null ? null : BaremePrixDeVente::depuisTableau(json_decode($value, true, flags: JSON_THROW_ON_ERROR));
+                return $value === null ? null : BaremePrixDeVente::depuisTableau(ValeursLues::tableau(json_decode(ValeursLues::texte($value), true, flags: JSON_THROW_ON_ERROR)));
             }
 
             /**
@@ -162,7 +175,7 @@ final readonly class BaremePrixDeVente implements Castable
              */
             public function set(Model $model, string $key, mixed $value, array $attributes): array
             {
-                return [$key => $value === null ? null : json_encode($value->versTableau(), JSON_THROW_ON_ERROR)];
+                return [$key => $value === null ? null : json_encode(ValeursLues::instance($value, BaremePrixDeVente::class)->versTableau(), JSON_THROW_ON_ERROR)];
             }
         };
     }

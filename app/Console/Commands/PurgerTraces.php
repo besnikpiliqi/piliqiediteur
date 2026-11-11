@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Console\Attributes\Description;
@@ -106,7 +107,7 @@ class PurgerTraces extends Command
                 ->pluck($cle);
 
             if ($lot->isNotEmpty()) {
-                $effacees += $expirees()->whereKey($lot->all())->delete();
+                $effacees += ValeursLues::entier($expirees()->whereKey($lot->all())->delete());
             }
         } while ($lot->count() === self::LOT);
 

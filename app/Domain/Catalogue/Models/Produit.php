@@ -19,7 +19,9 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Database\Factories\ProduitFactory;
@@ -33,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\UniqueConstraintViolationException;
 use InvalidArgumentException;
 use LogicException;
+use UnexpectedValueException;
 
 /**
  * Un produit naît seulement de la validation d'une facture d'achat ou d'un
@@ -177,7 +180,7 @@ class Produit extends Model
      */
     protected function identiteDansLeJournal(): array
     {
-        return ['produit' => ['id' => $this->getKey(), 'reference' => $this->reference, 'nom' => $this->nom]];
+        return ['produit' => ['id' => CleDuModele::de($this), 'reference' => $this->reference, 'nom' => $this->nom]];
     }
 
     protected function documentDuJournal(): Model
@@ -481,12 +484,24 @@ class Produit extends Model
      * opérations sur les mêmes produits ne s'attendent jamais l'une
      * l'autre en sens inverse.
      *
-     * @param  iterable<int|string|null>  $identifiants
+     * Chaque identifiant est une valeur simple, lue comme (int) la lit :
+     * celui d'une ligne relue en base, ou celui d'une ligne saisie (« 12 »
+     * ou 12) ; une ligne sans produit (rien, 0 ou « ») n'en verrouille
+     * aucun.
+     *
+     * @param  iterable<array-key, mixed>  $identifiants
      * @return Collection<int, Produit>
+     *
+     * @throws UnexpectedValueException un identifiant qui n'est pas une valeur simple
      */
     public static function verrouillerPourLeStock(iterable $identifiants): Collection
     {
-        $identifiants = collect($identifiants)->filter()->map(fn (int|string $identifiant): int => (int) $identifiant)->unique()->sort()->values();
+        $identifiants = collect($identifiants)
+            ->map(fn (mixed $identifiant): int => ValeurSimple::enEntier($identifiant))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
 
         return $identifiants->isEmpty()
             ? new Collection

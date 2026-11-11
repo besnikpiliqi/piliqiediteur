@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,7 @@ class AjouterPreuveOperationAction
                 throw new LogicException("Ce type de preuve ne concerne pas une vente de nature « {$facture->nature_operation->getLabel()} ».");
             }
 
-            $dejaEnregistree = $facture->preuvesOperation()->pluck('reference')
+            $dejaEnregistree = collect(ValeursLues::textes($facture->preuvesOperation()->pluck('reference')))
                 ->first(fn (string $enregistree): bool => self::sansCasse($enregistree) === self::sansCasse($reference));
 
             if ($dejaEnregistree !== null) {

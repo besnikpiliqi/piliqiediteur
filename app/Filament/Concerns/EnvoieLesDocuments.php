@@ -15,6 +15,7 @@ use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -117,7 +118,7 @@ trait EnvoieLesDocuments
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
             ->action(fn (Facture|Avoir|Devis|RecuPaiement $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), $record, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
+                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['message'] ?? null), ValeurSimple::enTexteOuNul($data['jeton']));
 
                 self::confirmerLEnvoi($envoi, $record);
             }));
@@ -145,7 +146,7 @@ trait EnvoieLesDocuments
             ->fillForm(fn (Facture $record): array => ['destinataire' => ValeurRequise::de($record->client, 'le client de la facture relancée')->email])
             ->form([static::champDuJeton(), self::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->relancer(CompteConnecte::exiger(), $record, $data['destinataire'], $data['jeton']);
+                $envoi = app(EnvoyerDocumentAction::class)->relancer(CompteConnecte::exiger(), $record, ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['jeton']));
 
                 self::confirmerLEnvoi($envoi, $record);
             }));

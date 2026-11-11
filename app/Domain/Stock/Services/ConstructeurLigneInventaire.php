@@ -13,8 +13,9 @@ use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
 
@@ -90,7 +91,7 @@ class ConstructeurLigneInventaire
             $cout = $this->coutUnitaire($donnees['cout_unitaire_ht'] ?? null);
 
             if (filled($donnees['produit_id'] ?? null)) {
-                $produit = $this->produitJamaisRecu($donnees['produit_id']);
+                $produit = $this->produitJamaisRecu(ValeurSimple::enTexte($donnees['produit_id']));
 
                 if (in_array($produit->getKey(), $produitsInventories, true)) {
                     throw new LogicException("Le produit « {$produit->nom} » figure déjà sur une autre ligne de cet inventaire d'ouverture.");
@@ -99,7 +100,7 @@ class ConstructeurLigneInventaire
                 $produitsInventories[] = $produit->getKey();
                 $fiche = null;
             } else {
-                $produit = $this->nouveauProduit($donnees['produit'] ?? []);
+                $produit = $this->nouveauProduit(ValeursLues::champs($donnees['produit'] ?? []));
 
                 if (filled($produit->reference)) {
                     $cle = Produit::normaliserReference($produit->reference);
@@ -203,14 +204,14 @@ class ConstructeurLigneInventaire
      */
     private function nouveauProduit(array $attributs): Produit
     {
-        $attributs = array_filter(Arr::only($attributs, ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT), fn (mixed $valeur): bool => filled($valeur));
+        $attributs = array_filter(array_intersect_key($attributs, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT)), fn (mixed $valeur): bool => filled($valeur));
 
         if (! isset($attributs['nom'])) {
             throw new InvalidArgumentException('Chaque nouveau produit d\'un inventaire d\'ouverture doit avoir un nom.');
         }
 
         if (! isset($attributs['prix_vente_ttc'])) {
-            throw new InvalidArgumentException("Indiquez le prix de vente TTC du nouveau produit « {$attributs['nom']} ».");
+            throw new InvalidArgumentException('Indiquez le prix de vente TTC du nouveau produit « '.ValeurSimple::enTexte($attributs['nom']).' ».');
         }
 
         if (SaisieDecimale::enCentiemes($attributs['prix_vente_ttc']) < 0) {

@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Models\User;
 use Closure;
@@ -194,7 +195,7 @@ class ChangerSiretAction
      */
     private function valider(Societe $societe, Magasin $magasin, mixed $nic): string
     {
-        return Validator::make(['nic' => $nic], [
+        return ValeursLues::texteDe(Validator::make(['nic' => $nic], [
             'nic' => [
                 'required',
                 'string',
@@ -218,7 +219,7 @@ class ChangerSiretAction
                     }
                 },
             ],
-        ], attributes: ['nic' => 'NIC'])->validate()['nic'];
+        ], attributes: ['nic' => 'NIC'])->validate(), 'nic');
     }
 
     /**

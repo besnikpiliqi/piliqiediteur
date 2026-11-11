@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use InvalidArgumentException;
+use UnexpectedValueException;
 
 /**
  * Les montants d'une vente, d'un achat et de leurs retours, tous en
@@ -376,7 +378,7 @@ class CalculateurLigne
             $lignes = $this->repartirLEcart($lignes, $taux, $base, $tvaRetenue - $proposee);
         }
 
-        return array_map(fn (array $ligne): array => [...$ligne, 'montant_ttc' => $ligne['montant_ht'] + $ligne['montant_tva']], $lignes);
+        return array_map(fn (array $ligne): array => [...$ligne, 'montant_ttc' => $this->entier($ligne, 'montant_ht') + $this->entier($ligne, 'montant_tva')], $lignes);
     }
 
     /**
@@ -652,8 +654,12 @@ class CalculateurLigne
      * Les sommes des HT, des TVA et des TTC de ces lignes, tableaux ou
      * lignes enregistrées.
      *
-     * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}|\ArrayAccess<string, mixed>>  $lignes
+     * Chaque montant est une valeur simple, lue comme (float) la lit.
+     *
+     * @param  iterable<array{montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}|\ArrayAccess<string, mixed>>  $lignes
      * @return array{total_ht: float, total_tva: float, total_ttc: float}
+     *
+     * @throws UnexpectedValueException un montant qui n'est pas une valeur simple
      */
     public function totaliser(iterable $lignes): array
     {
@@ -662,9 +668,9 @@ class CalculateurLigne
         $totalTtcCentimes = 0;
 
         foreach ($lignes as $ligne) {
-            $totalHtCentimes += $this->versUnites((float) $ligne['montant_ht'], 100);
-            $totalTvaCentimes += $this->versUnites((float) $ligne['montant_tva'], 100);
-            $totalTtcCentimes += $this->versUnites((float) $ligne['montant_ttc'], 100);
+            $totalHtCentimes += $this->versUnites((float) ValeurSimple::simple($ligne['montant_ht']), 100);
+            $totalTvaCentimes += $this->versUnites((float) ValeurSimple::simple($ligne['montant_tva']), 100);
+            $totalTtcCentimes += $this->versUnites((float) ValeurSimple::simple($ligne['montant_ttc']), 100);
         }
 
         return [
@@ -1114,19 +1120,21 @@ class CalculateurLigne
         $report = 0;
 
         foreach ($rangs as $rang) {
-            $cumulHt += $lignes[$rang]['montant_ht'];
+            $ht = $this->entier($lignes[$rang], 'montant_ht');
+            $cumulHt += $ht;
             // Une base nulle n'a que des lignes à 0 € HT : aucune part.
             $part = $this->diviserArrondi($this->multiplier($ecart, $cumulHt), max($base, 1));
-            $voulue = $lignes[$rang]['montant_tva'] + $part - $partPrecedente + $report;
+            $voulue = $this->entier($lignes[$rang], 'montant_tva') + $part - $partPrecedente + $report;
             $partPrecedente = $part;
-            $tva = max(0, min($lignes[$rang]['montant_ht'], $voulue));
+            $tva = max(0, min($ht, $voulue));
             $report = $voulue - $tva;
             $lignes[$rang]['montant_tva'] = $tva;
         }
 
         foreach (array_reverse($rangs) as $rang) {
-            $tva = max(0, min($lignes[$rang]['montant_ht'], $lignes[$rang]['montant_tva'] + $report));
-            $report -= $tva - $lignes[$rang]['montant_tva'];
+            $tvaPlacee = $this->entier($lignes[$rang], 'montant_tva');
+            $tva = max(0, min($this->entier($lignes[$rang], 'montant_ht'), $tvaPlacee + $report));
+            $report -= $tva - $tvaPlacee;
             $lignes[$rang]['montant_tva'] = $tva;
         }
 

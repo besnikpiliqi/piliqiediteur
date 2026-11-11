@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Casts;
 
 use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 
@@ -19,7 +20,7 @@ class NumeroTvaNormalise implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?string
     {
-        return $value;
+        return ValeursLues::texteOuNul($value);
     }
 
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string

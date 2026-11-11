@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -37,7 +38,7 @@ final class DestinatairesDesAlertes
             ->where(fn ($affectations) => $affectations
                 ->where(fn ($responsables) => $responsables->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value))
                 ->orWhere(fn ($cochees) => $cochees
-                    ->where(fn ($ici) => $ici->where('magasin_id', $magasin->getKey())->orWhereNull('magasin_id'))
+                    ->where(fn (Builder $ici) => $ici->where('magasin_id', $magasin->getKey())->orWhereNull('magasin_id'))
                     ->whereIn('id', DB::table('autorisations_affectations')->where('autorisation', $autorisation)->select('affectation_id'))))
             ->select('user_id');
 

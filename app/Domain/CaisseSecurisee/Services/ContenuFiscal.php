@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\CategorieOperation;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
@@ -16,7 +17,10 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Support\Collection;
 
 /**
@@ -163,7 +167,7 @@ class ContenuFiscal
             ->where('document_id', $paiementId)
             ->min('sequence');
 
-        return $sequence === null ? null : (int) $sequence;
+        return $sequence === null ? null : ValeurSimple::enEntier($sequence);
     }
 
     /**
@@ -211,7 +215,7 @@ class ContenuFiscal
 
         return [
             'emetteur' => $emetteur->enTableau(),
-            'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
+            'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->map(fn (LigneFacture $ligne): NatureLigne => $ligne->nature))->value,
             'mentions' => $this->mentions->pour($facture, $emetteur),
             'consultation_vies' => $consultation === null ? null : [
                 'numero_tva' => $consultation->numero_tva,
@@ -279,7 +283,7 @@ class ContenuFiscal
 
         return [
             'emetteur' => $emetteur->enTableau(),
-            'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->value,
+            'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->map(fn (LigneAvoir $ligne): NatureLigne => $ligne->nature))->value,
             'mentions' => $this->mentions->pour($avoir, $emetteur),
             'imputations' => $avoir->allocations->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
@@ -338,9 +342,9 @@ class ContenuFiscal
                 ->sortKeysDesc()
                 ->map(fn (Collection $lignesDuTaux, int $taux): array => [
                     'taux' => $taux,
-                    'ht' => $lignesDuTaux->sum('ht'),
-                    'tva' => $lignesDuTaux->sum('tva'),
-                    'ttc' => $lignesDuTaux->sum('ttc'),
+                    'ht' => ValeursLues::entier($lignesDuTaux->sum('ht')),
+                    'tva' => ValeursLues::entier($lignesDuTaux->sum('tva')),
+                    'ttc' => ValeursLues::entier($lignesDuTaux->sum('ttc')),
                 ])
                 ->all()),
             'totaux' => [
@@ -378,7 +382,7 @@ class ContenuFiscal
     private function client(Client $client): array
     {
         return [
-            'id' => (int) $client->getKey(),
+            'id' => CleDuModele::de($client),
             'nom' => $client->nom,
             'type_client' => $client->type_client->value,
             'comptoir' => $client->estComptoir(),

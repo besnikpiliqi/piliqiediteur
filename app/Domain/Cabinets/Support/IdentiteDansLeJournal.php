@@ -3,6 +3,7 @@
 namespace App\Domain\Cabinets\Support;
 
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 
 /**
  * Ce que le journal d'audit retient d'une société dans les entrées d'un
@@ -18,7 +19,7 @@ final class IdentiteDansLeJournal
      */
     public static function de(Societe $societe): array
     {
-        return ['id' => (int) $societe->getKey(), 'siren' => (string) $societe->siren, 'raison_sociale' => $societe->raison_sociale];
+        return ['id' => CleDuModele::de($societe), 'siren' => (string) $societe->siren, 'raison_sociale' => $societe->raison_sociale];
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\GenerateurDIdentifiants;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -84,7 +85,7 @@ class UserFactory extends Factory
             'role_societe' => RoleSociete::Membre,
             'email' => null,
             'email_verified_at' => null,
-        ])->afterCreating(fn (User $compte) => self::attribuerLIdentifiant($compte, (int) $magasin->getKey()));
+        ])->afterCreating(fn (User $compte) => self::attribuerLIdentifiant($compte, CleDuModele::de($magasin)));
     }
 
     /**

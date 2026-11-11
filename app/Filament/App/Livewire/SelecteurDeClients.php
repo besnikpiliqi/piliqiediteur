@@ -8,9 +8,11 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ExpressionDUneColonne;
 use App\Domain\Tenancy\Support\SensDuTri;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -113,7 +115,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                 TextColumn::make('ville')->label('Ville')->placeholder('—')->visible($voitLesFiches),
                 TextColumn::make('credit_d_avoir')
                     ->label('Crédit d\'avoir')
-                    ->state(fn (Client $client): ?string => ($credit = $this->credits()[$client->getKey()] ?? 0) > 0 ? app(CalculateurLigne::class)->enEuros($credit) : null)
+                    ->state(fn (Client $client): ?string => ($credit = $this->credits()[CleDuModele::de($client)] ?? 0) > 0 ? app(CalculateurLigne::class)->enEuros($credit) : null)
                     ->placeholder('—')
                     ->color('warning')
                     ->visible($voitLesFiches),
@@ -157,7 +159,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                     ->authorize(fn (): bool => auth()->user()?->can(PermissionRegistry::CLIENT_CREATE) ?? false)
                     ->modalHeading('Nouveau client')
                     ->form(ClientResource::creationRapideSchema())
-                    ->action(fn (array $data) => $this->choisir(ClientResource::creerUnClient($data))),
+                    ->action(fn (array $data) => $this->choisir(ClientResource::creerUnClient(ValeursLues::champs($data)))),
             ]);
     }
 
@@ -192,6 +194,9 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
     {
         $enregistrements = $this->getTableRecords();
 
-        return $this->credits ??= Client::creditsDAvoirEnCentimes($enregistrements instanceof Collection ? $enregistrements : $enregistrements->items());
+        return $this->credits ??= Client::creditsDAvoirEnCentimes(array_map(
+            fn (mixed $client): Client => ValeursLues::instance($client, Client::class),
+            $enregistrements instanceof Collection ? $enregistrements->all() : $enregistrements->items(),
+        ));
     }
 }

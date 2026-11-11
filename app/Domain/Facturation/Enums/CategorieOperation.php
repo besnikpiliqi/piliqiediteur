@@ -25,7 +25,7 @@ enum CategorieOperation: string implements HasLabel
     }
 
     /**
-     * @param  iterable<NatureLigne>  $natures
+     * @param  iterable<array-key, NatureLigne>  $natures
      */
     public static function depuisNatures(iterable $natures): self
     {

@@ -8,11 +8,13 @@ use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Query\Builder;
 use Throwable;
 
 /**
@@ -36,25 +38,26 @@ class CloreInscriptionsSansCode extends Command
         $closes = 0;
         $enEchec = 0;
 
-        Societe::query()
+        $societes = Societe::query()
             ->whereNull('validee_le')
             ->whereNull('close_le')
             ->where('statut', '<>', StatutSociete::Revoquee->value)
             ->where('created_at', '<=', $limite)
-            ->whereNotExists(fn ($courriers) => $courriers->from((new CodeConfirmation)->getTable())
+            ->whereNotExists(fn (Builder $courriers): Builder => $courriers->from((new CodeConfirmation)->getTable())
                 ->whereColumn('codes_confirmation.societe_id', 'societes.id')
                 ->where('codes_confirmation.motif', MotifCode::Verification->value)
                 ->where('codes_confirmation.envoye_le', '>', $limite))
             ->orderBy('id')
-            ->pluck('id')
-            ->each(function (int $societeId) use ($clore, $limite, &$closes, &$enEchec): void {
-                try {
-                    $closes += $clore->cloreSansCode(Societe::query()->findOrFail($societeId), $limite) ? 1 : 0;
-                } catch (Throwable $erreur) {
-                    report($erreur);
-                    $enEchec++;
-                }
-            });
+            ->pluck('id');
+
+        foreach (ValeursLues::entiers($societes) as $societeId) {
+            try {
+                $closes += $clore->cloreSansCode(Societe::query()->findOrFail($societeId), $limite) ? 1 : 0;
+            } catch (Throwable $erreur) {
+                report($erreur);
+                $enEchec++;
+            }
+        }
 
         $this->info("{$closes} inscription(s) close(s).");
 

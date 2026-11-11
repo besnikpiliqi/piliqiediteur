@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Models\User;
@@ -24,7 +25,6 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -143,7 +143,7 @@ class ModifierMagasin extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        return [...Arr::only($data, self::CHAMPS), 'nic' => substr((string) $this->magasin()->siret, 9)];
+        return [...array_intersect_key($data, array_flip(self::CHAMPS)), 'nic' => substr((string) $this->magasin()->siret, 9)];
     }
 
     /**
@@ -153,9 +153,9 @@ class ModifierMagasin extends EditRecord
     {
         return static::executerOuInterrompre(function () use ($data): Magasin {
             try {
-                return app(ModifierEtablissementAction::class)->handle($this->auteur(), $this->record, Arr::only($data, self::CHAMPS));
+                return app(ModifierEtablissementAction::class)->handle($this->auteur(), $this->record, array_intersect_key($data, array_flip(self::CHAMPS)));
             } catch (ValidationException $refus) {
-                throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
+                throw ValidationException::withMessages(collect($refus->validator->errors()->messages())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }
         });
     }
@@ -205,7 +205,7 @@ class ModifierMagasin extends EditRecord
                 self::champMotDePasse(),
             ])
             ->action(fn (array $data) => $this->agir(
-                fn () => app(ChangerSiretAction::class)->handle($this->auteur(), $this->magasin(), $data['nic'], (string) $data['mot_de_passe']),
+                fn () => app(ChangerSiretAction::class)->handle($this->auteur(), $this->magasin(), $data['nic'], ValeurSimple::enTexte($data['mot_de_passe'])),
                 fn (): string => "Le SIRET du magasin est désormais {$this->magasin()->siret}.",
             ));
     }
@@ -261,7 +261,7 @@ class ModifierMagasin extends EditRecord
                 self::champMotDePasse(),
             ])
             ->action(fn (array $data) => $this->agir(
-                fn () => app(FermerMagasinAction::class)->handle($this->auteur(), $this->magasin(), MotifFermeture::from((string) $data['motif']), (string) $data['mot_de_passe']),
+                fn () => app(FermerMagasinAction::class)->handle($this->auteur(), $this->magasin(), MotifFermeture::from(ValeurSimple::enTexte($data['motif'])), ValeurSimple::enTexte($data['mot_de_passe'])),
                 fn (): string => "Le magasin {$this->magasin()->nom} est fermé.",
             ));
     }
@@ -284,7 +284,7 @@ class ModifierMagasin extends EditRecord
                 self::champMotDePasse(),
             ])
             ->action(fn (array $data) => $this->agir(
-                fn () => app(FermerMagasinAction::class)->handle($this->auteur(), $this->magasin(), MotifFermeture::Cession, (string) $data['mot_de_passe'], (string) $data['confirmation']),
+                fn () => app(FermerMagasinAction::class)->handle($this->auteur(), $this->magasin(), MotifFermeture::Cession, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['confirmation'])),
                 fn (): string => "Le magasin {$this->magasin()->nom} est cédé : la valeur de son stock sorti vous est remise dans vos notifications.",
             ));
     }
@@ -300,7 +300,7 @@ class ModifierMagasin extends EditRecord
                 : 'Son établissement est contrôlé au répertoire Sirene. Votre société n\'étant pas encore validée, le magasin rouvert ne vend qu\'après sa validation, qui le met en activité avec vos autres magasins ouverts.')
             ->form([self::champMotDePasse()])
             ->action(fn (array $data) => $this->agir(
-                fn () => app(RouvrirMagasinAction::class)->handle($this->auteur(), $this->magasin(), (string) $data['mot_de_passe']),
+                fn () => app(RouvrirMagasinAction::class)->handle($this->auteur(), $this->magasin(), ValeurSimple::enTexte($data['mot_de_passe'])),
                 fn (): string => match (true) {
                     $this->magasin()->etablissement_verifie_le === null => "Le magasin {$this->magasin()->nom} est rouvert : le répertoire Sirene n'ayant pas répondu, son établissement sera vérifié avant toute vente.",
                     ! $this->magasin()->societe->estValidee() => "Le magasin {$this->magasin()->nom} est rouvert : il vendra une fois votre société validée.",
@@ -327,7 +327,7 @@ class ModifierMagasin extends EditRecord
                 $geste();
                 $fait = true;
             } catch (ValidationException $refus) {
-                Notification::make()->title(implode(' ', array_merge(...array_values($refus->errors()))))->danger()->send();
+                Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
             }
         });
 

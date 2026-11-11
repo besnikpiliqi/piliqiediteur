@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Closure;
 use LogicException;
 
@@ -101,7 +102,7 @@ class TenantContext
 
     public function id(): int
     {
-        return $this->magasin()->getKey();
+        return CleDuModele::de($this->magasin());
     }
 
     /**

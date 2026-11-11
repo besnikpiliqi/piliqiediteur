@@ -155,15 +155,17 @@ class CloturerCaisseAction
         $avoirs = Avoir::query()->enAttenteDeCloture($instant->calendrier(), $journee)->lockForUpdate()->get();
         $etabli = $this->recapitulatif->etablir($magasin, $journee, $ventes, $avoirs, ClotureCaisse::query()->orderByDesc('date_cloture')->first());
         $recapitulatif = $etabli['recapitulatif'];
-        $net = fn (string $montant): int => $recapitulatif['ventes_particuliers'][$montant] + $recapitulatif['avoirs_particuliers'][$montant];
+        $ventesNettes = $recapitulatif['ventes_particuliers'];
+        $avoirsNets = $recapitulatif['avoirs_particuliers'];
+        $net = ['ht' => $ventesNettes['ht'] + $avoirsNets['ht'], 'tva' => $ventesNettes['tva'] + $avoirsNets['tva'], 'ttc' => $ventesNettes['ttc'] + $avoirsNets['ttc']];
 
         $cloture = (new ClotureCaisse(['date_cloture' => $journee]))->forceFill([
             'cree_par' => $compte?->getKey(),
             'nombre_ventes' => $ventes->count(),
             'nombre_avoirs' => $avoirs->count(),
-            'total_ht' => $this->calculateur->enDecimal($net('ht')),
-            'total_tva' => $this->calculateur->enDecimal($net('tva')),
-            'total_ttc' => $this->calculateur->enDecimal($net('ttc')),
+            'total_ht' => $this->calculateur->enDecimal($net['ht']),
+            'total_tva' => $this->calculateur->enDecimal($net['tva']),
+            'total_ttc' => $this->calculateur->enDecimal($net['ttc']),
             'recapitulatif' => $recapitulatif,
             'derniere_sequence_vente' => $etabli['derniere_sequence_vente'],
             'derniere_sequence_encaissement' => $etabli['derniere_sequence_encaissement'],
@@ -196,9 +198,9 @@ class CloturerCaisseAction
             'journee' => $journee,
             'nombre_ventes' => $cloture->nombre_ventes,
             'nombre_avoirs' => $cloture->nombre_avoirs,
-            'total_ht' => $net('ht'),
-            'total_tva' => $net('tva'),
-            'total_ttc' => $net('ttc'),
+            'total_ht' => $net['ht'],
+            'total_tva' => $net['tva'],
+            'total_ttc' => $net['ttc'],
             'encaissements' => array_column($recapitulatif['encaissements'], 'montant', 'mode'),
             'credit_avoir_impute' => $recapitulatif['credit_avoir_impute'],
             'grands_totaux' => $recapitulatif['grands_totaux'],

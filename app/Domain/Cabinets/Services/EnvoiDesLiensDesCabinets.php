@@ -12,6 +12,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use Illuminate\Support\Facades\Mail;
 use SensitiveParameter;
@@ -61,7 +62,7 @@ class EnvoiDesLiensDesCabinets
             return;
         }
 
-        $siren = (string) Societe::query()->whereKey($lien->societe_id)->value('siren');
+        $siren = ValeursLues::texte(Societe::query()->whereKey($lien->societe_id)->value('siren'));
 
         if ($lien->etat !== EtatDuLien::DemandeParLeCabinet || ! $lien->estUneDemandeValable() || ! $cabinet->estUnCabinetVerifie()) {
             self::prevenirDuNonEnvoi($cabinet, "La demande de rattachement pour le SIREN {$siren} n'est pas partie : elle n'est plus en cours, ou votre cabinet n'est plus vérifié.");

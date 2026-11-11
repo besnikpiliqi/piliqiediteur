@@ -8,6 +8,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\Concerns\EnregistreLesParametresDuMagasin;
 use Filament\Forms\Components\Placeholder;
@@ -174,7 +176,7 @@ class ParametresPrixDeVente extends Page implements HasForms
 
         try {
             $calculateur = app(CalculateurLigne::class);
-            $prixAchatHt = (float) $get('essai_prix_achat_ht');
+            $prixAchatHt = (float) ValeurSimple::simple($get('essai_prix_achat_ht'));
             $prix = self::baremeSaisi($get)->prixDeVente($prixAchatHt, $tauxTva);
 
             if ($prix === null) {
@@ -202,7 +204,7 @@ class ParametresPrixDeVente extends Page implements HasForms
     {
         return BaremePrixDeVente::depuisTableau([
             'paliers' => array_values(array_filter(
-                $get('paliers') ?? [],
+                ValeursLues::lignes($get('paliers') ?? []),
                 fn (array $palier): bool => filled($palier['jusqu_a'] ?? null) && filled($palier['benefice'] ?? null),
             )),
             'benefice_au_dela' => $get('benefice_au_dela'),
@@ -240,7 +242,7 @@ class ParametresPrixDeVente extends Page implements HasForms
     {
         try {
             $bareme = BaremePrixDeVente::depuisTableau([
-                'paliers' => array_values($data['paliers'] ?? []),
+                'paliers' => array_values(ValeursLues::tableau($data['paliers'] ?? [])),
                 'benefice_au_dela' => $data['benefice_au_dela'],
                 'arrondi_x9' => $data['arrondi_x9'],
             ]);

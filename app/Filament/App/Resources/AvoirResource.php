@@ -12,8 +12,11 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -43,6 +46,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Livewire\Component;
+use UnexpectedValueException;
 
 /**
  * Un avoir part toujours du numéro d'un ticket ou d'une facture, jamais du
@@ -312,7 +316,7 @@ class AvoirResource extends Resource
         return array_values($identifiants
             ->map(fn (int $identifiant): ?Facture => $lignesVues->get($identifiant)?->facture)
             ->filter()
-            ->unique(fn (Facture $facture): int => $facture->getKey())
+            ->unique(fn (Facture $facture): int => CleDuModele::de($facture))
             ->all());
     }
 
@@ -360,7 +364,7 @@ class AvoirResource extends Resource
      * par le serveur parmi les documents que la personne voit. Une ligne
      * introuvable est refusée avant toute écriture.
      *
-     * @param  array<array-key, array{ligne_facture_id: mixed}>  $lignes
+     * @param  array<array-key, array{ligne_facture_id: int|string, quantite: int|string}>  $lignes
      *
      * @throws InvalidArgumentException
      */
@@ -510,7 +514,7 @@ class AvoirResource extends Resource
      * hors des lignes proposées. Une ligne d'un autre magasin n'est pas
      * lue ici (MagasinScope) : EnregistrerAvoirAction la refuse.
      *
-     * @param  array<array-key, array{ligne_facture_id: mixed}>  $lignes
+     * @param  array<array-key, array{ligne_facture_id: int|string, quantite: int|string}>  $lignes
      *
      * @throws AuthorizationException
      */
@@ -521,6 +525,26 @@ class AvoirResource extends Resource
         foreach (LigneFacture::query()->whereKey($identifiants)->with('facture')->get() as $ligne) {
             Gate::authorize('view', $ligne->facture);
         }
+    }
+
+    /**
+     * Les lignes à créditer telles que le formulaire validé les envoie, ici
+     * comme dans l'action « Avoir » de FactureResource, sous leurs clés :
+     * chacune la ligne de facture de son champ caché, lue comme l'action la
+     * lit (voir CreerAvoirAction), et la quantité saisie, telle quelle, un
+     * entier ou un texte que sa validation a contrôlé (voir
+     * champQuantiteRetournee()).
+     *
+     * @return array<array-key, array{ligne_facture_id: int, quantite: int|string}>
+     *
+     * @throws UnexpectedValueException des lignes qui ne sont pas un tableau, ou une ligne sans ligne de facture ni quantité
+     */
+    public static function lignesACrediter(mixed $lignes): array
+    {
+        return array_map(fn (array $ligne): array => [
+            'ligne_facture_id' => ValeurSimple::enEntier(ValeursLues::champ($ligne, 'ligne_facture_id')),
+            'quantite' => ValeursLues::entierOuTexte(ValeursLues::champ($ligne, 'quantite')),
+        ], ValeursLues::lignes($lignes));
     }
 
     /**

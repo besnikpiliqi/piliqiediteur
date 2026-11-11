@@ -7,6 +7,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -96,7 +97,7 @@ final class CaissesDeLaSociete
      */
     public function pour(User $compte, ?string $journee): array
     {
-        $magasins = $this->magasins($compte)->keyBy(fn (Magasin $magasin): int => (int) $magasin->getKey());
+        $magasins = $this->magasins($compte)->keyBy(fn (Magasin $magasin): int => CleDuModele::de($magasin));
 
         if ($magasins->isEmpty()) {
             return [];

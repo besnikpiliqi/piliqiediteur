@@ -16,6 +16,8 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Models\User;
 use Closure;
@@ -105,7 +107,7 @@ class ModifierEtablissementAction
             $valides = $this->valider($magasin, $donnees);
             $consultation = null;
 
-            if (isset($valides['nic']) && $societe->siren.$valides['nic'] !== $magasin->siret) {
+            if (isset($valides['nic']) && $societe->siren.ValeursLues::texteDe($valides, 'nic') !== $magasin->siret) {
                 if ($societe->estValidee()) {
                     throw new LogicException(self::MESSAGE_SIRET_SOCIETE_VALIDEE);
                 }
@@ -114,7 +116,7 @@ class ModifierEtablissementAction
                     throw new LogicException(self::MESSAGE_SIRET_LIBERE);
                 }
 
-                $consultation = $this->controleSirene->etablissement($societe->siren.$valides['nic'], $societe->siren);
+                $consultation = $this->controleSirene->etablissement($societe->siren.ValeursLues::texteDe($valides, 'nic'), $societe->siren);
 
                 if ($consultation['resultat'] === ResultatVerification::Negative) {
                     throw ValidationException::withMessages(['nic' => $consultation['motif']]);
@@ -176,7 +178,7 @@ class ModifierEtablissementAction
             }
 
             $enregistre->forceFill([
-                'siret' => $enregistre->societe->siren.$valides['nic'],
+                'siret' => $enregistre->societe->siren.ValeursLues::texteDe($valides, 'nic'),
                 'etablissement_verifie_le' => $etablissement === null ? null : now(),
                 ...($etablissement === null ? [] : [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR']),
             ]);
@@ -226,7 +228,7 @@ class ModifierEtablissementAction
     {
         $societe = $magasin->societe;
 
-        return Validator::make($donnees, [
+        return ValeursLues::champs(Validator::make($donnees, [
             'nom' => ['sometimes', 'required', 'string', 'max:150'],
             'code' => ['sometimes', 'required', 'string', new CodeMagasinLibre($societe, $magasin)],
             'adresse' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -256,7 +258,7 @@ class ModifierEtablissementAction
                     }
                 },
             ],
-        ], attributes: ['nom' => 'nom du magasin', 'code' => 'code du magasin', 'nic' => 'NIC'])->validate();
+        ], attributes: ['nom' => 'nom du magasin', 'code' => 'code du magasin', 'nic' => 'NIC'])->validate());
     }
 
     /**
@@ -292,7 +294,7 @@ class ModifierEtablissementAction
      */
     private function refusDuDoublon(UniqueConstraintViolationException $doublon): ValidationException|UniqueConstraintViolationException
     {
-        $indexRefuse = (string) ($doublon->errorInfo[2] ?? '');
+        $indexRefuse = ValeurSimple::enTexte($doublon->errorInfo[2] ?? null);
 
         return match (true) {
             str_contains($indexRefuse, 'siret') => ValidationException::withMessages(['nic' => SiretsDesMagasins::MESSAGE_SIRET_RESERVE]),

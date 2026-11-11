@@ -14,9 +14,9 @@ use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -72,7 +72,7 @@ class CreerAvoirFournisseurAction
     public const LONGUEUR_NUMERO_FOURNISSEUR = 60;
 
     /**
-     * @param  array<array-key, array{ligne_achat_id: int|string, quantite: int|string, montant_ht?: float|string|null}>  $lignesSelectionnees
+     * @param  array<array-key, array<string, mixed>>  $lignesSelectionnees  chaque ligne choisie, telle que l'écran la saisit (ligne_achat_id, quantite, montant_ht), chaque valeur lue par sa vérification
      * @param  string|null  $numeroFournisseur  le n° de l'avoir chez le fournisseur, facultatif
      * @param  MontantsDuFournisseur|null  $montants  ce qu'écrit la note d'avoir du fournisseur au niveau du document ; aucun, les propositions de PILIQI
      *
@@ -99,7 +99,7 @@ class CreerAvoirFournisseurAction
             }
 
             // Même règle que CreerAvoirAction : une ligne une seule fois.
-            $identifiantsLignes = array_map(fn (array $selection): int => (int) $selection['ligne_achat_id'], $lignesSelectionnees);
+            $identifiantsLignes = array_map(fn (array $selection): int => ValeurSimple::enEntier($selection['ligne_achat_id']), $lignesSelectionnees);
 
             if (count($identifiantsLignes) !== count(array_unique($identifiantsLignes))) {
                 throw new InvalidArgumentException('Une même ligne de facture d\'achat ne peut apparaître qu\'une fois dans un avoir fournisseur.');
@@ -115,7 +115,7 @@ class CreerAvoirFournisseurAction
             $retours = [];
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
-                $ligneAchat = $factureAchat->lignes->firstWhere('id', (int) $selection['ligne_achat_id']);
+                $ligneAchat = $factureAchat->lignes->firstWhere('id', ValeurSimple::enEntier($selection['ligne_achat_id']));
 
                 if ($ligneAchat === null) {
                     throw new InvalidArgumentException("Cette ligne n'appartient pas à la facture d'achat créditée.");
@@ -151,7 +151,7 @@ class CreerAvoirFournisseurAction
                     'remise_pourcentage' => $ligneAchat->remise_pourcentage,
                     'montant_ht_saisi' => $retour['montant_ht_saisi'],
                     'ordre' => $index,
-                    ...Arr::only($chiffre->lignes[$index], ['montant_ht', 'montant_tva', 'montant_ttc']),
+                    ...array_intersect_key($chiffre->lignes[$index], array_flip(['montant_ht', 'montant_tva', 'montant_ttc'])),
                 ]);
             }
 

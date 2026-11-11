@@ -3,6 +3,7 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -92,7 +93,7 @@ class AccepterLaTransmission extends SimplePage
         $donnees = $this->form->getState();
 
         try {
-            app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($this->compte(), $this->jeton, (string) $donnees['mot_de_passe']);
+            app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($this->compte(), $this->jeton, ValeurSimple::enTexte($donnees['mot_de_passe']));
         } catch (AuthorizationException|LogicException $refus) {
             Notification::make()->title($refus->getMessage())->danger()->send();
             $this->data['mot_de_passe'] = null;

@@ -11,6 +11,8 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Enums\DecisionExamenSiren;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -112,7 +114,7 @@ class RegularisationDUneFacture
         return $examen !== null
             && ($examen->nouvelles_valeurs['decision'] ?? null) === DecisionExamenSiren::Erreur->value
             && ($examen->nouvelles_valeurs['siren_correct'] ?? null) === (string) $facture->magasin->societe->siren
-            && $facture->date_emission < Instant::depuisLaBase((string) $examen->nouvelles_valeurs['documents_emis_avant']);
+            && $facture->date_emission < Instant::depuisLaBase(ValeurSimple::enTexte($examen->nouvelles_valeurs['documents_emis_avant']));
     }
 
     /**
@@ -134,7 +136,7 @@ class RegularisationDUneFacture
     public function refusDUnAvoirOrdinaire(Facture $facture): ?string
     {
         return match (true) {
-            $facture->statut === StatutFacture::EnAttenteDeRegularisation => sprintf(self::REFUS_RETOUR_RECTIFICATIVE_EN_ATTENTE, $facture->numero, $facture->factureRectifiee()->value('numero')),
+            $facture->statut === StatutFacture::EnAttenteDeRegularisation => sprintf(self::REFUS_RETOUR_RECTIFICATIVE_EN_ATTENTE, $facture->numero, ValeursLues::texteOuNul($facture->factureRectifiee()->value('numero'))),
             $facture->rectificative !== null => sprintf(self::REFUS_FACTURE_RECTIFIEE, $facture->numero),
             $this->estDesignee($facture) => sprintf(self::REFUS_RETOUR_AVANT_REGULARISATION, $facture->numero),
             default => null,
@@ -198,7 +200,7 @@ class RegularisationDUneFacture
     public function lignesDeLAvoir(Facture $facture): array
     {
         return array_values($facture->lignes()->get()
-            ->map(fn (LigneFacture $ligne): array => ['ligne_facture_id' => (int) $ligne->getKey(), 'quantite' => $ligne->quantiteCreditableRestante()])
+            ->map(fn (LigneFacture $ligne): array => ['ligne_facture_id' => CleDuModele::de($ligne), 'quantite' => $ligne->quantiteCreditableRestante()])
             ->filter(fn (array $ligne): bool => $ligne['quantite'] > 0)
             ->all());
     }
@@ -224,7 +226,7 @@ class RegularisationDUneFacture
                 ->where('ligne_facture_id', $ligne->getKey())
                 ->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise)->where('regularisation', false))
                 ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
-            $quantite = $ligne->quantite - (int) $creditees->sum('quantite');
+            $quantite = $ligne->quantite - ValeursLues::entier($creditees->sum('quantite'));
 
             if ($quantite <= 0) {
                 continue;

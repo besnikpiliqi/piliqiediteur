@@ -14,7 +14,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
 
@@ -74,7 +73,7 @@ class ModifierInventaireOuvertureAction
             $this->lecteur->exiger($compte, 'update', $magasin, $inventaire);
 
             return $this->operateur->pendant($compte, function () use ($inventaire, $lignes, $attributs): InventaireOuverture {
-                $inventaire->update(Arr::only($attributs, ['notes']));
+                $inventaire->update(array_intersect_key($attributs, ['notes' => true]));
 
                 $this->constructeurLignes->enregistrer($inventaire, $lignes);
 

@@ -11,6 +11,8 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
@@ -29,6 +31,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
+use UnexpectedValueException;
 
 /**
  * L'équipe du magasin, dans son panneau : ses vendeurs, ses observateurs
@@ -125,6 +128,19 @@ class EquipeDuMagasinResource extends Resource
     }
 
     /**
+     * Le rôle choisi, tel que le formulaire le rend : la valeur d'une
+     * option, ou le rôle relu de la fiche qu'il modifie.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws UnexpectedValueException un rôle qui n'est pas une valeur simple
+     */
+    public static function roleChoisi(array $data): RoleMagasin|string
+    {
+        return $data['role'] instanceof RoleMagasin ? $data['role'] : ValeurSimple::enTexte($data['role']);
+    }
+
+    /**
      * Ses cases dans ce magasin, et dans ce seul magasin, celles de la
      * vente à part (voir CocheLesAutorisationsDeMagasin) ; aucune pour un
      * responsable, qui a toutes les autorisations du magasin.
@@ -139,7 +155,7 @@ class EquipeDuMagasinResource extends Resource
             'Le rôle choisi les a précochées : cochez ou décochez ce que cette personne peut voir et faire dans ce magasin.',
             'Vente',
             'Créer et émettre un ticket ou une facture, enregistrer un encaissement, vendre sans stock : cette personne aura sa caisse personnelle.',
-            fn (Get $get): bool => RoleMagasin::tryFrom((string) $get('role')) === RoleMagasin::Responsable,
+            fn (Get $get): bool => RoleMagasin::tryFrom(ValeurSimple::enTexte($get('role'))) === RoleMagasin::Responsable,
         );
     }
 
@@ -199,14 +215,14 @@ class EquipeDuMagasinResource extends Resource
                         $enPresence = ($data['mode'] ?? null) === 'present';
 
                         if ($enPresence) {
-                            static::exigerLeMotDePasseChoisi((string) ($data['mot_de_passe'] ?? ''), $compte, $form);
+                            static::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $compte, $form);
                         }
 
                         static::executerLeGeste(function () use ($compte, $enPresence, $data): void {
                             app(ModifierMembreAction::class)->handle(static::auteur(), $compte, RoleMagasin::Responsable);
 
                             if ($enPresence) {
-                                app(RedonnerLAccesAction::class)->handle(static::auteur(), $compte->refresh(), true, (string) $data['mot_de_passe'], (string) ($data['jeton'] ?? ''));
+                                app(RedonnerLAccesAction::class)->handle(static::auteur(), $compte->refresh(), true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton'] ?? ''));
                             }
                         });
                     }),
@@ -218,9 +234,9 @@ class EquipeDuMagasinResource extends Resource
                     ->modalDescription(fn (Affectation $record): string => "Un compte ne vaut que pour son magasin : {$record->utilisateur->name} sera retiré de la société. Son compte, son identifiant et son historique restent : il pourra être réintégré.")
                     ->authorize('delete')
                     ->action(fn (Affectation $record) => static::executerLeGeste(fn () => app(ChangerStatutCompteAction::class)->retirer(static::auteur(), $record->utilisateur))),
-                static::actionRedonnerLAcces(Tables\Actions\Action::make('redonner_l_acces'), fn (Affectation $record): User => $record->utilisateur),
-                static::actionSuspendre(Tables\Actions\Action::make('suspendre'), fn (Affectation $record): User => $record->utilisateur),
-                static::actionReactiver(Tables\Actions\Action::make('reactiver'), fn (Affectation $record): User => $record->utilisateur),
+                static::actionRedonnerLAcces(Tables\Actions\Action::make('redonner_l_acces'), fn (mixed $record): User => ValeursLues::instance($record, Affectation::class)->utilisateur),
+                static::actionSuspendre(Tables\Actions\Action::make('suspendre'), fn (mixed $record): User => ValeursLues::instance($record, Affectation::class)->utilisateur),
+                static::actionReactiver(Tables\Actions\Action::make('reactiver'), fn (mixed $record): User => ValeursLues::instance($record, Affectation::class)->utilisateur),
             ])
             ->bulkActions([]);
     }

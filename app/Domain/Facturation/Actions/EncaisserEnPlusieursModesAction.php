@@ -16,6 +16,7 @@ use App\Domain\Facturation\Services\RecusDePaiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
@@ -119,7 +120,7 @@ class EncaisserEnPlusieursModesAction
                     $compte,
                     ValeurRequise::de($facture->client, 'le client de la facture'),
                     ['mode_paiement' => $part->mode->value, 'montant' => $montant, 'reference' => $part->reference, 'recu_le' => $recuLe],
-                    [['facture_id' => $facture->getKey(), 'montant' => $montant]],
+                    [['facture_id' => CleDuModele::de($facture), 'montant' => $montant]],
                     null,
                     $rang === 0 ? $bons : [],
                     $recu,

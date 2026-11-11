@@ -11,7 +11,9 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\TeteJournalAudit;
 use App\Domain\Tenancy\Models\TraceAudit;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Models\User;
 use BackedEnum;
 use Carbon\CarbonImmutable;
@@ -133,9 +135,10 @@ class JournalAudit
         $duree = $categorie->dureeDeConservation();
 
         return DB::transaction(function () use ($action, $origine, $magasin, $anciennesValeurs, $nouvellesValeurs, $cible, $cle, $cleId, $societe, $auteur, $categorie, $maintenant, $duree, $details): EntreeAudit {
-            $tete = $this->teteVerrouillee($societe->getKey(), $magasin?->getKey(), $categorie);
+            $tete = $this->teteVerrouillee(CleDuModele::de($societe), $magasin === null ? null : CleDuModele::de($magasin), $categorie);
 
             $entree = (new EntreeAudit)->forceFill([
+                'societe_id' => CleDuModele::de($societe),
                 'magasin_id' => $magasin?->getKey(),
                 'categorie' => $categorie,
                 'sequence' => $tete->sequence + 1,
@@ -153,7 +156,6 @@ class JournalAudit
                 'expire_le' => $duree === null ? null : Calendrier::deParis()->decaler($maintenant, $duree),
                 'created_at' => $maintenant,
             ]);
-            $entree->societe_id = $societe->getKey();
             $entree->empreinte = self::empreinte($cle, $tete->empreinte, $entree);
             $entree->save();
 
@@ -233,7 +235,7 @@ class JournalAudit
     public static function cle(string $cleId): ?string
     {
         $courante = config('journal_audit.cle_id') === $cleId ? config('journal_audit.cle') : null;
-        $cle = $courante ?? (config('journal_audit.cles_precedentes')[$cleId] ?? null);
+        $cle = $courante ?? (Reglage::tableau('journal_audit.cles_precedentes')[$cleId] ?? null);
 
         return is_string($cle) ? self::decoder($cle) : null;
     }

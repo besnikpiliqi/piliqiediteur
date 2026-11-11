@@ -89,7 +89,7 @@ class CorrigerLeTerritoireAction
                 throw new LogicException($lu['motif']);
             }
 
-            [$corrige, $ancien] = app(TenantContext::class)->runAs($magasin, fn () => $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrou($magasin, function () use ($magasin, $siret, $consultation, $lu, $editeur) {
+            $correction = function () use ($magasin, $siret, $consultation, $lu, $editeur) {
                 $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($verrouille->siret !== $siret) {
@@ -114,11 +114,12 @@ class CorrigerLeTerritoireAction
                 $this->journalAudit->inscrire(ActionAuditee::TerritoireCorrige, null, $verrouille, ['territoire' => $ancien->value], ['territoire' => $lu['territoire']->value], $verrouille, $editeur);
 
                 return [$verrouille, $ancien];
-            })));
+            };
+            [$corrige, $ancien] = app(TenantContext::class)->runAs($magasin, fn () => $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrou($magasin, $correction)));
 
-            $societe->proprietaire?->notify(new AvisDeVerification($societe, 'Territoire de votre magasin corrigé', "Le répertoire Sirene situe désormais l'établissement de {$corrige->nom} (SIRET {$corrige->siret}) {$corrige->territoire->lieu()}, et non {$ancien->lieu()} : l'éditeur a corrigé son territoire, qui fixe son taux de TVA par défaut et son heure, avant son premier document numéroté."));
+            $societe->proprietaire?->notify(new AvisDeVerification($societe, 'Territoire de votre magasin corrigé', "Le répertoire Sirene situe désormais l'établissement de {$corrige->nom} (SIRET {$corrige->siret}) {$lu['territoire']->lieu()}, et non {$ancien->lieu()} : l'éditeur a corrigé son territoire, qui fixe son taux de TVA par défaut et son heure, avant son premier document numéroté."));
 
-            return $corrige->territoire;
+            return $lu['territoire'];
         });
     }
 }

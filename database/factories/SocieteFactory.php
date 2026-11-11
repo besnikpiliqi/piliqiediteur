@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -86,7 +87,7 @@ class SocieteFactory extends Factory
     public function commeApresLInscription(): static
     {
         return $this->state(fn (array $attributs): array => [
-            'raison_sociale' => "SOCIETE FICTIVE {$attributs['siren']}",
+            'raison_sociale' => 'SOCIETE FICTIVE '.ValeursLues::texteDe($attributs, 'siren'),
             'categorie_juridique_insee' => '5710',
             'forme_juridique' => FormeJuridique::Sas,
             'capital_social' => null,

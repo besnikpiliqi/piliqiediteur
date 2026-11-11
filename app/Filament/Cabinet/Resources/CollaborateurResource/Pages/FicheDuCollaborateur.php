@@ -11,8 +11,11 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Models\User;
 use Closure;
@@ -65,7 +68,7 @@ class FicheDuCollaborateur extends ViewRecord
             ->label('Clients confiés')
             ->icon('heroicon-o-briefcase')
             ->visible(fn (): bool => auth()->user()?->can('confierDesClients', $this->compte()) ?? false)
-            ->fillForm(fn (): array => ['liens' => ClientConfie::query()->where('user_id', $this->compte()->getKey())->pluck('lien_id')->map(fn ($id): string => (string) $id)->all()])
+            ->fillForm(fn (): array => ['liens' => ClientConfie::query()->where('user_id', $this->compte()->getKey())->pluck('lien_id')->map(fn (mixed $id): string => (string) ValeursLues::entier($id))->all()])
             ->form([
                 CheckboxList::make('liens')
                     ->label('Clients liés')
@@ -75,7 +78,7 @@ class FicheDuCollaborateur extends ViewRecord
             ])
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    app(ConfierDesClientsAction::class)->handle(CompteConnecte::exiger(), $this->compte(), array_values(array_map(intval(...), $data['liens'] ?? [])));
+                    app(ConfierDesClientsAction::class)->handle(CompteConnecte::exiger(), $this->compte(), array_values(array_map(ValeurSimple::enEntier(...), ValeursLues::tableau($data['liens'] ?? []))));
                     Notification::make()->title('Les clients confiés sont enregistrés.')->success()->send();
                 });
             });
@@ -96,7 +99,7 @@ class FicheDuCollaborateur extends ViewRecord
             ->mapWithKeys(function (LienCabinet $lien) use ($clients): array {
                 $client = ValeurRequise::de($clients->get($lien->societe_id), 'le client d\'un lien ouvert');
 
-                return [(int) $lien->getKey() => ($client->raison_sociale ?? 'Sans dénomination').' · SIREN '.$client->siren];
+                return [CleDuModele::de($lien) => ($client->raison_sociale ?? 'Sans dénomination').' · SIREN '.$client->siren];
             })
             ->sort()
             ->all();
@@ -122,7 +125,7 @@ class FicheDuCollaborateur extends ViewRecord
             ])
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle(CompteConnecte::exiger(), $this->compte(), $data['mot_de_passe']);
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle(CompteConnecte::exiger(), $this->compte(), ValeurSimple::enTexte($data['mot_de_passe']));
                     Notification::make()->title('Un lien a été envoyé à l\'adresse de ce collaborateur : la propriété ne passera que quand il l\'aura suivi.')->success()->send();
                 });
             });

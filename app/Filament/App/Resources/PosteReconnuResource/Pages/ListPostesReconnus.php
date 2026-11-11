@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\PosteReconnuResource\Pages;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Services\PostesReconnus;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\PosteReconnuResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Models\User;
@@ -41,9 +42,9 @@ class ListPostesReconnus extends ListRecords
                 ->action(function (array $data): void {
                     static::executerSansCasser(function () use ($data): void {
                         try {
-                            app(PostesReconnus::class)->reconnaitre($this->auteur(), $this->magasin(), (string) $data['nom'], request());
+                            app(PostesReconnus::class)->reconnaitre($this->auteur(), $this->magasin(), ValeurSimple::enTexte($data['nom']), request());
                         } catch (ValidationException $refus) {
-                            Notification::make()->title(implode(' ', array_merge(...array_values($refus->errors()))))->danger()->send();
+                            Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
 
                             return;
                         }

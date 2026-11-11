@@ -7,6 +7,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -64,8 +65,8 @@ final class PorteeDesAdministrateurs
         $memesPartout = array_is_list($autorisationsMagasin);
         $cases = [];
 
-        foreach ($tous ? [0] : $selection->modelKeys() as $magasinId) {
-            $cases[$magasinId] = PermissionRegistry::verifierConnues($memesPartout ? $autorisationsMagasin : ($autorisationsMagasin[$magasinId] ?? []), $societe->type_activite);
+        foreach ($tous ? [0] : ValeursLues::entiers($selection->modelKeys()) as $magasinId) {
+            $cases[$magasinId] = PermissionRegistry::verifierConnues($memesPartout ? $autorisationsMagasin : ValeursLues::tableau($autorisationsMagasin[$magasinId] ?? []), $societe->type_activite);
         }
 
         return ['tous' => $tous, 'magasins' => $selection, 'cases' => $cases, 'societe' => $deSociete];

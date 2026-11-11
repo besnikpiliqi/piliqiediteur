@@ -10,6 +10,8 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 
@@ -53,7 +55,7 @@ class AnnulerUneNominationAction
                 [$compteRelu] = $relus;
                 $relue = Affectation::query()->whereKey($affectation->getKey())->lockForUpdate()->first();
 
-                if ($relue === null || (int) $relue->user_id !== (int) $compteRelu->getKey() || ! $this->portee->peutAnnulerLaNomination($auteurRelu, $relue)) {
+                if ($relue === null || (int) $relue->user_id !== CleDuModele::de($compteRelu) || ! $this->portee->peutAnnulerLaNomination($auteurRelu, $relue)) {
                     throw new AuthorizationException(PorteeDesDroits::REFUS);
                 }
 
@@ -68,8 +70,8 @@ class AnnulerUneNominationAction
                     return;
                 }
 
-                $relue->forceFill(['role' => RoleMagasin::from($avant['role']), 'nomme_par' => null, 'avant_la_nomination' => null])->save();
-                $relue->cocher($avant['autorisations']);
+                $relue->forceFill(['role' => RoleMagasin::from(ValeursLues::texteDe($avant, 'role')), 'nomme_par' => null, 'avant_la_nomination' => null])->save();
+                $relue->cocher(ValeursLues::tableauDe($avant, 'autorisations'));
             });
         });
     }

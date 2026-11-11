@@ -32,6 +32,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class JournaliserOuvertureDeSession
 {
+    /**
+     * @param  Closure(Request): Response  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $contexte = app(TenantContext::class);

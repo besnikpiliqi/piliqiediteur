@@ -15,6 +15,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\ClotureCaisseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Collection;
 use LogicException;
+use UnexpectedValueException;
 
 /**
  * La clôture d'une journée de caisse, son ticket Z (voir
@@ -89,7 +92,7 @@ class ClotureCaisse extends Model
      */
     public function estValidee(): bool
     {
-        return $this->exists && $this->documentNumeroteEnBase(self::class, [$this->getKey()]);
+        return $this->exists && $this->documentNumeroteEnBase(self::class, [CleDuModele::de($this)]);
     }
 
     protected function regleDInalterabilite(): string
@@ -104,7 +107,60 @@ class ClotureCaisse extends Model
      */
     public function totalEncaisseEnCentimes(): int
     {
-        return (int) array_sum(array_column($this->recapitulatif['encaissements'], 'montant'));
+        return array_sum(array_column($this->encaissementsParMode(), 'montant'));
+    }
+
+    /**
+     * Les encaissements de la journée par mode, tels que le récapitulatif
+     * les a écrits à la clôture (voir RecapitulatifDeCloture), en centimes,
+     * dans leur ordre.
+     *
+     * @return list<array{mode: string, libelle: string, paiements: int, contre_passations: int, montant: int}>
+     *
+     * @throws UnexpectedValueException un mode absent, ou d'un autre type
+     */
+    public function encaissementsParMode(): array
+    {
+        return array_map(function (mixed $encaissement): array {
+            $encaissement = ValeursLues::tableau($encaissement);
+
+            return [
+                'mode' => ValeursLues::texteDe($encaissement, 'mode'),
+                'libelle' => ValeursLues::texteDe($encaissement, 'libelle'),
+                'paiements' => ValeursLues::entierDe($encaissement, 'paiements'),
+                'contre_passations' => ValeursLues::entierDe($encaissement, 'contre_passations'),
+                'montant' => ValeursLues::entierDe($encaissement, 'montant'),
+            ];
+        }, array_values(ValeursLues::tableauDe($this->recapitulatif, 'encaissements')));
+    }
+
+    /**
+     * Le crédit d'avoir imputé de la journée, en centimes, tel que le
+     * récapitulatif l'a écrit.
+     *
+     * @throws UnexpectedValueException un crédit absent, ou qui n'est pas un entier
+     */
+    public function creditAvoirImpute(): int
+    {
+        return ValeursLues::entierDe($this->recapitulatif, 'credit_avoir_impute');
+    }
+
+    /**
+     * Les grands totaux perpétuels du magasin après le dernier document de
+     * la journée, en centimes, tels que le récapitulatif les a écrits.
+     *
+     * @return array{perpetuel_reel: int, perpetuel_absolu: int}
+     *
+     * @throws UnexpectedValueException des grands totaux absents, ou qui ne sont pas des entiers
+     */
+    public function grandsTotaux(): array
+    {
+        $grandsTotaux = ValeursLues::tableauDe($this->recapitulatif, 'grands_totaux');
+
+        return [
+            'perpetuel_reel' => ValeursLues::entierDe($grandsTotaux, 'perpetuel_reel'),
+            'perpetuel_absolu' => ValeursLues::entierDe($grandsTotaux, 'perpetuel_absolu'),
+        ];
     }
 
     /**
@@ -129,21 +185,25 @@ class ClotureCaisse extends Model
             'ttc' => $ttc,
             'detail' => $detail,
         ];
-        $rubrique = fn (string $cle, string $libelle): array => [
-            $ligne($libelle, $this->recapitulatif[$cle]['nombre'], $this->recapitulatif[$cle]['ht'], $this->recapitulatif[$cle]['tva'], $this->recapitulatif[$cle]['ttc']),
-            ...array_map(
-                fn (array $taux): array => $ligne('dont TVA à '.self::tauxEnTexte($taux['taux']), null, $taux['ht'], $taux['tva'], $taux['ttc'], true),
-                $this->recapitulatif[$cle]['par_taux'],
-            ),
-        ];
+        $rubrique = function (string $cle, string $libelle) use ($ligne): array {
+            $rubrique = $this->rubriqueDuRecapitulatif($cle);
 
-        return array_values([
+            return [
+                $ligne($libelle, $rubrique['nombre'], $rubrique['ht'], $rubrique['tva'], $rubrique['ttc']),
+                ...array_map(
+                    fn (array $taux): array => $ligne('dont TVA à '.self::tauxEnTexte($taux['taux']), null, $taux['ht'], $taux['tva'], $taux['ttc'], true),
+                    $rubrique['par_taux'],
+                ),
+            ];
+        };
+
+        return [
             ...$rubrique('ventes_particuliers', 'Ventes aux particuliers (tickets)'),
             ...$rubrique('avoirs_particuliers', 'Avoirs sur des tickets'),
             $ligne('Net des ventes aux particuliers (base de l\'e-reporting)', null, $calculateur->enCentiemes($this->total_ht), $calculateur->enCentiemes($this->total_tva), $calculateur->enCentiemes($this->total_ttc)),
             ...$rubrique('factures_professionnels', 'Factures aux professionnels (pour information)'),
             ...$rubrique('avoirs_professionnels', 'Avoirs aux professionnels (pour information)'),
-        ]);
+        ];
     }
 
     /**
@@ -159,7 +219,7 @@ class ClotureCaisse extends Model
     {
         $nets = [];
 
-        foreach ([...$this->recapitulatif['ventes_particuliers']['par_taux'], ...$this->recapitulatif['avoirs_particuliers']['par_taux']] as $taux) {
+        foreach ([...$this->rubriqueDuRecapitulatif('ventes_particuliers')['par_taux'], ...$this->rubriqueDuRecapitulatif('avoirs_particuliers')['par_taux']] as $taux) {
             $net = $nets[$taux['taux']] ?? ['taux' => $taux['taux'], 'ht' => 0, 'tva' => 0, 'ttc' => 0];
             $nets[$taux['taux']] = ['taux' => $taux['taux'], 'ht' => $net['ht'] + $taux['ht'], 'tva' => $net['tva'] + $taux['tva'], 'ttc' => $net['ttc'] + $taux['ttc']];
         }
@@ -167,6 +227,37 @@ class ClotureCaisse extends Model
         krsort($nets);
 
         return array_values($nets);
+    }
+
+    /**
+     * Une rubrique du récapitulatif tel qu'il a été écrit à la clôture
+     * (voir RecapitulatifDeCloture) : son nombre de documents, ses
+     * montants et ceux de chacun de ses taux, en centimes, dans leur ordre.
+     *
+     * @return array{nombre: int, ht: int, tva: int, ttc: int, par_taux: list<array{taux: int, ht: int, tva: int, ttc: int}>}
+     *
+     * @throws UnexpectedValueException une rubrique absente, ou un montant qui n'est pas un entier
+     */
+    private function rubriqueDuRecapitulatif(string $cle): array
+    {
+        $rubrique = ValeursLues::tableauDe($this->recapitulatif, $cle);
+
+        return [
+            'nombre' => ValeursLues::entierDe($rubrique, 'nombre'),
+            'ht' => ValeursLues::entierDe($rubrique, 'ht'),
+            'tva' => ValeursLues::entierDe($rubrique, 'tva'),
+            'ttc' => ValeursLues::entierDe($rubrique, 'ttc'),
+            'par_taux' => array_map(function (mixed $taux): array {
+                $taux = ValeursLues::tableau($taux);
+
+                return [
+                    'taux' => ValeursLues::entierDe($taux, 'taux'),
+                    'ht' => ValeursLues::entierDe($taux, 'ht'),
+                    'tva' => ValeursLues::entierDe($taux, 'tva'),
+                    'ttc' => ValeursLues::entierDe($taux, 'ttc'),
+                ];
+            }, array_values(ValeursLues::tableauDe($rubrique, 'par_taux'))),
+        ];
     }
 
     /**
@@ -198,7 +289,7 @@ class ClotureCaisse extends Model
      */
     public static function derniereJourneeCloturee(): ?string
     {
-        return static::query()->max('date_cloture');
+        return ValeursLues::texteOuNul(static::query()->max('date_cloture'));
     }
 
     /**

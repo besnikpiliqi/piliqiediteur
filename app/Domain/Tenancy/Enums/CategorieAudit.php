@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Enums;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Carbon\CarbonInterval;
 use Filament\Support\Contracts\HasLabel;
 
@@ -38,8 +39,8 @@ enum CategorieAudit: string implements HasLabel
     public function dureeDeConservation(): ?CarbonInterval
     {
         return match ($this) {
-            self::Operations => CarbonInterval::years((int) config('conservation.journal_audit_operations_en_annees')),
-            self::Acces => CarbonInterval::years((int) config('conservation.journal_audit_acces_en_annees')),
+            self::Operations => CarbonInterval::years(Reglage::entier('conservation.journal_audit_operations_en_annees')),
+            self::Acces => CarbonInterval::years(Reglage::entier('conservation.journal_audit_acces_en_annees')),
             self::Verification => null,
         };
     }

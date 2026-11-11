@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -65,12 +66,11 @@ class MarquerFacturesEnRetard extends Command
 
         $marquees = [];
 
-        $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id')
-            ->each(function (string $numero, int $id) use ($echues, &$marquees): void {
-                if ($echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1) {
-                    $marquees[] = $numero;
-                }
-            });
+        foreach ($echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id') as $id => $numero) {
+            if ($echues()->whereKey($id)->update(['statut' => StatutFacture::EnRetard]) === 1) {
+                $marquees[] = ValeursLues::texte($numero);
+            }
+        }
 
         if ($marquees !== []) {
             Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $marquees));

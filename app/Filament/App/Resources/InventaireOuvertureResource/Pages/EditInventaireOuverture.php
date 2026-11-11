@@ -6,6 +6,8 @@ use App\Domain\Stock\Actions\ModifierInventaireOuvertureAction;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
@@ -47,8 +49,8 @@ class EditInventaireOuverture extends EditRecord
         return static::executerOuInterrompre(fn (): Model => app(ModifierInventaireOuvertureAction::class)->handle(
             CompteConnecte::exiger(),
             $this->record,
-            array_values($data['lignes'] ?? []),
-            ['notes' => $data['notes'] ?? null],
+            array_values(ValeursLues::lignes($data['lignes'] ?? [])),
+            ['notes' => ValeurSimple::enTexteOuNul($data['notes'] ?? null)],
         ));
     }
 

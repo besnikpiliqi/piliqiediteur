@@ -13,6 +13,7 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
@@ -282,7 +283,7 @@ trait ChoisitLaNatureDeLOperation
             try {
                 $prix = SaisieDecimale::enCentiemes($ligne['prix_unitaire_ttc']);
                 $taux = is_numeric($ligne['taux_tva'] ?? null) ? SaisieDecimale::enCentiemes($ligne['taux_tva']) : null;
-                $reference = self::prixDeReferenceConverti($services->get((int) $ligne['service_id']), $prix, $taux, $sansTvaAvant, $sansTvaApres);
+                $reference = self::prixDeReferenceConverti($services->get(ValeurSimple::enEntier($ligne['service_id'])), $prix, $taux, $sansTvaAvant, $sansTvaApres);
 
                 if ($reference === null && $taux === null) {
                     continue;
@@ -297,8 +298,7 @@ trait ChoisitLaNatureDeLOperation
 
             // Présentés comme un prix relu en base (cast decimal:2), "15.00",
             // et un taux tel qu'on l'écrit dans le champ, "20".
-            $lignes[$cle]['prix_unitaire_ttc'] = $prixConverti;
-            $lignes[$cle]['taux_tva'] = (string) (float) $tauxConverti;
+            $lignes[$cle] = [...$ligne, 'prix_unitaire_ttc' => $prixConverti, 'taux_tva' => (string) (float) $tauxConverti];
             $converties = true;
         }
 

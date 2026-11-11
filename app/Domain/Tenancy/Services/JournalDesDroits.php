@@ -19,7 +19,9 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -94,7 +96,7 @@ class JournalDesDroits
      *
      * @param  User|null  $auteur  null pour le système
      * @param  list<User>  $comptes  les comptes existants dont les droits changent
-     * @param  iterable<Magasin>  $magasinsVises  les magasins que leurs nouveaux droits toucheront
+     * @param  iterable<array-key, Magasin>  $magasinsVises  les magasins que leurs nouveaux droits toucheront
      *
      * @param-immediately-invoked-callable  $modification
      *
@@ -108,8 +110,8 @@ class JournalDesDroits
      */
     public function modifier(?User $auteur, ActionAuditee $action, array $comptes, iterable $magasinsVises, Closure $modification, ?Closure $verrousAvantLesComptes = null): mixed
     {
-        $vises = array_values(collect($magasinsVises)->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all());
-        $ids = array_map(fn (User $compte): int => (int) $compte->getKey(), $comptes);
+        $vises = array_values(collect($magasinsVises)->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all());
+        $ids = array_map(fn (User $compte): int => CleDuModele::de($compte), $comptes);
 
         for ($essai = 1; $essai <= self::ESSAIS_SI_LES_MAGASINS_CHANGENT; $essai++) {
             $magasins = $this->magasinsTouches($ids, $vises);
@@ -122,8 +124,8 @@ class JournalDesDroits
                     $verrousAvantLesComptes();
                 }
 
-                $verrouilles = User::query()->with('societe')->whereKey($auteur === null ? $ids : [...$ids, (int) $auteur->getKey()])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => (int) $compte->getKey());
-                $auteurRelu = $auteur === null ? null : ($verrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.'));
+                $verrouilles = User::query()->with('societe')->whereKey($auteur === null ? $ids : [...$ids, CleDuModele::de($auteur)])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => CleDuModele::de($compte));
+                $auteurRelu = $auteur === null ? null : ($verrouilles->get(CleDuModele::de($auteur)) ?? throw new LogicException('Ce compte n\'existe pas.'));
                 $relus = array_map(fn (int $id): User => $verrouilles->get($id) ?? throw new LogicException('Ce compte n\'existe pas.'), $ids);
                 $touches = array_map(intval(...), $this->magasinsTouches($ids, $vises)->modelKeys());
 
@@ -173,11 +175,11 @@ class JournalDesDroits
      */
     public function sousVerrouDesComptes(User $auteur, array $comptes, Closure $geste): mixed
     {
-        $ids = array_map(fn (User $compte): int => (int) $compte->getKey(), $comptes);
+        $ids = array_map(fn (User $compte): int => CleDuModele::de($compte), $comptes);
 
         return DB::transaction(function () use ($auteur, $ids, $geste): mixed {
-            $verrouilles = User::query()->with('societe')->whereKey([...$ids, (int) $auteur->getKey()])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => (int) $compte->getKey());
-            $auteurRelu = $verrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.');
+            $verrouilles = User::query()->with('societe')->whereKey([...$ids, CleDuModele::de($auteur)])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => CleDuModele::de($compte));
+            $auteurRelu = $verrouilles->get(CleDuModele::de($auteur)) ?? throw new LogicException('Ce compte n\'existe pas.');
             $relus = array_map(fn (int $id): User => $verrouilles->get($id) ?? throw new LogicException('Ce compte n\'existe pas.'), $ids);
 
             return $this->operateur->pendant($auteurRelu, fn (): mixed => $geste($auteurRelu, $relus));
@@ -241,25 +243,25 @@ class JournalDesDroits
                 $tenu = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $client, $liens, $modification, $entrees, $cabinetsQuiEntrent, $editeur, $visee, $magasins) {
                     $clientVerrouille = Societe::query()->whereKey($client->getKey())->lock('for no key update')->firstOrFail();
 
-                    if (array_map(intval(...), $clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
+                    if (ValeursLues::entiers($clientVerrouille->magasinsReels()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return null;
                     }
 
-                    $ids = array_map(fn (LienCabinet $lien): int => (int) $lien->getKey(), $liens);
+                    $ids = array_map(fn (LienCabinet $lien): int => CleDuModele::de($lien), $liens);
                     $actif = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->value('id');
-                    $verrouilles = LienCabinet::query()->whereKey(array_values(array_unique([...$ids, ...($actif === null ? [] : [(int) $actif])])))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (LienCabinet $lien): int => (int) $lien->getKey());
+                    $verrouilles = LienCabinet::query()->whereKey(array_values(array_unique([...$ids, ...($actif === null ? [] : [ValeursLues::entier($actif)])])))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (LienCabinet $lien): int => CleDuModele::de($lien));
                     $relus = array_map(fn (int $id): LienCabinet => $verrouilles->get($id) ?? throw new LogicException('Ce lien n\'existe pas.'), $ids);
                     $cabinets = array_values(array_unique([...$verrouilles->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->all(), ...$cabinetsQuiEntrent]));
                     sort($cabinets);
                     Cabinet::query()->withoutGlobalScope(SocieteScope::class)->whereIn('societe_id', $cabinets)->orderBy('id')->sharedLock()->get(['id']);
-                    $comptesAvant = $verrouilles->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => (int) $compte->getKey());
+                    $comptesAvant = $verrouilles->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => CleDuModele::de($compte));
                     $aVerrouiller = [
                         ...$comptesAvant->keys()->all(),
-                        ...User::query()->whereIn('societe_id', $cabinets)->where('role_societe', RoleSociete::Proprietaire->value)->pluck('id')->map(intval(...))->all(),
-                        ...($auteur === null ? [] : [(int) $auteur->getKey()]),
+                        ...ValeursLues::entiers(User::query()->whereIn('societe_id', $cabinets)->where('role_societe', RoleSociete::Proprietaire->value)->pluck('id')),
+                        ...($auteur === null ? [] : [CleDuModele::de($auteur)]),
                     ];
-                    $comptesVerrouilles = User::query()->with('societe')->whereKey(array_values(array_unique($aVerrouiller)))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => (int) $compte->getKey());
-                    $auteurRelu = $auteur === null ? null : ($comptesVerrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.'));
+                    $comptesVerrouilles = User::query()->with('societe')->whereKey(array_values(array_unique($aVerrouiller)))->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => CleDuModele::de($compte));
+                    $auteurRelu = $auteur === null ? null : ($comptesVerrouilles->get(CleDuModele::de($auteur)) ?? throw new LogicException('Ce compte n\'existe pas.'));
 
                     $resultat = $this->operateur->auNomDe($auteurRelu, function () use ($auteurRelu, $clientVerrouille, $relus, $verrouilles, $modification, $entrees, $editeur, $visee, $magasins, $comptesAvant): mixed {
                         $avant = $this->etats($magasins, array_values($comptesAvant->all()));
@@ -268,14 +270,14 @@ class JournalDesDroits
                             ->where(fn ($apres) => $apres->whereKey($verrouilles->keys()->all())->orWhere('etat', EtatDuLien::Actif->value))
                             ->orderBy('id')
                             ->get();
-                        $comptesApres = $liensApres->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => (int) $compte->getKey());
+                        $comptesApres = $liensApres->flatMap(fn (LienCabinet $lien) => $this->acces->comptesQuiOntAcces($lien))->keyBy(fn (User $compte): int => CleDuModele::de($compte));
                         $apres = $this->etats($magasins, array_values($comptesAvant->union($comptesApres)->sortKeys()->all()));
 
                         foreach ($apres as $compteId => $etat) {
                             $this->inscrireLeJet130($magasins, $etat['compte'], $avant[$compteId]['magasins'] ?? [], $etat['magasins']);
                         }
 
-                        $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : array_values($liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has((int) $lien->getKey()))->all());
+                        $concernes = $relus !== [] ? array_map(fn (LienCabinet $lien): LienCabinet => $liensApres->firstWhere('id', $lien->getKey()) ?? $lien, $relus) : array_values($liensApres->filter(fn (LienCabinet $lien): bool => ! $verrouilles->has(CleDuModele::de($lien)))->all());
                         $this->inscrireAuxJournauxDuLien($auteurRelu, $clientVerrouille, $liensApres, $concernes, $avant, $apres, $entrees, $resultat, $editeur, $visee);
 
                         return $resultat;
@@ -340,7 +342,7 @@ class JournalDesDroits
         $duCabinet = $lien === null ? new Collection : $this->acces->comptesQuiOntAcces($lien);
 
         foreach ($comptes->concat($duCabinet) as $compte) {
-            $this->inscrireLeJet130(new Collection([$magasin]), $compte, [], [$magasin->getKey() => $compte->droitsDans($magasin)]);
+            $this->inscrireLeJet130(new Collection([$magasin]), $compte, [], [CleDuModele::de($magasin) => $compte->droitsDans($magasin)]);
         }
     }
 
@@ -363,7 +365,7 @@ class JournalDesDroits
                 ->flatMap(fn (User $compte) => $this->acces->magasinsDuCompte($compte))
                 ->concat(Magasin::query()->with('societe')->whereKey($vises)->where('est_demonstration', false)->get());
 
-            return new Collection($touches->unique(fn (Magasin $magasin): int => (int) $magasin->getKey())->sortBy(fn (Magasin $magasin): int => (int) $magasin->getKey())->values()->all());
+            return new Collection($touches->unique(fn (Magasin $magasin): int => CleDuModele::de($magasin))->sortBy(fn (Magasin $magasin): int => CleDuModele::de($magasin))->values()->all());
         }
 
         $societeId = $societe->getKey();
@@ -397,14 +399,14 @@ class JournalDesDroits
 
         foreach ($comptes as $compte) {
             $relu = User::query()->whereKey($compte->getKey())->firstOrFail();
-            $etats[$relu->getKey()] = [
+            $etats[CleDuModele::de($relu)] = [
                 'compte' => $relu,
                 'societe' => [
                     'role_societe' => $relu->role_societe->value,
                     'statut' => $relu->statut->value,
                     'autorisations_societe' => $relu->autorisationsDeSociete(),
                 ],
-                'magasins' => $magasins->mapWithKeys(fn (Magasin $magasin): array => [$magasin->getKey() => $relu->droitsDans($magasin)])->all(),
+                'magasins' => $magasins->mapWithKeys(fn (Magasin $magasin): array => [CleDuModele::de($magasin) => $relu->droitsDans($magasin)])->all(),
             ];
         }
 
@@ -493,7 +495,7 @@ class JournalDesDroits
     {
         $cabinets = $liens->map(fn (LienCabinet $lien): int => (int) $lien->cabinet_id)->unique()->sort()->values();
         $journaux = [$client, ...$cabinets->map(fn (int $id): Societe => Societe::query()->findOrFail($id))->all()];
-        $duVisiteur = (int) ($auteur->societe_id ?? $client->getKey());
+        $duVisiteur = $auteur->societe_id ?? CleDuModele::de($client);
 
         foreach ($journaux as $journal) {
             foreach ($entrees($journal, $concernes, $resultat) as [$action, $valeurs, $cabinetId]) {
@@ -516,7 +518,7 @@ class JournalDesDroits
 
                 $inscrire = fn () => app(TenantContext::class)->runAsSociete($journal, fn () => $this->journalAudit->inscrire(
                     $action,
-                    $journal->is($client) || ($auteur !== null && in_array((int) $auteur->societe_id, [(int) $journal->getKey(), (int) $client->getKey()], true)) ? $auteur : null,
+                    $journal->is($client) || ($auteur !== null && in_array((int) $auteur->societe_id, [CleDuModele::de($journal), CleDuModele::de($client)], true)) ? $auteur : null,
                     null,
                     ['droits' => $droitsAvant],
                     ['droits' => $droitsApres, ...$valeurs],
@@ -524,7 +526,7 @@ class JournalDesDroits
                     $editeur,
                     detailsDeLEditeur: $visee === null || $journal->is($visee),
                 ));
-                (int) $journal->getKey() === $duVisiteur ? $inscrire() : $this->traces->horsDeSaSociete($inscrire);
+                CleDuModele::de($journal) === $duVisiteur ? $inscrire() : $this->traces->horsDeSaSociete($inscrire);
             }
         }
     }
@@ -564,8 +566,8 @@ class JournalDesDroits
     private function inscrireLeJet130(Collection $magasins, User $compte, array $avant, array $apres): void
     {
         foreach ($magasins as $magasin) {
-            $droitsAvant = $avant[$magasin->getKey()] ?? null;
-            $droitsApres = $apres[$magasin->getKey()] ?? null;
+            $droitsAvant = $avant[CleDuModele::de($magasin)] ?? null;
+            $droitsApres = $apres[CleDuModele::de($magasin)] ?? null;
 
             if ($droitsAvant === $droitsApres) {
                 continue;
@@ -577,7 +579,7 @@ class JournalDesDroits
                 'apres' => $droitsApres,
             ]));
 
-            $dansSaSociete = fn () => (int) $magasin->societe_id === (int) app(TenantContext::class)->societe()->getKey()
+            $dansSaSociete = fn () => (int) $magasin->societe_id === CleDuModele::de(app(TenantContext::class)->societe())
                 ? $journaliser()
                 : app(TenantContext::class)->runAsSociete($magasin->societe, $journaliser);
             $operateur = $this->operateur->actuel();

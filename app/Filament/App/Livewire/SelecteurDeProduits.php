@@ -9,6 +9,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -152,14 +154,14 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
             ->recordAction('basculer')
             ->recordClasses(fn (Produit $produit): array => [
                 'opacity-50' => DevisResource::refusDuProduit($produit, $vendSansStock) !== null,
-                'bg-gray-100 dark:bg-white/5 font-semibold' => $this->quantiteChoisie($produit->getKey()) !== null,
+                'bg-gray-100 dark:bg-white/5 font-semibold' => $this->quantiteChoisie(CleDuModele::de($produit)) !== null,
             ])
             ->searchPlaceholder('Nom, référence ou code-barres')
             ->emptyStateHeading('Aucun produit ne correspond.')
             ->columns([
                 TextColumn::make('choisi')
                     ->label('')
-                    ->state(fn (Produit $produit): ?string => ($quantite = $this->quantiteChoisie($produit->getKey())) === null ? null : '× '.$quantite)
+                    ->state(fn (Produit $produit): ?string => ($quantite = $this->quantiteChoisie(CleDuModele::de($produit))) === null ? null : '× '.$quantite)
                     ->icon('heroicon-m-check-circle')
                     ->color('primary'),
                 TextColumn::make('reference')->label('Référence'),
@@ -178,7 +180,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                 // achat, une réception ou un inventaire.
                 TextColumn::make('stock_quantite')
                     ->label('Stock restant')
-                    ->formatStateUsing(fn (Produit $produit): string => $produit->suivi_stock ? ResultatDePhp::texte(Number::format($produit->stock_quantite, locale: config('app.locale')), 'Le format du stock restant') : '—')
+                    ->formatStateUsing(fn (Produit $produit): string => $produit->suivi_stock ? ResultatDePhp::texte(Number::format($produit->stock_quantite, locale: Reglage::texte('app.locale')), 'Le format du stock restant') : '—')
                     ->color(fn (Produit $produit): ?string => $produit->estEpuise() ? 'danger' : null)
                     ->description(fn (Produit $produit): ?string => $produit->estEnStockNegatif() ? 'À régulariser' : null)
                     ->visible($voitLesFiches),
@@ -405,7 +407,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
 
     private function marge(Produit $produit): MargeDuCatalogue
     {
-        return $this->marges[$produit->getKey()] ??= MargeDuCatalogue::de($produit, app(TenantContext::class)->magasin()->societe->estEnFranchiseDeTva());
+        return $this->marges[CleDuModele::de($produit)] ??= MargeDuCatalogue::de($produit, app(TenantContext::class)->magasin()->societe->estEnFranchiseDeTva());
     }
 
     /**

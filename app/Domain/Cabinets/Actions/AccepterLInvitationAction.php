@@ -29,8 +29,10 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use App\Integrations\Rne\RepresentantRne;
@@ -130,7 +132,7 @@ class AccepterLInvitationAction
         }
 
         $type = $this->valider($donnees);
-        $motDePasseHache = Hash::make((string) $donnees['password']);
+        $motDePasseHache = Hash::make(ValeursLues::texteDe($donnees, 'password'));
         $siren = (string) $invitation->siren;
 
         $consultation = $this->controleSirene->unite($siren);
@@ -174,7 +176,7 @@ class AccepterLInvitationAction
 
         $client = Societe::query()->findOrFail($proprietaire->societe_id);
         $this->validation->apresLaValidation($client, $proprietaire);
-        RendreCaduquesLesInvitationsDuSiren::dispatch($siren, (int) $invitation->getKey());
+        RendreCaduquesLesInvitationsDuSiren::dispatch($siren, CleDuModele::de($invitation));
         $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(
             $cabinet,
             'Invitation acceptée',
@@ -183,7 +185,7 @@ class AccepterLInvitationAction
             'Voir vos clients',
             AvisDuCabinet::SUCCES,
             parCourriel: true,
-            clientId: (int) $client->getKey(),
+            clientId: CleDuModele::de($client),
         ));
 
         return $proprietaire;
@@ -204,9 +206,9 @@ class AccepterLInvitationAction
             'type_activite.in' => self::MESSAGE_TYPE_CABINET,
             'choix_definitif.accepted' => self::MESSAGE_CHOIX_DEFINITIF,
         ], ['password' => 'mot de passe', 'type_activite' => 'type d\'activité'])->validate();
-        RegleDuMotDePasse::exiger((string) $valides['password'], null);
+        RegleDuMotDePasse::exiger(ValeursLues::texteDe($valides, 'password'), null);
 
-        return TypeDActivite::from($valides['type_activite']);
+        return TypeDActivite::from(ValeursLues::texteDe($valides, 'type_activite'));
     }
 
     /**
@@ -286,8 +288,8 @@ class AccepterLInvitationAction
                 'client' => IdentiteDansLeJournal::de(ModeleRelu::de($client)),
                 'origine' => OrigineDuLien::Invitation->value,
                 'autorisations' => 'par_defaut',
-            ], (int) $cabinet->getKey()]];
-        }, [(int) $cabinet->getKey()]);
+            ], CleDuModele::de($cabinet)]];
+        }, [CleDuModele::de($cabinet)]);
 
         app(TenantContext::class)->runAsSociete($cabinet, function () use ($relue, $client): void {
             $relue->forceFill(['etat' => EtatInvitation::Acceptee, 'close_le' => now()])->save();
@@ -304,6 +306,6 @@ class AccepterLInvitationAction
      */
     private function rendreCaduque(InvitationCabinet $invitation, Societe $cabinet): void
     {
-        (new RendreCaduquesLesInvitationsDuSiren((string) $invitation->siren, 0))->rendreCaduque((int) $invitation->getKey(), (int) $cabinet->getKey());
+        (new RendreCaduquesLesInvitationsDuSiren((string) $invitation->siren, 0))->rendreCaduque(CleDuModele::de($invitation), CleDuModele::de($cabinet));
     }
 }

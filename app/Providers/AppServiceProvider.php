@@ -35,6 +35,7 @@ use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
@@ -62,6 +63,7 @@ use App\Policies\ProduitPolicy;
 use App\Policies\RecuPaiementPolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\SocietePolicy;
+use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Field;
@@ -92,6 +94,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Validator as ValidatorDeLaravel;
 use LogicException;
+use PDO;
 use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
@@ -132,11 +135,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(RegistreFiscal::class);
         $this->app->scoped(OrigineDesProduits::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
-        Connection::resolverFor('pgsql', static fn (mixed $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres => new ConnexionPostgres($pdo, $base, $prefixe, $configuration));
+        Connection::resolverFor('pgsql', self::connexionPostgres(...));
 
         foreach (self::PILOTES_REFUSES as $pilote) {
             Connection::resolverFor($pilote, static fn (mixed $pdo, string $base, string $prefixe, array $configuration): never => throw new RuntimeException(
-                "PILIQI ne fonctionne qu'avec PostgreSQL (17 ou 18) : la connexion « {$configuration['name']} » utilise le pilote « {$pilote} ». "
+                'PILIQI ne fonctionne qu\'avec PostgreSQL (17 ou 18) : la connexion « '.ValeursLues::texteDe($configuration, 'name')." » utilise le pilote « {$pilote} ». "
                 .'Réglez DB_CONNECTION=pgsql et les autres variables DB_ de .env (voir le README), videz la configuration en cache (php artisan config:clear), puis recommencez.',
             ));
         }
@@ -192,7 +195,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(InvitationCabinet::class, InvitationCabinetPolicy::class);
         Gate::policy(EntreeAudit::class, EntreeAuditPolicy::class);
 
-        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app->make('hash'), $config['model']));
+        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app->make('hash'), ValeursLues::texteDe($config, 'model')));
 
         $this->nommerLesModelesPolymorphes();
         $this->declarerLaSaisieEnDirect();
@@ -310,6 +313,19 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
+     * La connexion PostgreSQL de PILIQI (voir ConnexionPostgres), que
+     * Laravel crée avec le PDO de la base, ou la fonction qui l'ouvre à sa
+     * première requête.
+     *
+     * @param  PDO|(Closure(): PDO)  $pdo
+     * @param  array<array-key, mixed>  $configuration
+     */
+    private static function connexionPostgres(PDO|Closure $pdo, string $base, string $prefixe, array $configuration): ConnexionPostgres
+    {
+        return new ConnexionPostgres($pdo, $base, $prefixe, $configuration);
+    }
+
+    /**
      * Le message d'une règle de date (after, before...) écrit la date
      * comparée comme on l'écrit en français (« postérieure ou égale au
      * 09/10/2026 », suivie de l'heure si elle en a une), jamais sous sa
@@ -322,13 +338,14 @@ class AppServiceProvider extends ServiceProvider
     {
         foreach (['after', 'after_or_equal', 'before', 'before_or_equal', 'date_equals'] as $regle) {
             Validator::replacer($regle, static function (string $message, string $attribute, string $rule, array $parameters, ValidatorDeLaravel $validator): string {
-                $jour = Calendrier::jourValide(substr($parameters[0], 0, 10));
+                $date = ValeursLues::texte($parameters[0]);
+                $jour = Calendrier::jourValide(substr($date, 0, 10));
 
                 if ($jour === null) {
-                    return str_replace(':date', $validator->getDisplayableAttribute($parameters[0]), $message);
+                    return str_replace(':date', $validator->getDisplayableAttribute($date), $message);
                 }
 
-                $heure = substr($parameters[0], 11, 5);
+                $heure = substr($date, 11, 5);
 
                 return str_replace(':date', Calendrier::afficherJour($jour, 'd/m/Y').(in_array($heure, ['', '00:00'], true) ? '' : ' à '.$heure), $message);
             });
@@ -369,9 +386,9 @@ class AppServiceProvider extends ServiceProvider
             return $this->relationship(
                 $relation,
                 $attributAffiche,
-                static fn (Builder $query, Select $component, ?Model $record): Builder => $query->scopes(['proposables' => [
+                static fn (Builder $query, Select $component, ?Model $record): Builder => ValeursLues::instance($query->scopes(['proposables' => [
                     $record?->getOriginal(AppServiceProvider::relationDuChoix($component)->getForeignKeyName()),
-                ]]),
+                ]]), Builder::class),
             )->getSearchResultsUsing(static function (Select $component, string $search) use ($attributAffiche, $colonnesDeRecherche): array {
                 $relation = Relation::noConstraints(static fn (): BelongsTo => AppServiceProvider::relationDuChoix($component));
                 $cle = $relation->getRelated()->getKeyName();
@@ -406,11 +423,11 @@ class AppServiceProvider extends ServiceProvider
         $fiche = $relation->getParent();
 
         if (! method_exists($modele, 'regleExisteDansLeMagasin')
-            || ($fiche->exists && (string) $component->getState() === (string) $fiche->getOriginal($relation->getForeignKeyName()))) {
+            || ($fiche->exists && ValeurSimple::enTexte($component->getState()) === ValeurSimple::enTexte($fiche->getOriginal($relation->getForeignKeyName())))) {
             return null;
         }
 
-        return $modele::regleExisteDansLeMagasin();
+        return ValeursLues::instance($modele::regleExisteDansLeMagasin(), Exists::class);
     }
 
     /**

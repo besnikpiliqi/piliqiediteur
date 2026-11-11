@@ -18,6 +18,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use ErrorException;
@@ -288,8 +289,8 @@ class VerificateurIntegrite
             ->get()
             ->each(fn (stdClass $chaine) => $this->rapport->signaler(AnomalieFiscale::defaut(
                 'chaine',
-                "{$chaine->nombre} enregistrement(s) dans une chaîne inconnue du registre (« {$chaine->chaine} »).",
-                ['chaine' => (string) $chaine->chaine],
+                ValeurSimple::enTexte($chaine->nombre).' enregistrement(s) dans une chaîne inconnue du registre (« '.ValeurSimple::enTexte($chaine->chaine).' »).',
+                ['chaine' => ValeurSimple::enTexte($chaine->chaine)],
             )));
     }
 
@@ -519,7 +520,7 @@ class VerificateurIntegrite
      * ceux des colonnes de l'enregistrement ou du magasin. Un élément
      * absent ou en trop se voit dans sa structure, les clés et leur ordre.
      *
-     * @param  array<string, mixed>  $contenu
+     * @param  array<array-key, mixed>  $contenu
      * @return list<string>
      */
     private function ecartsDEnTete(ChaineFiscale $chaine, EnregistrementFiscal $enregistrement, array $contenu): array
@@ -539,11 +540,11 @@ class VerificateurIntegrite
             'sequence' => ($contenu['sequence'] ?? null) !== $enregistrement->sequence,
             'type' => ($contenu['type'] ?? null) !== $enregistrement->type,
             'horodatage' => self::horodatageSigneEnBase($contenu['horodatage'] ?? null) !== $enregistrement->getRawOriginal('horodatage'),
-            'operateur' => (is_array($operateur) ? ($operateur['id'] ?? null) : $operateur) !== ($operateurId === null ? null : (int) $operateurId),
+            'operateur' => (is_array($operateur) ? ($operateur['id'] ?? null) : $operateur) !== ($operateurId === null ? null : ValeurSimple::enEntier($operateurId)),
             'version_module' => ($contenu['version_module'] ?? null) !== $enregistrement->version_module,
             'cle_id' => ($contenu['cle_id'] ?? null) !== $enregistrement->cle_id,
             'signature_precedente' => ($contenu['signature_precedente'] ?? null) !== $enregistrement->signature_precedente,
-            'document' => ($contenu['document'] ?? null) !== ($documentType === null && $documentId === null ? null : ['type' => $documentType, 'id' => $documentId === null ? null : (int) $documentId]),
+            'document' => ($contenu['document'] ?? null) !== ($documentType === null && $documentId === null ? null : ['type' => $documentType, 'id' => $documentId === null ? null : ValeurSimple::enEntier($documentId)]),
         ];
 
         return array_keys(array_filter($ecarts));
@@ -556,7 +557,7 @@ class VerificateurIntegrite
      * valeur absolue (l'absolu). Sans précédent connu (après une rupture
      * de séquence), seul le montant se vérifie.
      *
-     * @param  array<string, mixed>  $contenu
+     * @param  array<array-key, mixed>  $contenu
      * @param  array{reel: int, absolu: int}|null  $precedents
      * @param  array<string, int|string>  $reference
      * @return array{reel: int, absolu: int}|null
@@ -564,7 +565,7 @@ class VerificateurIntegrite
     private function verifierLesGrandsTotaux(array $contenu, ?array $precedents, string $situation, array $reference): ?array
     {
         $grandsTotaux = self::grandsTotauxSignes($contenu);
-        $montant = $contenu['gt']['montant'] ?? null;
+        $montant = ValeursLues::valeurAu($contenu, 'gt', 'montant');
 
         if ($grandsTotaux === null || ! is_int($montant)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('grands_totaux', "{$situation} : ses grands totaux signés sont illisibles.", $reference));
@@ -572,7 +573,7 @@ class VerificateurIntegrite
             return null;
         }
 
-        $totalDuDocument = $contenu['donnees']['document']['totaux']['ttc'] ?? null;
+        $totalDuDocument = ValeursLues::valeurAu($contenu, 'donnees', 'document', 'totaux', 'ttc');
 
         if ($montant !== $totalDuDocument) {
             $this->rapport->signaler(AnomalieFiscale::defaut('grands_totaux', sprintf(
@@ -698,12 +699,12 @@ class VerificateurIntegrite
      * désigne pas un document numéroté du bon type est signalé par
      * verifierLesEnregistrementsDesDocuments().
      *
-     * @param  array<string, mixed>  $contenu
+     * @param  array<array-key, mixed>  $contenu
      */
     private function verifierLeDocument(ChaineFiscale $chaine, EnregistrementFiscal $enregistrement, array $contenu): void
     {
         $alias = self::DOCUMENTS_PAR_TYPE[$chaine->value][$enregistrement->type] ?? null;
-        $documentId = (int) $enregistrement->getRawOriginal('document_id');
+        $documentId = ValeurSimple::enEntier($enregistrement->getRawOriginal('document_id'));
 
         if ($alias === null || $enregistrement->getRawOriginal('document_type') !== $alias) {
             return;
@@ -809,12 +810,14 @@ class VerificateurIntegrite
             ->toBase()
             ->get(['chaine', 'sequence', 'type'])
             ->each(function (stdClass $enregistrement): void {
-                $chaine = ChaineFiscale::from($enregistrement->chaine);
-                $situation = sprintf('Enregistrement n° %d %s', $enregistrement->sequence, self::nomDeLaChaine($chaine));
+                $chaine = ChaineFiscale::from(ValeursLues::texte($enregistrement->chaine));
+                $sequence = ValeurSimple::enEntier($enregistrement->sequence);
+                $type = ValeurSimple::enTexte($enregistrement->type);
+                $situation = sprintf('Enregistrement n° %d %s', $sequence, self::nomDeLaChaine($chaine));
 
-                $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', isset(self::DOCUMENTS_PAR_TYPE[$chaine->value][$enregistrement->type])
+                $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', isset(self::DOCUMENTS_PAR_TYPE[$chaine->value][$type])
                     ? "{$situation} : il ne désigne pas le document qu'il enregistre."
-                    : "{$situation} : son type « {$enregistrement->type} » n'est pas celui d'un document que sa chaîne enregistre.", ['chaine' => $chaine->value, 'sequence' => (int) $enregistrement->sequence]));
+                    : "{$situation} : son type « {$type} » n'est pas celui d'un document que sa chaîne enregistre.", ['chaine' => $chaine->value, 'sequence' => $sequence]));
             });
 
         foreach (array_keys(self::MODELES) as $alias) {
@@ -909,9 +912,10 @@ class VerificateurIntegrite
             ->selectRaw("{$table}.id as id, {$numero} as numero, {$contrePasse} as contre_passe_paiement_id, count(enregistrements_fiscaux.id) as nombre, min(enregistrements_fiscaux.type) as type_enregistre, min(enregistrements_fiscaux.sequence) as sequence_enregistree")
             ->get()
             ->each(function (stdClass $document) use ($alias, $chaine, $types): void {
-                $documentId = (int) $document->id;
-                $libelle = self::libelleDuDocument($alias, $documentId, $document->numero);
-                $nombre = (int) $document->nombre;
+                $documentId = ValeurSimple::enEntier($document->id);
+                $numero = ValeursLues::texteOuNul($document->numero);
+                $libelle = self::libelleDuDocument($alias, $documentId, $numero);
+                $nombre = ValeurSimple::enEntier($document->nombre);
                 $reference = ['document' => $alias, 'document_id' => $documentId];
                 $nomDeLaChaine = self::nomDeLaChaine(ChaineFiscale::from($chaine));
 
@@ -932,17 +936,19 @@ class VerificateurIntegrite
                     return;
                 }
 
+                $typeEnregistre = ValeurSimple::enTexte($document->type_enregistre);
+
                 $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', match ($alias) {
                     'paiement' => $document->contre_passe_paiement_id === null
-                        ? sprintf('%s est enregistré comme « %s » alors qu\'il ne contre-passe aucun paiement.', $libelle, $document->type_enregistre)
-                        : sprintf('%s est enregistré comme « %s » alors qu\'il contre-passe le paiement (identifiant interne %d).', $libelle, $document->type_enregistre, $document->contre_passe_paiement_id),
+                        ? sprintf('%s est enregistré comme « %s » alors qu\'il ne contre-passe aucun paiement.', $libelle, $typeEnregistre)
+                        : sprintf('%s est enregistré comme « %s » alors qu\'il contre-passe le paiement (identifiant interne %d).', $libelle, $typeEnregistre, ValeurSimple::enEntier($document->contre_passe_paiement_id)),
                     default => sprintf(
                         '%s est enregistré comme « %s » alors que son numéro le place dans la série des %ss.',
                         $libelle,
-                        $document->type_enregistre,
-                        str_starts_with($document->numero, TypeDocument::TicketCaisse->code().'-') ? 'ticket' : 'facture',
+                        $typeEnregistre,
+                        str_starts_with(ValeurSimple::enTexte($numero), TypeDocument::TicketCaisse->code().'-') ? 'ticket' : 'facture',
                     ),
-                }, [...$reference, 'chaine' => $chaine, 'sequence' => (int) $document->sequence_enregistree]));
+                }, [...$reference, 'chaine' => $chaine, 'sequence' => ValeurSimple::enEntier($document->sequence_enregistree)]));
             });
     }
 
@@ -978,11 +984,11 @@ class VerificateurIntegrite
             ->get(['enregistrements_fiscaux.sequence', 'enregistrements_fiscaux.document_id'])
             ->each(fn (stdClass $enregistrement) => $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', sprintf(
                 'Enregistrement n° %d %s : il désigne %s (identifiant interne %d).',
-                $enregistrement->sequence,
+                ValeurSimple::enEntier($enregistrement->sequence),
                 self::nomDeLaChaine(ChaineFiscale::from($chaine)),
                 $nature,
-                $enregistrement->document_id,
-            ), ['chaine' => $chaine, 'sequence' => (int) $enregistrement->sequence])));
+                ValeurSimple::enEntier($enregistrement->document_id),
+            ), ['chaine' => $chaine, 'sequence' => ValeurSimple::enEntier($enregistrement->sequence)])));
     }
 
     /**
@@ -1097,8 +1103,8 @@ class VerificateurIntegrite
             ->where('document_id', $documentId)
             ->orderBy('id')
             ->pluck('contenu')
-            ->each(function (string $contenu) use ($alias, $documentId, &$imputations): void {
-                $donnees = self::decoder($contenu)['donnees'] ?? null;
+            ->each(function (mixed $contenu) use ($alias, $documentId, &$imputations): void {
+                $donnees = self::decoder(ValeursLues::texte($contenu))['donnees'] ?? null;
                 $imputations = [...$imputations, ...self::imputationsSignees($alias, $documentId, is_array($donnees) ? $donnees : [])];
             });
 
@@ -1132,11 +1138,11 @@ class VerificateurIntegrite
                 $signees[] = ['origine' => 'credit', 'origine_id' => $documentId, 'avoir_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $entier($signee['facture_id'] ?? null), 'montant' => $entier($signee['montant'] ?? null)];
             }
         } elseif ($alias === 'facture') {
-            foreach (self::tableauxSignes($donnees['contexte']['credits_avoir'] ?? []) as $signee) {
+            foreach (self::tableauxSignes(ValeursLues::valeurAu($donnees, 'contexte', 'credits_avoir') ?? []) as $signee) {
                 $signees[] = ['origine' => 'avoir', 'origine_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $documentId, 'montant' => $entier($signee['montant'] ?? null)];
             }
         } else {
-            foreach (self::tableauxSignes($donnees['contexte']['imputations'] ?? []) as $signee) {
+            foreach (self::tableauxSignes(ValeursLues::valeurAu($donnees, 'contexte', 'imputations') ?? []) as $signee) {
                 $signees[] = ['origine' => 'avoir', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null), 'montant' => $entier($signee['montant'] ?? null)];
             }
         }
@@ -1231,22 +1237,23 @@ class VerificateurIntegrite
                 [$centimesImputes, $illisibles] = $this->centimesImputesSur(ValeursLues::entiers($documents->pluck('id')), $sommes);
 
                 foreach ($documents as $document) {
-                    $impute = $centimesImputes[$document->id] ?? 0;
+                    $documentId = ValeurSimple::enEntier($document->id);
+                    $impute = $centimesImputes[$documentId] ?? 0;
                     $total = self::centimesLus($document->total_ttc);
 
                     // Un montant illisible (« NaN », que garde une colonne
                     // numeric de PostgreSQL) est déjà signalé avec son
                     // imputation (voir verifierLImputation()) ou son document
                     // (voir verifierLeDocument()).
-                    if (isset($illisibles[$document->id]) || $total === null || ($impute >= 0 && $impute <= $total)) {
+                    if (isset($illisibles[$documentId]) || $total === null || ($impute >= 0 && $impute <= $total)) {
                         continue;
                     }
 
-                    $libelle = self::libelleDuDocument($alias, (int) $document->id, $document->numero);
+                    $libelle = self::libelleDuDocument($alias, $documentId, ValeursLues::texteOuNul($document->numero));
 
                     $this->rapport->signaler(AnomalieFiscale::defaut('montants_imputes', $impute < 0
                         ? sprintf('%s : %s %s, un montant négatif : on y a retiré plus qu\'on n\'y avait imputé.', $libelle, self::enEuros($impute), $nature)
-                        : sprintf('%s : %s %s pour un total TTC de %s, soit %s de trop.', $libelle, self::enEuros($impute), $nature, self::enEuros($total), self::enEuros($impute - $total)), ['document' => $alias, 'document_id' => (int) $document->id]));
+                        : sprintf('%s : %s %s pour un total TTC de %s, soit %s de trop.', $libelle, self::enEuros($impute), $nature, self::enEuros($total), self::enEuros($impute - $total)), ['document' => $alias, 'document_id' => $documentId]));
                 }
             });
     }
@@ -1267,7 +1274,7 @@ class VerificateurIntegrite
 
         foreach ($sommes as [$imputations, $colonne]) {
             foreach ((clone $imputations)->toBase()->whereIn($colonne, $documents)->get([$colonne, 'montant_alloue']) as $imputation) {
-                $document = (int) $imputation->{$colonne};
+                $document = ValeurSimple::enEntier($imputation->{$colonne});
                 $centimes = self::centimesLus($imputation->montant_alloue);
 
                 if ($centimes === null) {
@@ -1315,11 +1322,13 @@ class VerificateurIntegrite
         $series = SequenceDocument::query()
             ->where('magasin_id', $this->magasin->getKey())
             ->whereIn('type_document', [TypeDocument::TicketCaisse->value, TypeDocument::Facture->value, TypeDocument::Avoir->value])
-            ->get()
-            ->groupBy(static fn (SequenceDocument $serie): string => $serie->type_document === TypeDocument::Avoir ? 'avoir' : 'facture');
+            ->get();
 
         foreach (['facture', 'avoir'] as $alias) {
-            $seriesDuDocument = ($series[$alias] ?? collect())->keyBy('prefixe')->all();
+            $seriesDuDocument = $series
+                ->filter(static fn (SequenceDocument $serie): bool => ($serie->type_document === TypeDocument::Avoir ? 'avoir' : 'facture') === $alias)
+                ->keyBy(static fn (SequenceDocument $serie): string => $serie->prefixe)
+                ->all();
             $attribuesPresents = array_fill_keys(array_keys($seriesDuDocument), 0);
             $horsDeLaSerie = array_fill_keys(array_keys($seriesDuDocument), []);
 
@@ -1329,7 +1338,7 @@ class VerificateurIntegrite
                 ->select(['id', 'numero', 'date_emission'])
                 ->lazyById(1000, 'numero')
                 ->each(function (stdClass $document) use ($alias, $seriesDuDocument, &$attribuesPresents, &$horsDeLaSerie): void {
-                    $serieEtRang = $this->serieDuNumero($document->numero, $seriesDuDocument, $alias, (int) $document->id);
+                    $serieEtRang = $this->serieDuNumero(ValeursLues::texte($document->numero), $seriesDuDocument, $alias, ValeurSimple::enEntier($document->id));
 
                     if ($serieEtRang === null) {
                         return;
@@ -1399,10 +1408,10 @@ class VerificateurIntegrite
         if ($anneeDEmission !== $serie->period_key) {
             $this->rapport->signaler(AnomalieFiscale::defaut('numerotation', sprintf(
                 '%s est numéroté dans l\'année %s mais émis le %s.',
-                self::libelleDuDocument($alias, (int) $document->id, $document->numero),
+                self::libelleDuDocument($alias, ValeurSimple::enEntier($document->id), ValeursLues::texteOuNul($document->numero)),
                 $serie->period_key,
                 $this->enClair($emission),
-            ), ['document' => $alias, 'document_id' => (int) $document->id, 'numero' => $document->numero]));
+            ), ['document' => $alias, 'document_id' => ValeurSimple::enEntier($document->id), 'numero' => ValeursLues::texteOuNul($document->numero)]));
         }
     }
 
@@ -1463,7 +1472,7 @@ class VerificateurIntegrite
             ->lazy(1000);
 
         foreach ($numeros as $document) {
-            $prefixeEtRang = self::prefixeEtRang($document->numero);
+            $prefixeEtRang = self::prefixeEtRang(ValeursLues::texte($document->numero));
 
             if ($prefixeEtRang === null || $prefixeEtRang[0] !== $serie->prefixe || self::numeroDeLaSerie($serie, $prefixeEtRang[1]) !== $document->numero || $prefixeEtRang[1] < $attendu) {
                 continue;
@@ -1535,7 +1544,7 @@ class VerificateurIntegrite
      */
     private static function numeroDuDocument(string $alias, ?int $documentId): ?string
     {
-        return $documentId === null ? null : self::MODELES[$alias]::query()->whereKey($documentId)->value('numero');
+        return $documentId === null ? null : ValeursLues::texteOuNul(self::MODELES[$alias]::query()->whereKey($documentId)->value('numero'));
     }
 
     /**
@@ -1606,9 +1615,11 @@ class VerificateurIntegrite
     }
 
     /**
-     * Le contenu signé décodé, ou null s'il n'est pas un objet JSON.
+     * Le contenu signé décodé, ou null s'il n'est pas un objet JSON : ses
+     * noms sont des textes, sauf un nom écrit en chiffres, que json_decode()
+     * rend en entier.
      *
-     * @return array<string, mixed>|null
+     * @return array<array-key, mixed>|null
      */
     private static function decoder(string $contenu): ?array
     {
@@ -1622,13 +1633,13 @@ class VerificateurIntegrite
     }
 
     /**
-     * @param  array<string, mixed>  $contenu
+     * @param  array<array-key, mixed>  $contenu
      * @return array{reel: int, absolu: int}|null
      */
     private static function grandsTotauxSignes(array $contenu): ?array
     {
-        $reel = $contenu['gt']['perpetuel_reel'] ?? null;
-        $absolu = $contenu['gt']['perpetuel_absolu'] ?? null;
+        $reel = ValeursLues::valeurAu($contenu, 'gt', 'perpetuel_reel');
+        $absolu = ValeursLues::valeurAu($contenu, 'gt', 'perpetuel_absolu');
 
         return is_int($reel) && is_int($absolu) ? ['reel' => $reel, 'absolu' => $absolu] : null;
     }

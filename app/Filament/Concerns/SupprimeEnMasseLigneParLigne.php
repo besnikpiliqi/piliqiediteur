@@ -10,6 +10,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Closure;
 use Filament\Notifications\Notification;
 use Filament\Tables\Actions\DeleteBulkAction;
@@ -154,7 +155,7 @@ trait SupprimeEnMasseLigneParLigne
         $modele = ValeurRequise::de($refusees->first(), 'une ligne refusée');
 
         return array_values($modele->newQuery()->whereKey($refusees->modelKeys())->pluck($modele->getQualifiedKeyName())
-            ->map(fn (mixed $cle): string => (string) $cle)
+            ->map(fn (mixed $cle): string => ValeurSimple::enTexte($cle))
             ->sort()
             ->all());
     }

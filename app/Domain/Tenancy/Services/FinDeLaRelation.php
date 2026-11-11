@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\Reglage;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +45,7 @@ class FinDeLaRelation
             return $verrouillee->verification_conservee_jusqu_au;
         }
 
-        $fin = Calendrier::deParis()->decaler(now(), CarbonInterval::years((int) config('conservation.verification_apres_la_fin_de_la_relation_en_annees')));
+        $fin = Calendrier::deParis()->decaler(now(), CarbonInterval::years(Reglage::entier('conservation.verification_apres_la_fin_de_la_relation_en_annees')));
         $verrouillee->forceFill(['verification_conservee_jusqu_au' => $fin])->save();
 
         CodeConfirmation::query()->whereNull('conserver_jusqu_au')->orderBy('id')->lockForUpdate()->get()

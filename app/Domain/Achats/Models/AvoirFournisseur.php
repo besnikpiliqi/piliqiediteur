@@ -8,6 +8,7 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\AvoirFournisseurFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -139,7 +140,7 @@ class AvoirFournisseur extends Model
         $quantitesParProduit = $this->lignes()
             ->get()
             ->groupBy('produit_id')
-            ->map(fn (Collection $lignes): int => $lignes->sum('quantite'))
+            ->map(fn (Collection $lignes): int => ValeursLues::entier($lignes->sum('quantite')))
             ->sortKeys();
 
         foreach ($quantitesParProduit as $produitId => $quantite) {

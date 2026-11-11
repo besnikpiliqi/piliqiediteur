@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
@@ -52,7 +53,7 @@ class VerificateurCaissesPersonnelles
     {
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->vendeursAvecCaisseOuverteDans([$magasin->getKey() => [$magasin, $journee]])[$magasin->getKey()];
+        return $this->vendeursAvecCaisseOuverteDans([CleDuModele::de($magasin) => [$magasin, $journee]])[CleDuModele::de($magasin)];
     }
 
     /**
@@ -128,8 +129,8 @@ class VerificateurCaissesPersonnelles
      */
     public function aSaCaisseOuverte(User $compte): bool
     {
-        return Facture::query()->nonFermeesParLeVendeur($compte->getKey())->exists()
-            || Paiement::query()->nonFermesParLeVendeur($compte->getKey())->exists();
+        return Facture::query()->nonFermeesParLeVendeur(CleDuModele::de($compte))->exists()
+            || Paiement::query()->nonFermesParLeVendeur(CleDuModele::de($compte))->exists();
     }
 
     /**

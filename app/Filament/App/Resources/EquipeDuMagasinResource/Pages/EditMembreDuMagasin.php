@@ -43,7 +43,7 @@ class EditMembreDuMagasin extends EditRecord
     {
         /** @var Affectation $record */
         return static::executerOuInterrompre(function () use ($record, $data): Affectation {
-            app(ModifierMembreAction::class)->handle(CompteConnecte::exiger(), $record->utilisateur, $data['role'], EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
+            app(ModifierMembreAction::class)->handle(CompteConnecte::exiger(), $record->utilisateur, EquipeDuMagasinResource::roleChoisi($data), EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
 
             return $record->refresh();
         });

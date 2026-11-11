@@ -99,6 +99,87 @@ function section(array $seuils, string $cle): array
 }
 
 /**
+ * Le contenu de ce fichier, que l'outil lit (un rapport, un journal, une
+ * configuration) : un fichier illisible est refusé.
+ */
+function contenuDe(string $fichier): string
+{
+    $contenu = file_get_contents($fichier);
+
+    if ($contenu === false) {
+        throw new RuntimeException("Fichier illisible : {$fichier}.");
+    }
+
+    return $contenu;
+}
+
+/**
+ * Une valeur lue dans un fichier que l'outil ne fait que lire (un rapport,
+ * un journal, une configuration), là où il attend un tableau : une valeur
+ * d'un autre type est refusée, au lieu d'être utilisée pour ce qu'elle
+ * n'est pas.
+ *
+ * @param  string  $quoi  ce qu'est la valeur (« le journal d'Infection »)
+ * @return array<array-key, mixed>
+ */
+function tableauLu(mixed $valeur, string $quoi): array
+{
+    if (! is_array($valeur)) {
+        throw new RuntimeException(ucfirst($quoi).' n\'est pas un tableau : '.get_debug_type($valeur).'.');
+    }
+
+    return $valeur;
+}
+
+/**
+ * La même lecture, là où l'outil attend un texte.
+ *
+ * @param  string  $quoi  ce qu'est la valeur
+ */
+function texteLu(mixed $valeur, string $quoi): string
+{
+    if (! is_string($valeur)) {
+        throw new RuntimeException(ucfirst($quoi).' n\'est pas un texte : '.get_debug_type($valeur).'.');
+    }
+
+    return $valeur;
+}
+
+/**
+ * La même lecture, là où l'outil attend un entier.
+ *
+ * @param  string  $quoi  ce qu'est la valeur
+ */
+function entierLu(mixed $valeur, string $quoi): int
+{
+    if (! is_int($valeur)) {
+        throw new RuntimeException(ucfirst($quoi).' n\'est pas un entier : '.get_debug_type($valeur).'.');
+    }
+
+    return $valeur;
+}
+
+/**
+ * Les grandes parties du logiciel (parties.php), chacune avec ses chemins.
+ *
+ * @return array<string, list<string>>
+ */
+function parties(): array
+{
+    $parties = [];
+
+    foreach (tableauLu(require __DIR__.'/parties.php', 'parties.php') as $partie => $chemins) {
+        if (! is_string($partie)) {
+            throw new RuntimeException("parties.php : chaque partie se nomme par un texte, pas par {$partie}.");
+        }
+
+        $parties[$partie] = listeDeChaines($chemins, "parties.php, partie {$partie},");
+    }
+
+    return $parties;
+}
+
+/**
  * Les seuils d'un outil par partie (couverture, mutation), chacun un
  * nombre de points de pourcentage, entier ou décimal, tel que seuils.json
  * l'écrit.
@@ -157,7 +238,7 @@ function partieDe(string $fichier): string
 {
     $relatif = relatifAuDepot($fichier);
 
-    foreach (require __DIR__.'/parties.php' as $partie => $chemins) {
+    foreach (parties() as $partie => $chemins) {
         foreach ($chemins as $chemin) {
             if (str_starts_with($relatif, $chemin)) {
                 return $partie;
@@ -335,10 +416,37 @@ function mutantsNonConclus(string $journalTexte): array
     return array_map(fn (array $morceau): array => [$morceau[1], (int) $morceau[2], $morceau[3]], $morceaux);
 }
 
+/**
+ * Les mutants de cet état du journal JSON d'Infection (killed, escaped…),
+ * chacun avec ce que le contrôle en lit : son fichier, sa ligne, son
+ * mutateur et la sortie de ses tests, vide quand le journal n'en donne
+ * pas. Un état absent n'a aucun mutant.
+ *
+ * @param  array<array-key, mixed>  $donnees  le journal JSON d'Infection
+ * @return list<array{fichier: string, ligne: int, mutateur: string, sortie: string}>
+ */
+function mutantsDuJournal(array $donnees, string $etat): array
+{
+    $mutants = [];
+
+    foreach (tableauLu($donnees[$etat] ?? [], "la liste « {$etat} » du journal d'Infection") as $mutant) {
+        $mutant = tableauLu($mutant, "un mutant « {$etat} » du journal d'Infection");
+        $mutateur = tableauLu($mutant['mutator'] ?? null, "le mutateur d'un mutant « {$etat} » du journal d'Infection");
+        $mutants[] = [
+            'fichier' => texteLu($mutateur['originalFilePath'] ?? null, "le fichier d'un mutant « {$etat} » du journal d'Infection"),
+            'ligne' => entierLu($mutateur['originalStartLine'] ?? null, "la ligne d'un mutant « {$etat} » du journal d'Infection"),
+            'mutateur' => texteLu($mutateur['mutatorName'] ?? null, "le nom du mutateur d'un mutant « {$etat} » du journal d'Infection"),
+            'sortie' => texteLu($mutant['processOutput'] ?? '', "la sortie des tests d'un mutant « {$etat} » du journal d'Infection"),
+        ];
+    }
+
+    return $mutants;
+}
+
 function mutation(string $journal, ?string $rapport): int
 {
-    $donnees = json_decode((string) file_get_contents($journal), true, flags: JSON_THROW_ON_ERROR);
-    $sansTest = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => preg_match('/Test file ".*" not found/', (string) ($mutant['processOutput'] ?? '')) === 1);
+    $donnees = tableauLu(json_decode(contenuDe($journal), true, flags: JSON_THROW_ON_ERROR), "le journal d'Infection {$journal}");
+    $sansTest = array_filter(mutantsDuJournal($donnees, 'killed'), fn (array $mutant): bool => preg_match('/Test file ".*" not found/', $mutant['sortie']) === 1);
 
     if ($sansTest !== []) {
         echo count($sansTest)." mutants comptés comme tués n'ont lancé aucun test : Infection n'a pas trouvé leurs fichiers dans le rapport JUnit. Ce rapport doit venir de paratest (PHPUnit), pas de php artisan test (Pest) : voir README.\n";
@@ -346,7 +454,7 @@ function mutation(string $journal, ?string $rapport): int
         return 1;
     }
 
-    $testsPasses = array_filter($donnees['killed'] ?? [], fn (array $mutant): bool => str_contains((string) ($mutant['processOutput'] ?? ''), '"result":"passed"'));
+    $testsPasses = array_filter(mutantsDuJournal($donnees, 'killed'), fn (array $mutant): bool => str_contains($mutant['sortie'], '"result":"passed"'));
 
     if ($testsPasses !== []) {
         echo count($testsPasses)." mutants comptés comme tués ont pourtant passé tous leurs tests : PHPUnit a écrit son résumé pour un agent de code (variables AI_AGENT, CLAUDECODE ou CLAUDE_CODE), qu'Infection ne lit pas. Relancez Infection sans elles (env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE) : voir README.\n";
@@ -359,8 +467,8 @@ function mutation(string $journal, ?string $rapport): int
     $mutants = [];
 
     foreach ($etats as $cle => $etat) {
-        foreach ($donnees[$cle] ?? [] as $mutant) {
-            $mutants[] = [$etat, $mutant['mutator']['originalFilePath'], $mutant['mutator']['originalStartLine'], $mutant['mutator']['mutatorName']];
+        foreach (mutantsDuJournal($donnees, $cle) as $mutant) {
+            $mutants[] = [$etat, $mutant['fichier'], $mutant['ligne'], $mutant['mutateur']];
         }
     }
 
@@ -947,11 +1055,11 @@ const PARTIES_SENSIBLES = ['calculs', 'droits_et_isolation'];
 
 function sensibles(): int
 {
-    $parties = require __DIR__.'/parties.php';
+    $parties = parties();
     $chemins = [];
 
     foreach (PARTIES_SENSIBLES as $partie) {
-        array_push($chemins, ...$parties[$partie]);
+        array_push($chemins, ...$parties[$partie] ?? throw new RuntimeException("parties.php n'a pas la partie sensible {$partie}."));
     }
 
     echo implode("\n", $chemins), "\n";
@@ -1002,6 +1110,10 @@ function glob_recursif(string $dossier): array
     $fichiers = [];
 
     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS)) as $fichier) {
+        if (! $fichier instanceof SplFileInfo) {
+            throw new RuntimeException("Le parcours de {$dossier} ne rend pas un fichier : ".get_debug_type($fichier).'.');
+        }
+
         if ($fichier->isFile() && str_ends_with($fichier->getFilename(), '.php')) {
             $fichiers[] = $fichier->getPathname();
         }
@@ -1012,11 +1124,11 @@ function glob_recursif(string $dossier): array
 
 function configurationSensibles(string $destination): int
 {
-    $configuration = json_decode((string) preg_replace('#^\s*//.*$#m', '', (string) file_get_contents(RACINE.'/infection.json5')), true, flags: JSON_THROW_ON_ERROR);
+    $configuration = tableauLu(json_decode((string) preg_replace('#^\s*//.*$#m', '', contenuDe(RACINE.'/infection.json5')), true, flags: JSON_THROW_ON_ERROR), 'infection.json5');
     $configuration['$schema'] = RACINE.'/vendor/infection/infection/resources/schema.json';
     $configuration['source'] = ['directories' => [RACINE.'/app'], 'excludes' => exclusionsHorsDesPartiesSensibles()];
-    $configuration['tmpDir'] = RACINE.'/'.$configuration['tmpDir'];
-    $configuration['logs'] = array_map(fn (string $journal): string => RACINE.'/'.$journal, $configuration['logs']);
+    $configuration['tmpDir'] = RACINE.'/'.texteLu($configuration['tmpDir'] ?? null, 'le tmpDir de infection.json5');
+    $configuration['logs'] = array_map(fn (mixed $journal): string => RACINE.'/'.texteLu($journal, 'un journal de infection.json5'), tableauLu($configuration['logs'] ?? null, 'les journaux de infection.json5'));
     $configuration['phpUnit'] = ['configDir' => RACINE];
     file_put_contents($destination, json_encode($configuration, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n");
 
@@ -1038,11 +1150,38 @@ function sensiblesChanges(string $base): int
  * donnée venue de l'extérieur qui atteint, sans contrôle, une requête SQL,
  * une page, un fichier, une commande, une redirection ou un e-mail) ?
  *
- * @param  array<string, mixed>  $probleme
+ * @param  array<array-key, mixed>  $probleme
  */
 function estUnCheminDeSecurite(array $probleme): bool
 {
-    return ($probleme['is_security'] ?? false) === true || str_starts_with((string) $probleme['type'], 'Tainted');
+    return ($probleme['is_security'] ?? false) === true || str_starts_with(texteLu($probleme['type'] ?? null, "le type d'un problème du rapport de Psalm"), 'Tainted');
+}
+
+/**
+ * Les chemins de sécurité d'un rapport JSON de Psalm (voir
+ * estUnCheminDeSecurite()), dans son ordre, chacun avec ce que le contrôle
+ * en lit : son fichier, sa ligne, son type et son message.
+ *
+ * @return list<array{fichier: string, ligne: int, type: string, message: string}>
+ */
+function cheminsDeSecurite(string $rapport): array
+{
+    $chemins = [];
+
+    foreach (tableauLu(json_decode(contenuDe($rapport), true, flags: JSON_THROW_ON_ERROR), "le rapport de Psalm {$rapport}") as $probleme) {
+        $probleme = tableauLu($probleme, "un problème du rapport de Psalm {$rapport}");
+
+        if (estUnCheminDeSecurite($probleme)) {
+            $chemins[] = [
+                'fichier' => texteLu($probleme['file_name'] ?? null, "le fichier d'un chemin du rapport de Psalm"),
+                'ligne' => entierLu($probleme['line_from'] ?? null, "la ligne d'un chemin du rapport de Psalm"),
+                'type' => texteLu($probleme['type'], "le type d'un chemin du rapport de Psalm"),
+                'message' => texteLu($probleme['message'] ?? null, "le message d'un chemin du rapport de Psalm"),
+            ];
+        }
+    }
+
+    return $chemins;
 }
 
 /**
@@ -1059,10 +1198,7 @@ function flux(string $rapport): int
         return 1;
     }
 
-    $chemins = array_values(array_filter(
-        json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR),
-        estUnCheminDeSecurite(...),
-    ));
+    $chemins = cheminsDeSecurite($rapport);
 
     if ($chemins === []) {
         echo "Aucun chemin d'une donnée venue de l'extérieur sans contrôle.\n";
@@ -1073,7 +1209,7 @@ function flux(string $rapport): int
     echo "Chemins d'une donnée venue de l'extérieur sans contrôle :\n";
 
     foreach ($chemins as $chemin) {
-        echo sprintf("  %s:%d %s : %s\n", $chemin['file_name'], $chemin['line_from'], $chemin['type'], $chemin['message']);
+        echo sprintf("  %s:%d %s : %s\n", $chemin['fichier'], $chemin['ligne'], $chemin['type'], $chemin['message']);
     }
 
     return 1;
@@ -1093,8 +1229,8 @@ function cheminsDuRapport(string $rapport): ?array
 
     $chemins = [];
 
-    foreach (array_filter(json_decode((string) file_get_contents($rapport), true, flags: JSON_THROW_ON_ERROR), estUnCheminDeSecurite(...)) as $probleme) {
-        $chemins[] = sprintf('%s:%d %s', relatifAuDepot((string) $probleme['file_name']), $probleme['line_from'], $probleme['type']);
+    foreach (cheminsDeSecurite($rapport) as $chemin) {
+        $chemins[] = sprintf('%s:%d %s', relatifAuDepot($chemin['fichier']), $chemin['ligne'], $chemin['type']);
     }
 
     sort($chemins);

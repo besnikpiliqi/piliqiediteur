@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -198,7 +199,7 @@ class TableauDeBordDuCabinet extends Dashboard
             ->modalDescription('Ce client et votre cabinet ne sont plus liés : il pourra en lier un autre.')
             ->action(function (array $arguments): void {
                 static::executerSansCasser(function () use ($arguments): void {
-                    $lien = LienCabinet::query()->duCabinet($this->cabinet())->parUuid((string) ($arguments['uuid'] ?? ''))->firstOrFail();
+                    $lien = LienCabinet::query()->duCabinet($this->cabinet())->parUuid(ValeurSimple::enTexte($arguments['uuid'] ?? ''))->firstOrFail();
                     app(MettreFinAuLienAction::class)->handle(CompteConnecte::exiger(), $lien);
                     Notification::make()->title('Le lien a pris fin.')->success()->send();
                 });

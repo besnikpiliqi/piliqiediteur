@@ -19,6 +19,8 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -405,18 +407,20 @@ class EReportingDesParticuliers
         $paiementsALEmission = [];
 
         foreach ($ventes as $vente) {
-            $contexte = $vente->contenuSigne()['donnees']['contexte'];
+            $contexte = ValeursLues::tableauDe($vente->donneesSignees(), 'contexte');
 
             if ($vente->type === 'avoir') {
-                foreach ($contexte['imputations'] as $imputation) {
-                    $reglements[] = self::reglement((int) $imputation['facture_id'], $calendrier->jourDe($vente->horodatage), (int) $imputation['montant'], (int) $vente->document_id, null);
+                foreach (ValeursLues::tableauDe($contexte, 'imputations') as $imputation) {
+                    $imputation = ValeursLues::tableau($imputation);
+                    $reglements[] = self::reglement(ValeurSimple::enEntier($imputation['facture_id']), $calendrier->jourDe($vente->horodatage), ValeurSimple::enEntier($imputation['montant']), (int) $vente->document_id, null);
                 }
 
                 continue;
             }
 
-            $paiementsALEmission = [...$paiementsALEmission, ...array_map('intval', array_column($contexte['reglements'], 'paiement_id'))];
-            $montant = (int) array_sum(array_column($contexte['reglements'], 'montant')) + (int) array_sum(array_column($contexte['credits_avoir'], 'montant'));
+            $reglementsALEmission = ValeursLues::tableauDe($contexte, 'reglements');
+            $paiementsALEmission = [...$paiementsALEmission, ...array_map(ValeurSimple::enEntier(...), array_column($reglementsALEmission, 'paiement_id'))];
+            $montant = (int) array_sum(array_column($reglementsALEmission, 'montant')) + (int) array_sum(array_column(ValeursLues::tableauDe($contexte, 'credits_avoir'), 'montant'));
 
             if ($montant !== 0) {
                 $reglements[] = self::reglement((int) $vente->document_id, $calendrier->jourDe($vente->horodatage), $montant, null, null);
@@ -428,14 +432,17 @@ class EReportingDesParticuliers
                 continue;
             }
 
-            $donnees = $encaissement->contenuSigne()['donnees'];
+            $donnees = $encaissement->donneesSignees();
+            $recuLe = ValeursLues::texteDe(ValeursLues::tableauDe($donnees, 'paiement'), 'recu_le');
 
-            foreach ($donnees['allocations'] as $allocation) {
-                $reglements[] = self::reglement((int) $allocation['facture_id'], $donnees['paiement']['recu_le'], (int) $allocation['montant'], null, null);
+            foreach (ValeursLues::tableauDe($donnees, 'allocations') as $allocation) {
+                $allocation = ValeursLues::tableau($allocation);
+                $reglements[] = self::reglement(ValeurSimple::enEntier($allocation['facture_id']), $recuLe, ValeurSimple::enEntier($allocation['montant']), null, null);
             }
 
-            foreach ($donnees['credits_imputes'] as $credit) {
-                $reglements[] = self::reglement((int) $credit['facture_id'], $calendrier->jourDe($encaissement->horodatage), (int) $credit['montant'], (int) $credit['avoir_id'], (int) $encaissement->document_id);
+            foreach (ValeursLues::tableauDe($donnees, 'credits_imputes') as $credit) {
+                $credit = ValeursLues::tableau($credit);
+                $reglements[] = self::reglement(ValeurSimple::enEntier($credit['facture_id']), $calendrier->jourDe($encaissement->horodatage), ValeurSimple::enEntier($credit['montant']), ValeurSimple::enEntier($credit['avoir_id']), (int) $encaissement->document_id);
             }
         }
 

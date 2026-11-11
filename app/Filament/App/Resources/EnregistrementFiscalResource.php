@@ -8,6 +8,8 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Forms\Components\DatePicker;
@@ -80,7 +82,7 @@ class EnregistrementFiscalResource extends Resource
             ])->columns(3),
 
             InfolistSection::make('Trace technique')
-                ->description(fn (): string => 'Hors du contenu signé, effacée '.config('conservation.traces_en_mois').' mois après l\'événement.')
+                ->description(fn (): string => 'Hors du contenu signé, effacée '.Reglage::entier('conservation.traces_en_mois').' mois après l\'événement.')
                 ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement
                     && CompteConnecte::exiger()->estProprietaireDuMagasin(app(TenantContext::class)->magasin()))
                 ->schema([
@@ -151,18 +153,18 @@ class EnregistrementFiscalResource extends Resource
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         /** @var Builder<EnregistrementFiscal> $query */
-                        return $query->horodatesDuJourAuJour(self::calendrierDuMagasin(), $data['du'] ?? null, $data['au'] ?? null);
+                        return $query->horodatesDuJourAuJour(self::calendrierDuMagasin(), ValeurSimple::enTexteOuNul($data['du'] ?? null), ValeurSimple::enTexteOuNul($data['au'] ?? null));
                     })
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
-                        filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour($data['du'], 'd/m/Y') : null,
-                        filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour($data['au'], 'd/m/Y') : null,
+                        filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour(ValeurSimple::enTexte($data['du']), 'd/m/Y') : null,
+                        filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour(ValeurSimple::enTexte($data['au']), 'd/m/Y') : null,
                     ]))),
                 Tables\Filters\SelectFilter::make('code')->label('Code de l\'événement')
                     ->options(collect(CodeEvenement::cases())->mapWithKeys(
                         fn (CodeEvenement $code): array => [$code->value => $code->libelleAvecCode()],
                     )->all())
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
-                        ? $query->where('chaine', ChaineFiscale::Evenement->value)->where('type', (string) $data['value'])
+                        ? $query->where('chaine', ChaineFiscale::Evenement->value)->where('type', ValeurSimple::enTexte($data['value']))
                         : $query),
             ])
             ->actions([

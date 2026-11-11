@@ -25,6 +25,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class BindTenantContextFromFilamentTenant
 {
+    /**
+     * @param  Closure(Request): Response  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $tenant = Filament::getTenant();

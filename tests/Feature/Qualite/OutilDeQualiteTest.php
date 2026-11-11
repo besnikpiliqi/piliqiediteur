@@ -185,6 +185,50 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringContainsString('chemin en trop : tests/Qualite/Psalm/Temoin/Temoin.php:2 TaintedSql', $sortie);
     }
 
+    /**
+     * Le contrôle des flux ne compte que les chemins de sécurité d'un
+     * rapport de Psalm, chacun avec son fichier, sa ligne, son type et son
+     * message.
+     */
+    public function test_le_controle_des_flux_ne_compte_que_les_chemins_de_securite(): void
+    {
+        $autre = ['type' => 'MixedArgument', 'file_name' => $this->depot.'/app/Autre.php', 'line_from' => 3, 'message' => 'valeur sans type'];
+        $chemin = ['type' => 'TaintedSql', 'file_name' => $this->depot.'/app/Requete.php', 'line_from' => 4, 'message' => 'saisie dans une requête', 'is_security' => true];
+
+        [$code, $sortie] = $this->lancer('flux', $this->ecrire('psalm.json', json_encode([$autre, $chemin], JSON_THROW_ON_ERROR)));
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString($this->depot.'/app/Requete.php:4 TaintedSql : saisie dans une requête', $sortie);
+        $this->assertStringNotContainsString('MixedArgument', $sortie);
+
+        [$code, $sortie] = $this->lancer('flux', $this->ecrire('psalm.json', json_encode([$autre], JSON_THROW_ON_ERROR)));
+        $this->assertSame(0, $code, $sortie);
+        $this->assertStringContainsString('Aucun chemin', $sortie);
+    }
+
+    /**
+     * Le contrôle de la mutation range chaque mutant du journal JSON
+     * d'Infection dans sa partie et liste ceux qu'aucun test n'arrête ; un
+     * mutant sans son mutateur rend le journal illisible.
+     */
+    public function test_le_controle_de_la_mutation_lit_chaque_mutant_du_journal_d_infection(): void
+    {
+        $mutant = fn (string $fichier, int $ligne, string $mutateur): array => ['mutator' => ['mutatorName' => $mutateur, 'originalFilePath' => $this->depot.'/'.$fichier, 'originalStartLine' => $ligne], 'processOutput' => 'Tests: 2, Assertions: 4, Failures: 1.'];
+
+        [$code, $sortie] = $this->lancer('mutation', $this->ecrire('infection.json', json_encode([
+            'killed' => [$mutant('app/Domain/Facturation/Services/CalculateurLigne.php', 12, 'Plus')],
+            'escaped' => [$mutant('app/Policies/FacturePolicy.php', 30, 'Minus')],
+            'uncovered' => [['mutator' => ['mutatorName' => 'Identical', 'originalFilePath' => $this->depot.'/app/Policies/FacturePolicy.php', 'originalStartLine' => 31]]],
+        ], JSON_THROW_ON_ERROR)));
+        $this->assertSame(0, $code, $sortie);
+        $this->assertStringContainsString('| calculs | 1 | 0 | 0 | 0 | 0 | 100.0 % | — |', $sortie);
+        $this->assertStringContainsString('| droits_et_isolation | 0 | 0 | 1 | 1 | 0 | 0.0 % | — |', $sortie);
+        $this->assertStringContainsString("- app/Policies/FacturePolicy.php:30 Minus\n- app/Policies/FacturePolicy.php:31 Identical", $sortie);
+
+        [$code, $sortie] = $this->lancer('mutation', $this->ecrire('infection.json', json_encode(['killed' => [['processOutput' => '']]], JSON_THROW_ON_ERROR)));
+        $this->assertSame(1, $code, $sortie);
+        $this->assertStringContainsString('Échec : Le mutateur d\'un mutant « killed » du journal d\'Infection n\'est pas un tableau : null.', $sortie);
+    }
+
     public function test_les_seuils_sans_leur_ancien_fichier_ecrivent_l_usage_et_sortent_avec_le_code_2(): void
     {
         [$code, $sortie] = $this->lancer('seuils');

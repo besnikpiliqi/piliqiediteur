@@ -10,6 +10,8 @@ use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
+use UnexpectedValueException;
 
 /**
  * Une ligne du registre fiscal, écrite seulement par RegistreFiscal. Elle
@@ -60,7 +63,7 @@ class EnregistrementFiscal extends Model
     /**
      * Le contenu signé décodé, une fois par instance.
      *
-     * @var array<string, mixed>|null
+     * @var array<array-key, mixed>|null
      */
     private ?array $contenuDecode = null;
 
@@ -124,12 +127,29 @@ class EnregistrementFiscal extends Model
 
     /**
      * Le contenu signé, décodé : en-tête de l'enregistrement et données.
+     * Ses noms sont des textes, sauf un nom écrit en chiffres, que
+     * json_decode() rend en entier.
      *
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
+     *
+     * @throws UnexpectedValueException un contenu qui n'est pas un objet JSON
      */
     public function contenuSigne(): array
     {
-        return $this->contenuDecode ??= json_decode($this->contenu, true, flags: JSON_THROW_ON_ERROR);
+        return $this->contenuDecode ??= ValeursLues::tableau(json_decode($this->contenu, true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Le bloc « donnees » du contenu signé : ce que l'enregistrement signe
+     * de son document ou de son événement (voir ContenuFiscal).
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws UnexpectedValueException un contenu signé sans bloc « donnees »
+     */
+    public function donneesSignees(): array
+    {
+        return ValeursLues::tableauDe($this->contenuSigne(), 'donnees');
     }
 
     /**
@@ -158,7 +178,7 @@ class EnregistrementFiscal extends Model
     {
         $operateur = $this->contenuSigne()['operateur'] ?? null;
 
-        return is_array($operateur) ? "{$operateur['nom']} (n° {$operateur['id']})" : 'Système';
+        return is_array($operateur) ? ValeurSimple::enTexte($operateur['nom']).' (n° '.ValeurSimple::enTexte($operateur['id']).')' : 'Système';
     }
 
     /**
@@ -182,17 +202,17 @@ class EnregistrementFiscal extends Model
         $estUneCloture = $this->chaine === ChaineFiscale::Evenement && $document['type'] === (new ClotureCaisse)->getMorphClass();
         $nature = match (true) {
             $estUneCloture => 'Clôture',
-            $this->chaine === ChaineFiscale::Evenement => Str::ucfirst(str_replace('_', ' ', $document['type'])),
+            $this->chaine === ChaineFiscale::Evenement => Str::ucfirst(str_replace('_', ' ', ValeurSimple::enTexte($document['type']))),
             default => $this->libelleDuType(),
         };
         $numeroLegal = match (true) {
-            $estUneCloture => $contenu['donnees']['details']['numero'] ?? null,
-            $this->chaine === ChaineFiscale::Vente => $contenu['donnees']['document']['numero'] ?? null,
+            $estUneCloture => ValeursLues::valeurAu($contenu, 'donnees', 'details', 'numero'),
+            $this->chaine === ChaineFiscale::Vente => ValeursLues::valeurAu($contenu, 'donnees', 'document', 'numero'),
             default => null,
         };
 
         return $numeroLegal === null
-            ? "{$nature} (identifiant interne {$document['id']})"
-            : "{$nature} {$numeroLegal}";
+            ? "{$nature} (identifiant interne ".ValeurSimple::enTexte($document['id']).')'
+            : "{$nature} ".ValeurSimple::enTexte($numeroLegal);
     }
 }

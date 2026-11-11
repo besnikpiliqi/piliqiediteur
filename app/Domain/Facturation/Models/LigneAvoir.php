@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -58,7 +59,7 @@ class LigneAvoir extends Model
      */
     public function estValidee(): bool
     {
-        return $this->documentNumeroteEnBase(Avoir::class, [$this->getRawOriginal('avoir_id'), $this->getAttribute('avoir_id')]);
+        return $this->documentNumeroteEnBase(Avoir::class, [ValeurSimple::enEntierOuNul($this->getRawOriginal('avoir_id')), ValeurSimple::enEntierOuNul($this->getAttribute('avoir_id'))]);
     }
 
     protected function regleDInalterabilite(): string

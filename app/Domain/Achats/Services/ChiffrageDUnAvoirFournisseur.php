@@ -7,6 +7,7 @@ namespace App\Domain\Achats\Services;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Tenancy\Support\ValeursLues;
 use InvalidArgumentException;
 
 /**
@@ -101,22 +102,23 @@ class ChiffrageDUnAvoirFournisseur
         $totaux = ['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0];
 
         foreach ($lignes as $ligne) {
-            $cle = $enDecimal($ligne['taux']);
-            $parTaux[$cle] ??= ['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0, 'montant_tva_calcule' => $tvaProposeeParTaux[$ligne['taux']]];
+            $taux = ValeursLues::entierDe($ligne, 'taux');
+            $cle = $enDecimal($taux);
+            $parTaux[$cle] ??= ['montant_ht' => 0, 'montant_tva' => 0, 'montant_ttc' => 0, 'montant_tva_calcule' => $tvaProposeeParTaux[$taux]];
 
             foreach (['montant_ht', 'montant_tva', 'montant_ttc'] as $montant) {
-                $parTaux[$cle][$montant] += $ligne[$montant];
-                $totaux[$montant] += $ligne[$montant];
+                $parTaux[$cle][$montant] += ValeursLues::entierDe($ligne, $montant);
+                $totaux[$montant] += ValeursLues::entierDe($ligne, $montant);
             }
         }
 
         return new DocumentChiffre(
             array_map(fn (array $ligne): array => [
                 ...$ligne,
-                'montant_ht' => $enDecimal($ligne['montant_ht']),
-                'montant_ht_calcule' => $enDecimal($ligne['montant_ht_calcule']),
-                'montant_tva' => $enDecimal($ligne['montant_tva']),
-                'montant_ttc' => $enDecimal($ligne['montant_ttc']),
+                'montant_ht' => $enDecimal(ValeursLues::entierDe($ligne, 'montant_ht')),
+                'montant_ht_calcule' => $enDecimal(ValeursLues::entierDe($ligne, 'montant_ht_calcule')),
+                'montant_tva' => $enDecimal(ValeursLues::entierDe($ligne, 'montant_tva')),
+                'montant_ttc' => $enDecimal(ValeursLues::entierDe($ligne, 'montant_ttc')),
             ], $lignes),
             array_map(fn (array $montants): array => array_map($enDecimal, $montants), $parTaux),
             [

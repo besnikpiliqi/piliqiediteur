@@ -14,7 +14,9 @@ use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -109,7 +111,7 @@ class DemanderLaTransmissionDeLaProprieteAction
                 self::exigerLesConditions($auteurRelu, $administrateurRelu, $societe);
 
                 $enAttente = $this->demandesEnAttente($societe);
-                $memeDemande = $enAttente->first(fn (TransmissionPropriete $demande): bool => (int) $demande->destinataire_id === (int) $administrateurRelu->getKey() && $demande->adresse === $administrateurRelu->email);
+                $memeDemande = $enAttente->first(fn (TransmissionPropriete $demande): bool => (int) $demande->destinataire_id === CleDuModele::de($administrateurRelu) && $demande->adresse === $administrateurRelu->email);
 
                 if ($memeDemande !== null) {
                     return [$memeDemande, null];
@@ -167,7 +169,7 @@ class DemanderLaTransmissionDeLaProprieteAction
                 self::exigerLeProprietaire($auteurRelu, $societe);
                 self::exigerLesConditions($auteurRelu, $administrateurRelu, $societe);
 
-                $demande = $this->demandesEnAttente($societe)->first(fn (TransmissionPropriete $demande): bool => (int) $demande->destinataire_id === (int) $administrateurRelu->getKey())
+                $demande = $this->demandesEnAttente($societe)->first(fn (TransmissionPropriete $demande): bool => (int) $demande->destinataire_id === CleDuModele::de($administrateurRelu))
                     ?? throw new LogicException(self::MESSAGE_AUCUNE_DEMANDE);
 
                 if ($demande->adresse !== $administrateurRelu->email) {
@@ -270,7 +272,7 @@ class DemanderLaTransmissionDeLaProprieteAction
     {
         $proprietaireDeLAdresse = FournisseurDesComptes::proprietaireDeLAdresse($demande->adresse);
         $lien = $proprietaireDeLAdresse === null
-            ? rtrim((string) config('app.url'), '/').route($societe->estUnCabinet() ? 'filament.cabinet.transmission' : 'filament.societe.transmission', ['jeton' => $jeton], absolute: false)
+            ? rtrim(Reglage::texte('app.url'), '/').route($societe->estUnCabinet() ? 'filament.cabinet.transmission' : 'filament.societe.transmission', ['jeton' => $jeton], absolute: false)
             : null;
 
         Mail::to($demande->adresse)->send(new TransmissionDeLaProprieteMail(

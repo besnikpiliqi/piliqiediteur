@@ -4,6 +4,7 @@ namespace App\Domain\Cabinets\Mail;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -30,7 +31,7 @@ class InvitationDuCabinetMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "{$this->cabinet} vous invite sur ".config('app.name'));
+        return new Envelope(subject: "{$this->cabinet} vous invite sur ".Reglage::texte('app.name'));
     }
 
     public function content(): Content

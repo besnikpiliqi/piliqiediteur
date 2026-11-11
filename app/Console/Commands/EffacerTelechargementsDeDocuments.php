@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -43,7 +44,7 @@ class EffacerTelechargementsDeDocuments extends Command
                         DatabaseNotification::query()
                             ->where('notifiable_type', (new User)->getMorphClass())
                             ->where('notifiable_id', $telechargement->demande_par)
-                            ->where('data->telechargement_id', (int) $telechargement->getKey())
+                            ->where('data->telechargement_id', CleDuModele::de($telechargement))
                             ->delete();
                         $telechargement->delete();
 

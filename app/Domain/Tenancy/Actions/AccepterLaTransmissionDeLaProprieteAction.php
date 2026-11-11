@@ -19,7 +19,9 @@ use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -123,8 +125,8 @@ class AccepterLaTransmissionDeLaProprieteAction
                     $demandeRelue = TransmissionPropriete::query()->whereKey($demande->getKey())->lockForUpdate()->first();
 
                     if ($demandeRelue === null || ! $demandeRelue->estValable() || $demandeRelue->jeton_hache !== $demande->jeton_hache
-                        || (int) $demandeRelue->destinataire_id !== (int) $nouveauRelu->getKey()
-                        || ! $ancienRelu->estProprietaire() || (int) $demandeRelue->demandee_par !== (int) $ancienRelu->getKey()
+                        || (int) $demandeRelue->destinataire_id !== CleDuModele::de($nouveauRelu)
+                        || ! $ancienRelu->estProprietaire() || (int) $demandeRelue->demandee_par !== CleDuModele::de($ancienRelu)
                         || ! app(PorteeDesDroits::class)->gereSonEquipe($ancienRelu)) {
                         throw new LogicException(self::MESSAGE_LIEN);
                     }
@@ -203,7 +205,7 @@ class AccepterLaTransmissionDeLaProprieteAction
 
         return $demande !== null
             && $demande->estValable()
-            && (int) $demande->destinataire_id === (int) $compte->getKey()
+            && (int) $demande->destinataire_id === CleDuModele::de($compte)
             && (int) $demande->societe_id === (int) $compte->societe_id
                 ? $demande
                 : null;
@@ -218,10 +220,12 @@ class AccepterLaTransmissionDeLaProprieteAction
     private function confierTousLesClients(User $ancien, User $nouveau): void
     {
         ClientConfie::query()->where('user_id', $nouveau->getKey())->delete();
-        $dejaConfies = ClientConfie::query()->where('user_id', $ancien->getKey())->pluck('lien_id')->map(fn ($id): int => (int) $id)->all();
+        $dejaConfies = ValeursLues::entiers(ClientConfie::query()->where('user_id', $ancien->getKey())->pluck('lien_id'));
 
-        LienCabinet::query()->duCabinet((int) $ancien->societe_id)->where('etat', EtatDuLien::Actif->value)->orderBy('id')->pluck('id')
-            ->reject(fn ($id): bool => in_array((int) $id, $dejaConfies, true))
-            ->each(fn ($id) => (new ClientConfie)->forceFill(['lien_id' => (int) $id, 'user_id' => $ancien->getKey(), 'confie_par' => $nouveau->getKey()])->save());
+        foreach (ValeursLues::entiers(LienCabinet::query()->duCabinet((int) $ancien->societe_id)->where('etat', EtatDuLien::Actif->value)->orderBy('id')->pluck('id')) as $lienId) {
+            if (! in_array($lienId, $dejaConfies, true)) {
+                (new ClientConfie)->forceFill(['lien_id' => $lienId, 'user_id' => $ancien->getKey(), 'confie_par' => $nouveau->getKey()])->save();
+            }
+        }
     }
 }

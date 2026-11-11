@@ -6,9 +6,12 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
+use UnexpectedValueException;
 
 /**
  * Les cases d'un compte dans un magasin, celles du type d'activité de la
@@ -73,7 +76,21 @@ trait CocheLesAutorisationsDeMagasin
      */
     public static function autorisationsSaisies(array $data, string $nom): array
     {
-        return array_values(array_unique([...array_values($data[$nom] ?? []), ...array_values($data["{$nom}_vente"] ?? []), ...array_values($data["{$nom}_proprietaire"] ?? [])]));
+        return array_values(array_unique([...self::casesCochees($data, $nom), ...self::casesCochees($data, "{$nom}_vente"), ...self::casesCochees($data, "{$nom}_proprietaire")]));
+    }
+
+    /**
+     * Les cases cochées de ce champ, dans leur ordre ; aucune quand le
+     * champ manque (un groupe que le formulaire ne montre pas).
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     *
+     * @throws UnexpectedValueException un champ qui n'est pas une liste de cases
+     */
+    public static function casesCochees(array $data, string $champ): array
+    {
+        return array_values(array_map(ValeurSimple::enTexte(...), ValeursLues::tableau($data[$champ] ?? [])));
     }
 
     /**

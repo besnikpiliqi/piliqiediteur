@@ -14,7 +14,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
 
@@ -68,7 +67,7 @@ class CreerInventaireOuvertureAction
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, InventaireOuverture::class);
 
             return $this->operateur->pendant($compte, function () use ($compte, $lignes, $attributs): InventaireOuverture {
-                $inventaire = (new InventaireOuverture(Arr::only($attributs, ['notes'])))->forceFill(['cree_par' => $compte->getKey()]);
+                $inventaire = (new InventaireOuverture(array_intersect_key($attributs, ['notes' => true])))->forceFill(['cree_par' => $compte->getKey()]);
                 $inventaire->save();
 
                 $this->constructeurLignes->enregistrer($inventaire, $lignes);

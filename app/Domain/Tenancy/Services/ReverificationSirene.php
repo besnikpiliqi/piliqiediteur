@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -116,7 +117,7 @@ class ReverificationSirene
                 $this->journalAudit->inscrireLesChangements(ActionAuditee::IdentiteModifiee, null, null, $avant, $enregistree->identiteAuditee(), $enregistree);
             }
 
-            return $avant['categorie_juridique_insee'];
+            return ValeursLues::texteOuNulDe($avant, 'categorie_juridique_insee');
         });
 
         if ($consultation['resultat'] === ResultatVerification::Negative) {

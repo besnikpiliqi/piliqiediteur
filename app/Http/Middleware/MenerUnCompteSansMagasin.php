@@ -25,6 +25,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class MenerUnCompteSansMagasin
 {
+    /**
+     * @param  Closure(Request): Response  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $compte = $request->user();

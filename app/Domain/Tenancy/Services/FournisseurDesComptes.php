@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Auth\EloquentUserProvider;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -150,6 +151,6 @@ class FournisseurDesComptes extends EloquentUserProvider
      */
     private static function empreinteFactice(): string
     {
-        return sprintf('$2y$%02d$%s', (int) config('hashing.bcrypt.rounds', 12), str_repeat('.', 53));
+        return sprintf('$2y$%02d$%s', ValeurSimple::enEntier(config('hashing.bcrypt.rounds', 12)), str_repeat('.', 53));
     }
 }

@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ExpressionDUneColonne;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -261,7 +262,7 @@ class Client extends Model
      */
     public function soldeCrediteurEnCentimes(): int
     {
-        return self::creditsDAvoirEnCentimes([$this])[$this->getKey()];
+        return self::creditsDAvoirEnCentimes([$this])[CleDuModele::de($this)];
     }
 
     /**
@@ -274,13 +275,13 @@ class Client extends Model
      * jamais, sans rien lire pour lui. Le tableau des clients d'une vente
      * (voir SelecteurDeClients) le lit ainsi pour toute sa page.
      *
-     * @param  iterable<Client>  $clients
+     * @param  iterable<array-key, Client>  $clients
      * @return array<int, int>
      */
     public static function creditsDAvoirEnCentimes(iterable $clients): array
     {
         $clients = collect($clients);
-        $credits = $clients->mapWithKeys(fn (Client $client): array => [$client->getKey() => 0])->all();
+        $credits = $clients->mapWithKeys(fn (Client $client): array => [CleDuModele::de($client) => 0])->all();
         $identifies = $clients->reject(fn (Client $client): bool => $client->estComptoir());
 
         if ($identifies->isEmpty()) {
@@ -295,7 +296,7 @@ class Client extends Model
             ->get();
 
         foreach ($avoirs as $avoir) {
-            $credits[$avoir->client_id] += $avoir->creditApres($avoir->allocations->pluck('montant_alloue'));
+            $credits[$avoir->client_id] += $avoir->creditApres($avoir->allocations->map(fn (AvoirAllocation $allocation): string => $allocation->montant_alloue));
         }
 
         return $credits;

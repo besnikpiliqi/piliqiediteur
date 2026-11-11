@@ -22,8 +22,10 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
@@ -543,7 +545,7 @@ trait AjouteDesLignesDeVente
         );
 
         foreach (array_keys($refusees) as $cle) {
-            $lignes[$cle] = [...self::ligneAuPrixDuCatalogue($lignes[$cle], $contexte), 'remise_pourcentage' => '0'];
+            $lignes[$cle] = [...self::ligneAuPrixDuCatalogue(ValeursLues::champs($lignes[$cle]), $contexte), 'remise_pourcentage' => '0'];
         }
 
         return $lignes;
@@ -616,7 +618,7 @@ trait AjouteDesLignesDeVente
 
     protected static function documentDesLignesSaisies(Get $get): DocumentChiffre
     {
-        return self::apercuDesLignes($get('lignes') ?? [], $get('client_id'), $get('nature_operation'));
+        return self::apercuDesLignes(ValeursLues::tableau($get('lignes') ?? []), $get('client_id'), $get('nature_operation'));
     }
 
     /**
@@ -724,7 +726,7 @@ trait AjouteDesLignesDeVente
         $tauxTva = self::magasin()->societe->estEnFranchiseDeTva() ? '0' : self::pourcentageEnTexte($produit->taux_tva);
 
         return [
-            'produit_id' => $produit->getKey(),
+            'produit_id' => CleDuModele::de($produit),
             'service_id' => null,
             'description' => $produit->nom,
             'reference' => $produit->reference,
@@ -803,8 +805,14 @@ trait AjouteDesLignesDeVente
 
         try {
             $choisis = self::produitsChoisis($selection);
-            $lignes = array_filter($repeteur->getState() ?? [], fn (mixed $ligne): bool => is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null)));
+            $lignes = [];
             $nouveaux = [];
+
+            foreach (ValeursLues::tableau($repeteur->getState() ?? []) as $cle => $ligne) {
+                if (is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null))) {
+                    $lignes[$cle] = ValeursLues::champs($ligne);
+                }
+            }
 
             foreach ($choisis as ['produit' => $produit, 'quantite' => $quantite]) {
                 $cle = self::ligneSansDerogationDuProduit($lignes, $produit);
@@ -883,7 +891,7 @@ trait AjouteDesLignesDeVente
         $prixDeLaFiche = app(CalculateurLigne::class)->enCentiemes($produit->prix_vente_ttc);
 
         foreach ($lignes as $cle => $ligne) {
-            if ((string) ($ligne['produit_id'] ?? '') !== (string) $produit->getKey() || filled($ligne['service_id'] ?? null)) {
+            if (ValeurSimple::enTexte($ligne['produit_id'] ?? '') !== (string) CleDuModele::de($produit) || filled($ligne['service_id'] ?? null)) {
                 continue;
             }
 
@@ -985,7 +993,7 @@ trait AjouteDesLignesDeVente
                     ->map(fn (TextInput $champ): TextInput => $champ->visible(fn (Get $get): bool => self::peutCreerUnService() && self::peutAccorderDesRemises() && filled($get('nouveau_service'))))
                     ->all(),
             ])
-            ->action(fn (array $data, HasForms $livewire) => self::ajouterLesServices($livewire, $data));
+            ->action(fn (array $data, HasForms $livewire) => self::ajouterLesServices($livewire, ValeursLues::champs($data)));
     }
 
     private static function peutCreerUnService(): bool
@@ -1016,16 +1024,15 @@ trait AjouteDesLignesDeVente
     private static function servicesProposes(mixed $recherche, mixed $coches): array
     {
         $recherche = is_string($recherche) ? trim($recherche) : '';
-        $coches = array_map('intval', is_array($coches) ? $coches : []);
+        $coches = array_map(ValeurSimple::enEntier(...), is_array($coches) ? $coches : []);
 
-        return self::servicesVendables()
+        return ValeursLues::textesParCle(self::servicesVendables()
             ->when($recherche !== '', fn (Builder $services): Builder => $services->where(
                 fn (Builder $services): Builder => RechercheSansAccents::appliquer($services, $recherche, ['nom'])->orWhereKey($coches),
             ))
             ->orderBy('nom')
             ->orderBy('id')
-            ->pluck('nom', 'id')
-            ->all();
+            ->pluck('nom', 'id'));
     }
 
     /**
@@ -1043,16 +1050,20 @@ trait AjouteDesLignesDeVente
     }
 
     /**
-     * @param  array{services?: list<int|string>|null, nouveau_service?: string|null, prix_ttc?: string|null, taux_tva?: string|null}  $data
+     * Les services cochés (« services »), puis le nouveau service tapé
+     * (« nouveau_service ») avec son prix de référence (« prix_ttc ») et
+     * son taux (« taux_tva »), tels que la fenêtre les envoie.
+     *
+     * @param  array<string, mixed>  $data
      */
     private static function ajouterLesServices(HasForms $livewire, array $data): void
     {
-        $identifiants = array_map('intval', $data['services'] ?? []);
-        $nouveauService = Service::nettoyerNom((string) ($data['nouveau_service'] ?? ''));
+        $identifiants = array_map(ValeurSimple::enEntier(...), ValeursLues::tableau($data['services'] ?? []));
+        $nouveauService = Service::nettoyerNom(ValeurSimple::enTexte($data['nouveau_service'] ?? ''));
 
         if ($nouveauService !== '') {
             try {
-                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(CompteConnecte::exiger(), $nouveauService, $data['prix_ttc'] ?? null, $data['taux_tva'] ?? null);
+                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(CompteConnecte::exiger(), $nouveauService, ValeurSimple::enTexteOuNul($data['prix_ttc'] ?? null), ValeurSimple::enTexteOuNul($data['taux_tva'] ?? null));
             } catch (LogicException|AuthorizationException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
@@ -1118,11 +1129,11 @@ trait AjouteDesLignesDeVente
 
         $uuid = $lignes->generateUuid();
 
-        $lignes->state([...($lignes->getState() ?? []), $uuid => []]);
+        $lignes->state([...ValeursLues::tableau($lignes->getState() ?? []), $uuid => []]);
         $lignes->getChildComponentContainer($uuid)->fill();
 
-        $etat = $lignes->getState();
-        $etat[$uuid] = [...$etat[$uuid], ...$valeurs];
+        $etat = ValeursLues::tableau($lignes->getState());
+        $etat[$uuid] = [...ValeursLues::tableau($etat[$uuid]), ...$valeurs];
         $lignes->state($etat);
 
         $lignes->callAfterStateUpdated();

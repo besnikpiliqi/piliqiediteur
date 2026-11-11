@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Tenancy\Mail\AlerteEditeurMail;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -27,6 +28,6 @@ class AlerteEditeur
             return;
         }
 
-        Mail::to($adresse)->send(new AlerteEditeurMail($objet, ["Société n° {$societe->getKey()}, SIREN {$societe->siren}.", ...$lignes]));
+        Mail::to($adresse)->send(new AlerteEditeurMail($objet, ['Société n° '.CleDuModele::de($societe).", SIREN {$societe->siren}.", ...$lignes]));
     }
 }

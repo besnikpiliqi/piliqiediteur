@@ -6,7 +6,9 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\DebitDesEmails;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -72,7 +74,7 @@ class DemanderUneNouvelleAdresseAction
                 throw new LogicException(self::MESSAGE_INSCRIPTION_CLOSE);
             }
 
-            $nouvelleAdresse = Validator::make(['email' => User::normaliserEmail($nouvelleAdresse)], ['email' => ['required', 'string', 'email', 'max:255']])->validate()['email'];
+            $nouvelleAdresse = ValeursLues::texteDe(Validator::make(['email' => User::normaliserEmail($nouvelleAdresse)], ['email' => ['required', 'string', 'email', 'max:255']])->validate(), 'email');
             $this->debit->verifier($compte);
             $jeton = $this->mettreEnAttente($compte, $nouvelleAdresse);
             $compte->save();
@@ -112,7 +114,7 @@ class DemanderUneNouvelleAdresseAction
     public function envoyer(User $compte, string $jeton): void
     {
         Mail::to((string) $compte->nouvelle_adresse)->send(new ConfirmationNouvelleAdresseMail(
-            rtrim((string) config('app.url'), '/').route('profil.adresse.afficher', ['jeton' => $jeton], absolute: false),
+            rtrim(Reglage::texte('app.url'), '/').route('profil.adresse.afficher', ['jeton' => $jeton], absolute: false),
             Calendrier::deParis()->afficher(ValeurRequise::de($compte->nouvelle_adresse_expire_le, 'l\'échéance du lien de la nouvelle adresse'), 'd/m/Y à H:i'),
             premiereAdresse: ! $compte->aUneAdresseDeConnexion(),
         ));

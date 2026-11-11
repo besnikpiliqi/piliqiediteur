@@ -29,6 +29,7 @@ use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -168,7 +169,7 @@ class SaisirCodeDeConfirmationAction
         }
 
         try {
-            [$proprietaire, $jeton] = $this->servir($societe, $code, $memePersonne ? null : ['email' => $email, 'password' => Hash::make($motDePasse), 'nom' => (string) ($code->destinataire['nom'] ?? $email)]);
+            [$proprietaire, $jeton] = $this->servir($societe, $code, $memePersonne ? null : ['email' => $email, 'password' => Hash::make($motDePasse), 'nom' => ValeursLues::texte($code->destinataire['nom'] ?? $email)]);
         } catch (SiretDejaReserveException) {
             $this->alerteEditeur->alerter($societe, 'Validation impossible à la saisie du code du courrier', [
                 'Le code du courrier est juste, mais l\'un des magasins de la société a un SIRET déjà réservé par une autre société : rien n\'a été validé, et le code reste valable.',
@@ -304,7 +305,7 @@ class SaisirCodeDeConfirmationAction
             'siren' => $verrouille->siren,
             'envoi_id' => $verrouille->getKey(),
             'motif' => $verrouille->motif->value,
-            'source_adresse' => $verrouille->destinataire['adresse']['source'] ?? null,
+            'source_adresse' => ValeursLues::valeurAu($verrouille->destinataire, 'adresse', 'source'),
             'reference_envoi' => $verrouille->reference_envoi,
         ], $auteur, fournisseur: 'recommande', reference: $verrouille->reference_envoi);
     }
@@ -359,7 +360,7 @@ class SaisirCodeDeConfirmationAction
                 $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $code, $nouveauCompte, $magasins): array|string {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
 
-                    if (array_map(intval(...), Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
+                    if (ValeursLues::entiers(Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return self::MAGASINS_CHANGES;
                     }
 

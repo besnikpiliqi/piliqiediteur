@@ -21,7 +21,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -188,11 +190,11 @@ class ValiderInventaireOuvertureAction
      */
     private function creerLeProduit(LigneInventaireOuverture $ligne): int
     {
-        $produit = (new Produit(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit')))->forceFill(['cmup_ht' => $ligne->cout_unitaire_ht]);
+        $produit = (new Produit(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit'))))->forceFill(['cmup_ht' => $ligne->cout_unitaire_ht]);
         $this->origine->pendant(OrigineProduit::InventaireOuverture, fn (): bool => $produit->save());
 
         $ligne->update(['produit_id' => $produit->getKey(), 'reference' => $produit->reference, 'nouveau_produit' => null]);
 
-        return (int) $ligne->getKey();
+        return CleDuModele::de($ligne);
     }
 }

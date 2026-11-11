@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Filament\Facades\Filament;
@@ -85,7 +86,7 @@ final class SuiviDesConnexions
      */
     public static function accesRedonne(User $compte): string
     {
-        $auteur = $compte->acces_redonne_par === null ? null : User::query()->whereKey($compte->acces_redonne_par)->value('name');
+        $auteur = $compte->acces_redonne_par === null ? null : ValeursLues::texteOuNul(User::query()->whereKey($compte->acces_redonne_par)->value('name'));
 
         return 'Votre accès a été redonné '.self::date($compte, ValeurRequise::de($compte->acces_redonne_le, 'l\'instant où l\'accès a été redonné')).($auteur === null ? '' : " par {$auteur}").', '.($compte->acces_redonne_en_presence ? 'en votre présence.' : 'en votre absence.');
     }

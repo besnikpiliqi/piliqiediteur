@@ -13,6 +13,8 @@ use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Services\ConstructeurLigneInventaire;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -102,7 +104,7 @@ class InventaireOuvertureResource extends Resource
                     ->label('')
                     ->schema(self::ligneSchema())
                     ->columns(2)
-                    ->itemLabel(fn (array $state): ?string => self::libelleDeLaLigne($state))
+                    ->itemLabel(fn (array $state): ?string => self::libelleDeLaLigne(ValeursLues::champs($state)))
                     ->addActionLabel('Ajouter un produit')
                     ->defaultItems(1)
                     ->minItems(1)
@@ -129,7 +131,7 @@ class InventaireOuvertureResource extends Resource
                 ->helperText('Laissez vide pour un nouveau produit, créé à la validation de l\'inventaire.')
                 ->searchable()
                 ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query()->jamaisRecus(), $search))
-                ->getOptionLabelUsing(fn (mixed $value): ?string => $estUnIdentifiant($value) ? Produit::withTrashed()->find((int) $value)?->nom : null)
+                ->getOptionLabelUsing(fn (mixed $value): ?string => $estUnIdentifiant($value) ? Produit::withTrashed()->find(ValeurSimple::enEntier($value))?->nom : null)
                 ->rule('integer')
                 ->rule(fn (): Exists => Produit::regleExisteDansLeMagasin(Produit::query()->jamaisRecus()), fn (mixed $state): bool => $estUnIdentifiant($state))
                 ->validationMessages([
@@ -174,10 +176,10 @@ class InventaireOuvertureResource extends Resource
         $produitId = $ligne['produit_id'] ?? null;
 
         if (filled($produitId) && filter_var($produitId, FILTER_VALIDATE_INT) !== false) {
-            return Produit::withTrashed()->find((int) $produitId)?->nom;
+            return Produit::withTrashed()->find(ValeurSimple::enEntier($produitId))?->nom;
         }
 
-        return $ligne['produit']['nom'] ?? null;
+        return ValeurSimple::enTexteOuNul(ValeursLues::valeurAu($ligne, 'produit', 'nom'));
     }
 
     /**
@@ -192,7 +194,7 @@ class InventaireOuvertureResource extends Resource
         $fiche = $ligne->nouveau_produit ?? [];
 
         if (isset($fiche['taux_tva'])) {
-            $fiche['taux_tva'] = DevisResource::pourcentageEnTexte($fiche['taux_tva']);
+            $fiche['taux_tva'] = DevisResource::pourcentageEnTexte(ValeurSimple::enTexteOuNul($fiche['taux_tva']));
         }
 
         return [
@@ -288,7 +290,7 @@ class InventaireOuvertureResource extends Resource
             ->visible(fn (InventaireOuverture $record): bool => $record->statut === StatutInventaireOuverture::Brouillon && CompteConnecte::exiger()->can('valider', $record))
             ->action(function (InventaireOuverture $record, array $data, MountableAction $action): void {
                 static::executerSansCasser(function () use ($record, $data, $action): void {
-                    $inventaire = app(ValiderInventaireOuvertureAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']);
+                    $inventaire = app(ValiderInventaireOuvertureAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton']));
 
                     Notification::make()->title("Inventaire d'ouverture {$inventaire->numero} validé.")->success()->send();
                     $action->redirect(self::getUrl('view', ['record' => $inventaire]));

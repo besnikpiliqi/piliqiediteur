@@ -24,6 +24,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
@@ -54,6 +55,7 @@ use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
 use Livewire\Attributes\Locked;
 use LogicException;
+use UnexpectedValueException;
 
 /**
  * Caisse rapide pour une vente comptoir : un vendeur encaisse directement
@@ -211,14 +213,14 @@ class Caisse extends Page implements HasForms
      */
     public function rendering(): void
     {
-        $this->data['lignes'] = DevisResource::lignesAuxPrixPermis($this->data['lignes'] ?? [], $this->data['client_id'] ?? null);
+        $this->data['lignes'] = DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($this->data['lignes'] ?? []), $this->data['client_id'] ?? null);
 
         try {
             $this->enregistrerLePanier();
         } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
             static::notifierLeRefus($refus);
 
-            $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(CompteConnecte::exiger()), $this->data['parts'] ?? null);
+            $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(CompteConnecte::exiger()), isset($this->data['parts']) ? ValeursLues::tableau($this->data['parts']) : null);
         }
 
         $this->suivreLeResteAPayer();
@@ -233,12 +235,26 @@ class Caisse extends Page implements HasForms
     {
         $cle = $this->seulePartPayee();
 
-        if ($cle === null || ($this->data['parts'][$cle]['montant_saisi'] ?? false)) {
+        if ($cle === null || (ValeursLues::valeurAu($this->data, 'parts', $cle, 'montant_saisi') ?? false)) {
             return;
         }
 
         $reste = $this->apercuDuReglement($this->data['lignes'] ?? [], $this->data['client_id'] ?? null, self::bonsDesParts($this->data['parts']))->resteARepartir;
-        $this->data['parts'][$cle]['montant'] = $reste > 0 ? app(CalculateurLigne::class)->enDecimal($reste) : null;
+        $this->changerLaPart($cle, 'montant', $reste > 0 ? app(CalculateurLigne::class)->enDecimal($reste) : null);
+    }
+
+    /**
+     * Change ce champ de cette part du règlement saisi (voir
+     * seulePartPayee(), qui ne désigne qu'une part saisie), les autres
+     * champs et les autres parts gardés tels quels, à leur place.
+     *
+     * @throws UnexpectedValueException un règlement ou une part qui n'est pas un tableau
+     */
+    private function changerLaPart(string $cle, string $champ, mixed $valeur): void
+    {
+        $parts = ValeursLues::tableau($this->data['parts'] ?? []);
+        $parts[$cle] = [...ValeursLues::champs($parts[$cle] ?? null), $champ => $valeur];
+        $this->data['parts'] = $parts;
     }
 
     /**
@@ -263,7 +279,7 @@ class Caisse extends Page implements HasForms
      */
     private function enregistrerLePanier(): void
     {
-        $panier = app(PanierDeCaisse::class)->enregistrer(CompteConnecte::exiger(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+        $panier = app(PanierDeCaisse::class)->enregistrer(CompteConnecte::exiger(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, ValeursLues::tableau($this->data['lignes'] ?? []));
 
         if ($panier !== null) {
             $this->jetonDeLaVente = $panier->jeton;
@@ -337,7 +353,7 @@ class Caisse extends Page implements HasForms
         $cle = $this->seulePartPayee();
 
         if ($cle !== null) {
-            $this->data['parts'][$cle]['mode'] = self::modePrefere($clientId)->value;
+            $this->changerLaPart($cle, 'mode', self::modePrefere($clientId)->value);
         }
     }
 
@@ -367,7 +383,7 @@ class Caisse extends Page implements HasForms
     private function apercuDuReglement(mixed $lignes, mixed $clientId, array $bons): ApercuDuReglement
     {
         $totalTtc = app(CalculateurLigne::class)->enCentiemes(DevisResource::apercuDesLignes(is_array($lignes) ? $lignes : [], $clientId)->totaux['total_ttc']);
-        $client = blank($clientId) || is_bool($clientId) || filter_var($clientId, FILTER_VALIDATE_INT) === false ? null : Client::withTrashed()->find((int) $clientId);
+        $client = blank($clientId) || is_bool($clientId) || filter_var($clientId, FILTER_VALIDATE_INT) === false ? null : Client::withTrashed()->find(ValeurSimple::enEntier($clientId));
 
         return ApercuDuReglement::aLaCaisse($client, $totalTtc, $bons);
     }
@@ -403,7 +419,7 @@ class Caisse extends Page implements HasForms
                         ->schema(ClientResource::creationRapideSchema()))
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
-                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient(ValeursLues::champs($data)))
                     ->afterStateUpdated(fn (mixed $state) => $this->preselectionnerLeModePrefere($state))
                     ->required(),
             ]),
@@ -453,7 +469,7 @@ class Caisse extends Page implements HasForms
                 ->visible(fn (): bool => $this->lignesRenseignees() !== [])
                 ->action(function (): void {
                     try {
-                        app(PanierDeCaisse::class)->abandonner(CompteConnecte::exiger(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+                        app(PanierDeCaisse::class)->abandonner(CompteConnecte::exiger(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, ValeursLues::tableau($this->data['lignes'] ?? []));
                     } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
@@ -481,11 +497,11 @@ class Caisse extends Page implements HasForms
             ->modalHeading('Vendre sans stock ?')
             ->modalIcon('heroicon-o-exclamation-triangle')
             ->modalIconColor('warning')
-            ->modalDescription(fn (array $arguments): HtmlString => static::descriptionDeLAvertissement($arguments))
+            ->modalDescription(fn (array $arguments): HtmlString => static::descriptionDeLAvertissement(ValeursLues::champs($arguments)))
             ->modalSubmitActionLabel('Confirmer la vente')
             ->action(function (array $arguments, Actions\Action $action): void {
                 try {
-                    $confirmation = static::confirmationDesArguments($arguments);
+                    $confirmation = static::confirmationDesArguments(ValeursLues::champs($arguments));
                 } catch (InvalidArgumentException $illisible) {
                     static::notifierLeRefus($illisible);
 
@@ -555,10 +571,15 @@ class Caisse extends Page implements HasForms
      */
     private function lignesRenseignees(): array
     {
-        return array_values(array_filter(
-            $this->data['lignes'] ?? [],
-            fn (mixed $ligne): bool => is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null)),
-        ));
+        $renseignees = [];
+
+        foreach (ValeursLues::tableau($this->data['lignes'] ?? []) as $ligne) {
+            if (is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null))) {
+                $renseignees[] = ValeursLues::champs($ligne);
+            }
+        }
+
+        return $renseignees;
     }
 
     /**
@@ -607,7 +628,7 @@ class Caisse extends Page implements HasForms
             $facture = app(EnregistrerVenteCaisseAction::class)->handle(
                 CompteConnecte::exiger(),
                 $client,
-                $data['lignes'],
+                ValeursLues::lignes($data['lignes']),
                 new ReglementComptant(self::partsPayees($data['parts'] ?? []), self::bonsDesParts($data['parts'] ?? [])),
                 $confirmation,
                 $this->jetonDeLaVente,

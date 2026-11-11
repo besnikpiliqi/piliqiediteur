@@ -11,7 +11,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -59,7 +61,7 @@ class ConfierDesClientsAction
         $changements = ['ajoutes' => [], 'retires' => []];
 
         $this->dansLaSociete($cabinet, CreerCollaborateurAction::MESSAGE_PROPRIETAIRE_DU_CABINET_SEUL, function () use ($auteur, $collaborateur, $cabinet, $liens, &$changements): void {
-            $actuels = DB::table('clients_confies')->where('societe_id', $cabinet->getKey())->where('user_id', $collaborateur->getKey())->pluck('lien_id')->map(fn ($id): int => (int) $id)->all();
+            $actuels = ValeursLues::entiers(DB::table('clients_confies')->where('societe_id', $cabinet->getKey())->where('user_id', $collaborateur->getKey())->pluck('lien_id'));
             $concernes = array_values(array_unique([...$liens, ...$actuels]));
             $clients = LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->pluck('societe_id')->unique()->values()->all();
             $magasinsVises = Magasin::query()->with('societe')->whereIn('societe_id', $clients)->where('est_demonstration', false)->orderBy('id')->get();
@@ -71,7 +73,7 @@ class ConfierDesClientsAction
                     throw new AuthorizationException(CreerCollaborateurAction::MESSAGE_PROPRIETAIRE_DU_CABINET_SEUL);
                 }
 
-                $verrouilles = LienCabinet::query()->duCabinet($cabinet)->whereKey($liens)->get()->keyBy(fn (LienCabinet $lien): int => (int) $lien->getKey());
+                $verrouilles = LienCabinet::query()->duCabinet($cabinet)->whereKey($liens)->get()->keyBy(fn (LienCabinet $lien): int => CleDuModele::de($lien));
 
                 foreach ($liens as $id) {
                     if (! ($verrouilles->get($id)?->estActif() ?? false)) {
@@ -83,12 +85,12 @@ class ConfierDesClientsAction
                 $retires = $actuels->reject(fn (ClientConfie $confie): bool => in_array((int) $confie->lien_id, $liens, true));
                 $retires->each(fn (ClientConfie $confie) => ClientConfie::query()->whereKey($confie->getKey())->delete());
 
-                foreach (array_diff($liens, $actuels->pluck('lien_id')->map(fn ($id): int => (int) $id)->all()) as $id) {
+                foreach (array_diff($liens, ValeursLues::entiers($actuels->pluck('lien_id'))) as $id) {
                     tap((new ClientConfie)->forceFill(['lien_id' => $id, 'user_id' => $collaborateurRelu->getKey(), 'confie_par' => $auteurRelu->getKey()]))->save();
                     $changements['ajoutes'][] = (int) ValeurRequise::de($verrouilles->get($id), 'le lien verrouillé du client confié')->societe_id;
                 }
 
-                $changements['retires'] = array_values(LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id')->map(fn ($id): int => (int) $id)->all());
+                $changements['retires'] = ValeursLues::entiers(LienCabinet::query()->duCabinet($cabinet)->whereKey($retires->pluck('lien_id')->all())->pluck('societe_id'));
             }, function () use ($cabinet, $concernes): void {
                 LienCabinet::query()->duCabinet($cabinet)->whereKey($concernes)->orderBy('id')->lockForUpdate()->get();
                 $cabinet->cabinet()->sharedLock()->first();

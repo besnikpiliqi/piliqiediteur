@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\MotifCode;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\EspaceDeLaSociete;
 use App\Models\User;
 use Filament\Notifications\Notification;
@@ -66,11 +68,11 @@ class CodeDuCourrierController
             ], attributes: self::NOMS_DES_CHAMPS)->validate();
 
             $proprietaire = $saisir->handle(
-                self::siren($donnees['siren']),
-                $donnees['code'],
-                $donnees['email'],
-                $donnees['password'],
-                (string) ($donnees['password_confirmation'] ?? ''),
+                self::siren(ValeursLues::texteDe($donnees, 'siren')),
+                ValeursLues::texteDe($donnees, 'code'),
+                ValeursLues::texteDe($donnees, 'email'),
+                ValeursLues::texteDe($donnees, 'password'),
+                ValeurSimple::enTexte($donnees['password_confirmation'] ?? null),
                 (string) $requete->ip(),
             );
         } catch (ValidationException $refus) {
@@ -90,7 +92,7 @@ class CodeDuCourrierController
                 ->title('Confirmez votre adresse de connexion')
                 ->body($proprietaire->nouvelle_adresse !== null
                     ? "Un lien valable 24 heures vient d'être envoyé à {$proprietaire->nouvelle_adresse} : suivez-le en étant connecté à ce compte pour en faire votre adresse de connexion. {$identifiant}"
-                    : 'Le lien de confirmation n\'a pas pu être envoyé à '.User::normaliserEmail($donnees['email'])." : saisissez cette adresse dans votre profil et enregistrez pour en recevoir un. {$identifiant}")
+                    : 'Le lien de confirmation n\'a pas pu être envoyé à '.User::normaliserEmail(ValeursLues::texteDe($donnees, 'email'))." : saisissez cette adresse dans votre profil et enregistrez pour en recevoir un. {$identifiant}")
                 ->warning()
                 ->persistent()
                 ->send();
@@ -106,7 +108,7 @@ class CodeDuCourrierController
 
         try {
             $donnees = Validator::make($requete->all(), self::reglesDuCode(), attributes: self::NOMS_DES_CHAMPS)->validate();
-            $saisir->saisirUnCodeDeProcedure(self::siren($donnees['siren']), $motif, $donnees['code'], (string) $requete->ip());
+            $saisir->saisirUnCodeDeProcedure(self::siren(ValeursLues::texteDe($donnees, 'siren')), $motif, ValeursLues::texteDe($donnees, 'code'), (string) $requete->ip());
         } catch (ValidationException $refus) {
             return redirect()->route('code.procedure.afficher', ['objet' => $motif->value])
                 ->withErrors($refus->errors())

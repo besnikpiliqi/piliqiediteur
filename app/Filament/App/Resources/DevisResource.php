@@ -12,6 +12,8 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
@@ -75,7 +77,7 @@ class DevisResource extends Resource
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
-                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient(ValeursLues::champs($data)))
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),
@@ -181,7 +183,7 @@ class DevisResource extends Resource
                         : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
                     ->form([self::champDuJeton()])
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && CompteConnecte::exiger()->can('envoyer', $record))
-                    ->action(fn (Devis $record, array $data) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(CompteConnecte::exiger(), $record, $data['jeton']))),
+                    ->action(fn (Devis $record, array $data) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexteOuNul($data['jeton'])))),
                 // Masquée une fois la date de validité dépassée (voir
                 // DevisPolicy::accepter()).
                 Tables\Actions\Action::make('accepter')

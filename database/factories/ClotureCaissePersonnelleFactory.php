@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -21,7 +22,7 @@ class ClotureCaissePersonnelleFactory extends Factory
         return [
             'vendeur_id' => User::factory(),
             'mode_fermeture' => ModeFermetureCaisse::Vendeur,
-            'fermee_par' => static fn (array $attributs): int => $attributs['vendeur_id'],
+            'fermee_par' => static fn (array $attributs): int => ValeursLues::entier($attributs['vendeur_id']),
             'periode_debut' => now()->subHours(4),
             'jusqu_au' => now(),
             'cloturee_a' => now(),

@@ -2,6 +2,8 @@
 
 namespace App\Integrations\EnvoiRecommande;
 
+use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -48,7 +50,7 @@ class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande
         }
 
         $reference = 'faux-'.Str::lower(Str::random(16));
-        Cache::forever(self::CLE_DU_CACHE, [...Cache::get(self::CLE_DU_CACHE, []), $reference => [
+        Cache::forever(self::CLE_DU_CACHE, [...self::courriers(), $reference => [
             'destinataire' => $destinataire->enTableau(),
             'pdf' => base64_encode($pdf),
             'remise_en_personne' => $remiseEnPersonne,
@@ -70,7 +72,7 @@ class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande
             throw new EnvoiRecommandeIndisponibleException;
         }
 
-        return SuiviDEnvoi::depuisLeRappel(Cache::get(self::CLE_DU_CACHE, [])[$reference]['suivi'] ?? []);
+        return SuiviDEnvoi::depuisLeRappel(ValeursLues::tableau(self::courriers()[$reference]['suivi'] ?? []));
     }
 
     /**
@@ -81,11 +83,11 @@ class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande
     public function envois(): array
     {
         return array_map(fn (array $envoi): array => [
-            'destinataire' => DestinataireDuCourrier::depuisTableau($envoi['destinataire']),
-            'pdf' => (string) base64_decode($envoi['pdf'], true),
-            'remise_en_personne' => $envoi['remise_en_personne'],
-            'suivi' => SuiviDEnvoi::depuisLeRappel($envoi['suivi']),
-        ], Cache::get(self::CLE_DU_CACHE, []));
+            'destinataire' => DestinataireDuCourrier::depuisTableau(ValeursLues::tableauDe($envoi, 'destinataire')),
+            'pdf' => ResultatDePhp::texte(base64_decode(ValeursLues::texteDe($envoi, 'pdf'), true), 'Le décodage du PDF d\'un courrier factice'),
+            'remise_en_personne' => ValeursLues::booleenDe($envoi, 'remise_en_personne'),
+            'suivi' => SuiviDEnvoi::depuisLeRappel(ValeursLues::tableauDe($envoi, 'suivi')),
+        ], self::courriers());
     }
 
     /**
@@ -111,8 +113,25 @@ class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande
 
     private function suivreLePli(string $reference, string $statut): void
     {
-        $envois = Cache::get(self::CLE_DU_CACHE, []);
+        $envois = self::courriers();
         $envois[$reference]['suivi'] = ['statut' => $statut];
         Cache::forever(self::CLE_DU_CACHE, $envois);
+    }
+
+    /**
+     * Les courriers que le service factice garde dans le cache, par
+     * référence, tels qu'il les y a écrits.
+     *
+     * @return array<string, array<array-key, mixed>>
+     */
+    private static function courriers(): array
+    {
+        $courriers = [];
+
+        foreach (ValeursLues::tableau(Cache::get(self::CLE_DU_CACHE, [])) as $reference => $courrier) {
+            $courriers[ValeursLues::texte($reference)] = ValeursLues::tableau($courrier);
+        }
+
+        return $courriers;
     }
 }

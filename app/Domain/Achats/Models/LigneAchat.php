@@ -8,6 +8,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -176,7 +177,7 @@ class LigneAchat extends Model
                 'montant_ht' => $centiemes('montant_ht'),
                 'montant_tva' => $centiemes('montant_tva'),
             ],
-            (int) $avoirsEmis->sum('quantite') + $quantite,
+            ValeursLues::entier($avoirsEmis->sum('quantite')) + $quantite,
             [
                 'montant_ht' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
                 'montant_tva' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),

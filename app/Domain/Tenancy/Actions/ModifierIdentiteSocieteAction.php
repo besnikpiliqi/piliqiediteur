@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -149,7 +150,7 @@ class ModifierIdentiteSocieteAction
     {
         $recus = array_intersect_key($donnees, array_flip($societe->type_activite->aDesMagasins() ? self::CHAMPS : array_diff(self::CHAMPS, self::CHAMPS_DE_L_ASSURANCE)));
         $saisie = [...array_map(JournalAudit::valeur(...), $societe->only(self::CHAMPS)), ...$recus];
-        $forme = FormeJuridique::tryFrom((string) ($saisie['forme_juridique'] ?? ''));
+        $forme = FormeJuridique::tryFrom(ValeurSimple::enTexte($saisie['forme_juridique'] ?? null));
         $commerciale = $saisie['societe_commerciale'] === null || $saisie['societe_commerciale'] === ''
             ? null
             : filter_var($saisie['societe_commerciale'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);

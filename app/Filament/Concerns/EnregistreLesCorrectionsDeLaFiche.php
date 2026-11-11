@@ -5,6 +5,7 @@ namespace App\Filament\Concerns;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\Locked;
 
@@ -49,7 +50,7 @@ trait EnregistreLesCorrectionsDeLaFiche
         $fiche = $this->getRecord();
         $archiveeDepuisLaLecture = $this->ficheLue !== [] && method_exists($fiche, 'trashed') && $fiche->trashed();
 
-        abort_unless($archiveeDepuisLaLecture ? static::getResource()::canView($fiche) : static::getResource()::canEdit($fiche), 403);
+        abort_unless(ValeursLues::booleen($archiveeDepuisLaLecture ? static::getResource()::canView($fiche) : static::getResource()::canEdit($fiche)), 403);
     }
 
     protected function fillForm(): void

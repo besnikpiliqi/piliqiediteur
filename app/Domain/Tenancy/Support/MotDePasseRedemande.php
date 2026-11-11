@@ -26,7 +26,7 @@ final class MotDePasseRedemande
      */
     public static function exiger(User $auteur, #[SensitiveParameter] string $motDePasse): void
     {
-        if (! Hash::check($motDePasse, (string) User::query()->whereKey($auteur->getKey())->value('password'))) {
+        if (! Hash::check($motDePasse, ValeursLues::texte(User::query()->whereKey($auteur->getKey())->value('password')))) {
             throw new LogicException(self::MESSAGE);
         }
     }

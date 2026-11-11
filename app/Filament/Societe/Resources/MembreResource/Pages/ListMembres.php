@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\MontreLeCompteCree;
 use App\Filament\Societe\Resources\MembreResource;
@@ -112,14 +113,14 @@ class ListMembres extends ListRecords
                     $enPresence = $candidat?->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
 
                     if ($enPresence) {
-                        MembreResource::exigerLeMotDePasseChoisi((string) ($data['mot_de_passe'] ?? ''), $candidat, $form);
+                        MembreResource::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $candidat, $form);
                     }
 
                     MembreResource::executerLeGeste(function () use ($candidat, $enPresence, $data): void {
                         app(ModifierMembreAction::class)->handle($this->auteur(), $candidat ?? throw new AuthorizationException(PorteeDesDroits::REFUS), RoleMagasin::Responsable);
 
                         if ($enPresence) {
-                            app(RedonnerLAccesAction::class)->handle($this->auteur(), $candidat, true, (string) $data['mot_de_passe'], (string) $data['jeton_acces']);
+                            app(RedonnerLAccesAction::class)->handle($this->auteur(), $candidat, true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
                         }
 
                         Notification::make()->title('Le responsable est nommé.')->success()->send();
@@ -130,7 +131,7 @@ class ListMembres extends ListRecords
 
                 MembreResource::executerLeGeste(function () use ($data, &$cree): void {
                     $magasin = $this->magasinChoisi(fn (string $champ): mixed => $data[$champ] ?? null) ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
-                    $cree = MembreResource::creerOuReintegrerUnMembre($this->auteur(), $magasin, $data, RoleMagasin::Responsable, []);
+                    $cree = MembreResource::creerOuReintegrerUnMembre($this->auteur(), $magasin, ValeursLues::champs($data), RoleMagasin::Responsable, []);
                 });
 
                 if ($cree instanceof User) {
@@ -166,9 +167,10 @@ class ListMembres extends ListRecords
                 $cree = null;
 
                 MembreResource::executerLeGeste(function () use ($data, &$cree): void {
-                    $magasin = $this->magasinChoisi(fn (string $champ): mixed => $data[$champ] ?? null) ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
-                    $role = MembreResource::roleSaisi($data);
-                    $cree = MembreResource::creerOuReintegrerUnMembre($this->auteur(), $magasin, $data, $role['role'], $role['autorisations']);
+                    $saisie = ValeursLues::champs($data);
+                    $magasin = $this->magasinChoisi(fn (string $champ): mixed => $saisie[$champ] ?? null) ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
+                    $role = MembreResource::roleSaisi($saisie);
+                    $cree = MembreResource::creerOuReintegrerUnMembre($this->auteur(), $magasin, $saisie, $role['role'], $role['autorisations']);
                 });
 
                 if ($cree instanceof User) {
@@ -194,14 +196,15 @@ class ListMembres extends ListRecords
                 $cree = null;
 
                 MembreResource::executerLeGeste(function () use ($data, &$cree): void {
+                    $saisie = ValeursLues::champs($data);
                     $cree = app(CreerAdministrateurAction::class)->handle(
                         $this->auteur(),
                         MembreResource::societe(),
-                        ['name' => $data['name']],
-                        $data['portee'] === 'tous' ? null : array_values(array_map(intval(...), $data['magasins'] ?? [])),
-                        MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
-                        array_values($data['autorisations_societe'] ?? []),
-                        filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null,
+                        ['name' => $saisie['name']],
+                        MembreResource::magasinsSaisis($saisie),
+                        MembreResource::autorisationsSaisies($saisie, 'autorisations_magasin'),
+                        MembreResource::casesCochees($saisie, 'autorisations_societe'),
+                        filled($saisie['jeton'] ?? null) ? ValeurSimple::enTexte($saisie['jeton']) : null,
                     );
                 });
 
@@ -219,7 +222,7 @@ class ListMembres extends ListRecords
      */
     private function magasinChoisi(callable $get): ?Magasin
     {
-        $id = (int) $get('magasin_id');
+        $id = ValeurSimple::enEntier($get('magasin_id'));
 
         return array_key_exists($id, MembreResource::magasinsOuCreerUnCompte()) ? MembreResource::magasin($id) : null;
     }

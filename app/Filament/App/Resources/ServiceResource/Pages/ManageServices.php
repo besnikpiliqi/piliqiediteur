@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\ServiceResource\Pages;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\CreerUneFicheAction;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ServiceResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
@@ -39,7 +40,7 @@ class ManageServices extends ManageRecords
     {
         return [
             Actions\CreateAction::make()
-                ->using(fn (array $data): Service => static::executerOuInterrompre(fn (): Service => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Service::class, $data))),
+                ->using(fn (array $data): Service => static::executerOuInterrompre(fn (): Service => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Service::class, ValeursLues::champs($data)))),
         ];
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Tenancy\Support\ValeursLues;
+
 /**
  * Après « Créer » ou « Sauvegarder », retour à la liste de la ressource,
  * sa page parente : rester sur le formulaire donne l'impression que rien
@@ -11,6 +13,6 @@ trait RevientALaListe
 {
     protected function getRedirectUrl(): string
     {
-        return static::getResource()::getUrl('index');
+        return ValeursLues::texte(static::getResource()::getUrl('index'));
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Integrations\Sirene;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -204,9 +205,9 @@ class InseeSirene implements RepertoireSirene
         }
 
         try {
-            $reponse = Http::baseUrl(config('services.sirene.url'))
+            $reponse = Http::baseUrl(Reglage::texte('services.sirene.url'))
                 ->withHeaders(['X-INSEE-Api-Key-Integration' => $cle])
-                ->timeout(config('services.sirene.delai'))
+                ->timeout(Reglage::entier('services.sirene.delai'))
                 ->connectTimeout(5)
                 ->acceptJson()
                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false)

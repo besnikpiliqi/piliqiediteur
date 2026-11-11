@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -71,7 +72,7 @@ class CreerMembreAction
             $identiteValide = $this->creation->valider($identite);
             $empreinte = CreationDesComptes::empreinte([
                 'role_societe' => RoleSociete::Membre->value,
-                'magasin' => (int) $magasin->getKey(),
+                'magasin' => CleDuModele::de($magasin),
                 'role' => $demandee['role']->value,
                 'name' => $identiteValide['name'],
                 'autorisations' => $cases,

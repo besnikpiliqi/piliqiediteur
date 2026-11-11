@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Filament\Societe\Pages\CabinetComptable;
 use App\Models\User;
@@ -76,16 +77,30 @@ abstract class RepondreAUneDemandeDeLien
             $relu->forceFill(['etat' => $etat, 'jeton_hache' => null, 'repondu_par' => $auteurRelu?->getKey(), 'repondu_le' => now()])->save();
             $duCabinet = $relu->origine === OrigineDuLien::DemandeDuCabinet;
 
-            $duVisiteur = (int) ($auteurRelu->societe_id ?? $client->getKey());
-            $auJournalDe = fn (Societe $journal, array $valeurs): mixed => (int) $journal->getKey() === $duVisiteur
-                ? $this->inscrire($journal, $action, $auteurRelu, $valeurs, $relu)
-                : $this->traces->horsDeSaSociete(fn () => $this->inscrire($journal, $action, $auteurRelu, $valeurs, $relu));
+            $duVisiteur = $auteurRelu->societe_id ?? CleDuModele::de($client);
 
-            $auJournalDe($client, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client)]);
-            $auJournalDe($cabinet, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => $duCabinet ? IdentiteDansLeJournal::sirenSeul($client) : IdentiteDansLeJournal::de($client)]);
+            $this->inscrireAuJournalDe($client, $duVisiteur, $action, $auteurRelu, $relu, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client)]);
+            $this->inscrireAuJournalDe($cabinet, $duVisiteur, $action, $auteurRelu, $relu, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => $duCabinet ? IdentiteDansLeJournal::sirenSeul($client) : IdentiteDansLeJournal::de($client)]);
 
             return $relu;
         }));
+    }
+
+    /**
+     * Inscrit le geste au journal de cette société : directement quand
+     * c'est la société du visiteur (celle de l'auteur, ou le client pour
+     * le système), sans garder la trace du visiteur sinon (voir
+     * TraceDuVisiteur).
+     *
+     * @param  array<string, mixed>  $valeurs
+     */
+    private function inscrireAuJournalDe(Societe $journal, int $duVisiteur, ActionAuditee $action, ?User $auteur, LienCabinet $demande, array $valeurs): void
+    {
+        if (CleDuModele::de($journal) === $duVisiteur) {
+            $this->inscrire($journal, $action, $auteur, $valeurs, $demande);
+        } else {
+            $this->traces->horsDeSaSociete(fn (): EntreeAudit => $this->inscrire($journal, $action, $auteur, $valeurs, $demande));
+        }
     }
 
     /**
@@ -97,7 +112,7 @@ abstract class RepondreAUneDemandeDeLien
      */
     private function inscrire(Societe $journal, ActionAuditee $action, ?User $auteur, array $valeurs, LienCabinet $demande): EntreeAudit
     {
-        return app(TenantContext::class)->runAsSociete($journal, fn (): EntreeAudit => $auteur !== null && (int) $auteur->societe_id !== (int) $journal->getKey()
+        return app(TenantContext::class)->runAsSociete($journal, fn (): EntreeAudit => $auteur !== null && (int) $auteur->societe_id !== CleDuModele::de($journal)
             ? $this->journalAudit->inscrireLeGesteDeLAutreSociete($action, null, $valeurs, $demande)
             : $this->journalAudit->inscrire($action, $auteur, null, null, $valeurs, $demande));
     }

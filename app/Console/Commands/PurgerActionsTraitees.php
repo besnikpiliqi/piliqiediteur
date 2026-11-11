@@ -6,6 +6,8 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\ActionTraitee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -33,7 +35,7 @@ class PurgerActionsTraitees extends Command
 
     public function handle(TenantContext $tenantContext): int
     {
-        $limite = Calendrier::deParis()->decaler(now(), CarbonInterval::days(-config('conservation.actions_traitees_en_jours')));
+        $limite = Calendrier::deParis()->decaler(now(), CarbonInterval::days(-Reglage::entier('conservation.actions_traitees_en_jours')));
         $effaces = 0;
         $enEchec = 0;
 
@@ -46,7 +48,7 @@ class PurgerActionsTraitees extends Command
                         $lot = ActionTraitee::query()->where('created_at', '<', $limite)->orderBy('id')->limit(self::LOT)->pluck('id');
 
                         if ($lot->isNotEmpty()) {
-                            $effaces += ActionTraitee::query()->whereKey($lot->all())->delete();
+                            $effaces += ValeursLues::entier(ActionTraitee::query()->whereKey($lot->all())->delete());
                         }
                     } while ($lot->count() === self::LOT);
 

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -49,10 +50,10 @@ class ConformiteApercu extends BaseWidget
                 ->description(ModuleFiscal::REFERENCE_LEGALE)
                 ->color('gray'),
             $this->cleDeSignature(),
-            Stat::make('Grand total perpétuel réel', self::enEuros($grandsTotaux['perpetuel_reel'] ?? 0))
+            Stat::make('Grand total perpétuel réel', self::enEuros(ValeursLues::entier(ValeursLues::valeurAu($grandsTotaux, 'perpetuel_reel') ?? 0)))
                 ->description($origine)
                 ->color('success'),
-            Stat::make('Grand total perpétuel absolu', self::enEuros($grandsTotaux['perpetuel_absolu'] ?? 0))
+            Stat::make('Grand total perpétuel absolu', self::enEuros(ValeursLues::entier(ValeursLues::valeurAu($grandsTotaux, 'perpetuel_absolu') ?? 0)))
                 ->description($origine)
                 ->color('success'),
             $this->derniereVerification(),
@@ -77,11 +78,11 @@ class ConformiteApercu extends BaseWidget
                 ->color('warning');
         }
 
-        $details = $controle->contenuSigne()['donnees']['details'] ?? [];
-        $anomalies = (int) ($details['nombre_anomalies'] ?? 0);
+        $details = ValeursLues::valeurAu($controle->contenuSigne(), 'donnees', 'details');
+        $anomalies = ValeursLues::entier(ValeursLues::valeurAu($details, 'nombre_anomalies') ?? 0);
         $quand = sprintf(
             'Vérification %s du %s',
-            ($details['verification'] ?? null) === 'complete' ? 'complète' : 'incrémentale',
+            ValeursLues::valeurAu($details, 'verification') === 'complete' ? 'complète' : 'incrémentale',
             self::calendrierDuMagasin()->afficher($controle->horodatage, 'd/m/Y à H:i:s'),
         );
 

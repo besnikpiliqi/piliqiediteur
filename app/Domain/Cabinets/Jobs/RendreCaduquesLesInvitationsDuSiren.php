@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -48,7 +49,7 @@ class RendreCaduquesLesInvitationsDuSiren implements ShouldQueue
             ->whereKeyNot($this->acceptee)
             ->orderBy('id')
             ->get(['id', 'societe_id'])
-            ->each(fn (InvitationCabinet $invitation) => $this->rendreCaduque((int) $invitation->getKey(), (int) $invitation->societe_id));
+            ->each(fn (InvitationCabinet $invitation) => $this->rendreCaduque(CleDuModele::de($invitation), (int) $invitation->societe_id));
     }
 
     /**

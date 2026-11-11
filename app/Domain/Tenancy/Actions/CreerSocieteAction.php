@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\GenerateurDIdentifiants;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -107,7 +108,7 @@ class CreerSocieteAction
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
         ])->validate();
-        $email = User::normaliserEmail($valides['email']);
+        $email = User::normaliserEmail(ValeursLues::texteDe($valides, 'email'));
         $motDePasseHache = Hash::isHashed($motDePasse) ? $motDePasse : Hash::make($motDePasse);
 
         if (FournisseurDesComptes::proprietaireDeLAdresse($email) !== null) {

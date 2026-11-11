@@ -23,7 +23,9 @@ final class ResultatDePhp
     }
 
     /**
-     * @param  resource|false  $resultat
+     * Un flux : celui qu'ouvre fopen() (false quand il a échoué), ou celui
+     * que reçoit une fonction qui écrit un fichier, sans type en PHP.
+     *
      * @return resource
      *
      * @throws RuntimeException l'opération a échoué (false)

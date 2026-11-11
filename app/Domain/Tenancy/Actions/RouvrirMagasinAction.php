@@ -150,8 +150,10 @@ class RouvrirMagasinAction
                 throw new LogicException($refusDuTerritoire);
             }
 
+            $reouverture = fn () => $this->registre->sousVerrou($magasin, fn () => $this->rouvrir($auteur, $magasin, $siret, $consultation));
+
             try {
-                [$rouvert, $autreTerritoire] = $contexte->runAs($magasin, fn (): array => $this->operateur->pendant($auteur, fn (): array => $this->registre->sousVerrou($magasin, fn (): array => $this->rouvrir($auteur, $magasin, $siret, $consultation))));
+                [$rouvert, $autreTerritoire] = $contexte->runAs($magasin, fn () => $this->operateur->pendant($auteur, $reouverture));
             } catch (SiretDejaReserveException) {
                 throw new LogicException(SiretsDesMagasins::MESSAGE_SIRET_RESERVE);
             }

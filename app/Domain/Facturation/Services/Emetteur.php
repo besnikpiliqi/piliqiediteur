@@ -5,7 +5,9 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Support\Str;
+use UnexpectedValueException;
 
 /**
  * Le vendeur tel qu'un ticket, une facture, un avoir ou un devis
@@ -181,40 +183,55 @@ final readonly class Emetteur
      * écrit par enTableau(), comme celui qu'un devis a figé à son envoi
      * (voir Devis::emetteur()).
      *
-     * @param  array<string, mixed>  $emetteur
+     * Chaque champ est lu pour ce qu'enTableau() y écrit ; un champ absent
+     * ou d'un autre type est refusé. Le marqueur « demonstration » n'est
+     * écrit que pour le magasin de démonstration.
+     *
+     * @param  array<array-key, mixed>  $emetteur
+     *
+     * @throws UnexpectedValueException un champ absent ou d'un autre type
      */
     public static function duContenuSigne(array $emetteur): self
     {
+        $siege = ValeursLues::tableauDe($emetteur, 'siege');
+        $mentions = ValeursLues::tableauDe($emetteur, 'mentions');
+        $assurance = ValeursLues::tableauDe($emetteur, 'assurance');
+        $regimeTva = ValeursLues::texteOuNulDe($emetteur, 'regime_tva');
+
         return new self(
-            nom: $emetteur['nom'],
-            raisonSociale: $emetteur['raison_sociale'],
-            formeJuridique: $emetteur['forme_juridique'],
-            estEntrepreneurIndividuel: $emetteur['entrepreneur_individuel'],
-            capitalSocial: $emetteur['capital_social'],
-            capitalVariable: $emetteur['capital_variable'],
-            siren: $emetteur['siren'],
-            siret: $emetteur['siret'],
-            immatriculation: $emetteur['immatriculation'],
-            numeroTva: $emetteur['numero_tva'],
-            adresse: $emetteur['adresse'],
-            complementAdresse: $emetteur['complement_adresse'],
-            codePostal: $emetteur['code_postal'],
-            ville: $emetteur['ville'],
-            pays: $emetteur['pays'],
-            siegeAdresse: $emetteur['siege']['adresse'],
-            siegeComplementAdresse: $emetteur['siege']['complement_adresse'],
-            siegeCodePostal: $emetteur['siege']['code_postal'],
-            siegeVille: $emetteur['siege']['ville'],
-            email: $emetteur['email'],
-            telephone: $emetteur['telephone'],
-            regimeTva: $emetteur['regime_tva'] === null ? null : RegimeTva::from($emetteur['regime_tva']),
-            optionDebitsTva: $emetteur['option_debits_tva'],
-            mentionsEntreProfessionnels: $emetteur['mentions'],
-            assuranceAssureur: $emetteur['assurance']['assureur'],
-            assuranceAdresse: $emetteur['assurance']['adresse'],
-            assuranceContrat: $emetteur['assurance']['contrat'],
-            assuranceCouverture: $emetteur['assurance']['couverture'],
-            estDemonstration: $emetteur['demonstration'] ?? false,
+            nom: ValeursLues::texteDe($emetteur, 'nom'),
+            raisonSociale: ValeursLues::texteOuNulDe($emetteur, 'raison_sociale'),
+            formeJuridique: ValeursLues::texteOuNulDe($emetteur, 'forme_juridique'),
+            estEntrepreneurIndividuel: ValeursLues::booleenDe($emetteur, 'entrepreneur_individuel'),
+            capitalSocial: ValeursLues::entierOuNulDe($emetteur, 'capital_social'),
+            capitalVariable: ValeursLues::booleenDe($emetteur, 'capital_variable'),
+            siren: ValeursLues::texteOuNulDe($emetteur, 'siren'),
+            siret: ValeursLues::texteOuNulDe($emetteur, 'siret'),
+            immatriculation: ValeursLues::texteOuNulDe($emetteur, 'immatriculation'),
+            numeroTva: ValeursLues::texteOuNulDe($emetteur, 'numero_tva'),
+            adresse: ValeursLues::texteOuNulDe($emetteur, 'adresse'),
+            complementAdresse: ValeursLues::texteOuNulDe($emetteur, 'complement_adresse'),
+            codePostal: ValeursLues::texteOuNulDe($emetteur, 'code_postal'),
+            ville: ValeursLues::texteOuNulDe($emetteur, 'ville'),
+            pays: ValeursLues::texteDe($emetteur, 'pays'),
+            siegeAdresse: ValeursLues::texteOuNulDe($siege, 'adresse'),
+            siegeComplementAdresse: ValeursLues::texteOuNulDe($siege, 'complement_adresse'),
+            siegeCodePostal: ValeursLues::texteOuNulDe($siege, 'code_postal'),
+            siegeVille: ValeursLues::texteOuNulDe($siege, 'ville'),
+            email: ValeursLues::texteOuNulDe($emetteur, 'email'),
+            telephone: ValeursLues::texteOuNulDe($emetteur, 'telephone'),
+            regimeTva: $regimeTva === null ? null : RegimeTva::from($regimeTva),
+            optionDebitsTva: ValeursLues::booleenDe($emetteur, 'option_debits_tva'),
+            mentionsEntreProfessionnels: [
+                'penalites_retard' => ValeursLues::texteDe($mentions, 'penalites_retard'),
+                'indemnite_recouvrement' => ValeursLues::texteDe($mentions, 'indemnite_recouvrement'),
+                'escompte' => ValeursLues::texteDe($mentions, 'escompte'),
+            ],
+            assuranceAssureur: ValeursLues::texteOuNulDe($assurance, 'assureur'),
+            assuranceAdresse: ValeursLues::texteOuNulDe($assurance, 'adresse'),
+            assuranceContrat: ValeursLues::texteOuNulDe($assurance, 'contrat'),
+            assuranceCouverture: ValeursLues::texteOuNulDe($assurance, 'couverture'),
+            estDemonstration: array_key_exists('demonstration', $emetteur) && ValeursLues::booleenDe($emetteur, 'demonstration'),
         );
     }
 

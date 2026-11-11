@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -180,7 +181,7 @@ class TableauDeBord extends Dashboard
     {
         $lie = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->first(['id', 'cabinet_id']);
         $demandes = LienCabinet::query()->where('etat', EtatDuLien::DemandeParLeCabinet->value)->where('expire_le', '>', now())->orderBy('demande_le')->get(['id', 'uuid', 'cabinet_id']);
-        $denomination = fn (int $cabinet): string => Societe::query()->whereKey($cabinet)->value('raison_sociale') ?? 'Un cabinet';
+        $denomination = fn (int $cabinet): string => ValeursLues::texteOuNul(Societe::query()->whereKey($cabinet)->value('raison_sociale')) ?? 'Un cabinet';
 
         return [
             'lie' => $lie === null ? null : $denomination((int) $lie->cabinet_id),

@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\DemanderUneNouvelleAdresseAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Component;
@@ -195,7 +196,7 @@ class ModifierProfil extends EditProfile
     {
         $compte = $this->compte();
         $donnees = $this->form->getState();
-        $adresse = filled($donnees['email'] ?? null) ? User::normaliserEmail((string) $donnees['email']) : null;
+        $adresse = filled($donnees['email'] ?? null) ? User::normaliserEmail(ValeurSimple::enTexte($donnees['email'])) : null;
         $motDePasse = $donnees['password'] ?? null;
         $this->adresseDemandee = null;
 
@@ -213,7 +214,7 @@ class ModifierProfil extends EditProfile
                 $compte->forceFill(['name' => $donnees['name']])->save();
 
                 if (filled($motDePasse)) {
-                    app(ChangerSonMotDePasseAction::class)->handle($compte, (string) $motDePasse, request()->hasSession() ? request()->session()->getId() : null, 'data.password');
+                    app(ChangerSonMotDePasseAction::class)->handle($compte, ValeurSimple::enTexte($motDePasse), request()->hasSession() ? request()->session()->getId() : null, 'data.password');
                 }
             });
         } catch (LogicException $refus) {

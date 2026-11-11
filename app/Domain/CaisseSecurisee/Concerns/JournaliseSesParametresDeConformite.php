@@ -10,6 +10,8 @@ use BackedEnum;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Stringable;
+use UnexpectedValueException;
 
 /**
  * Une fiche dont certaines colonnes sont des paramètres ayant un impact
@@ -133,7 +135,7 @@ trait JournaliseSesParametresDeConformite
         return match (true) {
             $valeur instanceof BackedEnum => $valeur->value,
             $valeur === null, is_bool($valeur), is_int($valeur), is_string($valeur) => $valeur,
-            default => (string) $valeur,
+            default => is_float($valeur) || $valeur instanceof Stringable ? (string) $valeur : throw new UnexpectedValueException('Un paramètre de conformité n\'a pas de valeur que le registre signe : '.get_debug_type($valeur).'.'),
         };
     }
 }

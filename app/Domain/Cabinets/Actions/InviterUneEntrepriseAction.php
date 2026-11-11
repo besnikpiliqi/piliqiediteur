@@ -24,9 +24,12 @@ use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Models\User;
 use Carbon\CarbonInterval;
@@ -102,8 +105,8 @@ class InviterUneEntrepriseAction
             'siren' => ['required', 'string', new SirenValide],
             'email' => ['required', 'string', 'email', 'max:255'],
         ])->validate();
-        $siren = $valides['siren'];
-        $email = User::normaliserEmail($valides['email']);
+        $siren = ValeursLues::texteDe($valides, 'siren');
+        $email = User::normaliserEmail(ValeursLues::texteDe($valides, 'email'));
 
         if ($siren === (string) $cabinet->siren) {
             throw ValidationException::withMessages(['siren' => self::MESSAGE_SOI_MEME]);
@@ -188,7 +191,7 @@ class InviterUneEntrepriseAction
         ]))->save();
         $this->journalAudit->inscrire(ActionAuditee::InvitationEnvoyee, $auteur, null, null, ['siren' => $siren], $invitation);
 
-        return ['resultat' => ResultatDInvitation::InvitationEnvoyee, 'id' => (int) $invitation->getKey()];
+        return ['resultat' => ResultatDInvitation::InvitationEnvoyee, 'id' => CleDuModele::de($invitation)];
     }
 
     /**
@@ -241,7 +244,7 @@ class InviterUneEntrepriseAction
             $this->traces->horsDeSaSociete(fn () => $this->journalAudit->inscrireLeGesteDeLAutreSociete(ActionAuditee::LienDemande, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::de($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
             app(TenantContext::class)->runAsSociete($cabinet, fn () => $this->journalAudit->inscrire(ActionAuditee::LienDemande, $auteur, null, null, ['cabinet' => IdentiteDansLeJournal::de($cabinet), 'client' => IdentiteDansLeJournal::sirenSeul($client), 'origine' => OrigineDuLien::DemandeDuCabinet->value], $lien));
 
-            return ['resultat' => ResultatDInvitation::DemandeEnvoyee, 'id' => (int) $lien->getKey()];
+            return ['resultat' => ResultatDInvitation::DemandeEnvoyee, 'id' => CleDuModele::de($lien)];
         });
     }
 
@@ -277,7 +280,7 @@ class InviterUneEntrepriseAction
         $relu = User::query()->whereKey($auteur->getKey())->first();
 
         if ($relu === null || Gate::forUser($relu)->denies('create', [InvitationCabinet::class, $cabinet])) {
-            if ($relu !== null && $relu->estProprietaire() && (int) $relu->societe_id === (int) $cabinet->getKey() && ! ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
+            if ($relu !== null && $relu->estProprietaire() && (int) $relu->societe_id === CleDuModele::de($cabinet) && ! ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
                 throw new CabinetNonVerifieException;
             }
 
@@ -296,7 +299,7 @@ class InviterUneEntrepriseAction
      */
     private function verifierLaLimiteDuJour(Societe $cabinet): void
     {
-        $limite = (int) config('cabinets.invitations_par_jour', 50);
+        $limite = Reglage::entier('cabinets.invitations_par_jour');
         $depuis = Calendrier::deParis()->debutDuJour(Calendrier::deParis()->aujourdhui());
         $envoyees = InvitationCabinet::query()->where('created_at', '>', $depuis)->count()
             + LienCabinet::query()->duCabinet($cabinet)->where('origine', OrigineDuLien::DemandeDuCabinet->value)->where('demande_le', '>', $depuis)->count();

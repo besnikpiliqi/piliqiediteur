@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Enums;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Filament\Support\Contracts\HasLabel;
 
 /**
@@ -66,7 +67,7 @@ enum TypeDActivite: string implements HasLabel
     {
         return match ($this) {
             self::Commerce => 'Vous vendez des articles achetés à vos fournisseurs et suivis en stock, avec ou sans votre main-d\'œuvre et vos services. C\'est le choix le plus complet : prenez-le si vous vendez ne serait-ce que quelques articles. Seules les marchandises que vous revendez s\'enregistrent en facture d\'achat ; vos matières premières, fournitures et frais, pas encore. La vente de ce que vous fabriquez ou préparez vous-même n\'est pas prise en charge.',
-            self::Services => 'Vous facturez votre travail, votre temps ou une prestation, sans vendre d\'articles : services, devis, factures, encaissements et caisse de comptoir ; ni articles, ni achats de marchandises, ni stock, ni inventaire. Les métiers du bâtiment s\'inscrivent ici : vos travaux, fournitures comprises, se facturent en lignes de service (fourniture et pose). Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale des travaux du bâtiment, par exemple), renseignez-la dans l\'identité de votre société : '.config('app.name').' l\'imprime sur vos devis et vos factures. Ce choix ne permet pas de vendre des articles.',
+            self::Services => 'Vous facturez votre travail, votre temps ou une prestation, sans vendre d\'articles : services, devis, factures, encaissements et caisse de comptoir ; ni articles, ni achats de marchandises, ni stock, ni inventaire. Les métiers du bâtiment s\'inscrivent ici : vos travaux, fournitures comprises, se facturent en lignes de service (fourniture et pose). Si la loi exige une assurance professionnelle pour votre activité (la garantie décennale des travaux du bâtiment, par exemple), renseignez-la dans l\'identité de votre société : '.Reglage::texte('app.name').' l\'imprime sur vos devis et vos factures. Ce choix ne permet pas de vendre des articles.',
             self::Cabinet => 'Réservé aux cabinets inscrits au tableau de l\'Ordre des experts-comptables, dont le code d\'activité est 69.20Z : un espace pour suivre vos clients, sans magasin ni vente. L\'inscription à l\'Ordre est vérifiée.',
         };
     }
@@ -77,7 +78,7 @@ enum TypeDActivite: string implements HasLabel
      */
     public static function rappelDuChoixDefinitif(): string
     {
-        $application = config('app.name');
+        $application = Reglage::texte('app.name');
 
         return "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « ".self::Commerce->getLabel()." », le plus complet. {$application} ne permet pas de facturer une activité exonérée de TVA (soins, enseignement, assurance, location de logements…).";
     }

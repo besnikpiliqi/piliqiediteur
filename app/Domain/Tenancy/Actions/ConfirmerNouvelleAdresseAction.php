@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JetonsDuLien;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -94,7 +95,7 @@ class ConfirmerNouvelleAdresseAction
      */
     public static function peutConfirmerDepuis(User $compte, ?Authenticatable $connecte): bool
     {
-        return $compte->aUneAdresseDeConnexion() || ($connecte instanceof User && (int) $connecte->getKey() === (int) $compte->getKey());
+        return $compte->aUneAdresseDeConnexion() || ($connecte instanceof User && CleDuModele::de($connecte) === CleDuModele::de($compte));
     }
 
     /**

@@ -22,9 +22,13 @@ use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
+use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
@@ -227,15 +231,15 @@ class Magasin extends Model implements HasName
      * AppPanelProvider) : une adresse qui ne porte pas un uuid ne désigne
      * aucun magasin (404), sans interroger la colonne uuid, de type uuid.
      *
-     * @param  mixed  $query
+     * @param  Model|BuilderContract  $query
      * @param  mixed  $value
      * @param  string|null  $field
-     * @return mixed
+     * @return BuilderContract
      */
     public function resolveRouteBindingQuery($query, $value, $field = null)
     {
-        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid((string) $value)) {
-            throw (new ModelNotFoundException)->setModel(self::class, [$value]);
+        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid($value)) {
+            throw (new ModelNotFoundException)->setModel(self::class, [ValeurSimple::enTexte($value)]);
         }
 
         return parent::resolveRouteBindingQuery($query, $value, $field);
@@ -830,7 +834,7 @@ class Magasin extends Model implements HasName
      */
     protected function identiteDansLeJournal(): array
     {
-        return ['magasin' => ['id' => $this->getKey(), 'nom' => $this->nom]];
+        return ['magasin' => ['id' => CleDuModele::de($this), 'nom' => $this->nom]];
     }
 
     /**
@@ -870,9 +874,9 @@ class Magasin extends Model implements HasName
     protected function delaisRelance(): Attribute
     {
         return Attribute::make(
-            get: fn (?string $valeur): ?array => $valeur === null ? null : json_decode($valeur, true, flags: JSON_THROW_ON_ERROR),
+            get: fn (mixed $valeur): ?array => $valeur === null ? null : ValeursLues::entiers(ValeursLues::tableau(json_decode(ValeursLues::texte($valeur), true, flags: JSON_THROW_ON_ERROR))),
             set: function (array $delais): string {
-                $jours = collect($delais)->map(fn (int|string $delai): int => (int) $delai)->unique()->sort()->values();
+                $jours = collect($delais)->map(fn (mixed $delai): int => is_int($delai) || is_string($delai) ? (int) $delai : throw new InvalidArgumentException('Un délai de relance est un nombre de jours.'))->unique()->sort()->values();
 
                 if ($jours->contains(fn (int $delai): bool => $delai < 1)) {
                     throw new InvalidArgumentException('Une relance part au moins un jour après l\'échéance.');

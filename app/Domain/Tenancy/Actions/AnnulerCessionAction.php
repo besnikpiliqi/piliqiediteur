@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -93,7 +94,7 @@ class AnnulerCessionAction
 
             $this->exigerAucuneOperationApres($instant, ValeursLues::entiers($sorties->modelKeys()));
             $motif = $cession->action === ActionAuditee::MagasinCede
-                ? (MotifFermeture::tryFrom((string) ($cession->anciennes_valeurs['motif'] ?? '')) ?? MotifFermeture::Temporaire)
+                ? (MotifFermeture::tryFrom(ValeurSimple::enTexte($cession->anciennes_valeurs['motif'] ?? null)) ?? MotifFermeture::Temporaire)
                 : MotifFermeture::Temporaire;
 
             $rentrees = $sorties->map(function (MouvementStock $sortie) use ($verrouille): array {

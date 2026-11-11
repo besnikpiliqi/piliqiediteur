@@ -3,6 +3,8 @@
 namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Notifications\LienPourChoisirSonMotDePasse;
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Facades\Filament;
@@ -39,11 +41,11 @@ class DemandeDeLien extends RequestPasswordReset
         $donnees = $this->form->getState();
 
         Password::broker(Filament::getAuthPasswordBroker())->sendResetLink(
-            ['email' => User::normaliserEmail((string) $donnees['email'])],
+            ['email' => User::normaliserEmail(ValeurSimple::enTexte($donnees['email']))],
             function (User $compte, string $jeton): void {
                 $compte->notify(new LienPourChoisirSonMotDePasse(
                     Filament::getPanel('app')->getResetPasswordUrl($jeton, $compte),
-                    (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'),
+                    Reglage::entier('auth.passwords.'.Reglage::texte('auth.defaults.passwords').'.expire'),
                 ));
             },
         );

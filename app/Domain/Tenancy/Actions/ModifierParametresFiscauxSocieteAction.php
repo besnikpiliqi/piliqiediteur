@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -73,11 +74,11 @@ class ModifierParametresFiscauxSocieteAction
 
             $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'modifierLesParametresFiscaux', $societe, $societe, new LogicException(ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION));
 
-            $valides = Validator::make(array_intersect_key($donnees, array_flip(self::CHAMPS)), [
+            $valides = ValeursLues::champs(Validator::make(array_intersect_key($donnees, array_flip(self::CHAMPS)), [
                 'regime_tva' => ['sometimes', 'required', Rule::enum(RegimeTva::class)],
                 'option_debits_tva' => ['sometimes', 'boolean'],
                 'mois_fin_exercice' => ['sometimes', 'required', 'integer', 'between:1,12'],
-            ], attributes: ['regime_tva' => 'régime de TVA', 'mois_fin_exercice' => 'mois de fin d\'exercice'])->validate();
+            ], attributes: ['regime_tva' => 'régime de TVA', 'mois_fin_exercice' => 'mois de fin d\'exercice'])->validate());
 
             return $this->operateur->pendant($auteur, fn (): Societe => $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();

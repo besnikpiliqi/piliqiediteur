@@ -12,6 +12,7 @@ use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Societe\Pages\CabinetComptable;
@@ -71,7 +72,7 @@ class AccepterLaDemandeDeLienAction
                 throw new LogicException(self::MESSAGE_PLUS_VALABLE);
             }
 
-            if ($autorisations !== null && ($demande->etat !== EtatDuLien::DemandeParLeCabinet || (int) $auteurRelu->societe_id !== (int) $clientVerrouille->getKey())) {
+            if ($autorisations !== null && ($demande->etat !== EtatDuLien::DemandeParLeCabinet || (int) $auteurRelu->societe_id !== CleDuModele::de($clientVerrouille))) {
                 throw new LogicException('Seul le propriétaire du client ajuste les autorisations d\'une demande de rattachement.');
             }
 
@@ -83,10 +84,9 @@ class AccepterLaDemandeDeLienAction
             }
 
             $remplace = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->whereKeyNot($demande->getKey())->first();
-            $ancienAcces = collect();
+            $ancienAcces = $remplace === null ? new Collection : $this->acces->comptesQuiOntAcces($remplace);
 
             if ($remplace !== null) {
-                $ancienAcces = $this->acces->comptesQuiOntAcces($remplace);
                 MettreFinAuLienAction::terminerSousVerrou($remplace, $auteurRelu, MotifDeFinDuLien::Remplace);
             }
 
@@ -109,7 +109,7 @@ class AccepterLaDemandeDeLienAction
                 'client' => IdentiteDansLeJournal::de($client),
                 'origine' => $demande->origine->value,
                 'autorisations' => $autorisations === null ? 'par_defaut' : 'ajustees',
-            ], (int) $cabinet->getKey()];
+            ], CleDuModele::de($cabinet)];
             $termine = $remplace === null ? null : [ActionAuditee::LienTermine, [
                 'cabinet' => IdentiteDansLeJournal::de(Societe::query()->findOrFail($remplace->cabinet_id)),
                 'client' => IdentiteDansLeJournal::de($client),
@@ -118,7 +118,7 @@ class AccepterLaDemandeDeLienAction
 
             return match (true) {
                 $journal->is($client) => array_values(array_filter([$termine, $active])),
-                (int) $journal->getKey() === (int) $cabinet->getKey() => [$active],
+                CleDuModele::de($journal) === CleDuModele::de($cabinet) => [$active],
                 default => array_filter([$termine]),
             };
         });
@@ -141,7 +141,7 @@ class AccepterLaDemandeDeLienAction
         $client = Societe::query()->findOrFail($lien->societe_id);
         $cabinet = Societe::query()->findOrFail($lien->cabinet_id);
 
-        if ((int) $auteur->societe_id === (int) $client->getKey()) {
+        if ((int) $auteur->societe_id === CleDuModele::de($client)) {
             $cabinet->proprietaire()->first()?->notify(new AvisDuCabinet(
                 $cabinet,
                 'Nouveau client lié',
@@ -150,7 +150,7 @@ class AccepterLaDemandeDeLienAction
                 'Voir vos clients',
                 AvisDuCabinet::SUCCES,
                 parCourriel: true,
-                clientId: (int) $client->getKey(),
+                clientId: CleDuModele::de($client),
             ));
         } else {
             $client->proprietaire()->first()?->notify(new AvisDuCabinet(

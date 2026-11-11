@@ -13,7 +13,9 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
@@ -93,7 +95,7 @@ class ClientResource extends Resource
 
         $type = $get('type_client');
 
-        return ($type instanceof TypeClient ? $type : TypeClient::tryFrom((string) $type)) === TypeClient::Professionnel;
+        return ($type instanceof TypeClient ? $type : TypeClient::tryFrom(ValeurSimple::enTexte($type))) === TypeClient::Professionnel;
     }
 
     private static function visibleSiProfessionnel(): Closure
@@ -111,7 +113,7 @@ class ClientResource extends Resource
      */
     private static function estEtabliEnFrance(Get $get): bool
     {
-        return TerritoireFiscal::estEnFrance($get('pays')) || (bool) $get('etabli_en_france');
+        return TerritoireFiscal::estEnFrance(ValeurSimple::enTexteOuNul($get('pays'))) || (bool) ValeurSimple::simple($get('etabli_en_france'));
     }
 
     /**
@@ -131,7 +133,7 @@ class ClientResource extends Resource
             ->default(TypeClient::Particulier)
             ->required()
             ->live()
-            ->afterStateUpdated(fn (Get $get, Set $set) => $set('etabli_en_france', TerritoireFiscal::estEnFrance($get('pays'))));
+            ->afterStateUpdated(fn (Get $get, Set $set) => $set('etabli_en_france', TerritoireFiscal::estEnFrance(ValeurSimple::enTexteOuNul($get('pays')))));
     }
 
     /**
@@ -180,11 +182,11 @@ class ClientResource extends Resource
         return [
             Toggle::make('etabli_en_france')
                 ->label('Établi en France')
-                ->helperText(fn (Get $get): string => TerritoireFiscal::estEnFrance($get('pays'))
+                ->helperText(fn (Get $get): string => TerritoireFiscal::estEnFrance(ValeurSimple::enTexteOuNul($get('pays')))
                     ? 'Son adresse est en France : il y est établi, et son SIREN l\'identifie.'
                     : 'Cochez pour une entreprise étrangère qui a un établissement en France : son SIREN remplace alors son n° de TVA ou un autre identifiant.')
                 ->default(true)
-                ->disabled(fn (Get $get): bool => TerritoireFiscal::estEnFrance($get('pays')))
+                ->disabled(fn (Get $get): bool => TerritoireFiscal::estEnFrance(ValeurSimple::enTexteOuNul($get('pays'))))
                 ->required()
                 ->markAsRequired(false)
                 ->live()
@@ -205,7 +207,7 @@ class ClientResource extends Resource
                 ->maxLength(14)
                 ->regex('/^\d{14}$/')
                 ->rule(fn (Get $get): Closure => function (string $attribute, mixed $siret, Closure $fail) use ($get): void {
-                    if (filled($get('siren')) && ! str_starts_with((string) $siret, (string) $get('siren'))) {
+                    if (filled($get('siren')) && ! str_starts_with(ValeurSimple::enTexte($siret), ValeurSimple::enTexte($get('siren')))) {
                         $fail('Le SIRET commence par les 9 chiffres du SIREN.');
                     }
                 })
@@ -283,7 +285,7 @@ class ClientResource extends Resource
      */
     public static function creerUnClient(array $data): int
     {
-        return static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Client::class, $data))->getKey();
+        return CleDuModele::de(static::executerOuInterrompre(fn (): Client => app(CreerUneFicheAction::class)->handle(CompteConnecte::exiger(), Client::class, $data)));
     }
 
     /**

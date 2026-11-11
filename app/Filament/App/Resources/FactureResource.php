@@ -46,6 +46,7 @@ use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
@@ -187,7 +188,7 @@ class FactureResource extends Resource
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(CompteConnecte::exiger()->can(PermissionRegistry::CLIENT_CREATE)))
-                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient($data))
+                    ->createOptionUsing(fn (array $data): int => ClientResource::creerUnClient(ValeursLues::champs($data)))
                     ->suffixAction(ClientResource::actionChercherUnClient()),
                 // L'échéance ne se saisit pas : elle se calcule à l'émission,
                 // date d'émission + délai du client choisi, sinon délai du
@@ -419,7 +420,7 @@ class FactureResource extends Resource
                             TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')
                                 ->label('Crédité sur cette facture (TTC)')
-                                ->state(fn (Avoir $record) => app(CalculateurLigne::class)->sommer($record->lignes->pluck('montant_ttc')))
+                                ->state(fn (Avoir $record) => app(CalculateurLigne::class)->sommer($record->lignes->map(fn (LigneAvoir $ligne) => $ligne->montant_ttc)))
                                 ->money('EUR'),
                             // Le résumé (numéro/motif/total) ne dit pas CE QUI
                             // a été retourné : le détail des lignes créditées
@@ -751,7 +752,7 @@ class FactureResource extends Resource
             // soit le nombre de factures.
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue', 'rectificative:id,facture_rectifiee_id', 'magasin.societe.dernierExamenDuSiren'])
-                ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => $lignes->scopes('creditables')]))
+                ->withExists(['lignes as lignes_creditables_exists' => fn (Builder $lignes): Builder => ValeursLues::instance($lignes->scopes('creditables'), Builder::class)]))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),
@@ -857,8 +858,9 @@ class FactureResource extends Resource
                     ->modalDescription(fn (Facture $record): string => 'Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible. '.AvoirResource::imputationDuCredit($record->client))
                     ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record))
                     ->action(function (Facture $record, array $data): void {
-                        AvoirResource::autoriserLesLignesACrediter($data['lignes']);
-                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(CompteConnecte::exiger(), ValeurRequise::de($record->client, 'le client de la facture'), $data['lignes'], $data['motif'], $data['jeton']));
+                        $lignes = AvoirResource::lignesACrediter($data['lignes']);
+                        AvoirResource::autoriserLesLignesACrediter($lignes);
+                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(CompteConnecte::exiger(), ValeurRequise::de($record->client, 'le client de la facture'), $lignes, ValeurSimple::enTexteOuNul($data['motif']), ValeurSimple::enTexteOuNul($data['jeton'])));
                     }),
             ])
             // Seuls les brouillons partent : une facture déjà émise se
@@ -944,8 +946,8 @@ class FactureResource extends Resource
                     $record,
                     self::partsPayees($data['parts'] ?? []),
                     self::bonsDesParts($data['parts'] ?? []),
-                    $data['recu_le'],
-                    $data['jeton'],
+                    ValeurSimple::enTexte($data['recu_le']),
+                    ValeurSimple::enTexteOuNul($data['jeton']),
                 ));
                 $record->refresh();
             });
@@ -1036,7 +1038,7 @@ class FactureResource extends Resource
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
             ->action(fn (PaiementAllocation $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), self::recuDe($record), $data['destinataire'], $data['message'] ?? null, $data['jeton']);
+                $envoi = app(EnvoyerDocumentAction::class)->handle(CompteConnecte::exiger(), self::recuDe($record), ValeurSimple::enTexte($data['destinataire']), ValeurSimple::enTexteOuNul($data['message'] ?? null), ValeurSimple::enTexteOuNul($data['jeton']));
 
                 Notification::make()
                     ->title("Envoi à {$envoi->destinataire} programmé")
@@ -1070,11 +1072,11 @@ class FactureResource extends Resource
             ->requiresConfirmation()
             ->modalHeading(fn (array $arguments): string => filled($arguments['avertissements'] ?? null) ? 'Vendre sans stock ?' : 'Émettre')
             ->modalDescription(fn (array $arguments): string|HtmlString => filled($arguments['avertissements'] ?? null)
-                ? static::descriptionDeLAvertissement($arguments)
+                ? static::descriptionDeLAvertissement(ValeursLues::champs($arguments))
                 : 'Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
             ->form([self::champDuJeton()])
             ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && CompteConnecte::exiger()->can('emettre', $record))
-            ->action(fn (Facture $record, array $data, array $arguments, MountableAction $action) => self::emettreLeBrouillon($record, $data, $arguments, $action, null));
+            ->action(fn (Facture $record, array $data, array $arguments, MountableAction $action) => self::emettreLeBrouillon($record, ValeursLues::champs($data), ValeursLues::champs($arguments), $action, null));
     }
 
     /**
@@ -1109,7 +1111,7 @@ class FactureResource extends Resource
             ->color('success')
             ->modalHeading(fn (array $arguments): string => filled($arguments['avertissements'] ?? null) ? 'Vendre sans stock ?' : 'Émettre et encaisser')
             ->modalDescription(fn (array $arguments): string|HtmlString => filled($arguments['avertissements'] ?? null)
-                ? static::descriptionDeLAvertissement($arguments)
+                ? static::descriptionDeLAvertissement(ValeursLues::champs($arguments))
                 : 'Un numéro définitif sera attribué, l\'échéance fixée, le stock décrémenté et le règlement enregistré : il s\'imprimera sur le document. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
             ->modalSubmitActionLabel('Émettre et encaisser')
             ->form([
@@ -1128,7 +1130,7 @@ class FactureResource extends Resource
                 static::executerSansCasser(function () use ($record, $data, $arguments, $action): void {
                     $parts = self::partsPayees($data['parts'] ?? []);
 
-                    self::emettreLeBrouillon($record, $data, $arguments, $action, $parts === [] ? null : ReglementComptant::horsDeLaCaisse($parts));
+                    self::emettreLeBrouillon($record, ValeursLues::champs($data), ValeursLues::champs($arguments), $action, $parts === [] ? null : ReglementComptant::horsDeLaCaisse($parts));
                 });
             });
     }
@@ -1150,7 +1152,7 @@ class FactureResource extends Resource
             self::verifierLeNumeroTvaSurViesSiBesoin($record);
 
             try {
-                app(EmettreFactureAction::class)->handle(CompteConnecte::exiger(), $record, $reglement, static::confirmationDesArguments($arguments), $data['jeton']);
+                app(EmettreFactureAction::class)->handle(CompteConnecte::exiger(), $record, $reglement, static::confirmationDesArguments($arguments), ValeurSimple::enTexteOuNul($data['jeton']));
             } catch (ConfirmationVenteSansStockRequiseException $exception) {
                 $avertissement = $exception;
             }

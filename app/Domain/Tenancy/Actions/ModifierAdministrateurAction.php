@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use LogicException;
@@ -49,7 +50,7 @@ class ModifierAdministrateurAction
 
             $this->journalDesDroits->modifier($auteur, ActionAuditee::AdministrateurModifie, [$administrateur], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu, array $relus) use ($societe, $portee): void {
                 [$administrateurRelu] = $relus;
-                self::exigerUnAdministrateur($auteurRelu, $administrateurRelu, $societe->getKey());
+                self::exigerUnAdministrateur($auteurRelu, $administrateurRelu, CleDuModele::de($societe));
                 $avant = $administrateurRelu->magasinsDeSesDroits();
 
                 $this->porteeDesAdministrateurs->effacer($administrateurRelu);

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Notifications;
 
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\Reglage;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification as NotificationFilament;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -54,7 +55,7 @@ class AvisDeLEquipe extends Notification
             $message->action($this->libelleDuLien, $this->url);
         }
 
-        return $message->line('Ce message vous est envoyé en tant que propriétaire de la société sur '.config('app.name').'.');
+        return $message->line('Ce message vous est envoyé en tant que propriétaire de la société sur '.Reglage::texte('app.name').'.');
     }
 
     /**

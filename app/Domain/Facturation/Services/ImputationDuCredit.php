@@ -10,7 +10,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -107,21 +107,23 @@ class ImputationDuCredit
      */
     private function imputations(Client $client, Collection $avoirs): array
     {
-        $credits = $avoirs->mapWithKeys(fn (Avoir $avoir): array => [$avoir->getKey() => $avoir->creditEnCentimes()])->all();
+        $credits = $avoirs->mapWithKeys(fn (Avoir $avoir): array => [CleDuModele::de($avoir) => $avoir->creditEnCentimes()])->all();
         $restes = [];
         $imputations = [];
         $imputer = function (Avoir $avoir, Facture $facture, int $plafond) use (&$credits, &$restes, &$imputations): void {
-            $restes[$facture->getKey()] ??= $facture->statut->attendUnReglement() ? $facture->resteDuEnCentimes() : 0;
-            $montant = min($credits[$avoir->getKey()], $plafond, $restes[$facture->getKey()]);
+            $avoirId = CleDuModele::de($avoir);
+            $factureId = CleDuModele::de($facture);
+            $restes[$factureId] ??= $facture->statut->attendUnReglement() ? $facture->resteDuEnCentimes() : 0;
+            $montant = min($credits[$avoirId], $plafond, $restes[$factureId]);
 
             if ($montant <= 0) {
                 return;
             }
 
-            $cle = $avoir->getKey().':'.$facture->getKey();
+            $cle = $avoirId.':'.$factureId;
             $imputations[$cle] = ['avoir' => $avoir, 'facture' => $imputations[$cle]['facture'] ?? $facture, 'montant' => ($imputations[$cle]['montant'] ?? 0) + $montant];
-            $credits[$avoir->getKey()] -= $montant;
-            $restes[$facture->getKey()] -= $montant;
+            $credits[$avoirId] -= $montant;
+            $restes[$factureId] -= $montant;
         };
         $factures = [];
 
@@ -147,12 +149,12 @@ class ImputationDuCredit
             if ($rectificative !== null) {
                 // Elle n'attend aucun autre règlement : ce qui en reste dû
                 // ne compte que pour lui.
-                $restes[$rectificative->getKey()] = $rectificative->resteDuEnCentimes();
+                $restes[CleDuModele::de($rectificative)] = $rectificative->resteDuEnCentimes();
                 $imputer($avoir, $rectificative, PHP_INT_MAX);
             }
         }
 
-        if (! $client->estComptoir() && $autres->sum(fn (Avoir $avoir): int => $credits[$avoir->getKey()]) > 0) {
+        if (! $client->estComptoir() && $autres->sum(fn (Avoir $avoir): int => $credits[CleDuModele::de($avoir)]) > 0) {
             $facturesDues = Facture::query()
                 ->where('client_id', $client->getKey())
                 ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
@@ -188,9 +190,17 @@ class ImputationDuCredit
             ->groupBy('facture_id')
             ->map(fn (Collection $allocations): int => (int) $allocations->sum(fn (AvoirAllocation $allocation): int => $this->calculateur->enCentiemes($allocation->montant_alloue)));
 
-        return $avoir->lignes()->with('ligneFacture')->get()
-            ->groupBy(fn (LigneAvoir $ligne): int => (int) ValeurRequise::de($ligne->ligneFacture, 'la ligne de facture que corrige la ligne d\'avoir')->facture_id)
-            ->map(fn (Collection $lignes, int $factureId): int => (int) $lignes->sum(fn (LigneAvoir $ligne): int => $this->calculateur->enCentiemes($ligne->montant_ttc)) - ($dejaImpute[$factureId] ?? 0))
-            ->all();
+        $parts = [];
+
+        foreach ($avoir->lignes()->with('ligneFacture')->get() as $ligne) {
+            $factureId = (int) ValeurRequise::de($ligne->ligneFacture, 'la ligne de facture que corrige la ligne d\'avoir')->facture_id;
+            $parts[$factureId] = ($parts[$factureId] ?? 0) + $this->calculateur->enCentiemes($ligne->montant_ttc);
+        }
+
+        foreach ($parts as $factureId => $part) {
+            $parts[$factureId] = $part - ($dejaImpute[$factureId] ?? 0);
+        }
+
+        return $parts;
     }
 }

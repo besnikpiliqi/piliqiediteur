@@ -20,9 +20,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use LogicException;
@@ -161,7 +161,7 @@ class ConstructeurLigneAchat
      */
     private static function corrigeUnParametreDeConformite(Produit $produit, array $donnees): bool
     {
-        $corrections = Arr::only(self::correctionsDeLaFiche($produit, $donnees), Produit::parametresDeConformite());
+        $corrections = array_intersect_key(self::correctionsDeLaFiche($produit, $donnees), array_flip(Produit::parametresDeConformite()));
 
         return is_array($donnees['fiche_lue'] ?? null) ? $corrections !== [] : $produit->fill($corrections)->isDirty();
     }
@@ -203,7 +203,7 @@ class ConstructeurLigneAchat
         $fichesDejaSaisies = $factureAchat->lignes()
             ->whereNull('produit_id')
             ->get()
-            ->map(fn (LigneAchat $ligne): array => self::ficheComparable(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit')))
+            ->map(fn (LigneAchat $ligne): array => self::ficheComparable(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit'))))
             ->all();
         $factureAchat->lignes()->delete();
 
@@ -216,7 +216,7 @@ class ConstructeurLigneAchat
         $document = $this->chiffrer($lignesPreparees, $montants->tvaParTaux);
         $montants->verifier($document);
         $lignesEnregistrees = array_map(
-            fn (array $ligne): LigneAchat => $factureAchat->lignes()->create(Arr::except($ligne, ['montant_ht_calcule'])),
+            fn (array $ligne): LigneAchat => $factureAchat->lignes()->create(array_diff_key($ligne, ['montant_ht_calcule' => true])),
             $document->lignes,
         );
 
@@ -262,7 +262,7 @@ class ConstructeurLigneAchat
     public function creerLesNouveauxProduits(FactureAchat $factureAchat): void
     {
         foreach ($factureAchat->lignes()->whereNull('produit_id')->get() as $ligne) {
-            $produit = new Produit(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit'));
+            $produit = new Produit(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit')));
 
             if (blank($produit->prix_vente_ttc)) {
                 $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, ValeurRequise::de($ligne->prix_unitaire_ht, 'le prix unitaire HT de la ligne d\'achat'), (float) $ligne->remise_pourcentage, (float) $produit->taux_tva)
@@ -306,8 +306,9 @@ class ConstructeurLigneAchat
                 continue;
             }
 
-            $produit = new Produit($ligne->nouveau_produit);
-            $ficheDejaSaisie = array_search(self::ficheComparable($ligne->nouveau_produit), $fichesDejaSaisies, true);
+            $fiche = ValeursLues::champs($ligne->nouveau_produit);
+            $produit = new Produit($fiche);
+            $ficheDejaSaisie = array_search(self::ficheComparable($fiche), $fichesDejaSaisies, true);
 
             if ($ficheDejaSaisie === false) {
                 $this->verifierLeDroitDEnregistrer($auteur, $produit);
@@ -382,7 +383,7 @@ class ConstructeurLigneAchat
                 continue;
             }
 
-            $lignes[$cle] = [...$ligne, 'description' => $saisie['produit']['nom'] ?? '', 'reference' => $saisie['produit']['reference'] ?? null];
+            $lignes[$cle] = [...$ligne, 'description' => ValeursLues::valeurAu($saisie, 'produit', 'nom') ?? '', 'reference' => ValeursLues::valeurAu($saisie, 'produit', 'reference')];
         }
 
         try {
@@ -414,7 +415,7 @@ class ConstructeurLigneAchat
         return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUnAchat(array_map(
             fn (array $ligne): array => [
                 'prix_unitaire_ht' => $this->calculateur->enMillioniemes($ligne['prix_unitaire_ht']),
-                'quantite' => $ligne['quantite'],
+                'quantite' => ValeursLues::entier($ligne['quantite']),
                 'remise_pourcentage' => $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
                 'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
                 'montant_ht' => $ligne['montant_ht_saisi'] === null ? null : $this->calculateur->enCentiemes($ligne['montant_ht_saisi']),
@@ -545,7 +546,7 @@ class ConstructeurLigneAchat
         }
 
         if ($produit->exists && $utilisateur->denies('update', $produit)) {
-            throw new LogicException("Vous ne pouvez pas modifier la fiche du produit « {$produit->getOriginal('nom')} » : seule la ligne se modifie ici.");
+            throw new LogicException('Vous ne pouvez pas modifier la fiche du produit « '.ValeurSimple::enTexte($produit->getOriginal('nom')).' » : seule la ligne se modifie ici.');
         }
     }
 
@@ -575,7 +576,7 @@ class ConstructeurLigneAchat
             $corrections = self::correctionsDeLaFiche($produit, $donnees);
 
             if (is_array($donnees['fiche_lue'] ?? null)) {
-                FicheLue::depuis(Produit::class, $donnees['fiche_lue'])->refuserUneCorrectionPerimee($produit, $corrections, sprintf(self::REFUS_FICHE_PERIMEE, $produit->nom));
+                FicheLue::depuis(Produit::class, ValeursLues::champs($donnees['fiche_lue']))->refuserUneCorrectionPerimee($produit, $corrections, sprintf(self::REFUS_FICHE_PERIMEE, $produit->nom));
             }
 
             $produit->fill($corrections);
@@ -586,7 +587,7 @@ class ConstructeurLigneAchat
             if ($factureAchat->source !== SourceFactureAchat::Api
                 && $produit->isDirty(Produit::ATTRIBUTS_DU_FOURNISSEUR)
                 && $produit->vientDUneFactureAchatApi()) {
-                throw new LogicException("Le produit « {$produit->getOriginal('nom')} » vient d'une facture d'achat récupérée automatiquement : ses informations fournisseur ne se modifient pas.");
+                throw new LogicException('Le produit « '.ValeurSimple::enTexte($produit->getOriginal('nom')).' » vient d\'une facture d\'achat récupérée automatiquement : ses informations fournisseur ne se modifient pas.');
             }
 
             return $produit;
@@ -616,7 +617,7 @@ class ConstructeurLigneAchat
         $attributs = self::attributsDuProduit($donnees);
 
         return is_array($donnees['fiche_lue'] ?? null)
-            ? FicheLue::depuis(Produit::class, $donnees['fiche_lue'])->corrections($attributs)
+            ? FicheLue::depuis(Produit::class, ValeursLues::champs($donnees['fiche_lue']))->corrections($attributs)
             : $attributs;
     }
 
@@ -630,7 +631,7 @@ class ConstructeurLigneAchat
     private static function attributsDuProduit(array $donnees): array
     {
         return array_filter(
-            Arr::only($donnees['produit'] ?? [], self::ATTRIBUTS_DU_PRODUIT),
+            array_intersect_key(ValeursLues::champs($donnees['produit'] ?? []), array_flip(self::ATTRIBUTS_DU_PRODUIT)),
             fn (mixed $valeur, string $attribut): bool => filled($valeur) || in_array($attribut, self::ATTRIBUTS_EFFACABLES, true),
             ARRAY_FILTER_USE_BOTH,
         );

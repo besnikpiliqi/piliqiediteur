@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Tenancy\Models\ActionTraitee;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use BackedEnum;
 use Closure;
@@ -201,7 +202,7 @@ class ActionsUniques
     public static function verrouDe(User ...$comptes): Closure
     {
         return static fn (): mixed => User::query()
-            ->whereKey(collect($comptes)->map(fn (User $compte): int => (int) $compte->getKey())->unique()->sort()->values()->all())
+            ->whereKey(collect($comptes)->map(fn (User $compte): int => CleDuModele::de($compte))->unique()->sort()->values()->all())
             ->orderBy('id')
             ->lock('for no key update')
             ->get();
@@ -308,7 +309,7 @@ class ActionsUniques
      */
     private function resultatDeja(ActionTraitee $traitee, string $action, string $classe, User $auteur, string $empreinte): ?Model
     {
-        if ($traitee->action !== $action || $traitee->user_id !== (int) $auteur->getKey() || ! hash_equals($traitee->empreinte_demande, $empreinte)) {
+        if ($traitee->action !== $action || $traitee->user_id !== CleDuModele::de($auteur) || ! hash_equals($traitee->empreinte_demande, $empreinte)) {
             throw new LogicException(self::REFUS);
         }
 

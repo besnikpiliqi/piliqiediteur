@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Mail;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -27,7 +28,7 @@ class TransmissionDeLaProprieteMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Transmission de la propriété de '.$this->societe.' sur '.config('app.name'));
+        return new Envelope(subject: 'Transmission de la propriété de '.$this->societe.' sur '.Reglage::texte('app.name'));
     }
 
     public function content(): Content

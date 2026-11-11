@@ -14,6 +14,9 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -126,7 +129,8 @@ class ExporterJournalDesEvenementsAction
         $calendrier = $magasin->calendrier();
         $avecLesTraces = $exportateur->estProprietaireDuMagasin($magasin);
 
-        return static function ($flux) use ($magasinId, $calendrier, $du, $au, $avecLesTraces): void {
+        return static function (mixed $flux) use ($magasinId, $calendrier, $du, $au, $avecLesTraces): void {
+            $flux = ResultatDePhp::flux($flux, 'L\'ouverture du fichier de l\'export');
             fwrite($flux, "\u{FEFF}");
             self::ecrireUneLigne($flux, self::colonnes($calendrier));
 
@@ -160,16 +164,16 @@ class ExporterJournalDesEvenementsAction
      */
     private static function ligne(EnregistrementFiscal $evenement, Calendrier $calendrier, bool $avecLaTrace): array
     {
-        $donnees = $evenement->contenuSigne()['donnees'] ?? [];
-        $details = $donnees['details'] ?? [];
+        $contenu = $evenement->contenuSigne();
+        $details = ValeursLues::valeurAu($contenu, 'donnees', 'details') ?? [];
         $trace = $avecLaTrace ? $evenement->trace : null;
 
         $lecture = [
             (string) $evenement->sequence,
             $calendrier->afficherDansUnJournal($evenement->horodatage, 'd/m/Y H:i:s'),
-            (string) ($evenement->contenuSigne()['horodatage'] ?? ''),
-            (string) ($donnees['code'] ?? $evenement->type),
-            (string) ($donnees['libelle'] ?? ''),
+            ValeurSimple::enTexte(ValeursLues::valeurAu($contenu, 'horodatage')),
+            ValeurSimple::enTexte(ValeursLues::valeurAu($contenu, 'donnees', 'code') ?? $evenement->type),
+            ValeurSimple::enTexte(ValeursLues::valeurAu($contenu, 'donnees', 'libelle')),
             $evenement->libelleDeLOperateur(),
             $details === [] ? '' : json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             (string) $trace?->ip,

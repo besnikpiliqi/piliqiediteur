@@ -3,9 +3,12 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Enums\CategorieOperation;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Support\ValeurRequise;
 
@@ -78,7 +81,7 @@ class MentionsFiscales
         }
 
         if (! $document instanceof Devis) {
-            $mentions[] = 'Catégorie de l\'opération : '.CategorieOperation::depuisNatures($document->lignes->pluck('nature'))->getLabel();
+            $mentions[] = 'Catégorie de l\'opération : '.CategorieOperation::depuisNatures($document->lignes->map(fn (LigneFacture|LigneAvoir $ligne): NatureLigne => $ligne->nature))->getLabel();
         }
 
         if ($document->nature_operation->mention() !== null) {

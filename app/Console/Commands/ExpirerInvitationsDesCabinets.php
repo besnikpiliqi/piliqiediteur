@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -46,7 +47,7 @@ class ExpirerInvitationsDesCabinets extends Command
                         if ($invitation->expire_le->isPast()) {
                             $invitation->forceFill(['etat' => EtatInvitation::Expiree, 'close_le' => now()])->save();
                         } elseif (Societe::sirenPris((string) $invitation->siren)) {
-                            $caduques[] = (int) $invitation->getKey();
+                            $caduques[] = CleDuModele::de($invitation);
                         }
                     });
 
@@ -54,7 +55,7 @@ class ExpirerInvitationsDesCabinets extends Command
             }));
 
             foreach ($caduques as $invitationId) {
-                (new RendreCaduquesLesInvitationsDuSiren('', 0))->rendreCaduque($invitationId, (int) $cabinetId);
+                (new RendreCaduquesLesInvitationsDuSiren('', 0))->rendreCaduque($invitationId, CleDuModele::de($cabinet));
             }
         }
 

@@ -105,7 +105,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
             try {
                 app(ModifierParametresFiscauxSocieteAction::class)->handle(CompteConnecte::exiger(), $this->societe(), $donnees);
             } catch (ValidationException $refus) {
-                throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
+                throw ValidationException::withMessages(collect($refus->validator->errors()->messages())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }
 
             $this->remplir();

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Closure;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -39,7 +40,7 @@ class VerifierIntegriteFiscale extends Command
      */
     public static function jourDeLaVerificationComplete(Magasin $magasin): int
     {
-        return ($magasin->getKey() - 1) % 28 + 1;
+        return (CleDuModele::de($magasin) - 1) % 28 + 1;
     }
 
     public function handle(TenantContext $tenantContext, VerifierIntegriteAction $verifier): int

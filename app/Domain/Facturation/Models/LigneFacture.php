@@ -9,6 +9,8 @@ use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -63,7 +65,7 @@ class LigneFacture extends Model
      */
     public function estValidee(): bool
     {
-        return $this->documentNumeroteEnBase(Facture::class, [$this->getRawOriginal('facture_id'), $this->getAttribute('facture_id')]);
+        return $this->documentNumeroteEnBase(Facture::class, [ValeurSimple::enEntierOuNul($this->getRawOriginal('facture_id')), ValeurSimple::enEntierOuNul($this->getAttribute('facture_id'))]);
     }
 
     protected function regleDInalterabilite(): string
@@ -192,7 +194,7 @@ class LigneFacture extends Model
                 'montant_ht' => $centiemes('montant_ht'),
                 'montant_tva' => $centiemes('montant_tva'),
             ],
-            (int) $avoirsEmis->sum('quantite') + $quantite,
+            ValeursLues::entier($avoirsEmis->sum('quantite')) + $quantite,
             [
                 'montant_ht' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
                 'montant_tva' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),

@@ -16,6 +16,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Closure;
@@ -200,7 +203,7 @@ class RegistreFiscal
     {
         $contexte = app(TenantContext::class);
         $societeId = $contexte->societe()->getKey();
-        $magasins = $magasins->sortBy(fn (Magasin $magasin): int => $magasin->getKey())->values();
+        $magasins = $magasins->sortBy(fn (Magasin $magasin): int => CleDuModele::de($magasin))->values();
 
         if ($magasins->contains(fn (Magasin $magasin): bool => (int) $magasin->societe_id !== $societeId)) {
             throw new LogicException('Le registre fiscal d\'un magasin ne se verrouille que dans le contexte de sa société.');
@@ -237,14 +240,12 @@ class RegistreFiscal
      */
     public function sousVerrouDesMagasinsDesClients(Societe $cabinet, Collection $magasins, Closure $operation): mixed
     {
-        $magasins = (new EloquentCollection($magasins->sortBy(fn (Magasin $magasin): int => $magasin->getKey())->values()->all()))->loadMissing('societe');
-        $clients = LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
+        $magasins = (new EloquentCollection($magasins->sortBy(fn (Magasin $magasin): int => CleDuModele::de($magasin))->values()->all()))->loadMissing('societe');
+        $clients = ValeursLues::entiers(LienCabinet::query()->withoutGlobalScope(SocieteScope::class)
             ->where('cabinet_id', $cabinet->getKey())
             ->whereIn('societe_id', $magasins->pluck('societe_id')->unique()->values()->all())
             ->distinct()
-            ->pluck('societe_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
+            ->pluck('societe_id'));
 
         if ($magasins->contains(fn (Magasin $magasin): bool => ! in_array((int) $magasin->societe_id, $clients, true))) {
             throw new LogicException('Le registre fiscal d\'un magasin ne se verrouille, hors de sa société, que pour un client du cabinet.');
@@ -271,7 +272,7 @@ class RegistreFiscal
         $transaction = $this->transactionsEnCours()->first();
 
         foreach ($magasins as $magasin) {
-            if ($transaction !== null && ($this->verrous[$magasin->getKey()]['transaction'] ?? null) !== $transaction) {
+            if ($transaction !== null && ($this->verrous[CleDuModele::de($magasin)]['transaction'] ?? null) !== $transaction) {
                 throw new LogicException('Le registre fiscal se verrouille en tête de transaction, avant tout autre verrou : la transaction en cours doit le verrouiller dès son début.');
             }
         }
@@ -364,13 +365,13 @@ class RegistreFiscal
             return ['perpetuel_reel' => 0, 'perpetuel_absolu' => 0];
         }
 
-        $grandsTotaux = EnregistrementFiscal::query()
+        $grandsTotaux = ValeursLues::tableauDe(EnregistrementFiscal::query()
             ->where('chaine', ChaineFiscale::Vente->value)
             ->where('sequence', $sequenceDeVente)
             ->sole()
-            ->contenuSigne()['gt'];
+            ->contenuSigne(), 'gt');
 
-        return ['perpetuel_reel' => $grandsTotaux['perpetuel_reel'], 'perpetuel_absolu' => $grandsTotaux['perpetuel_absolu']];
+        return ['perpetuel_reel' => ValeursLues::entierDe($grandsTotaux, 'perpetuel_reel'), 'perpetuel_absolu' => ValeursLues::entierDe($grandsTotaux, 'perpetuel_absolu')];
     }
 
     /**
@@ -457,7 +458,7 @@ class RegistreFiscal
 
         $magasin = app(TenantContext::class)->magasin();
 
-        if ($document !== null && (! $document->exists || (int) $document->getAttribute('magasin_id') !== $magasin->getKey())) {
+        if ($document !== null && (! $document->exists || ValeurSimple::enEntier($document->getAttribute('magasin_id')) !== CleDuModele::de($magasin))) {
             throw new LogicException('Le registre fiscal n\'enregistre qu\'un document déjà enregistré du magasin actif.');
         }
 

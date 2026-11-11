@@ -4,6 +4,7 @@ namespace App\Integrations\Vies;
 
 use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -63,8 +64,8 @@ class ClientVies
         }
 
         try {
-            $reponse = Http::baseUrl(config('services.vies.url'))
-                ->timeout(config('services.vies.delai'))
+            $reponse = Http::baseUrl(Reglage::texte('services.vies.url'))
+                ->timeout(Reglage::entier('services.vies.delai'))
                 ->connectTimeout(5)
                 ->acceptJson()
                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false)

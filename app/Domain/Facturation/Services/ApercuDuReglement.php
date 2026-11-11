@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Support\Collection;
 
 /**
@@ -73,7 +74,7 @@ final readonly class ApercuDuReglement
     public static function surLaFacture(Facture $facture, array $numerosDesBons): self
     {
         $calculateur = app(CalculateurLigne::class);
-        $somme = fn (Collection $montants): int => (int) $montants->sum(fn (string $montant): int => $calculateur->enCentiemes($montant));
+        $somme = fn (Collection $montants): int => (int) $montants->sum(fn (mixed $montant): int => $calculateur->enCentiemes(ValeursLues::texte($montant)));
         $creditImpute = $somme($facture->allocationsAvoir()->pluck('montant_alloue'));
         $resteDu = max(0, $calculateur->enCentiemes($facture->total_ttc) - $somme($facture->allocationsPaiement()->pluck('montant_alloue')) - $creditImpute);
 

@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
@@ -186,7 +187,7 @@ class AccesDesCabinets
             return [];
         }
 
-        $clients = array_map(intval(...), $liens->pluck('societe_id')->all());
+        $clients = ValeursLues::entiers($liens->pluck('societe_id'));
         $accordees = DB::table('autorisations_cabinet')
             ->whereIn('societe_id', $clients)
             ->whereIn('lien_id', $liens->modelKeys())
@@ -198,7 +199,7 @@ class AccesDesCabinets
 
         foreach ($liens as $lien) {
             $retenues = array_values(array_intersect(
-                $accordees->get($lien->getKey(), collect())->pluck('autorisation')->all(),
+                ValeursLues::textes($accordees->get(CleDuModele::de($lien), collect())->pluck('autorisation')),
                 PermissionRegistry::duCabinet(ValeurRequise::de($types->get($lien->societe_id), 'la société d\'un client lié')->type_activite),
             ));
             sort($retenues);

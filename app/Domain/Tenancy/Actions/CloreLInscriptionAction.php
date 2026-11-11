@@ -20,9 +20,12 @@ use App\Domain\Tenancy\Services\JetonsDuLien;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -175,7 +178,7 @@ class CloreLInscriptionAction
                 $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $magasins, $cloture): mixed {
                     $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
 
-                    if (array_map(intval(...), $verrouillee->magasinsReels()->orderBy('id')->pluck('id')->all()) !== array_map(intval(...), $magasins->modelKeys())) {
+                    if (ValeursLues::entiers($verrouillee->magasinsReels()->orderBy('id')->pluck('id')) !== ValeursLues::entiers($magasins->modelKeys())) {
                         return self::MAGASINS_CHANGES;
                     }
 
@@ -317,7 +320,7 @@ class CloreLInscriptionAction
             $this->journalAudit->inscrire(ActionAuditee::TransmissionAnnulee, null, null, null, [
                 'destinataire' => ['id' => $destinataire->getKey(), 'nom' => $destinataire->name],
             ], $demande, $editeur);
-            $destinataires[] = (int) $destinataire->getKey();
+            $destinataires[] = CleDuModele::de($destinataire);
         }
 
         return $destinataires;
@@ -378,7 +381,7 @@ class CloreLInscriptionAction
                     Mail::to($adresseRetiree)->send(new InscriptionCloseMail(
                         $societe->getFilamentName(),
                         lcfirst($motif->getLabel()),
-                        rtrim((string) config('app.url'), '/').route('filament.app.auth.register', absolute: false),
+                        rtrim(Reglage::texte('app.url'), '/').route('filament.app.auth.register', absolute: false),
                         $societe->estUnCabinet() ? 'Son espace reste consultable, en lecture seule.' : 'Ses magasins restent consultables, en lecture seule.',
                         $motif === MotifCloture::TypeErrone ? self::reinscriptionAvecLeBonType() : null,
                     ));

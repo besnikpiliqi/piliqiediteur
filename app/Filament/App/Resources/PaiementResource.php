@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
@@ -348,7 +349,7 @@ class PaiementResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription(fn (Paiement $record): string => self::descriptionDeLaContrePassation($record))
                     ->visible(fn (Paiement $record): bool => CompteConnecte::exiger()->can('contrePasser', $record))
-                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(CompteConnecte::exiger(), $record, $data['motif'], $data['jeton']))),
+                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(CompteConnecte::exiger(), $record, ValeurSimple::enTexte($data['motif']), ValeurSimple::enTexteOuNul($data['jeton'])))),
             ])
             ->bulkActions([]);
     }

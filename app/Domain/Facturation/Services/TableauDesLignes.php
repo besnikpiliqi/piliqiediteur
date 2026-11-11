@@ -10,6 +10,8 @@ use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Dompdf\Dompdf;
 use Dompdf\FontMetrics;
 use Illuminate\Support\Number;
@@ -102,7 +104,7 @@ final readonly class TableauDesLignes
         $enTtc = ! $document->estPourUnProfessionnel() && ! ContexteDeVente::documentRetireLaTvaDuPrix($document);
         $avecFactureDOrigine = $document instanceof Avoir;
         $avecRemise = $document->lignes->contains(fn (LigneFacture|LigneAvoir|LigneDevis $ligne): bool => $calculateur->enCentiemes($ligne->remise_pourcentage) !== 0);
-        $pourcentage = fn (mixed $valeur): string => Number::format((float) $valeur, maxPrecision: 2, locale: 'fr').' %';
+        $pourcentage = fn (mixed $valeur): string => Number::format((float) ValeurSimple::simple($valeur), maxPrecision: 2, locale: 'fr').' %';
 
         $titres = [
             ['titre' => 'Référence', 'montant' => false],
@@ -160,7 +162,7 @@ final readonly class TableauDesLignes
         $largeurDuTexte = fn (string $texte): float => $polices->getTextWidth($texte, $normale, self::CORPS);
         $largeurDeColonne = fn (int $rang, array $textes): float => max([
             $polices->getTextWidth(mb_convert_case($titres[$rang]['titre'], MB_CASE_UPPER, 'UTF-8'), $grasse, self::CORPS_DES_TITRES),
-            ...array_map($largeurDuTexte, $textes),
+            ...array_map($largeurDuTexte, ValeursLues::textes($textes)),
         ]) + 2 * self::MARGE_DE_CASE + self::JEU;
 
         $largeurs = [];

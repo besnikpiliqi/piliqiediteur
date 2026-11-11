@@ -23,9 +23,9 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -185,9 +185,9 @@ class ModifierFactureAchatAction
             // Les produits que la réception a reçus avant sa correction ; un
             // brouillon n'a rien reçu.
             $produitsAvant = $estValidee
-                ? array_values($factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->all())
+                ? array_values(array_unique(ValeursLues::entiers($factureAchat->lignes->pluck('produit_id'))))
                 : [];
-            $avant = $estValidee ? Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES) : [];
+            $avant = $estValidee ? array_intersect_key($factureAchat->valeursAuditees(), array_flip(self::CHAMPS_AUDITES)) : [];
 
             return $this->operateur->pendant($compte, function () use ($compte, $factureAchat, $fournisseur, $lignes, $attributs, $montants, $pieces, $estValidee, $produitsAvant, $avant): FactureAchat {
                 $factureAchat->fill([...$attributs, 'fournisseur_id' => $fournisseur->getKey()])->verifierLaDateDeLaSaisie();
@@ -202,7 +202,7 @@ class ModifierFactureAchatAction
                 $this->tva->retenir($compte, $factureAchat, $document, $montants);
 
                 if ($estValidee) {
-                    $this->journalAudit->inscrireLesChangements(ActionAuditee::FactureAchatModifiee, $compte, $factureAchat->magasin, $avant, Arr::only($factureAchat->valeursAuditees(), self::CHAMPS_AUDITES), $factureAchat);
+                    $this->journalAudit->inscrireLesChangements(ActionAuditee::FactureAchatModifiee, $compte, $factureAchat->magasin, $avant, array_intersect_key($factureAchat->valeursAuditees(), array_flip(self::CHAMPS_AUDITES)), $factureAchat);
                 }
 
                 $this->pieces->joindre($compte, $factureAchat, $pieces);
@@ -230,7 +230,7 @@ class ModifierFactureAchatAction
     {
         $quantitesApres = $factureAchat->lignes
             ->groupBy('produit_id')
-            ->map(fn (Collection $lignesDuProduit): int => $lignesDuProduit->sum('quantite'));
+            ->map(fn (Collection $lignesDuProduit): int => ValeursLues::entier($lignesDuProduit->sum('quantite')));
 
         foreach (array_unique([...$produitsAvant, ...$quantitesApres->keys()->all()]) as $produitId) {
             $produit = Produit::query()->findOrFail($produitId);
@@ -258,13 +258,12 @@ class ModifierFactureAchatAction
      */
     private function lotsDesReceptions(Produit $produit): array
     {
-        return $produit->achatsValides()
-            ->with('factureAchat')
-            ->get()
-            ->groupBy('facture_achat_id')
-            ->map(fn (Collection $lignes): array => array_values($lignes
-                ->map(fn (LigneAchat $ligne): array => ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()])
-                ->all()))
-            ->all();
+        $lots = [];
+
+        foreach ($produit->achatsValides()->with('factureAchat')->get() as $ligne) {
+            $lots[$ligne->facture_achat_id][] = ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()];
+        }
+
+        return $lots;
     }
 }

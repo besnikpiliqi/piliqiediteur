@@ -12,7 +12,9 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
@@ -147,20 +149,20 @@ class InscriptionSociete extends Register
         }
 
         $donnees = $this->form->getState();
-        $email = User::normaliserEmail($donnees['email']);
+        $email = User::normaliserEmail(ValeurSimple::enTexte($donnees['email']));
 
-        if ($this->limiteAtteinte($donnees['siren'], $email)) {
+        if ($this->limiteAtteinte(ValeurSimple::enTexte($donnees['siren']), $email)) {
             $this->terminer();
 
             return null;
         }
 
-        if (Societe::sirenPris($donnees['siren'])) {
+        if (Societe::sirenPris(ValeurSimple::enTexte($donnees['siren']))) {
             throw ValidationException::withMessages(['data.siren' => CreerSocieteAction::MESSAGE_SIREN_PRIS]);
         }
 
-        $type = TypeDActivite::from($donnees['type_activite']);
-        $unite = $this->refuserCeQueSireneRefuse($donnees['siren']);
+        $type = TypeDActivite::from(ValeurSimple::enTexte($donnees['type_activite']));
+        $unite = $this->refuserCeQueSireneRefuse(ValeurSimple::enTexte($donnees['siren']));
 
         if ($type === TypeDActivite::Cabinet && $unite !== null && ControleSirene::exerceLesActivitesComptables($unite) === false) {
             throw ValidationException::withMessages(['data.type_activite' => ControleSirene::MOTIF_ACTIVITE_NON_COMPTABLE]);
@@ -215,7 +217,7 @@ class InscriptionSociete extends Register
      */
     public static function adresseDeLApplication(string $route, array $parametres = []): string
     {
-        return rtrim((string) config('app.url'), '/').route($route, $parametres, absolute: false);
+        return rtrim(Reglage::texte('app.url'), '/').route($route, $parametres, absolute: false);
     }
 
     protected function getSirenFormComponent(): Component
@@ -247,7 +249,7 @@ class InscriptionSociete extends Register
             ->in(array_map(fn (TypeDActivite $type): string => $type->value, TypeDActivite::cases()))
             ->live()
             ->helperText(fn (Get $get): HtmlString => new HtmlString(implode('<br>', array_map(e(...), array_filter([
-                TypeDActivite::tryFrom((string) $get('type_activite'))?->aide(),
+                TypeDActivite::tryFrom(ValeurSimple::enTexte($get('type_activite')))?->aide(),
                 TypeDActivite::rappelDuChoixDefinitif(),
             ])))));
     }

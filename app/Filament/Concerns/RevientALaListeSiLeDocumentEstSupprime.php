@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /**
@@ -28,7 +29,7 @@ trait RevientALaListeSiLeDocumentEstSupprime
         $document = $this->getRecord();
 
         if (method_exists($document, 'trashed') && $document->trashed()) {
-            throw (new ModelNotFoundException)->setModel($document::class, [$document->getKey()]);
+            throw (new ModelNotFoundException)->setModel($document::class, [CleDuModele::de($document)]);
         }
     }
 }

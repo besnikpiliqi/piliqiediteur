@@ -11,6 +11,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -91,7 +92,7 @@ class RattachementDUnCabinet extends Page
     {
         return [
             'societe' => Societe::query()->whereKey($demande->cabinet_id)->firstOrFail(['id', 'siren', 'raison_sociale', 'siege_code_postal', 'siege_ville']),
-            'numero_ordre' => Cabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $demande->cabinet_id)->value('numero_ordre'),
+            'numero_ordre' => ValeursLues::texteOuNul(Cabinet::query()->withoutGlobalScope(SocieteScope::class)->where('societe_id', $demande->cabinet_id)->value('numero_ordre')),
         ];
     }
 
@@ -102,7 +103,7 @@ class RattachementDUnCabinet extends Page
     {
         $actif = LienCabinet::query()->where('etat', EtatDuLien::Actif->value)->first(['id', 'cabinet_id']);
 
-        return $actif === null ? null : (Societe::query()->whereKey($actif->cabinet_id)->value('raison_sociale') ?? 'votre cabinet actuel');
+        return $actif === null ? null : (ValeursLues::texteOuNul(Societe::query()->whereKey($actif->cabinet_id)->value('raison_sociale')) ?? 'votre cabinet actuel');
     }
 
     /**
@@ -154,7 +155,7 @@ class RattachementDUnCabinet extends Page
                 Placeholder::make('jamais')->hiddenLabel()->content(CabinetComptable::TEXTE_JAMAIS),
                 Placeholder::make('vide')->hiddenLabel()->content('Sans aucune autorisation, votre cabinet reste lié et voit votre identité, vos réglages fiscaux et vos magasins, mais n\'ouvre aucun document, aucune fiche ni aucun téléchargement.'),
             ])
-            ->action(fn (array $data) => $this->accepter(array_values(array_unique([...($data['consultations'] ?? []), ...($data['achats'] ?? []), ...($data['telechargements'] ?? [])]))));
+            ->action(fn (array $data) => $this->accepter(CabinetComptable::autorisationsCocheesDans($data)));
     }
 
     public function refuserAction(): Action

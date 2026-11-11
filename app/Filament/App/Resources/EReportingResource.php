@@ -9,6 +9,7 @@ use App\Domain\Facturation\Services\ApercuEReporting;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\EReportingResource\Pages;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -72,7 +73,7 @@ class EReportingResource extends Resource
 
     public static function canView(Model $record): bool
     {
-        return static::canViewAny() && (int) $record->getAttribute('magasin_id') === app(TenantContext::class)->id();
+        return static::canViewAny() && ValeurSimple::enEntier($record->getAttribute('magasin_id')) === app(TenantContext::class)->id();
     }
 
     public static function canCreate(): bool

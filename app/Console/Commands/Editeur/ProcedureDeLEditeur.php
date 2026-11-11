@@ -7,7 +7,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\RegistreDesOperateurs;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Command;
 use LogicException;
 
@@ -97,7 +99,7 @@ abstract class ProcedureDeLEditeur extends Command
             return self::FAILURE;
         }
 
-        foreach ([$this->getDescription(), "Société n° {$societe->getKey()} — {$societe->getFilamentName()} — SIREN {$societe->siren}", ...$this->resume($societe)] as $ligne) {
+        foreach ([$this->getDescription(), 'Société n° '.CleDuModele::de($societe)." — {$societe->getFilamentName()} — SIREN {$societe->siren}", ...$this->resume($societe)] as $ligne) {
             $this->line($ligne);
         }
 
@@ -121,7 +123,7 @@ abstract class ProcedureDeLEditeur extends Command
 
             for ($rang = 1; $rang <= $this->operateursExiges(); $rang++) {
                 $suffixe = $this->operateursExiges() === 1 ? '' : ($rang === 1 ? ' (premier)' : ' (second)');
-                $operateur = $operateurs->authentifier($this->ask("Nom de l'opérateur{$suffixe}"), $this->secret("Secret de l'opérateur{$suffixe}"));
+                $operateur = $operateurs->authentifier(ValeursLues::texteOuNul($this->ask("Nom de l'opérateur{$suffixe}")), ValeursLues::texteOuNul($this->secret("Secret de l'opérateur{$suffixe}")));
 
                 if (in_array($operateur, $authentifies, true)) {
                     throw new VerificationRefuseeException(self::MESSAGE_MEME_OPERATEUR);

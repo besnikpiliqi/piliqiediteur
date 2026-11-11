@@ -50,24 +50,24 @@ class JourneesDeCaisse
         $premiereVente = Facture::jourDeLaPremiereVente($magasin->calendrier());
 
         if ($premiereVente === null) {
-            return collect();
+            return new Collection;
         }
 
         $journee = $derniereCloturee !== null && $derniereCloturee >= $premiereVente
             ? Calendrier::ajouterJours($derniereCloturee, 1)
             : $premiereVente;
         $periodes = $this->periodesDActivite->jours($magasin);
-        $journees = collect();
+        $journees = [];
 
         while ($journee <= $fin) {
             if (self::estDansUnePeriode($journee, $periodes)) {
-                $journees->push($journee);
+                $journees[] = $journee;
             }
 
             $journee = Calendrier::ajouterJours($journee, 1);
         }
 
-        return $journees;
+        return collect($journees);
     }
 
     /**

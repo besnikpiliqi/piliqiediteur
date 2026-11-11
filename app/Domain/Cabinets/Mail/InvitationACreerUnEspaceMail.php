@@ -2,6 +2,7 @@
 
 namespace App\Domain\Cabinets\Mail;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -22,7 +23,7 @@ class InvitationACreerUnEspaceMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "{$this->societe} vous invite à créer l'espace de votre cabinet sur ".config('app.name'));
+        return new Envelope(subject: "{$this->societe} vous invite à créer l'espace de votre cabinet sur ".Reglage::texte('app.name'));
     }
 
     public function content(): Content

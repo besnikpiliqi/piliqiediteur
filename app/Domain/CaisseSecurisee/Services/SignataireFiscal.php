@@ -5,6 +5,8 @@ namespace App\Domain\CaisseSecurisee\Services;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Support\ErreursOpenSsl;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Contracts\Config\Repository;
 use OpenSSLAsymmetricKey;
 use RuntimeException;
@@ -83,7 +85,7 @@ class SignataireFiscal
 
         return [
             'cle_id' => self::empreinte($cle),
-            'cle_privee' => $clePrivee,
+            'cle_privee' => ValeursLues::texte($clePrivee),
             'cle_publique' => self::pem(self::spki($cle)),
         ];
     }
@@ -103,7 +105,7 @@ class SignataireFiscal
             throw new RuntimeException('La signature OpenSSL du contenu fiscal a échoué. '.ErreursOpenSsl::detail());
         }
 
-        return self::base64url($signature);
+        return self::base64url(ValeursLues::texte($signature));
     }
 
     /**
@@ -164,7 +166,7 @@ class SignataireFiscal
             return $this->clePrivee;
         }
 
-        $valeur = trim((string) $this->config->get('caisse_securisee.cle_privee'));
+        $valeur = trim(ValeurSimple::enTexte($this->config->get('caisse_securisee.cle_privee')));
 
         if ($valeur === '') {
             throw ModuleFiscalNonConfigureException::clePriveeAbsente();
@@ -176,7 +178,7 @@ class SignataireFiscal
             throw ModuleFiscalNonConfigureException::clePriveeIllisible('Sa valeur n\'est pas écrite en base64.');
         }
 
-        $phraseSecrete = (string) $this->config->get('caisse_securisee.phrase_secrete');
+        $phraseSecrete = ValeurSimple::enTexte($this->config->get('caisse_securisee.phrase_secrete'));
         ErreursOpenSsl::oublier();
         $cle = openssl_pkey_get_private($pem, $phraseSecrete === '' ? null : $phraseSecrete);
 
@@ -213,12 +215,14 @@ class SignataireFiscal
         $trousseau = [];
 
         foreach ((array) $this->config->get('caisse_securisee.cles_publiques', []) as $fichier => $pem) {
-            if (str_contains((string) $pem, 'PRIVATE KEY')) {
+            $pem = ValeurSimple::enTexte($pem);
+
+            if (str_contains($pem, 'PRIVATE KEY')) {
                 throw ModuleFiscalNonConfigureException::clePriveeEpinglee((string) $fichier);
             }
 
             ErreursOpenSsl::oublier();
-            $cle = openssl_pkey_get_public((string) $pem);
+            $cle = openssl_pkey_get_public($pem);
 
             if ($cle === false) {
                 throw ModuleFiscalNonConfigureException::cleEpingleeIllisible((string) $fichier, ErreursOpenSsl::detail());
@@ -240,7 +244,7 @@ class SignataireFiscal
 
         return $details !== false
             && $details['type'] === OPENSSL_KEYTYPE_EC
-            && ($details['ec']['curve_name'] ?? null) === self::COURBE;
+            && ValeursLues::valeurAu($details, 'ec', 'curve_name') === self::COURBE;
     }
 
     /**
@@ -268,11 +272,11 @@ class SignataireFiscal
     {
         ErreursOpenSsl::oublier();
         $details = openssl_pkey_get_details($cle);
-        $coordonnees = ($details !== false ? $details : throw new RuntimeException('OpenSSL ne donne pas le détail de la clé ECDSA P-256. '.ErreursOpenSsl::detail()))['ec'];
+        $coordonnees = ValeursLues::tableauDe($details !== false ? $details : throw new RuntimeException('OpenSSL ne donne pas le détail de la clé ECDSA P-256. '.ErreursOpenSsl::detail()), 'ec');
 
         return hex2bin(self::ENTETE_SPKI_P256)."\x04"
-            .str_pad($coordonnees['x'], 32, "\0", STR_PAD_LEFT)
-            .str_pad($coordonnees['y'], 32, "\0", STR_PAD_LEFT);
+            .str_pad(ValeursLues::texteDe($coordonnees, 'x'), 32, "\0", STR_PAD_LEFT)
+            .str_pad(ValeursLues::texteDe($coordonnees, 'y'), 32, "\0", STR_PAD_LEFT);
     }
 
     private static function pem(string $der): string

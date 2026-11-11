@@ -6,6 +6,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\PaiementResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -47,10 +48,10 @@ class CreatePaiement extends CreateRecord
         // archivé qui règle ce qu'il doit encore (voir
         // Client::scopeQuiPeuventRegler()).
         $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
-        $allocations = array_map(fn (array $allocation) => [
-            'facture_id' => (int) $allocation['facture_id'],
-            'montant' => (float) $allocation['montant'],
-        ], $data['allocations']);
+        $allocations = array_values(array_map(fn (array $allocation): array => [
+            'facture_id' => ValeurSimple::enEntier($allocation['facture_id']),
+            'montant' => (float) ValeurSimple::simple($allocation['montant']),
+        ], ValeursLues::lignes($data['allocations'])));
 
         foreach (Facture::query()->whereKey(array_column($allocations, 'facture_id'))->get() as $facture) {
             Gate::authorize('view', $facture);
@@ -61,11 +62,11 @@ class CreatePaiement extends CreateRecord
         // changement du solde entre l'affichage du formulaire et sa
         // soumission (ex : un autre paiement ou avoir appliqué entre-temps).
         return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle(CompteConnecte::exiger(), $client, [
-            'mode_paiement' => $data['mode_paiement'],
-            'montant' => $data['montant'],
-            'reference' => $data['reference'] ?? null,
-            'notes' => $data['notes'] ?? null,
-            'recu_le' => $data['recu_le'],
-        ], $allocations, $data['jeton']));
+            'mode_paiement' => ValeurSimple::enTexte($data['mode_paiement']),
+            'montant' => ValeurSimple::enTexte($data['montant']),
+            'reference' => ValeurSimple::enTexteOuNul($data['reference'] ?? null),
+            'notes' => ValeurSimple::enTexteOuNul($data['notes'] ?? null),
+            'recu_le' => ValeurSimple::enTexte($data['recu_le']),
+        ], $allocations, ValeurSimple::enTexteOuNul($data['jeton'])));
     }
 }

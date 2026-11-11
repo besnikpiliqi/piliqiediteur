@@ -22,6 +22,7 @@ use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -142,13 +143,15 @@ class EmettreAvoirAction
 
         $avoir = ModeleRelu::de($avoir);
         $contenu = $this->contenuFiscal->document($avoir);
-        $enregistrement = $this->registre->enregistrerVente('avoir', $contenu['document']['totaux']['ttc'], $contenu, $avoir);
+        $documentSigne = ValeursLues::tableauDe($contenu, 'document');
+        $totalTtc = ValeursLues::entierDe(ValeursLues::tableauDe($documentSigne, 'totaux'), 'ttc');
+        $enregistrement = $this->registre->enregistrerVente('avoir', $totalTtc, $contenu, $avoir);
 
         if ($contenu['document']['corrige'] === 'ticket') {
             $this->registre->journaliser(CodeEvenement::AnnulationDeTicket, [
                 'avoir' => $avoir->numero,
-                'tickets' => array_column($contenu['document']['documents_corriges'], 'numero'),
-                'montant_ttc' => $contenu['document']['totaux']['ttc'],
+                'tickets' => array_column(ValeursLues::tableauDe($documentSigne, 'documents_corriges'), 'numero'),
+                'montant_ttc' => $totalTtc,
                 'sequence_vente' => $enregistrement->sequence,
                 'motif' => $avoir->motif,
             ], $avoir);

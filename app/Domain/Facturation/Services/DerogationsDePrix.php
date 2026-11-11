@@ -8,6 +8,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
@@ -85,7 +87,7 @@ class DerogationsDePrix
         $introduites = [];
 
         foreach ($lignesApres as $cleDeLigne => $ligne) {
-            $article = $ligne['produit_id'] !== null ? $produits->get($ligne['produit_id']) : $services->get($ligne['service_id']);
+            $article = $ligne['produit_id'] !== null ? $produits->get(ValeurSimple::enEntier($ligne['produit_id'])) : $services->get(ValeurSimple::enEntier($ligne['service_id']));
             $derogation = $this->derogation($ligne, ValeurRequise::de($article, 'l\'article du catalogue de la ligne'), $contexte);
 
             if ($derogation === null) {
@@ -130,7 +132,7 @@ class DerogationsDePrix
         if ($article instanceof Produit) {
             return $prix === $this->calculateur->enCentiemes($article->prix_vente_ttc)
                 ? null
-                : "Vendre « {$article->nom} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($article->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
+                : "Vendre « {$article->nom} » à ".$this->prixUnitaire(ValeursLues::texte($ligne['prix_unitaire_ttc'])).' au lieu de '.$this->prixUnitaire($article->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
         }
 
         if ($article->estASonPrixDeReference($prix, $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']), $contexte)) {
@@ -144,7 +146,7 @@ class DerogationsDePrix
         $prixDeReference = ValeurRequise::de($article->prixDeReferenceDans($contexte), 'le prix de référence du service');
 
         if ($prix !== $this->calculateur->enCentiemes($prixDeReference)) {
-            return "Vendre « {$article->nom} » à ".$this->prixUnitaire($ligne['prix_unitaire_ttc']).' au lieu de '.$this->prixUnitaire($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
+            return "Vendre « {$article->nom} » à ".$this->prixUnitaire(ValeursLues::texte($ligne['prix_unitaire_ttc'])).' au lieu de '.$this->prixUnitaire($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
         }
 
         return "Vendre « {$article->nom} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($article->taux_tva).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';
@@ -159,9 +161,9 @@ class DerogationsDePrix
     private function cle(array $ligne): string
     {
         return implode('|', [
-            $ligne['produit_id'],
-            $ligne['service_id'],
-            $ligne['quantite'],
+            ValeurSimple::enTexte($ligne['produit_id']),
+            ValeurSimple::enTexte($ligne['service_id']),
+            ValeurSimple::enTexte($ligne['quantite']),
             $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']),
             $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']),
             $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
@@ -180,6 +182,6 @@ class DerogationsDePrix
 
     private static function pourcentage(mixed $pourcentage): string
     {
-        return str_replace('.', ',', (string) (float) $pourcentage);
+        return str_replace('.', ',', (string) (float) ValeurSimple::simple($pourcentage));
     }
 }

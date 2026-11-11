@@ -8,6 +8,7 @@ use App\Domain\Cabinets\Support\IdentiteDansLeJournal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Models\User;
@@ -68,7 +69,7 @@ class ReglerLesAutorisationsDuCabinetAction
                 ClientDuCabinetResource::getUrl('view', ['record' => $lien->uuid], panel: 'cabinet', tenant: $cabinet),
                 'Voir le client',
                 AvisDuCabinet::INFORMATION,
-                clientId: (int) $client->getKey(),
+                clientId: CleDuModele::de($client),
             ));
         });
     }

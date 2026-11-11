@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Concerns;
 
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
@@ -34,7 +35,7 @@ trait FigeLeNomDeSesAuteurs
             foreach (static::colonnesAuNomFige() as $colonne => $colonneDuNom) {
                 if (! $modele->exists || $modele->isDirty($colonne)) {
                     $personne = $modele->getAttribute($colonne);
-                    $modele->setAttribute($colonneDuNom, $personne === null ? null : User::nomFigeDe((int) $personne));
+                    $modele->setAttribute($colonneDuNom, $personne === null ? null : User::nomFigeDe(ValeurSimple::enEntier($personne)));
 
                     continue;
                 }

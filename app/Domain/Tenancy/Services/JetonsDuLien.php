@@ -3,6 +3,8 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -64,13 +66,13 @@ final class JetonsDuLien
             return false;
         }
 
-        $expireLe = Instant::depuisLaBase((string) $ligne->created_at)->addMinutes((int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'));
+        $expireLe = Instant::depuisLaBase(ValeursLues::texte($ligne->created_at))->addMinutes(Reglage::entier('auth.passwords.'.Reglage::texte('auth.defaults.passwords').'.expire'));
 
         return $expireLe->isFuture() && Hash::check($jeton, $ligne->token);
     }
 
     private function table(): string
     {
-        return (string) config('auth.passwords.'.config('auth.defaults.passwords').'.table');
+        return Reglage::texte('auth.passwords.'.Reglage::texte('auth.defaults.passwords').'.table');
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Filament\Societe\Pages\RattachementDUnCabinet;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -56,7 +57,7 @@ class RattachementAuCabinetController
 
         $societe = Societe::query()->whereKey($lien->societe_id)->firstOrFail(['id', 'uuid', 'close_le', 'statut']);
 
-        if (! $compte->estProprietaire() || ! $compte->peutAgir() || (int) $compte->societe_id !== (int) $societe->getKey() || $societe->close_le !== null || $societe->statut === StatutSociete::Revoquee) {
+        if (! $compte->estProprietaire() || ! $compte->peutAgir() || $compte->societe_id !== CleDuModele::de($societe) || $societe->close_le !== null || $societe->statut === StatutSociete::Revoquee) {
             return $this->neutre(self::MESSAGE_AUTRE_COMPTE, 403);
         }
 

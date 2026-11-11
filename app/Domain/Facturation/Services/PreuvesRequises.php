@@ -9,6 +9,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -83,7 +84,7 @@ class PreuvesRequises
             return [];
         }
 
-        $nombre = $facture->preuvesOperation()->pluck('type')->countBy(fn (TypePreuve $type): string => $type->value);
+        $nombre = $facture->preuvesOperation()->pluck('type')->countBy(fn (mixed $type): string => ValeursLues::instance($type, TypePreuve::class)->value);
         $nombreDe = fn (TypePreuve ...$types): int => array_sum(array_map(fn (TypePreuve $type): int => $nombre->get($type->value, 0), $types));
         $declaration = $nombreDe(TypePreuve::Mrn, TypePreuve::Cn23) > 0 ? null : TypePreuve::Mrn->getLabel().', ou '.lcfirst(TypePreuve::Cn23->getLabel());
         $transportsA = $nombreDe(TypePreuve::TransportA);

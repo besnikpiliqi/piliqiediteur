@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ClientResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\EnregistreLesCorrectionsDeLaFiche;
@@ -51,7 +52,7 @@ class EditClient extends EditRecord
     {
         $saisie = data_get($this->data, 'numero_tva');
         $numeroSaisi = is_string($saisie) && filled($saisie) ? NumeroTva::normaliser($saisie) : null;
-        $numeroEnregistre = $this->getRecord()->getAttribute('numero_tva');
+        $numeroEnregistre = ValeursLues::instance($this->getRecord(), Client::class)->numero_tva;
 
         if ($numeroSaisi === $numeroEnregistre) {
             return;

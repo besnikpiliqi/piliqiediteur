@@ -34,6 +34,9 @@ class ExigerSonPropreMotDePasse
      */
     public const A_LA_CONNEXION = 'doit_choisir_son_mot_de_passe';
 
+    /**
+     * @param  Closure(Request): Response  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $compte = $request->user();

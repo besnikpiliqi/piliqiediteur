@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TeteJournalAudit;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -104,7 +105,7 @@ class PurgerJournalAudit extends Command
                 TraceAudit::query()->whereIn('entree_audit_id', $identifiants)->delete();
                 $tete->forceFill(['reprise_sequence' => $derniere->sequence, 'reprise_empreinte' => $derniere->empreinte])->save();
 
-                return EntreeAudit::query()->whereKey($identifiants)->delete();
+                return ValeursLues::entier(EntreeAudit::query()->whereKey($identifiants)->delete());
             });
         }
 

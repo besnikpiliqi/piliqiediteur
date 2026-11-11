@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\VerificateurJournalAudit;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -33,7 +34,7 @@ class VerifierJournalAudit extends Command
 
         foreach ($societes as $societe) {
             foreach ($verificateur->verifier($societe) as $anomalie) {
-                $this->error("Société n° {$societe->getKey()} : {$anomalie}");
+                $this->error('Société n° '.CleDuModele::de($societe)." : {$anomalie}");
                 $anomalies++;
             }
         }
@@ -64,6 +65,6 @@ class VerifierJournalAudit extends Command
             default => null,
         };
 
-        return $societe === null ? collect() : collect([$societe]);
+        return new Collection($societe === null ? [] : [$societe]);
     }
 }

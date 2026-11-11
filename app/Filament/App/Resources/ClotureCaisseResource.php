@@ -165,7 +165,7 @@ class ClotureCaisseResource extends Resource
                         ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->totalEncaisseEnCentimes())),
                     TextEntry::make('credit_avoir_impute')
                         ->label('Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)')
-                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->recapitulatif['credit_avoir_impute'])),
+                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->creditAvoirImpute())),
                 ])
                 ->columns(2),
 
@@ -174,10 +174,10 @@ class ClotureCaisseResource extends Resource
                 ->schema([
                     TextEntry::make('grand_total_reel')
                         ->label('Grand total perpétuel réel')
-                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->recapitulatif['grands_totaux']['perpetuel_reel'])),
+                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->grandsTotaux()['perpetuel_reel'])),
                     TextEntry::make('grand_total_absolu')
                         ->label('Grand total perpétuel absolu')
-                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->recapitulatif['grands_totaux']['perpetuel_absolu'])),
+                        ->state(fn (ClotureCaisse $record): string => app(CalculateurLigne::class)->enEuros($record->grandsTotaux()['perpetuel_absolu'])),
                 ])
                 ->columns(2),
 
@@ -219,7 +219,7 @@ class ClotureCaisseResource extends Resource
             ->state($documents)
             ->schema([
                 TextEntry::make('numero')->label('Numéro')
-                    ->url(fn (TextEntry $component): string => $component->getContainer()->getState()['url'])
+                    ->url(fn (TextEntry $component): string => ValeursLues::texteDe(ValeursLues::tableau($component->getContainer()->getState()), 'url'))
                     ->color('primary'),
                 TextEntry::make('client_nom')->label('Client'),
                 TextEntry::make('ht')->label('Total HT'),
@@ -302,12 +302,12 @@ class ClotureCaisseResource extends Resource
      */
     private static function encaissements(ClotureCaisse $cloture): array
     {
-        return array_values(array_map(fn (array $mode): array => [
-            'libelle' => ValeursLues::texte($mode['libelle']),
-            'paiements' => ValeursLues::entier($mode['paiements']),
-            'contre_passations' => ValeursLues::entier($mode['contre_passations']),
-            'montant' => app(CalculateurLigne::class)->enEuros(ValeursLues::entier($mode['montant'])),
-        ], $cloture->recapitulatif['encaissements']));
+        return array_map(fn (array $mode): array => [
+            'libelle' => $mode['libelle'],
+            'paiements' => $mode['paiements'],
+            'contre_passations' => $mode['contre_passations'],
+            'montant' => app(CalculateurLigne::class)->enEuros($mode['montant']),
+        ], $cloture->encaissementsParMode());
     }
 
     public static function table(Table $table): Table

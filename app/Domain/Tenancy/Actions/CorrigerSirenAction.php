@@ -27,6 +27,7 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -165,7 +166,7 @@ class CorrigerSirenAction
         $nouveauSiren = (string) preg_replace('/\s+/', '', $nouveauSiren);
         $numeroTva = $numeroTva === null ? null : NumeroTva::normaliser($numeroTva);
 
-        [$corrigee, $cabinetQuiEtaitVerifie] = app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $nouveauSiren, $siretsParCode, $numeroTva, $assujettiUnique, $editeur): array {
+        [$corrigee, $cabinetQuiEtaitVerifie] = app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $nouveauSiren, $siretsParCode, $numeroTva, $assujettiUnique, $editeur) {
             ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($societe);
             $examen = $this->exigerUnExamenConcluantAUneErreur($nouveauSiren);
             $unite = $this->controleSirene->unite($nouveauSiren);
@@ -181,7 +182,7 @@ class CorrigerSirenAction
             $magasins = $societe->magasinsReels()->orderBy('id')->get();
             $etablissements = $this->etablissementsDesMagasins(self::quiChangentDeSiret($magasins), $siretsParCode, $nouveauSiren);
 
-            return $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrouDesMagasins($magasins, function () use ($societe, $nouveauSiren, $numeroTva, $assujettiUnique, $editeur, $magasins, $etablissements, $unite, $examen): array {
+            $correction = function () use ($societe, $nouveauSiren, $numeroTva, $assujettiUnique, $editeur, $magasins, $etablissements, $unite, $examen) {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 ExaminerSirenAction::exigerUneSocieteValideeNonRevoquee($verrouillee);
                 $relus = $verrouillee->magasinsReels()->orderBy('id')->get();
@@ -216,7 +217,7 @@ class CorrigerSirenAction
                 foreach (self::quiChangentDeSiret($relus) as $magasin) {
                     app(TenantContext::class)->runAs($magasin, function () use ($magasin, $etablissements, $editeur, &$anciensSirets, &$nouveauxSirets): void {
                         $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
-                        $consultation = $etablissements[(int) $magasin->getKey()];
+                        $consultation = $etablissements[CleDuModele::de($magasin)];
                         $anciensSirets[(string) $verrouille->code] = (string) $verrouille->siret;
 
                         try {
@@ -236,13 +237,15 @@ class CorrigerSirenAction
                     $verrouillee, $editeur);
 
                 return [$verrouillee, $cabinetQuiEtaitVerifie];
-            }));
+            };
+
+            return $this->operateur->pendantLeSysteme(fn () => $this->registre->sousVerrouDesMagasins($magasins, $correction));
         });
 
         $this->prevenirLeProprietaire($corrigee);
 
         if ($cabinetQuiEtaitVerifie) {
-            PrevenirLesClientsDuCabinet::dispatch((int) $corrigee->getKey(), accesRetabli: false);
+            PrevenirLesClientsDuCabinet::dispatch(CleDuModele::de($corrigee), accesRetabli: false);
         }
 
         return $corrigee;
@@ -396,7 +399,7 @@ class CorrigerSirenAction
                 throw new VerificationRefuseeException(SiretsDesMagasins::MESSAGE_SIRET_RESERVE);
             }
 
-            $etablissements[(int) $magasin->getKey()] = $consultation;
+            $etablissements[CleDuModele::de($magasin)] = $consultation;
         }
 
         return $etablissements;

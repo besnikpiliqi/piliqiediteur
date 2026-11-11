@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Database\Factories\ClotureCaissePersonnelleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -140,7 +141,7 @@ class ClotureCaissePersonnelle extends Model
      */
     public function totalEncaisse(): float
     {
-        return app(CalculateurLigne::class)->sommer($this->encaissements);
+        return app(CalculateurLigne::class)->sommer(ValeursLues::textes($this->encaissements));
     }
 
     /**
@@ -151,10 +152,12 @@ class ClotureCaissePersonnelle extends Model
      */
     public function encaissementsEnClair(): array
     {
-        return array_map(
-            fn (string $mode, string $montant): string => ModePaiement::from($mode)->getLabel().' : '.number_format((float) $montant, 2, ',', ' ').' €',
-            array_keys($this->encaissements),
-            $this->encaissements,
-        );
+        $lignes = [];
+
+        foreach ($this->encaissements as $mode => $montant) {
+            $lignes[] = ModePaiement::from(ValeursLues::texte($mode))->getLabel().' : '.number_format((float) ValeursLues::texte($montant), 2, ',', ' ').' €';
+        }
+
+        return $lignes;
     }
 }

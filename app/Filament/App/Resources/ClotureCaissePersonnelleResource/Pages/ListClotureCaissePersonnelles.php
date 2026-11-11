@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Widgets\CaissesOuvertesDeLEquipeApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -72,7 +73,7 @@ class ListClotureCaissePersonnelles extends ListRecords
                 ->modalDescription(fn (): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(CompteConnecte::exiger()), 'votre'))
                 ->form([self::champDuJeton()])
                 ->visible(fn () => CompteConnecte::exiger()->can('fermer', ClotureCaissePersonnelle::class))
-                ->action(fn (array $data) => static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), CompteConnecte::exiger(), $data['jeton']))),
+                ->action(fn (array $data) => static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), CompteConnecte::exiger(), ValeurSimple::enTexteOuNul($data['jeton'])))),
             Actions\Action::make('fermer_la_caisse_d_un_vendeur')
                 ->label('Fermer la caisse d\'un vendeur')
                 ->icon('heroicon-o-user-minus')
@@ -104,7 +105,7 @@ class ListClotureCaissePersonnelles extends ListRecords
                     }
 
                     static::executerSansCasser(function () use ($vendeur, $data): void {
-                        $releve = app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), $vendeur, $data['jeton']);
+                        $releve = app(FermerSaCaisseAction::class)->handle(CompteConnecte::exiger(), $vendeur, ValeurSimple::enTexteOuNul($data['jeton']));
 
                         Notification::make()->title("Caisse de {$releve->vendeur_nom} fermée")->success()->send();
                     });
@@ -127,7 +128,7 @@ class ListClotureCaissePersonnelles extends ListRecords
 
     private static function vendeurChoisi(mixed $vendeurId): ?User
     {
-        return filled($vendeurId) ? self::vendeursAvecCaisseOuverte()->firstWhere('id', (int) $vendeurId) : null;
+        return filled($vendeurId) ? self::vendeursAvecCaisseOuverte()->firstWhere('id', ValeurSimple::enEntier($vendeurId)) : null;
     }
 
     /**

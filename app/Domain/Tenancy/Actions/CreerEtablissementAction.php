@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -123,7 +124,7 @@ class CreerEtablissementAction
             $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'creerUnMagasin', $societe, $societe, new LogicException(self::MESSAGE_SANS_AUTORISATION));
 
             $valides = $this->valider($societe, $donnees);
-            $siret = $societe->siren.$valides['nic'];
+            $siret = $societe->siren.ValeursLues::texteDe($valides, 'nic');
             $consultation = $this->controleSirene->etablissement($siret, $societe->siren);
             $etablissement = $consultation['etablissement'];
 
@@ -198,7 +199,7 @@ class CreerEtablissementAction
      */
     private function valider(Societe $societe, array $donnees): array
     {
-        return Validator::make($donnees, [
+        return ValeursLues::champs(Validator::make($donnees, [
             'nom' => ['required', 'string', 'max:150'],
             'code' => ['nullable', 'string', new CodeMagasinLibre($societe)],
             'email' => ['nullable', 'string', 'email', 'max:150'],
@@ -223,6 +224,6 @@ class CreerEtablissementAction
                     }
                 },
             ],
-        ], attributes: ['nom' => 'nom du magasin', 'code' => 'code du magasin', 'nic' => 'NIC'])->validate();
+        ], attributes: ['nom' => 'nom du magasin', 'code' => 'code du magasin', 'nic' => 'NIC'])->validate());
     }
 }

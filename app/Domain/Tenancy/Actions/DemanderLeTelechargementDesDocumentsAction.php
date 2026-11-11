@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Carbon\CarbonInterval;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -63,7 +64,7 @@ class DemanderLeTelechargementDesDocumentsAction
     ) {}
 
     /**
-     * @param  iterable<Magasin>  $magasins  les magasins de la société choisis, chacun déjà proposé à la personne
+     * @param  iterable<array-key, Magasin>  $magasins  les magasins de la société choisis, chacun déjà proposé à la personne
      * @param  list<TypeDeDocumentTelechargeable>  $types
      * @param  list<string>  $selection  les clés des documents choisis (voir DocumentTrouve::cle())
      *
@@ -89,12 +90,12 @@ class DemanderLeTelechargementDesDocumentsAction
             throw new InvalidArgumentException(self::REFUS_SELECTION);
         }
 
-        if ($magasins->isEmpty() || $magasins->contains(fn (Magasin $magasin): bool => (int) $magasin->societe_id !== (int) $societe->getKey())) {
+        if ($magasins->isEmpty() || $magasins->contains(fn (Magasin $magasin): bool => (int) $magasin->societe_id !== CleDuModele::de($societe))) {
             throw new AuthorizationException(self::REFUS_MAGASINS);
         }
 
         $telechargement = DB::transaction(function () use ($auteur, $societe, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement): TelechargementDeDocuments {
-            Societe::verrouillerAvantSonJournalDAudit($societe->getKey());
+            Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
             $compte = User::query()->whereKey($auteur->getKey())->lock('for no key update')->firstOrFail();
             $documents = app(DocumentsDeLaPeriode::class);
 
@@ -109,7 +110,7 @@ class DemanderLeTelechargementDesDocumentsAction
             return $this->contexte->runAsSociete($societe, function () use ($compte, $magasins, $du, $au, $types, $origine, $format, $selection, $pieceManquanteSeulement): TelechargementDeDocuments {
                 $telechargement = (new TelechargementDeDocuments)->forceFill([
                     'demande_par' => $compte->getKey(),
-                    'magasins' => $magasins->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all(),
+                    'magasins' => $magasins->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all(),
                     'du' => $du,
                     'au' => $au,
                     'types' => array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types),
@@ -126,7 +127,7 @@ class DemanderLeTelechargementDesDocumentsAction
             });
         });
 
-        PreparerLeTelechargementDesDocumentsJob::dispatch($telechargement->getKey());
+        PreparerLeTelechargementDesDocumentsJob::dispatch(CleDuModele::de($telechargement));
 
         return $telechargement;
     }

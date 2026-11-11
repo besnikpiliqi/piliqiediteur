@@ -2,9 +2,11 @@
 
 namespace App\Domain\Calendrier\Connexions;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use RuntimeException;
+use stdClass;
 
 /**
  * Le fuseau par défaut de la base PostgreSQL : celui que reçoit toute
@@ -118,14 +120,24 @@ final class FuseauParDefautDeLaBase
         $reglage = static fn (string $base, string $role): string => '(select substr(c.reglage, 10) from pg_db_role_setting s cross join lateral unnest(s.setconfig) as c(reglage) '
             ."where s.setdatabase = {$base} and s.setrole = {$role} and c.reglage ilike 'timezone=%')";
 
-        return $connexion->selectOne(
+        $etat = ValeursLues::instance($connexion->selectOne(
             'select d.datname as base, r.rolname as role, pg_get_userbyid(d.datdba) as proprietaire, '
             ."(select reset_val from pg_settings where name = 'TimeZone') as fuseau, "
             .$reglage('d.oid', 'r.oid').' as fuseau_du_role_dans_la_base, '
             .$reglage('0', 'r.oid').' as fuseau_du_role, '
             .$reglage('d.oid', '0').' as fuseau_de_la_base '
             .'from pg_database d, pg_roles r where d.datname = current_database() and r.rolname = session_user'
-        );
+        ), stdClass::class);
+
+        return (object) [
+            'base' => ValeursLues::texte($etat->base),
+            'role' => ValeursLues::texte($etat->role),
+            'proprietaire' => ValeursLues::texte($etat->proprietaire),
+            'fuseau' => ValeursLues::texte($etat->fuseau),
+            'fuseau_du_role_dans_la_base' => ValeursLues::texteOuNul($etat->fuseau_du_role_dans_la_base),
+            'fuseau_du_role' => ValeursLues::texteOuNul($etat->fuseau_du_role),
+            'fuseau_de_la_base' => ValeursLues::texteOuNul($etat->fuseau_de_la_base),
+        ];
     }
 
     /**

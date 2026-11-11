@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ModeleRelu;
 use App\Filament\Cabinet\Pages\VerificationDuCabinet;
@@ -111,7 +112,7 @@ class ConstaterLInscriptionALOrdreAction
         ));
 
         if ($devenuVerifie) {
-            PrevenirLesClientsDuCabinet::dispatch((int) $cabinet->getKey(), accesRetabli: true);
+            PrevenirLesClientsDuCabinet::dispatch(CleDuModele::de($cabinet), accesRetabli: true);
         }
     }
 

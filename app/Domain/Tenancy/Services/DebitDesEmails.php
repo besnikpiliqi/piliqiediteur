@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 use LogicException;
@@ -58,7 +59,7 @@ final class DebitDesEmails
     private function compteurs(User $expediteur, ?int $magasinId): array
     {
         return [
-            "emails:personne:{$expediteur->getKey()}" => self::PAR_HEURE_ET_PAR_PERSONNE,
+            'emails:personne:'.CleDuModele::de($expediteur) => self::PAR_HEURE_ET_PAR_PERSONNE,
             ...($magasinId === null ? [] : ["emails:magasin:{$magasinId}" => self::PAR_HEURE_ET_PAR_MAGASIN]),
         ];
     }

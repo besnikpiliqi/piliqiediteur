@@ -11,6 +11,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ResultatDePhp;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -95,8 +96,11 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ])
                 ->authorize(static fn (): bool => EnregistrementFiscalResource::canViewAny())
                 ->action(function (array $data): ?StreamedResponse {
+                    $du = ValeurSimple::enTexte($data['du']);
+                    $au = ValeurSimple::enTexte($data['au']);
+
                     try {
-                        $ecrire = app(ExporterJournalDesEvenementsAction::class)->handle(CompteConnecte::exiger(), $data['du'], $data['au']);
+                        $ecrire = app(ExporterJournalDesEvenementsAction::class)->handle(CompteConnecte::exiger(), $du, $au);
                     } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
@@ -105,7 +109,7 @@ class ListEnregistrementsFiscaux extends ListRecords
 
                     return response()->streamDownload(
                         static fn () => $ecrire(ResultatDePhp::flux(fopen('php://output', 'wb'), 'L\'ouverture de la sortie du téléchargement')),
-                        "journal-des-evenements-du-{$data['du']}-au-{$data['au']}.csv",
+                        "journal-des-evenements-du-{$du}-au-{$au}.csv",
                         ['Content-Type' => 'text/csv; charset=UTF-8'],
                     );
                 }),

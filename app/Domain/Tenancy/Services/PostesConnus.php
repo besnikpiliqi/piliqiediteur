@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\TemoinsEnTableau;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -33,7 +34,7 @@ final class PostesConnus
      */
     public function nonceDuCompte(Request $requete, User $compte): ?string
     {
-        $nonce = $this->postes($requete)[(string) $compte->getKey()] ?? null;
+        $nonce = $this->postes($requete)[(string) CleDuModele::de($compte)] ?? null;
 
         return is_string($nonce) && preg_match('/^[A-Za-z0-9]{40}$/D', $nonce) === 1 ? $nonce : null;
     }
@@ -48,7 +49,7 @@ final class PostesConnus
     public function retenir(Request $requete, User $compte): void
     {
         $postes = $this->postes($requete);
-        $cle = (string) $compte->getKey();
+        $cle = (string) CleDuModele::de($compte);
         $nonce = $this->nonceDuCompte($requete, $compte) ?? Str::random(40);
         unset($postes[$cle]);
         $postes[$cle] = $nonce;
@@ -59,10 +60,12 @@ final class PostesConnus
 
     /**
      * Les postes que porte le témoin du navigateur (déchiffré par
-     * EncryptCookies) ; aucun pour un témoin absent, mal formé, ou envoyé
-     * en tableau (« postes_connus[0]=… »).
+     * EncryptCookies), par identifiant de compte (une clé entière, que
+     * json_decode() rend pour un nombre écrit en texte) ; aucun pour un
+     * témoin absent, mal formé, ou envoyé en tableau
+     * (« postes_connus[0]=… »).
      *
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      */
     private function postes(Request $requete): array
     {

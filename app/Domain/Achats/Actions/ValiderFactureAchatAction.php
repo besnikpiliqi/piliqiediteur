@@ -20,7 +20,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use LogicException;
@@ -172,7 +171,7 @@ class ValiderFactureAchatAction
         // nouveau compris.
         FactureAchatValidee::dispatch($factureAchat->load('lignes'));
 
-        $this->journalAudit->inscrire(ActionAuditee::FactureAchatValidee, $compte, $factureAchat->magasin, null, Arr::only($factureAchat->valeursAuditees(), ActionAuditee::FactureAchatValidee->champsAudites()), $factureAchat);
+        $this->journalAudit->inscrire(ActionAuditee::FactureAchatValidee, $compte, $factureAchat->magasin, null, array_intersect_key($factureAchat->valeursAuditees(), array_flip(ActionAuditee::FactureAchatValidee->champsAudites())), $factureAchat);
 
         return $factureAchat;
     }

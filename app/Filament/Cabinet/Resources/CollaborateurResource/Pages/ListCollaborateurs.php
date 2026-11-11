@@ -5,6 +5,7 @@ namespace App\Filament\Cabinet\Resources\CollaborateurResource\Pages;
 use App\Domain\Cabinets\Actions\CreerCollaborateurAction;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Concerns\MontreLeCompteCree;
 use App\Models\User;
@@ -51,7 +52,7 @@ class ListCollaborateurs extends ListRecords
                 $cree = null;
 
                 CollaborateurResource::executerLeGeste(function () use ($data, &$cree): void {
-                    $cree = app(CreerCollaborateurAction::class)->handle(CompteConnecte::exiger(), app(TenantContext::class)->societe(), ['name' => $data['name']], filled($data['jeton'] ?? null) ? (string) $data['jeton'] : null);
+                    $cree = app(CreerCollaborateurAction::class)->handle(CompteConnecte::exiger(), app(TenantContext::class)->societe(), ['name' => $data['name']], filled($data['jeton'] ?? null) ? ValeurSimple::enTexte($data['jeton']) : null);
                 });
 
                 if ($cree instanceof User) {

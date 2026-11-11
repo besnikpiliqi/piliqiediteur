@@ -15,6 +15,8 @@ use App\Domain\Tenancy\Services\CourrierDeCode;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\ReverificationSirene;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Integrations\EnvoiRecommande\DestinataireDuCourrier;
 use Carbon\CarbonImmutable;
@@ -152,7 +154,7 @@ class VerificationSociete extends Page
             ->first();
 
         return $dernier?->resultat === ResultatVerification::Negative && ($dernier->details['siret'] ?? null) === $magasin->siret
-            ? ($dernier->details['motif'] ?? null)
+            ? ValeursLues::texteOuNul($dernier->details['motif'] ?? null)
             : null;
     }
 
@@ -210,7 +212,7 @@ class VerificationSociete extends Page
 
                 try {
                     static::executerSansCasser(function () use ($data, $fichier): void {
-                        app(DeposerUnePieceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), TypePiece::from($data['type']), (string) $fichier->get());
+                        app(DeposerUnePieceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), TypePiece::from(ValeurSimple::enTexte($data['type'])), (string) $fichier->get());
                         Notification::make()->title('Pièce déposée : l\'éditeur est prévenu.')->success()->send();
                     });
                 } finally {

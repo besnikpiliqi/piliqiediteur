@@ -8,10 +8,12 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonInterval;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
@@ -69,10 +71,10 @@ class EffacerPiecesVerification extends Command
 
     private function effacerLesEnvoisAbandonnes(): int
     {
-        $stockage = FileUploadConfiguration::storage();
+        $stockage = ValeursLues::instance(FileUploadConfiguration::storage(), Filesystem::class);
         $limite = now()->subMinutes(self::MINUTES_ENTRE_DEUX_PASSAGES)->getTimestamp();
 
-        $abandonnes = array_filter($stockage->allFiles(FileUploadConfiguration::path()), fn (string $fichier): bool => $stockage->exists($fichier) && $stockage->lastModified($fichier) <= $limite);
+        $abandonnes = array_filter($stockage->allFiles(ValeursLues::texte(FileUploadConfiguration::path())), fn (string $fichier): bool => $stockage->exists($fichier) && $stockage->lastModified($fichier) <= $limite);
 
         foreach ($abandonnes as $fichier) {
             $stockage->delete($fichier);

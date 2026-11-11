@@ -11,6 +11,8 @@ use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ClientResource;
 use Closure;
@@ -111,8 +113,8 @@ trait SaisitUnReglementEnParts
                 }),
             Placeholder::make('reste_a_repartir')
                 ->label('')
-                ->content(fn (Get $get, ?Model $record): Htmlable => ClientResource::enEvidence((string) self::ecartDesParts($get('parts') ?? [], $apercu($get, $record, ''), $aLaCaisse)))
-                ->visible(fn (Get $get, ?Model $record): bool => self::ecartDesParts($get('parts') ?? [], $apercu($get, $record, ''), $aLaCaisse) !== null),
+                ->content(fn (Get $get, ?Model $record): Htmlable => ClientResource::enEvidence((string) self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse)))
+                ->visible(fn (Get $get, ?Model $record): bool => self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse) !== null),
         ];
     }
 
@@ -147,7 +149,7 @@ trait SaisitUnReglementEnParts
                 throw new LogicException(PartDeReglement::MONTANT_NON_POSITIF);
             }
 
-            $payees[] = new PartDeReglement($mode, $montant, filled($part['reference'] ?? null) ? (string) $part['reference'] : null);
+            $payees[] = new PartDeReglement($mode, $montant, filled($part['reference'] ?? null) ? ValeurSimple::enTexte($part['reference']) : null);
         }
 
         return $payees;
@@ -162,7 +164,7 @@ trait SaisitUnReglementEnParts
     public static function bonsDesParts(mixed $parts): array
     {
         return array_values(array_map(
-            fn (array $part): string => (string) ($part['bon'] ?? ''),
+            fn (array $part): string => ValeurSimple::enTexte($part['bon'] ?? ''),
             array_filter(is_array($parts) ? $parts : [], fn (mixed $part): bool => is_array($part) && ($part['mode'] ?? null) === self::PART_AVOIR),
         ));
     }
@@ -236,7 +238,7 @@ trait SaisitUnReglementEnParts
                 ->required()
                 ->live()
                 ->rule(fn (Get $get): Closure => function (string $attribute, mixed $mode, Closure $echec) use ($get): void {
-                    $memeMode = array_filter($get('../../parts') ?? [], fn (mixed $part): bool => is_array($part) && ($part['mode'] ?? null) === $mode);
+                    $memeMode = array_filter(ValeursLues::tableau($get('../../parts') ?? []), fn (mixed $part): bool => is_array($part) && ($part['mode'] ?? null) === $mode);
 
                     if ($mode !== self::PART_AVOIR && count($memeMode) > 1) {
                         $echec('Chaque mode ne règle qu\'une part du règlement.');
@@ -416,11 +418,11 @@ trait SaisitUnReglementEnParts
      */
     private static function numeroDuBon(mixed $numero): string
     {
-        return mb_strtoupper(trim((string) $numero));
+        return mb_strtoupper(trim(ValeurSimple::enTexte($numero)));
     }
 
     private static function modeDeLaPart(mixed $valeur): ?ModePaiement
     {
-        return $valeur instanceof ModePaiement ? $valeur : ModePaiement::tryFrom((string) $valeur);
+        return $valeur instanceof ModePaiement ? $valeur : ModePaiement::tryFrom(ValeurSimple::enTexte($valeur));
     }
 }

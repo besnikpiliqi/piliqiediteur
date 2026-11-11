@@ -17,6 +17,8 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
 use Closure;
@@ -89,7 +91,7 @@ class FicheDuMembre extends ViewRecord
             ->modalDescription(fn (): string => 'Son magasin ne change pas : '.($this->compte()->magasinDeSonIdentifiant()->nom ?? '—').'.')
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    $role = MembreResource::roleSaisi($data);
+                    $role = MembreResource::roleSaisi(ValeursLues::champs($data));
                     app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), $role['role'], $role['autorisations']);
                     Notification::make()->title('Son rôle est enregistré.')->success()->send();
                 });
@@ -176,20 +178,21 @@ class FicheDuMembre extends ViewRecord
                 $enPresence = $compte->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
 
                 if ($enPresence) {
-                    MembreResource::exigerLeMotDePasseChoisi((string) ($data['mot_de_passe'] ?? ''), $compte, $form);
+                    MembreResource::exigerLeMotDePasseChoisi(ValeurSimple::enTexte($data['mot_de_passe'] ?? ''), $compte, $form);
                 }
 
                 $this->agir(function () use ($data, $compte, $enPresence): void {
                     $action = app(ChangerLeRoleDeSocieteAction::class);
+                    $saisie = ValeursLues::champs($data);
 
-                    match (RoleSociete::from((string) $data['role_societe'])) {
-                        RoleSociete::Membre => $action->versMembre($this->auteur(), $compte, MembreResource::roleSaisi($data)['role'], MembreResource::roleSaisi($data)['autorisations'], filled($data['magasin_id'] ?? null) ? (int) $data['magasin_id'] : null),
-                        RoleSociete::Administrateur => $action->versAdministrateur(...$this->porteeSaisie($data)),
+                    match (RoleSociete::from(ValeurSimple::enTexte($saisie['role_societe']))) {
+                        RoleSociete::Membre => $action->versMembre($this->auteur(), $compte, MembreResource::roleSaisi($saisie)['role'], MembreResource::roleSaisi($saisie)['autorisations'], filled($saisie['magasin_id'] ?? null) ? ValeurSimple::enEntier($saisie['magasin_id']) : null),
+                        RoleSociete::Administrateur => $action->versAdministrateur(...$this->porteeSaisie($saisie)),
                         RoleSociete::Proprietaire, RoleSociete::Collaborateur => throw new AuthorizationException(PorteeDesDroits::REFUS),
                     };
 
                     if ($enPresence) {
-                        app(RedonnerLAccesAction::class)->handle($this->auteur(), $compte->refresh(), true, (string) $data['mot_de_passe'], (string) $data['jeton_acces']);
+                        app(RedonnerLAccesAction::class)->handle($this->auteur(), $compte->refresh(), true, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['jeton_acces']));
                     }
 
                     Notification::make()->title('Son rôle est changé.')->success()->send();
@@ -206,7 +209,7 @@ class FicheDuMembre extends ViewRecord
             ->fillForm(fn (): array => $this->porteeActuelle())
             ->form(MembreResource::champsDeLAdministrateur())
             ->action(function (array $data): void {
-                $this->agir(fn () => app(ModifierAdministrateurAction::class)->modifier(...$this->porteeSaisie($data)));
+                $this->agir(fn () => app(ModifierAdministrateurAction::class)->modifier(...$this->porteeSaisie(ValeursLues::champs($data))));
             });
     }
 
@@ -230,7 +233,7 @@ class FicheDuMembre extends ViewRecord
             ])
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($this->auteur(), $this->compte(), $data['mot_de_passe']);
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($this->auteur(), $this->compte(), ValeurSimple::enTexte($data['mot_de_passe']));
                     Notification::make()->title('Un lien a été envoyé à l\'adresse de cet administrateur : la propriété ne passera que quand il l\'aura suivi.')->success()->send();
                 });
             });
@@ -295,9 +298,9 @@ class FicheDuMembre extends ViewRecord
                     $compte = $this->compte();
 
                     if ($compte->estAdministrateur()) {
-                        $action->reintegrerLAdministrateur(...$this->porteeSaisie($data));
+                        $action->reintegrerLAdministrateur(...$this->porteeSaisie(ValeursLues::champs($data)));
                     } elseif ($this->auteur()->estProprietaire()) {
-                        $role = MembreResource::roleSaisi($data);
+                        $role = MembreResource::roleSaisi(ValeursLues::champs($data));
                         $action->reintegrer($this->auteur(), $compte, $role['role'], $role['autorisations']);
                     } else {
                         $action->reintegrer($this->auteur(), $compte, RoleMagasin::Responsable);
@@ -349,13 +352,12 @@ class FicheDuMembre extends ViewRecord
      */
     private function magasinsReelsOuverts(): array
     {
-        return Magasin::query()
+        return ValeursLues::textesParCle(Magasin::query()
             ->where('societe_id', MembreResource::societe()->getKey())
             ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif->value)
             ->orderBy('nom')
-            ->pluck('nom', 'id')
-            ->all();
+            ->pluck('nom', 'id'));
     }
 
     /**
@@ -367,9 +369,9 @@ class FicheDuMembre extends ViewRecord
         return [
             $this->auteur(),
             $this->compte(),
-            $data['portee'] === 'tous' ? null : array_values(array_map(intval(...), $data['magasins'] ?? [])),
+            MembreResource::magasinsSaisis($data),
             MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
-            array_values($data['autorisations_societe'] ?? []),
+            MembreResource::casesCochees($data, 'autorisations_societe'),
         ];
     }
 
@@ -384,7 +386,7 @@ class FicheDuMembre extends ViewRecord
 
         return [
             'portee' => $compte->administreTousLesMagasins() ? 'tous' : 'selection',
-            'magasins' => $affectations->pluck('magasin_id')->filter()->map(fn ($id): int => (int) $id)->values()->all(),
+            'magasins' => ValeursLues::entiers($affectations->pluck('magasin_id')->filter()),
             'autorisations_societe' => $compte->autorisationsDeSociete(),
             ...MembreResource::autorisationsAAfficher($premiere?->autorisations() ?? [], 'autorisations_magasin'),
         ];

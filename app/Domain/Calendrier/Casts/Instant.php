@@ -2,6 +2,7 @@
 
 namespace App\Domain\Calendrier\Casts;
 
+use App\Domain\Tenancy\Support\ValeursLues;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -60,7 +61,7 @@ final class Instant implements CastsAttributes
 
     public function get(Model $model, string $key, mixed $value, array $attributes): ?CarbonImmutable
     {
-        return $value === null ? null : self::depuisLaBase((string) $value);
+        return $value === null ? null : self::depuisLaBase(ValeursLues::texte($value));
     }
 
     /**

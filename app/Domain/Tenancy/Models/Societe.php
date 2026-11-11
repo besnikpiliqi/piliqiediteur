@@ -21,9 +21,13 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Models\Contracts\HasName;
+use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -231,15 +235,15 @@ class Societe extends Model implements HasName
      * désigne aucune société (404), sans interroger la colonne uuid, de
      * type uuid.
      *
-     * @param  mixed  $query
+     * @param  Model|BuilderContract  $query
      * @param  mixed  $value
      * @param  string|null  $field
-     * @return mixed
+     * @return BuilderContract
      */
     public function resolveRouteBindingQuery($query, $value, $field = null)
     {
-        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid((string) $value)) {
-            throw (new ModelNotFoundException)->setModel(self::class, [$value]);
+        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid($value)) {
+            throw (new ModelNotFoundException)->setModel(self::class, [ValeurSimple::enTexte($value)]);
         }
 
         return parent::resolveRouteBindingQuery($query, $value, $field);
@@ -485,7 +489,7 @@ class Societe extends Model implements HasName
             ->where('statut', '<>', StatutSociete::Revoquee->value)
             ->first(['id', 'type_activite']);
 
-        return $tenante === null ? null : ['id' => (int) $tenante->getKey(), 'type_activite' => $tenante->type_activite];
+        return $tenante === null ? null : ['id' => CleDuModele::de($tenante), 'type_activite' => $tenante->type_activite];
     }
 
     /**
@@ -567,7 +571,7 @@ class Societe extends Model implements HasName
             ->first()
             ?->details;
 
-        return $details['denomination'] ?? null;
+        return ValeursLues::texteOuNul($details['denomination'] ?? null);
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Support\QrCode;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Integrations\EnvoiRecommande\DestinataireDuCourrier;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonInterface;
@@ -53,7 +54,7 @@ class CourrierDeCode
             'date' => Calendrier::deParis()->afficher(now(), 'd/m/Y'),
             'adresseCourte' => self::adresseCourte($motif),
             'qrCode' => QrCode::uriDeDonnees(self::adresseDeLaPage($siren, $motif)),
-            'application' => config('app.name'),
+            'application' => Reglage::texte('app.name'),
             'editeur' => config('editeur.email'),
         ])->render();
     }
@@ -65,7 +66,7 @@ class CourrierDeCode
      */
     public static function adresseDeLaPage(string $siren, MotifCode $motif = MotifCode::Verification): string
     {
-        return rtrim((string) config('app.url'), '/').self::chemin($motif, $siren);
+        return rtrim(Reglage::texte('app.url'), '/').self::chemin($motif, $siren);
     }
 
     /**
@@ -75,7 +76,7 @@ class CourrierDeCode
      */
     public static function adresseCourte(MotifCode $motif = MotifCode::Verification): string
     {
-        return (string) preg_replace('#^https?://#', '', rtrim((string) config('app.url'), '/').self::chemin($motif, null));
+        return (string) preg_replace('#^https?://#', '', rtrim(Reglage::texte('app.url'), '/').self::chemin($motif, null));
     }
 
     private static function chemin(MotifCode $motif, ?string $siren): string

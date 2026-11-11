@@ -14,7 +14,9 @@ use App\Domain\Facturation\Models\LigneRecuPaiement;
 use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\Emetteur;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
@@ -73,7 +75,7 @@ class DocumentMail extends Mailable
         $emailDuMagasin = $this->envoi->magasin->email;
 
         return new Envelope(
-            from: new Address(config('mail.from.address'), $nom),
+            from: new Address(Reglage::texte('mail.from.address'), $nom),
             replyTo: $emailDuMagasin ? [new Address($emailDuMagasin, $nom)] : [],
             subject: $this->envoi->objet,
         );
@@ -175,7 +177,7 @@ class DocumentMail extends Mailable
     {
         $emetteur = $this->emetteur;
         $magasin = $this->envoi->magasin;
-        $joindre = fn (array $morceaux): string => implode(' · ', array_filter($morceaux, fn (?string $morceau): bool => filled($morceau)));
+        $joindre = fn (array $morceaux): string => implode(' · ', ValeursLues::textes(array_filter($morceaux, filled(...))));
 
         return array_values(array_filter([
             $joindre([$emetteur->denominationImprimee() ?: $emetteur->nom, $emetteur->adresse, trim("{$emetteur->codePostal} {$emetteur->ville}")]),

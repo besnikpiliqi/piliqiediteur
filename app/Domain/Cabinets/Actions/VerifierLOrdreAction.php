@@ -14,7 +14,9 @@ use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\AlerteEditeur;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Pages\VerificationDuCabinet;
 use App\Integrations\Ordre\AnnuaireDeLOrdreIndisponibleException;
 use App\Integrations\Ordre\Contracts\AnnuaireDeLOrdre;
@@ -89,12 +91,12 @@ class VerifierLOrdreAction
                 'conseil_regional' => ['required', 'string', 'max:100'],
             ], attributes: ['numero_ordre' => 'n° d\'inscription au tableau', 'conseil_regional' => 'conseil régional'])->validate();
 
-            if (! RateLimiter::attempt("ordre:{$cabinet->getKey()}", self::ESSAIS_PAR_HEURE, static fn (): bool => true, 3600)) {
+            if (! RateLimiter::attempt('ordre:'.CleDuModele::de($cabinet), self::ESSAIS_PAR_HEURE, static fn (): bool => true, 3600)) {
                 throw new VerificationRefuseeException(self::MESSAGE_TROP_D_ESSAIS);
             }
 
             if (! $this->annuaire->estAutomatique()) {
-                return $this->demanderALEditeur($auteur, $cabinet, trim($valides['numero_ordre']), trim($valides['conseil_regional']));
+                return $this->demanderALEditeur($auteur, $cabinet, trim(ValeursLues::texteDe($valides, 'numero_ordre')), trim(ValeursLues::texteDe($valides, 'conseil_regional')));
             }
 
             try {
@@ -117,7 +119,7 @@ class VerifierLOrdreAction
             $this->prevenir($cabinet, 'Inscription à l\'Ordre vérifiée', 'L\'annuaire de l\'Ordre confirme l\'inscription de votre cabinet au tableau.', AvisDuCabinet::SUCCES);
 
             if (ModeleRelu::de($cabinet)->estUnCabinetVerifie()) {
-                PrevenirLesClientsDuCabinet::dispatch((int) $cabinet->getKey(), accesRetabli: true);
+                PrevenirLesClientsDuCabinet::dispatch(CleDuModele::de($cabinet), accesRetabli: true);
             }
 
             return $resultat;

@@ -30,7 +30,7 @@ class CreateDevis extends CreateRecord
     {
         $client = Client::query()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
-        return static::executerOuInterrompre(fn () => app(CreerDevisAction::class)->handle(CompteConnecte::exiger(), $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(CreerDevisAction::class)->handle(CompteConnecte::exiger(), $client, ValeursLues::lignes($data['lignes']), [
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

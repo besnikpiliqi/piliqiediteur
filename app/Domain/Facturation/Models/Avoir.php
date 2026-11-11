@@ -21,6 +21,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -136,7 +138,7 @@ class Avoir extends Model implements DocumentEnvoyable
      */
     public function estValidee(): bool
     {
-        return $this->exists && $this->documentNumeroteEnBase(self::class, [$this->getKey()]);
+        return $this->exists && $this->documentNumeroteEnBase(self::class, [CleDuModele::de($this)]);
     }
 
     protected function regleDInalterabilite(): string
@@ -253,7 +255,7 @@ class Avoir extends Model implements DocumentEnvoyable
      */
     public function mentionDuBonDAvoir(): ?string
     {
-        return $this->numero === null ? null : $this->contexteSigne()['bon_d_avoir'];
+        return $this->numero === null ? null : ValeursLues::texteOuNulDe($this->contexteSigne(), 'bon_d_avoir');
     }
 
     /**
@@ -266,7 +268,7 @@ class Avoir extends Model implements DocumentEnvoyable
      */
     public function mentionDeRegularisation(): ?string
     {
-        return $this->numero === null ? null : $this->contexteSigne()['regularisation'];
+        return $this->numero === null ? null : ValeursLues::texteOuNulDe($this->contexteSigne(), 'regularisation');
     }
 
     /**
@@ -397,7 +399,7 @@ class Avoir extends Model implements DocumentEnvoyable
             return 0;
         }
 
-        return $this->creditApres($this->allocations()->pluck('montant_alloue'));
+        return $this->creditApres(ValeursLues::textes($this->allocations()->pluck('montant_alloue')));
     }
 
     /**

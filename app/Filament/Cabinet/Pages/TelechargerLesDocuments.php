@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Filament\Concerns\TelechargeLesDocumentsParPeriode;
 use App\Models\User;
@@ -101,14 +102,14 @@ class TelechargerLesDocuments extends Page
     {
         $compte = auth()->user();
 
-        return $this->magasinsParClient ??= $compte instanceof User ? $this->documentsDeLaPeriode()->magasinsDesClients($compte) : collect();
+        return $this->magasinsParClient ??= $compte instanceof User ? $this->documentsDeLaPeriode()->magasinsDesClients($compte) : new Collection;
     }
 
     protected function chercherLesMagasins(): Collection
     {
         $client = $this->societeDesDocuments();
 
-        return $client instanceof Societe ? $this->magasinsParClient()->get($client->getKey(), collect()) : collect();
+        return $client instanceof Societe ? $this->magasinsParClient()->get(CleDuModele::de($client), new Collection) : new Collection;
     }
 
     protected function societeDesDocuments(): ?Societe

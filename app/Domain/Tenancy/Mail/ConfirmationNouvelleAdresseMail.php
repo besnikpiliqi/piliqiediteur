@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Mail;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -26,8 +27,8 @@ class ConfirmationNouvelleAdresseMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(subject: $this->premiereAdresse
-            ? 'Confirmez votre adresse de connexion à '.config('app.name')
-            : 'Confirmez votre nouvelle adresse de connexion à '.config('app.name'));
+            ? 'Confirmez votre adresse de connexion à '.Reglage::texte('app.name')
+            : 'Confirmez votre nouvelle adresse de connexion à '.Reglage::texte('app.name'));
     }
 
     public function content(): Content

@@ -56,7 +56,7 @@ class EditFactureAchat extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $fournisseur = Fournisseur::withTrashed()->whereKey(ValeursLues::cle($data['fournisseur_id']))->firstOrFail();
 
-        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(CompteConnecte::exiger(), $this->record, $fournisseur, array_values($data['lignes']), [
+        $factureAchat = static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle(CompteConnecte::exiger(), $this->record, $fournisseur, array_values(ValeursLues::lignes($data['lignes'])), [
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
             'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,

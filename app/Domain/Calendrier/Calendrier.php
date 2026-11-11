@@ -4,6 +4,7 @@ namespace App\Domain\Calendrier;
 
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use DateTimeImmutable;
@@ -329,7 +330,7 @@ final class Calendrier
     {
         foreach (["config('app.timezone')" => config('app.timezone'), 'date_default_timezone_get()' => date_default_timezone_get()] as $source => $fuseau) {
             if ($fuseau !== 'UTC') {
-                throw new LogicException("Le fuseau de l'application doit être UTC : {$source} vaut « {$fuseau} ». Le calendrier de chaque magasin passe par la classe Calendrier.");
+                throw new LogicException("Le fuseau de l'application doit être UTC : {$source} vaut « ".ValeurSimple::enTexte($fuseau).' ». Le calendrier de chaque magasin passe par la classe Calendrier.');
             }
         }
     }

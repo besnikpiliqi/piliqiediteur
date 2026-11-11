@@ -5,7 +5,9 @@ namespace App\Filament\App\Pages\Auth;
 use App\Domain\Tenancy\Actions\ChoisirSonMotDePasseParLeLienAction;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\JetonsDuLien;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -95,7 +97,7 @@ class PageDuLien extends SimplePage
         $donnees = $this->form->getState();
 
         try {
-            app(ChoisirSonMotDePasseParLeLienAction::class)->handle($compte, (string) $this->token, $donnees['password']);
+            app(ChoisirSonMotDePasseParLeLienAction::class)->handle($compte, (string) $this->token, ValeurSimple::enTexte($donnees['password']));
         } catch (AuthorizationException $refus) {
             Notification::make()->title($refus->getMessage())->danger()->send();
 
@@ -137,6 +139,6 @@ class PageDuLien extends SimplePage
 
     public function getHeading(): string|Htmlable
     {
-        return 'Votre mot de passe '.config('app.name');
+        return 'Votre mot de passe '.Reglage::texte('app.name');
     }
 }

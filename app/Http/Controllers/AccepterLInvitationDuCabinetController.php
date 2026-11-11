@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\AvertissementsDuCodeDActivite;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\EspaceDeLaSociete;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,13 +61,13 @@ class AccepterLInvitationDuCabinetController
 
     public function accepter(Request $requete, string $jeton, AccepterLInvitationAction $accepter, SuiviDesConnexions $suivi): Response|RedirectResponse
     {
-        $type = TypeDActivite::tryFrom((string) $requete->input('type_activite'));
+        $type = TypeDActivite::tryFrom(ValeurSimple::enTexte($requete->input('type_activite')));
 
         try {
             $proprietaire = $accepter->handle($jeton, [
-                'password' => (string) $requete->input('password'),
-                'password_confirmation' => (string) $requete->input('password_confirmation'),
-                'type_activite' => (string) $requete->input('type_activite'),
+                'password' => ValeurSimple::enTexte($requete->input('password')),
+                'password_confirmation' => ValeurSimple::enTexte($requete->input('password_confirmation')),
+                'type_activite' => ValeurSimple::enTexte($requete->input('type_activite')),
                 'choix_definitif' => $requete->boolean('choix_definitif'),
             ]);
         } catch (InvitationInvalideException) {

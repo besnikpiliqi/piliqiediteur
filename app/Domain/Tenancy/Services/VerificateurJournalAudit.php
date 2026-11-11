@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TeteJournalAudit;
+use App\Domain\Tenancy\Support\ValeurSimple;
 
 /**
  * Vérifie les chaînes du journal d'audit d'une société (voir JournalAudit),
@@ -96,7 +97,7 @@ class VerificateurJournalAudit
 
     private static function memeMagasin(mixed $premier, mixed $second): bool
     {
-        return ($premier === null && $second === null) || ($premier !== null && $second !== null && (int) $premier === (int) $second);
+        return ($premier === null && $second === null) || ($premier !== null && $second !== null && ValeurSimple::enEntier($premier) === ValeurSimple::enEntier($second));
     }
 
     private static function nomDeLaChaine(?int $magasinId, string $categorie): string

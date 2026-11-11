@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
@@ -81,7 +82,7 @@ class ChoisirSonMotDePasse extends SimplePage
         $compte = $this->compte();
         $donnees = $this->form->getState();
 
-        app(ChangerSonMotDePasseAction::class)->handle($compte, $donnees['password'], session()->getId(), 'data.password');
+        app(ChangerSonMotDePasseAction::class)->handle($compte, ValeurSimple::enTexte($donnees['password']), session()->getId(), 'data.password');
 
         session()->put(['password_hash_'.Filament::getAuthGuard() => $compte->refresh()->getAuthPassword()]);
         session()->forget(ExigerSonPropreMotDePasse::A_LA_CONNEXION);

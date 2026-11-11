@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Facturation\Services\Emetteur;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
@@ -60,7 +61,7 @@ trait FigeSonEmetteur
             return Emetteur::duMagasin($this->magasin);
         }
 
-        return Emetteur::duContenuSigne($this->contexteSigne()['emetteur']);
+        return Emetteur::duContenuSigne(ValeursLues::tableauDe($this->contexteSigne(), 'emetteur'));
     }
 
     /**
@@ -68,7 +69,7 @@ trait FigeSonEmetteur
      * (voir ContenuFiscal) : ce qu'il imprime pour toujours, et non ce que
      * le magasin ou ses règlements sont devenus depuis.
      *
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      *
      * @throws DocumentSansEnregistrementSigneException
      */
@@ -80,6 +81,6 @@ trait FigeSonEmetteur
             throw DocumentSansEnregistrementSigneException::pour($this);
         }
 
-        return $enregistrement->contenuSigne()['donnees']['contexte'];
+        return ValeursLues::tableauDe($enregistrement->donneesSignees(), 'contexte');
     }
 }

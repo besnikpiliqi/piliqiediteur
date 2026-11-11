@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -60,8 +61,9 @@ class ConsulterLesPieces extends ProcedureDeLEditeur
 
         try {
             foreach ($pieces as $piece) {
-                File::put("{$dossier}/piece-{$piece->getKey()}-{$piece->type->value}", app(PiecesDeVerification::class)->dechiffrer($piece));
-                chmod("{$dossier}/piece-{$piece->getKey()}-{$piece->type->value}", 0600);
+                $fichier = "{$dossier}/piece-".CleDuModele::de($piece)."-{$piece->type->value}";
+                File::put($fichier, app(PiecesDeVerification::class)->dechiffrer($piece));
+                chmod($fichier, 0600);
             }
 
             app(TenantContext::class)->runAsSociete($societe, fn () => app(JournalAudit::class)->inscrire(ActionAuditee::PiecesConsultees, null, null, null, [

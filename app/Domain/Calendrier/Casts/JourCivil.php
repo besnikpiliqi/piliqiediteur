@@ -3,6 +3,7 @@
 namespace App\Domain\Calendrier\Casts;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
@@ -21,7 +22,7 @@ final class JourCivil implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?string
     {
-        return $value === null ? null : (string) $value;
+        return $value === null ? null : ValeursLues::texte($value);
     }
 
     /**

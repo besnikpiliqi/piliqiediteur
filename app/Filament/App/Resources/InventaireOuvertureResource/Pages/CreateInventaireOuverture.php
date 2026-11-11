@@ -4,6 +4,8 @@ namespace App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Resources\Pages\CreateRecord;
@@ -24,8 +26,8 @@ class CreateInventaireOuverture extends CreateRecord
     {
         return static::executerOuInterrompre(fn (): Model => app(CreerInventaireOuvertureAction::class)->handle(
             CompteConnecte::exiger(),
-            array_values($data['lignes'] ?? []),
-            ['notes' => $data['notes'] ?? null],
+            array_values(ValeursLues::lignes($data['lignes'] ?? [])),
+            ['notes' => ValeurSimple::enTexteOuNul($data['notes'] ?? null)],
         ));
     }
 

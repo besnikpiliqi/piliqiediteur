@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
@@ -88,8 +89,8 @@ class Connexion extends Login
     public function authenticate(): ?LoginResponse
     {
         $donnees = $this->form->getState();
-        $saisie = trim((string) $donnees['login']);
-        $motDePasse = (string) $donnees['password'];
+        $saisie = trim(ValeurSimple::enTexte($donnees['login']));
+        $motDePasse = ValeurSimple::enTexte($donnees['password']);
         $estUneAdresse = str_contains($saisie, '@');
         $normalisee = $estUneAdresse ? User::normaliserEmail($saisie) : IdentifiantDeConnexion::normaliser($saisie);
 

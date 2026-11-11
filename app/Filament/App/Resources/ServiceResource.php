@@ -7,8 +7,11 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
@@ -121,7 +124,7 @@ class ServiceResource extends Resource
     public static function regleNomRempli(): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail): void {
-            if (filled($value) && Service::nettoyerNom((string) $value) === '') {
+            if (filled($value) && Service::nettoyerNom(ValeurSimple::enTexte($value)) === '') {
                 $fail('Le nom du service ne peut pas être fait seulement d\'espaces.');
             }
         };
@@ -135,7 +138,7 @@ class ServiceResource extends Resource
     {
         return function (string $attribute, mixed $value, Closure $fail) use ($record): void {
             $doublon = Service::query()
-                ->where('nom_normalise', Service::normaliserNom((string) $value))
+                ->where('nom_normalise', Service::normaliserNom(ValeurSimple::enTexte($value)))
                 ->when($record, fn ($query, Service $service) => $query->whereKeyNot($service->getKey()))
                 ->first();
 
@@ -185,12 +188,12 @@ class ServiceResource extends Resource
     {
         return Tables\Actions\EditAction::make()
             ->mutateRecordDataUsing(function (array $data, Service $record, ManageServices $livewire): array {
-                $livewire->fichesLues[$record->getKey()] = FicheLue::de($record)->valeurs();
+                $livewire->fichesLues[CleDuModele::de($record)] = FicheLue::de($record)->valeurs();
 
                 return $data;
             })
             ->using(fn (Service $record, array $data, ManageServices $livewire): Service => static::executerOuInterrompre(
-                fn (): Service => app(ModifierUneFicheAction::class)->handle(CompteConnecte::exiger(), $record, $livewire->fichesLues[$record->getKey()] ?? [], $data),
+                fn (): Service => app(ModifierUneFicheAction::class)->handle(CompteConnecte::exiger(), $record, $livewire->fichesLues[CleDuModele::de($record)] ?? [], ValeursLues::champs($data)),
             ));
     }
 

@@ -2,6 +2,8 @@
 
 namespace App\Http\Responses;
 
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
@@ -82,7 +84,7 @@ final class ReponseAUnDocumentDisparu
      */
     public static function message(string $modele): string
     {
-        return defined("{$modele}::REFUS_INTROUVABLE") ? constant("{$modele}::REFUS_INTROUVABLE") : self::MESSAGE;
+        return defined("{$modele}::REFUS_INTROUVABLE") ? ValeursLues::texte(constant("{$modele}::REFUS_INTROUVABLE")) : self::MESSAGE;
     }
 
     /**
@@ -99,14 +101,15 @@ final class ReponseAUnDocumentDisparu
      */
     private static function pageDuDocument(mixed $composant, ModelNotFoundException $introuvable): ?string
     {
-        $instantane = json_decode((string) data_get($composant, 'snapshot'), true);
+        $instantane = json_decode(ValeurSimple::enTexte(data_get($composant, 'snapshot')), true);
         $document = data_get($instantane, 'data.record.1');
 
         if (! is_array($instantane) || ! is_array($document) || ($document['s'] ?? null) !== 'mdl' || ! isset($document['class'], $document['key'])) {
             return null;
         }
 
-        $modele = Relation::getMorphedModel($document['class']) ?? $document['class'];
+        $classe = ValeurSimple::enTexte($document['class']);
+        $modele = Relation::getMorphedModel($classe) ?? $classe;
 
         try {
             Checksum::verify($instantane);

@@ -65,7 +65,7 @@ class EditDevis extends EditRecord
     {
         $donnees = DevisResource::natureARouvrir($this->record, [...$data, 'lignes' => DevisResource::lignesARouvrir($this->record)]);
 
-        return [...$donnees, 'lignes' => DevisResource::lignesAuxPrixPermis($donnees['lignes'], $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record)];
+        return [...$donnees, 'lignes' => DevisResource::lignesAuxPrixPermis(ValeursLues::tableau($donnees['lignes']), $donnees['client_id'] ?? null, $donnees['nature_operation'] ?? null, $this->record)];
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model
@@ -75,7 +75,7 @@ class EditDevis extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $client = Client::withTrashed()->whereKey(ValeursLues::cle($data['client_id']))->firstOrFail();
 
-        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(CompteConnecte::exiger(), $this->record, $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(CompteConnecte::exiger(), $this->record, $client, ValeursLues::lignes($data['lignes']), [
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

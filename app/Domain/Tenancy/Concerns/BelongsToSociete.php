@@ -5,6 +5,8 @@ namespace App\Domain\Tenancy\Concerns;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -32,8 +34,8 @@ trait BelongsToSociete
     {
         static::addGlobalScope(new SocieteScope);
 
-        static::creating(function ($model): void {
-            $model->societe_id = app(TenantContext::class)->societe()->getKey();
+        static::creating(function (Model $model): void {
+            $model->setAttribute('societe_id', CleDuModele::de(app(TenantContext::class)->societe()));
         });
     }
 

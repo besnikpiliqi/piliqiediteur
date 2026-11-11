@@ -58,7 +58,7 @@ class TelechargerLesDocuments extends Page
         $compte = auth()->user();
         $magasin = Filament::getTenant();
 
-        return $compte instanceof User && $magasin instanceof Magasin ? $this->documentsDeLaPeriode()->magasinsDuMagasin($compte, $magasin) : collect();
+        return $compte instanceof User && $magasin instanceof Magasin ? $this->documentsDeLaPeriode()->magasinsDuMagasin($compte, $magasin) : new Collection;
     }
 
     protected function societeDesDocuments(): ?Societe

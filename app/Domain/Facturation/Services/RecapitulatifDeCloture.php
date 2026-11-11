@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
@@ -63,6 +64,9 @@ use Illuminate\Support\Collection;
  * enregistrement de la chaîne des ventes que la clôture compte : un
  * document enregistré après la clôture de sa journée n'y entre pas, il
  * entre dans les grands totaux de la clôture suivante.
+ *
+ * @phpstan-type Rubrique array{nombre: int, ht: int, tva: int, ttc: int, par_taux: list<array{taux: int, ht: int, tva: int, ttc: int}>}
+ * @phpstan-type Recapitulatif array{ventes_particuliers: Rubrique, avoirs_particuliers: Rubrique, factures_professionnels: Rubrique, avoirs_professionnels: Rubrique, encaissements: list<array{mode: string, libelle: string, paiements: int, contre_passations: int, montant: int}>, credit_avoir_impute: int, grands_totaux: array{perpetuel_reel: int, perpetuel_absolu: int}}
  */
 class RecapitulatifDeCloture
 {
@@ -81,7 +85,7 @@ class RecapitulatifDeCloture
      * @param  EloquentCollection<int, Facture>  $tickets  les tickets de la journée
      * @param  EloquentCollection<int, Avoir>  $avoirsDeTickets  les avoirs du jour sur des tickets
      * @param  ClotureCaisse|null  $precedente  la dernière clôture du magasin, null pour la première
-     * @return array{recapitulatif: array<string, mixed>, derniere_sequence_vente: int|null, derniere_sequence_encaissement: int|null}
+     * @return array{recapitulatif: Recapitulatif, derniere_sequence_vente: int|null, derniere_sequence_encaissement: int|null}
      *
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
@@ -212,14 +216,19 @@ class RecapitulatifDeCloture
      */
     private static function encaissementsParMode(Collection $encaissements): array
     {
-        $paiements = $encaissements->map(fn (EnregistrementFiscal $encaissement): array => [
-            'mode' => $encaissement->contenuSigne()['donnees']['paiement']['mode'],
-            'montant' => $encaissement->contenuSigne()['donnees']['paiement']['montant'],
-            'contre_passation' => $encaissement->contenuSigne()['donnees']['contre_passe'] !== null,
-        ]);
+        $paiements = $encaissements->map(function (EnregistrementFiscal $encaissement): array {
+            $donnees = $encaissement->donneesSignees();
+            $paiement = ValeursLues::tableauDe($donnees, 'paiement');
+
+            return [
+                'mode' => ValeursLues::texteDe($paiement, 'mode'),
+                'montant' => ValeursLues::entierDe($paiement, 'montant'),
+                'contre_passation' => ValeursLues::champ($donnees, 'contre_passe') !== null,
+            ];
+        });
         $codes = array_values(array_unique([
             ...array_map(fn (ModePaiement $mode): string => $mode->value, self::modesDansLOrdre()),
-            ...$paiements->pluck('mode')->all(),
+            ...$paiements->map(fn (array $paiement): string => $paiement['mode'])->all(),
         ]));
 
         return array_map(function (string $code) use ($paiements): array {
@@ -230,7 +239,7 @@ class RecapitulatifDeCloture
                 'libelle' => ModePaiement::tryFrom($code)?->getLabel() ?? $code,
                 'paiements' => $duMode->where('contre_passation', false)->count(),
                 'contre_passations' => $duMode->where('contre_passation', true)->count(),
-                'montant' => (int) $duMode->sum('montant'),
+                'montant' => ValeursLues::entier($duMode->sum('montant')),
             ];
         }, $codes);
     }
@@ -249,7 +258,7 @@ class RecapitulatifDeCloture
     {
         $somme = fn (array $imputations): int => (int) array_sum(array_column($imputations, 'montant'));
 
-        return (int) $ventes->sum(fn (EnregistrementFiscal $vente): int => $somme($vente->contenuSigne()['donnees']['contexte'][$vente->type === 'avoir' ? 'imputations' : 'credits_avoir']))
-            + (int) $encaissements->sum(fn (EnregistrementFiscal $encaissement): int => $somme($encaissement->contenuSigne()['donnees']['credits_imputes']));
+        return (int) $ventes->sum(fn (EnregistrementFiscal $vente): int => $somme(ValeursLues::tableauDe(ValeursLues::tableauDe($vente->donneesSignees(), 'contexte'), $vente->type === 'avoir' ? 'imputations' : 'credits_avoir')))
+            + (int) $encaissements->sum(fn (EnregistrementFiscal $encaissement): int => $somme(ValeursLues::tableauDe($encaissement->donneesSignees(), 'credits_imputes')));
     }
 }

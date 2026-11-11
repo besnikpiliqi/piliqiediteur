@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Exceptions\StockInsuffisantException;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
@@ -105,8 +106,8 @@ class VerificateurDeStock
     private function manquesParmi(Collection $produits, array $quantites): array
     {
         return array_values($produits
-            ->filter(fn (Produit $produit): bool => $produit->suivi_stock && $produit->stock_quantite - $quantites[$produit->getKey()] < 0)
-            ->map(fn (Produit $produit): ManqueDeStock => new ManqueDeStock($produit->getKey(), $produit->nom, (string) $produit->reference, $produit->stock_quantite, $quantites[$produit->getKey()]))
+            ->filter(fn (Produit $produit): bool => $produit->suivi_stock && $produit->stock_quantite - $quantites[CleDuModele::de($produit)] < 0)
+            ->map(fn (Produit $produit): ManqueDeStock => new ManqueDeStock(CleDuModele::de($produit), $produit->nom, (string) $produit->reference, $produit->stock_quantite, $quantites[CleDuModele::de($produit)]))
             ->all());
     }
 }

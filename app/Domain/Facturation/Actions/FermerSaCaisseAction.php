@@ -11,7 +11,9 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -160,7 +162,7 @@ class FermerSaCaisseAction
      */
     private function ventesDuReleve(User $vendeur, CarbonInterface $jusquAu): Builder
     {
-        return Facture::query()->nonFermeesParLeVendeur($vendeur->getKey())->emisJusquA($jusquAu)->orderBy('id');
+        return Facture::query()->nonFermeesParLeVendeur(CleDuModele::de($vendeur))->emisJusquA($jusquAu)->orderBy('id');
     }
 
     /**
@@ -173,7 +175,7 @@ class FermerSaCaisseAction
     private function paiementsDuReleve(User $vendeur, CarbonInterface $jusquAu): Builder
     {
         return Paiement::query()
-            ->nonFermesParLeVendeur($vendeur->getKey())
+            ->nonFermesParLeVendeur(CleDuModele::de($vendeur))
             ->where('recu_le', '<=', app(TenantContext::class)->magasin()->calendrier()->jourDe($jusquAu))
             ->orderBy('id');
     }
@@ -223,8 +225,8 @@ class FermerSaCaisseAction
         $depuis = $derniere->jusqu_au ?? $calendrier->debutDuJour($calendrier->jourDe($jusquAu));
 
         foreach ([$factures->min('date_emission'), $paiements->min('created_at')] as $plusAncien) {
-            if ($plusAncien !== null && $plusAncien->lt($depuis)) {
-                $depuis = $plusAncien;
+            if ($plusAncien !== null && ValeursLues::instance($plusAncien, CarbonInterface::class)->lt($depuis)) {
+                $depuis = ValeursLues::instance($plusAncien, CarbonInterface::class);
             }
         }
 

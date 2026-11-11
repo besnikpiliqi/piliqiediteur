@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
 use App\Domain\Tenancy\Services\ExercicesDeLaSociete;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -172,7 +173,7 @@ trait TelechargeLesDocumentsParPeriode
     protected function preparerLaPage(): void
     {
         $this->raccourci('ce_mois');
-        $this->magasinsCoches = array_values($this->magasinsProposes()->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all());
+        $this->magasinsCoches = array_values($this->magasinsProposes()->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all());
         $this->types = array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $this->typesProposes());
     }
 
@@ -398,7 +399,7 @@ trait TelechargeLesDocumentsParPeriode
     {
         $coches = array_map('intval', array_filter($this->magasinsCoches, 'is_scalar'));
 
-        return $this->magasinsProposes()->filter(fn (Magasin $magasin): bool => in_array((int) $magasin->getKey(), $coches, true))->values();
+        return $this->magasinsProposes()->filter(fn (Magasin $magasin): bool => in_array(CleDuModele::de($magasin), $coches, true))->values();
     }
 
     /**
@@ -444,7 +445,7 @@ trait TelechargeLesDocumentsParPeriode
         $magasins = $this->magasinsChoisis();
         $types = $this->typesChoisis();
         $origine = $this->origineChoisie();
-        $cle = json_encode([$this->du, $this->au, $magasins->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all(), array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types), $origine->value, $this->pieceManquanteSeulement]);
+        $cle = json_encode([$this->du, $this->au, $magasins->map(fn (Magasin $magasin): int => CleDuModele::de($magasin))->all(), array_map(fn (TypeDeDocumentTelechargeable $type): string => $type->value, $types), $origine->value, $this->pieceManquanteSeulement]);
 
         if ($this->trouves !== null && $this->trouves['cle'] === $cle) {
             return $this->trouves['documents'];

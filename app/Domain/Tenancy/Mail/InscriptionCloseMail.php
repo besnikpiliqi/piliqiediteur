@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Mail;
 
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -30,7 +31,7 @@ class InscriptionCloseMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'L\'inscription de votre société sur '.config('app.name').' est close');
+        return new Envelope(subject: 'L\'inscription de votre société sur '.Reglage::texte('app.name').' est close');
     }
 
     public function content(): Content

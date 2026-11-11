@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\TraceDuVisiteur;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Filament\Cabinet\Pages\InvitationsEtDemandes;
 use App\Models\User;
 use Carbon\CarbonInterval;
@@ -138,7 +139,7 @@ class DesignerUnCabinetAction
                 'Répondre',
                 AvisDuCabinet::INFORMATION,
                 parCourriel: true,
-                clientId: (int) $client->getKey(),
+                clientId: CleDuModele::de($client),
             ));
             $this->debit->compter($auteurRelu);
         }

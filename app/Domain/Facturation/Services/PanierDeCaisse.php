@@ -14,6 +14,8 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -322,7 +324,7 @@ class PanierDeCaisse
     {
         $identifiant = self::identifiant($clientId);
 
-        return $identifiant === null ? null : Client::withTrashed()->whereKey($identifiant)->value('id');
+        return $identifiant === null ? null : ValeurSimple::enEntierOuNul(Client::withTrashed()->whereKey($identifiant)->value('id'));
     }
 
     /**
@@ -363,7 +365,7 @@ class PanierDeCaisse
             try {
                 $quantite = QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null);
             } catch (InvalidArgumentException) {
-                $quantite = $memeArticle ? $precedente['quantite'] : 1;
+                $quantite = $memeArticle ? ValeursLues::entier($precedente['quantite']) : 1;
             }
 
             $prixLisible = $this->lignesRetirees->prixEnCentimes($ligne['prix_unitaire_ttc'] ?? null) !== null;
@@ -374,8 +376,8 @@ class PanierDeCaisse
                 'description' => self::texte($ligne['description'] ?? null),
                 'reference' => self::texte($ligne['reference'] ?? null),
                 'quantite' => $quantite,
-                'prix_unitaire_ht' => $prixLisible || ! $memeArticle ? self::texte($ligne['prix_unitaire_ht'] ?? null) : $precedente['prix_unitaire_ht'],
-                'prix_unitaire_ttc' => $prixLisible || ! $memeArticle ? self::texte($ligne['prix_unitaire_ttc'] ?? null) : $precedente['prix_unitaire_ttc'],
+                'prix_unitaire_ht' => $prixLisible || ! $memeArticle ? self::texte($ligne['prix_unitaire_ht'] ?? null) : ValeursLues::texteOuNul($precedente['prix_unitaire_ht']),
+                'prix_unitaire_ttc' => $prixLisible || ! $memeArticle ? self::texte($ligne['prix_unitaire_ttc'] ?? null) : ValeursLues::texteOuNul($precedente['prix_unitaire_ttc']),
                 'taux_tva' => self::texte($ligne['taux_tva'] ?? null),
                 'remise_pourcentage' => self::texte($ligne['remise_pourcentage'] ?? null),
             ];
@@ -473,7 +475,7 @@ class PanierDeCaisse
      */
     private function comparable(array $ligne): array
     {
-        return $this->lignesRetirees->comparable($ligne['produit_id'], $ligne['service_id'], $ligne['description'], $ligne['quantite'], $ligne['prix_unitaire_ttc']);
+        return $this->lignesRetirees->comparable(ValeurSimple::enEntierOuNul($ligne['produit_id']), ValeurSimple::enEntierOuNul($ligne['service_id']), ValeurSimple::enTexteOuNul($ligne['description']), ValeursLues::entier($ligne['quantite']), $ligne['prix_unitaire_ttc']);
     }
 
     /**

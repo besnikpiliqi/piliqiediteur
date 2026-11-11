@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ProduitResource;
 use Closure;
@@ -91,7 +92,7 @@ trait AjouteDesLignesDAchat
                 ->schema(self::ligneDAchatSchema())
                 ->columns(5)
                 ->defaultItems(0)
-                ->itemLabel(fn (array $state): ?string => $state['produit']['nom'] ?? null)
+                ->itemLabel(fn (array $state): ?string => ValeurSimple::enTexteOuNul(ValeursLues::valeurAu($state, 'produit', 'nom')))
                 // Remplacé par le bouton ci-dessous, qui ouvre le formulaire
                 // de ligne.
                 ->addable(false)
@@ -123,7 +124,7 @@ trait AjouteDesLignesDAchat
                 ->schema([
                     Hidden::make('taux_tva'),
                     TextInput::make('montant_tva')
-                        ->label(fn (Get $get): string => 'TVA à '.str_replace('.', ',', self::pourcentageEnTexte($get('taux_tva'))).' % sur la facture')
+                        ->label(fn (Get $get): string => 'TVA à '.str_replace('.', ',', self::pourcentageEnTexte(ValeurSimple::enTexteOuNul($get('taux_tva')))).' % sur la facture')
                         ->numeric()
                         ->minValue(0)
                         ->suffix('€')
@@ -191,7 +192,7 @@ trait AjouteDesLignesDAchat
      */
     private static function synchroniserLesTaux(Get $get, Set $set): void
     {
-        $set('taux', self::rangeesDeLaTva(array_keys(app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [])->parTaux), $get('taux')));
+        $set('taux', self::rangeesDeLaTva(array_keys(app(ConstructeurLigneAchat::class)->apercu(ValeursLues::tableau($get('lignes') ?? []))->parTaux), $get('taux')));
     }
 
     /**
@@ -261,7 +262,7 @@ trait AjouteDesLignesDAchat
      */
     private static function tvaProposee(Get $get): string
     {
-        $document = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? []);
+        $document = app(ConstructeurLigneAchat::class)->apercu(ValeursLues::tableau($get('../../lignes') ?? []));
         $taux = self::tauxDeLaRangee($get);
 
         return isset($document->parTaux[$taux]) ? self::montantEnTexte($document->tvaProposee($taux)) : '';
@@ -274,7 +275,7 @@ trait AjouteDesLignesDAchat
     private static function detailDeLaTva(Get $get): string
     {
         $taux = self::tauxDeLaRangee($get);
-        $document = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [], self::tvaEcriteDuFormulaire($get('../../taux')));
+        $document = app(ConstructeurLigneAchat::class)->apercu(ValeursLues::tableau($get('../../lignes') ?? []), self::tvaEcriteDuFormulaire($get('../../taux')));
         $montants = $document->parTaux[$taux] ?? null;
 
         if ($montants === null) {
@@ -308,7 +309,7 @@ trait AjouteDesLignesDAchat
      */
     private static function avertissementsDesEcarts(Get $get, ?Model $record): array
     {
-        $document = app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [], self::tvaEcriteDuFormulaire($get('taux')));
+        $document = app(ConstructeurLigneAchat::class)->apercu(ValeursLues::tableau($get('lignes') ?? []), self::tvaEcriteDuFormulaire($get('taux')));
         $ecarts = app(TvaDuFournisseur::class)->ecartsAConfirmer($document, $record instanceof FactureAchat ? $record : null);
 
         return array_merge(...array_map(fn (EcartsDUnTaux $ecart): array => $ecart->avertissements(), $ecarts));
@@ -361,8 +362,8 @@ trait AjouteDesLignesDAchat
             ->helperText(function (Get $get, Placeholder $component): string {
                 $montants = self::montantsDeLaLigneDAchat($get, $component);
 
-                return ($get('quantite') ?? 0).' x '.self::prixDAchatEnTexte($get('prix_unitaire_ht')).' HT'
-                    .(filled($get('remise_pourcentage')) && (float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
+                return ValeurSimple::enTexte($get('quantite') ?? 0).' x '.self::prixDAchatEnTexte($get('prix_unitaire_ht')).' HT'
+                    .(filled($get('remise_pourcentage')) && (float) ValeurSimple::simple($get('remise_pourcentage')) > 0 ? ' remisé de '.self::pourcentageEnTexte(ValeurSimple::enTexteOuNul($get('remise_pourcentage'))).' %' : '')
                     .' = '.self::montantEnTexte($montants['montant_ht_calcule']).' HT'
                     .($montants['montant_ht'] !== $montants['montant_ht_calcule'] ? ' ; HT de la facture : '.self::montantEnTexte($montants['montant_ht']) : '')
                     .' + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
@@ -498,7 +499,7 @@ trait AjouteDesLignesDAchat
                 /** @var Repeater $lignes */
                 $lignes = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
 
-                $lignes->state([...($lignes->getState() ?? []), $lignes->generateUuid() => self::ligneDepuisLeFormulaire($data)]);
+                $lignes->state([...ValeursLues::tableau($lignes->getState() ?? []), $lignes->generateUuid() => self::ligneDepuisLeFormulaire(ValeursLues::champs($data))]);
                 $lignes->callAfterStateUpdated();
             });
     }
@@ -512,11 +513,11 @@ trait AjouteDesLignesDAchat
             ->modalHeading('Modifier la ligne')
             ->modalSubmitActionLabel('Enregistrer la ligne')
             ->modalWidth(MaxWidth::FourExtraLarge)
-            ->fillForm(fn (array $arguments, Repeater $component): array => self::formulaireDepuisLaLigne($component->getRawItemState($arguments['item'])))
+            ->fillForm(fn (array $arguments, Repeater $component): array => self::formulaireDepuisLaLigne($component->getRawItemState(ValeurSimple::enTexte($arguments['item']))))
             ->form(self::formulaireDeLigne())
             ->action(function (array $arguments, array $data, Repeater $component): void {
-                $etat = $component->getState();
-                $etat[$arguments['item']] = self::ligneDepuisLeFormulaire($data);
+                $etat = ValeursLues::tableau($component->getState() ?? []);
+                $etat[ValeurSimple::enTexte($arguments['item'])] = self::ligneDepuisLeFormulaire(ValeursLues::champs($data));
 
                 $component->state($etat);
                 $component->callAfterStateUpdated();
@@ -724,7 +725,7 @@ trait AjouteDesLignesDAchat
      */
     protected static function documentDesLignesSaisies(Get $get): DocumentChiffre
     {
-        return app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? [], self::tvaEcriteDuFormulaire($get('taux')));
+        return app(ConstructeurLigneAchat::class)->apercu(ValeursLues::tableau($get('lignes') ?? []), self::tvaEcriteDuFormulaire($get('taux')));
     }
 
     /**
@@ -737,13 +738,13 @@ trait AjouteDesLignesDAchat
      */
     private static function montantsDeLaLigneDAchat(Get $get, Placeholder $champ): array
     {
-        $ligne = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [], self::tvaEcriteDuFormulaire($get('../../taux')))->lignes[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
+        $ligne = app(ConstructeurLigneAchat::class)->apercu(ValeursLues::tableau($get('../../lignes') ?? []), self::tvaEcriteDuFormulaire($get('../../taux')))->lignes[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
 
         return [
-            'montant_ht' => $ligne['montant_ht'] ?? '0.00',
-            'montant_ht_calcule' => $ligne['montant_ht_calcule'] ?? '0.00',
-            'montant_tva' => $ligne['montant_tva'] ?? '0.00',
-            'montant_ttc' => $ligne['montant_ttc'] ?? '0.00',
+            'montant_ht' => ValeursLues::texte($ligne['montant_ht'] ?? '0.00'),
+            'montant_ht_calcule' => ValeursLues::texte($ligne['montant_ht_calcule'] ?? '0.00'),
+            'montant_tva' => ValeursLues::texte($ligne['montant_tva'] ?? '0.00'),
+            'montant_ttc' => ValeursLues::texte($ligne['montant_ttc'] ?? '0.00'),
         ];
     }
 
@@ -755,7 +756,7 @@ trait AjouteDesLignesDAchat
      */
     private static function prixDAchatNet(Get $get): float
     {
-        return app(CalculateurLigne::class)->coutUnitaireNet((string) $get('prix_unitaire_ht'), (float) ($get('remise_pourcentage') ?? 0));
+        return app(CalculateurLigne::class)->coutUnitaireNet(ValeurSimple::enTexte($get('prix_unitaire_ht')), (float) ValeurSimple::simple($get('remise_pourcentage') ?? 0));
     }
 
     /**
@@ -815,11 +816,11 @@ trait AjouteDesLignesDAchat
         $produit = filled($data['produit_id'] ?? null) ? Produit::withTrashed()->whereKey(ValeursLues::cle($data['produit_id']))->first() : null;
         $ficheLue = match (true) {
             $produit === null => null,
-            is_array($data['fiche_lue'] ?? null) => FicheLue::depuis(Produit::class, $data['fiche_lue']),
+            is_array($data['fiche_lue'] ?? null) => FicheLue::depuis(Produit::class, ValeursLues::champs($data['fiche_lue'])),
             default => FicheLue::de($produit),
         };
         $valeursDuProduit = [...($ficheLue === null ? [] : self::valeursDuProduit($ficheLue->fiche())), ...array_intersect_key($data, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT))];
-        $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte((float) $valeursDuProduit['prix_vente_ttc']);
+        $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte((float) ValeurSimple::simple($valeursDuProduit['prix_vente_ttc']));
 
         return [
             'produit_id' => $produit?->id,
@@ -842,14 +843,14 @@ trait AjouteDesLignesDAchat
     private static function formulaireDepuisLaLigne(array $ligne): array
     {
         return [
-            ...($ligne['produit'] ?? []),
+            ...ValeursLues::champs($ligne['produit'] ?? []),
             'origine' => filled($ligne['produit_id'] ?? null) ? self::PRODUIT_EXISTANT : self::NOUVEAU_PRODUIT,
             'produit_id' => $ligne['produit_id'] ?? null,
             'fiche_lue' => $ligne['fiche_lue'] ?? null,
             'quantite' => $ligne['quantite'] ?? 1,
             'prix_unitaire_ht' => $ligne['prix_unitaire_ht'] ?? null,
             'remise_pourcentage' => $ligne['remise_pourcentage'] ?? 0,
-            'taux_tva' => $ligne['taux_tva'] ?? ($ligne['produit']['taux_tva'] ?? self::pourcentageEnTexte(app(TenantContext::class)->magasin()->tauxTvaParDefaut())),
+            'taux_tva' => $ligne['taux_tva'] ?? ValeursLues::valeurAu($ligne, 'produit', 'taux_tva') ?? self::pourcentageEnTexte(app(TenantContext::class)->magasin()->tauxTvaParDefaut()),
             'montant_ht' => $ligne['montant_ht'] ?? null,
             'prix_vente_propose' => $ligne['prix_vente_propose'] ?? null,
         ];
@@ -870,7 +871,7 @@ trait AjouteDesLignesDAchat
         return [
             'produit_id' => $ligne->produit_id,
             'fiche_lue' => $ligne->produit === null ? null : FicheLue::de($ligne->produit)->valeurs(),
-            'produit' => self::valeursDuProduit($ligne->produit ?? new Produit(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit'))),
+            'produit' => self::valeursDuProduit($ligne->produit ?? new Produit(ValeursLues::champs(ValeurRequise::de($ligne->nouveau_produit, 'la fiche du nouveau produit d\'une ligne sans produit')))),
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),

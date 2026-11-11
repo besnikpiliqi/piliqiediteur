@@ -8,6 +8,9 @@ use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
@@ -69,7 +72,9 @@ class ProduitResource extends Resource
                 // Produit::referenceDejaPrise()) ; parmi les produits du
                 // magasin seulement (MagasinScope).
                 ->rule(static fn (TextInput $component): Closure => static function (string $attribute, mixed $value, Closure $fail) use ($component, $produitModifie): void {
-                    if (is_string($value) && Produit::referenceDejaPrise($value, $component->evaluate($produitModifie))) {
+                    $produit = $component->evaluate($produitModifie);
+
+                    if (is_string($value) && Produit::referenceDejaPrise($value, $produit === null ? null : ValeursLues::instance($produit, Produit::class))) {
                         $fail('Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.');
                     }
                 }),
@@ -149,7 +154,7 @@ class ProduitResource extends Resource
                 ->maxValue(100)
                 ->required()
                 ->default(fn (): string => DevisResource::pourcentageEnTexte(app(TenantContext::class)->magasin()->tauxTvaParDefaut()))
-                ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : DevisResource::pourcentageEnTexte($state))
+                ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : DevisResource::pourcentageEnTexte(ValeurSimple::enTexteOuNul($state)))
                 ->helperText(fn (mixed $state): ?string => self::aideSurLeTauxDeTva($state))
                 ->saisieEnDirect(),
         ];
@@ -180,7 +185,7 @@ class ProduitResource extends Resource
      */
     public static function tauxDeTvaSaisi(mixed $taux): ?float
     {
-        return filled($taux) ? (float) $taux : null;
+        return filled($taux) ? (float) ValeurSimple::simple($taux) : null;
     }
 
     /**
@@ -296,7 +301,7 @@ class ProduitResource extends Resource
                 Tables\Columns\TextColumn::make('stock_quantite')
                     ->label('Stock')
                     ->formatStateUsing(fn (Produit $record) => $record->suivi_stock
-                        ? Number::format($record->stock_quantite, locale: config('app.locale'))
+                        ? Number::format($record->stock_quantite, locale: Reglage::texte('app.locale'))
                         : '—')
                     ->description(fn (Produit $record): ?string => $record->estEnStockNegatif() ? 'À régulariser' : null)
                     ->badge()

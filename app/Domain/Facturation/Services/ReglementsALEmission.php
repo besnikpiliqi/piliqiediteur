@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Tenancy\Support\ValeursLues;
 
 /**
  * Ce qui a réglé un ticket ou une facture à son émission, tel que son
@@ -32,20 +33,28 @@ final readonly class ReglementsALEmission
      * Les règlements que le contexte signé d'un document émis a retenus ;
      * aucun pour un brouillon, qui n'en a pas reçu.
      *
-     * @param  array<string, mixed>|null  $contexteSigne  le bloc « contexte » signé, null pour un brouillon
+     * @param  array<array-key, mixed>|null  $contexteSigne  le bloc « contexte » signé, null pour un brouillon
      * @param  int  $totalTtc  le total TTC du document, en centimes
      */
     public static function depuisLeContexte(?array $contexteSigne, int $totalTtc): self
     {
-        $paiements = array_map(fn (array $reglement): array => [
-            'mode' => ModePaiement::from($reglement['mode']),
-            'reference' => $reglement['reference'],
-            'montant' => $reglement['montant'],
-        ], $contexteSigne['reglements'] ?? []);
-        $creditsDAvoir = array_map(fn (array $credit): array => [
-            'numero' => $credit['numero'],
-            'montant' => $credit['montant'],
-        ], $contexteSigne['credits_avoir'] ?? []);
+        $paiements = array_map(function (mixed $reglement): array {
+            $reglement = ValeursLues::tableau($reglement);
+
+            return [
+                'mode' => ModePaiement::from(ValeursLues::texteDe($reglement, 'mode')),
+                'reference' => ValeursLues::texteOuNulDe($reglement, 'reference'),
+                'montant' => ValeursLues::entierDe($reglement, 'montant'),
+            ];
+        }, ValeursLues::tableau($contexteSigne['reglements'] ?? []));
+        $creditsDAvoir = array_map(function (mixed $credit): array {
+            $credit = ValeursLues::tableau($credit);
+
+            return [
+                'numero' => ValeursLues::texteDe($credit, 'numero'),
+                'montant' => ValeursLues::entierDe($credit, 'montant'),
+            ];
+        }, ValeursLues::tableau($contexteSigne['credits_avoir'] ?? []));
 
         return new self(
             array_values($paiements),

@@ -8,6 +8,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Tenancy\Support\CleDuModele;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -143,7 +144,7 @@ class StockLedgerService
         DB::transaction(function () use ($produit, $reception, $figuraitSurLaReception, $quantiteRecue, $lotsDesReceptions, $note) {
             $produitVerrouille = $this->verrouiller($produit);
             $grandLivre = $produitVerrouille->mouvementsStock()->orderBy('id')->get();
-            $mouvementsDeLaReception = $grandLivre->filter(fn (MouvementStock $mouvement): bool => $this->vientDe($mouvement, $reception->getMorphClass(), $reception->getKey()));
+            $mouvementsDeLaReception = $grandLivre->filter(fn (MouvementStock $mouvement): bool => $this->vientDe($mouvement, $reception->getMorphClass(), CleDuModele::de($reception)));
             $entreEnStock = $figuraitSurLaReception ? $mouvementsDeLaReception->isNotEmpty() : $produitVerrouille->suivi_stock;
 
             if ($entreEnStock) {
@@ -151,7 +152,8 @@ class StockLedgerService
 
                 if ($ecart !== 0) {
                     $grandLivre->push($this->ajuster($produitVerrouille, $produitVerrouille->stock_quantite + $ecart, $note, $reception));
-                    $produit->setAttribute('stock_quantite', $produitVerrouille->stock_quantite)->syncOriginalAttribute('stock_quantite');
+                    $produit->setAttribute('stock_quantite', $produitVerrouille->stock_quantite);
+                    $produit->syncOriginalAttribute('stock_quantite');
                 }
             }
 
@@ -261,7 +263,7 @@ class StockLedgerService
      */
     public function rentrerApresAnnulationDeCession(Produit $produit, MouvementStock $sortie, Model $source, string $note): ?MouvementStock
     {
-        if ($sortie->type !== TypeMouvementStock::SortieCession || (int) $sortie->produit_id !== (int) $produit->getKey()) {
+        if ($sortie->type !== TypeMouvementStock::SortieCession || (int) $sortie->produit_id !== CleDuModele::de($produit)) {
             throw new InvalidArgumentException('Seule une sortie de cession de ce produit rentre à l\'annulation de la cession.');
         }
 
@@ -373,7 +375,8 @@ class StockLedgerService
 
             $etaitEnAlerte = $produitVerrouille->enAlerteStock();
             $produitVerrouille->forceFill(['stock_quantite' => $nouvelleQuantite])->save();
-            $produit->setAttribute('stock_quantite', $nouvelleQuantite)->syncOriginalAttribute('stock_quantite');
+            $produit->setAttribute('stock_quantite', $nouvelleQuantite);
+            $produit->syncOriginalAttribute('stock_quantite');
 
             // Une seule alerte au passage du seuil, pas une à chaque vente
             // tant que le stock reste bas ; aucune pour le stock d'un
@@ -517,6 +520,7 @@ class StockLedgerService
     private function changerLeCmup(Produit $produit, Produit $produitVerrouille, float $cmup): void
     {
         $produitVerrouille->forceFill(['cmup_ht' => $cmup])->save();
-        $produit->setAttribute('cmup_ht', $produitVerrouille->cmup_ht)->syncOriginalAttribute('cmup_ht');
+        $produit->setAttribute('cmup_ht', $produitVerrouille->cmup_ht);
+        $produit->syncOriginalAttribute('cmup_ht');
     }
 }

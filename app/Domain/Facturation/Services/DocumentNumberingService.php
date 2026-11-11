@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -169,7 +170,7 @@ class DocumentNumberingService
             return "{$type->code()}-";
         }
 
-        $codeDuMagasin = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->value('code');
+        $codeDuMagasin = ValeurSimple::enTexte(Magasin::query()->whereKey($magasin->getKey())->sharedLock()->value('code'));
 
         return "{$type->code()}-{$codeDuMagasin}-{$periodKey}-";
     }

@@ -28,7 +28,10 @@ use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\SensDuTri;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
@@ -153,7 +156,7 @@ trait AfficheLeJournalDAudit
                     ->query(fn (Builder $query, array $data): Builder => match (true) {
                         blank($data['value'] ?? null) => $query,
                         $data['value'] === 'societe' => $query->whereNull('magasin_id'),
-                        ctype_digit((string) $data['value']) => $query->where('magasin_id', (int) $data['value']),
+                        ctype_digit(ValeurSimple::enTexte($data['value'])) => $query->where('magasin_id', ValeurSimple::enEntier($data['value'])),
                         default => $query->whereRaw('1 = 0'),
                     })
                     ->visible(fn (): bool => self::societeAffichee()->type_activite->aDesMagasins()),
@@ -164,11 +167,11 @@ trait AfficheLeJournalDAudit
                         DatePicker::make('au')->label('Au'),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when(filled($data['du'] ?? null), fn (Builder $entrees): Builder => $entrees->where('created_at', '>=', Calendrier::deParis()->debutDuJour((string) $data['du'])))
-                        ->when(filled($data['au'] ?? null), fn (Builder $entrees): Builder => $entrees->where('created_at', '<', Calendrier::deParis()->bornesDuJour((string) $data['au'])[1])))
+                        ->when(filled($data['du'] ?? null), fn (Builder $entrees): Builder => $entrees->where('created_at', '>=', Calendrier::deParis()->debutDuJour(ValeurSimple::enTexte($data['du']))))
+                        ->when(filled($data['au'] ?? null), fn (Builder $entrees): Builder => $entrees->where('created_at', '<', Calendrier::deParis()->bornesDuJour(ValeurSimple::enTexte($data['au']))[1])))
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
-                        filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour((string) $data['du'], 'd/m/Y') : null,
-                        filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour((string) $data['au'], 'd/m/Y') : null,
+                        filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour(ValeurSimple::enTexte($data['du']), 'd/m/Y') : null,
+                        filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour(ValeurSimple::enTexte($data['au']), 'd/m/Y') : null,
                     ]))),
             ])
             ->actions([
@@ -218,7 +221,7 @@ trait AfficheLeJournalDAudit
                 ]),
 
             Section::make('Trace technique')
-                ->description(fn (): string => 'Hors de l\'empreinte de l\'entrée, effacée '.config('conservation.traces_en_mois').' mois après elle.')
+                ->description(fn (): string => 'Hors de l\'empreinte de l\'entrée, effacée '.Reglage::entier('conservation.traces_en_mois').' mois après elle.')
                 ->schema([
                     TextEntry::make('trace.ip')->label('Adresse IP')
                         ->placeholder('Aucune (traitement automatique, procédure de l\'éditeur, ou trace effacée)'),
@@ -268,7 +271,7 @@ trait AfficheLeJournalDAudit
             return Calendrier::deParis()->afficher($fin, 'd/m/Y');
         }
 
-        $annees = (int) config('conservation.verification_apres_la_fin_de_la_relation_en_annees');
+        $annees = Reglage::entier('conservation.verification_apres_la_fin_de_la_relation_en_annees');
 
         return "{$annees} an".($annees > 1 ? 's' : '').' après la fin de la relation avec la société';
     }
@@ -300,7 +303,7 @@ trait AfficheLeJournalDAudit
             ->orderBy('nom')
             ->orderBy('id')
             ->get(['id', 'nom', 'code'])
-            ->mapWithKeys(fn (Magasin $magasin): array => [$magasin->getKey() => "{$magasin->nom} ({$magasin->code})"])
+            ->mapWithKeys(fn (Magasin $magasin): array => [CleDuModele::de($magasin) => "{$magasin->nom} ({$magasin->code})"])
             ->all();
     }
 

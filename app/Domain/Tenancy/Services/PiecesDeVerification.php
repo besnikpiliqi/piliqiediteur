@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Support\Facades\Crypt;
@@ -67,7 +68,7 @@ class PiecesDeVerification
      */
     public function ranger(Societe $societe, string $contenu): string
     {
-        $chemin = "societe-{$societe->getKey()}/".bin2hex(random_bytes(16)).'.chiffre';
+        $chemin = 'societe-'.CleDuModele::de($societe).'/'.bin2hex(random_bytes(16)).'.chiffre';
         Storage::disk(self::DISQUE)->put($chemin, Crypt::encryptString($contenu));
 
         return $chemin;

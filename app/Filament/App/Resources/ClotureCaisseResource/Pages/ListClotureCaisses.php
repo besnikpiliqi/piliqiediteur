@@ -10,6 +10,7 @@ use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
@@ -115,7 +116,7 @@ class ListClotureCaisses extends ListRecords
                 ->visible(fn (): bool => CompteConnecte::exiger()->can('cloturer', ClotureCaisse::class)
                     && $this->journeesACloturer()->isNotEmpty())
                 ->action(fn (array $data) => static::executerSansCasser(function () use ($journeeVisee, $enClair, $data): void {
-                    ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne(CompteConnecte::exiger(), app(TenantContext::class)->magasin(), $journeeVisee, $data['jeton']);
+                    ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne(CompteConnecte::exiger(), app(TenantContext::class)->magasin(), $journeeVisee, ValeurSimple::enTexteOuNul($data['jeton']));
                     $this->journeesEnAttente = $this->vendeursEnAttente = null;
 
                     if ($clotures->isEmpty()) {

@@ -9,6 +9,8 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -65,7 +67,7 @@ final class CreationDesComptes
     {
         $valide = Validator::make(['name' => $identite['name'] ?? null], ['name' => ['required', 'string', 'max:255']])->validate();
 
-        return ['name' => trim($valide['name'])];
+        return ['name' => trim(ValeursLues::texteDe($valide, 'name'))];
     }
 
     /**
@@ -103,7 +105,7 @@ final class CreationDesComptes
 
         $compte = User::query()->where('societe_id', $societe->getKey())->find($identifiant->user_id);
 
-        if ($compte === null || (int) $compte->cree_par !== (int) $auteur->getKey() || $identifiant->empreinte_de_creation !== $empreinte) {
+        if ($compte === null || (int) $compte->cree_par !== CleDuModele::de($auteur) || $identifiant->empreinte_de_creation !== $empreinte) {
             throw new LogicException(self::MESSAGE_DEMANDE_DEJA_SERVIE);
         }
 
@@ -163,7 +165,7 @@ final class CreationDesComptes
             'cree_par' => $auteur->getKey(),
         ]))->save();
 
-        $identifiant = $this->generateur->attribuer($compte, $magasin?->getKey(), $jeton, $empreinte);
+        $identifiant = $this->generateur->attribuer($compte, $magasin === null ? null : CleDuModele::de($magasin), $jeton, $empreinte);
         $compte->forceFill(['password' => $identifiant, 'mot_de_passe_est_l_identifiant' => true])->save();
 
         return $compte;

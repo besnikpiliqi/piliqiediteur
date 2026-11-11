@@ -8,7 +8,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -158,10 +160,10 @@ class CreerMagasin extends CreateRecord
                         ->helperText('Les 5 derniers chiffres de son SIRET, après le SIREN.')
                         ->required()
                         ->maxLength(5)
-                        ->readOnly(fn (Get $get): bool => array_key_exists((string) $get('etablissement'), $this->etablissements)),
+                        ->readOnly(fn (Get $get): bool => array_key_exists(ValeurSimple::enTexte($get('etablissement')), $this->etablissements)),
                     Placeholder::make('adresse')
                         ->label('Adresse')
-                        ->content(fn (Get $get): string => $this->etablissements[(string) $get('etablissement')]['adresse'] ?? 'Celle que le répertoire Sirene donne de l\'établissement, reprise à la création.'),
+                        ->content(fn (Get $get): string => $this->etablissements[ValeurSimple::enTexte($get('etablissement'))]['adresse'] ?? 'Celle que le répertoire Sirene donne de l\'établissement, reprise à la création.'),
                 ]),
             Section::make('Magasin')
                 ->schema([
@@ -218,7 +220,7 @@ class CreerMagasin extends CreateRecord
                     'email' => $data['email'] ?? null,
                 ]);
             } catch (ValidationException $refus) {
-                throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
+                throw ValidationException::withMessages(collect($refus->validator->errors()->messages())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());
             }
         });
     }
@@ -252,7 +254,7 @@ class CreerMagasin extends CreateRecord
     private function listeDuRepertoire(): ?array
     {
         $societe = $this->societe();
-        $cle = "sirene-etablissements-actifs:{$societe->getKey()}:{$societe->siren}";
+        $cle = 'sirene-etablissements-actifs:'.CleDuModele::de($societe).":{$societe->siren}";
         $gardee = Cache::get($cle);
 
         if (is_array($gardee)) {
@@ -321,7 +323,15 @@ class CreerMagasin extends CreateRecord
      */
     private function consulterLeRepertoire(): bool
     {
-        return RateLimiter::attempt('consultations-sirene-magasins:'.$this->societe()->getKey(), self::CONSULTATIONS_SIRENE_PAR_MINUTE, static fn (): bool => true, 60);
+        $cle = 'consultations-sirene-magasins:'.CleDuModele::de($this->societe());
+
+        if (RateLimiter::tooManyAttempts($cle, self::CONSULTATIONS_SIRENE_PAR_MINUTE)) {
+            return false;
+        }
+
+        RateLimiter::hit($cle, 60);
+
+        return true;
     }
 
     /**
@@ -329,7 +339,7 @@ class CreerMagasin extends CreateRecord
      * SIRET, se gardent telles quelles (l'opérateur +, et non une
      * décomposition, qui renumérote les clés numériques).
      *
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     private function options(): array
     {
@@ -342,7 +352,7 @@ class CreerMagasin extends CreateRecord
      * L'adresse de chaque établissement de la liste, et ce qui empêche de
      * le choisir.
      *
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     private function descriptions(): array
     {
@@ -364,7 +374,7 @@ class CreerMagasin extends CreateRecord
             return null;
         }
 
-        $this->siretsDesMagasins ??= array_flip($this->societe()->magasins()->whereNotNull('siret')->whereNull('siret_libere_le')->pluck('siret')->all());
+        $this->siretsDesMagasins ??= array_flip(ValeursLues::textes($this->societe()->magasins()->whereNotNull('siret')->whereNull('siret_libere_le')->pluck('siret')));
 
         return match (true) {
             array_key_exists($choix, $this->siretsDesMagasins) => self::MARQUE_DEJA_UN_MAGASIN,

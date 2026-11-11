@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Tenancy\Actions\ConfirmerNouvelleAdresseAction;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -42,7 +43,7 @@ class ConfirmerNouvelleAdresseController
         try {
             $compte = $confirmer->handle($jeton, Auth::user());
         } catch (AuthorizationException|ValidationException $refus) {
-            $message = $refus instanceof ValidationException ? collect($refus->errors())->flatten()->first() : $refus->getMessage();
+            $message = $refus instanceof ValidationException ? ValeursLues::texteOuNul(collect($refus->errors())->flatten()->first()) : $refus->getMessage();
 
             return $message === ConfirmerNouvelleAdresseAction::MESSAGE_CONNEXION_REQUISE
                 ? $this->pageDeConnexion($requete, $jeton, erreur: true)

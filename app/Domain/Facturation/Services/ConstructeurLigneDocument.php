@@ -7,10 +7,13 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use LogicException;
+use UnexpectedValueException;
 
 /**
  * Construit les lignes d'un devis ou d'une facture, chacune prête pour
@@ -59,7 +62,7 @@ class ConstructeurLigneDocument
         $lignes = [];
 
         foreach (array_values($lignesDonnees) as $index => $donnees) {
-            $produit = filled($donnees['produit_id'] ?? null) ? $produits->get($donnees['produit_id']) : null;
+            $produit = filled($donnees['produit_id'] ?? null) ? self::ficheDesignee($produits, $donnees['produit_id']) : null;
 
             if ($produit?->trashed()) {
                 throw new LogicException("Le produit « {$produit->nom} » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.");
@@ -125,7 +128,7 @@ class ConstructeurLigneDocument
         return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUneVente(array_map(
             fn (array $ligne): array => [
                 'prix_unitaire_ttc' => $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']),
-                'quantite' => $ligne['quantite'],
+                'quantite' => ValeursLues::entier($ligne['quantite']),
                 'remise_pourcentage' => $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
                 'taux_tva_du_prix' => $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']),
                 'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
@@ -182,11 +185,11 @@ class ConstructeurLigneDocument
     private function construire(array $donnees, int $ordre, ContexteDeVente $contexte, Collection $produits, Collection $services): array
     {
         $produit = filled($donnees['produit_id'] ?? null)
-            ? ($produits->get($donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [$donnees['produit_id']]))
+            ? (self::ficheDesignee($produits, $donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [ValeursLues::entierOuTexte($donnees['produit_id'])]))
             : null;
 
         $service = filled($donnees['service_id'] ?? null)
-            ? ($services->get($donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [$donnees['service_id']]))
+            ? (self::ficheDesignee($services, $donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [ValeursLues::entierOuTexte($donnees['service_id'])]))
             : null;
 
         if ($produit !== null && $service !== null) {
@@ -246,15 +249,15 @@ class ConstructeurLigneDocument
      * magasin actif par MagasinScope : un identifiant d'un autre magasin
      * n'y est pas, et sa ligne est introuvable.
      *
-     * @param  array<array-key, array<string, mixed>>  $lignes
+     * @param  array<array-key, array<array-key, mixed>>  $lignes
      * @return array{Collection<int, Produit>, Collection<int, Service>}
      */
     private function catalogue(array $lignes): array
     {
         $identifiants = fn (string $cle): array => collect($lignes)
             ->pluck($cle)
-            ->map(fn (mixed $identifiant): int|false => filter_var($identifiant, FILTER_VALIDATE_INT))
-            ->filter(fn (int|false $identifiant): bool => $identifiant !== false)
+            ->map(fn (mixed $identifiant): ?int => self::identifiant($identifiant))
+            ->filter(fn (?int $identifiant): bool => $identifiant !== null)
             ->unique()
             ->values()
             ->all();
@@ -263,8 +266,40 @@ class ConstructeurLigneDocument
         $services = $identifiants('service_id');
 
         return [
-            $produits === [] ? collect() : Produit::withTrashed()->whereKey($produits)->get()->keyBy('id'),
-            $services === [] ? collect() : Service::query()->whereKey($services)->get()->keyBy('id'),
+            $produits === [] ? new Collection : Produit::withTrashed()->whereKey($produits)->get()->keyBy(fn (Produit $produit): int => CleDuModele::de($produit))->toBase(),
+            $services === [] ? new Collection : Service::query()->whereKey($services)->get()->keyBy(fn (Service $service): int => CleDuModele::de($service))->toBase(),
         ];
+    }
+
+    /**
+     * La fiche que désigne l'identifiant d'une ligne, cherché parmi celles
+     * du catalogue comme une clé de tableau : un entier, ou un texte qui
+     * l'écrit comme PHP écrit un entier (« 12 », jamais « +12 », « 012 »
+     * ni « 12 » suivi d'une espace) ; null quand aucune ne porte cet
+     * identifiant, comme le rend Collection::get().
+     *
+     * @template TFiche of Produit|Service
+     *
+     * @param  Collection<int, TFiche>  $fiches
+     * @return TFiche|null
+     *
+     * @throws UnexpectedValueException un identifiant qui n'est ni un entier ni un texte
+     */
+    private static function ficheDesignee(Collection $fiches, mixed $identifiant): Produit|Service|null
+    {
+        return $fiches->all()[ValeursLues::entierOuTexte($identifiant)] ?? null;
+    }
+
+    /**
+     * L'identifiant d'une fiche choisie dans une ligne, lu comme l'entier
+     * qu'il écrit (« 12 » ou 12, ou encore « +12 » ou « 12 » entouré
+     * d'espaces, comme les lit filter_var()), ou null pour toute autre
+     * valeur : les fiches du catalogue chargées pour les lignes.
+     */
+    private static function identifiant(mixed $valeur): ?int
+    {
+        $identifiant = filter_var($valeur, FILTER_VALIDATE_INT);
+
+        return $identifiant === false ? null : $identifiant;
     }
 }

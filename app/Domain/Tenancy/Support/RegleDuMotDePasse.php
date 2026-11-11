@@ -42,7 +42,7 @@ final class RegleDuMotDePasse implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        foreach (self::reproches((string) $value, $this->identifiant) as $reproche) {
+        foreach (self::reproches(ValeurSimple::enTexte($value), $this->identifiant) as $reproche) {
             $fail($reproche);
         }
     }

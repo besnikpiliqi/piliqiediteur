@@ -141,7 +141,7 @@ class FermerMagasinAction
             throw new AuthorizationException(LecteurDesDroits::REFUS_DANS_LA_SOCIETE);
         }
 
-        $resultat = $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $motif, $motDePasse, $confirmation, $contexte): array {
+        $resultat = $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $motif, $motDePasse, $confirmation, $contexte) {
             $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, $motif === MotifFermeture::Cession ? 'cederLeMagasin' : 'fermerLeMagasin', $societe, $magasin);
             MotDePasseRedemande::exiger($auteur, $motDePasse);
 
@@ -159,7 +159,9 @@ class FermerMagasinAction
 
             self::verifierQuIlSeFerme($magasin, $motif);
 
-            return $contexte->runAs($magasin, fn (): array => $this->operateur->pendant($auteur, fn (): array => $this->registre->sousVerrou($magasin, fn (): array => $this->fermer($auteur, $magasin, $motif))));
+            $fermeture = fn () => $this->registre->sousVerrou($magasin, fn () => $this->fermer($auteur, $magasin, $motif));
+
+            return $contexte->runAs($magasin, fn () => $this->operateur->pendant($auteur, $fermeture));
         });
 
         if ($resultat['fermeture'] !== null) {

@@ -3,6 +3,9 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Tenancy\Jobs\AlerterDuSeuilDEchecsJob;
+use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Models\User;
 use Illuminate\Contracts\Cache\Factory;
 use Illuminate\Contracts\Cache\Repository;
@@ -125,7 +128,7 @@ final class LimitationDesConnexions
      */
     public function compteDe(string $cle): int
     {
-        return (int) $this->cache()->get($cle, 0);
+        return ValeurSimple::enEntier($this->cache()->get($cle, 0));
     }
 
     /**
@@ -137,7 +140,7 @@ final class LimitationDesConnexions
         $echecsDeLaSaisie = $this->compter($this->cle('alerte', $saisie), self::UNE_HEURE);
 
         if ($compte !== null && $echecsDeLaSaisie >= self::ECHECS_PAR_SAISIE && $this->cache()->add($this->cle('alerte-envoyee', $saisie), true, self::UNE_HEURE)) {
-            AlerterDuSeuilDEchecsJob::dispatch((int) $compte->getKey());
+            AlerterDuSeuilDEchecsJob::dispatch(CleDuModele::de($compte));
         }
 
         if ($motDePasseEgalALaSaisie && $this->compter('connexion-plateforme-mot-de-passe-egal-a-la-saisie', self::UNE_HEURE) === self::ECHECS_EGAUX_A_LA_SAISIE_PAR_HEURE + 1) {
@@ -250,7 +253,7 @@ final class LimitationDesConnexions
      */
     private function secondesRestantes(string $cle): int
     {
-        return $this->compteDe($cle) > 0 ? max(0, (int) $this->cache()->get($cle.':fin', 0) - now()->getTimestamp()) : 0;
+        return $this->compteDe($cle) > 0 ? max(0, ValeurSimple::enEntier($this->cache()->get($cle.':fin', 0)) - now()->getTimestamp()) : 0;
     }
 
     /**
@@ -285,7 +288,7 @@ final class LimitationDesConnexions
      */
     private function cache(): Repository
     {
-        return $this->caches->store(config('cache.limiter'));
+        return $this->caches->store(Reglage::texteOuNul('cache.limiter'));
     }
 
     /**
@@ -299,9 +302,9 @@ final class LimitationDesConnexions
 
     private static function cleSecrete(): string
     {
-        $cle = (string) config('app.key');
+        $cle = Reglage::texteOuNul('app.key');
 
-        if ($cle === '') {
+        if ($cle === null || $cle === '') {
             throw new RuntimeException('APP_KEY manque : les compteurs des essais de connexion ne peuvent pas être protégés.');
         }
 

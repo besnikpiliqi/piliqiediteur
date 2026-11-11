@@ -7,7 +7,9 @@ namespace App\Domain\Achats\Services;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Tenancy\Support\ValeursLues;
 use InvalidArgumentException;
+use UnexpectedValueException;
 
 /**
  * Ce que la facture d'achat ou la note d'avoir d'un fournisseur écrit au
@@ -55,16 +57,17 @@ final readonly class MontantsDuFournisseur
      * tableau. Un montant s'écrit au centime (voir
      * SaisieDecimale::montantAuCentime()).
      *
-     * @param  array{taux?: iterable<mixed>|null, total_ttc?: mixed, confirmation?: mixed}  $saisie
+     * @param  array<array-key, mixed>  $saisie
      *
      * @throws InvalidArgumentException
+     * @throws UnexpectedValueException des taux qui ne sont pas un tableau
      */
     public static function depuisLaSaisie(array $saisie): self
     {
         $tvaParTaux = [];
         $baseParTaux = [];
 
-        foreach ($saisie['taux'] ?? [] as $taux) {
+        foreach (ValeursLues::tableau($saisie['taux'] ?? []) as $taux) {
             if (! is_array($taux) || blank($taux['taux_tva'] ?? null)) {
                 continue;
             }

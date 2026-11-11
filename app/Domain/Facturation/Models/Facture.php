@@ -38,7 +38,10 @@ use App\Domain\Facturation\Services\ReglementsALEmission;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
 use Database\Factories\FactureFactory;
@@ -156,7 +159,7 @@ class Facture extends Model implements DocumentEnvoyable
                 'origine' => 'brouillon',
                 'facture_id' => $facture->getKey(),
                 'nombre_lignes' => $facture->lignes()->count(),
-                'nombre_articles' => (int) $facture->lignes()->pluck('quantite')->sum(),
+                'nombre_articles' => ValeursLues::entier($facture->lignes()->pluck('quantite')->sum()),
                 'total_ttc' => app(CalculateurLigne::class)->enCentiemes($facture->total_ttc ?? '0.00'),
             ]);
         });
@@ -201,7 +204,7 @@ class Facture extends Model implements DocumentEnvoyable
      */
     public function estValidee(): bool
     {
-        return $this->exists && $this->documentNumeroteEnBase(self::class, [$this->getKey()]);
+        return $this->exists && $this->documentNumeroteEnBase(self::class, [CleDuModele::de($this)]);
     }
 
     /**
@@ -351,14 +354,24 @@ class Facture extends Model implements DocumentEnvoyable
     public static function totauxAEncaisser(Collection $factures): array
     {
         $enRetard = $factures->filter(fn (Facture $facture): bool => $facture->estEchue());
-        $restantDu = fn (Collection $parmi): int => (int) $parmi->sum(fn (Facture $facture): int => $facture->resteDuEnCentimes());
 
         return [
             'nombre' => $factures->count(),
-            'restant_du' => $restantDu($factures),
+            'restant_du' => self::restantDu($factures),
             'nombre_en_retard' => $enRetard->count(),
-            'restant_du_en_retard' => $restantDu($enRetard),
+            'restant_du_en_retard' => self::restantDu($enRetard),
         ];
+    }
+
+    /**
+     * Ce qui reste dû de ces factures, en centimes (voir
+     * resteDuEnCentimes()).
+     *
+     * @param  Collection<int, Facture>  $factures
+     */
+    private static function restantDu(Collection $factures): int
+    {
+        return array_sum(array_map(fn (Facture $facture): int => $facture->resteDuEnCentimes(), $factures->all()));
     }
 
     /**
@@ -407,7 +420,7 @@ class Facture extends Model implements DocumentEnvoyable
     {
         $premiere = static::query()->emises()->min('date_emission');
 
-        return $premiere === null ? null : $calendrier->jourDe(Instant::depuisLaBase($premiere));
+        return $premiere === null ? null : $calendrier->jourDe(Instant::depuisLaBase(ValeursLues::texte($premiere)));
     }
 
     /**
@@ -634,10 +647,10 @@ class Facture extends Model implements DocumentEnvoyable
         $suivantes = [];
 
         for ($facture = $this; ($rectificative = $facture->rectificative()->first(['id', 'facture_rectifiee_id'])) !== null; $facture = $rectificative) {
-            $suivantes[] = (int) $rectificative->getKey();
+            $suivantes[] = CleDuModele::de($rectificative);
         }
 
-        return [...$precedentes, (int) $this->getKey(), ...$suivantes];
+        return [...$precedentes, CleDuModele::de($this), ...$suivantes];
     }
 
     public function possedeDesLignesCreditables(): bool
@@ -649,7 +662,7 @@ class Facture extends Model implements DocumentEnvoyable
 
     public function montantPaye(): float
     {
-        return app(CalculateurLigne::class)->sommer($this->allocationsPaiement()->pluck('montant_alloue'));
+        return app(CalculateurLigne::class)->sommer(ValeursLues::textes($this->allocationsPaiement()->pluck('montant_alloue')));
     }
 
     /**
@@ -665,7 +678,7 @@ class Facture extends Model implements DocumentEnvoyable
      */
     public function montantCrediteParAvoir(): float
     {
-        return app(CalculateurLigne::class)->sommer($this->allocationsAvoir()->pluck('montant_alloue'));
+        return app(CalculateurLigne::class)->sommer(ValeursLues::textes($this->allocationsAvoir()->pluck('montant_alloue')));
     }
 
     /**
@@ -794,7 +807,7 @@ class Facture extends Model implements DocumentEnvoyable
      */
     public function niveauDeRelanceAtteint(): int
     {
-        return (int) $this->relancesComptees()->max('niveau_relance');
+        return ValeurSimple::enEntier($this->relancesComptees()->max('niveau_relance'));
     }
 
     /**

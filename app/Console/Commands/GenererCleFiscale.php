@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Tenancy\Support\Reglage;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -27,7 +28,7 @@ class GenererCleFiscale extends Command
 {
     public function handle(): int
     {
-        $dossier = (string) config('caisse_securisee.dossier_cles_publiques');
+        $dossier = Reglage::texte('caisse_securisee.dossier_cles_publiques');
         $paire = SignataireFiscal::genererUnePaire();
         $fichier = $dossier.DIRECTORY_SEPARATOR.$paire['cle_id'].'.pem';
 

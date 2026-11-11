@@ -34,7 +34,7 @@ class CodeMagasinLibre implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (! CodeMagasin::estAuFormat($value)) {
+        if (! is_string($value) || ! CodeMagasin::estAuFormat($value)) {
             $fail(self::MESSAGE);
 
             return;

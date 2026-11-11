@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\AvoirResource\Pages;
 
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -56,13 +57,14 @@ class CreateAvoir extends CreateRecord
      */
     protected function handleRecordCreation(array $data): Model
     {
-        AvoirResource::autoriserLesLignesACrediter($data['lignes']);
+        $lignes = AvoirResource::lignesACrediter($data['lignes']);
+        AvoirResource::autoriserLesLignesACrediter($lignes);
 
         return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(CompteConnecte::exiger(),
-            AvoirResource::clientDuPremierDocument($data['lignes']),
-            $data['lignes'],
-            $data['motif'],
-            $data['jeton'],
+            AvoirResource::clientDuPremierDocument($lignes),
+            $lignes,
+            ValeurSimple::enTexteOuNul($data['motif']),
+            ValeurSimple::enTexteOuNul($data['jeton']),
         ));
     }
 }

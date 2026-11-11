@@ -1748,3 +1748,7 @@ Fini ce que t as a finir car 99% du session est arrivé donc fini et arret et si
 
 recommence
 
+## 187. 2026-11-11 21:31 UTC
+
+@"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/aa6782c3-arbitrage_piliqi_3.1.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/3d5d5d74-arbitrage_piliqi_3.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/c4c5b905-arbitrage_piliqi_2.pdf" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/88d7223f-Arbitrages_PILIQI.html" @"/root/.claude/uploads/00d7e3b2-c4d1-5536-95c0-3e77e19552bb/4df8549c-arbitrage_piliqi.pdf" est ce que tu as mis tout ces question faite avec ces repones sur la fiche, donc est ce que t as mis tout ce genre de arbitrage ?
+

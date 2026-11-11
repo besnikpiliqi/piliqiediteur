@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 21:02 UTC par pilotage-sync.sh : « T105 (note de calcul) et fin du lot CALC ».
+Mis à jour le 11/11/2026 à 21:48 UTC par pilotage-sync.sh : « Contrôle des pages d'arbitrages contre l'onglet 3 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -38,6 +38,9 @@ b93aeff Relecture du lot PG de la série 8
 
 ```
  M .env.example
+ M .github/workflows/tests.yml
+ M CLAUDE.md
+ M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
  M app/Console/Commands/Editeur/ConsulterLesPieces.php
  M app/Domain/Achats/Actions/CreerFactureAchatAction.php
@@ -69,34 +72,31 @@ RM app/Domain/Achats/Services/PieceDeposee.php -> app/Domain/Fichiers/PieceDepos
  M bootstrap/providers.php
  M composer.json
  M composer.lock
+ M config/filesystems.php
  M config/piliqi.php
  M config/services.php
  M database/migrations/2026_10_02_100014_create_pieces_verification_table.php
  M database/migrations/2026_10_07_100009_create_pieces_fournisseur_table.php
  M phpunit.xml
  M resources/views/telechargements/indisponible.blade.php
+ M tests/Browser/AidesCommunesTest.php
  M tests/Browser/Parcours/PiecesDuFournisseurTest.php
+ M tests/Browser/inventaire-des-actions.php
  M tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
  M tests/Feature/Achats/PiecesDuFournisseurTest.php
  M tests/Feature/Authorization/ActionsHorsEcranTest.php
+ M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
  M tests/Feature/Editeur/ProceduresTest.php
+ M tests/Feature/Facturation/RecusDePaiementTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
+ M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
+ M tests/Feature/Filament/EnvoieLesDocumentsTest.php
  M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
  M tests/Feature/Filament/TelechargerLesDocumentsTest.php
  M tests/Feature/Societe/EffacerPiecesVerificationTest.php
  M tests/Feature/Societe/VerificationSocieteTest.php
  M tests/Feature/Tenancy/TenantIsolationTest.php
 ?? app/Domain/Fichiers/AnalyseurDePdf.php
-?? app/Domain/Fichiers/ControleDesFichiers.php
-?? app/Domain/Fichiers/EnTetesDesFichiers.php
-?? app/Domain/Fichiers/Enums/
-?? app/Domain/Fichiers/Exceptions/
-?? app/Domain/Fichiers/FichierControle.php
-?? app/Domain/Fichiers/NomDeFichier.php
-?? app/Domain/Fichiers/ReenregistrementDesImages.php
-?? app/Domain/Fichiers/RevueAntivirus.php
-?? app/Domain/Tenancy/Notifications/AvisDeLAntivirus.php
-?? app/Integrations/Antivirus/
 ```
 
 ## Dernière course de la chaîne
@@ -112,4 +112,5 @@ CALC:correction
 CALC:poussee
 CALC:notes
 FI:implementation
+FI:implementation-2
 ```

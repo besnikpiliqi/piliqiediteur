@@ -340,19 +340,25 @@ class CalculateurLigneLimitesTest extends TestCase
 
     /**
      * Un montant reçu absent compte pour 0 € ; une conversion en centimes
-     * n'arrondit qu'au demi-centime pile, lu chiffre à chiffre :
-     * 0,0049999652 € (sous le demi-centime) n'en vaut aucun ; un nombre
-     * transmis en flottant se lit d'abord à six décimales, qui effacent son
-     * bruit binaire : 0,004999995 € (bruit sous le millionième) vaut
-     * 1 centime.
+     * n'arrondit qu'une fois, au demi-centime pile, lu chiffre à chiffre,
+     * qu'il arrive en texte ou en flottant, lu alors par son écriture la
+     * plus courte, sans arrondi préalable (voir SaisieDecimale) :
+     * 0,0049999652 € et 0,004999995 €, sous le demi-centime, n'en valent
+     * aucun ; 1,005 €, qu'un flottant garde 1,00499999999999989... €, en
+     * vaut 101.
      */
     public function test_les_conversions_en_centimes_arrondissent_au_bon_endroit(): void
     {
         $c = $this->calculateur();
 
         $this->assertSame(-1250, $c->sommer([null]) - $c->sommer(['12.50']));
-        $this->assertSame(1, SaisieDecimale::enCentiemes(0.004999995));
-        $this->assertSame(0, SaisieDecimale::enCentiemes('0.0049999652'));
+
+        foreach (['0.0049999652', 0.0049999652, '0.004999995', 0.004999995] as $sousLeDemiCentime) {
+            $this->assertSame(0, SaisieDecimale::enCentiemes($sousLeDemiCentime));
+        }
+
+        $this->assertSame(101, SaisieDecimale::enCentiemes(1.005));
+        $this->assertSame(101, SaisieDecimale::enCentiemes('1.005'));
     }
 
     /**

@@ -7,7 +7,6 @@ namespace App\Domain\Facturation\Services;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\MathException;
 use Brick\Math\NumberSyntax;
-use Brick\Math\RoundingMode;
 use InvalidArgumentException;
 
 /**
@@ -25,15 +24,19 @@ use InvalidArgumentException;
  * un prix d'achat à six décimales au plus, et une saisie plus précise est
  * refusée (voir montantAuCentime() et enMillioniemes()).
  *
- * Une saisie se lit par ses chiffres, jamais par un nombre à virgule
- * flottante : une écriture scientifique (« 1e3 ») passe par BigDecimal
- * (brick/math), exacte, ramenée à six décimales. Un nombre qui arrive
- * déjà à virgule flottante, que seul un composant de l'écran ou un test
- * peut transmettre, se lit aussitôt par son écriture décimale à six
- * décimales, qui efface le bruit binaire (8.325 vaut réellement
- * 8,32499999999999982...) : c'est la seule porte d'entrée d'un tel
- * nombre, que le calcul lui-même refuse. Une valeur qui n'est pas un
- * nombre est refusée, jamais lue comme zéro.
+ * Une saisie se lit par ses chiffres, exactement, jamais par un nombre à
+ * virgule flottante, et ne s'arrondit qu'une fois, à sa conversion : une
+ * écriture scientifique (« 1e3 ») passe par BigDecimal (brick/math), qui
+ * la développe sans rien arrondir. Un nombre qui arrive déjà à virgule
+ * flottante, que seuls un composant de l'écran, une requête JSON ou un
+ * test peuvent transmettre, se lit aussitôt par son écriture la plus
+ * courte, celle qui le redonne exactement et qu'avait la saisie
+ * transmise (voir ecritureCourte()) : le bruit binaire s'efface (8.325
+ * vaut réellement 8,32499999999999982... et s'écrit « 8.325 », 833
+ * centimes) sans autre arrondi (8.3249996 vaut 832 centimes, comme
+ * « 8.3249996 »), le calcul lui-même refusant un tel nombre (voir
+ * CalculateurLigne). Une valeur qui n'est pas un nombre est refusée,
+ * jamais lue comme zéro.
  */
 final class SaisieDecimale
 {
@@ -56,8 +59,9 @@ final class SaisieDecimale
     /**
      * Le plus de chiffres qu'une écriture scientifique développe : bien
      * au-delà des douze chiffres entiers et des six décimales de toute
-     * colonne, assez peu pour qu'une saisie comme « 1e1000000000 » ne
-     * s'écrive jamais en entier.
+     * colonne, et des dix-sept chiffres significatifs d'un nombre à virgule
+     * flottante écrit entre 1e-22 et 1e22, assez peu pour qu'une saisie
+     * comme « 1e1000000000 » ne s'écrive jamais en entier.
      */
     private const CHIFFRES_D_UNE_ECRITURE_SCIENTIFIQUE = 40;
 
@@ -118,8 +122,8 @@ final class SaisieDecimale
      * fournisseur l'écrit, six décimales au plus, jamais arrondi en
      * silence -- « 0.1234 » vaut 123400, « 0.1234567 » est refusé
      * (REFUS_PRIX_D_ACHAT_TROP_PRECIS). Un nombre transmis à virgule
-     * flottante se lit, comme toute saisie, par son écriture décimale à
-     * six décimales.
+     * flottante se lit, comme toute saisie, par son écriture la plus
+     * courte : 0.1234567 est refusé comme « 0.1234567 ».
      *
      * @throws InvalidArgumentException
      */
@@ -148,7 +152,7 @@ final class SaisieDecimale
     {
         $texte = match (true) {
             is_int($saisie) => (string) $saisie,
-            is_float($saisie) && is_finite($saisie) => sprintf('%.6F', $saisie),
+            is_float($saisie) && is_finite($saisie) => self::ecritureCourte($saisie),
             is_string($saisie) => trim($saisie),
             default => throw new InvalidArgumentException('Nombre illisible.'),
         };
@@ -193,19 +197,47 @@ final class SaisieDecimale
     }
 
     /**
+     * L'écriture la plus courte qui redonne exactement ce nombre à virgule
+     * flottante, en notation scientifique : celle de la saisie que l'écran,
+     * le JSON ou le test a transmise -- 8.3249996 s'écrit « 8.3249996e+0 »,
+     * 8.325, qui vaut réellement 8,32499999999999982..., « 8.325e+0 »,
+     * 0.1 + 0.2 « 3.0000000000000004e-1 ». Elle se lit ensuite exactement
+     * (voir ecritureDecimale()), sans aucun arrondi avant celui de la
+     * conversion, et ne dépend d'aucun réglage de PHP (precision,
+     * serialize_precision) ; dix-sept chiffres significatifs redonnent
+     * toujours le nombre.
+     */
+    private static function ecritureCourte(float $nombre): string
+    {
+        for ($decimales = 0; $decimales < 16; $decimales++) {
+            $ecriture = sprintf('%.'.$decimales.'e', $nombre);
+
+            if ((float) $ecriture === $nombre) {
+                return $ecriture;
+            }
+        }
+
+        return sprintf('%.16e', $nombre);
+    }
+
+    /**
      * L'écriture décimale d'un nombre écrit en notation scientifique, que
-     * PHP reconnaît comme un nombre (« 1e3 », « -2.5E1 », « +12 ») : lu
+     * PHP reconnaît comme un nombre (« 1e3 », « -2.5E1 », « +12 »), ou d'un
+     * nombre transmis à virgule flottante (voir ecritureCourte()) : lu
      * exactement par BigDecimal, sans passer par un nombre à virgule
-     * flottante, et ramené à six décimales, un demi en s'éloignant de zéro.
-     * Un nombre que ses chiffres feraient dépasser toute colonne (« 1e400 »)
-     * est refusé, jamais lu zéro.
+     * flottante, avec toutes ses décimales -- « 8.3249996e0 » s'écrit
+     * « 8.3249996 » --, si bien que la conversion qui suit arrondit une
+     * seule fois et que montantAuCentime() et enMillioniemes() refusent
+     * une décimale de trop au lieu de l'arrondir. Un nombre que ses
+     * chiffres feraient dépasser toute colonne (« 1e400 », « 1e-50 ») est
+     * refusé, jamais lu zéro.
      *
      * @throws InvalidArgumentException
      */
     private static function ecritureDecimale(string $texte): string
     {
         try {
-            return (string) BigDecimal::parse($texte, NumberSyntax::SCIENTIFIC, self::CHIFFRES_D_UNE_ECRITURE_SCIENTIFIQUE)->toScale(6, RoundingMode::HalfUp);
+            return (string) BigDecimal::parse($texte, NumberSyntax::SCIENTIFIC, self::CHIFFRES_D_UNE_ECRITURE_SCIENTIFIQUE);
         } catch (MathException) {
             throw new InvalidArgumentException('Montant hors limites.');
         }

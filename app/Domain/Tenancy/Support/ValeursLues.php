@@ -10,13 +10,12 @@ use UnexpectedValueException;
  * écrite, une liste passée à une macro, une option d'une commande, une
  * variable d'environnement, un montant que le code écrit en texte), lues
  * pour ce que leur source garantit : un texte, un entier, un booléen, un
- * tableau, un objet d'une classe ou un nombre écrit en texte, ou une liste
- * de textes ou d'entiers, dans leur ordre. Une autre valeur (une colonne
- * nulle, un champ absent, ou d'un autre type que celui que le code
- * attend) est refusée par une exception, au lieu d'être utilisée pour ce
- * qu'elle n'est pas. La clé d'une fiche saisie dans un écran se lit par
- * cle(), et se cherche parmi des fiches rangées sous leur clé par
- * cleDeTableau().
+ * tableau ou un objet d'une classe, ou une liste de textes ou d'entiers,
+ * dans leur ordre. Une autre valeur (une colonne nulle, un champ absent,
+ * ou d'un autre type que celui que le code attend) est refusée par une
+ * exception, au lieu d'être utilisée pour ce qu'elle n'est pas. La clé
+ * d'une fiche saisie dans un écran se lit par cle(), et se cherche parmi
+ * des fiches rangées sous leur clé par cleDeTableau().
  */
 final class ValeursLues
 {

@@ -203,8 +203,16 @@ return [
         ]],
     ],
     'app/Filament/App/Pages/ParametresPrixDeVente.php' => [
-        'champ:actif' => ['lot' => 'NAV-3', 'tests' => []],
-        'champ:essai_prix_achat_ht' => ['lot' => 'NAV-3', 'tests' => []],
+        'champ:actif' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+        ]],
+        'champ:essai_prix_achat_ht' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+        ]],
         'champ:essai_taux_tva' => ['lot' => 'NAV-3', 'tests' => []],
         'page' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -213,8 +221,15 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire d’une société qui attend son code ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
         ]],
-        'repeteur:paliers' => ['lot' => 'NAV-3', 'tests' => []],
+        'repeteur:paliers' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le propriétaire voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › le responsable voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+            'tests/Browser/Parcours/BaremeAuCentimeTest.php › l’administrateur voit refusé un bénéfice du barème au millième, jamais arrondi, puis l’enregistre au centime',
+        ]],
     ],
     'app/Filament/App/Pages/ParametresRelances.php' => [
         'champ:actif' => ['lot' => 'NAV-3', 'tests' => []],
@@ -368,7 +383,9 @@ return [
     ],
     'app/Filament/App/Resources/AvoirResource/Pages/ViewAvoir.php' => [
         'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => []],
-        'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
+        ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -376,6 +393,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le collaborateur du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
         ]],
     ],
     'app/Filament/App/Resources/ClientResource.php' => [
@@ -760,7 +778,9 @@ return [
         'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
+        ]],
         'page' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -770,6 +790,7 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
         ]],
     ],
     'app/Filament/App/Resources/EReportingResource.php' => [
@@ -1342,8 +1363,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/PuHtExactTest.php › le collaborateur du cabinet lié lit le PU HT tel qu’il est enregistré sur la fiche d’une facture de son client à un professionnel',
             'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel',
             'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket',
+            'tests/Browser/Parcours/PuHtExactTest.php › le vendeur lit le PU HT tel qu’il est enregistré sur la fiche de sa facture à un professionnel',
+            'tests/Browser/Parcours/PuHtExactTest.php › l’administrateur lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
         ]],
     ],

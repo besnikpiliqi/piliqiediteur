@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Facturation\Rules\MontantAuCentime;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
@@ -117,10 +118,14 @@ class ParametresPrixDeVente extends Page implements HasForms
                     Repeater::make('paliers')
                         ->label('')
                         ->schema([
+                            // Les montants du barème s'écrivent au centime,
+                            // jamais arrondis en silence (voir
+                            // BaremePrixDeVente::depuisTableau()).
                             TextInput::make('jusqu_a')
                                 ->label('Prix d\'achat HT inférieur à')
                                 ->numeric()
-                                ->minValue(0.01)
+                                ->minValue('0.01')
+                                ->rule(new MontantAuCentime)
                                 ->suffix('€')
                                 ->required()
                                 ->distinct(),
@@ -128,6 +133,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                                 ->label('Bénéfice ajouté')
                                 ->numeric()
                                 ->minValue(0)
+                                ->rule(new MontantAuCentime)
                                 ->suffix('€ HT')
                                 ->required(),
                         ])
@@ -140,6 +146,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                         ->helperText('Laissez vide pour saisir à la main le prix de vente des articles plus chers.')
                         ->numeric()
                         ->minValue(0)
+                        ->rule(new MontantAuCentime)
                         ->suffix('€ HT')
                         ->required(fn (Get $get): bool => $get('actif') && blank($get('paliers')))
                         ->validationMessages(['required' => 'Sans palier, indiquez au moins le bénéfice à appliquer.'])

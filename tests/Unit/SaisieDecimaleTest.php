@@ -32,9 +32,90 @@ class SaisieDecimaleTest extends TestCase
     }
 
     /**
-     * Un nombre trop grand pour un flottant (« 1e400 ») n'a pas d'écriture
-     * décimale : il est refusé, jamais lu zéro, comme un nombre au-delà de
-     * la borne du calcul.
+     * Une notation scientifique se développe avec toutes ses décimales,
+     * sans arrondi préalable : « 8.3249996e0 » est sous le demi-centième
+     * et vaut 832, et un montant ou un prix d'achat écrit avec une décimale
+     * de trop est refusé, jamais arrondi.
+     */
+    public function test_une_notation_scientifique_garde_toutes_ses_decimales(): void
+    {
+        $this->assertSame(832, SaisieDecimale::enCentiemes('8.3249996e0'));
+        $this->assertSame(123456, SaisieDecimale::enMillioniemes('1.23456e-1'));
+        $this->assertThrows(fn () => SaisieDecimale::montantAuCentime('6.0000004e0'), SaisieDecimale::REFUS_MONTANT_TROP_PRECIS);
+        $this->assertThrows(fn () => SaisieDecimale::enMillioniemes('1.2345674e-1'), SaisieDecimale::REFUS_PRIX_D_ACHAT_TROP_PRECIS);
+    }
+
+    /**
+     * Un nombre transmis à virgule flottante se lit par son écriture la
+     * plus courte, celle de la saisie transmise, puis s'arrondit une seule
+     * fois : jamais d'abord à six décimales, qui feraient passer
+     * 8,3249996 € au demi-centime (833) ; le bruit binaire s'efface sans
+     * arrondi (8.325 vaut réellement 8,32499999999999982...).
+     *
+     * @return array<string, array{float, int}>
+     */
+    public static function flottants(): array
+    {
+        return [
+            'sous le demi-centime' => [8.3249996, 832],
+            'sous le demi-centime, plus loin' => [12.3449999, 1234],
+            'sous le demi-centime, sous le centime' => [0.0049999652, 0],
+            'demi-centime au bruit binaire' => [8.325, 833],
+            'somme au bruit binaire' => [0.1 + 0.2, 30],
+            'négatif' => [-2.5, -250],
+            'entier' => [25.0, 2500],
+            'en notation scientifique' => [1.5e-7, 0],
+        ];
+    }
+
+    #[DataProvider('flottants')]
+    public function test_un_flottant_se_lit_par_son_ecriture_la_plus_courte_et_s_arrondit_une_seule_fois(float $saisie, int $centiemes): void
+    {
+        $this->assertSame($centiemes, SaisieDecimale::enCentiemes($saisie));
+    }
+
+    /**
+     * Un montant ou un prix d'achat transmis à virgule flottante se lit à
+     * sa dernière décimale, comme écrit : une décimale de trop est refusée,
+     * jamais arrondie en silence, même celle d'un calcul fait en flottant
+     * (0.1 + 0.2 s'écrit 0.30000000000000004).
+     */
+    public function test_un_montant_et_un_prix_d_achat_en_flottant_se_lisent_a_leur_derniere_decimale(): void
+    {
+        $this->assertSame(650, SaisieDecimale::montantAuCentime(6.5));
+        $this->assertSame(123456, SaisieDecimale::enMillioniemes(0.123456));
+        $this->assertThrows(fn () => SaisieDecimale::montantAuCentime(6.005), SaisieDecimale::REFUS_MONTANT_TROP_PRECIS);
+        $this->assertThrows(fn () => SaisieDecimale::montantAuCentime(6.0000001), SaisieDecimale::REFUS_MONTANT_TROP_PRECIS);
+        $this->assertThrows(fn () => SaisieDecimale::montantAuCentime(0.1 + 0.2), SaisieDecimale::REFUS_MONTANT_TROP_PRECIS);
+        $this->assertThrows(fn () => SaisieDecimale::enMillioniemes(0.1234567), SaisieDecimale::REFUS_PRIX_D_ACHAT_TROP_PRECIS);
+    }
+
+    /**
+     * La lecture d'un flottant ne dépend d'aucun réglage de PHP : avec dix-
+     * sept chiffres pour l'écriture des nombres, 8.325 vaut toujours 833 et
+     * 8.3249996 832.
+     */
+    public function test_la_lecture_d_un_flottant_ne_depend_pas_des_reglages_de_php(): void
+    {
+        $reglages = ['precision' => ini_get('precision'), 'serialize_precision' => ini_get('serialize_precision')];
+
+        try {
+            ini_set('precision', '17');
+            ini_set('serialize_precision', '17');
+
+            $this->assertSame([833, 832], [SaisieDecimale::enCentiemes(8.325), SaisieDecimale::enCentiemes(8.3249996)]);
+        } finally {
+            foreach ($reglages as $reglage => $valeur) {
+                ini_set($reglage, (string) $valeur);
+            }
+        }
+    }
+
+    /**
+     * Un nombre trop grand pour un flottant (« 1e400 »), ou que ses
+     * décimales feraient dépasser toute colonne (« 1e-50 »), n'a pas
+     * d'écriture décimale lisible : il est refusé, jamais lu zéro, comme un
+     * nombre au-delà de la borne du calcul.
      *
      * @return array<string, array{string}>
      */
@@ -44,6 +125,7 @@ class SaisieDecimaleTest extends TestCase
             'infini positif' => ['1e400'],
             'infini négatif' => ['-1e400'],
             'au-delà de la borne' => ['1e20'],
+            'trop de décimales' => ['1e-50'],
         ];
     }
 

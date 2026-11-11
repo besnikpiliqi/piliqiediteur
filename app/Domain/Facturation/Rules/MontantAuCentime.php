@@ -8,9 +8,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use InvalidArgumentException;
 
 /**
- * Un montant recopié du document d'un fournisseur (le HT d'une ligne, la
- * TVA d'un taux, le total TTC saisi pour contrôle) s'écrit au centime,
- * jamais arrondi en silence (voir SaisieDecimale::montantAuCentime()).
+ * Un montant qui s'écrit au centime, jamais arrondi en silence (voir
+ * SaisieDecimale::montantAuCentime()) : celui que l'on recopie du
+ * document d'un fournisseur (le HT d'une ligne, la TVA d'un taux, le
+ * total TTC saisi pour contrôle), et chaque montant du barème des prix de
+ * vente (voir BaremePrixDeVente::depuisTableau()).
  */
 class MontantAuCentime implements ValidationRule
 {

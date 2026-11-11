@@ -22,6 +22,7 @@ use App\Filament\Societe\Pages\TableauDeBord;
 use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -330,6 +331,32 @@ class IdentiteSocieteTest extends TestCase
             ->call('save')
             ->assertHasNoFormErrors();
         $this->assertNull($societe->fresh()->capital_social);
+    }
+
+    /**
+     * Le plus grand capital que garde sa colonne, 999 999 999 999,99 €,
+     * s'enregistre, et un centime de plus est refusé, quel que soit le
+     * réglage de PHP qui écrit les nombres à virgule flottante : la borne
+     * de la règle « max: » s'écrit en texte, si bien qu'un PHP lancé avec
+     * dix-sept chiffres (precision=17) l'écrit encore « 999999999999.99 »,
+     * jamais « 999999999999.98999 ».
+     */
+    public function test_le_capital_maximum_s_enregistre_quel_que_soit_le_reglage_de_php(): void
+    {
+        $societe = $this->ouvrirLAdministration();
+        $regle = Process::path(base_path())->timeout(60)->run([
+            PHP_BINARY, '-d', 'precision=17', '-r',
+            'require "vendor/autoload.php"; echo "max:".'.ModifierIdentiteSocieteAction::class.'::CAPITAL_MAXIMUM;',
+        ]);
+
+        $this->assertSame('max:999999999999.99', $regle->output(), $regle->errorOutput());
+        $this->assertThrows(
+            fn () => app(ModifierIdentiteSocieteAction::class)->handle($societe->proprietaire, $societe, [...self::identiteComplete(), 'capital_social' => '1000000000000.00']),
+            fn (ValidationException $refus): bool => $refus->errors() === ['capital_social' => ['Le capital social ne peut pas dépasser 999 999 999 999,99 €.']],
+        );
+        app(ModifierIdentiteSocieteAction::class)->handle($societe->proprietaire, $societe, [...self::identiteComplete(), 'capital_social' => '999999999999.99']);
+
+        $this->assertSame('999999999999.99', $societe->fresh()->capital_social);
     }
 
     /**

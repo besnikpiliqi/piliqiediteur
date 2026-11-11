@@ -14,7 +14,7 @@ use UnexpectedValueException;
  * Les valeurs lues là où rien ne dit leur type à l'analyse statique (voir
  * ValeursLues) : chacune est rendue telle quelle quand elle est du type que
  * le code attend, et refusée sinon, avec un message qui nomme le type
- * trouvé, le texte qui n'est pas un nombre ou le champ absent.
+ * trouvé ou le champ absent.
  */
 class ValeursLuesTest extends TestCase
 {

@@ -26,29 +26,52 @@ use UnexpectedValueException;
  * bénéfice au-delà du dernier palier facultatif -- sans lui, le prix de
  * vente d'un article plus cher se saisit à la main.
  *
- * Ses montants sont des euros au centime, en centimes entiers, saisis
- * comme tout montant (voir SaisieDecimale::enCentiemes()) ; le prix
- * d'achat auquel il s'applique est un coût au dix-millième d'euro (voir
+ * Ses montants sont des euros au centime, en centimes entiers, saisis au
+ * centime et jamais arrondis : une saisie plus précise est refusée (voir
+ * SaisieDecimale::montantAuCentime()) ; le prix d'achat auquel il
+ * s'applique est un coût au dix-millième d'euro (voir
  * CalculateurLigne::coutUnitaireNet()).
  */
 final readonly class BaremePrixDeVente implements Castable
 {
+    public const REFUS_MONTANT_A_VIRGULE = 'Les montants du barème sont des centimes entiers, jamais un nombre à virgule.';
+
     /**
+     * Le bénéfice au-delà du dernier palier, en centimes ; null quand le
+     * magasin n'en prévoit aucun.
+     */
+    public ?int $beneficeAuDela;
+
+    /**
+     * Chaque montant est un nombre entier de centimes, le bénéfice au-delà
+     * du dernier palier compris : un nombre à virgule, que l'on prendrait
+     * pour des euros (60.0 pour 60,00 €), est refusé (REFUS_MONTANT_A_VIRGULE)
+     * au lieu de valoir 60 centimes, même passé depuis un fichier sans
+     * strict_types, où PHP le convertirait en entier sans rien dire.
+     *
      * @param  list<array{jusqu_a: int, benefice: int}>  $paliers  en centimes ; un palier s'applique à un prix d'achat HT strictement inférieur à son « jusqu_a »
-     * @param  int|null  $beneficeAuDela  en centimes
+     * @param  mixed  $beneficeAuDela  en centimes, ou null sans bénéfice au-delà du dernier palier
+     *
+     * @throws InvalidArgumentException
      */
     public function __construct(
         public array $paliers,
-        public ?int $beneficeAuDela,
+        mixed $beneficeAuDela,
         public bool $arrondiX9,
     ) {
         $seuils = array_column($paliers, 'jusqu_a');
 
         foreach ([...$seuils, ...array_column($paliers, 'benefice')] as $montant) {
             if (! is_int($montant)) {
-                throw new InvalidArgumentException('Les montants du barème sont des centimes entiers, jamais un nombre à virgule.');
+                throw new InvalidArgumentException(self::REFUS_MONTANT_A_VIRGULE);
             }
         }
+
+        if ($beneficeAuDela !== null && ! is_int($beneficeAuDela)) {
+            throw new InvalidArgumentException(self::REFUS_MONTANT_A_VIRGULE);
+        }
+
+        $this->beneficeAuDela = $beneficeAuDela;
 
         if ($paliers === [] && $beneficeAuDela === null) {
             throw new InvalidArgumentException('Le barème a au moins un palier, ou un bénéfice au-delà.');
@@ -89,20 +112,22 @@ final readonly class BaremePrixDeVente implements Castable
     /**
      * Le barème d'un tableau : celui qu'écrit versTableau(), relu en base,
      * ou celui que saisit la page des paramètres du prix de vente (voir
-     * ParametresPrixDeVente), chaque montant lu au centime comme toute
-     * saisie (voir SaisieDecimale::enCentiemes()).
+     * ParametresPrixDeVente), chaque montant lu au centime et jamais
+     * arrondi en silence -- « 0.125 » est refusé
+     * (SaisieDecimale::REFUS_MONTANT_TROP_PRECIS), « 2.50 » et « 2.500 »
+     * valent 250 (voir SaisieDecimale::montantAuCentime()).
      *
      * @param  array<array-key, mixed>  $bareme
      *
      * @throws UnexpectedValueException un champ absent, un palier qui n'est pas un tableau, ou une valeur qui n'est pas une valeur simple
-     * @throws InvalidArgumentException un montant qui n'est pas un nombre
+     * @throws InvalidArgumentException un montant qui n'est pas un nombre, ou plus précis que le centime
      */
     public static function depuisTableau(array $bareme): self
     {
         $paliers = array_map(
             fn (mixed $palier): array => [
-                'jusqu_a' => SaisieDecimale::enCentiemes(ValeurSimple::simple(ValeursLues::champ(ValeursLues::tableau($palier), 'jusqu_a'))),
-                'benefice' => SaisieDecimale::enCentiemes(ValeurSimple::simple(ValeursLues::champ(ValeursLues::tableau($palier), 'benefice'))),
+                'jusqu_a' => SaisieDecimale::montantAuCentime(ValeurSimple::simple(ValeursLues::champ(ValeursLues::tableau($palier), 'jusqu_a'))),
+                'benefice' => SaisieDecimale::montantAuCentime(ValeurSimple::simple(ValeursLues::champ(ValeursLues::tableau($palier), 'benefice'))),
             ],
             ValeursLues::tableauDe($bareme, 'paliers'),
         );
@@ -110,7 +135,7 @@ final readonly class BaremePrixDeVente implements Castable
         usort($paliers, fn (array $a, array $b): int => $a['jusqu_a'] <=> $b['jusqu_a']);
         $beneficeAuDela = ValeurSimple::simple(ValeursLues::champ($bareme, 'benefice_au_dela'));
 
-        return new self($paliers, filled($beneficeAuDela) ? SaisieDecimale::enCentiemes($beneficeAuDela) : null, (bool) ValeurSimple::simple(ValeursLues::champ($bareme, 'arrondi_x9')));
+        return new self($paliers, filled($beneficeAuDela) ? SaisieDecimale::montantAuCentime($beneficeAuDela) : null, (bool) ValeurSimple::simple(ValeursLues::champ($bareme, 'arrondi_x9')));
     }
 
     /**

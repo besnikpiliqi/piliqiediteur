@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\FicheLue;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
@@ -104,7 +105,7 @@ class ServiceResource extends Resource
                 ->helperText('Le prix que prend une ligne de ce service. Vide : seul un membre autorisé à fixer les prix vend ce service, au prix qu\'il saisit.')
                 ->numeric()
                 ->minValue(0)
-                ->maxValue(9999999999.99)
+                ->maxValue(Caisse::MONTANT_MAXIMUM)
                 ->prefix('€'),
             TextInput::make('taux_tva')
                 ->label('TVA % du prix de référence')

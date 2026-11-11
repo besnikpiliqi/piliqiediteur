@@ -62,6 +62,34 @@ class ServiceResourceTest extends TestCase
         $this->assertSame($magasin->id, $service->magasin_id);
     }
 
+    /**
+     * Le plus grand prix de référence que garde sa colonne,
+     * 9 999 999 999,99 €, s'enregistre quel que soit le réglage de PHP qui
+     * écrit les nombres à virgule flottante (precision) : la borne du champ
+     * s'écrit en texte (voir Caisse::MONTANT_MAXIMUM), jamais
+     * « 9999999999.9899998 » ; un centime de plus est refusé.
+     */
+    public function test_le_prix_de_reference_maximum_s_enregistre_quel_que_soit_le_reglage_de_php(): void
+    {
+        $this->connecterProprietaire();
+        $precision = ini_get('precision');
+
+        try {
+            ini_set('precision', '17');
+
+            Livewire::test(ManageServices::class)
+                ->callAction('create', data: ['nom' => 'Rénovation', 'actif' => true, 'prix_ttc' => '10000000000.00', 'taux_tva' => '20'])
+                ->assertHasActionErrors(['prix_ttc' => 'max']);
+            Livewire::test(ManageServices::class)
+                ->callAction('create', data: ['nom' => 'Rénovation', 'actif' => true, 'prix_ttc' => '9999999999.99', 'taux_tva' => '20'])
+                ->assertHasNoActionErrors();
+        } finally {
+            ini_set('precision', (string) $precision);
+        }
+
+        $this->assertSame('9999999999.99', Service::query()->sole()->prix_ttc);
+    }
+
     public function test_renommer_un_service_corrige_son_nom(): void
     {
         $this->connecterProprietaire();

@@ -82,7 +82,13 @@ class ModifierIdentiteSocieteAction
      */
     public const CHAMPS_DE_L_ASSURANCE = ['assurance_assureur', 'assurance_adresse', 'assurance_contrat', 'assurance_couverture'];
 
-    public const CAPITAL_MAXIMUM = 999999999999.99;
+    /**
+     * Le plus grand capital social que garde sa colonne decimal(14,2),
+     * écrit en texte comme toute borne d'un montant (voir
+     * Caisse::MONTANT_MAXIMUM) : la règle « max: » qui la lit ne dépend pas
+     * de l'écriture d'un nombre à virgule flottante par PHP.
+     */
+    public const CAPITAL_MAXIMUM = '999999999999.99';
 
     public const MESSAGE_CAPITAL_EXIGE = 'Le capital social est obligatoire pour une société commerciale (art. R123-238 du Code de commerce).';
 

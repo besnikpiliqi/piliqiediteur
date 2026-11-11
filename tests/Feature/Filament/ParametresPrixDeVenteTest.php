@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -138,6 +139,63 @@ class ParametresPrixDeVenteTest extends TestCase
             ->assertHasFormErrors(['paliers.0.jusqu_a', 'paliers.1.jusqu_a']);
 
         $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->fresh()->bareme_prix_vente);
+    }
+
+    /**
+     * Un montant du barème s'écrit au centime : un seuil, un bénéfice ou
+     * un bénéfice au-delà à trois décimales est refusé sous son champ,
+     * jamais arrondi en silence, et rien ne s'enregistre ; tant qu'il est
+     * dans la page, l'essai ne propose aucun prix (1 € d'achat sous le
+     * seuil de 2,555 € ne vaut pas (1 + 1) x 1,2 = 2,40 € TTC), puis le
+     * propose une fois le seuil écrit au centime.
+     */
+    public function test_un_montant_du_bareme_a_trois_decimales_est_refuse_et_l_essai_ne_propose_aucun_prix(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'benefice_au_dela' => '60.001', 'essai_prix_achat_ht' => '1', 'essai_taux_tva' => '20'])
+            ->set('data.paliers', [['jusqu_a' => '2.555', 'benefice' => '1'], ['jusqu_a' => '50', 'benefice' => '0.125']]);
+
+        $page->assertDontSee('bénéfice réel')
+            ->call('save')
+            ->assertHasFormErrors([
+                'paliers.0.jusqu_a' => SaisieDecimale::REFUS_MONTANT_TROP_PRECIS,
+                'paliers.1.benefice' => SaisieDecimale::REFUS_MONTANT_TROP_PRECIS,
+                'benefice_au_dela' => SaisieDecimale::REFUS_MONTANT_TROP_PRECIS,
+            ]);
+        $page->set('data.paliers', [['jusqu_a' => '2.55', 'benefice' => '1'], ['jusqu_a' => '50', 'benefice' => '0.12']])
+            ->set('data.benefice_au_dela', '60')
+            ->assertSee('2,40 € TTC');
+
+        $magasin->refresh();
+        $this->assertFalse($magasin->prix_vente_automatique);
+        $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->bareme_prix_vente);
+    }
+
+    /**
+     * Le plus petit prix d'achat d'un palier, 0,01 €, s'enregistre quel que
+     * soit le réglage de PHP qui écrit les nombres à virgule flottante
+     * (precision) : la borne du champ s'écrit en texte, jamais
+     * « 0.0100000000000000002 ».
+     */
+    public function test_un_palier_a_un_centime_s_enregistre_quel_que_soit_le_reglage_de_php(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $precision = ini_get('precision');
+
+        try {
+            ini_set('precision', '18');
+
+            Livewire::test(ParametresPrixDeVente::class)
+                ->fillForm(['actif' => true, 'benefice_au_dela' => '60'])
+                ->set('data.paliers', [['jusqu_a' => '0.01', 'benefice' => '1']])
+                ->call('save')
+                ->assertHasNoFormErrors();
+        } finally {
+            ini_set('precision', (string) $precision);
+        }
+
+        $this->assertSame([['jusqu_a' => 1, 'benefice' => 100]], $magasin->fresh()->baremePrixDeVenteActif()->paliers);
     }
 
     public function test_un_bareme_sans_palier_ni_benefice_est_refuse(): void

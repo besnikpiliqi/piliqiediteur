@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -159,15 +160,45 @@ class BaremePrixDeVenteTest extends TestCase
     }
 
     /**
-     * Les montants d'un palier sont des centimes entiers : un nombre à
-     * virgule, que l'on prendrait pour des euros (10.0 pour 10,00 €), est
-     * refusé dès la construction du barème, au lieu de valoir 10 centimes.
+     * Les montants d'un palier, et le bénéfice au-delà du dernier, sont des
+     * centimes entiers : un nombre à virgule, que l'on prendrait pour des
+     * euros (10.0 pour 10,00 €), est refusé dès la construction du barème,
+     * au lieu de valoir 10 centimes -- même depuis ce fichier, sans
+     * strict_types, où PHP convertirait 60.0 en 60 sans rien dire.
      */
     public function test_un_palier_aux_montants_a_virgule_est_refuse(): void
     {
-        foreach ([fn () => new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 2000]], null, false), fn () => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 20.0]], null, false), fn () => new BaremePrixDeVente([['jusqu_a' => '1000', 'benefice' => 2000]], null, false)] as $bareme) {
+        foreach ([
+            fn () => new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 2000]], null, false),
+            fn () => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 20.0]], null, false),
+            fn () => new BaremePrixDeVente([['jusqu_a' => '1000', 'benefice' => 2000]], null, false),
+            fn () => new BaremePrixDeVente([['jusqu_a' => 1000, 'benefice' => 2000]], 60.0, false),
+            fn () => new BaremePrixDeVente([], '6000', false),
+        ] as $bareme) {
             $this->assertThrows($bareme, InvalidArgumentException::class, 'Les montants du barème sont des centimes entiers, jamais un nombre à virgule.');
         }
+    }
+
+    /**
+     * Un montant du barème saisi s'écrit au centime et ne s'arrondit
+     * jamais en silence : un seuil, un bénéfice ou un bénéfice au-delà à
+     * trois décimales est refusé, au lieu de devenir 2,01 €, 0,13 € ou
+     * 60,00 € ; des zéros après le centime ne comptent pas.
+     */
+    public function test_un_montant_du_bareme_plus_precis_que_le_centime_est_refuse_jamais_arrondi(): void
+    {
+        foreach ([
+            ['paliers' => [['jusqu_a' => '2.005', 'benefice' => '10']], 'benefice_au_dela' => null],
+            ['paliers' => [['jusqu_a' => '50', 'benefice' => '0.125']], 'benefice_au_dela' => null],
+            ['paliers' => [['jusqu_a' => '50', 'benefice' => '10']], 'benefice_au_dela' => '60.001'],
+        ] as $bareme) {
+            $this->assertThrows(fn () => BaremePrixDeVente::depuisTableau([...$bareme, 'arrondi_x9' => false]), InvalidArgumentException::class, SaisieDecimale::REFUS_MONTANT_TROP_PRECIS);
+        }
+
+        $bareme = BaremePrixDeVente::depuisTableau(['paliers' => [['jusqu_a' => '2.500', 'benefice' => '0.120']], 'benefice_au_dela' => '60.000', 'arrondi_x9' => false]);
+
+        $this->assertSame([['jusqu_a' => 250, 'benefice' => 12]], $bareme->paliers);
+        $this->assertSame(6000, $bareme->beneficeAuDela);
     }
 
     /**

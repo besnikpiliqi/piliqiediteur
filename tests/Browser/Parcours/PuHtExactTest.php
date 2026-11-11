@@ -4,8 +4,11 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
@@ -20,8 +23,10 @@ use Tests\Browser\Support\Navigation;
  * jusqu'à six décimales, sans zéro inutile au-delà de deux, sur le PDF, la
  * fiche et les lignes du formulaire ; un ticket ou un devis à un
  * particulier le montre au centime. 4 diffuseurs à 65,00 € TTC à 20 % : PU
- * HT 54,166667 €, 54,17 € au centime ; 216,67 € HT. La société de test a
- * tous ses rôles et son catalogue (voir TestCaseDuNavigateur::societeComplete()).
+ * HT 54,166667 €, 54,17 € au centime ; 216,67 € HT ; 2 diffuseurs rendus :
+ * 108,33 € HT. Chaque rôle qui ouvre la fiche ou le PDF y lit le même PU
+ * HT, avec la note de calcul de son document. La société de test a tous
+ * ses rôles et son catalogue (voir TestCaseDuNavigateur::societeComplete()).
  */
 
 /**
@@ -48,6 +53,15 @@ function brouillonDeDiffuseurs(Magasin $magasin, User $auteur, string $client): 
 }
 
 /**
+ * La facture de 4 diffuseurs à ce client du catalogue de la société de
+ * test, faite et émise par ce compte.
+ */
+function factureDeDiffuseurs(Magasin $magasin, User $auteur, string $client): Facture
+{
+    return app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EmettreFactureAction::class)->handle($auteur, brouillonDeDiffuseurs($magasin, $auteur, $client)));
+}
+
+/**
  * Attend que le champ du PU HT de la première ligne du formulaire montre
  * cette valeur.
  */
@@ -62,7 +76,7 @@ function attendreLePuHt(Navigation $onglet, string $valeur): Navigation
 test('le responsable lit le PU HT tel qu’il est enregistré sur la fiche et sur le PDF d’une facture à un professionnel, et au centime sur la fiche d’un ticket', function () {
     $societe = $this->societeComplete();
     [$facture, $ticket] = array_map(
-        fn (string $client): Facture => app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => app(EmettreFactureAction::class)->handle($societe->responsable, brouillonDeDiffuseurs($societe->magasin, $societe->responsable, $client))),
+        fn (string $client): Facture => factureDeDiffuseurs($societe->magasin, $societe->responsable, $client),
         ['Hôtel des Pins', 'Jean Dupont'],
     );
     $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id);
@@ -86,7 +100,7 @@ test('le responsable lit le PU HT tel qu’il est enregistré sur la fiche et su
 
 test('le propriétaire lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel', function () {
     $societe = $this->societeComplete();
-    $facture = app(TenantContext::class)->runAs($societe->magasin, fn (): Facture => app(EmettreFactureAction::class)->handle($societe->responsable, brouillonDeDiffuseurs($societe->magasin, $societe->responsable, 'Hôtel des Pins')));
+    $facture = factureDeDiffuseurs($societe->magasin, $societe->responsable, 'Hôtel des Pins');
 
     $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id)
         ->voir('54,166667 €')
@@ -142,4 +156,83 @@ test('le propriétaire change le client d’un devis, et le PU HT des lignes sui
     $devis = app(TenantContext::class)->runAs($societe->magasin, fn (): Devis => $devis->fresh(['client', 'lignes']));
     expect($devis->client->nom)->toBe('Hôtel des Pins')
         ->and($devis->lignes->sole()->prix_unitaire_ht)->toBe('54.166667');
+});
+
+test('le responsable lit le PU HT tel qu’il est enregistré et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel', function () {
+    $societe = $this->societeComplete();
+    $facture = factureDeDiffuseurs($societe->magasin, $societe->responsable, 'Hôtel des Pins');
+    $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): Avoir => app(EnregistrerAvoirAction::class)->handle(
+        $societe->responsable,
+        $facture->client()->sole(),
+        [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 2]],
+        'Retour de deux diffuseurs',
+    ));
+    $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/avoirs/'.$avoir->id);
+
+    $onglet->voir('54,166667 €')
+        ->voir('108,33 €')
+        ->voir('chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici')
+        ->voir('Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés')
+        ->nePasVoir('54,17 €')
+        ->cliquerSur('PDF');
+    $fichiers = $onglet->telechargements();
+    expect($fichiers)->toHaveCount(1);
+    $textes = array_column($this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0]['textes'], 'texte');
+    expect($textes)->toContain('54,166667 €')
+        ->and($textes)->toContain('108,33 €')
+        ->and($textes)->not->toContain('54,17 €')
+        ->and(preg_replace('/\s+/u', ' ', implode(' ', $textes)))->toContain('la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne');
+});
+
+test('le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel', function () {
+    $societe = $this->societeComplete();
+    $devis = app(TenantContext::class)->runAs($societe->magasin, fn (): Devis => app(EmettreDevisAction::class)->handle($societe->proprietaire, app(CreerDevisAction::class)->handle(
+        $societe->proprietaire,
+        Client::query()->where('nom', 'Hôtel des Pins')->sole(),
+        [['produit_id' => diffuseur($societe->magasin)->id, 'quantite' => 4]],
+    )));
+    $onglet = $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->magasin->uuid.'/devis/'.$devis->id);
+
+    $onglet->voir('54,166667 €')
+        ->voir('216,67 €')
+        ->voir('Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés')
+        ->nePasVoir('54,17 €')
+        ->cliquerSur('PDF');
+    $fichiers = $onglet->telechargements();
+    expect($fichiers)->toHaveCount(1);
+    $textes = array_column($this->pagesDuPdf(base64_decode($fichiers[0]['contenu']))[0]['textes'], 'texte');
+    expect($textes)->toContain('54,166667 €')
+        ->and($textes)->toContain('216,67 €')
+        ->and($textes)->not->toContain('54,17 €')
+        ->and(preg_replace('/\s+/u', ' ', implode(' ', $textes)))->toContain('la quantité × le PU HT, remise déduite, retombe sur le total HT de la ligne');
+});
+
+test('le vendeur lit le PU HT tel qu’il est enregistré sur la fiche de sa facture à un professionnel', function () {
+    $societe = $this->societeComplete();
+    $facture = factureDeDiffuseurs($societe->magasin, $societe->vendeur, 'Hôtel des Pins');
+
+    $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id)
+        ->voir('54,166667 €')
+        ->voir('Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés')
+        ->nePasVoir('54,17 €');
+});
+
+test('l’administrateur lit le PU HT tel qu’il est enregistré sur la fiche d’une facture à un professionnel', function () {
+    $societe = $this->societeComplete();
+    $facture = factureDeDiffuseurs($societe->magasin, $societe->vendeur, 'Hôtel des Pins');
+
+    $this->seConnecter($societe->administrateur)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id)
+        ->voir('54,166667 €')
+        ->voir('Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés')
+        ->nePasVoir('54,17 €');
+});
+
+test('le collaborateur du cabinet lié lit le PU HT tel qu’il est enregistré sur la fiche d’une facture de son client à un professionnel', function () {
+    $societe = $this->societeComplete();
+    $facture = factureDeDiffuseurs($societe->magasin, $societe->vendeur, 'Hôtel des Pins');
+
+    $this->seConnecter($societe->collaborateur, panneau: 'cabinet')->aller('/app/'.$societe->magasin->uuid.'/factures/'.$facture->id)
+        ->voir('54,166667 €')
+        ->voir('Les prix unitaires HT sont affichés tels qu\'ils sont enregistrés')
+        ->nePasVoir('54,17 €');
 });

@@ -205,3 +205,5 @@ a-trancher/releve-avis.js
 a-trancher/urgent-tableau.md
 serie9-rapide.js
 reprises/args-chaine-rapide-2026-11-11.json
+reprises/lot-CALC-commits-locaux.patch
+reprises/lot-CALC-travail-non-commite.patch

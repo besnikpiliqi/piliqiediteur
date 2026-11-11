@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 11:48 UTC par pilotage-sync.sh : « registre : mots de l'éditeur ».
+Mis à jour le 11/11/2026 à 12:06 UTC par pilotage-sync.sh : « Point de suivi 12 h 06 : CALC sauvegardé ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

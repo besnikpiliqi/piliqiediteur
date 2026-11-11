@@ -1582,3 +1582,11 @@ il faut que tu mettes tout les "Le plus urgent" de la fiche dans un tableux pret
 
 voila comme ca tu ajoute toujour dans cette endroit
 
+## 157. 2026-11-11 00:01 UTC
+
+la "À faire vérifier par un professionnel" t es en train d ecrire ou quoi car je vois vide?
+
+## 158. 2026-11-11 00:27 UTC
+
+dit moi qu'est ce qu il a fait le PG et qu est ce quo fait le TY1
+

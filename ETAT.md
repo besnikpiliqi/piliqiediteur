@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 06:17 UTC par pilotage-sync.sh : « Point de suivi 06:15 ».
+Mis à jour le 11/11/2026 à 08:16 UTC par pilotage-sync.sh : « Point de suivi 08:15 : TY2 en relecture ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `9f46860`. Commits locaux pas encore poussés :
 
 ```
+b9dd057 Vérifie les types que donnaient les commentaires en ligne, et refuse ces commentaires au contrôle des seuils (lot TY2, types en ligne)
 c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type sont vérifiées (lot TY2, niveaux 9 et 10)
 ```
 
@@ -38,66 +39,6 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M README.md
- M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
- M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
- M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
- M app/Domain/Facturation/Services/Emetteur.php
- M app/Domain/Facturation/Services/ImputationDuCredit.php
- M app/Domain/Stock/Services/VerificateurDeStock.php
- M app/Domain/Tenancy/Actions/CreerMembreAction.php
- M app/Domain/Tenancy/Models/Magasin.php
- M app/Filament/App/Livewire/SelecteurDeClients.php
- M app/Filament/App/Livewire/SelecteurDeProduits.php
- M app/Filament/App/Pages/Caisse.php
- M app/Filament/App/Pages/CoordonneesMagasin.php
- M app/Filament/App/Pages/TelechargerLesDocuments.php
- M app/Filament/App/Resources/AvoirResource.php
- M app/Filament/App/Resources/ClientResource/Pages/ViewClient.php
- M app/Filament/App/Resources/EnregistrementFiscalResource.php
- M app/Filament/App/Resources/EquipeDuMagasinResource/Pages/EditMembreDuMagasin.php
- M app/Filament/App/Resources/EquipeDuMagasinResource/Pages/ListEquipeDuMagasin.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/App/Resources/PosteReconnuResource/Pages/ListPostesReconnus.php
- M app/Filament/App/Resources/ProduitResource.php
- M app/Filament/App/Widgets/BienvenueApercu.php
- M app/Filament/Cabinet/Pages/InvitationsEtDemandes.php
- M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
- M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
- M app/Filament/Cabinet/Resources/CollaborateurResource/Pages/FicheDuCollaborateur.php
- M app/Filament/Concerns/AjouteDesLignesDAchat.php
- M app/Filament/Concerns/AjouteDesLignesDeVente.php
- M app/Filament/Concerns/EnregistreLesParametresDuMagasin.php
- M app/Filament/Concerns/GereLesComptes.php
- M app/Filament/Concerns/GereLesExceptionsMetier.php
- M app/Filament/Concerns/RecoitLeClientChoisi.php
- M app/Filament/Societe/Pages/CabinetComptable.php
- M app/Filament/Societe/Pages/IdentiteSociete.php
- M app/Filament/Societe/Pages/LesCaisses.php
- M app/Filament/Societe/Pages/ParametresFiscauxSociete.php
- M app/Filament/Societe/Pages/RattachementDUnCabinet.php
- M app/Filament/Societe/Pages/TableauDeBord.php
- M app/Filament/Societe/Pages/VerificationSociete.php
- M app/Filament/Societe/Resources/MagasinResource/Pages/CreerMagasin.php
- M app/Filament/Societe/Resources/MagasinResource/Pages/ModifierMagasin.php
- M app/Filament/Societe/Resources/MembreResource.php
- M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
- M tests/Feature/Cabinets/ClientsConfiesTest.php
- M tests/Feature/CaisseSecurisee/VerificateurIntegriteTest.php
- M tests/Feature/Editeur/RevoquerSocieteTest.php
- M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
- M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
- M tests/Feature/Filament/EquipeDuMagasinTest.php
- M tests/Feature/Qualite/OutilDeQualiteTest.php
- M tests/Feature/Societe/AdministrateursTest.php
- M tests/Feature/Societe/MembresTest.php
- M tests/Feature/Societe/ParametresFiscauxSocieteTest.php
- M tests/Feature/Societe/ResponsablesTest.php
- M tests/Feature/Stock/VenteSansStockTest.php
- M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
- M tests/Qualite/qualite.php
-?? app/Domain/Tenancy/Support/RequeteDuModele.php
-?? tests/Feature/Societe/CloreInscriptionsSansCodeTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -127,4 +68,6 @@ TY1:poussee
 TY1:fiche
 TY1:notes
 TY2:implementation
+TY2:relecture1
+TY2:relecture2
 ```

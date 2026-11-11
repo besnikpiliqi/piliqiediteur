@@ -1,13 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 04:16 UTC par pilotage-sync.sh : « Point de suivi 04:15 : TY2 sauvegardé ».
+Mis à jour le 11/11/2026 à 05:11 UTC par pilotage-sync.sh : « CI de 9f46860 verte ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `9f46860`. Commits locaux pas encore poussés :
 
 ```
-f0a961d Type les valeurs lues du socle : commandes, requêtes, réglages, intégrations (Larastan niveaux 9 et 10, lot TY2 1/n)
+c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type sont vérifiées (lot TY2, niveaux 9 et 10)
 ```
 
 Derniers commits poussés :
@@ -38,66 +38,53 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Console/Commands/EffacerPiecesVerification.php
- M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
- M app/Domain/Achats/Models/AvoirFournisseur.php
- M app/Domain/Achats/Models/LigneAchat.php
- M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
- M app/Domain/Achats/Services/ConstructeurLigneAchat.php
- M app/Domain/Achats/Services/MontantsDuFournisseur.php
- M app/Domain/Achats/Services/TvaDuFournisseur.php
- M app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
- M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
- M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
- M app/Domain/Cabinets/Actions/ConstaterLInscriptionALOrdreAction.php
- M app/Domain/Cabinets/Actions/DesignerUnCabinetAction.php
- M app/Domain/Cabinets/Actions/InviterSonCabinetACreerSonEspaceAction.php
- M app/Domain/Cabinets/Actions/InviterUneEntrepriseAction.php
- M app/Domain/Cabinets/Actions/MettreFinAuLienAction.php
- M app/Domain/Cabinets/Actions/ReglerLesAutorisationsDuCabinetAction.php
- M app/Domain/Cabinets/Actions/RepondreAUneDemandeDeLien.php
- M app/Domain/Cabinets/Actions/VerifierLOrdreAction.php
- M app/Domain/Cabinets/Enums/ResultatDInvitation.php
- M app/Domain/Cabinets/Jobs/RendreCaduquesLesInvitationsDuSiren.php
- M app/Domain/Cabinets/Mail/DemandeDeRattachementMail.php
- M app/Domain/Cabinets/Mail/InvitationACreerUnEspaceMail.php
- M app/Domain/Cabinets/Mail/InvitationDuCabinetMail.php
- M app/Domain/Cabinets/Notifications/AvisDuCabinet.php
- M app/Domain/Cabinets/Services/AccesDesCabinets.php
- M app/Domain/Cabinets/Services/EnvoiDesLiensDesCabinets.php
- M app/Domain/Cabinets/Support/IdentiteDansLeJournal.php
- M app/Domain/CaisseSecurisee/Actions/ExporterJournalDesEvenementsAction.php
- M app/Domain/CaisseSecurisee/Actions/VerifierIntegriteAction.php
- M app/Domain/CaisseSecurisee/Concerns/JournaliseSesParametresDeConformite.php
- M app/Domain/CaisseSecurisee/Models/EnregistrementFiscal.php
- M app/Domain/CaisseSecurisee/Services/ContenuFiscal.php
- M app/Domain/CaisseSecurisee/Services/RegistreFiscal.php
- M app/Domain/CaisseSecurisee/Services/SignataireFiscal.php
- M app/Domain/CaisseSecurisee/Services/VerificateurIntegrite.php
- M app/Domain/CaisseSecurisee/Support/MagasinsOuvertsParLaSession.php
- M app/Domain/Calendrier/Calendrier.php
- M app/Domain/Calendrier/Casts/Instant.php
- M app/Domain/Calendrier/Casts/JourCivil.php
- M app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
- M app/Domain/Catalogue/Models/Produit.php
- M app/Domain/Catalogue/Services/BaremePrixDeVente.php
- M app/Domain/Contacts/Models/Client.php
- M app/Domain/Facturation/Actions/AjouterPreuveOperationAction.php
- M app/Domain/Facturation/Actions/CloturerCaisseAction.php
- M app/Domain/Facturation/Actions/EmettreAvoirAction.php
- M app/Domain/Facturation/Actions/EmettreFactureAction.php
- M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
- M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
- M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
- M app/Domain/Facturation/Actions/ModifierFactureAction.php
- M app/Domain/Facturation/Casts/NumeroTvaNormalise.php
- M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
- M app/Domain/Facturation/Concerns/NoteSaNatureDOperation.php
- M app/Domain/Facturation/Enums/CategorieOperation.php
+ M README.md
+ M app/Domain/Facturation/Actions/AppliquerAvoirsDisponiblesAction.php
+ M app/Domain/Facturation/Actions/ContrePasserPaiementAction.php
+ M app/Domain/Facturation/Jobs/EnvoyerDocumentJob.php
+ M app/Domain/Facturation/Services/Emetteur.php
+ M app/Domain/Facturation/Services/ImputationDuCredit.php
+ M app/Domain/Stock/Services/VerificateurDeStock.php
+ M app/Domain/Tenancy/Actions/CreerMembreAction.php
+ M app/Domain/Tenancy/Models/Magasin.php
+ M app/Filament/App/Livewire/SelecteurDeClients.php
+ M app/Filament/App/Livewire/SelecteurDeProduits.php
+ M app/Filament/App/Pages/Caisse.php
+ M app/Filament/App/Pages/CoordonneesMagasin.php
+ M app/Filament/App/Pages/TelechargerLesDocuments.php
+ M app/Filament/App/Resources/AvoirResource.php
+ M app/Filament/App/Resources/ClientResource/Pages/ViewClient.php
+ M app/Filament/App/Resources/EnregistrementFiscalResource.php
+ M app/Filament/App/Resources/EquipeDuMagasinResource/Pages/EditMembreDuMagasin.php
+ M app/Filament/App/Resources/EquipeDuMagasinResource/Pages/ListEquipeDuMagasin.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/App/Resources/PosteReconnuResource/Pages/ListPostesReconnus.php
+ M app/Filament/App/Resources/ProduitResource.php
+ M app/Filament/App/Widgets/BienvenueApercu.php
+ M app/Filament/Cabinet/Pages/InvitationsEtDemandes.php
+ M app/Filament/Cabinet/Pages/TableauDeBordDuCabinet.php
+ M app/Filament/Cabinet/Resources/ClientDuCabinetResource/Pages/FicheDuClient.php
+ M app/Filament/Cabinet/Resources/CollaborateurResource/Pages/FicheDuCollaborateur.php
+ M app/Filament/Concerns/AjouteDesLignesDAchat.php
+ M app/Filament/Concerns/AjouteDesLignesDeVente.php
+ M app/Filament/Concerns/EnregistreLesParametresDuMagasin.php
+ M app/Filament/Concerns/RecoitLeClientChoisi.php
+ M app/Filament/Societe/Pages/CabinetComptable.php
+ M app/Filament/Societe/Pages/IdentiteSociete.php
+ M app/Filament/Societe/Pages/LesCaisses.php
+ M app/Filament/Societe/Pages/ParametresFiscauxSociete.php
+ M app/Filament/Societe/Pages/RattachementDUnCabinet.php
+ M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Filament/Societe/Pages/VerificationSociete.php
+ M app/Filament/Societe/Resources/MagasinResource/Pages/CreerMagasin.php
+ M app/Filament/Societe/Resources/MagasinResource/Pages/ModifierMagasin.php
+ M app/Filament/Societe/Resources/MembreResource.php
+ M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
+ M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
+ M tests/Feature/Qualite/OutilDeQualiteTest.php
+ M tests/Qualite/qualite.php
+?? app/Domain/Tenancy/Support/RequeteDuModele.php
+?? tests/Feature/Tenancy/RequeteDuModeleTest.php
 ```
 
 ## Dernière course de la chaîne

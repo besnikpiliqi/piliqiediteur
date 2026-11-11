@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -1194,6 +1195,27 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, 'Enregistrement n° 4 de la chaîne des encaissements : sa signature précédente n\'est pas la signature de l\'enregistrement n° 3.'],
             [90, "Le paiement (identifiant interne {$documents['contrePassation']->id}) est enregistré comme « paiement » alors qu'il contre-passe le paiement (identifiant interne {$documents['errone']->id})."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * Même signé de la clé de l'éditeur, un paiement ordinaire enregistré
+     * comme une contre-passation ne correspond pas à son type.
+     */
+    public function test_un_paiement_enregistre_comme_une_contre_passation_est_detecte(): void
+    {
+        $this->magasinActif();
+        $documents = $this->contrePassationPuisBonPaiement();
+
+        $this->reecrireEtResigner(
+            $this->enregistrementDe($documents['bon'], ChaineFiscale::Encaissement),
+            static fn (string $contenu): string => Str::replaceFirst('"type":"paiement"', '"type":"contre_passation"', $contenu),
+            ['type' => 'contre_passation'],
+        );
+
+        $this->assertSame([
+            [90, 'La ligne de tête de la chaîne des encaissements note la séquence 4, alors que son dernier enregistrement est le n° 4, d\'une autre signature.'],
+            [90, "Le paiement (identifiant interne {$documents['bon']->id}) est enregistré comme « contre_passation » alors qu'il ne contre-passe aucun paiement."],
         ], $this->anomalies($this->verifier()));
     }
 

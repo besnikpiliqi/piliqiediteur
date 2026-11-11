@@ -16,6 +16,7 @@ use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
 
@@ -204,7 +205,7 @@ class ConstructeurLigneInventaire
      */
     private function nouveauProduit(array $attributs): Produit
     {
-        $attributs = array_filter(array_intersect_key($attributs, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT)), fn (mixed $valeur): bool => filled($valeur));
+        $attributs = array_filter(ValeursLues::champs(Arr::only($attributs, ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT)), fn (mixed $valeur): bool => filled($valeur));
 
         if (! isset($attributs['nom'])) {
             throw new InvalidArgumentException('Chaque nouveau produit d\'un inventaire d\'ouverture doit avoir un nom.');

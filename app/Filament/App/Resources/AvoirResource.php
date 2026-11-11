@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -108,10 +109,7 @@ class AvoirResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        /** @var Builder<Avoir> $avoirs */
-        $avoirs = parent::getEloquentQuery();
-
-        return $avoirs->with(['client', 'magasin', 'lignes.ligneFacture.facture'])->visiblesPar(CompteConnecte::exiger());
+        return RequeteDuModele::de(parent::getEloquentQuery(), Avoir::class)->with(['client', 'magasin', 'lignes.ligneFacture.facture'])->visiblesPar(CompteConnecte::exiger());
     }
 
     public static function form(Form $form): Form

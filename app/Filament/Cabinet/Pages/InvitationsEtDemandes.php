@@ -70,8 +70,7 @@ class InvitationsEtDemandes extends Page
 
     public function cabinet(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     protected function getHeaderActions(): array

@@ -238,6 +238,48 @@ class AdministrateursTest extends TestCase
         $this->assertSame([$membre->id, 'observateur', null], [$dansLAutre['membre']['id'], $dansLAutre['avant']['role_magasin'], $dansLAutre['apres']]);
     }
 
+    /**
+     * Depuis sa fiche, le propriétaire étend la sélection d'un
+     * administrateur : la fenêtre part de sa portée actuelle, et
+     * l'administrateur gère ensuite les deux magasins.
+     */
+    public function test_le_proprietaire_etend_la_selection_d_un_administrateur_depuis_sa_fiche(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $administrateur = $this->administrateur($lyon, [$lyon->id]);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $this->proprietaireDe($lyon));
+
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
+            ->mountAction('modifierLAdministrateur')
+            ->assertActionDataSet(['portee' => 'selection', 'magasins' => [$lyon->id]])
+            ->setActionData(['magasins' => [$lyon->id, $villeurbanne->id]])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame([true, true], [$administrateur->fresh()->administreLeMagasin($lyon), $administrateur->fresh()->administreLeMagasin($villeurbanne)]);
+    }
+
+    /**
+     * Retiré, un administrateur se réintègre depuis sa fiche avec la portée
+     * que le propriétaire choisit.
+     */
+    public function test_le_proprietaire_reintegre_un_administrateur_retire_depuis_sa_fiche(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $administrateur = $this->administrateur($magasin);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $administrateur);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
+
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
+            ->callAction('reintegrer', ['portee' => 'tous'])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(StatutCompte::Actif, $administrateur->refresh()->statut);
+        $this->assertTrue($administrateur->administreTousLesMagasins());
+    }
+
     public function test_modifier_un_administrateur_global_inscrit_le_jet_130_dans_tous_les_magasins(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

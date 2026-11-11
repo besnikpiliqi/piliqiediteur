@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Services\PostesReconnus;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\PosteReconnuResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Models\User;
@@ -14,7 +15,6 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Les postes reconnus du magasin, avec « Reconnaître ce navigateur » : le
@@ -40,15 +40,8 @@ class ListPostesReconnus extends ListRecords
                     TextInput::make('nom')->label('Nom du poste')->placeholder('Caisse 1')->required()->maxLength(100),
                 ])
                 ->action(function (array $data): void {
-                    static::executerSansCasser(function () use ($data): void {
-                        try {
-                            app(PostesReconnus::class)->reconnaitre($this->auteur(), $this->magasin(), ValeurSimple::enTexte($data['nom']), request());
-                        } catch (ValidationException $refus) {
-                            Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
-
-                            return;
-                        }
-
+                    static::executerLeGeste(function () use ($data): void {
+                        app(PostesReconnus::class)->reconnaitre($this->auteur(), $this->magasin(), ValeurSimple::enTexte($data['nom']), request());
                         Notification::make()->title('Ce navigateur est reconnu comme un poste du magasin.')->success()->send();
                     });
                 }),
@@ -57,8 +50,7 @@ class ListPostesReconnus extends ListRecords
 
     private function magasin(): Magasin
     {
-        /** @var Magasin */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Magasin::class);
     }
 
     private function auteur(): User

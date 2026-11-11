@@ -16,6 +16,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
+use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -190,6 +191,55 @@ class MembresTest extends TestCase
         $this->assertSame([StatutCompte::Suspendu, StatutCompte::Actif], [$suspendu->refresh()->statut, $retire->refresh()->statut]);
         $this->assertSame([RoleMagasin::Observateur, $identifiantDuRetire], [Affectation::query()->where('user_id', $retire->id)->sole()->role, $retire->identifiantDeConnexion()]);
         $this->assertSame($comptes, User::query()->where('societe_id', $magasin->societe_id)->count());
+    }
+
+    /**
+     * L'écran de création montre le refus du compte de trop du jour, au
+     * lieu d'une erreur, et ne crée rien.
+     */
+    public function test_l_ecran_de_creation_montre_le_refus_du_compte_de_trop_du_jour(): void
+    {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $limite = CreationDesComptes::COMPTES_PAR_JOUR + CreationDesComptes::COMPTES_PAR_MAGASIN_ET_PAR_JOUR;
+
+        for ($numero = User::query()->where('cree_par', $proprietaire->id)->count() + 1; $numero <= $limite; $numero++) {
+            app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => "Vendeur {$numero}"], RoleMagasin::Vendeur);
+        }
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
+        Livewire::test(ListMembres::class)
+            ->callAction('creerUnMembre', ['magasin_id' => $magasin->id, 'name' => 'De trop', 'role' => RoleMagasin::Vendeur->value])
+            ->assertNotified(CreationDesComptes::messageDeLaLimite($limite));
+
+        $this->assertSame($limite, User::query()->where('cree_par', $proprietaire->id)->count());
+    }
+
+    /**
+     * Depuis la fiche d'un membre, le propriétaire change son rôle dans
+     * son magasin, et le réintègre, retiré, avec le rôle qu'il choisit.
+     */
+    public function test_le_proprietaire_change_le_role_d_un_membre_et_le_reintegre_depuis_sa_fiche(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
+
+        Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])
+            ->callAction('modifierSonRole', ['role' => RoleMagasin::Observateur->value])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Son rôle est enregistré.');
+        $this->assertSame(RoleMagasin::Observateur, Affectation::query()->where('user_id', $vendeur->id)->sole()->role);
+
+        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur);
+        Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])
+            ->callAction('reintegrer', ['role' => RoleMagasin::Vendeur->value])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(StatutCompte::Actif, $vendeur->refresh()->statut);
+        $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeur->id)->sole()->role);
     }
 
     /**

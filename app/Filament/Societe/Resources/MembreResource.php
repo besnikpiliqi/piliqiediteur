@@ -432,8 +432,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
     public static function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     public static function magasin(int $id): Magasin

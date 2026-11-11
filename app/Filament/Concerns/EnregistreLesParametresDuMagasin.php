@@ -77,7 +77,6 @@ trait EnregistreLesParametresDuMagasin
      */
     protected function parametresTelsQueLus(): Magasin
     {
-        /** @var Magasin */
         return FicheLue::depuis(Magasin::class, $this->parametresLus)->fiche();
     }
 

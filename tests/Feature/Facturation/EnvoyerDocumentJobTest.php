@@ -47,6 +47,7 @@ use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
+use UnexpectedValueException;
 
 class EnvoyerDocumentJobTest extends TestCase
 {
@@ -380,6 +381,31 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertSame([StatutEnvoi::Echec, 'Ce document n\'existe pas, ou plus, dans ce magasin. L\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
         $notification = $this->proprietaireDe($magasin)->notifications()->sole();
         $this->assertSame(['Ma Boutique : Échec de l\'envoi : document supprimé', 'L\'e-mail à client@exemple.fr n\'est pas parti. Ce document n\'existe pas, ou plus, dans ce magasin. L\'e-mail n\'est pas parti.'], [$notification->data['title'], $notification->data['body']]);
+    }
+
+    /**
+     * Un envoi dont le document n'est ni une facture, ni un devis, ni un
+     * avoir, ni un reçu de paiement -- son type changé directement en
+     * base, état qu'aucun écran ne produit -- est refusé avant toute
+     * lecture du document, par une exception qui nomme sa classe : rien
+     * ne part.
+     */
+    public function test_un_envoi_d_un_document_qui_ne_s_envoie_pas_est_refuse(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        DB::table('envois_documents')->where('id', $envoi->id)->update(['document_type' => 'produit']);
+
+        try {
+            (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+            $this->fail('L\'envoi d\'un document qui ne s\'envoie pas aurait dû être refusé.');
+        } catch (UnexpectedValueException $refus) {
+            $this->assertSame('Un envoi porte sur un document qui ne s\'envoie pas : '.Produit::class.'.', $refus->getMessage());
+        }
+
+        Mail::assertNothingSent();
     }
 
     /**

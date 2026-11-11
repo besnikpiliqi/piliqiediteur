@@ -7,6 +7,7 @@ use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use Filament\Actions\Action;
 use Filament\Pages\Dashboard;
@@ -52,8 +53,7 @@ class FicheDuClient extends ViewRecord
 
     public function lien(): LienCabinet
     {
-        /** @var LienCabinet */
-        return $this->getRecord();
+        return ValeursLues::instance($this->getRecord(), LienCabinet::class);
     }
 
     public function client(): Societe

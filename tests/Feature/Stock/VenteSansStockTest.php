@@ -284,6 +284,34 @@ class VenteSansStockTest extends TestCase
         $this->assertSame([StatutFacture::Emise, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
     }
 
+    /**
+     * « Émettre et encaisser » une vente au-delà du stock garde de même sa
+     * fenêtre ouverte, sous le titre « Vendre sans stock ? », avec
+     * l'avertissement ; confirmé, il émet et encaisse.
+     */
+    public function test_emettre_et_encaisser_avertit_avant_une_vente_sans_stock(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $cable = $this->produit('Câble USB', 1);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $brouillon->getRouteKey()])->mountAction('emettre_et_encaisser');
+        $premiere = (string) array_key_first($fiche->get('mountedActionsData.0.parts'));
+        $fiche->set("mountedActionsData.0.parts.{$premiere}.mode", ModePaiement::Especes->value)
+            ->callMountedAction()
+            ->assertActionMounted('emettre_et_encaisser')
+            ->assertSee('Vendre sans stock ?')
+            ->assertSee('Le stock de Câble USB passera à −2.');
+        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
+
+        $fiche->callMountedAction();
+
+        $this->assertSame([StatutFacture::Payee, -2], [$brouillon->fresh()->statut, $cable->fresh()->stock_quantite]);
+    }
+
     public function test_un_responsable_vend_sans_stock_apres_l_avertissement(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

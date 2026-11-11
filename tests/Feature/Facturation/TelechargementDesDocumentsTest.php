@@ -237,6 +237,23 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertContains('Relevé des encaissements;Boutique du Port (PORT);Encaissements 2026-03;31/03/2026;;;;;Virement;;;;20,00;;', $lignes);
     }
 
+    /**
+     * La clôture d'une journée sans aucune opération, celle que la
+     * fermeture du magasin clôt d'office, tient une ligne à zéro, sans
+     * taux.
+     */
+    public function test_la_cloture_d_une_journee_sans_operation_tient_une_ligne_a_zero_sans_taux(): void
+    {
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        app(FermerMagasinAction::class)->handle($proprietaire, $this->magasin, MotifFermeture::Temporaire, 'password');
+        $numero = app(TenantContext::class)->runAs($this->magasin->fresh(), fn (): string => (string) ClotureCaisse::query()->where('date_cloture', '2026-03-10')->sole()->numero);
+
+        $csv = app(RecapitulatifDesDocuments::class)->ecrire($proprietaire, $this->trouver($proprietaire, [TypeDeDocumentTelechargeable::Clotures]), '2026-03-01', '2026-03-31');
+        $lignes = array_map(fn (string $ligne): string => implode(';', str_getcsv($ligne, ';', '"', '')), explode("\r\n", rtrim(substr($csv, 3), "\r\n")));
+
+        $this->assertContains("Clôture du jour;Boutique du Port (PORT);{$numero};10/03/2026;;;;;;;0,00;0,00;0,00;;", $lignes);
+    }
+
     public function test_un_nom_qui_commence_comme_une_formule_s_ecrit_desamorce_dans_le_csv(): void
     {
         $proprietaire = $this->proprietaireDe($this->magasin);

@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Models\User;
@@ -370,7 +371,6 @@ class ModifierMagasin extends EditRecord
 
     private function magasin(): Magasin
     {
-        /** @var Magasin */
-        return $this->getRecord();
+        return ValeursLues::instance($this->getRecord(), Magasin::class);
     }
 }

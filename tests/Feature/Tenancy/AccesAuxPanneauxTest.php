@@ -213,6 +213,18 @@ class AccesAuxPanneauxTest extends TestCase
         $reponse->assertNotFound();
     }
 
+    /**
+     * De même, une adresse de l'espace de la société qui ne porte pas un
+     * uuid de société est introuvable.
+     */
+    public function test_une_adresse_qui_ne_porte_pas_un_uuid_de_societe_est_introuvable(): void
+    {
+        $proprietaire = User::factory()->create();
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+
+        $this->actingAs($proprietaire)->get('/societe/pas-un-uuid')->assertNotFound();
+    }
+
     public function test_un_responsable_ouvre_ses_magasins_et_pas_l_espace_societe(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);

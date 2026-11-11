@@ -138,7 +138,6 @@ class CoordonneesMagasin extends Page implements HasForms
 
     private function magasin(): Magasin
     {
-        /** @var Magasin */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Magasin::class);
     }
 }

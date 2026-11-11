@@ -12,6 +12,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
 use App\Domain\Achats\Models\TauxAvoirFournisseur;
+use App\Domain\Achats\Services\ChiffrageDUnAvoirFournisseur;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -239,6 +240,36 @@ class TvaDesAvoirsFournisseurTest extends TestCase
         $this->assertSame([['40.00', null, '8.00', '48.00'], ['15.00', null, '3.00', '18.00']], $this->montantsDesLignes($avoir));
         $this->assertSame([['20.00', '55.00', '11.00', '11.00', null, null]], $this->montantsDesTaux($avoir));
         $this->assertSame(['55.00', '11.00', '66.00'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+    }
+
+    /**
+     * Le chiffrage d'un avoir donne, pour chaque taux, la base, la TVA
+     * retenue, le TTC et la TVA proposée de ses lignes, chacun la somme
+     * exacte des lignes du taux : 2 câbles à 20,00 € et un chargeur à
+     * 15,00 € HT, à 20 %, font 55,00 € HT, 11,00 € de TVA et 66,00 € TTC,
+     * comme ses totaux ; une TVA écrite par la note d'avoir remplace la
+     * TVA retenue, et la proposée reste.
+     */
+    public function test_le_chiffrage_d_un_avoir_somme_chaque_taux_depuis_ses_lignes(): void
+    {
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CABLE-USB', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHARGEUR', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit_id' => $cable->id, 'quantite' => 5, 'prix_unitaire_ht' => '20.00'],
+            ['produit_id' => $chargeur->id, 'quantite' => 2, 'prix_unitaire_ht' => '15.00'],
+        ], ['date_facture' => '2026-01-15']));
+        [$ligneCable, $ligneChargeur] = $factureAchat->lignes()->orderBy('ordre')->get()->all();
+        $retours = [
+            'cable' => ['ligne_achat' => $ligneCable, 'quantite' => 2, 'montant_ht_saisi' => null],
+            'chargeur' => ['ligne_achat' => $ligneChargeur, 'quantite' => 1, 'montant_ht_saisi' => null],
+        ];
+
+        $chiffre = app(ChiffrageDUnAvoirFournisseur::class)->chiffrer($retours, []);
+        $ecrite = app(ChiffrageDUnAvoirFournisseur::class)->chiffrer($retours, [2000 => 1099]);
+
+        $this->assertSame(['20.00' => ['montant_ht' => '55.00', 'montant_tva' => '11.00', 'montant_ttc' => '66.00', 'montant_tva_calcule' => '11.00']], $chiffre->parTaux);
+        $this->assertSame(['total_ht' => '55.00', 'total_tva' => '11.00', 'total_ttc' => '66.00'], $chiffre->totaux);
+        $this->assertSame(['20.00' => ['montant_ht' => '55.00', 'montant_tva' => '10.99', 'montant_ttc' => '65.99', 'montant_tva_calcule' => '11.00']], $ecrite->parTaux);
     }
 
     /**

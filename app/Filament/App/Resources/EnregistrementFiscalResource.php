@@ -9,6 +9,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
@@ -151,10 +152,7 @@ class EnregistrementFiscalResource extends Resource
                         DatePicker::make('du')->label('Du'),
                         DatePicker::make('au')->label('Au'),
                     ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        /** @var Builder<EnregistrementFiscal> $query */
-                        return $query->horodatesDuJourAuJour(self::calendrierDuMagasin(), ValeurSimple::enTexteOuNul($data['du'] ?? null), ValeurSimple::enTexteOuNul($data['au'] ?? null));
-                    })
+                    ->query(fn (Builder $query, array $data): Builder => RequeteDuModele::de($query, EnregistrementFiscal::class)->horodatesDuJourAuJour(self::calendrierDuMagasin(), ValeurSimple::enTexteOuNul($data['du'] ?? null), ValeurSimple::enTexteOuNul($data['au'] ?? null)))
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
                         filled($data['du'] ?? null) ? 'Du '.Calendrier::afficherJour(ValeurSimple::enTexte($data['du']), 'd/m/Y') : null,
                         filled($data['au'] ?? null) ? 'Au '.Calendrier::afficherJour(ValeurSimple::enTexte($data['au']), 'd/m/Y') : null,

@@ -809,7 +809,9 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Son propre journal, et seulement dans le contexte de sa société.
+     * Son propre journal, et seulement dans le contexte de sa société : le
+     * magasin lui-même, lu comme un Magasin, ce que la collection d'Eloquent
+     * demande (elle ne tient pas le static de $this pour un Magasin).
      *
      * @return Collection<int, Magasin>
      *
@@ -823,10 +825,7 @@ class Magasin extends Model implements HasName
             throw new LogicException('Le SIRET et le territoire d\'un magasin ne se modifient que dans le contexte de sa société.');
         }
 
-        /** @var Collection<int, Magasin> $journal */
-        $journal = new Collection([$this]);
-
-        return $journal;
+        return new Collection([ValeursLues::instance($this, self::class)]);
     }
 
     /**

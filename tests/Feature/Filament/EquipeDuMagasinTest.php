@@ -234,6 +234,29 @@ class EquipeDuMagasinTest extends TestCase
     }
 
     /**
+     * Depuis l'équipe du magasin, le propriétaire nomme responsable un
+     * vendeur dont le mot de passe est encore son identifiant ; présent,
+     * il choisit le sien dans la même fenêtre.
+     */
+    public function test_le_proprietaire_nomme_responsable_un_vendeur_present_qui_choisit_son_mot_de_passe(): void
+    {
+        Notification::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        [$vendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        $saLigne = Affectation::query()->where('user_id', $vendeur->id)->sole();
+
+        $this->dansLeMagasin($magasin, $proprietaire);
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->callTableAction('nommer_responsable', $saLigne, ['mode' => 'present', 'mot_de_passe' => 'mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'mot-de-passe-de-paul'])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(RoleMagasin::Responsable, $saLigne->refresh()->role);
+        $this->assertTrue(Hash::check('mot-de-passe-de-paul', $vendeur->refresh()->password));
+        $this->assertFalse($vendeur->mot_de_passe_est_l_identifiant);
+    }
+
+    /**
      * Un responsable ne change ni son affectation, ni son statut, ni son
      * accès : sa ligne n'a aucun bouton, sa fiche ne s'ouvre pas, et
      * l'action refuse.

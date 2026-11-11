@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -132,7 +133,6 @@ class ParametresFiscauxSociete extends Page implements HasForms
 
     private function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 }

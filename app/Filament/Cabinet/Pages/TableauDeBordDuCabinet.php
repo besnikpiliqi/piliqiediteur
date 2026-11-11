@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Cabinet\Resources\ClientDuCabinetResource;
 use App\Filament\Cabinet\Resources\CollaborateurResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -71,8 +72,7 @@ class TableauDeBordDuCabinet extends Dashboard
 
     public function cabinet(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     /**

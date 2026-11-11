@@ -11,6 +11,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ExpressionDUneColonne;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\SensDuTri;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\ClientResource;
@@ -123,10 +124,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                 // (voir Facture::scopeVisiblesPar()).
                 TextColumn::make('factures_max_date_emission')
                     ->label('Dernier achat')
-                    ->max(['factures' => function (Builder $query): Builder {
-                        /** @var Builder<Facture> $query */
-                        return $query->visiblesPar(CompteConnecte::exiger());
-                    }], 'date_emission')
+                    ->max(['factures' => fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->visiblesPar(CompteConnecte::exiger())], 'date_emission')
                     ->dateTime('d/m/Y')
                     ->placeholder('—')
                     ->visible($voitLesFiches)
@@ -147,10 +145,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                     ->label('Avec un crédit d\'avoir')
                     ->toggle()
                     ->visible($voitLesFiches)
-                    ->query(function (Builder $query): Builder {
-                        /** @var Builder<Client> $query */
-                        return $query->avecUnCreditDAvoir();
-                    }),
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Client::class)->avecUnCreditDAvoir()),
             ])
             ->headerActions([
                 Action::make('nouveauClient')

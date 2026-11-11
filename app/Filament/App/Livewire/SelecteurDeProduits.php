@@ -11,6 +11,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ResultatDePhp;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -222,18 +223,12 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                 Filter::make('en_stock')
                     ->label('En stock seulement')
                     ->toggle()
-                    ->query(function (Builder $query): Builder {
-                        /** @var Builder<Produit> $query */
-                        return $query->enStock();
-                    }),
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Produit::class)->enStock()),
                 Filter::make('hors_stock')
                     ->label('Hors stock seulement')
                     ->toggle()
                     ->visible($vendSansStock)
-                    ->query(function (Builder $query): Builder {
-                        /** @var Builder<Produit> $query */
-                        return $query->epuises();
-                    }),
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Produit::class)->epuises()),
             ]);
     }
 

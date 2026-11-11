@@ -4,6 +4,7 @@ namespace App\Filament\Concerns;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Support\ValeurRequise;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Livewire\SelecteurDeClients;
 use App\Filament\App\Resources\ClientResource;
 use Filament\Forms\Components\Select;
@@ -36,8 +37,7 @@ trait RecoitLeClientChoisi
             return;
         }
 
-        /** @var Select $champ */
-        $champ = ValeurRequise::de($this->getForm('form'), 'le formulaire de la page')->getComponent('data.client_id');
+        $champ = ValeursLues::instance(ValeurRequise::de($this->getForm('form'), 'le formulaire de la page')->getComponent('data.client_id'), Select::class);
         $champ->state($client->getKey());
         $champ->callAfterStateUpdated();
 

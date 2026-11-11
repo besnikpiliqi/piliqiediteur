@@ -6,6 +6,7 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\TelechargeLesDocumentsParPeriode;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -70,10 +71,7 @@ class TelechargerLesDocuments extends Page
 
     protected function calendrierDesRaccourcis(): Calendrier
     {
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
-
-        return $magasin->calendrier();
+        return ValeursLues::instance(Filament::getTenant(), Magasin::class)->calendrier();
     }
 
     /**

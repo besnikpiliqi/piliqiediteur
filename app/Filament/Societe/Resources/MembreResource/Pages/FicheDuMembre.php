@@ -413,8 +413,7 @@ class FicheDuMembre extends ViewRecord
 
     private function compte(): User
     {
-        /** @var User */
-        return $this->getRecord();
+        return ValeursLues::instance($this->getRecord(), User::class);
     }
 
     private function auteur(): User

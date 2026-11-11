@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
 use Illuminate\Support\Str;
 use UnexpectedValueException;
@@ -93,8 +94,7 @@ final readonly class Emetteur
             return self::deDemonstration($magasin);
         }
 
-        /** @var Societe $societe */
-        $societe = $magasin->societe;
+        $societe = ValeurRequise::de($magasin->societe, 'la société du magasin');
 
         return new self(
             nom: $magasin->nom,

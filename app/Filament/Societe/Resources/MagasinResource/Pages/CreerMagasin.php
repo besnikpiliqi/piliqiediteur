@@ -227,8 +227,7 @@ class CreerMagasin extends CreateRecord
 
     protected function getCreatedNotificationTitle(): ?string
     {
-        /** @var Magasin $magasin */
-        $magasin = $this->getRecord();
+        $magasin = ValeursLues::instance($this->getRecord(), Magasin::class);
 
         return $magasin->etablissement_verifie_le === null
             ? "Le magasin {$magasin->nom} est créé : le répertoire Sirene n'ayant pas répondu, son établissement sera vérifié avant toute vente."
@@ -237,8 +236,7 @@ class CreerMagasin extends CreateRecord
 
     private function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     /**

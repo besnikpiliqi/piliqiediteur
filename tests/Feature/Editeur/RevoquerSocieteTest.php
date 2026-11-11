@@ -40,6 +40,7 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
@@ -307,6 +308,27 @@ class RevoquerSocieteTest extends TestCase
             $this->assertNotSame(0, EntreeAudit::query()->where('categorie', CategorieAudit::Verification->value)->count());
         });
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('verifications_societe')->where('societe_id', $societe->id)->delete()), QueryException::class, 'verifications_societe : suppression refusée avant expiration');
+    }
+
+    /**
+     * La révocation annule, au nom de l'éditeur, la transmission de la
+     * propriété en attente : le journal d'audit nomme son destinataire,
+     * qui en est prévenu.
+     */
+    public function test_la_revocation_annule_la_transmission_de_la_propriete_en_attente(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Usurpatrice']);
+        $societe = $magasin->societe;
+        $administrateur = $this->administrateurPretAReprendre($magasin);
+        $this->demanderLaTransmission($this->proprietaireDe($magasin), $administrateur);
+        app(TenantContext::class)->clear();
+
+        $this->revoquer($societe);
+
+        $this->assertNotNull(app(TenantContext::class)->runAsSociete($societe->fresh(), fn () => TransmissionPropriete::query()->where('destinataire_id', $administrateur->id)->sole()->annulee_le));
+        [$annulation] = $this->entreesDAudit($societe, ActionAuditee::TransmissionAnnulee);
+        $this->assertSame(['editeur', ['destinataire' => ['id' => $administrateur->id, 'nom' => $administrateur->name]]], [$annulation->origine, $annulation->nouvelles_valeurs]);
+        $this->assertContains('Transmission de la propriété annulée', $administrateur->notifications()->get()->pluck('data.title')->all());
     }
 
     /**

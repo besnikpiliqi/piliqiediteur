@@ -800,8 +800,7 @@ trait AjouteDesLignesDeVente
      */
     public static function ajouterLesProduitsChoisis(HasForms $livewire, mixed $selection): bool
     {
-        /** @var Repeater $repeteur */
-        $repeteur = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
+        $repeteur = ValeursLues::instance(ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes'), Repeater::class);
 
         try {
             $choisis = self::produitsChoisis($selection);
@@ -1124,8 +1123,7 @@ trait AjouteDesLignesDeVente
      */
     private static function ajouterUneLigne(HasForms $livewire, array $valeurs): void
     {
-        /** @var Repeater $lignes */
-        $lignes = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
+        $lignes = ValeursLues::instance(ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes'), Repeater::class);
 
         $uuid = $lignes->generateUuid();
 

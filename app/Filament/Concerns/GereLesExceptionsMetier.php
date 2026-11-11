@@ -8,6 +8,7 @@ use Closure;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 
 /**
@@ -51,6 +52,22 @@ trait GereLesExceptionsMetier
             $callback();
         } catch (LogicException|AuthorizationException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
             static::notifierLeRefus($exception);
+        }
+    }
+
+    /**
+     * Comme executerSansCasser(), et une donnée refusée par l'action (un
+     * mot de passe qui ne suit pas la règle, la limite des comptes créés
+     * dans la journée, par exemple) s'affiche aussi, message par message.
+     *
+     * @param  Closure(): mixed  $geste
+     */
+    public static function executerLeGeste(Closure $geste): void
+    {
+        try {
+            static::executerSansCasser($geste);
+        } catch (ValidationException $refus) {
+            Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
         }
     }
 

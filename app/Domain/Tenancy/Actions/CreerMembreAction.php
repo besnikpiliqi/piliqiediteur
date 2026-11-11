@@ -6,7 +6,6 @@ use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
-use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
@@ -110,9 +109,7 @@ class CreerMembreAction
                 return $resultat['existant'];
             }
 
-            /** @var Affectation $affectation */
-            $affectation = $resultat['affectation'];
-            $this->affectations->prevenirDUneNomination($resultat['compte'], $affectation, compteCree: true);
+            $this->affectations->prevenirDUneNomination($resultat['compte'], $resultat['affectation'], compteCree: true);
 
             return $resultat['compte'];
         });

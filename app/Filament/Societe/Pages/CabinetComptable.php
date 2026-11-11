@@ -144,8 +144,7 @@ class CabinetComptable extends Page implements HasForms
 
     public function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     public function lienActif(): ?LienCabinet

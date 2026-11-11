@@ -5,7 +5,6 @@ namespace App\Domain\Stock\Services;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Exceptions\StockInsuffisantException;
 use App\Domain\Tenancy\Support\CleDuModele;
@@ -89,7 +88,6 @@ class VerificateurDeStock
         $quantites = [];
 
         foreach ($facture->lignes()->whereNotNull('produit_id')->get() as $ligne) {
-            /** @var LigneFacture $ligne */
             $quantites[(int) $ligne->produit_id] = ($quantites[(int) $ligne->produit_id] ?? 0) + $ligne->quantite;
         }
 

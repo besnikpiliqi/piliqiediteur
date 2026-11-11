@@ -391,20 +391,6 @@ trait GereLesComptes
         ];
     }
 
-    /**
-     * Comme executerSansCasser(), et une donnée refusée par l'action (un
-     * mot de passe qui ne suit pas la règle, par exemple) s'affiche aussi,
-     * message par message.
-     */
-    public static function executerLeGeste(Closure $geste): void
-    {
-        try {
-            static::executerSansCasser($geste);
-        } catch (ValidationException $refus) {
-            Notification::make()->title(implode(' ', $refus->validator->errors()->all()))->danger()->send();
-        }
-    }
-
     protected static function auteur(): User
     {
         $auteur = auth()->user();

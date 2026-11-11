@@ -67,8 +67,7 @@ class RattachementDUnCabinet extends Page
 
     public function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     /**

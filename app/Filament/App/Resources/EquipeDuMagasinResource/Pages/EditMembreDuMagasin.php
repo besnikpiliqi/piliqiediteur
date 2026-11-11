@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -30,8 +31,7 @@ class EditMembreDuMagasin extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        /** @var Affectation $affectation */
-        $affectation = $this->getRecord();
+        $affectation = ValeursLues::instance($this->getRecord(), Affectation::class);
 
         return [...$data, 'role' => $affectation->role?->value, ...EquipeDuMagasinResource::autorisationsAAfficher($affectation->autorisations(), 'autorisations')];
     }
@@ -41,11 +41,12 @@ class EditMembreDuMagasin extends EditRecord
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        /** @var Affectation $record */
-        return static::executerOuInterrompre(function () use ($record, $data): Affectation {
-            app(ModifierMembreAction::class)->handle(CompteConnecte::exiger(), $record->utilisateur, EquipeDuMagasinResource::roleChoisi($data), EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
+        $affectation = ValeursLues::instance($record, Affectation::class);
 
-            return $record->refresh();
+        return static::executerOuInterrompre(function () use ($affectation, $data): Affectation {
+            app(ModifierMembreAction::class)->handle(CompteConnecte::exiger(), $affectation->utilisateur, EquipeDuMagasinResource::roleChoisi($data), EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
+
+            return $affectation->refresh();
         });
     }
 

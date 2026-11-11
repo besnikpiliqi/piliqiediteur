@@ -28,8 +28,10 @@ use Filament\Facades\Filament;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use LogicException;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 /**
@@ -92,6 +94,25 @@ class ParametresFiscauxSocieteTest extends TestCase
                 ['parametre' => 'option_debits_tva', 'ancienne_valeur' => false, 'nouvelle_valeur' => true],
             ], $this->parametresJournalises($magasin));
         }
+    }
+
+    /**
+     * Une donnée que l'action refuse, relue au moment d'écrire, s'affiche
+     * sous son champ, au lieu d'une erreur.
+     */
+    public function test_un_refus_de_l_action_s_affiche_sous_son_champ(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $this->ouvrirLAdministration($lyon->societe);
+        $this->mock(ModifierParametresFiscauxSocieteAction::class, fn (MockInterface $action) => $action->shouldReceive('handle')->once()->andThrow(ValidationException::withMessages(['regime_tva' => 'Ce régime de TVA est refusé.'])));
+
+        Livewire::test(ParametresFiscauxSociete::class)
+            ->fillForm(['regime_tva' => RegimeTva::FranchiseEnBase->value, 'option_debits_tva' => false, 'mois_fin_exercice' => 12])
+            ->call('save')
+            ->assertHasFormErrors(['regime_tva'])
+            ->assertSee('Ce régime de TVA est refusé.');
+
+        $this->assertSame(RegimeTva::ReelSimplifie, $lyon->societe->fresh()->regime_tva);
     }
 
     public function test_un_parametre_inchange_n_est_pas_journalise(): void

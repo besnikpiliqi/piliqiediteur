@@ -496,8 +496,7 @@ trait AjouteDesLignesDAchat
             ->modalWidth(MaxWidth::FourExtraLarge)
             ->form(self::formulaireDeLigne())
             ->action(function (array $data, HasForms $livewire): void {
-                /** @var Repeater $lignes */
-                $lignes = ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes');
+                $lignes = ValeursLues::instance(ValeurRequise::de($livewire->getForm('form'), 'le formulaire de la page')->getComponent('data.lignes'), Repeater::class);
 
                 $lignes->state([...ValeursLues::tableau($lignes->getState() ?? []), $lignes->generateUuid() => self::ligneDepuisLeFormulaire(ValeursLues::champs($data))]);
                 $lignes->callAfterStateUpdated();

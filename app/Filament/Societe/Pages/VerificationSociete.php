@@ -78,8 +78,7 @@ class VerificationSociete extends Page
 
     public function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     /**
@@ -207,8 +206,7 @@ class VerificationSociete extends Page
                 FileUpload::make('fichier')->label('Fichier')->storeFiles(false)->maxSize(DeposerUnePieceAction::TAILLE_MAXIMALE_EN_OCTETS / 1024)->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->required(),
             ])
             ->action(function (array $data): void {
-                /** @var TemporaryUploadedFile $fichier */
-                $fichier = $data['fichier'];
+                $fichier = ValeursLues::instance($data['fichier'], TemporaryUploadedFile::class);
 
                 try {
                     static::executerSansCasser(function () use ($data, $fichier): void {

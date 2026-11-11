@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Notification;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mime\Exception\RfcComplianceException;
 use Throwable;
+use UnexpectedValueException;
 
 /**
  * Envoie l'e-mail d'un EnvoiDocument (un devis, une facture, un avoir ou
@@ -215,8 +216,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return null;
         }
 
-        /** @var class-string<Facture|Devis|Avoir|RecuPaiement> $classe */
-        $classe = $envoi->getActualClassNameForMorph($envoi->document_type);
+        $classe = self::classeDuDocument($envoi);
         $lecteur = app(LecteurDesDroits::class);
 
         try {
@@ -285,6 +285,24 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             $exception instanceof TransportExceptionInterface => "Le serveur d'envoi des e-mails n'a pas accepté le message : vérifiez l'adresse du destinataire, puis {$this->consigne($envoi)}.",
             default => "Une erreur inattendue a empêché l'envoi : {$this->consigne($envoi)}, et contactez le support si elle se répète.",
         });
+    }
+
+    /**
+     * La classe du document de l'envoi : une facture ou un ticket, un
+     * devis, un avoir ou un reçu de paiement, les seuls documents qui
+     * s'envoient (voir EnvoyerDocumentAction). Un envoi d'un autre
+     * document, qu'aucun écran ne crée, est refusé par une exception avant
+     * toute lecture du document.
+     *
+     * @return class-string<Facture|Devis|Avoir|RecuPaiement>
+     *
+     * @throws UnexpectedValueException un envoi d'un document qui ne s'envoie pas
+     */
+    private static function classeDuDocument(EnvoiDocument $envoi): string
+    {
+        $classe = $envoi->getActualClassNameForMorph($envoi->document_type);
+
+        return in_array($classe, [Facture::class, Devis::class, Avoir::class, RecuPaiement::class], true) ? $classe : throw new UnexpectedValueException("Un envoi porte sur un document qui ne s'envoie pas : {$classe}.");
     }
 
     /**

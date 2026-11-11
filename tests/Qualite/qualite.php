@@ -22,11 +22,12 @@
  *       la règle (niveau, chemins, exclusions, stubs, options, règles
  *       désactivées) et que phpstan.neon doit suivre exactement, sans rien
  *       relâcher ni cacher, ni inclure d'autre fichier que l'extension de
- *       Larastan (voir refusDeLAnalyseStatique()). Une clé que l'ancien
- *       fichier n'a pas compte comme rien d'enregistré. Le PHPStan lancé
- *       est celui du dépôt (vendor/bin/phpstan), ou celui que nomme la
- *       variable QUALITE_PHPSTAN par son chemin absolu (les tests de cet
- *       outil, dans un dépôt temporaire).
+ *       Larastan, et sans qu'aucun commentaire ne fasse taire PHPStan ni ne
+ *       donne un type en ligne (voir refusDeLAnalyseStatique()). Une clé
+ *       que l'ancien fichier n'a pas compte comme rien d'enregistré. Le
+ *       PHPStan lancé est celui du dépôt (vendor/bin/phpstan), ou celui
+ *       que nomme la variable QUALITE_PHPSTAN par son chemin absolu (les
+ *       tests de cet outil, dans un dépôt temporaire).
  *   php tests/Qualite/qualite.php sensibles
  *       Les chemins des parties sensibles, un par ligne, à donner à
  *       Infection comme chemins à muter.
@@ -671,7 +672,8 @@ const PARAMETRES_HORS_COMPARAISON = [
  *   n'apparaît ; une clé que l'ancien n'a pas compte comme rien
  *   d'enregistré ;
  * - aucun commentaire d'un fichier analysé ne fait taire PHPStan sur une
- *   ligne (recherche par token_get_all, dans les seuls commentaires).
+ *   ligne, ni ne donne un type en ligne, que l'analyse croirait sans le
+ *   vérifier (voir commentairesRefuses()).
  *
  * @param  array<array-key, mixed>  $enregistre  la section analyse_statique du nouveau seuils.json
  * @param  array<array-key, mixed>  $ancien  celle de l'ancien
@@ -814,9 +816,7 @@ function refusDeLAnalyseStatique(array $enregistre, array $ancien): array
     }
 
     foreach (array_diff($chemins, $exclusions) as $chemin) {
-        foreach (consignesQuiFontTairePhpstan($chemin, $exclusions) as $consigne) {
-            $refus[] = "commentaire qui fait taire PHPStan : {$consigne}";
-        }
+        $refus = [...$refus, ...commentairesRefuses($chemin, $exclusions)];
     }
 
     return $refus;
@@ -1003,20 +1003,24 @@ function cheminsDuDepot(array $chemins): array
 
 /**
  * Les commentaires d'un fichier PHP de ce chemin (un fichier ou un
- * dossier du dépôt), hors des exclusions, qui demandent à PHPStan d'ignorer
- * une erreur, chacun « fichier:ligne » : la recherche se fait par
- * token_get_all, dans les seuls commentaires, si bien qu'une chaîne du code
- * qui cite la consigne (comme celle de cette fonction) n'est pas une
- * consigne.
+ * dossier du dépôt), hors des exclusions, que le contrôle refuse, chacun
+ * avec sa raison et « fichier:ligne » : celui qui demande à PHPStan
+ * d'ignorer une erreur, et celui qui donne un type en ligne, une balise
+ * var, phpstan-var ou psalm-var ailleurs que devant la déclaration d'une
+ * propriété ou d'une constante (voir precedeUneDeclaration()), un type
+ * que l'analyse croirait sans le vérifier (cahier de l'analyse statique,
+ * § 4.2, TY2). La recherche se fait par token_get_all, dans les seuls
+ * commentaires, si bien qu'une chaîne du code qui cite une consigne ou une
+ * balise (comme celles de cette fonction) n'en est pas une.
  *
  * @param  list<string>  $exclusions
  * @return list<string>
  */
-function consignesQuiFontTairePhpstan(string $chemin, array $exclusions): array
+function commentairesRefuses(string $chemin, array $exclusions): array
 {
     $absolu = RACINE.'/'.$chemin;
     $fichiers = is_dir($absolu) ? glob_recursif($absolu) : (is_file($absolu) ? [$absolu] : []);
-    $consignes = [];
+    $refus = [];
 
     foreach ($fichiers as $fichier) {
         $relatif = relatifAuDepot($fichier);
@@ -1033,14 +1037,71 @@ function consignesQuiFontTairePhpstan(string $chemin, array $exclusions): array
             throw new RuntimeException("Fichier illisible : {$relatif}.");
         }
 
-        foreach (token_get_all($source) as $jeton) {
-            if (is_array($jeton) && in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true) && str_contains($jeton[1], '@phpstan-'.'ignore')) {
-                $consignes[] = "{$relatif}:{$jeton[2]}";
+        $jetons = token_get_all($source);
+
+        foreach ($jetons as $rang => $jeton) {
+            if (! is_array($jeton) || ! in_array($jeton[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            if (str_contains($jeton[1], '@phpstan-'.'ignore')) {
+                $refus[] = "commentaire qui fait taire PHPStan : {$relatif}:{$jeton[2]}";
+            }
+
+            if (preg_match('/@(?:phpstan-|psalm-)?var\b/', $jeton[1]) === 1 && ! precedeUneDeclaration($jetons, $rang)) {
+                $refus[] = "type donné en ligne par un commentaire : {$relatif}:{$jeton[2]}";
             }
         }
     }
 
-    return $consignes;
+    return $refus;
+}
+
+/**
+ * Le commentaire de ce rang précède-t-il la déclaration d'une propriété
+ * (ses modificateurs, dont au moins sa visibilité, var ou readonly, puis
+ * son type et son nom ; propriété promue d'un constructeur comprise) ou
+ * d'une constante, de classe ou non ? Les espaces, les autres commentaires
+ * et les attributs qui les séparent sont sautés. Toute autre suite (une
+ * affectation, un return, une variable sans modificateur, une variable
+ * statique d'une fonction, une fonction) n'en est pas une.
+ *
+ * @param  array<int, array{int, string, int}|string>  $jetons  ceux de token_get_all()
+ */
+function precedeUneDeclaration(array $jetons, int $rang): bool
+{
+    $visible = false;
+    $dansUnAttribut = 0;
+
+    for ($suivant = $rang + 1; isset($jetons[$suivant]); $suivant++) {
+        $jeton = $jetons[$suivant];
+        $nature = is_array($jeton) ? $jeton[0] : $jeton;
+
+        if ($dansUnAttribut > 0) {
+            $dansUnAttribut += match ($nature) {
+                T_ATTRIBUTE, '[' => 1,
+                ']' => -1,
+                default => 0,
+            };
+
+            continue;
+        }
+
+        if ($nature === T_ATTRIBUTE) {
+            $dansUnAttribut = 1;
+        } elseif (in_array($nature, [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_VAR, T_READONLY], true)) {
+            $visible = true;
+        } elseif ($nature === T_CONST) {
+            return true;
+        } elseif ($nature === T_VARIABLE) {
+            return $visible;
+        } elseif (! in_array($nature, [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_STATIC, T_FINAL, T_ABSTRACT], true)
+            && ! ($visible && in_array($nature, [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_ARRAY, T_CALLABLE, T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG, '?', '|', '(', ')'], true))) {
+            return false;
+        }
+    }
+
+    return false;
 }
 
 /**

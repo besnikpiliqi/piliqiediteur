@@ -466,6 +466,36 @@ class OutilDeQualiteTest extends TestCase
         $this->assertStringNotContainsString('Exclu.php', $sortie);
     }
 
+    /**
+     * Un commentaire qui donne un type en ligne (une balise var,
+     * phpstan-var ou psalm-var devant une affectation, un return ou une
+     * variable) est refusé, avec son fichier et sa ligne ; celui d'une
+     * propriété (même précédée d'un attribut ou promue par un
+     * constructeur) ou d'une constante, une chaîne qui cite la balise, et
+     * un fichier exclu, ne le sont pas.
+     */
+    public function test_un_type_donne_en_ligne_par_un_commentaire_est_refuse(): void
+    {
+        $balise = '@'.'var';
+        $this->depotAnalyse();
+        $this->ecrire('app/Declarations.php', "<?php\n\n/** {$balise} int */\nconst LIMITE = 1;\n\nfinal class Declarations\n{\n    /** {$balise} list<int> */\n    #[Attribut(['a' => [1]])]\n    public array \$liste = [];\n\n    /** {$balise} string */\n    final public const NOM = 'nom';\n\n    /** @phpstan-var ?int */\n    private static ?int \$compte = null;\n\n    public function __construct(\n        /** @psalm-var list<string> */\n        public readonly array \$noms = [],\n    ) {}\n\n    public function cite(): string\n    {\n        return '{$balise} int \$x';\n    }\n}\n");
+        $this->ecrire('tests/Qualite/Psalm/Exclu.php', "<?php\n\n/** {$balise} int \$x */\n\$x = 1;\n");
+
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+        $this->assertSame(0, $code, $sortie);
+
+        $this->ecrire('app/EnLigne.php', "<?php\n\nfunction lire(): int\n{\n    /** {$balise} int \$x */\n    \$x = lu();\n\n    /** @phpstan-var int */\n    return \$x;\n}\n\nfunction autre(): void\n{\n    // @psalm-var string \$y\n    static \$y = '';\n}\n");
+        [$code, $sortie] = $this->lancerLesSeuils($this->seuilsDeLAnalyse());
+        $this->assertSame(1, $code, $sortie);
+
+        foreach ([5, 8, 14] as $ligne) {
+            $this->assertStringContainsString("type donné en ligne par un commentaire : app/EnLigne.php:{$ligne}", $sortie);
+        }
+
+        $this->assertStringNotContainsString('Declarations.php', $sortie);
+        $this->assertStringNotContainsString('Exclu.php', $sortie);
+    }
+
     public function test_un_seuil_de_couverture_ou_de_mutation_qui_baisse_est_refuse(): void
     {
         $this->depotAnalyse();

@@ -79,8 +79,7 @@ class TableauDeBord extends Dashboard
 
     public function societe(): Societe
     {
-        /** @var Societe */
-        return Filament::getTenant();
+        return ValeursLues::instance(Filament::getTenant(), Societe::class);
     }
 
     /**

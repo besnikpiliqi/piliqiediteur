@@ -24,6 +24,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -144,8 +145,7 @@ class ContrePasserPaiementAction
      */
     private function contrePasser(User $compte, Magasin $magasin, Paiement $original, string $motif, string $journee): Paiement
     {
-        /** @var Client $client */
-        $client = $original->client;
+        $client = ValeurRequise::de($original->client, 'le client du paiement contre-passé');
         $recu = $this->recus->ouvrir($compte, $magasin, NatureRecuPaiement::ContrePassation, $client, $journee);
         $contrePassation = new Paiement([
             'client_id' => $original->client_id,
@@ -199,10 +199,7 @@ class ContrePasserPaiementAction
      */
     private function reimputerLeCreditDisponible(Paiement $contrePassation): void
     {
-        /** @var Client $client */
-        $client = $contrePassation->client;
-
-        foreach ($this->imputation->apresUneContrePassation($client) as ['avoir' => $avoir, 'facture' => $facture, 'montant' => $montant]) {
+        foreach ($this->imputation->apresUneContrePassation(ValeurRequise::de($contrePassation->client, 'le client de la contre-passation')) as ['avoir' => $avoir, 'facture' => $facture, 'montant' => $montant]) {
             AvoirAllocation::create([
                 'avoir_id' => $avoir->getKey(),
                 'facture_id' => $facture->getKey(),

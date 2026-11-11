@@ -8,6 +8,7 @@ use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -72,8 +73,7 @@ class LesCaisses extends Page
      */
     protected function getViewData(): array
     {
-        /** @var User $compte */
-        $compte = auth()->user();
+        $compte = CompteConnecte::exiger();
 
         return [
             'caisses' => array_map(

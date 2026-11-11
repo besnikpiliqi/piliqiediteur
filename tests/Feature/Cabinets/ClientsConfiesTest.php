@@ -55,6 +55,27 @@ class ClientsConfiesTest extends TestCase
         $this->assertContains('Client retiré', $collaborateur->notifications()->get()->pluck('data.title')->all());
     }
 
+    /**
+     * Depuis la liste des clients, le propriétaire du cabinet confie un
+     * client à un collaborateur coché, et le laisse à un autre : seul le
+     * coché l'ouvre ensuite.
+     */
+    public function test_la_liste_des_clients_confie_un_client_aux_seuls_collaborateurs_coches(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique cliente']);
+        $lien = $this->lierLeCabinet($cabinet, $magasin);
+        $coche = $this->collaborateur($cabinet);
+        $autre = $this->collaborateur($cabinet);
+
+        $this->dansLEspaceDuCabinet($cabinet, $this->proprietaireDuCabinet($cabinet));
+        Livewire::test(ListClientsDuCabinet::class)
+            ->callTableAction('confier', $lien, ['collaborateurs' => [(string) $coche->id]])
+            ->assertNotified('Les collaborateurs de ce client sont enregistrés.');
+
+        $this->assertSame([true, false], [$coche->fresh()->peutOuvrir($magasin), $autre->fresh()->peutOuvrir($magasin)]);
+    }
+
     public function test_on_ne_confie_qu_un_client_lie_a_son_cabinet(): void
     {
         $cabinet = $this->ouvrirUnCabinet();

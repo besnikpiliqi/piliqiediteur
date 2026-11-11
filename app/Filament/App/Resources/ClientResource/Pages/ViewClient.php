@@ -3,11 +3,11 @@
 namespace App\Filament\App\Resources\ClientResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Filament\App\Resources\ClientResource;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -31,10 +31,7 @@ class ViewClient extends ViewRecord
      */
     protected function resolveRecord(int|string $key): Model
     {
-        /** @var Builder<Client> $clients */
-        $clients = ClientResource::getEloquentQuery();
-
-        return $clients->withTrashed()->whereKey($key)->firstOrFail();
+        return RequeteDuModele::de(ClientResource::getEloquentQuery(), Client::class)->withTrashed()->whereKey($key)->firstOrFail();
     }
 
     /**

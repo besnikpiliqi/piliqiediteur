@@ -206,7 +206,6 @@ class FicheDuCollaborateur extends ViewRecord
 
     private function compte(): User
     {
-        /** @var User */
-        return $this->getRecord();
+        return ValeursLues::instance($this->getRecord(), User::class);
     }
 }

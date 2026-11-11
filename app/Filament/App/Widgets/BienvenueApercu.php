@@ -3,6 +3,8 @@
 namespace App\Filament\App\Widgets;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -31,10 +33,8 @@ class BienvenueApercu extends Widget
      */
     protected function getViewData(): array
     {
-        /** @var User $compte */
-        $compte = auth()->user();
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
+        $compte = CompteConnecte::exiger();
+        $magasin = ValeursLues::instance(Filament::getTenant(), Magasin::class);
 
         return [
             'compte' => $compte,

@@ -64,10 +64,7 @@ class ImputationDuCredit
      */
     public function aLEmissionDe(Avoir $avoir): array
     {
-        /** @var Client $client */
-        $client = $avoir->client;
-
-        return $this->imputations($client, collect([$avoir]));
+        return $this->imputations(ValeurRequise::de($avoir->client, 'le client de l\'avoir'), collect([$avoir]));
     }
 
     /**

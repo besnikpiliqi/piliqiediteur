@@ -9,6 +9,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Pages\Caisse;
@@ -325,12 +326,13 @@ class ProduitResource extends Resource
                         'negatif' => 'Stock négatif',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
-                        /** @var Builder<Produit> $query */
+                        $produits = RequeteDuModele::de($query, Produit::class);
+
                         return match ($data['value'] ?? null) {
-                            'en_stock' => $query->where('suivi_stock', true)->where('stock_quantite', '>', 0),
-                            'epuise' => $query->epuises(),
-                            'negatif' => $query->enStockNegatif(),
-                            default => $query,
+                            'en_stock' => $produits->where('suivi_stock', true)->where('stock_quantite', '>', 0),
+                            'epuise' => $produits->epuises(),
+                            'negatif' => $produits->enStockNegatif(),
+                            default => $produits,
                         };
                     }),
                 static::filtreDesArchives(),

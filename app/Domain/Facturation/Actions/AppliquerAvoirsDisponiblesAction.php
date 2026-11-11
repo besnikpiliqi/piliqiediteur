@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -56,8 +57,7 @@ class AppliquerAvoirsDisponiblesAction
     {
         DB::transaction(function () use ($facture) {
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
-            /** @var Client $client */
-            $client = $facture->client;
+            $client = ValeurRequise::de($facture->client, 'le client de la facture');
             $resteDu = $facture->resteDuEnCentimes();
 
             if ($resteDu <= 0 || $client->estComptoir() || ! $facture->statut->attendUnReglement()) {

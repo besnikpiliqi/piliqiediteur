@@ -29,6 +29,7 @@ use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -225,6 +226,29 @@ class ResponsablesTest extends TestCase
         $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $auMotDePasseIdentifiant->id)->sole()->role);
         $this->assertTrue($auMotDePasseIdentifiant->refresh()->mot_de_passe_est_l_identifiant);
         $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $definitif->id)->sole()->role);
+    }
+
+    /**
+     * Présente, la personne dont le mot de passe est encore son
+     * identifiant choisit le sien dans la fenêtre qui la nomme
+     * responsable : elle l'est, avec le mot de passe qu'elle a tapé.
+     */
+    public function test_la_personne_presente_nommee_responsable_choisit_son_mot_de_passe_dans_la_meme_fenetre(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
+        [$auMotDePasseIdentifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
+        Livewire::test(ListMembres::class)
+            ->mountAction('nommerUnResponsable')
+            ->setActionData(['magasin_id' => $magasin->id, 'compte' => 'existant', 'candidat' => $auMotDePasseIdentifiant->id, 'mode' => 'present', 'mot_de_passe' => 'mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'mot-de-passe-de-paul'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $auMotDePasseIdentifiant->id)->sole()->role);
+        $this->assertTrue(Hash::check('mot-de-passe-de-paul', $auMotDePasseIdentifiant->refresh()->password));
+        $this->assertFalse($auMotDePasseIdentifiant->mot_de_passe_est_l_identifiant);
     }
 
     /**

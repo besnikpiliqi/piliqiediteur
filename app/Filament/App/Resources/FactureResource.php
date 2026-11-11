@@ -45,6 +45,7 @@ use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -139,10 +140,7 @@ class FactureResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        /** @var Builder<Facture> $factures */
-        $factures = parent::getEloquentQuery();
-
-        return $factures
+        return RequeteDuModele::de(parent::getEloquentQuery(), Facture::class)
             ->visiblesPar(CompteConnecte::exiger())
             ->with(['client', 'magasin']);
     }
@@ -222,9 +220,7 @@ class FactureResource extends Resource
      */
     private static function echeanceAnnoncee(mixed $clientId): string
     {
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
-        $delai = $magasin->delaiDePaiementPour(blank($clientId) ? null : Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first());
+        $delai = ValeursLues::instance(Filament::getTenant(), Magasin::class)->delaiDePaiementPour(blank($clientId) ? null : Client::withTrashed()->whereKey(ValeursLues::cle($clientId))->first());
 
         return 'Fixée à l\'émission : date d\'émission + '.$delai.' jour'.($delai > 1 ? 's' : '');
     }
@@ -780,10 +776,7 @@ class FactureResource extends Resource
                 Tables\Filters\Filter::make('preuves_a_fournir')
                     ->label('Preuves à fournir')
                     ->toggle()
-                    ->query(function (Builder $query): Builder {
-                        /** @var Builder<Facture> $query */
-                        return $query->preuvesAFournir();
-                    }),
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->preuvesAFournir()),
                 // Les factures et les tickets émis dont il reste quelque
                 // chose à régler (voir Facture::scopeAEncaisser()), où mène
                 // l'alerte du tableau de bord (voir
@@ -791,10 +784,7 @@ class FactureResource extends Resource
                 Tables\Filters\Filter::make(self::FILTRE_A_ENCAISSER)
                     ->label('À encaisser')
                     ->toggle()
-                    ->query(function (Builder $query): Builder {
-                        /** @var Builder<Facture> $query */
-                        return $query->aEncaisser();
-                    }),
+                    ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->aEncaisser()),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

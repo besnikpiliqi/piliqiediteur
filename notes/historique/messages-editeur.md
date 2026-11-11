@@ -1636,3 +1636,27 @@ tu propose quoi
 
 mais peut etre il va oublié le projet ?
 
+## 166. 2026-11-11 03:21 UTC
+
+t as quoi que t as mis comme reglage  de l effort?
+
+## 167. 2026-11-11 03:24 UTC
+
+[1 capture(s) d'écran jointe(s)]
+
+je vois qu il marque "des réponses plus approfondies" ca veut dire quoi? que le code sera hyper securise ou quoi
+
+## 168. 2026-11-11 03:29 UTC
+
+<!-- attach -->
+
+> comme les calculs, la caisse ou les droits
+
+
+
+et pour ceux t as aplique le quele
+
+## 169. 2026-11-11 03:31 UTC
+
+oui
+

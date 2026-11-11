@@ -13354,6 +13354,24 @@
     "T104",
     "T44"
    ]
+  },
+  {
+   "id": "Q392",
+   "serie": "Effort de la chaîne (11/11)",
+   "date_utc": "2026-11-11 03:32",
+   "date_paris": "11/11/2026 vers 04 h 32",
+   "code": "1",
+   "question": "Trois lots à venir en « max ». EC2 (droits de l'expert-comptable, isolation entre sociétés), DV (page publique où un client accepte un devis par un lien secret) et S9-L (lignes de vente et remises) touchent les droits, la sécurité ou les calculs, mais étaient réglés en « extra ». Ma proposition : les passer en « max », environ 30 % de consommation en plus chacun ; NAV-2 à NAV-5, ML et S9-A restent en « extra ».",
+   "mots": "oui",
+   "decision": "EC2, DV et S9-L tournent à l'effort « max » (écrire le code, relire, corriger), comme les autres lots qui touchent aux calculs, à la caisse ou aux droits.",
+   "theme": "Façon de travailler",
+   "statut": "a-appliquer",
+   "statut_detail": "Script de la chaîne modifié le 11/11 vers 04 h 32 ; pris en compte à la prochaine reprise de la course, au plus tard juste avant le lot DV.",
+   "sources": [
+    "message de l'éditeur dans la conversation, le 11/11 vers 03 h 32 UTC",
+    "nouvelle-session/serie8-lots.js, LOTS_SENSIBLES"
+   ],
+   "refs": []
   }
  ]
 }

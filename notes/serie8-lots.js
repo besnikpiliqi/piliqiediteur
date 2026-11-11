@@ -217,7 +217,7 @@ const TRAVAIL_COUPE = `Avant de commencer, regarde git status --short dans ${DEP
 // alors qu'en notation git « a..b » exclut a. Les relecteurs et la correction lisent donc les commits non poussés.
 const COMMITS_DU_LOT = `Les commits de ce lot sont tous ceux qui ne sont pas encore poussés : lis git -C ${DEPOT} log --oneline origin/${BRANCHE}..HEAD et git -C ${DEPOT} diff origin/${BRANCHE}..HEAD (avant de commencer, git -C ${DEPOT} fetch origin ${BRANCHE} si la référence manque). Attention : la plage « premier..dernier » rendue par l'agent qui a écrit le lot comprend son premier commit, alors que git diff ou git log sur « premier..dernier » l'exclurait ; ne lis donc jamais cette plage telle quelle, et vérifie que tu vois bien chaque commit « (lot <id> k/n) » du lot.`
 
-const LOTS_SENSIBLES = ['A7', 'A7b', 'TR', 'PG', 'TY1', 'TY2', 'TY3', 'PS1', 'PS2', 'CALC', 'FI', 'AUD', '21']
+const LOTS_SENSIBLES = ['A7', 'A7b', 'TR', 'PG', 'TY1', 'TY2', 'TY3', 'PS1', 'PS2', 'CALC', 'FI', 'AUD', 'DV', 'EC2', 'S9-L', '21']
 const effortDuLot = id => (LOTS_SENSIBLES.includes(id) ? 'max' : 'xhigh')
 
 const resultats = []

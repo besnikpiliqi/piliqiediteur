@@ -72,10 +72,11 @@ Piste (à vérifier en navigateur, ne pas croire) : `app/Filament/App/Livewire/S
 - la rangée choisie prend une teinte légère de la couleur principale du panneau (celle des boutons), avec un texte bien lisible : en mode clair, fond clair teinté et texte foncé ; en mode sombre, fond sombre teinté et texte clair ; même rendu au survol ; l'icône de coche et « × quantité » restent visibles ;
 - sans outil Node : seulement des classes présentes dans la feuille de Filament, ou une petite feuille CSS écrite à la main, enregistrée par Filament (`FilamentAsset`), qui lit les variables de couleur du panneau ;
 - le même style pour toute rangée « choisie » des fenêtres de sélection (produits, clients, services, retours cherchés par numéro, et toute autre liste où l'on coche des rangées), en clair et en sombre ;
+- la même teinte, avec le même test de contraste en clair et en sombre, pour les lignes cochées des listes (factures, devis, clients, produits… : celles qui ont des actions groupées) ;
 - test en navigateur, en mode clair et en mode sombre : choisir un produit, puis survoler sa rangée ; le contraste entre le texte et le fond de la rangée (couleurs calculées par le navigateur) atteint au moins 4,5 pour 1 (niveau AA des règles d'accessibilité WCAG) ; même test pour la fenêtre des clients ;
 - À faire sur le PC de l'éditeur : à dire dans « laisses » (a priori `php artisan filament:assets` si une feuille CSS est ajoutée, puis rien d'autre que git pull).
 
-**Confirmé par l'éditeur le 11/11/2026 vers 00 h 10 UTC** (point T43 du document « Ce qui reste à trancher », réponse « oui ») : la rangée choisie prend une teinte violette légère, celle de la couleur principale du panneau, au texte bien lisible.
+**Confirmé par l'éditeur le 11/11/2026 vers 00 h 10 UTC** (point T43, réponse « oui », donnée après cette explication du fil du document : « Quand vous cliquez sur une ligne d'une liste (une facture par ex.), elle se colore en violet clair, texte bien lisible. ») : la ligne choisie d'une liste ou d'une fenêtre de sélection prend une teinte violette légère, celle de la couleur principale du panneau, au texte bien lisible. Dans le compte rendu de NAV-2 à l'éditeur, dire que dans une liste un clic sur une ligne ouvre le document, et que la teinte marque les lignes cochées et la ligne choisie d'une fenêtre de sélection.
 
 ## C6 — Tests en navigateur sur le PC de l'éditeur (Windows, XAMPP, Node 26) : deux échecs propres à Windows (03/11/2026 vers 03 h 35 UTC ; lot NAV-2, ou le lot en cours à la reprise)
 

@@ -54,6 +54,8 @@ Sociétés et personnes fictives ; les SIREN sont ceux du répertoire Sirene fac
 
 ### R1 — Ce qu'est l'expert-comptable de la société (décision § 1 et § 3 ; choix 4)
 
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
+
 - Une société « Commerce ou atelier » ou « Services, sans vente d'articles », validée (P12), déclare son expert-comptable par le SIREN de son cabinet. Pour chaque personne de ce cabinet que le propriétaire nomme, PILIQI crée un compte **de la société**, au rôle de société « expert-comptable de la société ».
 - Ce compte n'est ni administrateur ni membre : ni affectation, ni case, ni autorisation de société, ni magasin de rattachement. Tant que sa déclaration est en attente, il ouvre chaque magasin réel de sa société, présent et futur, avec les autorisations de la déclaration (R7) ; jamais le magasin de démonstration, jamais l'espace d'administration de la société, jamais l'espace d'un cabinet.
 - Un cabinet d'expertise comptable ne déclare jamais d'expert-comptable (il n'est jamais client) : la base refuse la déclaration et le rôle dans un cabinet.
@@ -140,6 +142,8 @@ Exemples : 000 000 943 (actif, 69.20Z) passe, avec la dénomination « CABINET P
 
 ### R10 — Ce que voit et fait l'expert-comptable (§ 3)
 
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
+
 - Dans chaque magasin réel de sa société : exactement les autorisations de la déclaration, croisées avec `PermissionRegistry::duCabinet($type)` ; une autorisation qu'il n'a pas est un refus net ; une question de policy n'est permise que pour un geste de `ControleDesDroits::GESTES_D_UN_CABINET` (`app/Domain/Authorization/ControleDesDroits.php` l.123-132), comme pour un compte de cabinet.
 - Jamais :
   - vendre, encaisser, utiliser un bon d'avoir, ouvrir la caisse ou avoir une caisse personnelle (la base refuse une vente ou un encaissement à son nom) ;
@@ -174,6 +178,8 @@ Exemples : 000 000 943 (actif, 69.20Z) passe, avec la dénomination « CABINET P
 - Exemples : le 15/12/2026 à 16:05, Marc a oublié son mot de passe ; Julie choisit « Lui envoyer un nouveau lien » : son mot de passe cesse de valoir, ses sessions se ferment, un lien part, valable jusqu'au 22/12/2026 à 16:05 ; à sa connexion suivante, Marc lit « Votre accès a été redonné le 15/12/2026 à 16:05 par Julie Bernard, par un lien envoyé à votre adresse. » Le 05/11, Julie avait tapé deux fois sophie.lenoit@petit-associes.test ; le 06/11, Sophie n'ayant pas encore choisi son mot de passe, elle corrige l'adresse : le premier lien ne vaut plus, un nouveau part à sophie.lenoir@petit-associes.test.
 
 ### R13 — Le rattachement : le compte se ferme, l'accès passe par le cabinet (choix 3 ; P11)
+
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
 
 - Quand un cabinet dont le SIREN est celui d'une déclaration en attente devient vérifié, la déclaration de chaque société qui a déclaré ce SIREN devient son lien actif, chacune dans sa propre transaction, dès qu'au moins une de ses personnes a un compte actif (P11 ; sinon elle attend, et la réactivation ou la réintégration d'une personne relance le rattachement, R14) :
   - la même ligne reçoit `cabinet_id`, passe à `actif`, et `actif_depuis` vaut maintenant ; ses lignes d'autorisations restent telles quelles (aucune copie) ;
@@ -274,7 +280,7 @@ Exemples : 000 000 943 (actif, 69.20Z) passe, avec la dénomination « CABINET P
 - Rien ne change pour les comptes de la société (vendeurs, observateurs, administrateurs), pour qui « les siennes » garde son sens.
 - Le tableau de bord du cabinet et l'alerte des factures à encaisser lisent toujours « voir les factures de toute l'équipe » (`CLAUDE.md`), désormais accordé par la seule case des factures.
 - Tests : la fenêtre et l'e-mail montrent une seule case ou un seul libellé par paire ; cocher la case accorde les deux permissions et la décocher retire les deux ; la garde refuse en base une paire incomplète (insertion directe), pour un cabinet comme pour une déclaration ; un compte d'un cabinet à qui la case des factures est accordée voit toutes les factures du magasin, et sans elle aucune.
-- **Complété le 11/11/2026 par la décision, § 5 ter** (réponse de l'éditeur à T44) : en plus de cette case unique, le propriétaire choisit les magasins que voit le cabinet et règle les cases menu par menu, dans les magasins et pour la société ; ce paragraphe prime.
+- **Complété le 11/11/2026 par la décision, § 5 ter** (réponse de l'éditeur à T44) : en plus de cette case unique, le propriétaire choisit les magasins que voit le cabinet et règle les cases menu par menu, dans les magasins et pour la société (une seule liste de cases pour tous les magasins choisis, T104) ; le § 5 ter de la décision prime sur cette règle.
 
 ### R24 — Une société validée par l'invitation de son cabinet ne voit ni l'étape du courrier ni celle de la démonstration (décision § 5.5 ; message de l'éditeur du 01/11/2026, 22 h 00)
 
@@ -831,6 +837,8 @@ Chacune passe par une méthode nommée, retire explicitement le scope, filtre, n
 
 ### 6.1 Espace d'administration — page « Cabinet comptable » (`app/Filament/Societe/Pages/CabinetComptable.php`)
 
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
+
 - `lienActif()` (l.123-126) devient `lienEnCours()` ; `remplir()` (l.94-103), le formulaire (l.128-148), `enregistrerLesAutorisationsAction()` (l.150-164) et `mettreFinAction()` (l.166-183) le lisent et servent la déclaration comme le lien actif : deux groupes, « Consulter » et, pour un commerce, « Achats et stock », et le texte `TEXTE_JAMAIS` (l.61).
 - Vue `resources/views/filament/societe/pages/cabinet-comptable.blade.php` : la section « Votre cabinet » (l.12-29) ne s'affiche que pour un lien actif (`$lien->estActif()`) ; pour une déclaration (`$lien->estDeclare()`), la section « Votre expert-comptable (sans espace PILIQI) » la remplace. `cabinetDu()` (l.240-246) et `personnesQuiOntAcces()` (l.254-264) ne reçoivent jamais une ligne sans cabinet (`LogicException` sinon) : leur `firstOrFail()` sur un `cabinet_id` nul ferait répondre la page entière 404.
 - `mettreFinAction()`, pour une déclaration : libellé « Retirer votre expert-comptable », confirmation « Les comptes de {noms} sont retirés aussitôt ; leur historique reste. »
@@ -853,6 +861,8 @@ Chacune passe par une méthode nommée, retire explicitement le scope, filtre, n
 - `etapes()` (l.119-166) : R22 (titre et lien de l'étape des magasins, l.139-148 ; comptage de l'équipe sans les comptes d'expert-comptable, l.129) ; docblock (l.102-118).
 
 ### 6.3 Page de rattachement (`app/Filament/Societe/Pages/RattachementDUnCabinet.php`)
+
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
 
 - `cabinetActuel()` (l.100-105) lit le lien en cours. Pour la demande d'un autre cabinet alors qu'une déclaration attend : « Accepter remplace votre expert-comptable déclaré {dénomination} : les comptes de {noms} seront fermés. »
 - Pour la demande du cabinet du SIREN déclaré (C31) : « Ce cabinet est votre expert-comptable déclaré : accepter le relie à votre société avec les autorisations de votre déclaration, que vous pouvez ajuster ci-dessous, et ferme les comptes de {noms}. » ; « par défaut » y veut dire les autorisations de la déclaration, et le formulaire d'ajustement (l.138-142) est prérempli avec elles.
@@ -899,6 +909,8 @@ Le client paraît dans « Clients » (`ClientDuCabinetResource`, « Lié depuis 
 
 ### 7.1 Journal d'audit de la société (catégorie Accès, gardée 5 ans)
 
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
+
 | Entrée | Quand | Nouvelles valeurs |
 |---|---|---|
 | `ExpertComptableDeclare` | déclaration, avec sa première personne | `cabinet` (identité déclarée : SIREN, dénomination lue), `autorisations` (liste), `droits` (compte créé, comptes d'une déclaration remplacée) |
@@ -920,6 +932,8 @@ Jamais l'adresse, l'identifiant, le mot de passe ni un jeton. L'auteur est le pr
 Au rattachement seulement : `DemandeDeLienRetiree` (s'il y en a) et `LienActive`, avec les droits de ses seuls comptes, jamais le nom d'un compte de la société. Au remplacement d'un lien actif par une déclaration : `LienTermine` (motif `remplace`) ; au retrait de sa demande par une déclaration : `DemandeDeLienRetiree` ; sans rien de la déclaration. Rien d'autre sur les sociétés qui ont déclaré son SIREN.
 
 ### 7.3 JET 130 de chaque magasin réel
+
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
 
 À la création d'un compte (nul → droits), à chaque réglage des autorisations, à chaque statut, à la fin de la déclaration (droits → nul), au rattachement (comptes de la société → nul ; propriétaire du cabinet nul → droits, avec `cabinet`), à la création d'un magasin réel (droits implicites). Contenu : `membre` {`id`, `nom` figé}, `avant`, `apres` (`role_societe` `expert_comptable`, `role_magasin` nul, `statut`, `permissions`, `cabinet_declare` {`siren`, `raison_sociale`}). Jamais dans le magasin de démonstration, jamais au choix du mot de passe ni au changement d'adresse (aucun droit ne change). Aucune trace de visiteur pour un geste du système. Un cabinet lié à qui le client laisse « Caisse sécurisée : consulter » lit ces entrées, comme toutes celles de l'équipe du client (R18).
 
@@ -1219,6 +1233,8 @@ L'abonnement d'un cabinet et la facturation des clients qu'il invite ou qui le r
 Sans objet : l'éditeur a retenu toutes les options recommandées (« tout comme recommandé », 01/11/2026). Les textes des sections 8.1 à 8.9 sont les textes définitifs.
 
 ## 9. Tests nommés
+
+- **Voir aussi la décision, § 5 ter (11/11/2026)** : choix des magasins que voit l'expert-comptable (tous, présents et futurs, ou une sélection), cases par menu, journaux, stockage et gardes ; il prime sur ce qui suit.
 
 Règles : Faker semé par test ; toute heure écrite avec son fuseau (`self::aParis('2026-11-03 10:00:00')`) ; temps figé pour toute échéance ; tests HTTP et Livewire par `dansLeMagasin()`, `dansLEspaceDeLaSociete()`, `dansLEspaceDuCabinet()` ; tests de concurrence marqués `exigerUnServeurDeBaseDeDonnees()` et menés par `demarrerUnProcessusConcurrent()`, `concurrencerDesQueLaLigneEstVerrouillee()` et `attendreQueLeProcessusAttendeUnVerrou()` (`tests/TestCase.php` l.1512-1636). Chaque test nommé échoue sans le code qu'il couvre. Aucun test n'est supprimé pour faire passer la suite ; le message de commit nomme chaque test réécrit et sa raison. Les tests marqués d'un point (Pn) suivent l'option retenue ; une autre option les réécrit (8.10).
 

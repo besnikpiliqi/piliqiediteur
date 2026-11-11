@@ -188,10 +188,10 @@ Même machine : 4 processeurs, 16 Go de mémoire, environ 8 Go de disque libres.
 6. **Périmètre élargi** (§ 4.1, point 7), puis niveau 7, puis niveau 8. Chaque niveau donne un ou plusieurs commits, par domaine (Facturation, Tenancy, Filament…), chacun vert.
 
 **Nombre de commits, à partir de TY2 (décision de Claude du 11/11/2026, après TY1)** : chaque commit demande la suite PostgreSQL complète (25 à 30 min, § 3.3). TY1 en a fait douze : plus de 5 h de suites sur ses 9 h de travail, ce que l'éditeur a trouvé trop long. À partir de TY2, chaque lot fait le moins de commits possible, sans découpage par domaine :
-- TY2 : un commit pour tout le reste des niveaux 9 et 10 (après le 1/n déjà commité, gardé tel quel), puis un pour les `@var` en ligne et leur refus ;
+- TY2 : un commit pour les niveaux 9 et 10, puis un pour les `@var` en ligne et leur refus. Le 1/n (`f0a961d`) a été commité avant la fin de sa suite complète, coupée avec la première tentative : il ne reste pas seul. Une fois la suite complète du commit des niveaux 9 et 10 au code 0, `git reset --soft 9f46860` le réunit à ce commit, sur l'arbre exact que cette suite a validé (l'arbre ne change pas), avec un message qui reprend les deux ; si ce commit est déjà fait et pas encore poussé, la même commande les réunit. Consigne transmise le 11/11 vers 03 h 17 UTC à l'agent en cours par sa liste de tâches (tâche « TY2 2b ») ;
 - TY3 : un seul commit ;
 - PS1 et PS2 : un seul commit chacun, ou deux si un palier change plus de fichiers qu'une relecture ne peut en lire d'un bloc.
-Entre deux commits, seulement Larastan, Psalm et les tests ciblés des fichiers touchés. Avant chaque commit, la suite PostgreSQL complète, comme le veut le protocole de `CLAUDE.md` ; avant le dernier, les vérifications finales (§ 6.5). Le travail suit toujours l'ordre des niveaux et des domaines ; seuls les commits sont regroupés.
+Entre deux commits, seulement Larastan, Psalm et les tests ciblés des fichiers touchés. Avant chaque commit, la suite PostgreSQL complète, comme le veut le protocole de `CLAUDE.md`, lancée sur l'arbre exact du commit : le commit ne se fait qu'après le code 0 de cette suite, lu juste après, et rien ne change entre les deux ; un commit qui ne prend qu'une partie des modifications se prépare et se teste dans un worktree qui ne contient que lui. Avant le dernier commit, les vérifications finales (§ 6.5). Le travail suit toujours l'ordre des niveaux et des domaines ; seuls les commits sont regroupés. Ces nombres ne comptent pas les commits que le cahier impose à part (D61 de `historique/DIRECTIVES.md`) : les défauts réels du lot (§ 6.3) sont réunis dans un seul commit à part, chacun avec son test de régression et sa ligne dans le message ; la correction d'une tâche de la CI rouge ou annulée (§ 6.5, point 3) a aussi son commit ; chacun passe la suite complète sur son propre arbre. Cette règle remplace, pour TY2, TY3, PS1 et PS2, la phrase « Le lot est gros : plusieurs commits, chacun vert » de leur consigne dans la chaîne.
 
 **TY2** :
 1. Niveau 9, puis niveau 10.
@@ -204,8 +204,8 @@ Entre deux commits, seulement Larastan, Psalm et les tests ciblés des fichiers 
 3. `seuils.json`, `qualite.php` et `OutilDeQualiteTest`, complétés pour ce qui n'a de sens qu'avec les deux paquets (§ 4.3) : ensembles de règles, `featureToggles`, `strictRules` et témoins.
 4. Le README et `CLAUDE.md` (§ 4.4).
 
-**À chaque niveau ou palier** :
-- `phpstan.neon` et `seuils.json` changent ensemble : le niveau enregistré monte avec chaque niveau atteint ;
+**À chaque commit** (dans TY2, TY3, PS1 et PS2, un niveau ou un palier atteint sans commit ne demande que Larastan, Psalm et les tests ciblés) :
+- `phpstan.neon` et `seuils.json` changent ensemble, dans le commit qui atteint le niveau (un commit qui atteint les niveaux 9 et 10 les fait passer de 8 à 10) ;
 - Larastan rend zéro erreur sur tout le périmètre ;
 - `php artisan migrate:fresh` puis la suite PostgreSQL complète, tests en navigateur compris, rendent 0 ;
 - pint est passé.
@@ -386,7 +386,7 @@ Hors de cette liste, il n'y a que deux exceptions : la règle désactivée du §
 ### 6.2 Le comportement ne change pas
 
 - Aucune règle métier ne change.
-- Aucune valeur attendue d'un test existant ne change. Un commit de typage ne retire ni ne change aucune ligne de test ; il peut en ajouter.
+- Aucune valeur attendue d'un test existant ne change. Hors de `tests/Qualite` et d'`OutilDeQualiteTest`, un commit ne retire ni ne change aucune ligne de test ; il peut en ajouter (§ 7, point 1).
 - Une vérification ajoutée sur un chemin qu'une saisie peut atteindre doit être déjà garantie par la validation existante. Sinon, c'est un défaut réel (§ 6.3).
 - Une correction qui toucherait une règle métier non tranchée s'arrête là et se décrit dans « laisses ».
 
@@ -402,7 +402,7 @@ Le corps de chaque message de commit liste ses changements de ces six sortes (fi
 
 ### 6.3 Défauts réels
 
-Un défaut réel trouvé se corrige dans son propre commit, avec un test de régression qui échoue sans la correction. Exemples : un appel sur une valeur qui peut vraiment être nulle et donnerait une erreur 500 ; une case de tableau qui peut vraiment manquer ; une tâche unique sans `uniqueFor`. Le compte rendu le liste : fichier, scénario, test.
+Un défaut réel trouvé se corrige dans le commit à part des défauts réels du lot (un seul par lot, § 4.2), avec un test de régression qui échoue sans la correction. Exemples : un appel sur une valeur qui peut vraiment être nulle et donnerait une erreur 500 ; une case de tableau qui peut vraiment manquer ; une tâche unique sans `uniqueFor`. Le compte rendu le liste : fichier, scénario, test.
 
 ### 6.4 Caisse sécurisée et PDF : le test d'empreinte
 
@@ -443,6 +443,8 @@ Une vérification ajoutée, ou une ligne retouchée, a donc un test qui l'exécu
    - sur le même arbre et avec cette couverture, Infection sur les seules lignes changées : `php tests/Qualite/qualite.php configuration-sensibles storage/qualite/infection-sensibles.json`, puis `env -u AI_AGENT -u CLAUDECODE -u CLAUDE_CODE LARAVEL_PARALLEL_TESTING=1 vendor/bin/infection --configuration=storage/qualite/infection-sensibles.json --threads=4 --only-covering-test-cases --git-diff-lines --git-diff-base=<base> --coverage="$PWD/storage/qualite/infection" --skip-initial-tests --ignore-msi-with-no-mutations`. La base est `origin/<branche>` pour le lot, et le dernier commit du lot pour sa correction. Ensuite : `qualite.php mutation storage/qualite/infection.json`.
 
    La liste « mutants qu'aucun test n'arrête » doit être vide. Les mutants non conclus sont nommés dans le compte rendu. La durée suit le nombre de mutants des lignes changées : quelques minutes pour TY3 et PS1 (surtout des attributs, `final` et des constantes), environ 1 h à 1 h 30 au plus pour TY1, TY2 et PS2, plus 16 à 21 min de couverture.
+
+   Ordre, avant le dernier commit : d'abord la couverture, `nouveau-code` et la mutation des lignes changées ; ce qu'elles trouvent se corrige, et la couverture se relance si `app` ou les tests ont changé. Ensuite seulement viennent `migrate:fresh`, la suite complète, puis le commit, sans rien changer entre la suite et le commit.
 3. **La passe sur les fichiers entiers est celle de la CI.** Le lot suivant lit son résultat avant son dernier commit (règles impératives). Si la tâche « Couverture et mutation » est rouge ou annulée, il corrige d'abord, dans un commit à part. Puis il refait en local la passe sur les fichiers entiers de l'envoi en cause, avec `--git-diff-filter=AM`.
 
 **Toujours** :
@@ -481,9 +483,9 @@ On note `B=origin/claude/saas-invoice-editor-architecture-q6eizh` et `P='app rou
 
 1. **Les tests existants ne changent pas.**
    - Lister les commits : `git log --format='%h %s' $B..HEAD`.
-   - Un commit de typage ne retire ni ne change aucune ligne de test : `git show --format= <commit> -- tests | grep -E '^-[^-]'` ne rend rien.
+   - Hors du commit des défauts réels, aucun commit ne retire ni ne change une ligne de test en dehors de `tests/Qualite` et de `tests/Feature/Qualite/OutilDeQualiteTest.php` : `git show --format= <commit> -- tests ':(exclude)tests/Qualite' ':(exclude)tests/Feature/Qualite/OutilDeQualiteTest.php' | grep -E '^-[^-]'` ne rend rien. Dans ces deux chemins, chaque ligne retirée ou changée est nommée dans le message du commit.
    - Il peut ajouter des fichiers ou des méthodes : `git show --name-status --format= <commit> -- tests` les montre.
-   - Seuls le commit d'un défaut réel et celui de `qualite.php` y échappent.
+   - Seul le commit des défauts réels y échappe.
 2. **Interdits ajoutés** : `git diff $B..HEAD -U0 -- $P | grep -E '^\+[^+]' | grep -nE '@(phpstan|psalm)-(ignore|suppress|assert|var)|@psalm-ignore-(nullable|falsable)-return|@var\b|ignoreErrors|baseline|\bassert\(|\((int|string|float|bool|array)\)|\b(intval|strval|floatval|boolval|settype)\(|\bmixed\b'`. Chaque résultat suit une vérification juste au-dessus, ou relève d'une exception écrite.
 3. **Valeurs par défaut ajoutées** : même commande sur `app`, avec le motif `"\?\?\s*(0|0\.0|null|false|true|''|\"\"|\[\])\s*[;,)]|\?:|\?->"`.
 4. **Conditions réécrites** : même commande, avec le motif `"!==?\s*(''|\"\"|0|\[\])|array_filter\(|in_array\(|array_search\(|empty\("`.
@@ -496,7 +498,7 @@ On note `B=origin/claude/saas-invoice-editor-architecture-q6eizh` et `P='app rou
    - `php tests/Qualite/qualite.php seuils <(git show $B:tests/Qualite/seuils.json)` ;
    - `tests/Browser` en entier.
 
-   Les actions ne se rejouent à la main que si un défaut réel corrigé change leur résultat.
+   Les actions ne se rejouent à la main que si un défaut réel corrigé change leur résultat. Les relecteurs ne relancent pas la suite complète : l'agent du lot l'a passée sur le même arbre, et son journal en donne le code de sortie et la durée.
 9. **Configurations** : `phpstan dump-parameters --json`, les témoins du § 4.3 et `psalm.xml` disent exactement ce que ce cahier demande pour ce lot. `seuils.json` refuse toute baisse.
 
 ## 8. Critères de fin

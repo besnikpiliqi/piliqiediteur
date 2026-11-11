@@ -1608,3 +1608,7 @@ t104:Choix A (ma proposition) : une seule liste de cases pour tous les magasins 
 
 donc t as bien apliqué 2 commit au lieu de 12. donc tu fait 2 commit comme t as dit
 
+## 162. 2026-11-11 02:59 UTC
+
+donc tu fait pour tout jusqu à la fin du logiciel par 2 commit c est ca?
+

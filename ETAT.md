@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 05:41 UTC par pilotage-sync.sh : « Attente TY3 expirée ».
+Mis à jour le 11/11/2026 à 06:17 UTC par pilotage-sync.sh : « Point de suivi 06:15 ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

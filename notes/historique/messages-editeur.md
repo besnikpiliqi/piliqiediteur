@@ -1728,3 +1728,11 @@ Aborting
 
 Updating 0d373963..71a217ab
 
+## 182. 2026-11-11 11:11 UTC
+
+et le "À faire vérifier par un professionnel" il est pas encore fait ??
+
+## 183. 2026-11-11 11:24 UTC
+
+tu m explique pour ce que t as dit ca : "D63 : jusqu'à l'étape 15, seuls les tests PostgreSQL, Pint et l'audit des dépendances tournent à chaque envoi."
+

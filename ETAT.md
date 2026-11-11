@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 11:03 UTC par pilotage-sync.sh : « Onglet à la fin rempli ; T45 ; D64-D66 ».
+Mis à jour le 11/11/2026 à 11:39 UTC par pilotage-sync.sh : « D66 appliquée : onglets 1 et À faire vérifier réécrits, une question par ligne ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

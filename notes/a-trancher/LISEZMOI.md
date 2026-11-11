@@ -77,6 +77,7 @@
   l'avis d'un professionnel (expert-comptable, juriste ou avocat, administration, prestataire), y compris celles qu'il a tranchées
   autrement malgré l'avertissement ou sans attendre l'avis ; chaque nouvelle question de ce genre s'y ajoute le jour même, même
   s'il répond aussitôt autrement (elle reste aussi dans l'onglet où elle se range).
+- 11/11 vers 12 h 00 UTC : D66 appliquée (une question par ligne). Onglet 1 réécrit au rev 611 : 362 lignes de tableau, points coupés en T58.1, T58.2… ; « Le plus urgent » est désormais le tableau `mb4cajnjtng.103653` ; le titre « À voir avec votre expert-comptable » (`mb4cajnjtng.3294`) est gardé pour son fil de commentaire d2a7d77b-78dc (question T38 posée par Claude). Onglet « À faire vérifier par un professionnel » réécrit au rev 23 : 288 questions (156 ouvertes, 76 règles à confirmer, 51 comme conseillé, 5 autrement), chacune sous le numéro T de l'onglet 1 qu'elle vérifie, ou son numéro P. Sources : `scratchpad/t-vers-p/` (`decoupage.json`, `rendre.py`, `couper.py`, `blocs/`), export comparé au mot près (écarts voulus seulement : titres « (suite) » et ligne de date).
 - Relevé lancé le 10/11 à 23 h 30 UTC : workflow `wf_dfbbb6a6-31a` (tâche `wx0e27xzy`, script `releve-avis.js`) : 8 lecteurs
   (registre de l'onglet 1, relevé des décisions, CLAUDE.md et DIRECTIVES, conversation en deux moitiés, historique d'octobre, notes
   fiscales, notes société et cabinets), fusion, contrôles d'exhaustivité et de justesse, version finale numérotée P1… dans
@@ -86,7 +87,7 @@
 
 ## Où ajouter une nouvelle question (D60, 10/11/2026 à 23 h 56 et 23 h 59 UTC)
 
-- « Le plus urgent », en haut de l'onglet 1, est un tableau (`mb4cajnjtng.85849`) : N° | Ma question | Ma proposition | Votre réponse (vide) | Pourquoi maintenant. Toute nouvelle question posée à l'éditeur s'y ajoute EN HAUT, avec le numéro suivant (T105…), ma vraie proposition et la case « Votre réponse » vide ; elle peut aussi figurer dans le tableau de sa section, et va aussi dans l'onglet « À faire vérifier par un professionnel » si un professionnel doit la vérifier (D59).
+- « Le plus urgent », en haut de l'onglet 1, est un tableau (`mb4cajnjtng.103653` depuis la réécriture D66 du 11/11 ; avant, `mb4cajnjtng.85849`) : N° | Ma question | Ma proposition | Votre réponse (vide) | Pourquoi maintenant. Toute nouvelle question posée à l'éditeur s'y ajoute EN HAUT, avec le numéro suivant (T105…), ma vraie proposition et la case « Votre réponse » vide ; elle peut aussi figurer dans le tableau de sa section, et va aussi dans l'onglet « À faire vérifier par un professionnel » si un professionnel doit la vérifier (D59).
 - Une réponse écrite dans ce tableau, dans le tableau d'une section, dans une ligne qu'il ajoute lui-même ou dans la conversation vaut réponse : la ligne quitte les tableaux de l'onglet 1, passe dans la série du jour de « Mes questions et vos réponses », et la consigne va au lot qui l'applique.
 
 ## Révisions connues du document (pour les points de suivi)

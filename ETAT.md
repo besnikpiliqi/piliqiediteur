@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 20:29 UTC par pilotage-sync.sh : « Après le lot CALC ».
+Mis à jour le 11/11/2026 à 21:02 UTC par pilotage-sync.sh : « T105 (note de calcul) et fin du lot CALC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,66 @@ b93aeff Relecture du lot PG de la série 8
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M .env.example
+ M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
+ M app/Console/Commands/Editeur/ConsulterLesPieces.php
+ M app/Domain/Achats/Actions/CreerFactureAchatAction.php
+ M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/JoindreDesPiecesAction.php
+ M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
+ M app/Domain/Achats/Actions/RetirerUnePieceAction.php
+ M app/Domain/Achats/Models/PieceDuFournisseur.php
+ M app/Domain/Achats/Services/PiecesDuFournisseur.php
+ M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
+ M app/Domain/Facturation/Services/ArchiveDesDocuments.php
+RM app/Domain/Achats/Services/PieceDeposee.php -> app/Domain/Fichiers/PieceDeposee.php
+ M app/Domain/Tenancy/Actions/DeposerUnePieceAction.php
+ M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
+ M app/Domain/Tenancy/Models/PieceVerification.php
+ M app/Domain/Tenancy/Services/ActionsUniques.php
+ M app/Domain/Tenancy/Services/PiecesDeVerification.php
+ M app/Filament/App/Resources/EnregistrementFiscalResource/Pages/ListEnregistrementsFiscaux.php
+ M app/Filament/App/Resources/FactureAchatResource.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
+ M app/Filament/App/Resources/FactureResource.php
+ M app/Filament/Concerns/EnvoieLesDocuments.php
+ M app/Filament/Concerns/JointLesPiecesDuFournisseur.php
+ M app/Filament/Societe/Pages/VerificationSociete.php
+ M app/Http/Controllers/TelechargerLesDocumentsController.php
+ M app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php
+ M bootstrap/providers.php
+ M composer.json
+ M composer.lock
+ M config/piliqi.php
+ M config/services.php
+ M database/migrations/2026_10_02_100014_create_pieces_verification_table.php
+ M database/migrations/2026_10_07_100009_create_pieces_fournisseur_table.php
+ M phpunit.xml
+ M resources/views/telechargements/indisponible.blade.php
+ M tests/Browser/Parcours/PiecesDuFournisseurTest.php
+ M tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
+ M tests/Feature/Achats/PiecesDuFournisseurTest.php
+ M tests/Feature/Authorization/ActionsHorsEcranTest.php
+ M tests/Feature/Editeur/ProceduresTest.php
+ M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
+ M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
+ M tests/Feature/Filament/TelechargerLesDocumentsTest.php
+ M tests/Feature/Societe/EffacerPiecesVerificationTest.php
+ M tests/Feature/Societe/VerificationSocieteTest.php
+ M tests/Feature/Tenancy/TenantIsolationTest.php
+?? app/Domain/Fichiers/AnalyseurDePdf.php
+?? app/Domain/Fichiers/ControleDesFichiers.php
+?? app/Domain/Fichiers/EnTetesDesFichiers.php
+?? app/Domain/Fichiers/Enums/
+?? app/Domain/Fichiers/Exceptions/
+?? app/Domain/Fichiers/FichierControle.php
+?? app/Domain/Fichiers/NomDeFichier.php
+?? app/Domain/Fichiers/ReenregistrementDesImages.php
+?? app/Domain/Fichiers/RevueAntivirus.php
+?? app/Domain/Tenancy/Notifications/AvisDeLAntivirus.php
+?? app/Integrations/Antivirus/
 ```
 
 ## Dernière course de la chaîne
@@ -51,4 +111,5 @@ CALC:relecture2
 CALC:correction
 CALC:poussee
 CALC:notes
+FI:implementation
 ```

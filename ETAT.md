@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 13:52 UTC par pilotage-sync.sh : « Arrêt demandé : CALC poussé (b21124f), correction sauvegardée, chaîne arrêtée ».
+Mis à jour le 11/11/2026 à 14:01 UTC par pilotage-sync.sh : « CI b21124f : panne apt, relance ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

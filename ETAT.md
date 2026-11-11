@@ -1,12 +1,13 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 21:54 UTC par pilotage-sync.sh : « Point de suivi 21:54 UTC, sauvegarde FI ».
+Mis à jour le 11/11/2026 à 23:45 UTC par pilotage-sync.sh : « Reprise après redémarrage du conteneur (FI:correction) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
 Tête poussée : `cba222d`. Commits locaux pas encore poussés :
 
 ```
+5c67a15 Contrôle les fichiers reçus et sert les fichiers en sécurité (lot FI)
 ```
 
 Derniers commits poussés :
@@ -37,66 +38,31 @@ b93aeff Relecture du lot PG de la série 8
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M .env.example
- M .github/workflows/tests.yml
- M CLAUDE.md
  M README.md
  M app/Console/Commands/DiagnostiquerCaisseSecurisee.php
- M app/Console/Commands/Editeur/ConsulterLesPieces.php
- M app/Domain/Achats/Actions/CreerFactureAchatAction.php
- M app/Domain/Achats/Actions/EnregistrerAvoirFournisseurAction.php
- M app/Domain/Achats/Actions/JoindreDesPiecesAction.php
- M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
- M app/Domain/Achats/Actions/RetirerUnePieceAction.php
- M app/Domain/Achats/Models/PieceDuFournisseur.php
- M app/Domain/Achats/Services/PiecesDuFournisseur.php
- M app/Domain/Achats/Support/GardesDesPiecesDuFournisseur.php
  M app/Domain/Facturation/Services/ArchiveDesDocuments.php
-RM app/Domain/Achats/Services/PieceDeposee.php -> app/Domain/Fichiers/PieceDeposee.php
- M app/Domain/Tenancy/Actions/DeposerUnePieceAction.php
- M app/Domain/Tenancy/Enums/ActionAuditee.php
+ M app/Domain/Fichiers/AnalyseurDePdf.php
+ M app/Domain/Fichiers/NomDeFichier.php
+ M app/Domain/Fichiers/ReenregistrementDesImages.php
  M app/Domain/Tenancy/Jobs/PreparerLeTelechargementDesDocumentsJob.php
- M app/Domain/Tenancy/Models/PieceVerification.php
- M app/Domain/Tenancy/Services/ActionsUniques.php
- M app/Domain/Tenancy/Services/PiecesDeVerification.php
- M app/Filament/App/Resources/EnregistrementFiscalResource/Pages/ListEnregistrementsFiscaux.php
- M app/Filament/App/Resources/FactureAchatResource.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/CreateFactureAchat.php
- M app/Filament/App/Resources/FactureAchatResource/Pages/EditFactureAchat.php
- M app/Filament/App/Resources/FactureResource.php
- M app/Filament/Concerns/EnvoieLesDocuments.php
+ M app/Domain/Tenancy/Models/TelechargementDeDocuments.php
+ M app/Filament/App/Resources/AvoirFournisseurResource/Pages/ViewAvoirFournisseur.php
+ M app/Filament/App/Resources/FactureAchatResource/Pages/ViewFactureAchat.php
  M app/Filament/Concerns/JointLesPiecesDuFournisseur.php
- M app/Filament/Societe/Pages/VerificationSociete.php
  M app/Http/Controllers/TelechargerLesDocumentsController.php
  M app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php
- M bootstrap/providers.php
- M composer.json
- M composer.lock
- M config/filesystems.php
- M config/piliqi.php
- M config/services.php
- M database/migrations/2026_10_02_100014_create_pieces_verification_table.php
- M database/migrations/2026_10_07_100009_create_pieces_fournisseur_table.php
- M phpunit.xml
- M resources/views/telechargements/indisponible.blade.php
- M tests/Browser/AidesCommunesTest.php
+ M database/migrations/2026_10_14_100006_create_telechargements_documents_table.php
  M tests/Browser/Parcours/PiecesDuFournisseurTest.php
  M tests/Browser/inventaire-des-actions.php
- M tests/Feature/Achats/PiecesDuFournisseurConcurrenceTest.php
- M tests/Feature/Achats/PiecesDuFournisseurTest.php
- M tests/Feature/Authorization/ActionsHorsEcranTest.php
  M tests/Feature/CaisseSecurisee/CommandesModuleFiscalTest.php
- M tests/Feature/Editeur/ProceduresTest.php
- M tests/Feature/Facturation/RecusDePaiementTest.php
  M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
- M tests/Feature/Filament/EnregistrementFiscalResourceTest.php
- M tests/Feature/Filament/EnvoieLesDocumentsTest.php
- M tests/Feature/Filament/PiecesDuFournisseurResourceTest.php
- M tests/Feature/Filament/TelechargerLesDocumentsTest.php
- M tests/Feature/Societe/EffacerPiecesVerificationTest.php
- M tests/Feature/Societe/VerificationSocieteTest.php
- M tests/Feature/Tenancy/TenantIsolationTest.php
-?? app/Domain/Fichiers/AnalyseurDePdf.php
+ M tests/Feature/Fichiers/ControleDesFichiersTest.php
+ M tests/Feature/Fichiers/PdfDePiliqiTest.php
+ M tests/Feature/Fichiers/PiecesRecuesTest.php
+ M tests/Fixtures/FichiersDeTest.php
+?? app/Domain/Fichiers/MemoireDePhp.php
+?? app/Filament/Concerns/TelechargeLesPiecesDuFournisseur.php
+?? tests/Fixtures/controler-un-fichier.php
 ```
 
 ## Dernière course de la chaîne
@@ -113,4 +79,7 @@ CALC:poussee
 CALC:notes
 FI:implementation
 FI:implementation-2
+FI:relecture1
+FI:relecture2
+FI:correction
 ```

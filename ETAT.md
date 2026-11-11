@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 05:11 UTC par pilotage-sync.sh : « CI de 9f46860 verte ».
+Mis à jour le 11/11/2026 à 05:11 UTC par pilotage-sync.sh : « TY2 : c2455dd ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

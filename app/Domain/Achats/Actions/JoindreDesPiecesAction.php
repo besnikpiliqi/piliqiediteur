@@ -5,10 +5,10 @@ namespace App\Domain\Achats\Actions;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\PieceDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -23,7 +23,8 @@ use LogicException;
  * fournisseur : joint la vraie facture ou la vraie note d'avoir du
  * fournisseur, en brouillon comme après la validation (voir
  * PiecesDuFournisseur), et lève la marque « pièce du fournisseur
- * manquante ».
+ * manquante ». Chaque fichier est contrôlé avant toute transaction (voir
+ * PiecesDuFournisseur::controler()).
  *
  * Dans une transaction, la ligne de la société se verrouille d'abord (les
  * pièces s'inscrivent au journal d'audit, voir
@@ -50,13 +51,15 @@ class JoindreDesPiecesAction
      *
      * @throws AuthorizationException
      * @throws LogicException quand le magasin est en lecture seule
-     * @throws InvalidArgumentException quand une pièce est refusée ou qu'aucune n'est donnée
+     * @throws InvalidArgumentException quand une pièce est refusée (FichierRefuseException pour ses contrôles) ou qu'aucune n'est donnée
      */
     public function handle(User $auteur, FactureAchat|AvoirFournisseur $document, array $pieces): array
     {
         if ($pieces === []) {
             throw new InvalidArgumentException('Choisissez au moins un fichier à joindre.');
         }
+
+        $pieces = $this->pieces->controler($auteur, $document, $pieces);
 
         return DB::transaction(function () use ($auteur, $document, $pieces): array {
             $magasin = app(TenantContext::class)->magasin();

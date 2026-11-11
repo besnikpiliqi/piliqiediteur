@@ -243,6 +243,19 @@ class ActionsUniques
         return hash('sha256', json_encode(self::canonique($parametres), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
+    /**
+     * Une demande de ce jeton a-t-elle déjà été traitée ? Une action qui
+     * prépare sa demande avant ses transactions (le contrôle des fichiers
+     * déposés, voir EnregistrerAvoirFournisseurAction) s'en passe pour une
+     * demande répétée, qui rendra seulement son résultat, ses fichiers déjà
+     * effacés par l'écran ; executer() garde seul le dernier mot, sous ses
+     * verrous.
+     */
+    public function estDejaTraitee(?string $jeton): bool
+    {
+        return $jeton !== null && Str::isUuid($jeton) && $this->traitee($jeton) !== null;
+    }
+
     private function traitee(string $jeton): ?ActionTraitee
     {
         return ActionTraitee::query()->where('jeton', $jeton)->first();

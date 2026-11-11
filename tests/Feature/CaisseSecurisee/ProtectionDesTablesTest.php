@@ -168,7 +168,7 @@ class ProtectionDesTablesTest extends TestCase
             'sirets_magasins' => ['sirets_magasins', 'id', $premiere('sirets_magasins', 'magasin_id', $magasin->id)],
             'periodes_activite' => ['periodes_activite', 'id', $premiere('periodes_activite', 'magasin_id', $magasin->id)],
             'tetes_journal_audit' => ['tetes_journal_audit', 'id', $premiere('tetes_journal_audit', 'societe_id', $societe)],
-            'pieces_verification' => ['pieces_verification', 'id', DB::table('pieces_verification')->insertGetId(['societe_id' => $societe, 'type' => TypePiece::Identite->value, 'empreinte' => str_repeat('a', 64), 'deposee_par' => $proprietaire->id, 'deposee_par_nom' => $proprietaire->name, 'deposee_le' => now(), 'created_at' => now(), 'updated_at' => now()])],
+            'pieces_verification' => ['pieces_verification', 'id', DB::table('pieces_verification')->insertGetId(['societe_id' => $societe, 'type' => TypePiece::Identite->value, 'nom' => 'identite.pdf', 'type_mime' => 'application/pdf', 'taille' => 1, 'empreinte' => str_repeat('a', 64), 'analysee_le' => now(), 'deposee_par' => $proprietaire->id, 'deposee_par_nom' => $proprietaire->name, 'deposee_le' => now(), 'created_at' => now(), 'updated_at' => now()])],
             'cabinets' => ['cabinets', 'id', $premiere('cabinets', 'societe_id', $cabinet->id)],
             'liens_cabinet' => ['liens_cabinet', 'id', (int) $lien->id],
             'journal_audit' => ['journal_audit', 'id', $entreeAudit],

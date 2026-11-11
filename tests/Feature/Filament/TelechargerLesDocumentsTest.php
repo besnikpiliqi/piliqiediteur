@@ -5,7 +5,6 @@ namespace Tests\Feature\Filament;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\FactureAchat;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\MettreFinAuLienAction;
@@ -18,6 +17,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\FormatDuTelechargement;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\ChangerFinExerciceAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -128,7 +129,7 @@ class TelechargerLesDocumentsTest extends TestCase
     {
         $fournisseur = app(TenantContext::class)->runAs($this->magasin, fn (): Fournisseur => Fournisseur::factory()->create(['nom' => 'Grossiste du Nord']));
         $sansPiece = $this->acheter($fournisseur, []);
-        $avecPiece = $this->acheter($fournisseur, [new PieceDeposee('facture.pdf', "%PDF-1.4\nfacture\n%%EOF")]);
+        $avecPiece = $this->acheter($fournisseur, [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
         $this->dansLeMagasin($this->magasin, $this->proprietaireDe($this->magasin));
 
         $page = Livewire::test(TelechargerLesDocuments::class)
@@ -273,7 +274,14 @@ class TelechargerLesDocumentsTest extends TestCase
         $reponse = $this->telechargerEnTantQue($proprietaire, $telechargement->lien());
         $reponse->assertOk()->assertDownload('documents-2026-03-01-au-2026-03-31.csv');
         $this->assertStringStartsWith("\xEF\xBB\xBF", $reponse->streamedContent());
-        $this->assertSame(['text/csv; charset=UTF-8', 'nosniff'], [$reponse->headers->get('Content-Type'), $reponse->headers->get('X-Content-Type-Options')]);
+        $this->assertSame([
+            'text/csv; charset=UTF-8',
+            'attachment; filename=documents-2026-03-01-au-2026-03-31.csv',
+            'nosniff',
+            "sandbox; default-src 'none'",
+            'no-store, private',
+            'same-origin',
+        ], array_map(fn (string $entete): ?string => $reponse->headers->get($entete), ['Content-Type', 'Content-Disposition', 'X-Content-Type-Options', 'Content-Security-Policy', 'Cache-Control', 'Cross-Origin-Resource-Policy']), 'Le fichier, qui peut contenir des pièces reçues, part comme elles : en pièce jointe, dans un bac à sable, jamais gardé en cache.');
         $this->assertStringContainsString('/societe/telechargements/', $telechargement->lien());
 
         $this->telechargerEnTantQue($this->responsable($this->magasin), route('filament.app.telechargements-de-documents.telecharger', ['telechargement' => $telechargement->uuid]))->assertNotFound()->assertSeeText(TelechargerLesDocumentsController::INTROUVABLE);

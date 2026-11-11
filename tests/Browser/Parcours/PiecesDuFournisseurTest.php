@@ -4,10 +4,11 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\PieceDeposee;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use Tests\Browser\Support\Navigation;
+use Tests\Fixtures\FichiersDeTest;
 
 /*
  * Les pièces du fournisseur dans le navigateur (décision de l'éditeur du
@@ -29,12 +31,18 @@ use Tests\Browser\Support\Navigation;
  * (voir TestCaseDuNavigateur::remplirLeMagasin()).
  */
 
-const PDF_DU_FOURNISSEUR = "%PDF-1.4\nFacture F-812 du Grossiste du Nord\n%%EOF";
+/**
+ * Un vrai PDF de la facture du fournisseur, que qpdf lit en entier (voir
+ * AnalyseurDePdf) : son texte change son empreinte.
+ */
+function pdfDuFournisseur(string $texte = 'Facture F-812 du Grossiste du Nord'): string
+{
+    return FichiersDeTest::pdf($texte);
+}
 
 /**
  * Une vraie photo JPEG (16 × 12 pixels orange), que le navigateur sait
- * décoder pour son aperçu, écrite ici plutôt que dessinée par l'extension
- * GD, que la CI n'installe pas pour chaque version de PHP.
+ * décoder pour son aperçu.
  */
 const PHOTO_DU_FOURNISSEUR = '/9j/4AAQSkZJRgABAQEAYABgAAD//gA7Q1JFQVRPUjogZ2QtanBlZyB2MS4wICh1c2luZyBJSkcgSlBFRyB2ODApLCBxdWFsaXR5ID0gNzUK/9sAQwAIBgYHBgUIBwcHCQkICgwUDQwLCwwZEhMPFB0aHx4dGhwcICQuJyAiLCMcHCg3KSwwMTQ0NB8nOT04MjwuMzQy/9sAQwEJCQkMCwwYDQ0YMiEcITIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy/8AAEQgADAAQAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8Anooor5A+qP/Z';
 
@@ -105,7 +113,7 @@ test('le responsable dépose la facture du fournisseur à la saisie, avec sa dat
         ->choisirDansLaListe('Fournisseur', 'Grossiste du Nord')
         ->remplir('N° de facture du fournisseur', 'F-812')
         ->remplir('Date de la facture du fournisseur', '2026-03-09')
-        ->envoyerLeFichier(pieceSurLePoste('facture-F-812.pdf', PDF_DU_FOURNISSEUR))
+        ->envoyerLeFichier(pieceSurLePoste('facture-F-812.pdf', pdfDuFournisseur()))
         ->cliquerSur('Ajouter un produit')
         ->choisirDansLaListe('Produit', 'Bougie parfumée')
         ->remplir('Quantité reçue', '2')
@@ -115,11 +123,11 @@ test('le responsable dépose la facture du fournisseur à la saisie, avec sa dat
         ->attendreLaPage('/facture-achats$');
 
     $factureAchat = app(TenantContext::class)->runAs($societe->magasin, fn (): FactureAchat => FactureAchat::query()->where('numero_fournisseur', 'F-812')->sole());
-    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$factureAchat->date_facture, $factureAchat->piece_manquante, $factureAchat->pieces()->sole()->nom_origine]))->toBe(['2026-03-09', false, 'facture-F-812.pdf']);
+    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$factureAchat->date_facture, $factureAchat->piece_manquante, $factureAchat->pieces()->sole()->nom]))->toBe(['2026-03-09', false, 'facture-F-812.pdf']);
 
     $onglet->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey())->voir('facture-F-812.pdf');
     $fichier = telechargerLaPiece($onglet, 'facture-F-812.pdf');
-    expect([$fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe(['facture-F-812.pdf', 'application/pdf', PDF_DU_FOURNISSEUR]);
+    expect([$fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe(['facture-F-812.pdf', 'application/pdf', pdfDuFournisseur()]);
 });
 
 test('le responsable dépose une photo de la facture du fournisseur : son aperçu s’affiche sans aucune violation de la politique de contenu', function () {
@@ -146,7 +154,7 @@ test('le responsable dépose une photo de la facture du fournisseur : son aperç
         ->attendreLaPage('/facture-achats$');
 
     $piece = app(TenantContext::class)->runAs($societe->magasin, fn () => FactureAchat::query()->where('numero_fournisseur', 'F-813')->sole()->pieces()->sole());
-    expect([$piece->nom_origine, $piece->type_mime])->toBe(['facture-F-813.jpg', 'image/jpeg']);
+    expect([$piece->nom, $piece->type_mime])->toBe(['facture-F-813.jpg', 'image/jpeg']);
 });
 
 test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats', function () {
@@ -170,7 +178,7 @@ test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre 
         $onglet->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$sansPiece->getRouteKey())
             ->voir('Pièce du fournisseur manquante')
             ->cliquerSur('Ajouter des pièces')
-            ->envoyerLeFichier(pieceSurLePoste('facture-'.$rang.'.pdf', PDF_DU_FOURNISSEUR.' '.$rang))
+            ->envoyerLeFichier(pieceSurLePoste('facture-'.$rang.'.pdf', pdfDuFournisseur('Facture '.$rang)))
             ->soumettre('Joindre')
             ->voir('Pièce jointe.')
             ->voir('facture-'.$rang.'.pdf');
@@ -183,19 +191,19 @@ test('une facture saisie sans sa pièce est marquée, se retrouve par le filtre 
 
 test('sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire', function () {
     $societe = $this->societeComplete();
-    $brouillon = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('mauvaise-facture.pdf', '%PDF-1.4 mauvaise')], false);
+    $brouillon = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('mauvaise-facture.pdf', pdfDuFournisseur('mauvaise'))], false);
     $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$brouillon->getRouteKey());
 
     $piecesDuBrouillon = fn (): array => app(TenantContext::class)->runAs($societe->magasin, fn (): array => $brouillon->pieces()->get()->all());
 
     $onglet->cliquerSur('Remplacer une pièce')
         ->choisir('Pièce', $piecesDuBrouillon()[0]->uuid)
-        ->envoyerLeFichier(pieceSurLePoste('bonne-facture.pdf', PDF_DU_FOURNISSEUR))
+        ->envoyerLeFichier(pieceSurLePoste('bonne-facture.pdf', pdfDuFournisseur()))
         ->soumettre('Remplacer')
         ->voir('Pièce remplacée.')
         ->voir('bonne-facture.pdf')
         ->nePasVoir('mauvaise-facture.pdf');
-    expect(array_map(fn ($piece): string => $piece->nom_origine, $piecesDuBrouillon()))->toBe(['bonne-facture.pdf']);
+    expect(array_map(fn ($piece): string => $piece->nom, $piecesDuBrouillon()))->toBe(['bonne-facture.pdf']);
 
     $onglet->cliquerSur('Retirer une pièce')
         ->choisir('Pièce', $piecesDuBrouillon()[0]->uuid)
@@ -207,27 +215,27 @@ test('sur un brouillon, le responsable remplace une pièce déposée par erreur 
 
 test('le responsable joint la note d’avoir du fournisseur dans la fenêtre de l’avoir', function () {
     $societe = $this->societeComplete();
-    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture.pdf', PDF_DU_FOURNISSEUR)], true);
+    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture.pdf', pdfDuFournisseur())], true);
     $onglet = $this->seConnecter($societe->responsable)->aller('/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey());
 
     $onglet->cliquerSur('Créer un avoir fournisseur')
         ->remplirLaLigne('lignes', 0, 'quantite', '1')
         ->remplir('N° de l\'avoir du fournisseur', 'AV-NORD-9')
         ->remplir('Motif du retour', 'Bougie cassée')
-        ->envoyerLeFichier(pieceSurLePoste('note-AV-NORD-9.pdf', '%PDF-1.4 note AV-NORD-9'))
+        ->envoyerLeFichier(pieceSurLePoste('note-AV-NORD-9.pdf', pdfDuFournisseur('note AV-NORD-9')))
         ->soumettre('Émettre l\'avoir fournisseur')
         ->voir('émis.');
 
     $avoir = app(TenantContext::class)->runAs($societe->magasin, fn (): AvoirFournisseur => AvoirFournisseur::query()->where('numero_fournisseur', 'AV-NORD-9')->sole());
-    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$avoir->piece_manquante, $avoir->pieces()->pluck('nom_origine')->all()]))->toBe([false, ['note-AV-NORD-9.pdf']]);
+    expect(app(TenantContext::class)->runAs($societe->magasin, fn (): array => [$avoir->piece_manquante, $avoir->pieces()->pluck('nom')->all()]))->toBe([false, ['note-AV-NORD-9.pdf']]);
 
     $onglet->aller('/app/'.$societe->magasin->uuid.'/avoir-fournisseurs/'.$avoir->getRouteKey())->voir('note-AV-NORD-9.pdf');
-    expect(base64_decode(telechargerLaPiece($onglet, 'note-AV-NORD-9.pdf')['contenu']))->toBe('%PDF-1.4 note AV-NORD-9');
+    expect(base64_decode(telechargerLaPiece($onglet, 'note-AV-NORD-9.pdf')['contenu']))->toBe(pdfDuFournisseur('note AV-NORD-9'));
 });
 
-test('chaque rôle qui voit les achats télécharge la pièce depuis la fiche, cabinet lié compris ; seul qui saisit les achats en ajoute', function () {
+test('chaque rôle qui voit les achats télécharge la pièce depuis la fiche sous son nom réécrit en .pdf, cabinet lié compris ; seul qui saisit les achats en ajoute', function () {
     $societe = $this->societeComplete();
-    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture-F-812.pdf', PDF_DU_FOURNISSEUR)], true);
+    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [new PieceDeposee('facture-F-812.bat', pdfDuFournisseur())], true);
     $fiche = '/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey();
     $comptes = [
         'le propriétaire' => [$societe->proprietaire, 'app', true],
@@ -239,12 +247,40 @@ test('chaque rôle qui voit les achats télécharge la pièce depuis la fiche, c
     ];
 
     foreach ($comptes as $qui => [$compte, $panneau, $ajoute]) {
-        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($fiche)->voir('facture-F-812.pdf');
-        expect([$qui, base64_decode(telechargerLaPiece($onglet, 'facture-F-812.pdf')['contenu'])])->toBe([$qui, PDF_DU_FOURNISSEUR])
+        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller($fiche)->voir('facture-F-812.pdf')->nePasVoir('facture-F-812.bat');
+        $fichier = telechargerLaPiece($onglet, 'facture-F-812.pdf');
+        expect([$qui, $fichier['nom'], $fichier['type'], base64_decode($fichier['contenu'])])->toBe([$qui, 'facture-F-812.pdf', 'application/pdf', pdfDuFournisseur()])
             ->and([$qui, $onglet->element(Navigation::bouton('Ajouter des pièces'))->count()])->toBe([$qui, $ajoute ? 1 : 0]);
         $onglet->seDeconnecter();
     }
 
     $onglet = $this->seConnecter($societe->vendeur)->aller('/app/'.$societe->magasin->uuid);
     expect($onglet->element('.fi-sidebar a[href$="/facture-achats"]')->count())->toBe(0);
+});
+
+test('un PDF qui contient du code est refusé à l’ajout, pour chaque rôle qui ajoute des pièces : le message dit pourquoi et comment obtenir une copie propre, et rien n’est joint', function () {
+    $societe = $this->societeComplete();
+    $factureAchat = factureDuGrossiste($societe->magasin, $societe->responsable, [], true);
+    $fiche = '/app/'.$societe->magasin->uuid.'/facture-achats/'.$factureAchat->getRouteKey();
+    $refus = [
+        'le propriétaire' => [$societe->proprietaire, FichiersDeTest::pdf('Facture', '/OpenAction << /S /JavaScript /JS (app.alert\\(1\\)) >>'), 'ce PDF contient du JavaScript'],
+        'l’administrateur sans la vente' => [$societe->administrateur, FichiersDeTest::pdf('Facture', '', ['<< /Type /Annot /Subtype /Link /A << /S /Launch /F (calc.exe) >> >>']), "ce PDF contient le lancement d'un programme"],
+        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, FichiersDeTest::pdf('Facture', '/OpenAction << /S /SubmitForm /F (https://exemple.invalid/) >>'), 'ce PDF contient un formulaire qui envoie ou importe des données'],
+        'le responsable' => [$societe->responsable, FichiersDeTest::pdf('Facture', '/OpenAction << /S /JavaScript /JS (app.alert\\(1\\)) >>'), 'ce PDF contient du JavaScript'],
+    ];
+
+    foreach ($refus as $qui => [$compte, $contenu, $raison]) {
+        $onglet = $this->seConnecter($compte)->aller($fiche)
+            ->cliquerSur('Ajouter des pièces')
+            ->envoyerLeFichier(pieceSurLePoste('facture-piegee.pdf', $contenu))
+            ->soumettre('Joindre')
+            ->voir('Le fichier « facture-piegee.pdf » est refusé')
+            ->voir($raison)
+            ->voir('imprimez le document en PDF')
+            ->nePasVoir('Pièce jointe.');
+        expect([$qui, app(TenantContext::class)->runAs($societe->magasin, fn (): int => $factureAchat->pieces()->count())])->toBe([$qui, 0]);
+        $onglet->seDeconnecter();
+    }
+
+    expect(count($this->entreesDAudit($societe->magasin->societe, ActionAuditee::PieceDuFournisseurRefusee)))->toBe(4);
 });

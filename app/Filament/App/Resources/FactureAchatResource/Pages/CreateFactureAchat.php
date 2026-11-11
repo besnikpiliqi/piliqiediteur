@@ -3,8 +3,8 @@
 namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\App\Resources\FactureAchatResource;

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
+use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
@@ -32,8 +33,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * type, ou celle des documents de toute l'équipe), un lien avec un cabinet
  * terminé ou une autorisation que le client lui retire, un compte suspendu
  * le ferment aussitôt. Une page en français dit pourquoi le fichier n'est
- * pas servi. Le fichier part en pièce jointe, et le navigateur ne le garde
- * pas en cache.
+ * pas servi. Le fichier, qui peut contenir des pièces reçues, part comme
+ * elles (voir EnTetesDesFichiers::fichierRecu()) : en pièce jointe, dans
+ * un bac à sable, jamais gardé en cache.
  */
 class TelechargerLesDocumentsController
 {
@@ -75,11 +77,7 @@ class TelechargerLesDocumentsController
             return $this->indisponible(self::SANS_DROIT, 403);
         }
 
-        return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download(ValeurRequise::de($trouve->chemin, 'le fichier du téléchargement prêt'), $trouve->nomDuFichier(), [
-            'Content-Type' => $trouve->format->typeMime(),
-            'X-Content-Type-Options' => 'nosniff',
-            'Cache-Control' => 'private, no-store',
-        ]);
+        return Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->download(ValeurRequise::de($trouve->chemin, 'le fichier du téléchargement prêt'), $trouve->nomDuFichier(), EnTetesDesFichiers::fichierRecu($trouve->nomDuFichier(), $trouve->format->typeMime()));
     }
 
     private function indisponible(string $message, int $statut): Response

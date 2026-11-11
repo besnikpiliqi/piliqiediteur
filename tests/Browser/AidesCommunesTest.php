@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Models\PieceVerification;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use PHPUnit\Framework\AssertionFailedError;
+use Tests\Fixtures\FichiersDeTest;
 
 /*
  * Les aides communes des tests en navigateur (voir TestCaseDuNavigateur,
@@ -156,7 +158,7 @@ test('le propriétaire dont les courriers ne sont pas parvenus dépose une pièc
     $this->travelTo(self::aParis('2026-10-20 10:00:00'));
     app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
     app(TenantContext::class)->clear();
-    $contenu = '%PDF-1.4 Carte d\'identité de Jeanne Dupont';
+    $contenu = FichiersDeTest::pdf('Carte d\'identité de Jeanne Dupont');
 
     $this->seConnecter($societe->proprietaire, panneau: 'societe')
         ->cliquerSurLeLien('Vérification')
@@ -168,5 +170,29 @@ test('le propriétaire dont les courriers ne sont pas parvenus dépose une pièc
 
     $piece = app(TenantContext::class)->runAsSociete($societe, fn (): PieceVerification => PieceVerification::query()->sole());
     expect($piece->type)->toBe(TypePiece::Identite)
+        ->and($piece->nom)->toBe('cni.pdf')
         ->and($piece->empreinte)->toBe(hash('sha256', $contenu));
+});
+
+test('le propriétaire dont les courriers ne sont pas parvenus voit refuser un PDF qui contient du code, avec la façon d’en obtenir une copie propre', function () {
+    Storage::fake(PiecesDeVerification::DISQUE);
+    Storage::fake(FileUploadConfiguration::disk());
+    $this->travelTo(self::aParis('2026-10-05 10:00:00'));
+    $societe = $this->inscrireUneSociete();
+    $this->travelTo(self::aParis('2026-10-20 10:00:00'));
+    app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
+    app(TenantContext::class)->clear();
+
+    $this->seConnecter($societe->proprietaire, panneau: 'societe')
+        ->cliquerSurLeLien('Vérification')
+        ->cliquerSur('Déposer des pièces pour l\'éditeur')
+        ->choisir('Pièce', TypePiece::Kbis->value)
+        ->envoyerLeFichier(fichierDuPoste('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis', '/OpenAction << /S /JavaScript /JS (app.alert\\(1\\)) >>')))
+        ->soumettre('Soumettre')
+        ->voir('Le fichier « kbis.pdf » est refusé : ce PDF contient du JavaScript')
+        ->voir('imprimez le document en PDF')
+        ->nePasVoir('Pièce déposée : l\'éditeur est prévenu.');
+
+    expect(app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceVerification::query()->count()))->toBe(0)
+        ->and(count($this->entreesDAudit($societe, ActionAuditee::PieceDeVerificationRefusee)))->toBe(1);
 });

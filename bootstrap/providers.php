@@ -1,5 +1,6 @@
 <?php
 
+use App\Providers\AntivirusServiceProvider;
 use App\Providers\AppServiceProvider;
 use App\Providers\EventServiceProvider;
 use App\Providers\Filament\AppPanelProvider;
@@ -18,4 +19,5 @@ return [
     CabinetPanelProvider::class,
     TenancyServiceProvider::class,
     VerificationServiceProvider::class,
+    AntivirusServiceProvider::class,
 ];

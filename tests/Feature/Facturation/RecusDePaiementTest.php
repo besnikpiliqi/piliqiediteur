@@ -455,7 +455,7 @@ class RecusDePaiementTest extends TestCase
             ->assertSee('RP-LYON1-2026-000001')
             ->assertInfolistActionVisible('allocationsPaiement.0.telecharger_recuAction', 'telecharger_recu')
             ->callInfolistAction('allocationsPaiement.0.telecharger_recuAction', 'telecharger_recu')
-            ->assertFileDownloaded('recu-RP-LYON1-2026-000001.pdf');
+            ->assertFileDownloaded('recu-RP-LYON1-2026-000001.pdf', contentType: 'application/pdf');
     }
 
     /**

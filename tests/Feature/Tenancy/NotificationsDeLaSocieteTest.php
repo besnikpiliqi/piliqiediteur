@@ -16,6 +16,7 @@ use App\Domain\Stock\Notifications\StockNegatif;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
 use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
@@ -53,6 +54,7 @@ class NotificationsDeLaSocieteTest extends TestCase
         $responsable = $this->responsable($magasin);
         $envoi = EnvoiDocument::factory()->for(Facture::factory()->create(), 'document')->create();
         $notifications = [
+            AvisDeLAntivirus::class => new AvisDeLAntivirus($societe, 'Titre', 'Texte'),
             AvisDeLEquipe::class => new AvisDeLEquipe($societe, 'Titre', 'Texte'),
             AvisDeVerification::class => new AvisDeVerification($societe, 'Titre', 'Texte'),
             AvisDuCabinet::class => new AvisDuCabinet($societe, 'Titre', 'Texte'),

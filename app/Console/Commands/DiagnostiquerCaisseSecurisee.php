@@ -8,12 +8,18 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Connexions\FuseauParDefautDeLaBase;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Support\Reglage;
+use App\Integrations\Antivirus\AntivirusFactice;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
+use App\Integrations\Antivirus\Contracts\Antivirus;
+use App\Providers\AntivirusServiceProvider;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 use RuntimeException;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessExceptionInterface;
+use Symfony\Component\Process\Process;
 use ZipArchive;
 
 /**
@@ -37,13 +43,17 @@ use ZipArchive;
  * - le fuseau de l'application, UTC (voir Calendrier::exigerUnFuseauUtc()) ;
  * - le fuseau par défaut de la base, que les migrations fixent à UTC ; en
  *   échec, sa cause et la commande qui la corrige (voir
- *   FuseauParDefautDeLaBase).
+ *   FuseauParDefautDeLaBase) ;
+ * - les contrôles des fichiers reçus (lot FI, voir ControleDesFichiers) :
+ *   l'extension gd, qui réenregistre les photos ; qpdf, qui lit les PDF
+ *   (QPDF_BINAIRE) ; l'antivirus, qui doit reconnaître le fichier de test
+ *   EICAR, et ne jamais être l'antivirus factice en production.
  */
 #[Signature('caisse:diagnostiquer')]
-#[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base')]
+#[Description('Vérifie que la caisse sécurisée peut signer et le journal d\'audit s\'inscrire, et que les fichiers reçus se contrôlent : extensions, génération d\'une clé, clés épinglées, clé de signature, clé du journal d\'audit, version du module fiscal, fuseaux de l\'application et de la base, gd, qpdf, antivirus')]
 class DiagnostiquerCaisseSecurisee extends Command
 {
-    public function handle(SignataireFiscal $signataire): int
+    public function handle(SignataireFiscal $signataire, Antivirus $antivirus): int
     {
         $controles = [
             'Extension openssl' => fn (): string => $this->controlerOpenssl(),
@@ -55,6 +65,9 @@ class DiagnostiquerCaisseSecurisee extends Command
             'Version du module fiscal' => fn (): string => ModuleFiscal::VERSION,
             'Fuseau de l\'application' => fn (): string => $this->controlerLeFuseauDeLApplication(),
             'Fuseau par défaut de la base' => fn (): string => FuseauParDefautDeLaBase::exigerUtc(DB::connection()),
+            'Extension gd' => fn (): string => $this->controlerGd(),
+            'Analyseur des PDF (qpdf)' => fn (): string => $this->controlerQpdf(),
+            'Antivirus' => fn (): string => $this->controlerLAntivirus($antivirus),
         ];
 
         $lignes = [];
@@ -80,6 +93,65 @@ class DiagnostiquerCaisseSecurisee extends Command
         $this->info('Caisse sécurisée opérationnelle.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * L'extension gd, qui décode et réenregistre les photos reçues (voir
+     * ReenregistrementDesImages), en JPEG et en PNG.
+     */
+    private function controlerGd(): string
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg') || ! function_exists('imagepng')) {
+            throw new RuntimeException('L\'extension gd (avec JPEG et PNG) est absente : les photos reçues ne peuvent pas être réenregistrées, et toute photo est refusée.');
+        }
+
+        return 'version '.phpversion('gd');
+    }
+
+    /**
+     * qpdf, qui lit en entier chaque PDF reçu (voir AnalyseurDePdf).
+     */
+    private function controlerQpdf(): string
+    {
+        $binaire = Reglage::texte('piliqi.qpdf');
+
+        try {
+            $processus = new Process([$binaire, '--version']);
+            $processus->setTimeout(10);
+            $processus->run();
+        } catch (ProcessExceptionInterface $erreur) {
+            throw new RuntimeException("qpdf ne se lance pas ({$binaire}) : {$erreur->getMessage()}. Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
+        }
+
+        if (! $processus->isSuccessful()) {
+            throw new RuntimeException("qpdf ne se lance pas ({$binaire}). Installez qpdf ou indiquez son chemin dans QPDF_BINAIRE : sans lui, tout PDF reçu est refusé.");
+        }
+
+        return strtok(trim($processus->getOutput()), "\n") ?: $binaire;
+    }
+
+    /**
+     * L'antivirus répond et reconnaît le fichier de test EICAR ; jamais
+     * l'antivirus factice en production.
+     */
+    private function controlerLAntivirus(Antivirus $antivirus): string
+    {
+        if (app()->isProduction() && AntivirusServiceProvider::pilote() === AntivirusServiceProvider::FACTICE) {
+            throw new RuntimeException('L\'antivirus factice (ANTIVIRUS_PILOTE=factice) ne sert jamais en production : installez ClamAV et réglez ANTIVIRUS_PILOTE=clamav.');
+        }
+
+        try {
+            $description = $antivirus->description();
+            $resultat = $antivirus->analyser(AntivirusFactice::fichierDeTest());
+        } catch (AntivirusInjoignableException $injoignable) {
+            throw new RuntimeException($injoignable->getMessage().' Sans antivirus, tout dépôt de fichier est refusé.');
+        }
+
+        if ($resultat->estSain()) {
+            throw new RuntimeException("L'antivirus ({$description}) ne reconnaît pas le fichier de test EICAR : ses signatures ne sont pas chargées.");
+        }
+
+        return "{$description}, fichier de test EICAR reconnu ({$resultat->menace})";
     }
 
     private function controlerOpenssl(): string

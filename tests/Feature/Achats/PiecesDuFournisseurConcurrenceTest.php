@@ -8,10 +8,10 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\PieceDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Group;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -67,7 +68,7 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => '2.00'],
-        ], ['date_facture' => '2026-01-15'], null, array_map(fn (int $page): PieceDeposee => new PieceDeposee("page-{$page}.pdf", "%PDF-1.4 page {$page}"), range(1, 9)));
+        ], ['date_facture' => '2026-01-15'], null, array_map(fn (int $page): PieceDeposee => new PieceDeposee("page-{$page}.pdf", FichiersDeTest::pdf("page {$page}")), range(1, 9)));
         $magasinId = $magasin->id;
         $factureId = $factureAchat->id;
         $concurrente = null;
@@ -83,7 +84,7 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
         $this->assertStringContainsString(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame(10, PieceDuFournisseur::query()->where('facture_achat_id', $factureId)->count());
-        $this->assertSame(['premiere.pdf'], PieceDuFournisseur::query()->where('nom_origine', 'like', '%e.pdf')->pluck('nom_origine')->all());
+        $this->assertSame(['premiere.pdf'], PieceDuFournisseur::query()->where('nom', 'like', '%e.pdf')->pluck('nom')->all());
         $this->assertCount(10, Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
     }
 
@@ -107,7 +108,7 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => '2.00'],
-        ], ['date_facture' => '2026-01-15'], null, [new PieceDeposee('facture.pdf', '%PDF-1.4 facture du fournisseur')]);
+        ], ['date_facture' => '2026-01-15'], null, [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
         $pieceId = PieceDuFournisseur::query()->where('facture_achat_id', $factureAchat->id)->sole()->id;
         $concurrente = null;
         $this->concurrencerDesQueLaLigneEstVerrouillee('factures_achat', 'for update', static function () use ($pieceId): void {
@@ -133,7 +134,7 @@ class PiecesDuFournisseurConcurrenceTest extends TestCase
         app(JoindreDesPiecesAction::class)->handle(
             User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(),
             FactureAchat::query()->findOrFail($factureId),
-            [new PieceDeposee($nom, "%PDF-1.4 {$nom}")],
+            [new PieceDeposee($nom, FichiersDeTest::pdf($nom))],
         );
     }
 }

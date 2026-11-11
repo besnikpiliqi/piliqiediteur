@@ -2090,6 +2090,7 @@ return [
     'app/Filament/Concerns/JointLesPiecesDuFournisseur.php' => [
         'action:ajouter_des_pieces' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › une facture saisie sans sa pièce est marquée, se retrouve par le filtre et par « À faire », et « Ajouter des pièces » lève la marque pour chaque rôle qui saisit les achats',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › un PDF qui contient du code est refusé à l’ajout, pour chaque rôle qui ajoute des pièces : le message dit pourquoi et comment obtenir une copie propre, et rien n’est joint',
         ]],
         'action:remplacer_une_piece' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › sur un brouillon, le responsable remplace une pièce déposée par erreur puis la retire',
@@ -2202,6 +2203,7 @@ return [
         'action:demanderUnNouveauCourrier' => ['lot' => 'NAV-4', 'tests' => []],
         'action:deposerUnePiece' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/AidesCommunesTest.php › le propriétaire dont les courriers ne sont pas parvenus dépose une pièce par le champ de fichier de Filament',
+            'tests/Browser/AidesCommunesTest.php › le propriétaire dont les courriers ne sont pas parvenus voit refuser un PDF qui contient du code, avec la façon d’en obtenir une copie propre',
         ]],
         'action:reverifier' => ['lot' => 'NAV-4', 'tests' => []],
         'page' => ['lot' => 'NAV-4', 'tests' => [
@@ -2381,7 +2383,7 @@ return [
     ],
     'app/Http/Controllers/TelechargerUnePieceDuFournisseurController.php' => [
         'page' => ['lot' => 'NAV-3', 'tests' => [
-            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche, cabinet lié compris ; seul qui saisit les achats en ajoute',
+            'tests/Browser/Parcours/PiecesDuFournisseurTest.php › chaque rôle qui voit les achats télécharge la pièce depuis la fiche sous son nom réécrit en .pdf, cabinet lié compris ; seul qui saisit les achats en ajoute',
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable dépose la facture du fournisseur à la saisie, avec sa date, et la télécharge depuis la fiche',
             'tests/Browser/Parcours/PiecesDuFournisseurTest.php › le responsable joint la note d’avoir du fournisseur dans la fenêtre de l’avoir',
         ]],

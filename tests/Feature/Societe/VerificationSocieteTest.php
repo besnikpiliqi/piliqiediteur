@@ -13,6 +13,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
@@ -85,6 +86,7 @@ use Illuminate\Testing\TestResponse;
 use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use Livewire\Livewire;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -878,11 +880,11 @@ class VerificationSocieteTest extends TestCase
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->sole();
 
-        $this->assertThrows(fn () => app(DeposerUnePieceAction::class)->handle($proprietaire, $societe, TypePiece::Kbis, 'Extrait Kbis'), VerificationRefuseeException::class, DeposerUnePieceAction::MESSAGE_PAS_ENCORE);
+        $this->assertThrows(fn () => app(DeposerUnePieceAction::class)->handle($proprietaire, $societe, TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis'))), VerificationRefuseeException::class, DeposerUnePieceAction::MESSAGE_PAS_ENCORE);
         $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe);
 
-        app(DeposerUnePieceAction::class)->handle($proprietaire, $societe->fresh(), TypePiece::Kbis, 'Extrait Kbis');
+        app(DeposerUnePieceAction::class)->handle($proprietaire, $societe->fresh(), TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis')));
 
         $this->assertSame(1, app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceVerification::query()->count()));
     }
@@ -899,13 +901,14 @@ class VerificationSocieteTest extends TestCase
         Storage::fake(PiecesDeVerification::DISQUE);
         config(['editeur.operateurs' => ['alice' => password_hash('secret-d-alice', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1])]]);
         $societe = $this->societeDontLesCourriersNeSontPasParvenus();
-        $contenu = 'Extrait Kbis de la société, lisible en clair';
+        $contenu = FichiersDeTest::pdf('Extrait Kbis de la société, lisible en clair');
 
-        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, $contenu);
+        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, new PieceDeposee('Kbis.exe', $contenu));
 
         $chemin = (string) $piece->chemin;
         $chiffre = Storage::disk(PiecesDeVerification::DISQUE)->get($chemin);
         $this->assertStringNotContainsString('Kbis', $chiffre);
+        $this->assertSame(['Kbis.pdf', 'application/pdf', strlen($contenu)], [$piece->nom, $piece->type_mime, $piece->taille]);
         $this->assertSame($contenu, Crypt::decryptString($chiffre));
         $this->assertSame(hash('sha256', $contenu), $piece->empreinte);
 
@@ -926,7 +929,7 @@ class VerificationSocieteTest extends TestCase
         $this->assertTrue($societe->fresh()->estValidee());
 
         $autre = $this->societeDontLesCourriersNeSontPasParvenus();
-        $oubliee = app(DeposerUnePieceAction::class)->handle($autre->proprietaire, $autre, TypePiece::Identite, 'Carte d\'identité');
+        $oubliee = app(DeposerUnePieceAction::class)->handle($autre->proprietaire, $autre, TypePiece::Identite, new PieceDeposee('identite.jpg', FichiersDeTest::jpeg()));
         $this->travelTo(self::aParis('2026-11-20 10:00:00'));
         $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
         Storage::disk(PiecesDeVerification::DISQUE)->assertMissing((string) $oubliee->chemin);
@@ -950,16 +953,16 @@ class VerificationSocieteTest extends TestCase
         $envois = FileUploadConfiguration::storage();
 
         Livewire::test(PageDeVerification::class)
-            ->callAction('deposerUnePiece', data: ['type' => TypePiece::Identite->value, 'fichier' => UploadedFile::fake()->createWithContent('cni.pdf', '%PDF-1.4 Carte d\'identité de Jeanne Dupont')])
+            ->callAction('deposerUnePiece', data: ['type' => TypePiece::Identite->value, 'fichier' => UploadedFile::fake()->createWithContent('cni.pdf', FichiersDeTest::pdf('Carte d\'identité de Jeanne Dupont'))])
             ->assertHasNoActionErrors()
             ->assertNotified('Pièce déposée : l\'éditeur est prévenu.');
         $this->assertSame([], $envois->allFiles(FileUploadConfiguration::path()));
 
         foreach (range(2, DeposerUnePieceAction::PIECES_EN_ATTENTE_AU_PLUS) as $rang) {
-            app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Autre, "Pièce {$rang}");
+            app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Autre, new PieceDeposee("piece-{$rang}.pdf", FichiersDeTest::pdf("Pièce {$rang}")));
         }
         Livewire::test(PageDeVerification::class)
-            ->callAction('deposerUnePiece', data: ['type' => TypePiece::Identite->value, 'fichier' => UploadedFile::fake()->createWithContent('cni.pdf', '%PDF-1.4 Carte d\'identité de Jeanne Dupont')])
+            ->callAction('deposerUnePiece', data: ['type' => TypePiece::Identite->value, 'fichier' => UploadedFile::fake()->createWithContent('cni.pdf', FichiersDeTest::pdf('Carte d\'identité de Jeanne Dupont'))])
             ->assertNotified(DeposerUnePieceAction::MESSAGE_TROP_DE_PIECES);
 
         $this->assertSame([], $envois->allFiles(FileUploadConfiguration::path()));
@@ -977,7 +980,7 @@ class VerificationSocieteTest extends TestCase
         Storage::fake(PiecesDeVerification::DISQUE);
         config(['editeur.operateurs' => ['alice' => password_hash('secret-d-alice', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1])]]);
         $societe = $this->societeDontLesCourriersNeSontPasParvenus();
-        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, 'Extrait Kbis');
+        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis')));
 
         $this->procedureDeLEditeur('editeur:societe:clore', $societe, ['--motif' => 'refus'])->expectsOutputToContain('Inscription close : Refus de l\'éditeur.')->assertSuccessful();
 

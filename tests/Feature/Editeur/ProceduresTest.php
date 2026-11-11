@@ -9,6 +9,7 @@ use App\Domain\Cabinets\Enums\MotifDeFinDuLien;
 use App\Domain\Cabinets\Enums\VoieDeVerificationOrdre;
 use App\Domain\Cabinets\Notifications\AvisDuCabinet;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
@@ -36,6 +37,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -417,7 +419,7 @@ class ProceduresTest extends TestCase
         $societe = $this->inscrireUneSociete();
         $this->travelTo(self::aParis('2026-10-20 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
-        app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Kbis, 'Extrait Kbis');
+        app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis')));
         app(TenantContext::class)->clear();
 
         return $societe->fresh();

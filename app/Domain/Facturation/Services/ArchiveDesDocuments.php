@@ -4,14 +4,15 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
-use App\Domain\Achats\Models\PieceDuFournisseur;
 use App\Domain\Achats\Services\FicheDeSaisiePdfGenerator;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Facturation\Enums\TypeDeDocumentTelechargeable;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -26,9 +27,14 @@ use ZipArchive;
  * - une vente ou un avoir client : son PDF tel qu'émis (voir
  *   FacturePdfGenerator et AvoirPdfGenerator) ;
  * - une facture d'achat ou un avoir fournisseur : ses pièces du
- *   fournisseur, telles que déposées, chacune sous notre numéro suivi de
- *   son nom d'origine ; sans pièce, sa fiche de saisie marquée « Saisie
- *   PILIQI » (voir FicheDeSaisiePdfGenerator) ;
+ *   fournisseur, telles que conservées, chacune sous notre numéro suivi de
+ *   son nom réécrit avec l'extension de son type (voir NomDeFichier),
+ *   chacune analysée de nouveau par l'antivirus quand sa dernière analyse
+ *   date de plus de 24 heures, une pièce bloquée n'y entrant jamais (voir
+ *   PiecesDuFournisseur::contenuServable()) ; sans pièce à servir, sa
+ *   fiche de saisie marquée « Saisie PILIQI » (voir
+ *   FicheDeSaisiePdfGenerator). Un antivirus injoignable fait échouer
+ *   l'archive (voir PreparerLeTelechargementDesDocumentsJob) ;
  * - une clôture du jour : son ticket Z (voir ClotureCaissePdfGenerator) ;
  * - un relevé des encaissements : son PDF, par magasin et par mois (voir
  *   ReleveDesEncaissementsPdfGenerator).
@@ -58,6 +64,7 @@ final class ArchiveDesDocuments
      * @param  list<DocumentTrouve>  $documents
      *
      * @throws RuntimeException quand aucun document n'y entre ou que l'archive ne s'écrit pas
+     * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une pièce à analyser de nouveau
      */
     public function ecrire(User $compte, array $documents, string $du, string $au, string $chemin): void
     {
@@ -109,28 +116,35 @@ final class ArchiveDesDocuments
         return match ($document->type) {
             TypeDeDocumentTelechargeable::Ventes => [[$document->numero.'.pdf', $this->factures->generer(Facture::query()->findOrFail($document->identifiant))->output()]],
             TypeDeDocumentTelechargeable::AvoirsClients => [[$document->numero.'.pdf', $this->avoirs->generer(Avoir::query()->findOrFail($document->identifiant))->output()]],
-            TypeDeDocumentTelechargeable::FacturesAchat => $this->piecesOuFiche(FactureAchat::query()->findOrFail($document->identifiant)),
-            TypeDeDocumentTelechargeable::AvoirsFournisseur => $this->piecesOuFiche(AvoirFournisseur::query()->findOrFail($document->identifiant)),
+            TypeDeDocumentTelechargeable::FacturesAchat => $this->piecesOuFiche($compte, FactureAchat::query()->findOrFail($document->identifiant)),
+            TypeDeDocumentTelechargeable::AvoirsFournisseur => $this->piecesOuFiche($compte, AvoirFournisseur::query()->findOrFail($document->identifiant)),
             TypeDeDocumentTelechargeable::Clotures => [[$document->numero.'.pdf', $this->clotures->generer(ClotureCaisse::query()->findOrFail($document->identifiant))->output()]],
             TypeDeDocumentTelechargeable::Encaissements => [[$this->releves->nomFichier($magasin, $document->identifiant), $this->releves->generer($compte, $magasin, $document->identifiant, $du, $au)->output()]],
         };
     }
 
     /**
-     * Les pièces du fournisseur d'un achat, telles que déposées, ou sa
-     * fiche de saisie quand il n'en a aucune.
+     * Les pièces du fournisseur d'un achat que ce compte peut se faire
+     * servir, telles que conservées, ou sa fiche de saisie quand il n'en a
+     * aucune.
      *
      * @return list<array{0: string, 1: string}>
+     *
+     * @throws AntivirusInjoignableException
      */
-    private function piecesOuFiche(FactureAchat|AvoirFournisseur $document): array
+    private function piecesOuFiche(User $compte, FactureAchat|AvoirFournisseur $document): array
     {
-        $pieces = $document->pieces()->get();
+        $servies = [];
 
-        if ($pieces->isEmpty()) {
-            return [[$this->fiches->nomFichier($document), $this->fiches->generer($document)->output()]];
+        foreach ($document->pieces()->get() as $piece) {
+            try {
+                $servies[] = [$document->numero.' - '.$piece->nom, $this->pieces->contenuServable($compte, $piece)];
+            } catch (PieceBloqueeException) {
+                continue;
+            }
         }
 
-        return array_values($pieces->map(fn (PieceDuFournisseur $piece): array => [$document->numero.' - '.$piece->nom_origine, $this->pieces->contenu($piece)])->all());
+        return $servies !== [] ? $servies : [[$this->fiches->nomFichier($document), $this->fiches->generer($document)->output()]];
     }
 
     /**

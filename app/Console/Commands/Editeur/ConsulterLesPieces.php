@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Editeur;
 
+use App\Domain\Fichiers\NomDeFichier;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
@@ -10,6 +11,7 @@ use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Support\Facades\File;
@@ -28,7 +30,12 @@ use function Laravel\Prompts\pause;
  * que le processus reprend la main). Un dossier resté malgré tout
  * (processus tué sans pouvoir réagir) s'efface au plus tard une heure
  * après (voir app:effacer-pieces-verification). La consultation s'inscrit
- * au journal d'audit. La décision se prend ensuite par
+ * au journal d'audit. Chaque pièce y porte son type et l'extension de son
+ * type réel (piece-12-kbis.pdf), jamais le nom tel que reçu ; une pièce
+ * dont la dernière analyse date de plus de 24 heures repasse par
+ * l'antivirus, et une pièce bloquée n'y est pas écrite (voir
+ * PiecesDeVerification::dechiffrerPourLExamen()) ; un antivirus qui ne
+ * répond pas arrête l'examen. La décision se prend ensuite par
  * editeur:societe:examiner (un nouveau courrier) ou editeur:societe:clore
  * --motif=refus (la clôture de l'inscription).
  */
@@ -60,14 +67,31 @@ class ConsulterLesPieces extends ProcedureDeLEditeur
         });
 
         try {
+            $consultees = [];
+
             foreach ($pieces as $piece) {
-                $fichier = "{$dossier}/piece-".CleDuModele::de($piece)."-{$piece->type->value}";
-                File::put($fichier, app(PiecesDeVerification::class)->dechiffrer($piece));
+                try {
+                    $contenu = app(TenantContext::class)->runAsSociete($societe, fn (): ?string => app(PiecesDeVerification::class)->dechiffrerPourLExamen($piece, $editeur));
+                } catch (AntivirusInjoignableException $injoignable) {
+                    report($injoignable);
+
+                    throw new LogicException('L\'antivirus ne répond pas : les pièces ne se déchiffrent qu\'après une analyse récente. Réessayez dans quelques minutes.');
+                }
+
+                if ($contenu === null) {
+                    $this->warn("Pièce {$piece->type->value} bloquée par l'antivirus : elle n'est pas écrite dans le dossier.");
+
+                    continue;
+                }
+
+                $fichier = "{$dossier}/piece-".CleDuModele::de($piece)."-{$piece->type->value}.".NomDeFichier::EXTENSIONS[$piece->type_mime];
+                File::put($fichier, $contenu);
                 chmod($fichier, 0600);
+                $consultees[] = $piece->type->value;
             }
 
             app(TenantContext::class)->runAsSociete($societe, fn () => app(JournalAudit::class)->inscrire(ActionAuditee::PiecesConsultees, null, null, null, [
-                'pieces' => $pieces->map(fn (PieceVerification $piece): string => $piece->type->value)->values()->all(),
+                'pieces' => $consultees,
             ], $societe, $editeur));
 
             $this->line("Pièces déchiffrées dans {$dossier}");

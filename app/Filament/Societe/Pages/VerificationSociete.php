@@ -2,6 +2,9 @@
 
 namespace App\Filament\Societe\Pages;
 
+use App\Domain\Fichiers\ControleDesFichiers;
+use App\Domain\Fichiers\NomDeFichier;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -203,14 +206,14 @@ class VerificationSociete extends Page
             ->modalDescription('Extrait Kbis ou extrait du registre national des entreprises de moins de trois mois, pièce d\'identité du représentant légal. Vos pièces sont chiffrées et effacées dès la décision de l\'éditeur, au plus tard 30 jours après leur dépôt. L\'éditeur traite votre cas et vous envoie, s\'il y a lieu, un nouveau courrier recommandé : seul son code valide la société.')
             ->form([
                 Select::make('type')->label('Pièce')->options(TypePiece::class)->required(),
-                FileUpload::make('fichier')->label('Fichier')->storeFiles(false)->maxSize(DeposerUnePieceAction::TAILLE_MAXIMALE_EN_OCTETS / 1024)->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->required(),
+                FileUpload::make('fichier')->label('Fichier')->storeFiles(false)->maxSize(ControleDesFichiers::TAILLE_MAXIMALE_EN_OCTETS / 1024)->acceptedFileTypes(array_keys(NomDeFichier::EXTENSIONS))->required(),
             ])
             ->action(function (array $data): void {
                 $fichier = ValeursLues::instance($data['fichier'], TemporaryUploadedFile::class);
 
                 try {
                     static::executerSansCasser(function () use ($data, $fichier): void {
-                        app(DeposerUnePieceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), TypePiece::from(ValeurSimple::enTexte($data['type'])), (string) $fichier->get());
+                        app(DeposerUnePieceAction::class)->handle(CompteConnecte::exiger(), $this->societe(), TypePiece::from(ValeurSimple::enTexte($data['type'])), PieceDeposee::lire($fichier)[0]);
                         Notification::make()->title('Pièce déposée : l\'éditeur est prévenu.')->success()->send();
                     });
                 } finally {

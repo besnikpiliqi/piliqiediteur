@@ -42,6 +42,7 @@
         <env name="RNE_PILOTE" value="faux"/>
         <env name="RECOMMANDE_PILOTE" value="faux"/>
         <env name="ORDRE_PILOTE" value="faux"/>
+        <env name="ANTIVIRUS_PILOTE" value="factice"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

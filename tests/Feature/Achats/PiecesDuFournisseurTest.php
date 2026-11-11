@@ -13,11 +13,14 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\PieceDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\ControleDesFichiers;
+use App\Domain\Fichiers\Enums\RaisonDuRefus;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -31,6 +34,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use LogicException;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -48,12 +52,6 @@ use Tests\TestCase;
 class PiecesDuFournisseurTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const PDF = "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF";
-
-    private const JPEG = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00photo d'une facture";
-
-    private const PNG = "\x89PNG\r\n\x1A\n\x00\x00\x00\x0DIHDRcapture";
 
     private Magasin $magasin;
 
@@ -84,20 +82,29 @@ class PiecesDuFournisseurTest extends TestCase
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $saisie, $saisie->fournisseur, [$this->ligne()], ['date_facture' => null]);
     }
 
-    public function test_une_piece_pdf_se_joint_a_la_saisie_rangee_par_magasin_avec_son_nom_d_origine_et_son_empreinte(): void
+    /**
+     * Le nom enregistré est le nom de base du fichier déposé, réécrit avec
+     * l'extension de son type réel (décision de l'éditeur du 07/11/2026,
+     * lot FI) ; le nom tel que reçu, avec son chemin, n'est qu'une donnée
+     * du journal d'audit, avec l'empreinte et la taille du fichier reçu.
+     */
+    public function test_une_piece_pdf_se_joint_a_la_saisie_rangee_par_magasin_avec_son_nom_reecrit_et_son_empreinte(): void
     {
-        $factureAchat = $this->saisir([new PieceDeposee('C:\\Factures\\Grossiste du Nord n°812.pdf', self::PDF)]);
+        $factureAchat = $this->saisir([new PieceDeposee('C:\\Factures\\Grossiste du Nord n°812.PDF', FichiersDeTest::pdf())]);
 
         $piece = $factureAchat->pieces()->sole();
-        $this->assertSame(['Grossiste du Nord n°812.pdf', 'application/pdf', strlen(self::PDF), hash('sha256', self::PDF)], [$piece->nom_origine, $piece->type_mime, $piece->taille, $piece->empreinte]);
+        $this->assertSame(['Grossiste du Nord n°812.pdf', 'application/pdf', strlen(FichiersDeTest::pdf()), hash('sha256', FichiersDeTest::pdf())], [$piece->nom, $piece->type_mime, $piece->taille, $piece->empreinte]);
         $this->assertMatchesRegularExpression('#^magasin-'.$this->magasin->id.'/[0-9a-f]{32}\.pdf$#', $piece->chemin);
-        $this->assertSame(self::PDF, Storage::disk(PiecesDuFournisseur::DISQUE)->get($piece->chemin));
+        $this->assertSame(FichiersDeTest::pdf(), Storage::disk(PiecesDuFournisseur::DISQUE)->get($piece->chemin));
         $this->assertSame(self::auteur()->id, (int) $piece->ajoutee_par);
         $this->assertFalse($factureAchat->piece_manquante);
         $this->assertSame([[
             'document' => ['nature' => 'facture_achat', 'numero' => null, 'numero_fournisseur' => 'F-812'],
-            'empreinte' => hash('sha256', self::PDF),
-            'nom_origine' => 'Grossiste du Nord n°812.pdf',
+            'empreinte' => hash('sha256', FichiersDeTest::pdf()),
+            'empreinte_recue' => hash('sha256', FichiersDeTest::pdf()),
+            'nom' => 'Grossiste du Nord n°812.pdf',
+            'nom_recu' => 'C:\\Factures\\Grossiste du Nord n°812.PDF',
+            'taille_recue' => strlen(FichiersDeTest::pdf()),
         ]], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurJointe));
         $this->assertSame([], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
     }
@@ -112,7 +119,7 @@ class PiecesDuFournisseurTest extends TestCase
         $this->assertTrue($validee->refresh()->piece_manquante);
         $this->assertSame(4, $produit->refresh()->stock_quantite);
 
-        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $validee, [new PieceDeposee('photo.jpg', self::JPEG)]);
+        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $validee, [new PieceDeposee('photo.jpg', FichiersDeTest::jpeg())]);
 
         $this->assertFalse($validee->refresh()->piece_manquante);
         $designation = ['nature' => 'facture_achat', 'numero' => $validee->numero, 'numero_fournisseur' => 'F-812'];
@@ -123,50 +130,50 @@ class PiecesDuFournisseurTest extends TestCase
 
     public function test_seuls_un_pdf_une_photo_jpeg_ou_png_sont_admis_d_apres_leur_contenu(): void
     {
-        $factureAchat = $this->saisir([new PieceDeposee('scan.jpg', self::JPEG), new PieceDeposee('capture.png', self::PNG), new PieceDeposee('facture.pdf', "\xEF\xBB\xBF  ".self::PDF)]);
+        $factureAchat = $this->saisir([new PieceDeposee('scan.jpg', FichiersDeTest::jpeg()), new PieceDeposee('capture.png', FichiersDeTest::png()), new PieceDeposee('facture.pdf', "\xEF\xBB\xBF  ".FichiersDeTest::pdf())]);
 
         $this->assertSame(['image/jpeg', 'image/png', 'application/pdf'], $factureAchat->pieces()->pluck('type_mime')->all());
         $this->assertSame(['jpg', 'png', 'pdf'], $factureAchat->pieces()->get()->map(fn (PieceDuFournisseur $piece): string => pathinfo($piece->chemin, PATHINFO_EXTENSION))->all());
 
-        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_TYPE, 'facture.pdf'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('facture.pdf', 'MZ un programme qui se dit PDF')]));
-        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_TYPE, 'page.html'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('page.html', '<html><body>%PDF-</body>')]));
+        $this->assertRefus(RaisonDuRefus::Type->message('facture.pdf'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('facture.pdf', 'MZ un programme qui se dit PDF')]));
+        $this->assertRefus(RaisonDuRefus::Type->message('page.html'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('page.html', '<html><body>%PDF-</body>')]));
         $this->assertSame(3, $factureAchat->pieces()->count());
     }
 
     public function test_une_piece_vide_ou_de_plus_de_10_mo_est_refusee_et_rien_ne_reste(): void
     {
-        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_VIDE, 'vide.pdf'), fn () => $this->saisir([new PieceDeposee('vide.pdf', '')]));
-        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_TROP_GROS, 'enorme.pdf'), fn () => $this->saisir([new PieceDeposee('bonne.pdf', self::PDF), new PieceDeposee('enorme.pdf', self::PDF.str_repeat('x', PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS))]));
+        $this->assertRefus(RaisonDuRefus::Vide->message('vide.pdf'), fn () => $this->saisir([new PieceDeposee('vide.pdf', '')]));
+        $this->assertRefus(RaisonDuRefus::TropGros->message('enorme.pdf'), fn () => $this->saisir([new PieceDeposee('bonne.pdf', FichiersDeTest::pdf()), new PieceDeposee('enorme.pdf', FichiersDeTest::pdf().str_repeat('x', ControleDesFichiers::TAILLE_MAXIMALE_EN_OCTETS))]));
 
         $this->assertSame([0, 0], [FactureAchat::query()->count(), PieceDuFournisseur::query()->count()]);
         $this->assertSame([], Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
 
-        $tout = $this->saisir([new PieceDeposee('pile.pdf', str_pad(self::PDF, PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS, ' '))]);
-        $this->assertSame(PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS, $tout->pieces()->sole()->taille);
+        $tout = $this->saisir([new PieceDeposee('pile.pdf', FichiersDeTest::pdfDeTaille(ControleDesFichiers::TAILLE_MAXIMALE_EN_OCTETS))]);
+        $this->assertSame(ControleDesFichiers::TAILLE_MAXIMALE_EN_OCTETS, $tout->pieces()->sole()->taille);
     }
 
     public function test_un_document_porte_au_plus_dix_pieces_et_un_meme_fichier_une_seule_fois(): void
     {
-        $factureAchat = $this->saisir(array_map(fn (int $page): PieceDeposee => new PieceDeposee("page-{$page}.pdf", self::PDF." page {$page}"), range(1, 9)));
+        $factureAchat = $this->saisir(array_map(fn (int $page): PieceDeposee => new PieceDeposee("page-{$page}.pdf", FichiersDeTest::pdf("page {$page}")), range(1, 9)));
 
-        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_DEJA_JOINTE, 'encore.pdf'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('encore.pdf', self::PDF.' page 3')]));
-        $this->assertRefus(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('a.pdf', self::PDF.' a'), new PieceDeposee('b.pdf', self::PDF.' b')]));
-        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('dixieme.pdf', self::PDF.' page 10')]);
-        $this->assertRefus(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('onzieme.pdf', self::PDF.' page 11')]));
+        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_DEJA_JOINTE, 'encore.pdf'), fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('encore.pdf', FichiersDeTest::pdf('page 3'))]));
+        $this->assertRefus(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('a.pdf', FichiersDeTest::pdf('a')), new PieceDeposee('b.pdf', FichiersDeTest::pdf('b'))]));
+        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('dixieme.pdf', FichiersDeTest::pdf('page 10'))]);
+        $this->assertRefus(PiecesDuFournisseur::REFUS_TROP_DE_PIECES, fn () => app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('onzieme.pdf', FichiersDeTest::pdf('page 11'))]));
 
         $this->assertSame(10, $factureAchat->pieces()->count());
         $this->assertCount(10, Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
-        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_DEJA_JOINTE, 'double.pdf'), fn () => $this->saisir([new PieceDeposee('simple.pdf', self::PDF), new PieceDeposee('double.pdf', self::PDF)]));
+        $this->assertRefus(sprintf(PiecesDuFournisseur::REFUS_DEJA_JOINTE, 'double.pdf'), fn () => $this->saisir([new PieceDeposee('simple.pdf', FichiersDeTest::pdf()), new PieceDeposee('double.pdf', FichiersDeTest::pdf())]));
     }
 
     public function test_une_piece_se_retire_ou_se_remplace_d_un_brouillon_et_son_fichier_s_efface(): void
     {
-        $factureAchat = $this->saisir([new PieceDeposee('mauvaise.pdf', self::PDF.' mauvaise'), new PieceDeposee('bonne.jpg', self::JPEG)]);
+        $factureAchat = $this->saisir([new PieceDeposee('mauvaise.pdf', FichiersDeTest::pdf('mauvaise')), new PieceDeposee('bonne.jpg', FichiersDeTest::jpeg())]);
         [$mauvaise, $bonne] = $factureAchat->pieces()->get()->all();
 
-        app(RetirerUnePieceAction::class)->handle(self::auteur(), $mauvaise, new PieceDeposee('corrigee.png', self::PNG));
+        app(RetirerUnePieceAction::class)->handle(self::auteur(), $mauvaise, new PieceDeposee('corrigee.png', FichiersDeTest::png()));
 
-        $this->assertSame(['bonne.jpg', 'corrigee.png'], $factureAchat->pieces()->pluck('nom_origine')->all());
+        $this->assertSame(['bonne.jpg', 'corrigee.png'], $factureAchat->pieces()->pluck('nom')->all());
         Storage::disk(PiecesDuFournisseur::DISQUE)->assertMissing($mauvaise->chemin);
         $this->assertFalse($factureAchat->refresh()->piece_manquante);
         $this->assertSame([], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
@@ -177,14 +184,14 @@ class PiecesDuFournisseurTest extends TestCase
         $this->assertSame(0, $factureAchat->pieces()->count());
         $this->assertSame([], Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
         $this->assertTrue($factureAchat->refresh()->piece_manquante);
-        $this->assertSame(['mauvaise.pdf', 'bonne.jpg', 'corrigee.png'], array_column($this->valeursAuditees(ActionAuditee::PieceDuFournisseurRetiree), 'nom_origine'));
+        $this->assertSame(['mauvaise.pdf', 'bonne.jpg', 'corrigee.png'], array_column($this->valeursAuditees(ActionAuditee::PieceDuFournisseurRetiree), 'nom'));
         $this->assertCount(1, $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
     }
 
     public function test_une_piece_d_une_facture_validee_ou_d_un_avoir_emis_ne_se_retire_jamais(): void
     {
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]));
-        $avoir = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF.' avoir')]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]));
+        $avoir = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', FichiersDeTest::pdf('avoir'))]);
 
         foreach ([$factureAchat->pieces()->sole(), $avoir->pieces()->sole()] as $piece) {
             try {
@@ -205,21 +212,21 @@ class PiecesDuFournisseurTest extends TestCase
             Storage::disk(PiecesDuFournisseur::DISQUE)->assertExists($piece->chemin);
         }
 
-        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('page-2.pdf', self::PDF.' page 2')]);
+        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('page-2.pdf', FichiersDeTest::pdf('page 2'))]);
         $this->assertSame(2, $factureAchat->pieces()->count());
     }
 
     public function test_la_base_refuse_une_piece_modifiee_ou_jointe_a_deux_documents_ou_a_aucun(): void
     {
-        $factureAchat = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
+        $factureAchat = $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
         $piece = $factureAchat->pieces()->sole();
         $avoir = AvoirFournisseur::factory()->create(['facture_achat_id' => $factureAchat->id]);
 
-        $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->where('id', $piece->id)->update(['nom_origine' => 'autre.pdf']), 'pieces_fournisseur_jamais_modifiees');
-        $ligne = ['uuid' => 'a3c8f0c4-3b5f-4b11-9a68-0f1f3b6d2c10', 'magasin_id' => $this->magasin->id, 'nom_origine' => 'x.pdf', 'type_mime' => 'application/pdf', 'taille' => 1, 'empreinte' => str_repeat('b', 64), 'chemin' => 'magasin-1/x.pdf'];
+        $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->where('id', $piece->id)->update(['nom' => 'autre.pdf']), 'pieces_fournisseur_jamais_modifiees');
+        $ligne = ['uuid' => 'a3c8f0c4-3b5f-4b11-9a68-0f1f3b6d2c10', 'magasin_id' => $this->magasin->id, 'nom' => 'x.pdf', 'type_mime' => 'application/pdf', 'taille' => 1, 'empreinte' => str_repeat('b', 64), 'chemin' => 'magasin-1/x.pdf', 'analysee_le' => Instant::enBase(self::aParis('2026-02-27 10:00:00'))];
         $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->insert([...$ligne, 'facture_achat_id' => $factureAchat->id, 'avoir_fournisseur_id' => $avoir->id]), 'pieces_fournisseur_un_seul_document');
         $this->assertRefusDeLaBase(fn () => DB::table('pieces_fournisseur')->insert($ligne), 'pieces_fournisseur_un_seul_document');
-        $this->assertSame('facture.pdf', $piece->refresh()->nom_origine);
+        $this->assertSame('facture.pdf', $piece->refresh()->nom);
     }
 
     public function test_un_achat_recu_par_l_api_n_est_jamais_marque_et_peut_recevoir_une_piece(): void
@@ -227,7 +234,7 @@ class PiecesDuFournisseurTest extends TestCase
         $factureAchat = $this->saisir([], ['source' => SourceFactureAchat::Api]);
         $this->assertFalse($factureAchat->piece_manquante);
 
-        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('facturx.pdf', self::PDF)]);
+        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat, [new PieceDeposee('facturx.pdf', FichiersDeTest::pdf())]);
 
         $this->assertSame(1, $factureAchat->pieces()->count());
         $this->assertSame([], [...$this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee), ...$this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquanteLevee)]);
@@ -235,16 +242,16 @@ class PiecesDuFournisseurTest extends TestCase
 
     public function test_un_avoir_fournisseur_porte_sa_note_d_avoir_ou_en_est_marque_a_son_emission(): void
     {
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([new PieceDeposee('facture.pdf', self::PDF)], [], ['quantite' => 5]));
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())], [], ['quantite' => 5]));
 
-        $avecSaNote = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF.' note')]);
+        $avecSaNote = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', FichiersDeTest::pdf('note'))]);
         $sansSaNote = $this->retourner($factureAchat, []);
 
         $this->assertSame([false, true], [$avecSaNote->piece_manquante, $sansSaNote->refresh()->piece_manquante]);
-        $this->assertSame(['note.pdf'], $avecSaNote->pieces()->pluck('nom_origine')->all());
+        $this->assertSame(['note.pdf'], $avecSaNote->pieces()->pluck('nom')->all());
         $this->assertSame([['document' => ['nature' => 'avoir_fournisseur', 'numero' => $sansSaNote->numero, 'numero_fournisseur' => 'AV-12']]], $this->valeursAuditees(ActionAuditee::PieceDuFournisseurManquantePosee));
 
-        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $sansSaNote, [new PieceDeposee('note-recue.jpg', self::JPEG)]);
+        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $sansSaNote, [new PieceDeposee('note-recue.jpg', FichiersDeTest::jpeg())]);
         $this->assertFalse($sansSaNote->refresh()->piece_manquante);
     }
 
@@ -253,24 +260,24 @@ class PiecesDuFournisseurTest extends TestCase
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->saisir([], [], ['quantite' => 5]));
         $jeton = 'b5a1e3d2-8c4f-4a7e-9b61-2d0f7c3e4a95';
 
-        $premier = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF)], $jeton);
-        $repete = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF)], $jeton);
+        $premier = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', FichiersDeTest::pdf())], $jeton);
+        $repete = $this->retourner($factureAchat, [new PieceDeposee('note.pdf', FichiersDeTest::pdf())], $jeton);
 
         $this->assertTrue($premier->is($repete));
         $this->assertSame([1, 1], [AvoirFournisseur::query()->count(), PieceDuFournisseur::query()->whereNotNull('avoir_fournisseur_id')->count()]);
         $this->expectException(LogicException::class);
-        $this->retourner($factureAchat, [new PieceDeposee('note.pdf', self::PDF.' autre')], $jeton);
+        $this->retourner($factureAchat, [new PieceDeposee('note.pdf', FichiersDeTest::pdf('autre'))], $jeton);
     }
 
     public function test_un_brouillon_supprime_retire_ses_pieces_et_leurs_fichiers(): void
     {
-        $brouillon = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
+        $brouillon = $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
 
         app(SupprimerFactureAchatAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertSame([0, 0], [FactureAchat::query()->count(), PieceDuFournisseur::query()->count()]);
         $this->assertSame([], Storage::disk(PiecesDuFournisseur::DISQUE)->allFiles());
-        $this->assertSame(['facture.pdf'], array_column($this->valeursAuditees(ActionAuditee::PieceDuFournisseurRetiree), 'nom_origine'));
+        $this->assertSame(['facture.pdf'], array_column($this->valeursAuditees(ActionAuditee::PieceDuFournisseurRetiree), 'nom'));
     }
 
     public function test_joindre_exige_de_saisir_les_achats_et_retirer_un_brouillon(): void
@@ -280,13 +287,13 @@ class PiecesDuFournisseurTest extends TestCase
         $acheteur = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]);
 
         try {
-            app(JoindreDesPiecesAction::class)->handle($consultant, $factureAchat, [new PieceDeposee('facture.pdf', self::PDF)]);
+            app(JoindreDesPiecesAction::class)->handle($consultant, $factureAchat, [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
             $this->fail('Sans le droit de saisir les achats, aucune pièce ne se joint.');
         } catch (AuthorizationException) {
             $this->assertSame(0, PieceDuFournisseur::query()->count());
         }
 
-        $piece = app(JoindreDesPiecesAction::class)->handle($acheteur, $factureAchat, [new PieceDeposee('facture.pdf', self::PDF)])[0];
+        $piece = app(JoindreDesPiecesAction::class)->handle($acheteur, $factureAchat, [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())])[0];
         $this->assertSame($acheteur->id, (int) $piece->ajoutee_par);
 
         $this->expectException(AuthorizationException::class);
@@ -300,13 +307,13 @@ class PiecesDuFournisseurTest extends TestCase
         $retourneur = $this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]);
 
         try {
-            app(JoindreDesPiecesAction::class)->handle($consultant, $avoir, [new PieceDeposee('note.pdf', self::PDF)]);
+            app(JoindreDesPiecesAction::class)->handle($consultant, $avoir, [new PieceDeposee('note.pdf', FichiersDeTest::pdf())]);
             $this->fail('Sans le droit de créer les avoirs fournisseur, aucune pièce ne se joint à un avoir.');
         } catch (AuthorizationException) {
             $this->assertSame(0, $avoir->pieces()->count());
         }
 
-        app(JoindreDesPiecesAction::class)->handle($retourneur, $avoir, [new PieceDeposee('note.pdf', self::PDF)]);
+        app(JoindreDesPiecesAction::class)->handle($retourneur, $avoir, [new PieceDeposee('note.pdf', FichiersDeTest::pdf())]);
         $this->assertSame(1, $avoir->pieces()->count());
     }
 
@@ -316,7 +323,7 @@ class PiecesDuFournisseurTest extends TestCase
         $consultation = $this->collaborateurDuCabinetLie($this->magasin, nom: 'Paul Lefèvre');
 
         try {
-            app(JoindreDesPiecesAction::class)->handle($consultation, $factureAchat, [new PieceDeposee('facture.pdf', self::PDF)]);
+            app(JoindreDesPiecesAction::class)->handle($consultation, $factureAchat, [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
             $this->fail('Le cabinet qui consulte seulement ne joint aucune pièce.');
         } catch (AuthorizationException) {
             $this->assertSame(0, PieceDuFournisseur::query()->count());
@@ -327,7 +334,7 @@ class PiecesDuFournisseurTest extends TestCase
         $autorisees = [...PermissionRegistry::parDefautDuCabinet($autreMagasin->societe->type_activite), PermissionRegistry::FACTURE_ACHAT_CREER];
         $saisisseur = $this->collaborateurDuCabinetLie($autreMagasin, $autorisees, 'Lucie Moreau');
 
-        $piece = app(JoindreDesPiecesAction::class)->handle($saisisseur, $saisie, [new PieceDeposee('facture.pdf', self::PDF)])[0];
+        $piece = app(JoindreDesPiecesAction::class)->handle($saisisseur, $saisie, [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())])[0];
         $this->assertStringContainsString('Lucie Moreau', (string) $piece->ajoutee_par_nom);
         $this->assertFalse($saisie->refresh()->piece_manquante);
     }
@@ -338,12 +345,12 @@ class PiecesDuFournisseurTest extends TestCase
         app(FermerMagasinAction::class)->handle($this->proprietaireDe($this->magasin), $this->magasin->fresh(), MotifFermeture::Temporaire, 'password');
 
         $this->expectExceptionObject(new LogicException('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.'));
-        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat->refresh(), [new PieceDeposee('facture.pdf', self::PDF)]);
+        app(JoindreDesPiecesAction::class)->handle(self::auteur(), $factureAchat->refresh(), [new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
     }
 
     public function test_une_piece_d_un_magasin_est_introuvable_dans_un_autre(): void
     {
-        $factureAchat = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
+        $factureAchat = $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
         $piece = $factureAchat->pieces()->sole();
         $autre = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique de la Gare', 'code' => 'GARE']);
 

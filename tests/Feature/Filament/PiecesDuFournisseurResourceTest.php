@@ -8,11 +8,12 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\PieceDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\Enums\RaisonDuRefus;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -31,7 +32,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
-use Tests\Feature\EnTetesDeSecuriteTest;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 use function Livewire\invade;
@@ -47,10 +48,6 @@ use function Livewire\invade;
 class PiecesDuFournisseurResourceTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const PDF = "%PDF-1.4\nfacture du fournisseur\n%%EOF";
-
-    private const JPEG = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00note d'avoir";
 
     private Magasin $magasin;
 
@@ -79,20 +76,20 @@ class PiecesDuFournisseurResourceTest extends TestCase
         $this->assertSame(0, FactureAchat::query()->count());
 
         Livewire::test(CreateFactureAchat::class)
-            ->fillForm([...$formulaire, 'date_facture' => '2026-02-27', 'pieces' => [UploadedFile::fake()->createWithContent('facture-812.pdf', self::PDF)]])
+            ->fillForm([...$formulaire, 'date_facture' => '2026-02-27', 'pieces' => [UploadedFile::fake()->createWithContent('facture-812.pdf', FichiersDeTest::pdf())]])
             ->call('create')
             ->assertHasNoFormErrors();
 
         $factureAchat = FactureAchat::query()->sole();
         $this->assertSame(['2026-02-27', false], [$factureAchat->date_facture, $factureAchat->piece_manquante]);
-        $this->assertSame(['facture-812.pdf', hash('sha256', self::PDF)], [$factureAchat->pieces()->sole()->nom_origine, $factureAchat->pieces()->sole()->empreinte]);
+        $this->assertSame(['facture-812.pdf', hash('sha256', FichiersDeTest::pdf())], [$factureAchat->pieces()->sole()->nom, $factureAchat->pieces()->sole()->empreinte]);
 
         Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
-            ->fillForm(['pieces' => [UploadedFile::fake()->createWithContent('page-2.jpg', self::JPEG)]])
+            ->fillForm(['pieces' => [UploadedFile::fake()->createWithContent('page-2.jpg', FichiersDeTest::jpeg())]])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame(['facture-812.pdf', 'page-2.jpg'], $factureAchat->pieces()->pluck('nom_origine')->all());
+        $this->assertSame(['facture-812.pdf', 'page-2.jpg'], $factureAchat->pieces()->pluck('nom')->all());
     }
 
     public function test_un_fichier_refuse_garde_la_saisie_et_ne_cree_rien(): void
@@ -107,7 +104,7 @@ class PiecesDuFournisseurResourceTest extends TestCase
                 'pieces' => [UploadedFile::fake()->createWithContent('facture.pdf', 'MZ pas un PDF')],
             ])
             ->call('create')
-            ->assertNotified(sprintf(PiecesDuFournisseur::REFUS_TYPE, 'facture.pdf'));
+            ->assertNotified(RaisonDuRefus::Type->message('facture.pdf'));
 
         $this->assertSame([0, 0], [FactureAchat::query()->count(), PieceDuFournisseur::query()->count()]);
     }
@@ -115,7 +112,7 @@ class PiecesDuFournisseurResourceTest extends TestCase
     public function test_la_liste_marque_et_filtre_les_pieces_manquantes_et_a_faire_les_rappelle(): void
     {
         $sansPiece = $this->saisir([]);
-        $avecPiece = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
+        $avecPiece = $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
 
         Livewire::test(ListFacturesAchat::class)
             ->assertCanSeeTableRecords([$sansPiece, $avecPiece])
@@ -141,15 +138,15 @@ class PiecesDuFournisseurResourceTest extends TestCase
 
     public function test_la_fiche_ajoute_une_piece_et_sur_un_brouillon_la_remplace_ou_la_retire(): void
     {
-        $brouillon = $this->saisir([new PieceDeposee('mauvaise.pdf', self::PDF)]);
+        $brouillon = $this->saisir([new PieceDeposee('mauvaise.pdf', FichiersDeTest::pdf())]);
         $piece = $brouillon->pieces()->sole();
 
         Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
             ->assertSeeText('mauvaise.pdf')
             ->assertSee(FactureAchatResource::adresseDeLaPiece($piece), false)
-            ->callAction('remplacer_une_piece', ['piece' => $piece->uuid, 'pieces' => [UploadedFile::fake()->createWithContent('bonne.jpg', self::JPEG)]])
+            ->callAction('remplacer_une_piece', ['piece' => $piece->uuid, 'pieces' => [UploadedFile::fake()->createWithContent('bonne.jpg', FichiersDeTest::jpeg())]])
             ->assertNotified('Pièce remplacée.');
-        $this->assertSame(['bonne.jpg'], $brouillon->pieces()->pluck('nom_origine')->all());
+        $this->assertSame(['bonne.jpg'], $brouillon->pieces()->pluck('nom')->all());
 
         Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
             ->callAction('retirer_une_piece', ['piece' => $brouillon->pieces()->sole()->uuid])
@@ -161,37 +158,37 @@ class PiecesDuFournisseurResourceTest extends TestCase
             ->assertSeeText(FactureAchatResource::PIECE_MANQUANTE)
             ->assertActionHidden('retirer_une_piece')
             ->assertActionHidden('remplacer_une_piece')
-            ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('facture.pdf', self::PDF)]])
+            ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('facture.pdf', FichiersDeTest::pdf())]])
             ->assertNotified('Pièce jointe.');
         $this->assertFalse($validee->refresh()->piece_manquante);
     }
 
     public function test_la_fenetre_de_l_avoir_joint_sa_note_et_la_fiche_de_l_avoir_en_ajoute(): void
     {
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle($this->responsable, $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]));
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($this->responsable, $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]));
 
         $fiche = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->mountAction('creer_avoir_fournisseur');
         $fiche->set('mountedActionsData.0.lignes.'.array_key_first($fiche->get('mountedActionsData.0.lignes')).'.quantite', 1)
-            ->setActionData(['numero_fournisseur' => 'AV-9', 'motif' => 'Carnet abîmé', 'pieces' => [UploadedFile::fake()->createWithContent('note-av9.jpg', self::JPEG)]])
+            ->setActionData(['numero_fournisseur' => 'AV-9', 'motif' => 'Carnet abîmé', 'pieces' => [UploadedFile::fake()->createWithContent('note-av9.jpg', FichiersDeTest::jpeg())]])
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
         $avoir = AvoirFournisseur::query()->sole();
-        $this->assertSame([false, ['note-av9.jpg']], [$avoir->piece_manquante, $avoir->pieces()->pluck('nom_origine')->all()]);
+        $this->assertSame([false, ['note-av9.jpg']], [$avoir->piece_manquante, $avoir->pieces()->pluck('nom')->all()]);
 
         Livewire::test(ViewAvoirFournisseur::class, ['record' => $avoir->getRouteKey()])
             ->assertSeeText('note-av9.jpg')
-            ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('note-av9-p2.pdf', self::PDF.' p2')]])
+            ->callAction('ajouter_des_pieces', ['pieces' => [UploadedFile::fake()->createWithContent('note-av9-p2.pdf', FichiersDeTest::pdf('p2'))]])
             ->assertNotified('Pièce jointe.');
         $this->assertSame(2, $avoir->pieces()->count());
     }
 
     public function test_la_fenetre_de_l_avoir_renvoyee_avec_sa_note_apres_une_reponse_perdue_rend_l_avoir_deja_emis(): void
     {
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle($this->responsable, $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]));
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($this->responsable, $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]));
         $fiche = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->mountAction('creer_avoir_fournisseur');
         $fiche->set('mountedActionsData.0.lignes.'.array_key_first($fiche->get('mountedActionsData.0.lignes')).'.quantite', 1)
-            ->setActionData(['numero_fournisseur' => 'AV-9', 'motif' => 'Carnet abîmé', 'pieces' => [UploadedFile::fake()->createWithContent('note-av9.jpg', self::JPEG)]]);
+            ->setActionData(['numero_fournisseur' => 'AV-9', 'motif' => 'Carnet abîmé', 'pieces' => [UploadedFile::fake()->createWithContent('note-av9.jpg', FichiersDeTest::jpeg())]]);
         $demandeEnvoyee = invade($fiche)->lastState;
 
         $fiche->callMountedAction()->assertHasNoActionErrors();
@@ -202,12 +199,12 @@ class PiecesDuFournisseurResourceTest extends TestCase
         $fiche->callMountedAction()->assertHasNoActionErrors()->assertNotified("Avoir fournisseur {$avoir->numero} émis.");
 
         $this->assertSame(1, AvoirFournisseur::query()->count());
-        $this->assertSame(['note-av9.jpg'], $avoir->pieces()->pluck('nom_origine')->all());
+        $this->assertSame(['note-av9.jpg'], $avoir->pieces()->pluck('nom')->all());
     }
 
     public function test_les_gestes_de_la_fiche_ne_s_offrent_qu_a_qui_saisit_les_achats(): void
     {
-        $brouillon = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)]);
+        $brouillon = $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())]);
         $this->actingAs($this->membre($this->magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW]));
 
         Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
@@ -217,31 +214,51 @@ class PiecesDuFournisseurResourceTest extends TestCase
             ->assertActionHidden('remplacer_une_piece');
     }
 
+    /**
+     * Une pièce se télécharge telle que conservée, sous son nom réécrit
+     * avec l'extension de son type : « Facture Grossiste.bat », un PDF, se
+     * télécharge sous le nom « Facture Grossiste.pdf » (décision de
+     * l'éditeur du 07/11/2026, lot FI, défaut bloquant).
+     */
     public function test_une_piece_se_telecharge_telle_que_deposee_pour_qui_voit_son_document(): void
     {
-        $piece = $this->saisir([new PieceDeposee('Facture Grossiste.pdf', self::PDF)])->pieces()->sole();
+        $piece = $this->saisir([new PieceDeposee('Facture Grossiste.bat', FichiersDeTest::pdf())])->pieces()->sole();
 
         $reponse = $this->get(FactureAchatResource::adresseDeLaPiece($piece));
 
         $reponse->assertOk()->assertDownload('Facture Grossiste.pdf');
-        $this->assertSame(self::PDF, $reponse->streamedContent());
+        $this->assertSame(FichiersDeTest::pdf(), $reponse->getContent());
         $this->assertSame(['application/pdf', 'nosniff'], [$reponse->headers->get('Content-Type'), $reponse->headers->get('X-Content-Type-Options')]);
         $this->assertStringContainsString('no-store', (string) $reponse->headers->get('Cache-Control'));
     }
 
-    public function test_une_piece_telechargee_porte_les_en_tetes_de_securite(): void
+    /**
+     * Une pièce reçue se télécharge toujours en pièce jointe, jamais
+     * affichée dans une page de PILIQI : son type exact, nosniff, un bac à
+     * sable sans aucune source, sans cache, jamais chargée par un autre
+     * site (décision de l'éditeur du 07/11/2026, lot FI) ; les autres en-têtes
+     * de sécurité de PILIQI restent.
+     */
+    public function test_une_piece_telechargee_porte_les_en_tetes_d_un_fichier_recu(): void
     {
-        $piece = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)])->pieces()->sole();
+        $piece = $this->saisir([new PieceDeposee('photo.jpg', FichiersDeTest::jpeg())])->pieces()->sole();
 
         $reponse = $this->get(FactureAchatResource::adresseDeLaPiece($piece));
 
-        $reponse->assertOk();
-        EnTetesDeSecuriteTest::verifierLesEnTetes($reponse);
+        $reponse->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg')
+            ->assertHeader('Content-Disposition', 'attachment; filename=photo.jpg')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('Content-Security-Policy', "sandbox; default-src 'none'")
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertHeader('Cross-Origin-Resource-Policy', 'same-origin')
+            ->assertHeader('X-Frame-Options', 'DENY')
+            ->assertHeader('Cross-Origin-Opener-Policy', 'same-origin');
     }
 
     public function test_l_adresse_d_une_piece_est_refusee_hors_de_son_magasin_ou_sans_le_droit_de_voir_les_achats(): void
     {
-        $piece = $this->saisir([new PieceDeposee('facture.pdf', self::PDF)])->pieces()->sole();
+        $piece = $this->saisir([new PieceDeposee('facture.pdf', FichiersDeTest::pdf())])->pieces()->sole();
         $adresse = FactureAchatResource::adresseDeLaPiece($piece);
         $autre = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique de la Gare', 'code' => 'GARE']);
         $proprietaire = $this->proprietaireDe($this->magasin);

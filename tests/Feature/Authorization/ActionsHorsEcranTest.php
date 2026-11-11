@@ -46,6 +46,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
@@ -79,6 +80,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 use Throwable;
 
@@ -343,7 +345,7 @@ class ActionsHorsEcranTest extends TestCase
             'modifier les réglages fiscaux' => fn (User $auteur) => app(ModifierParametresFiscauxSocieteAction::class)->handle($auteur, $societe, ['mois_fin_exercice' => 6]),
             'ouvrir la démonstration' => fn (User $auteur) => app(OuvrirLaDemonstrationAction::class)->handle($auteur, $societe),
             'demander un nouveau courrier' => fn (User $auteur) => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($auteur, $societe),
-            'déposer une pièce' => fn (User $auteur) => app(DeposerUnePieceAction::class)->handle($auteur, $societe, TypePiece::Kbis, 'Extrait Kbis'),
+            'déposer une pièce' => fn (User $auteur) => app(DeposerUnePieceAction::class)->handle($auteur, $societe, TypePiece::Kbis, new PieceDeposee('kbis.pdf', FichiersDeTest::pdf('Extrait Kbis'))),
         };
     }
 

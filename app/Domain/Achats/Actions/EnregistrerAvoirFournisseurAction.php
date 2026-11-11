@@ -6,8 +6,9 @@ use App\Domain\Achats\Exceptions\ConfirmationDesEcartsRequiseException;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
+use App\Domain\Fichiers\Exceptions\FichierRefuseException;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -43,7 +44,9 @@ use LogicException;
  * (voir MontantsDuFournisseur et TvaDuFournisseur).
  *
  * La note d'avoir du fournisseur, en PDF ou en photo, se joint au
- * brouillon avant son émission (voir PiecesDuFournisseur) ; sans elle,
+ * brouillon avant son émission, contrôlée avant toute transaction (voir
+ * PiecesDuFournisseur::controler()), sauf pour une demande déjà traitée,
+ * dont l'écran a effacé les fichiers et qui rend seulement son avoir ; sans elle,
  * l'avoir s'émet quand même, marqué « pièce du fournisseur manquante »
  * (décision de l'éditeur du 03/11/2026, F1 = b, voir
  * EmettreAvoirFournisseurAction). Le jeton retient le nom et l'empreinte
@@ -69,6 +72,7 @@ class EnregistrerAvoirFournisseurAction
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ConfirmationDesEcartsRequiseException
+     * @throws FichierRefuseException quand la note d'avoir est refusée par ses contrôles, avant toute écriture
      */
     public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null, ?string $numeroFournisseur = null, ?string $jeton = null, ?MontantsDuFournisseur $montants = null, array $pieces = []): AvoirFournisseur
     {
@@ -80,6 +84,7 @@ class EnregistrerAvoirFournisseurAction
             ActionsUniques::verrouDe($auteur)();
         };
         $parametres = ['facture_achat_id' => $factureAchat->getKey(), 'lignes' => array_values($lignesSelectionnees), 'motif' => $motif, 'numero_fournisseur' => $numeroFournisseur, 'montants' => $montants->enTableau(), 'pieces' => PieceDeposee::signatures($pieces)];
+        $pieces = $this->actionsUniques->estDejaTraitee($jeton) ? [] : $this->pieces->controler($auteur, null, $pieces);
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR_FOURNISSEUR, AvoirFournisseur::class, $auteur, $parametres, $verrou, fn (): AvoirFournisseur => DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur, $montants, $pieces, $verrou): AvoirFournisseur {
             $verrou();

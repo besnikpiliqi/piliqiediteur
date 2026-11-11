@@ -1,16 +1,19 @@
 <?php
 
-namespace App\Domain\Achats\Services;
+namespace App\Domain\Fichiers;
 
 use Illuminate\Http\UploadedFile;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
- * Un fichier déposé pour devenir une pièce du fournisseur (voir
- * PiecesDuFournisseur::joindre()) : le nom que lui donnait la personne et
- * son contenu, lus une fois, avant tout contrôle, et, pour un fichier
- * envoyé par un écran, l'identifiant de cet envoi (le nom, tiré au hasard
- * par Livewire, de son fichier dans le dossier temporaire des envois).
+ * Un fichier déposé, tel que reçu, avant tout contrôle (voir
+ * ControleDesFichiers) : une pièce du fournisseur (voir
+ * PiecesDuFournisseur) ou une pièce de la vérification de la société (voir
+ * DeposerUnePieceAction). Le nom que lui donnait la personne, qui n'est
+ * qu'une donnée (le nom enregistré est réécrit, voir NomDeFichier), son
+ * contenu, lu une fois, et, pour un fichier envoyé par un écran,
+ * l'identifiant de cet envoi (le nom, tiré au hasard par Livewire, de son
+ * fichier dans le dossier temporaire des envois).
  */
 final readonly class PieceDeposee
 {

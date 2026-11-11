@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -60,8 +61,9 @@ use Throwable;
  *
  * Aucun document encore accessible, ou un compte qui n'agit plus : la
  * demande échoue, sans nouvelle tentative, la personne sachant pourquoi ;
- * une erreur imprévue fait réessayer, puis échouer de même (voir
- * failed()). Idempotent : une demande qui n'est plus en préparation ne se
+ * une erreur imprévue, ou un antivirus qui ne répond pas pour une pièce à
+ * analyser de nouveau (voir ArchiveDesDocuments), fait réessayer, puis
+ * échouer de même, la personne sachant pourquoi (voir failed()). Idempotent : une demande qui n'est plus en préparation ne se
  * prépare plus, et ShouldBeUnique n'en lance jamais deux préparations à
  * la fois.
  */
@@ -74,6 +76,8 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     public const MOTIF_COMPTE = 'Votre compte n\'a plus accès à ces documents : le fichier n\'a pas été préparé.';
 
     public const MOTIF_ERREUR = 'Le fichier n\'a pas pu être préparé : demandez-le de nouveau.';
+
+    public const MOTIF_ANTIVIRUS = 'L\'antivirus ne répondait pas : les pièces du fournisseur ne se servent qu\'après une analyse récente. Demandez le fichier de nouveau dans quelques minutes.';
 
     public int $tries = 2;
 
@@ -200,15 +204,15 @@ class PreparerLeTelechargementDesDocumentsJob implements ShouldBeUnique, ShouldQ
     }
 
     /**
-     * Une erreur imprévue, après toutes ses tentatives : la demande échoue,
-     * la personne le sait.
+     * Une erreur imprévue, ou un antivirus injoignable, après toutes ses
+     * tentatives : la demande échoue, la personne sait pourquoi.
      */
     public function failed(?Throwable $exception): void
     {
         $telechargement = TelechargementDeDocuments::query()->withoutGlobalScopes()->find($this->telechargementId);
 
         if ($telechargement !== null && $telechargement->statut === StatutDuTelechargement::EnPreparation) {
-            $this->echouer($telechargement, self::MOTIF_ERREUR);
+            $this->echouer($telechargement, $exception instanceof AntivirusInjoignableException ? self::MOTIF_ANTIVIRUS : self::MOTIF_ERREUR);
         }
     }
 

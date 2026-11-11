@@ -3,10 +3,10 @@
 namespace App\Domain\Achats\Actions;
 
 use App\Domain\Achats\Models\PieceDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -23,7 +23,8 @@ use LogicException;
  * (voir PiecesDuFournisseur) ; jointe à une facture validée ou à un avoir
  * émis, elle ne se retire plus. Le retrait, puis l'ajout, s'inscrivent au
  * journal d'audit, et la marque « pièce du fournisseur manquante » suit ce
- * qui reste joint.
+ * qui reste joint. Le fichier qui remplace est contrôlé avant toute
+ * transaction (voir PiecesDuFournisseur::controler()).
  *
  * Mêmes verrous que JoindreDesPiecesAction : la société, le magasin en
  * partage, l'auteur relu sous le verrou de sa ligne, qui doit pouvoir
@@ -47,6 +48,8 @@ class RetirerUnePieceAction
      */
     public function handle(User $auteur, PieceDuFournisseur $piece, ?PieceDeposee $remplacante = null): void
     {
+        $remplacante = $remplacante === null ? null : $this->pieces->controler($auteur, $piece->document(), [$remplacante])[0];
+
         DB::transaction(function () use ($auteur, $piece, $remplacante): void {
             $magasin = app(TenantContext::class)->magasin();
             Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);

@@ -652,11 +652,12 @@ class TenantIsolationTest extends TestCase
             ],
             PieceDuFournisseur::class => [
                 'facture_achat_id' => FactureAchat::factory()->create()->getKey(),
-                'nom_origine' => 'facture-fournisseur.pdf',
+                'nom' => 'facture-fournisseur.pdf',
                 'type_mime' => 'application/pdf',
                 'taille' => 1024,
                 'empreinte' => str_repeat('a', 64),
                 'chemin' => 'magasin-0/'.Str::random(32).'.pdf',
+                'analysee_le' => self::enUtc('2026-10-09 12:32:10'),
             ],
             TauxFactureAchat::class => [
                 'facture_achat_id' => FactureAchat::factory()->create()->getKey(),

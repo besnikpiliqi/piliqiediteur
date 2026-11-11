@@ -8,8 +8,10 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\PieceDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
+use App\Domain\Fichiers\ControleDesFichiers;
+use App\Domain\Fichiers\NomDeFichier;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use Filament\Actions\Action;
@@ -44,9 +46,17 @@ trait JointLesPiecesDuFournisseur
     public const PIECE_MANQUANTE = 'Pièce du fournisseur manquante';
 
     /**
+     * La marque d'une pièce que l'antivirus a reconnue comme une menace.
+     */
+    public const PIECE_BLOQUEE = 'Bloquée par l\'antivirus';
+
+    /**
      * Le champ de dépôt des pièces : des PDF ou des photos, dix au plus, de
-     * 10 Mo au plus chacun ; les fichiers restent dans le dossier temporaire
-     * des envois jusqu'à leur dépôt (voir PieceDeposee).
+     * 10 Mo au plus chacun, refusés autrement par le serveur, à l'envoi
+     * temporaire (config/livewire.php) comme à la validation du formulaire ;
+     * les fichiers restent dans le dossier temporaire des envois, sur le
+     * disque privé, jusqu'à leur dépôt, où l'action les contrôle en entier
+     * (voir PieceDeposee et ControleDesFichiers).
      */
     public static function champDesPieces(string $libelle, string $aide): FileUpload
     {
@@ -55,8 +65,8 @@ trait JointLesPiecesDuFournisseur
             ->helperText($aide)
             ->multiple()
             ->maxFiles(PiecesDuFournisseur::NOMBRE_MAXIMAL_PAR_DOCUMENT)
-            ->maxSize(PiecesDuFournisseur::TAILLE_MAXIMALE_EN_OCTETS / 1024)
-            ->acceptedFileTypes(array_keys(PiecesDuFournisseur::TYPES))
+            ->maxSize(ControleDesFichiers::TAILLE_MAXIMALE_EN_OCTETS / 1024)
+            ->acceptedFileTypes(array_keys(NomDeFichier::EXTENSIONS))
             ->storeFiles(false)
             ->columnSpanFull();
     }
@@ -108,8 +118,10 @@ trait JointLesPiecesDuFournisseur
 
     /**
      * La section des pièces d'une fiche : chacune avec son nom, qui la
-     * télécharge (voir TelechargerUnePieceDuFournisseurController), sa
-     * taille, et qui l'a jointe, quand.
+     * télécharge en pièce jointe (voir
+     * TelechargerUnePieceDuFournisseurController), sauf une pièce bloquée
+     * par l'antivirus, marquée comme telle, sa taille, et qui l'a jointe,
+     * quand.
      */
     public static function sectionDesPieces(): InfolistSection
     {
@@ -121,11 +133,14 @@ trait JointLesPiecesDuFournisseur
                     ->state(fn (FactureAchat|AvoirFournisseur $record) => $record->pieces()->get())
                     ->schema([
                         // Un lien de téléchargement (attribut download) : le
-                        // navigateur enregistre le fichier sous son nom
-                        // d'origine sans quitter la fiche.
-                        TextEntry::make('nom_origine')
+                        // navigateur enregistre le fichier sous son nom,
+                        // réécrit avec l'extension de son type, sans quitter
+                        // la fiche ; une pièce bloquée n'a pas de lien.
+                        TextEntry::make('nom')
                             ->label('Fichier')
-                            ->state(fn (PieceDuFournisseur $record): HtmlString => new HtmlString('<a href="'.e(self::adresseDeLaPiece($record)).'" download="'.e($record->nom_origine).'" class="text-primary-600 underline dark:text-primary-400">'.e($record->nom_origine).'</a>'))
+                            ->state(fn (PieceDuFournisseur $record): HtmlString => new HtmlString($record->bloquee_le !== null
+                                ? e($record->nom).' <span class="font-medium text-danger-600 dark:text-danger-400">'.e(self::PIECE_BLOQUEE).'</span>'
+                                : '<a href="'.e(self::adresseDeLaPiece($record)).'" download="'.e($record->nom).'" class="text-primary-600 underline dark:text-primary-400">'.e($record->nom).'</a>'))
                             ->html(),
                         TextEntry::make('taille')
                             ->label('Taille')
@@ -244,7 +259,7 @@ trait JointLesPiecesDuFournisseur
     {
         return Select::make('piece')
             ->label('Pièce')
-            ->options(fn (): array => $record->pieces()->get()->mapWithKeys(fn (PieceDuFournisseur $piece): array => [$piece->uuid => $piece->nom_origine.' ('.$piece->tailleLisible().')'])->all())
+            ->options(fn (): array => $record->pieces()->get()->mapWithKeys(fn (PieceDuFournisseur $piece): array => [$piece->uuid => $piece->nom.' ('.$piece->tailleLisible().')'])->all())
             ->required();
     }
 

@@ -6,6 +6,7 @@
     "license": "proprietary",
     "require": {
         "php": "^8.3",
+        "ext-gd": "*",
         "ext-openssl": "*",
         "ext-pdo_pgsql": "*",
         "ext-zip": "*",

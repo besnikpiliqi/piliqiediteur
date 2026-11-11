@@ -5,12 +5,13 @@ namespace Tests\Feature\Facturation;
 use App\Console\Commands\EffacerTelechargementsDeDocuments;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\JoindreDesPiecesAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\PieceDuFournisseur;
 use App\Domain\Achats\Services\FicheDeSaisiePdfGenerator;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Cabinets\Actions\ReglerLesAutorisationsDuCabinetAction;
@@ -35,6 +36,7 @@ use App\Domain\Facturation\Services\ArchiveDesDocuments;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
 use App\Domain\Facturation\Services\RecapitulatifDesDocuments;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\DemanderLeTelechargementDesDocumentsAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
@@ -45,10 +47,14 @@ use App\Domain\Tenancy\Enums\StatutDuTelechargement;
 use App\Domain\Tenancy\Jobs\PreparerLeTelechargementDesDocumentsJob;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\TelechargementDeDocuments;
+use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Notifications\AvisDuTelechargementDesDocuments;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
+use App\Integrations\Antivirus\Contracts\Antivirus;
+use App\Integrations\Antivirus\ResultatDeLAntivirus;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,6 +63,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use LogicException;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -74,8 +81,6 @@ use ZipArchive;
 class TelechargementDesDocumentsTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const PDF = "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF";
 
     private Magasin $magasin;
 
@@ -287,7 +292,7 @@ class TelechargementDesDocumentsTest extends TestCase
             "clotures/2026-03/{$this->documents['cloture']->numero}.pdf",
             'encaissements/2026-03/encaissements-PORT-2026-03.pdf',
         ], array_keys($fichiers));
-        $this->assertSame(self::PDF, $fichiers["achats/2026-03/{$achat} - Facture F-812.pdf"]);
+        $this->assertSame(FichiersDeTest::pdf(), $fichiers["achats/2026-03/{$achat} - Facture F-812.pdf"]);
         foreach ($fichiers as $nom => $contenu) {
             $this->assertStringStartsWith('%PDF-', $contenu, $nom);
         }
@@ -303,6 +308,84 @@ class TelechargementDesDocumentsTest extends TestCase
         $this->assertStringStartsWith(FicheDeSaisiePdfGenerator::MARQUE_FACTURE.' | Boutique du Port', $fiche);
         $this->assertStringContainsString('Facture du 05/03/2026 | Saisie manuelle | FOURNISSEUR | Grossiste du Nord', $fiche);
         $this->assertStringContainsString('Total TTC | 30,00 €', $fiche);
+    }
+
+    /**
+     * Une pièce du fournisseur entre dans le ZIP sous son nom réécrit avec
+     * l'extension de son type, jamais sous l'extension du nom déposé
+     * (« Bon de livraison.bat » y devient « Bon de livraison.pdf ») ;
+     * repassée par l'antivirus, sa dernière analyse ayant plus de 24
+     * heures, et reconnue alors comme une menace, elle est bloquée au nom
+     * de qui demande le fichier et n'y entre pas ; un achat dont plus
+     * aucune pièce ne se sert y entre par sa fiche de saisie (décisions de
+     * l'éditeur du 07/11/2026, lot FI).
+     */
+    public function test_le_zip_nomme_chaque_piece_par_l_extension_de_son_type_et_saute_une_piece_bloquee(): void
+    {
+        Notification::fake();
+        $achat = $this->documents['achatAvecPiece'];
+        $bon = FichiersDeTest::pdf('Bon de livraison');
+        app(TenantContext::class)->runAs($this->magasin, fn () => app(JoindreDesPiecesAction::class)->handle($this->responsable, $achat, [new PieceDeposee('Bon de livraison.bat', $bon)]));
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $this->antivirusQuiReconnait(FichiersDeTest::pdf());
+
+        $fichiers = $this->lireLeZip($this->demander($proprietaire, FormatDuTelechargement::Zip));
+
+        $pieces = array_values(array_filter(array_keys($fichiers), fn (string $nom): bool => str_starts_with($nom, "achats/2026-03/{$achat->numero} ")));
+        $this->assertSame(["achats/2026-03/{$achat->numero} - Bon de livraison.pdf"], $pieces);
+        $this->assertSame($bon, $fichiers[$pieces[0]]);
+        $bloquee = PieceDuFournisseur::query()->where('facture_achat_id', $achat->id)->where('nom', 'Facture F-812.pdf')->sole();
+        $this->assertMemeInstant(self::aParis('2026-03-10 10:00:00'), $bloquee->bloquee_le);
+        $this->assertSame([$proprietaire->id], array_map(fn ($entree): ?int => $entree->auteur_id, $this->entreesDAudit($this->magasin->societe, ActionAuditee::PieceDuFournisseurBloquee)));
+
+        $this->travelTo(self::aParis('2026-03-11 10:00:01'));
+        $this->antivirusQuiReconnait($bon);
+        $fichiers = $this->lireLeZip($this->demander($proprietaire, FormatDuTelechargement::Zip));
+
+        $this->assertSame(
+            ["achats/2026-03/{$achat->numero} - saisie PILIQI.pdf"],
+            array_values(array_filter(array_keys($fichiers), fn (string $nom): bool => str_starts_with($nom, "achats/2026-03/{$achat->numero} "))),
+        );
+        $this->assertSame(2, PieceDuFournisseur::query()->where('facture_achat_id', $achat->id)->whereNotNull('bloquee_le')->count());
+        Notification::assertSentToTimes($proprietaire, AvisDeLAntivirus::class, 2);
+    }
+
+    /**
+     * Un antivirus qui ne répond pas pour une pièce à analyser de nouveau
+     * fait échouer la préparation du ZIP : aucune pièce n'est servie sans
+     * une analyse de moins de 24 heures, aucun fichier ne reste, et la
+     * personne apprend pourquoi ; le CSV, qui ne contient aucune pièce, se
+     * prépare toujours.
+     */
+    public function test_un_antivirus_injoignable_fait_echouer_le_zip_avec_sa_raison(): void
+    {
+        Notification::fake();
+        $this->app->instance(Antivirus::class, new class implements Antivirus
+        {
+            public function analyser(string $contenu): ResultatDeLAntivirus
+            {
+                throw new AntivirusInjoignableException('clamd est injoignable.');
+            }
+
+            public function description(): string
+            {
+                throw new AntivirusInjoignableException('clamd est injoignable.');
+            }
+        });
+        $proprietaire = $this->proprietaireDe($this->magasin);
+
+        try {
+            $this->demander($proprietaire, FormatDuTelechargement::Zip);
+            $this->fail('La préparation du ZIP échoue quand l\'antivirus ne répond pas.');
+        } catch (AntivirusInjoignableException) {
+        }
+
+        $echec = TelechargementDeDocuments::query()->withoutGlobalScopes()->sole();
+        $this->assertSame([StatutDuTelechargement::Echec, PreparerLeTelechargementDesDocumentsJob::MOTIF_ANTIVIRUS, null], [$echec->statut, $echec->motif_echec, $echec->chemin]);
+        $this->assertSame([], Storage::disk(PreparerLeTelechargementDesDocumentsJob::DISQUE)->allFiles());
+        $this->assertSame(0, PieceDuFournisseur::query()->whereNotNull('bloquee_le')->count());
+        Notification::assertSentTo($proprietaire, AvisDuTelechargementDesDocuments::class, fn (AvisDuTelechargementDesDocuments $avis): bool => $avis->telechargement->is($echec));
+        $this->assertSame(StatutDuTelechargement::Pret, $this->demander($proprietaire, FormatDuTelechargement::Csv)->statut);
     }
 
     public function test_la_preparation_previent_la_personne_et_s_inscrit_au_journal_d_audit_de_la_societe(): void
@@ -625,6 +708,27 @@ class TelechargementDesDocumentsTest extends TestCase
     }
 
     /**
+     * Un antivirus qui ne reconnaît comme une menace que ce contenu.
+     */
+    private function antivirusQuiReconnait(string $menace): void
+    {
+        $this->app->instance(Antivirus::class, new class($menace) implements Antivirus
+        {
+            public function __construct(private readonly string $menace) {}
+
+            public function analyser(string $contenu): ResultatDeLAntivirus
+            {
+                return $contenu === $this->menace ? ResultatDeLAntivirus::menace('Pdf.Exploit.Nouveau') : ResultatDeLAntivirus::sain();
+            }
+
+            public function description(): string
+            {
+                return 'antivirus des tests';
+            }
+        });
+    }
+
+    /**
      * Les fichiers du ZIP préparé, chacun sous son chemin dans l'archive.
      *
      * @return array<string, string>
@@ -668,7 +772,7 @@ class TelechargementDesDocumentsTest extends TestCase
             $this->documents['achatAvecPiece'] = $valider($achat(
                 [['produit_id' => $bougie->id, 'quantite' => 20, 'prix_unitaire_ht' => 5], ['produit_id' => $the->id, 'quantite' => 10, 'prix_unitaire_ht' => 3]],
                 ['date_facture' => '2026-03-02', 'numero_fournisseur' => 'F-812'],
-                [new PieceDeposee('Facture F-812.pdf', self::PDF)],
+                [new PieceDeposee('Facture F-812.pdf', FichiersDeTest::pdf())],
             ));
             $this->documents['achatSansPiece'] = $valider($achat([['produit_id' => $bougie->id, 'quantite' => 5, 'prix_unitaire_ht' => 5]], ['date_facture' => '2026-03-05']));
             $this->documents['achatApi'] = $valider($achat([['produit_id' => $bougie->id, 'quantite' => 2, 'prix_unitaire_ht' => 5]], ['source' => SourceFactureAchat::Api, 'date_facture' => null]));

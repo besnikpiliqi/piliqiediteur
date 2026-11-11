@@ -40,6 +40,7 @@ use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Facturation\Services\RecuPaiementPdfGenerator;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Facturation\Services\RegularisationDUneFacture;
+use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
@@ -982,7 +983,7 @@ class FactureResource extends Resource
                     return null;
                 }
 
-                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($recu));
+                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($recu), EnTetesDesFichiers::fichierProduit('application/pdf'));
             });
     }
 

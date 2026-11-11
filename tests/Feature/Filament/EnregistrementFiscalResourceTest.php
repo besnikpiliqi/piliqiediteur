@@ -313,7 +313,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $composant = Livewire::test(ListEnregistrementsFiscaux::class)
             ->callAction('exporter_journal', ['du' => '2026-10-20', 'au' => '2026-10-22']);
 
-        $composant->assertFileDownloaded('journal-des-evenements-du-2026-10-20-au-2026-10-22.csv');
+        $composant->assertFileDownloaded('journal-des-evenements-du-2026-10-20-au-2026-10-22.csv', contentType: 'text/csv; charset=UTF-8');
         $lignes = $this->lignesDuCsv($composant);
         $this->assertSame(ExporterJournalDesEvenementsAction::colonnes(Calendrier::deParis()), $lignes[0]);
         $this->assertSame('Horodatage (heure de Paris)', $lignes[0][1]);

@@ -19,8 +19,11 @@ use LogicException;
  * PiecesDeVerification::effacer()). La ligne reste : la trace qu'une pièce
  * de ce type a été examinée, avec l'empreinte du fichier déposé.
  *
- * Seul l'effacement se pose (chemin remis à null, effacee_le posée), une
- * fois ; la ligne ne s'efface pas.
+ * Seuls se posent l'effacement (chemin remis à null, effacee_le posée),
+ * une fois, et, tant que le fichier reste, sa dernière analyse par
+ * l'antivirus, qui avance, et son blocage, une fois, avec sa menace (voir
+ * PiecesDeVerification::dechiffrerPourLExamen()) ; la ligne ne s'efface
+ * pas.
  */
 class PieceVerification extends Model
 {
@@ -48,15 +51,20 @@ class PieceVerification extends Model
         'type' => TypePiece::class,
         'deposee_le' => Instant::class,
         'effacee_le' => Instant::class,
+        'analysee_le' => Instant::class,
+        'bloquee_le' => Instant::class,
+        'taille' => 'integer',
     ];
 
     protected static function booted(): void
     {
         static::updating(function (PieceVerification $piece): void {
-            $corrigees = array_diff(array_keys($piece->getDirty()), ['chemin', 'effacee_le', 'updated_at']);
+            $modifiees = array_keys($piece->getDirty());
+            $effacement = array_diff($modifiees, ['chemin', 'effacee_le', 'updated_at']) === [] && $piece->chemin === null;
+            $analyse = array_diff($modifiees, ['analysee_le', 'bloquee_le', 'menace', 'updated_at']) === [] && $piece->getOriginal('bloquee_le') === null;
 
-            if ($corrigees !== [] || $piece->getOriginal('effacee_le') !== null || $piece->chemin !== null) {
-                throw new LogicException('Une pièce déposée ne se corrige jamais : seul son effacement se pose, une fois.');
+            if ($piece->getOriginal('effacee_le') !== null || (! $effacement && ! $analyse)) {
+                throw new LogicException('Une pièce déposée ne se corrige jamais : seuls son effacement, une fois, et sa dernière analyse par l\'antivirus se posent.');
             }
         });
 

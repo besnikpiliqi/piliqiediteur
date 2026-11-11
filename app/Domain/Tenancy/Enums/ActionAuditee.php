@@ -20,6 +20,8 @@ enum ActionAuditee: string implements HasLabel
     case PieceDeposee = 'piece_deposee';
     case PieceEffacee = 'piece_effacee';
     case PiecesConsultees = 'pieces_consultees';
+    case PieceDeVerificationRefusee = 'piece_de_verification_refusee';
+    case PieceDeVerificationBloquee = 'piece_de_verification_bloquee';
     case CodeEnvoye = 'code_envoye';
     case CodeSaisi = 'code_saisi';
     case CodeAnnule = 'code_annule';
@@ -92,6 +94,8 @@ enum ActionAuditee: string implements HasLabel
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
     case PieceDuFournisseurJointe = 'piece_du_fournisseur_jointe';
     case PieceDuFournisseurRetiree = 'piece_du_fournisseur_retiree';
+    case PieceDuFournisseurRefusee = 'piece_du_fournisseur_refusee';
+    case PieceDuFournisseurBloquee = 'piece_du_fournisseur_bloquee';
     case PieceDuFournisseurManquantePosee = 'piece_du_fournisseur_manquante_posee';
     case PieceDuFournisseurManquanteLevee = 'piece_du_fournisseur_manquante_levee';
     case DocumentsTelecharges = 'documents_telecharges';
@@ -116,6 +120,8 @@ enum ActionAuditee: string implements HasLabel
             self::PieceDeposee => 'Pièce déposée pour l\'éditeur',
             self::PieceEffacee => 'Pièce effacée',
             self::PiecesConsultees => 'Pièces consultées par l\'éditeur',
+            self::PieceDeVerificationRefusee => 'Pièce pour l\'éditeur refusée par ses contrôles',
+            self::PieceDeVerificationBloquee => 'Pièce pour l\'éditeur bloquée par l\'antivirus',
             self::CodeEnvoye => 'Code de confirmation envoyé',
             self::CodeSaisi => 'Code de confirmation saisi',
             self::CodeAnnule => 'Code de confirmation annulé',
@@ -188,6 +194,8 @@ enum ActionAuditee: string implements HasLabel
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
             self::PieceDuFournisseurJointe => 'Pièce du fournisseur jointe',
             self::PieceDuFournisseurRetiree => 'Pièce du fournisseur retirée',
+            self::PieceDuFournisseurRefusee => 'Pièce du fournisseur refusée par ses contrôles',
+            self::PieceDuFournisseurBloquee => 'Pièce du fournisseur bloquée par l\'antivirus',
             self::PieceDuFournisseurManquantePosee => 'Marque « pièce du fournisseur manquante » posée',
             self::PieceDuFournisseurManquanteLevee => 'Marque « pièce du fournisseur manquante » levée',
             self::DocumentsTelecharges => 'Documents téléchargés par période',
@@ -200,7 +208,7 @@ enum ActionAuditee: string implements HasLabel
     public function categorie(): CategorieAudit
     {
         return match ($this) {
-            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees,
+            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::PieceDeVerificationRefusee, self::PieceDeVerificationBloquee,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose,
             self::ActiviteDuCabinetControlee, self::OrdreDemande, self::OrdreVerifie, self::OrdreRefuse, self::OrdreRetire,
             self::OrdreARefaire => CategorieAudit::Verification,
@@ -236,7 +244,19 @@ enum ActionAuditee: string implements HasLabel
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
             self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],
-            self::PieceDeposee => ['type_piece', 'empreinte'],
+            // Le type de la pièce, son nom réécrit et l'empreinte du fichier
+            // conservé ; le nom tel que reçu, l'empreinte et la taille du
+            // fichier reçu (une photo se réenregistre, voir
+            // ControleDesFichiers), jamais son contenu.
+            self::PieceDeposee => ['type_piece', 'nom', 'empreinte', 'nom_recu', 'empreinte_recue', 'taille_recue'],
+            // Un fichier refusé pour une raison de sécurité (voir
+            // RaisonDuRefus::estDeSecurite()) : sa raison, ce qu'un PDF
+            // contient ou la menace trouvée, le nom tel que reçu, l'empreinte
+            // et la taille du fichier reçu, jamais son contenu.
+            self::PieceDeVerificationRefusee => ['type_piece', 'raison', 'detail', 'nom_recu', 'empreinte_recue', 'taille_recue'],
+            // Une pièce que l'antivirus reconnaît comme une menace à sa
+            // consultation par l'éditeur : gardée, plus jamais servie.
+            self::PieceDeVerificationBloquee => ['type_piece', 'nom', 'empreinte', 'menace'],
             self::PieceEffacee => ['type_piece', 'motif'],
             self::PiecesConsultees => ['pieces'],
             self::CodeEnvoye => ['motif', 'source_adresse', 'reference_envoi'],
@@ -384,11 +404,20 @@ enum ActionAuditee: string implements HasLabel
             // et la quantité retournées (voir EmettreAvoirFournisseurAction).
             self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'taux', 'tva_a_verifier', 'lignes'],
             // Le document du fournisseur (sa nature, notre numéro, son n°
-            // chez le fournisseur), le nom d'origine du fichier et son
-            // empreinte SHA-256, jamais son contenu (voir
-            // PiecesDuFournisseur) ; la marque « pièce du fournisseur
-            // manquante », le seul document.
-            self::PieceDuFournisseurJointe, self::PieceDuFournisseurRetiree => ['document', 'nom_origine', 'empreinte'],
+            // chez le fournisseur), le nom réécrit du fichier conservé et son
+            // empreinte SHA-256, et, à l'ajout, le nom tel que reçu,
+            // l'empreinte et la taille du fichier reçu (une photo se
+            // réenregistre, voir ControleDesFichiers), jamais son contenu
+            // (voir PiecesDuFournisseur) ; un fichier refusé pour une raison
+            // de sécurité : le document visé (aucun à la saisie), la raison,
+            // ce qu'un PDF contient ou la menace trouvée, et le fichier reçu ;
+            // une pièce bloquée par l'antivirus à son téléchargement : la
+            // menace ; la marque « pièce du fournisseur manquante », le seul
+            // document.
+            self::PieceDuFournisseurJointe => ['document', 'nom', 'empreinte', 'nom_recu', 'empreinte_recue', 'taille_recue'],
+            self::PieceDuFournisseurRetiree => ['document', 'nom', 'empreinte'],
+            self::PieceDuFournisseurRefusee => ['document', 'raison', 'detail', 'nom_recu', 'empreinte_recue', 'taille_recue'],
+            self::PieceDuFournisseurBloquee => ['document', 'nom', 'empreinte', 'menace'],
             self::PieceDuFournisseurManquantePosee, self::PieceDuFournisseurManquanteLevee => ['document'],
             // Le téléchargement des documents par période qu'un compte a
             // préparé (voir PreparerLeTelechargementDesDocumentsJob) : les

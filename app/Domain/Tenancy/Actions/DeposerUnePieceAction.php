@@ -3,11 +3,18 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Fichiers\ControleDesFichiers;
+use App\Domain\Fichiers\Enums\RaisonDuRefus;
+use App\Domain\Fichiers\Exceptions\FichierRefuseException;
+use App\Domain\Fichiers\FichierControle;
+use App\Domain\Fichiers\NomDeFichier;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Services\AlerteEditeur;
 use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -25,20 +32,22 @@ use Throwable;
  * CourriersDeVerification::piecesPossibles()), pour que l'éditeur traite
  * son cas à la main : extrait Kbis ou extrait du registre national des
  * entreprises de moins de trois mois, pièce d'identité du représentant
- * légal. Le fichier se range chiffré (voir PiecesDeVerification), avec
- * l'empreinte SHA-256 de ce qui a été déposé ; il s'efface dès la décision
- * de l'éditeur, au plus tard trente jours après le dépôt. L'éditeur est
+ * légal. Le fichier est d'abord contrôlé comme tout fichier reçu (voir
+ * ControleDesFichiers, lot FI) : un refus pour une raison de sécurité
+ * s'inscrit au journal d'audit de la société, et une menace trouvée par
+ * l'antivirus prévient le propriétaire ; accepté, il se range chiffré (voir
+ * PiecesDeVerification), avec son nom réécrit, son type, sa taille et
+ * l'empreinte SHA-256 du fichier conservé (une photo se réenregistre sans
+ * ses métadonnées) ; le journal d'audit garde aussi le nom tel que reçu,
+ * l'empreinte et la taille du fichier reçu. Il s'efface dès la décision de
+ * l'éditeur, au plus tard trente jours après le dépôt. L'éditeur est
  * prévenu qu'un dossier l'attend. Des pièces ne valident jamais la
  * société : l'éditeur envoie un nouveau courrier, dont seul le code la
  * valide (voir ExaminerLesPiecesAction).
  */
 class DeposerUnePieceAction
 {
-    public const TAILLE_MAXIMALE_EN_OCTETS = 10 * 1024 * 1024;
-
     public const PIECES_EN_ATTENTE_AU_PLUS = 10;
-
-    public const MESSAGE_VIDE_OU_TROP_GROS = 'La pièce doit être un fichier de 10 Mo au plus.';
 
     public const MESSAGE_TROP_DE_PIECES = 'Dix pièces attendent déjà l\'examen de l\'éditeur.';
 
@@ -51,34 +60,31 @@ class DeposerUnePieceAction
         private readonly JournalAudit $journalAudit,
         private readonly AlerteEditeur $alerteEditeur,
         private readonly CourriersDeVerification $courriers,
+        private readonly ControleDesFichiers $controle,
     ) {}
 
     /**
-     * @param  string  $contenu  le contenu du fichier déposé
-     *
      * @throws VerificationRefuseeException
+     * @throws FichierRefuseException quand le fichier est refusé par ses contrôles
      */
-    public function handle(User $proprietaire, Societe $societe, TypePiece $type, string $contenu): PieceVerification
+    public function handle(User $proprietaire, Societe $societe, TypePiece $type, PieceDeposee $depot): PieceVerification
     {
-        $piece = app(TenantContext::class)->runAsSociete($societe, function () use ($proprietaire, $societe, $type, $contenu): PieceVerification {
+        $piece = app(TenantContext::class)->runAsSociete($societe, function () use ($proprietaire, $societe, $type, $depot): PieceVerification {
             $proprietaire = app(LecteurDesDroits::class)->exigerDansLaSociete($proprietaire, 'verifierLaSociete', $societe, $societe, new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION));
 
             if (! $this->courriers->piecesPossibles($societe->refresh())) {
                 throw new VerificationRefuseeException(self::MESSAGE_PAS_ENCORE);
             }
 
-            if ($contenu === '' || strlen($contenu) > self::TAILLE_MAXIMALE_EN_OCTETS) {
-                throw new VerificationRefuseeException(self::MESSAGE_VIDE_OU_TROP_GROS);
-            }
-
             if (PieceVerification::query()->whereNull('effacee_le')->count() >= self::PIECES_EN_ATTENTE_AU_PLUS) {
                 throw new VerificationRefuseeException(self::MESSAGE_TROP_DE_PIECES);
             }
 
-            $chemin = $this->pieces->ranger($societe, $contenu);
+            $fichier = $this->controler($proprietaire, $societe, $type, $depot);
+            $chemin = $this->pieces->ranger($societe, $fichier->contenu);
 
             try {
-                return $this->enregistrer($proprietaire, $type, $contenu, $chemin);
+                return $this->enregistrer($proprietaire, $type, $fichier, $chemin);
             } catch (Throwable $erreur) {
                 Storage::disk(PiecesDeVerification::DISQUE)->delete($chemin);
 
@@ -96,21 +102,52 @@ class DeposerUnePieceAction
     }
 
     /**
+     * Le fichier contrôlé ; refusé pour une raison de sécurité, son refus
+     * s'inscrit au journal d'audit, dans sa propre transaction, et une
+     * menace prévient le propriétaire.
+     *
+     * @throws FichierRefuseException
+     */
+    private function controler(User $proprietaire, Societe $societe, TypePiece $type, PieceDeposee $depot): FichierControle
+    {
+        try {
+            return $this->controle->controler($depot);
+        } catch (FichierRefuseException $refus) {
+            if ($refus->raison->estDeSecurite()) {
+                DB::transaction(function () use ($proprietaire, $societe, $type, $refus): void {
+                    Societe::verrouillerAvantSonJournalDAudit(CleDuModele::de($societe));
+                    $this->journalAudit->inscrire(ActionAuditee::PieceDeVerificationRefusee, $proprietaire, null, null, ['type_piece' => $type->value, ...$refus->valeursAuditees()], $societe);
+                });
+            }
+
+            if ($refus->raison === RaisonDuRefus::Menace) {
+                $societe->proprietaire()->first()?->notify(new AvisDeLAntivirus($societe, 'Fichier refusé par l\'antivirus', 'Le fichier « '.NomDeFichier::pourUnMessage($refus->nomRecu)." » déposé pour l'éditeur ({$type->getLabel()}) a été refusé : l'antivirus y a trouvé la menace « {$refus->menace} ». Rien n'a été enregistré."));
+            }
+
+            throw $refus;
+        }
+    }
+
+    /**
      * La ligne de la pièce et son inscription au journal d'audit ; le
      * fichier déjà rangé s'efface si elles échouent.
      */
-    private function enregistrer(User $proprietaire, TypePiece $type, string $contenu, string $chemin): PieceVerification
+    private function enregistrer(User $proprietaire, TypePiece $type, FichierControle $fichier, string $chemin): PieceVerification
     {
-        return DB::transaction(function () use ($proprietaire, $type, $contenu, $chemin): PieceVerification {
+        return DB::transaction(function () use ($proprietaire, $type, $fichier, $chemin): PieceVerification {
             $piece = tap((new PieceVerification)->forceFill([
                 'type' => $type,
+                'nom' => $fichier->nom,
+                'type_mime' => $fichier->type,
+                'taille' => $fichier->taille(),
                 'chemin' => $chemin,
-                'empreinte' => hash('sha256', $contenu),
+                'empreinte' => $fichier->empreinte(),
+                'analysee_le' => $fichier->analyseLe,
                 'deposee_par' => $proprietaire->getKey(),
                 'deposee_le' => now(),
             ]))->save();
 
-            $this->journalAudit->inscrire(ActionAuditee::PieceDeposee, $proprietaire, null, null, ['type_piece' => $type->value, 'empreinte' => $piece->empreinte], $piece);
+            $this->journalAudit->inscrire(ActionAuditee::PieceDeposee, $proprietaire, null, null, ['type_piece' => $type->value, 'nom' => $piece->nom, 'empreinte' => $piece->empreinte, ...$fichier->valeursRecues()], $piece);
 
             return $piece;
         });

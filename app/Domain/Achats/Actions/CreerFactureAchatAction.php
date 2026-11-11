@@ -6,12 +6,13 @@ use App\Domain\Achats\Exceptions\ConfirmationDesEcartsRequiseException;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Achats\Services\MontantsDuFournisseur;
-use App\Domain\Achats\Services\PieceDeposee;
 use App\Domain\Achats\Services\PiecesDuFournisseur;
 use App\Domain\Achats\Services\TvaDuFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Fichiers\Exceptions\FichierRefuseException;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -61,7 +62,8 @@ use LogicException;
  * Une facture saisie à la main porte la date de la facture du fournisseur,
  * sans laquelle elle ne s'enregistre pas (lot EX : le téléchargement des
  * documents par période classe un achat par elle), et la pièce du
- * fournisseur, jointe à la saisie (voir PiecesDuFournisseur) ; sans pièce,
+ * fournisseur, jointe à la saisie et contrôlée avant toute écriture (voir
+ * PiecesDuFournisseur::controler()) ; sans pièce,
  * elle s'enregistre quand même, marquée « pièce du fournisseur manquante »
  * (décision de l'éditeur du 03/11/2026, F1 = b). Une facture reçue par
  * l'API n'exige ni l'une ni l'autre.
@@ -85,10 +87,12 @@ class CreerFactureAchatAction
      * @throws AuthorizationException
      * @throws LogicException quand le magasin est en lecture seule ou qu'une saisie à la main n'a pas la date de la facture du fournisseur
      * @throws ConfirmationDesEcartsRequiseException
+     * @throws FichierRefuseException quand une pièce est refusée par ses contrôles, avant toute écriture
      */
     public function handle(User $auteur, Fournisseur $fournisseur, array $lignes, array $attributs = [], ?MontantsDuFournisseur $montants = null, array $pieces = []): FactureAchat
     {
         $montants ??= MontantsDuFournisseur::aucun();
+        $pieces = $this->pieces->controler($auteur, null, $pieces);
 
         return DB::transaction(function () use ($auteur, $fournisseur, $lignes, $attributs, $montants, $pieces) {
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);

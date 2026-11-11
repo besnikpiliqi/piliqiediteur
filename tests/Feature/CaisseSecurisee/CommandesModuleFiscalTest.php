@@ -86,6 +86,37 @@ class CommandesModuleFiscalTest extends TestCase
     }
 
     /**
+     * Le diagnostic contrôle aussi ce qui contrôle les fichiers reçus (lot
+     * FI) : l'extension gd, qpdf, et l'antivirus, qui doit reconnaître le
+     * fichier de test EICAR.
+     */
+    public function test_le_diagnostic_controle_gd_qpdf_et_l_antivirus(): void
+    {
+        $this->artisan('caisse:diagnostiquer')
+            ->expectsOutputToContain('version '.phpversion('gd'))
+            ->expectsOutputToContain('qpdf version')
+            ->expectsOutputToContain('antivirus factice, qui ne reconnaît que le fichier de test EICAR, fichier de test EICAR reconnu (Eicar-Test-Signature)')
+            ->assertSuccessful();
+    }
+
+    /**
+     * En production, l'antivirus factice fait échouer le diagnostic ; un
+     * qpdf introuvable aussi, en tout lieu : sans lui, tout PDF reçu est
+     * refusé.
+     */
+    public function test_le_diagnostic_echoue_avec_l_antivirus_factice_en_production_ou_sans_qpdf(): void
+    {
+        config(['piliqi.qpdf' => '/chemin/qui/n/existe/pas/qpdf']);
+        $this->app->detectEnvironment(fn (): string => 'production');
+
+        $this->artisan('caisse:diagnostiquer')
+            ->expectsOutputToContain('L\'antivirus factice (ANTIVIRUS_PILOTE=factice) ne sert jamais en production')
+            ->expectsOutputToContain('qpdf ne se lance pas (/chemin/qui/n/existe/pas/qpdf)')
+            ->expectsOutputToContain('Caisse sécurisée non opérationnelle')
+            ->assertFailed();
+    }
+
+    /**
      * L'échec que connaît PHP sous Windows tant que la variable
      * OPENSSL_CONF ne désigne pas son fichier openssl.cnf, reproduit sur
      * tout système : la commande tourne dans un autre processus PHP, dont

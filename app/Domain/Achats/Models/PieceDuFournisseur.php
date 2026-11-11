@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Models;
 
+use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,12 +14,16 @@ use LogicException;
 /**
  * Une pièce du fournisseur (décision de l'éditeur du 03/11/2026, lot EX) :
  * la vraie facture d'achat ou la vraie note d'avoir du fournisseur, en PDF
- * ou en photo, jointe à une facture d'achat ou à un avoir fournisseur du
- * magasin (voir PiecesDuFournisseur). Elle ne se modifie jamais ; elle ne
- * s'efface que d'une facture d'achat encore en brouillon, et la base le
- * garantit (voir GardesDesPiecesDuFournisseur). Elle se télécharge par
+ * ou en photo, contrôlée à son dépôt (voir ControleDesFichiers), jointe à
+ * une facture d'achat ou à un avoir fournisseur du magasin (voir
+ * PiecesDuFournisseur). Elle ne se modifie jamais : seuls l'instant de sa
+ * dernière analyse par l'antivirus et son blocage, une fois, s'écrivent
+ * par PiecesDuFournisseur::contenuServable() ; elle ne s'efface que d'une
+ * facture d'achat encore en brouillon, et la base le garantit (voir
+ * GardesDesPiecesDuFournisseur). Elle se télécharge en pièce jointe, par
  * son adresse, désignée par son uuid tiré au hasard, pour qui peut voir
- * son document (voir TelechargerUnePieceDuFournisseurController).
+ * son document, sauf bloquée (voir
+ * TelechargerUnePieceDuFournisseurController).
  */
 class PieceDuFournisseur extends Model
 {
@@ -32,6 +37,8 @@ class PieceDuFournisseur extends Model
 
     protected $casts = [
         'taille' => 'integer',
+        'analysee_le' => Instant::class,
+        'bloquee_le' => Instant::class,
     ];
 
     /**
@@ -51,7 +58,7 @@ class PieceDuFournisseur extends Model
         });
 
         static::updating(function (): never {
-            throw new LogicException('Une pièce du fournisseur ne se modifie jamais : elle se retire d\'un brouillon, ou une autre s\'ajoute.');
+            throw new LogicException('Une pièce du fournisseur ne se modifie jamais : elle se retire d\'un brouillon, ou une autre s\'ajoute ; sa dernière analyse et son blocage par l\'antivirus s\'écrivent par PiecesDuFournisseur.');
         });
     }
 

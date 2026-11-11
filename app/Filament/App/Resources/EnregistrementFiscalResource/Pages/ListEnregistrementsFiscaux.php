@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ResultatDePhp;
@@ -110,7 +111,7 @@ class ListEnregistrementsFiscaux extends ListRecords
                     return response()->streamDownload(
                         static fn () => $ecrire(ResultatDePhp::flux(fopen('php://output', 'wb'), 'L\'ouverture de la sortie du téléchargement')),
                         "journal-des-evenements-du-{$du}-au-{$au}.csv",
-                        ['Content-Type' => 'text/csv; charset=UTF-8'],
+                        EnTetesDesFichiers::fichierProduit('text/csv; charset=UTF-8'),
                     );
                 }),
         ];

@@ -8,9 +8,24 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\PieceDuFournisseur;
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Fichiers\ControleDesFichiers;
+use App\Domain\Fichiers\Enums\RaisonDuRefus;
+use App\Domain\Fichiers\Exceptions\FichierRefuseException;
+use App\Domain\Fichiers\Exceptions\PieceBloqueeException;
+use App\Domain\Fichiers\FichierControle;
+use App\Domain\Fichiers\NomDeFichier;
+use App\Domain\Fichiers\PieceDeposee;
+use App\Domain\Fichiers\RevueAntivirus;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Notifications\AvisDeLAntivirus;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Antivirus\AntivirusInjoignableException;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
@@ -21,29 +36,41 @@ use LogicException;
  * fournisseur (décision de l'éditeur du 03/11/2026, lot EX), écrites une
  * seule fois ici, quel que soit l'écran ou l'action qui les dépose :
  *
- * - une pièce est un PDF, une photo JPEG ou PNG, reconnu sur son contenu,
- *   jamais sur son extension, de 10 Mo au plus, et un document en porte au
- *   plus dix, comptées sous le verrou de sa ligne : deux dépôts simultanés
- *   ne dépassent jamais ce nombre ; un même fichier ne se joint qu'une fois
- *   au même document ;
- * - le fichier se range sur le disque privé « pieces_fournisseur », dans
- *   le dossier de son magasin, sous un nom tiré au hasard ; la ligne garde
- *   son nom d'origine, son type, sa taille et son empreinte SHA-256. Une
- *   transaction annulée efface le fichier déjà rangé ;
+ * - chaque fichier déposé, à l'écran ou par l'API, est contrôlé avant
+ *   toute transaction (voir controler() et ControleDesFichiers, lot FI) :
+ *   type lu dans son contenu (PDF, JPEG ou PNG), 10 Mo au plus, nom
+ *   réécrit avec l'extension de ce type, PDF sans code actif, photo
+ *   réenregistrée sans ses métadonnées, antivirus ; un refus pour une
+ *   raison de sécurité s'inscrit au journal d'audit de la société, dans la
+ *   chaîne du magasin, et une menace prévient le propriétaire ;
+ * - un document porte au plus dix pièces, comptées sous le verrou de sa
+ *   ligne : deux dépôts simultanés ne dépassent jamais ce nombre ; un même
+ *   fichier ne se joint qu'une fois au même document ;
+ * - le fichier conservé se range sur le disque privé « pieces_fournisseur »,
+ *   dans le dossier de son magasin, sous un nom tiré au hasard ; la ligne
+ *   garde son nom réécrit, son type, sa taille, son empreinte SHA-256 et
+ *   l'instant de sa dernière analyse par l'antivirus. Une transaction
+ *   annulée efface le fichier déjà rangé ;
  * - avant la validation d'une facture d'achat, une pièce se retire ; jointe
  *   à une facture validée ou à un avoir émis, elle ne se retire plus (la
  *   base le garantit aussi, voir GardesDesPiecesDuFournisseur), on ne peut
  *   qu'en ajouter une. Le fichier d'une pièce retirée s'efface une fois la
  *   transaction validée ;
+ * - une pièce se sert (téléchargement seul ou dans un ZIP) après une
+ *   nouvelle analyse quand la dernière date de plus de 24 heures (voir
+ *   contenuServable()) : reconnue alors comme une menace, elle est bloquée,
+ *   gardée comme pièce justificative mais plus jamais servie ;
  * - un document saisi à la main sans aucune pièce porte la marque « pièce
  *   du fournisseur manquante » (F1 = b) : il s'enregistre et se valide
  *   quand même, et la marque se lève à l'ajout de la première pièce (voir
  *   marquer()) ; un document reçu par l'API n'en exige pas ;
- * - chaque ajout, chaque retrait, chaque pose et chaque levée de la marque
- *   s'inscrit au journal d'audit de la société, dans la chaîne du magasin
- *   (document, nom d'origine, empreinte, auteur).
+ * - chaque ajout, chaque retrait, chaque refus, chaque blocage, chaque pose
+ *   et chaque levée de la marque s'inscrit au journal d'audit de la
+ *   société, dans la chaîne du magasin (document, nom du fichier,
+ *   empreinte, auteur ; à l'ajout et au refus, le nom tel que reçu,
+ *   l'empreinte et la taille du fichier reçu).
  *
- * Les actions qui l'appellent ont déjà pris, dans l'ordre, la ligne de la
+ * Les actions qui joignent ont déjà pris, dans l'ordre, la ligne de la
  * société, celle du magasin et celle de l'auteur relu ; la ligne du
  * document se verrouille ici.
  */
@@ -51,25 +78,7 @@ final class PiecesDuFournisseur
 {
     public const DISQUE = 'pieces_fournisseur';
 
-    public const TAILLE_MAXIMALE_EN_OCTETS = 10 * 1024 * 1024;
-
     public const NOMBRE_MAXIMAL_PAR_DOCUMENT = 10;
-
-    /**
-     * Les types admis, lus sur le contenu, et l'extension de leur fichier
-     * rangé.
-     */
-    public const TYPES = [
-        'application/pdf' => 'pdf',
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-    ];
-
-    public const REFUS_VIDE = 'Le fichier « %s » est vide.';
-
-    public const REFUS_TROP_GROS = 'Le fichier « %s » dépasse 10 Mo : une pièce fait 10 Mo au plus.';
-
-    public const REFUS_TYPE = 'Le fichier « %s » n\'est ni un PDF, ni une photo JPEG ou PNG.';
 
     public const REFUS_TROP_DE_PIECES = 'Un document porte au plus dix pièces du fournisseur.';
 
@@ -77,15 +86,45 @@ final class PiecesDuFournisseur
 
     public const REFUS_RETRAIT = 'Une pièce ne se retire que d\'une facture d\'achat en brouillon : jointe à un document validé, elle se conserve comme lui ; vous pouvez en ajouter une autre.';
 
-    public function __construct(private readonly JournalAudit $journalAudit) {}
+    public function __construct(
+        private readonly JournalAudit $journalAudit,
+        private readonly ControleDesFichiers $controle,
+        private readonly RevueAntivirus $revue,
+    ) {}
 
     /**
-     * Joint ces pièces au document, puis met sa marque à jour.
+     * Contrôle ces fichiers déposés pour ce document du magasin courant
+     * (aucun encore à sa saisie), avant toute transaction ; un refus pour
+     * une raison de sécurité s'inscrit au journal d'audit, au nom de
+     * l'auteur, puis remonte.
      *
      * @param  list<PieceDeposee>  $pieces
+     * @return list<FichierControle>
+     *
+     * @throws FichierRefuseException
+     */
+    public function controler(User $auteur, FactureAchat|AvoirFournisseur|null $document, array $pieces): array
+    {
+        return array_map(function (PieceDeposee $piece) use ($auteur, $document): FichierControle {
+            try {
+                return $this->controle->controler($piece);
+            } catch (FichierRefuseException $refus) {
+                if ($refus->raison->estDeSecurite()) {
+                    $this->inscrireLeRefus($auteur, $document, $refus);
+                }
+
+                throw $refus;
+            }
+        }, $pieces);
+    }
+
+    /**
+     * Joint ces fichiers contrôlés au document, puis met sa marque à jour.
+     *
+     * @param  list<FichierControle>  $pieces
      * @return list<PieceDuFournisseur>
      *
-     * @throws InvalidArgumentException quand une pièce est refusée
+     * @throws InvalidArgumentException quand le document en porterait trop, ou porte déjà l'un d'eux
      */
     public function joindre(User $compte, FactureAchat|AvoirFournisseur $document, array $pieces): array
     {
@@ -101,22 +140,15 @@ final class PiecesDuFournisseur
                 throw new InvalidArgumentException(self::REFUS_TROP_DE_PIECES);
             }
 
-            $controlees = [];
-
             foreach ($pieces as $piece) {
-                $nom = self::nomDOrigine($piece->nom);
-                $type = self::controler($nom, $piece->contenu);
-                $empreinte = hash('sha256', $piece->contenu);
-
-                if (in_array($empreinte, $empreintes, true)) {
-                    throw new InvalidArgumentException(sprintf(self::REFUS_DEJA_JOINTE, $nom));
+                if (in_array($piece->empreinte(), $empreintes, true)) {
+                    throw new InvalidArgumentException(sprintf(self::REFUS_DEJA_JOINTE, $piece->nom));
                 }
 
-                $empreintes[] = $empreinte;
-                $controlees[] = [$nom, $type, $empreinte, $piece->contenu];
+                $empreintes[] = $piece->empreinte();
             }
 
-            $jointes = array_map(fn (array $controlee): PieceDuFournisseur => $this->ranger($compte, $document, ...$controlee), $controlees);
+            $jointes = array_map(fn (FichierControle $piece): PieceDuFournisseur => $this->ranger($compte, $document, $piece), $pieces);
             $this->marquer($compte, $document);
 
             return $jointes;
@@ -197,93 +229,144 @@ final class PiecesDuFournisseur
     }
 
     /**
-     * Le contenu du fichier d'une pièce.
-     */
-    public function contenu(PieceDuFournisseur $piece): string
-    {
-        return (string) Storage::disk(self::DISQUE)->get($piece->chemin);
-    }
-
-    /**
-     * Le type d'un contenu, lu sur ses premiers octets, jamais sur un nom
-     * de fichier : un PDF commence par « %PDF- » (après une marque d'ordre
-     * des octets ou des blancs, que certains logiciels écrivent avant), une
-     * photo JPEG par FF D8 FF, une image PNG par sa signature de huit
-     * octets ; null pour tout autre contenu, même s'il contient « %PDF- »
-     * plus loin.
-     */
-    public static function typeDuContenu(string $contenu): ?string
-    {
-        return match (true) {
-            str_starts_with(ltrim(str_starts_with($contenu, "\xEF\xBB\xBF") ? substr($contenu, 3) : $contenu, " \t\r\n"), '%PDF-') => 'application/pdf',
-            str_starts_with($contenu, "\xFF\xD8\xFF") => 'image/jpeg',
-            str_starts_with($contenu, "\x89PNG\r\n\x1A\n") => 'image/png',
-            default => null,
-        };
-    }
-
-    /**
-     * Le nom d'origine tel qu'il s'enregistre : son seul nom de base, sans
-     * chemin ni caractère de contrôle, 255 caractères au plus ; « pièce »
-     * quand il n'en reste rien.
-     */
-    public static function nomDOrigine(string $nom): string
-    {
-        $base = trim((string) preg_replace('/[\x00-\x1F\x7F]/u', '', basename(str_replace('\\', '/', $nom))));
-
-        return $base === '' || $base === '.' || $base === '..' ? 'pièce' : mb_substr($base, 0, 255);
-    }
-
-    /**
-     * Les valeurs qu'un ajout ou un retrait inscrit au journal d'audit.
+     * Le contenu d'une pièce, prêt à être servi à ce compte (téléchargement
+     * seul, ou dans un ZIP) : jamais celui d'une pièce bloquée ; analysé de
+     * nouveau quand sa dernière analyse date de plus de 24 heures (voir
+     * RevueAntivirus). Reconnue alors comme une menace, la pièce est
+     * bloquée, au nom de ce compte, et le propriétaire de la société en est
+     * prévenu.
      *
-     * @return array{document: array{nature: string, numero: string|null, numero_fournisseur: string|null}, nom_origine: string, empreinte: string}
+     * @throws PieceBloqueeException quand la pièce est bloquée
+     * @throws AntivirusInjoignableException quand l'antivirus ne répond pas pour une analyse due
+     */
+    public function contenuServable(User $compte, PieceDuFournisseur $piece): string
+    {
+        if ($piece->bloquee_le !== null) {
+            throw new PieceBloqueeException;
+        }
+
+        $contenu = (string) Storage::disk(self::DISQUE)->get($piece->chemin);
+
+        if (! $this->revue->aRevoir($piece->analysee_le)) {
+            return $contenu;
+        }
+
+        $resultat = $this->revue->analyser($contenu);
+        $maintenant = CarbonImmutable::now();
+
+        if ($resultat->estSain()) {
+            PieceDuFournisseur::query()->whereKey($piece->getKey())->where('analysee_le', '<', Instant::enBase($maintenant))->update(['analysee_le' => Instant::enBase($maintenant)]);
+
+            return $contenu;
+        }
+
+        $this->bloquer($compte, $piece, (string) $resultat->menace, $maintenant);
+
+        throw new PieceBloqueeException;
+    }
+
+    /**
+     * Bloque une pièce que l'antivirus vient de reconnaître comme une
+     * menace : gardée, plus jamais servie ; le blocage s'inscrit au journal
+     * d'audit et le propriétaire en est prévenu, une seule fois même si
+     * deux téléchargements la trouvent en même temps.
+     */
+    private function bloquer(User $compte, PieceDuFournisseur $piece, string $menace, CarbonImmutable $maintenant): void
+    {
+        $document = $piece->document();
+        $magasin = $document->magasin;
+
+        $bloquee = DB::transaction(function () use ($compte, $piece, $menace, $maintenant, $document, $magasin): bool {
+            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
+
+            if (PieceDuFournisseur::query()->whereKey($piece->getKey())->whereNull('bloquee_le')->update(['bloquee_le' => Instant::enBase($maintenant), 'analysee_le' => Instant::enBase($maintenant), 'menace' => $menace]) === 0) {
+                return false;
+            }
+
+            $this->journalAudit->inscrire(ActionAuditee::PieceDuFournisseurBloquee, $compte, $magasin, null, [...self::valeursAuditees($document, $piece), 'menace' => $menace], $document);
+
+            return true;
+        });
+
+        if ($bloquee) {
+            $this->prevenirLeProprietaire($magasin, 'Pièce du fournisseur bloquée par l\'antivirus', "La pièce « {$piece->nom} » de ".self::libelle($document)." est bloquée : l'antivirus y a trouvé la menace « {$menace} ». Elle reste conservée comme pièce justificative, mais ne se télécharge plus.");
+        }
+    }
+
+    /**
+     * Inscrit au journal d'audit, dans sa propre transaction, le refus d'un
+     * fichier pour une raison de sécurité ; une menace prévient aussi le
+     * propriétaire de la société.
+     */
+    private function inscrireLeRefus(User $auteur, FactureAchat|AvoirFournisseur|null $document, FichierRefuseException $refus): void
+    {
+        $magasin = app(TenantContext::class)->magasin();
+
+        DB::transaction(function () use ($auteur, $document, $refus, $magasin): void {
+            Societe::verrouillerAvantSonJournalDAudit($magasin->societe_id);
+            $this->journalAudit->inscrire(ActionAuditee::PieceDuFournisseurRefusee, $auteur, $magasin, null, [
+                'document' => $document === null ? null : TvaDuFournisseur::designation($document),
+                ...$refus->valeursAuditees(),
+            ], $document);
+        });
+
+        if ($refus->raison === RaisonDuRefus::Menace) {
+            $vise = $document === null ? 'une saisie d\'achat' : self::libelle($document);
+            $this->prevenirLeProprietaire($magasin, 'Fichier refusé par l\'antivirus', 'Le fichier « '.NomDeFichier::pourUnMessage($refus->nomRecu)." » déposé par {$auteur->nomPourLHistorique()} pour {$vise} a été refusé : l'antivirus y a trouvé la menace « {$refus->menace} ». Rien n'a été enregistré.");
+        }
+    }
+
+    private function prevenirLeProprietaire(Magasin $magasin, string $titre, string $texte): void
+    {
+        $societe = Societe::query()->findOrFail($magasin->societe_id);
+        $societe->proprietaire()->first()?->notify(new AvisDeLAntivirus($societe, "{$magasin->nom} : {$titre}", $texte));
+    }
+
+    /**
+     * « la facture d'achat FA-PORT-2026-000001 (F-812 chez le fournisseur) ».
+     */
+    private static function libelle(FactureAchat|AvoirFournisseur $document): string
+    {
+        $nature = $document instanceof FactureAchat ? 'la facture d\'achat' : 'l\'avoir fournisseur';
+        $numero = $document->numero ?? 'en brouillon';
+        $chezLeFournisseur = $document->numero_fournisseur === null ? '' : " ({$document->numero_fournisseur} chez le fournisseur)";
+
+        return "{$nature} {$numero}{$chezLeFournisseur}";
+    }
+
+    /**
+     * Les valeurs qu'un retrait ou un blocage inscrit au journal d'audit.
+     *
+     * @return array{document: array{nature: string, numero: string|null, numero_fournisseur: string|null}, nom: string, empreinte: string}
      */
     private static function valeursAuditees(FactureAchat|AvoirFournisseur $document, PieceDuFournisseur $piece): array
     {
-        return ['document' => TvaDuFournisseur::designation($document), 'nom_origine' => $piece->nom_origine, 'empreinte' => $piece->empreinte];
+        return ['document' => TvaDuFournisseur::designation($document), 'nom' => $piece->nom, 'empreinte' => $piece->empreinte];
     }
 
     /**
-     * Le type d'une pièce admise.
-     *
-     * @throws InvalidArgumentException
+     * Range le fichier contrôlé, puis enregistre sa ligne et l'inscrit au
+     * journal d'audit ; le fichier s'efface si la transaction est annulée.
      */
-    private static function controler(string $nom, string $contenu): string
+    private function ranger(User $compte, FactureAchat|AvoirFournisseur $document, FichierControle $fichier): PieceDuFournisseur
     {
-        if ($contenu === '') {
-            throw new InvalidArgumentException(sprintf(self::REFUS_VIDE, $nom));
-        }
-
-        if (strlen($contenu) > self::TAILLE_MAXIMALE_EN_OCTETS) {
-            throw new InvalidArgumentException(sprintf(self::REFUS_TROP_GROS, $nom));
-        }
-
-        return self::typeDuContenu($contenu) ?? throw new InvalidArgumentException(sprintf(self::REFUS_TYPE, $nom));
-    }
-
-    /**
-     * Range le fichier, puis enregistre sa ligne et l'inscrit au journal
-     * d'audit ; le fichier s'efface si la transaction est annulée.
-     */
-    private function ranger(User $compte, FactureAchat|AvoirFournisseur $document, string $nom, string $type, string $empreinte, string $contenu): PieceDuFournisseur
-    {
-        $chemin = 'magasin-'.$document->magasin_id.'/'.bin2hex(random_bytes(16)).'.'.self::TYPES[$type];
-        Storage::disk(self::DISQUE)->put($chemin, $contenu);
+        $chemin = 'magasin-'.$document->magasin_id.'/'.bin2hex(random_bytes(16)).'.'.NomDeFichier::EXTENSIONS[$fichier->type];
+        Storage::disk(self::DISQUE)->put($chemin, $fichier->contenu);
         DB::afterRollBack(fn () => Storage::disk(self::DISQUE)->delete($chemin));
 
         $piece = (new PieceDuFournisseur)->forceFill([
             $this->colonneDu($document) => $document->getKey(),
-            'nom_origine' => $nom,
-            'type_mime' => $type,
-            'taille' => strlen($contenu),
-            'empreinte' => $empreinte,
+            'nom' => $fichier->nom,
+            'type_mime' => $fichier->type,
+            'taille' => $fichier->taille(),
+            'empreinte' => $fichier->empreinte(),
             'chemin' => $chemin,
+            'analysee_le' => $fichier->analyseLe,
             'ajoutee_par' => $compte->getKey(),
         ]);
         $piece->save();
 
-        $this->journalAudit->inscrire(ActionAuditee::PieceDuFournisseurJointe, $compte, $document->magasin, null, self::valeursAuditees($document, $piece), $document);
+        $this->journalAudit->inscrire(ActionAuditee::PieceDuFournisseurJointe, $compte, $document->magasin, null, [...self::valeursAuditees($document, $piece), ...$fichier->valeursRecues()], $document);
 
         return $piece;
     }

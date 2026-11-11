@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\RecuPaiement;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Fichiers\EnTetesDesFichiers;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
@@ -79,7 +80,7 @@ trait EnvoieLesDocuments
                     return null;
                 }
 
-                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($record));
+                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($record), EnTetesDesFichiers::fichierProduit('application/pdf'));
             });
     }
 

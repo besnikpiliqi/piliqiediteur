@@ -222,7 +222,7 @@ class EnvoieLesDocumentsTest extends TestCase
         Livewire::test(ListDevis::class)
             ->assertTableActionVisible('telecharger_pdf', $devis)
             ->callTableAction('telecharger_pdf', $devis)
-            ->assertFileDownloaded("devis-{$devis->numero}.pdf");
+            ->assertFileDownloaded("devis-{$devis->numero}.pdf", contentType: 'application/pdf');
     }
 
     public function test_un_devis_sans_lignes_ne_part_pas_et_le_magasin_le_sait(): void

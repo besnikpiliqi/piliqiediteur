@@ -96,6 +96,24 @@ return [
         'pilote' => env('ORDRE_PILOTE', 'editeur'),
     ],
 
+    /*
+     | L'antivirus des fichiers reçus (voir Antivirus et
+     | AntivirusServiceProvider) : son pilote (clamav, le démon clamd du
+     | serveur, ou factice pour les tests, la démonstration et le
+     | développement, jamais en production), la socket Unix de clamd ou, à
+     | défaut, son hôte et son port, et le délai en secondes au-delà duquel
+     | il est tenu pour injoignable. Aucun secret.
+     */
+    'antivirus' => [
+        'pilote' => env('ANTIVIRUS_PILOTE', 'clamav'),
+        'clamav' => [
+            'socket' => env('CLAMAV_SOCKET'),
+            'hote' => env('CLAMAV_HOTE', '127.0.0.1'),
+            'port' => (int) env('CLAMAV_PORT', 3310),
+            'delai' => (int) env('CLAMAV_DELAI', 30),
+        ],
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

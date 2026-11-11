@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Calendrier\Casts\Instant;
+use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\TypePiece;
@@ -14,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
+use Tests\Fixtures\FichiersDeTest;
 use Tests\TestCase;
 
 /**
@@ -39,7 +42,7 @@ class EffacerPiecesVerificationTest extends TestCase
         $societe = $this->inscrireUneSociete();
         $this->travelTo(self::aParis('2026-11-02 10:00:00'));
         app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
-        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Identite, 'Carte d\'identité de Jeanne Dupont');
+        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Identite, new PieceDeposee('carte.pdf', FichiersDeTest::pdf('Carte d\'identité de Jeanne Dupont')));
         $chemin = (string) $piece->chemin;
 
         $this->travelTo(self::aParis('2026-12-02 08:00:00'));
@@ -67,8 +70,12 @@ class EffacerPiecesVerificationTest extends TestCase
         DB::table('pieces_verification')->insert(array_fill(0, 1001, [
             'societe_id' => $societe->id,
             'type' => TypePiece::Kbis->value,
+            'nom' => 'kbis.pdf',
+            'type_mime' => 'application/pdf',
+            'taille' => 1024,
             'chemin' => null,
             'empreinte' => str_repeat('0', 64),
+            'analysee_le' => Instant::enBase($deposeeLe),
             'deposee_par' => $societe->proprietaire->id,
             'deposee_par_nom' => $societe->proprietaire->name,
             'deposee_le' => $deposeeLe,

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 12:06 UTC par pilotage-sync.sh : « Point de suivi 12 h 06 : CALC sauvegardé ».
+Mis à jour le 11/11/2026 à 12:07 UTC par pilotage-sync.sh : « T58.1-4 : pas encore construit (onglet 1 rev 615) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -1736,21 +1736,24 @@
    "titre": "Cabinet : les mêmes cases pour tous les magasins choisis ?",
    "question": "Suite de votre réponse à T44 : vous choisissez les magasins que voit votre comptable (tous, ou cochés un à un) et ce qu'il y voit, menu par menu. Ces cases valent-elles pour tous les magasins choisis, ou se règlent-elles magasin par magasin ?",
    "qui": "vous",
-   "etat": "ouvert",
+   "etat": "tranche",
    "proposition": "Une seule liste de cases, valable dans tous les magasins choisis, comme pour un administrateur : plus simple à régler et à relire. Pour les magasins : « Tous les magasins, présents et futurs », ou une sélection. Par défaut, comme aujourd'hui : tous les magasins et toutes les consultations, sauf le téléchargement des documents par période, que vous seul cochez.",
    "bloquant": "lot EC2",
    "sources": [
     "nouvelle-session/ec2/decision-expert-comptable-societe.md (§ 5 ter)",
     "document « PILIQI — Ce qui reste à trancher », onglet 1, rev 469"
    ],
-   "citation": "Question de suite de la réponse de l'éditeur à T44 (11/11/2026)"
+   "citation": "Question de suite de la réponse de l'éditeur à T44 (11/11/2026)",
+   "reponse": {
+    "date_utc": "2026-11-11 02:39",
+    "date_paris": "11/11/2026 vers 03 h 39",
+    "mots": "t104:Choix A (ma proposition) : une seule liste de cases pour tous les magasins choisis.",
+    "decision": "Une seule liste de cases, valable dans tous les magasins que le propriétaire choisit pour son cabinet (« Tous les magasins, présents et futurs », ou une sélection), comme pour un administrateur ; par défaut, tous les magasins et toutes les consultations, sauf le téléchargement des documents par période.",
+    "ou": "Lot EC2 (ec2/decision-expert-comptable-societe.md, § 5 ter, point 5) ; onglet « Mes questions et vos réponses », Q391."
+   }
   }
  ],
  "urgent": [
-  {
-   "id": "T104",
-   "pourquoi": "Le lot EC2 construit ces cases ; sans réponse avant lui, il applique ma proposition."
-  },
   {
    "id": "T45",
    "pourquoi": "Le lot EC2 applique votre oui avec les demandes de lien : c'est avant lui qu'il faut dire si vous ne voulez que les invitations."

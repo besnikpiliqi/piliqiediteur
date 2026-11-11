@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 02:07 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 11/11/2026 à 02:40 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -39,6 +39,15 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
 
 ```
  M app/Console/Commands/EffacerPiecesVerification.php
+ M app/Domain/Achats/Actions/CreerAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/EmettreAvoirFournisseurAction.php
+ M app/Domain/Achats/Actions/ModifierFactureAchatAction.php
+ M app/Domain/Achats/Actions/ValiderFactureAchatAction.php
+ M app/Domain/Achats/Models/AvoirFournisseur.php
+ M app/Domain/Achats/Models/LigneAchat.php
+ M app/Domain/Achats/Services/ChiffrageDUnAvoirFournisseur.php
+ M app/Domain/Achats/Services/ConstructeurLigneAchat.php
+ M app/Domain/Achats/Services/TvaDuFournisseur.php
  M app/Domain/Cabinets/Actions/AccepterLInvitationAction.php
  M app/Domain/Cabinets/Actions/AccepterLaDemandeDeLienAction.php
  M app/Domain/Cabinets/Actions/ConfierDesClientsAction.php
@@ -72,32 +81,23 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
  M app/Domain/Calendrier/Casts/Instant.php
  M app/Domain/Calendrier/Casts/JourCivil.php
  M app/Domain/Calendrier/Connexions/FuseauParDefautDeLaBase.php
- M app/Domain/Tenancy/Actions/AccepterLaTransmissionDeLaProprieteAction.php
- M app/Domain/Tenancy/Actions/AnnulerCessionAction.php
- M app/Domain/Tenancy/Actions/AnnulerUneNominationAction.php
- M app/Domain/Tenancy/Actions/ChangerSiretAction.php
- M app/Domain/Tenancy/Actions/ChoisirEtablissementPrincipalAction.php
- M app/Domain/Tenancy/Actions/CloreLInscriptionAction.php
- M app/Domain/Tenancy/Actions/ConfirmerNouvelleAdresseAction.php
- M app/Domain/Tenancy/Actions/CorrigerSirenAction.php
- M app/Domain/Tenancy/Actions/CreerEtablissementAction.php
- M app/Domain/Tenancy/Actions/CreerMembreAction.php
- M app/Domain/Tenancy/Actions/CreerSocieteAction.php
- M app/Domain/Tenancy/Actions/DemanderLaTransmissionDeLaProprieteAction.php
- M app/Domain/Tenancy/Actions/DemanderLeTelechargementDesDocumentsAction.php
- M app/Domain/Tenancy/Actions/DemanderUneNouvelleAdresseAction.php
- M app/Domain/Tenancy/Actions/DeposerUnePieceAction.php
- M app/Domain/Tenancy/Actions/ModifierAdministrateurAction.php
- M app/Domain/Tenancy/Actions/ModifierEtablissementAction.php
- M app/Domain/Tenancy/Actions/ModifierIdentiteSocieteAction.php
- M app/Domain/Tenancy/Actions/ModifierLesParametresDuMagasinAction.php
- M app/Domain/Tenancy/Actions/ModifierParametresFiscauxSocieteAction.php
- M app/Domain/Tenancy/Actions/RevoquerSocieteAction.php
- M app/Domain/Tenancy/Actions/SaisirCodeDeConfirmationAction.php
- M app/Domain/Tenancy/Concerns/BelongsToMagasin.php
- M app/Domain/Tenancy/Concerns/BelongsToSociete.php
- M app/Domain/Tenancy/Concerns/FigeLeNomDeSesAuteurs.php
- M app/Domain/Tenancy/Enums/CategorieAudit.php
+ M app/Domain/Catalogue/Models/Produit.php
+ M app/Domain/Catalogue/Services/BaremePrixDeVente.php
+ M app/Domain/Contacts/Models/Client.php
+ M app/Domain/Facturation/Actions/AjouterPreuveOperationAction.php
+ M app/Domain/Facturation/Actions/CloturerCaisseAction.php
+ M app/Domain/Facturation/Actions/EmettreAvoirAction.php
+ M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EncaisserEnPlusieursModesAction.php
+ M app/Domain/Facturation/Actions/EnregistrerPaiementAction.php
+ M app/Domain/Facturation/Actions/FermerSaCaisseAction.php
+ M app/Domain/Facturation/Actions/ModifierFactureAction.php
+ M app/Domain/Facturation/Casts/NumeroTvaNormalise.php
+ M app/Domain/Facturation/Concerns/FigeSonEmetteur.php
+ M app/Domain/Facturation/Concerns/NoteSaNatureDOperation.php
+ M app/Domain/Facturation/Enums/CategorieOperation.php
+ M app/Domain/Facturation/Mail/DocumentMail.php
+ M app/Domain/Facturation/Models/Avoir.php
 ```
 
 ## Dernière course de la chaîne

@@ -13313,6 +13313,27 @@
     "T44",
     "T104"
    ]
+  },
+  {
+   "id": "Q391",
+   "serie": "Points de l'onglet « Ce qui reste à trancher » (11/11)",
+   "date_utc": "2026-11-11 02:39",
+   "date_paris": "11/11/2026 vers 03 h 39",
+   "code": "T104",
+   "question": "Cabinet : les mêmes cases pour tous les magasins choisis ? Suite de votre réponse à T44 : vous choisissez les magasins que voit votre comptable (tous, ou cochés un à un) et ce qu'il y voit, menu par menu. Ces cases valent-elles pour tous les magasins choisis, ou se règlent-elles magasin par magasin ? Ma proposition : une seule liste de cases, valable dans tous les magasins choisis, comme pour un administrateur ; pour les magasins, « Tous les magasins, présents et futurs », ou une sélection ; par défaut, tous les magasins et toutes les consultations, sauf le téléchargement des documents par période, que vous seul cochez.",
+   "mots": "t104:Choix A (ma proposition) : une seule liste de cases pour tous les magasins choisis.",
+   "decision": "Une seule liste de cases, valable dans tous les magasins que le propriétaire choisit pour son cabinet (« Tous les magasins, présents et futurs », ou une sélection), comme pour un administrateur ; par défaut, tous les magasins et toutes les consultations, sauf le téléchargement des documents par période.",
+   "theme": "Cabinets d'expertise comptable",
+   "statut": "a-appliquer",
+   "statut_detail": "Lot EC2 de la chaîne (§ 5 ter de sa décision, point 5).",
+   "sources": [
+    "message de l'éditeur dans la conversation, le 11/11 vers 02 h 39 UTC",
+    "nouvelle-session/ec2/decision-expert-comptable-societe.md (§ 5 ter)"
+   ],
+   "refs": [
+    "T104",
+    "T44"
+   ]
   }
  ]
 }

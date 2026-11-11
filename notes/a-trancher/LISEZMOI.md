@@ -95,3 +95,4 @@
   « Avant les prochains lots de la chaîne (NAV-2, EC2) », exemple « T45 : oui », 390 réponses) ; onglet « À faire vérifier » au rev 1 ;
   onglet 2 au rev 22 ; onglet 3 au rev 35 (T43 = Q389 et T44 = Q390 dans la série du 11/11 ; 390 réponses, dont 127 à appliquer).
 - Commentaires : dernier n° connu 526 (fils de T43 et T44, résolus par l'éditeur le 11/11 à 00 h 06 et 00 h 28 UTC).
+- 11/11 vers 02 h 45 UTC : T104 tranché par l'éditeur dans la conversation (« Choix A ») : onglet 1 au rev 471 (T104 retiré des deux tableaux, « Le plus urgent » à 8 points : T45, T58, T59, T61, T62, T63, T1, T2 ; 391 réponses), onglet 3 au rev 39 (T104 = Q391 dans la série du 11/11 ; 391 réponses, dont 128 à appliquer). Prochain numéro : T105.

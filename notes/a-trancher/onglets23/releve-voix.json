@@ -5098,7 +5098,9 @@
     "historique/DIRECTIVES.md, § 1.4, D61",
     "qualite/decision-statique.md, § 4.2 « Nombre de commits »"
    ],
-   "refs": []
+   "refs": [
+    "D61"
+   ]
   }
  ],
  "questions": [

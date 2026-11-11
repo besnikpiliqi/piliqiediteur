@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 11:41 UTC par pilotage-sync.sh : « D66 : Voir aussi retirés (onglet 4 rev 56) ».
+Mis à jour le 11/11/2026 à 11:47 UTC par pilotage-sync.sh : « Réponse B (revue fiscale avant la production) rangée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

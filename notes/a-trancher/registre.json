@@ -2486,6 +2486,14 @@
     "notes/decisions-editeur.md:191",
     "notes/decisions-editeur.md:210"
    ]
+  },
+  {
+   "id": "T1.5 T38.1 T38.3",
+   "date": "2026-11-11",
+   "heure": "vers 11 h 45 UTC",
+   "reponse": "« B » (à la question : « préférez-vous chercher un expert-comptable dès maintenant, ou faire une seule revue fiscale avant la mise en production (T38) ? »)",
+   "decision": "Une seule revue fiscale indépendante, faite avant la mise en production (étape 15), confirme d'un coup toutes les règles « à confirmer », dont la déclaration des paiements de services des particuliers (T1.5) ; pas d'expert-comptable cherché dès maintenant. Restent ouverts : T38.2 (qui fait la revue) et T38.4 (budget).",
+   "ou": "Étape 15 (onglet « À appliquer à la fin du logiciel ») ; onglet « Mes questions et vos réponses », Q396 à Q398."
   }
  ],
  "ecartes": [

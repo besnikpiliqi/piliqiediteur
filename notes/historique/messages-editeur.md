@@ -1736,3 +1736,7 @@ et le "À faire vérifier par un professionnel" il est pas encore fait ??
 
 tu m explique pour ce que t as dit ca : "D63 : jusqu'à l'étape 15, seuls les tests PostgreSQL, Pint et l'audit des dépendances tournent à chaque envoi."
 
+## 184. 2026-11-11 11:44 UTC
+
+B
+

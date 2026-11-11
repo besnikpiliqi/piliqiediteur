@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 12:07 UTC par pilotage-sync.sh : « T58.1-4 : pas encore construit (onglet 1 rev 615) ».
+Mis à jour le 11/11/2026 à 12:09 UTC par pilotage-sync.sh : « Renvoi T58 coupé en 4 lignes (rev 617) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

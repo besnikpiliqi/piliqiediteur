@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 11/11/2026 à 05:11 UTC par pilotage-sync.sh : « TY2 : c2455dd ».
+Mis à jour le 11/11/2026 à 05:41 UTC par pilotage-sync.sh : « Attente TY3 expirée ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -68,6 +68,8 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
  M app/Filament/Concerns/AjouteDesLignesDAchat.php
  M app/Filament/Concerns/AjouteDesLignesDeVente.php
  M app/Filament/Concerns/EnregistreLesParametresDuMagasin.php
+ M app/Filament/Concerns/GereLesComptes.php
+ M app/Filament/Concerns/GereLesExceptionsMetier.php
  M app/Filament/Concerns/RecoitLeClientChoisi.php
  M app/Filament/Societe/Pages/CabinetComptable.php
  M app/Filament/Societe/Pages/IdentiteSociete.php
@@ -80,11 +82,22 @@ ccaa905 Retire SQLite : PostgreSQL seul moteur, du code à la CI (lot PG)
  M app/Filament/Societe/Resources/MagasinResource/Pages/ModifierMagasin.php
  M app/Filament/Societe/Resources/MembreResource.php
  M app/Filament/Societe/Resources/MembreResource/Pages/FicheDuMembre.php
+ M tests/Feature/Cabinets/ClientsConfiesTest.php
+ M tests/Feature/CaisseSecurisee/VerificateurIntegriteTest.php
+ M tests/Feature/Editeur/RevoquerSocieteTest.php
  M tests/Feature/Facturation/EnvoyerDocumentJobTest.php
+ M tests/Feature/Facturation/TelechargementDesDocumentsTest.php
+ M tests/Feature/Filament/EquipeDuMagasinTest.php
  M tests/Feature/Qualite/OutilDeQualiteTest.php
+ M tests/Feature/Societe/AdministrateursTest.php
+ M tests/Feature/Societe/MembresTest.php
+ M tests/Feature/Societe/ParametresFiscauxSocieteTest.php
+ M tests/Feature/Societe/ResponsablesTest.php
+ M tests/Feature/Stock/VenteSansStockTest.php
+ M tests/Feature/Tenancy/AccesAuxPanneauxTest.php
  M tests/Qualite/qualite.php
 ?? app/Domain/Tenancy/Support/RequeteDuModele.php
-?? tests/Feature/Tenancy/RequeteDuModeleTest.php
+?? tests/Feature/Societe/CloreInscriptionsSansCodeTest.php
 ```
 
 ## Dernière course de la chaîne

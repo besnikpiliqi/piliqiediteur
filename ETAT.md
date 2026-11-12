@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 15:18 UTC par pilotage-sync.sh : « CI de d4a8247 : un échec de la règle du calendrier ».
+Mis à jour le 12/11/2026 à 15:22 UTC par pilotage-sync.sh : « Course 237 : même échec ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -83,7 +83,9 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ?? resources/views/devis/reponse-enregistree.blade.php
 ?? resources/views/devis/reponse-invalide.blade.php
 ?? resources/views/devis/reponse.blade.php
+?? tests/Feature/Facturation/ReponseAuDevisConcurrenceTest.php
 ?? tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php
+?? tests/Feature/Facturation/TransformerUnDevisEnFactureTest.php
 ```
 
 ## Dernière course de la chaîne

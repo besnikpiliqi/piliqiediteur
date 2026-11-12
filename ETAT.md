@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 14:26 UTC par pilotage-sync.sh : « Point de suivi de 14 h 25 UTC : sauvegarde ML ».
+Mis à jour le 12/11/2026 à 14:28 UTC par pilotage-sync.sh : « Décision : seulement PHP 8.5 et PostgreSQL 18 (lot VER) ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -41,3 +41,6 @@
 - `app/Filament/App/Resources/EReportingResource.php` : bloc « Encaissements à répartir » (l. 168-185, et l. 282), retiré avec le prorata.
 - Tests : `tests/Feature/Facturation/EReportingDesParticuliersTest.php` et `tests/Feature/Filament/EReportingResourceTest.php` (franchise TLB1/TPS1 au taux 0 sans « catégorie à vérifier » ; vente à 0 % hors franchise toujours « à vérifier » ; plus de « transmission en attente » pour l'export et le DOM ; mention des encaissements sans « attente de l'expert-comptable » ; prorata et arrondi seulement après T107). Le témoin `tests/Fixtures/empreinte-de-la-caisse/apercu-e-reporting.txt` (empreinte de la caisse) change avec l'aperçu : le régénérer en le justifiant dans le commit, jamais pour masquer un écart non voulu.
 - Non couvert, pour l'étape 2 sans question : les paiements des services d'un magasin en franchise (filtre `taux > 0`, l. 322), alors que l'art. 242 nonies P prévoit une transmission bimestrielle pour un franchisé.
+
+## Lot VER (décision de l'éditeur du 12/11/2026 vers 14 h 30 UTC) : seulement PHP 8.5 et PostgreSQL 18
+- Voir historique/DIRECTIVES.md (même date) : CI réduite à PHP 8.5 × PostgreSQL 18 ; composer.json ^8.5 ; CLAUDE.md, README ; d'abord installer PHP 8.5 et PostgreSQL 18 dans le conteneur (installer-session.sh), chaîne arrêtée.

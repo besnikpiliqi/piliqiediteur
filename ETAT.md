@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 23:32 UTC par pilotage-sync.sh : « Onglet À faire de votre côté ».
+Mis à jour le 12/11/2026 à 23:45 UTC par pilotage-sync.sh : « Constat qpdf Windows ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -101,32 +101,12 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 
 ## Dernière course de la chaîne
 
-Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_36339710-257`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO:notes
-UI:implementation
-UI:relecture1
-UI:relecture2
-UI:correction
-UI:poussee
-UI:notes
-ML:implementation
-ML:relecture1
-ML:relecture2
-ML:correction
-ML:poussee
-ML:notes
-DV:implementation
-DV:implementation-2
-DV:relecture1
-DV:relecture2
-DV:correction
-DV:poussee
-DV:notes
-EC2:implementation
-EC2:implementation-2
-EC2:implementation-3
-EC2:implementation-4
-EC2:implementation-5
+releve:readme-env
+releve:claude-md
+releve:notes
+releve:comptes-rendus
+releve:onglet-fin
 ```

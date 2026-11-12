@@ -2082,3 +2082,49 @@ tu m as dit quoi pour "QPDF_BINAIRE=qpdf"
 
 donc ca tu doit mettre alors dans l ongle a aplique a la fin du logiciel ou bien tu creer un nouveau ongle ou tu mets tout ce que je doit faire sur pc et en production avant lancer le logiciel en ligne
 
+## 219. 2026-11-12 23:44 UTC
+
+<!-- attach -->
+
+> Lancez php artisan caisse:diagnostiquer : la ligne de qpdf doit dire OK.
+
+
+
+PS C:\xampp\htdocs\piliqiediteur-v2> php artisan caisse:diagnostiquer
+
++------------------------------+------+------------------------------------------------------------------------------------------------------------------------+
+
+| Contrôle                     | État | Détail                                                                                                                 |
+
++------------------------------+------+------------------------------------------------------------------------------------------------------------------------+
+
+| Extension openssl            | OK   | OpenSSL 3.5.8 25 Aug 2026, courbe P-256 disponible                                                                     |
+
+| Génération d'une clé P-256   | OK   | clé d'essai générée et exportée, puis jetée                                                                            |
+
+| Extension zip                | OK   | version 1.22.8                                                                                                         |
+
+| Clés publiques épinglées     | OK   | [jeton retiré]                                                       |
+
+| Clé de signature             | OK   | cle_id [jeton retiré], signature ES256 vérifiée avec la clé épinglée |
+
+| Clé du journal d'audit       | OK   | clé (JOURNAL_AUDIT_CLE) et identifiant (JOURNAL_AUDIT_CLE_ID) configurés, valeurs non affichées                        |
+
+| Version du module fiscal     | OK   | 2.0                                                                                                                    |
+
+| Fuseau de l'application      | OK   | UTC                                                                                                                    |
+
+| Fuseau par défaut de la base | OK   | UTC                                                                                                                    |
+
+| Horloge du serveur           | OK   | écart de 0,000 s avec le serveur de base (une demi-seconde au plus)                                                    |
+
+| Extension gd                 | OK   | version 8.5.11                                                                                                         |
+
+                                                                                                   |
+
+| Antivirus                    | OK   | antivirus factice, qui ne reconnaît que le fichier de test EICAR, fichier de test EICAR reconnu (Eicar-Test-Signature) |
+
++------------------------------+------+------------------------------------------------------------------------------------------------------------------------+
+
+Caisse sécurisée opérationnelle. il y pas de qpdf$
+

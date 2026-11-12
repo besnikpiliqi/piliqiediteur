@@ -50,3 +50,8 @@
 - Directive D76 (historique/DIRECTIVES.md) : plus rien n'attend l'avis d'un expert-comptable ni d'un professionnel ; chaque point a une décision de Claude dans l'onglet « À faire vérifier par un professionnel », appliquée sans attendre ; une « Réponse du professionnel » remplie, même après la mise en production, prime.
 - Cahier complet du lot : scratchpad/pro-d76/cahier-ER-PRO.md (préparé par la course wf_c774c74a-bef), qui remplace les passages « attend T1xx » ci-dessus. Ordre après la chaîne : ER-PRO (avec T105 et DEMO-V), puis VER (PHP 8.5 / PostgreSQL 18), puis la campagne 1 bis.
 - Chaque point de suivi, et pour toujours après la mise en production : relire la colonne « Réponse du professionnel » ; toute réponse nouvelle donne un lot qui l'applique.
+
+## Constat de l'éditeur du 12/11 vers 23 h UTC (Windows) : la ligne de qpdf de caisse:diagnostiquer s'affiche vide
+- Sa sortie : toutes les lignes OK, « Caisse sécurisée opérationnelle. », mais la ligne « Analyseur des PDF (qpdf) » apparaît comme une ligne de blancs terminée par « | ».
+- Cause : DiagnostiquerCaisseSecurisee::controlerQpdf() prend la première ligne de `qpdf --version` par strtok("\n") sans retirer le « \r » de Windows ; ce retour chariot, imprimé dans la cellule, ramène le curseur au début de la ligne et efface l'affichage. Le contrôle lui-même passe.
+- À faire dans le lot ER-PRO (après la chaîne) : retirer les fins de ligne de chaque ligne lue (trim de la première ligne, ou découpe sur \R), dans controlerQpdf() et partout où une sortie de programme est lue (AnalyseurDePdf::versionAdmise, antivirus) ; test qui simule une sortie « qpdf version 12.2.0\r\n… » et vérifie le détail sans « \r ». Ajouter la ligne à l'onglet « À faire de votre côté » : rien à faire pour l'éditeur.

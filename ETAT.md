@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 06:45 UTC par pilotage-sync.sh : « Après le lot AUD ».
+Mis à jour le 12/11/2026 à 07:27 UTC par pilotage-sync.sh : « CI rouge de bb135db : cause notée, réparation attendue de la chaîne ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -37,6 +37,35 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
+ M CLAUDE.md
+ M app/Domain/Authorization/ControleDesDroits.php
+ M app/Domain/Authorization/PermissionRegistry.php
+ M app/Domain/Facturation/Actions/EmettreFactureAction.php
+ M app/Domain/Facturation/Actions/EmettreLaFactureRectificativeAction.php
+ M app/Domain/Facturation/Models/ClotureCaissePersonnelle.php
+ M app/Domain/Facturation/Support/GardesDeLaVente.php
+ M app/Domain/Tenancy/Actions/AccepterLaTransmissionDeLaProprieteAction.php
+ M app/Domain/Tenancy/Actions/OuvrirLaDemonstrationAction.php
+ M app/Filament/App/Resources/FactureResource/Pages/ViewFacture.php
+ M app/Filament/Societe/Pages/TableauDeBord.php
+ M app/Models/User.php
+ M app/Policies/ClotureCaissePersonnellePolicy.php
+ M app/Policies/FacturePolicy.php
+ M database/migrations/0001_01_01_000000_create_magasins_table.php
+ M database/migrations/2026_10_03_100003_create_factures_table.php
+ M database/migrations/2026_10_04_100001_create_paiements_table.php
+ M database/migrations/2026_10_14_100002_create_enregistrements_fiscaux_table.php
+ M tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php
+ M tests/Browser/inventaire-des-actions.php
+ M tests/Feature/Authorization/AutorisationsSelonLeTypeTest.php
+ M tests/Feature/Authorization/ProprietaireSansVenteTest.php
+ M tests/Feature/CaisseSecurisee/FonctionsDeGardeTest.php
+ M tests/Feature/Societe/MagasinDeDemonstrationTest.php
+ M tests/Feature/Societe/PanneauSocieteTest.php
+ M tests/Feature/Tenancy/IsolationDesSocietesTest.php
+ M tests/TestCase.php
+?? tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php
+?? tests/Feature/Authorization/ProprietaireEnDemonstrationTest.php
 ```
 
 ## Dernière course de la chaîne
@@ -66,4 +95,5 @@ AUD:relecture2
 AUD:correction
 AUD:poussee
 AUD:notes
+DEMO:implementation
 ```

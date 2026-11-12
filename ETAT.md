@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 23:45 UTC par pilotage-sync.sh : « Constat qpdf Windows ».
+Mis à jour le 12/11/2026 à 23:58 UTC par pilotage-sync.sh : « Onglet À faire de votre côté rempli ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -109,4 +109,6 @@ releve:claude-md
 releve:notes
 releve:comptes-rendus
 releve:onglet-fin
+ecrire:onglet
+verifier:onglet
 ```

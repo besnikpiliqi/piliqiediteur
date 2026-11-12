@@ -2128,3 +2128,17 @@ PS C:\xampp\htdocs\piliqiediteur-v2> php artisan caisse:diagnostiquer
 
 Caisse sécurisée opérationnelle. il y pas de qpdf$
 
+## 220. 2026-11-12 23:50 UTC
+
+dit moi ce qu'ils ont fait les ML,DV,EC2 quelle fonction font
+
+## 221. 2026-11-12 23:55 UTC
+
+<!-- attach -->
+
+> Envoi par Mailtrap. PILIQI envoie les e-mails par l’API de Mailtrap, et non plus par le vieux protocole SMTP, qui bloque souvent sur un PC Windows.
+
+
+
+comment ca ? tu as deja fait ou je doit faire qqch de mon cote
+

@@ -1928,3 +1928,13 @@ je pense laisser tombre pour le demo car tu me parle des loi exigant. donc demo 
 
 tu fait rien pour le demo, laisse comme est mtn et juste tu autorise que le proprietaire puisse faire tout dans le compte demo, vendre et tout tout les autorisation qui existe. donc les button tu laisse car les button s affiche uniquement quand on est sur le compte demo
 
+## 203. 2026-11-12 02:22 UTC
+
+<!-- attach -->
+
+> Colonne « Réponse du professionnel » : la recherche et la vérification des réponses détaillées sont en cours. Rien n’est encore écrit dans l’onglet.
+
+
+
+donc cette colonne tu laisse vide car il faut remplire par l expert comptable ou etc. mais tu mets  tes decision dans une colenne à part comme t as nomé toi "Réponse préparée et decidé par Claude"
+

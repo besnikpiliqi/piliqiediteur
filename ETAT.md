@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 02:14 UTC par pilotage-sync.sh : « D71 : seul le propriétaire peut tout faire en démonstration ; chaîne reprise ».
+Mis à jour le 12/11/2026 à 02:23 UTC par pilotage-sync.sh : « D72 : colonne à part pour les décisions de Claude ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

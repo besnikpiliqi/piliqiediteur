@@ -1,7 +1,7 @@
-"""Surveille la colonne « Réponse du professionnel » de l'onglet professionnel (D69).
+"""Surveille les colonnes « Réponse préparée et décidée par Claude » et « Réponse du professionnel » de l'onglet professionnel (D69, D72).
 
 Usage : python3 -I surveiller.py <export-markdown-de-l-onglet> [--enregistrer]
-Compare la dernière colonne de chaque ligne à l'instantané (instantane.json, à côté
+Compare les deux dernières colonnes de chaque ligne (Claude, puis professionnel) à l'instantané (instantane.json, à côté
 de ce script) et affiche chaque ligne ajoutée, retirée ou changée ; --enregistrer
 remplace l'instantané par l'état lu. Clé d'une ligne : section + N° (sans la date).
 """
@@ -32,7 +32,7 @@ def lire(chemin):
             while cle in lignes:
                 cle = f'{section} | {numero} #{n}'
                 n += 1
-            lignes[cle] = {'sujet': sujet, 'reponse': cellules[-1]}
+            lignes[cle] = {'sujet': sujet, 'reponse': cellules[-1], 'claude': cellules[-2] if len(cellules) >= 7 else None}
     return lignes
 
 
@@ -44,16 +44,17 @@ def main():
     ancien = json.loads(INSTANTANE.read_text(encoding='utf-8')) if INSTANTANE.exists() else {}
     changes = 0
     for cle in sorted(set(actuel) | set(ancien)):
-        avant = ancien.get(cle, {}).get('reponse')
-        apres = actuel.get(cle, {}).get('reponse')
-        if avant != apres:
-            changes += 1
-            etat = 'AJOUTÉE' if avant is None else 'RETIRÉE' if apres is None else 'CHANGÉE'
-            print(f'{etat} : {cle}')
-            if avant is not None:
-                print(f'  avant : {avant[:400]}')
-            if apres is not None:
-                print(f'  après : {apres[:400]}')
+        for colonne, nom in (('reponse', 'Réponse du professionnel'), ('claude', 'Réponse préparée et décidée par Claude')):
+            avant = ancien.get(cle, {}).get(colonne)
+            apres = actuel.get(cle, {}).get(colonne)
+            if avant != apres:
+                changes += 1
+                etat = 'AJOUTÉE' if avant is None else 'RETIRÉE' if apres is None else 'CHANGÉE'
+                print(f'{etat} [{nom}] : {cle}')
+                if avant is not None:
+                    print(f'  avant : {avant[:400]}')
+                if apres is not None:
+                    print(f'  après : {apres[:400]}')
     print(f'{changes} ligne(s) changée(s) sur {len(actuel)}.')
     if '--enregistrer' in sys.argv:
         INSTANTANE.write_text(json.dumps(actuel, ensure_ascii=False, indent=1), encoding='utf-8')

@@ -11,6 +11,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use Closure;
@@ -208,7 +209,7 @@ class ClotureCaisseResource extends Resource
 
     /**
      * Le tableau des documents que la personne voit, chaque numéro en lien
-     * vers sa fiche.
+     * vers sa fiche quand elle peut l'ouvrir (voir FicheDUnDocument).
      *
      * @param  Closure(ClotureCaisse): list<array<string, string|null>>  $documents
      */
@@ -219,14 +220,25 @@ class ClotureCaisseResource extends Resource
             ->state($documents)
             ->schema([
                 TextEntry::make('numero')->label('Numéro')
-                    ->url(fn (TextEntry $component): string => ValeursLues::texteDe(ValeursLues::tableau($component->getContainer()->getState()), 'url'))
-                    ->color('primary'),
+                    ->url(fn (TextEntry $component): ?string => self::adresseDuDocument($component))
+                    ->color(fn (TextEntry $component): ?string => self::adresseDuDocument($component) === null ? null : 'primary'),
                 TextEntry::make('client_nom')->label('Client'),
                 TextEntry::make('ht')->label('Total HT'),
                 TextEntry::make('tva')->label('TVA'),
                 TextEntry::make('ttc')->label('Total TTC'),
             ])
             ->columns(5);
+    }
+
+    /**
+     * L'adresse de la fiche du document de cette rangée, null quand la
+     * personne ne peut pas l'ouvrir (voir FicheDUnDocument).
+     */
+    private static function adresseDuDocument(TextEntry $component): ?string
+    {
+        $adresse = ValeursLues::tableau($component->getContainer()->getState())['url'] ?? null;
+
+        return is_string($adresse) ? $adresse : null;
     }
 
     /**
@@ -240,7 +252,7 @@ class ClotureCaisseResource extends Resource
      *
      * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $tous
      * @param  HasMany<Facture, ClotureCaisse>|HasMany<Avoir, ClotureCaisse>  $visibles
-     * @return array{visibles: list<array{numero: string, url: string, client_nom: string|null, ht: string, tva: string, ttc: string}>, autres: string|null}
+     * @return array{visibles: list<array{numero: string, url: string|null, client_nom: string|null, ht: string, tva: string, ttc: string}>, autres: string|null}
      */
     private static function documentsVisibles(HasMany $tous, HasMany $visibles): array
     {
@@ -258,7 +270,7 @@ class ClotureCaisseResource extends Resource
         return [
             'visibles' => array_values($vus->map(fn (Facture|Avoir $document): array => [
                 'numero' => ValeurRequise::de($document->numero, 'le numéro d\'un document de la clôture'),
-                'url' => $estUnAvoir ? AvoirResource::getUrl('view', ['record' => $document]) : FactureResource::getUrl('view', ['record' => $document]),
+                'url' => FicheDUnDocument::adresse($document),
                 'client_nom' => $document->client_nom,
                 'ht' => $montant($document, 'total_ht'),
                 'tva' => $montant($document, 'total_tva'),

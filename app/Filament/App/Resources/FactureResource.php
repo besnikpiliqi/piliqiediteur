@@ -50,6 +50,7 @@ use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
@@ -226,6 +227,25 @@ class FactureResource extends Resource
         return 'Fixée à l\'émission : date d\'émission + '.$delai.' jour'.($delai > 1 ? 's' : '');
     }
 
+    /**
+     * La personne voit le détail des paiements de ce document (constat C8,
+     * réponse de l'éditeur à T41 : « cacher ») : « Paiements : voir », dans
+     * sa portée, ses documents ou ceux de toute l'équipe (voir
+     * PaiementPolicy::view()). Le propriétaire, les responsables du magasin
+     * et le cabinet lié à qui le client accorde la consultation des
+     * paiements le voient ; pour les autres, la section « Paiements reçus »
+     * (paiements, références, contre-passations, reçus de paiement)
+     * n'apparaît pas du tout, et seuls « Payé » et « Restant dû » restent
+     * sur la fiche.
+     */
+    public static function voitLesPaiementsDe(Facture $facture): bool
+    {
+        $compte = CompteConnecte::exiger();
+
+        return $compte->can(PermissionRegistry::PAIEMENT_VIEW)
+            && ($compte->can(PermissionRegistry::FACTURE_VIEW_TOUTES) || $facture->cree_par === $compte->getKey());
+    }
+
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
@@ -245,13 +265,19 @@ class FactureResource extends Resource
                 // société (voir RegularisationDUneFacture) : la facture que
                 // rectifie une facture rectificative, et la rectificative
                 // d'une facture régularisée.
+                // Chaque numéro de document de la fiche mène à sa fiche, pour
+                // qui peut la voir (constat C2, voir FicheDUnDocument).
                 TextEntry::make('facture_rectifiee')
                     ->label('Rectifie la facture')
                     ->state(fn (Facture $record): ?string => $record->factureRectifiee?->numero)
+                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->factureRectifiee))
+                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->factureRectifiee) === null ? null : 'primary')
                     ->visible(fn (Facture $record): bool => $record->estUneRectificative()),
                 TextEntry::make('rectificative')
                     ->label('Facture rectificative')
                     ->state(fn (Facture $record): ?string => $record->rectificative?->numero)
+                    ->url(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->rectificative))
+                    ->color(fn (Facture $record): ?string => FicheDUnDocument::adresse($record->rectificative) === null ? null : 'primary')
                     ->visible(fn (Facture $record): bool => $record->rectificative !== null),
             ])->columns(3),
 
@@ -301,7 +327,7 @@ class FactureResource extends Resource
             ])->columns(3),
 
             InfolistSection::make('Paiements reçus')
-                ->visible(fn (Facture $record) => $record->allocationsPaiement()->exists())
+                ->visible(fn (Facture $record) => self::voitLesPaiementsDe($record) && $record->allocationsPaiement()->exists())
                 ->schema([
                     // Un paiement saisi par erreur y figure avec sa
                     // contre-passation, en négatif (voir
@@ -356,8 +382,8 @@ class FactureResource extends Resource
                         ->schema([
                             TextEntry::make('avoir.numero')
                                 ->label('Avoir')
-                                ->url(fn (AvoirAllocation $record) => AvoirResource::getUrl('view', ['record' => $record->avoir]))
-                                ->color('primary'),
+                                ->url(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->avoir))
+                                ->color(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->avoir) === null ? null : 'primary'),
                             TextEntry::make('montant_alloue')
                                 ->label('Montant crédité')
                                 ->money('EUR')
@@ -412,8 +438,8 @@ class FactureResource extends Resource
                             TextEntry::make('numero')
                                 ->label('Numéro')
                                 ->state(fn (Avoir $record) => $record->numero)
-                                ->url(fn (Avoir $record) => AvoirResource::getUrl('view', ['record' => $record]))
-                                ->color('primary'),
+                                ->url(fn (Avoir $record): ?string => FicheDUnDocument::adresse($record))
+                                ->color(fn (Avoir $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
                             TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')
                                 ->label('Crédité sur cette facture (TTC)')

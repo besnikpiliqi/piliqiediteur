@@ -5,6 +5,7 @@ namespace Tests\Browser\Support;
 use App\Domain\Calendrier\Calendrier;
 use Closure;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Pest\Browser\Api\PendingAwaitablePage;
 use Pest\Browser\Execution;
 use Pest\Browser\Playwright\Locator;
@@ -31,9 +32,18 @@ use PHPUnit\Framework\ExpectationFailedException;
 final class Navigation
 {
     /**
-     * Le délai d'attente d'un geste, en secondes.
+     * Le délai d'attente d'un geste, en secondes, sauf autre délai donné
+     * par la variable d'environnement VARIABLE_DU_DELAI (voir delai()).
      */
-    public const DELAI = 15;
+    public const DELAI_PAR_DEFAUT = 15;
+
+    /**
+     * La variable d'environnement qui donne un autre délai d'attente, en
+     * secondes, à un poste plus lent que la CI (constat C6 de l'éditeur :
+     * sur son PC Windows, serveur PHP intégré et antivirus, les premières
+     * pages dépassent 15 s).
+     */
+    public const VARIABLE_DU_DELAI = 'PILIQI_NAVIGATEUR_DELAI';
 
     /**
      * Le temps sans aucune activité au bout duquel la page est au repos, en
@@ -81,6 +91,32 @@ final class Navigation
     }
 
     /**
+     * Le délai d'attente d'un geste, en secondes : celui que donne la
+     * variable d'environnement PILIQI_NAVIGATEUR_DELAI, un nombre entier de
+     * secondes, au moins 1, sinon 15 (DELAI_PAR_DEFAUT). Il vaut pour chaque
+     * attente de cette classe et pour chaque geste de Playwright (voir
+     * tests/Pest.php).
+     *
+     * @throws InvalidArgumentException une variable qui n'est pas un nombre entier de secondes, au moins 1
+     */
+    public static function delai(): int
+    {
+        $valeur = getenv(self::VARIABLE_DU_DELAI);
+
+        if ($valeur === false || trim($valeur) === '') {
+            return self::DELAI_PAR_DEFAUT;
+        }
+
+        $secondes = filter_var(trim($valeur), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        if ($secondes === false) {
+            throw new InvalidArgumentException(self::VARIABLE_DU_DELAI.' doit être un nombre entier de secondes, au moins 1 : « '.$valeur.' » ne l\'est pas.');
+        }
+
+        return $secondes;
+    }
+
+    /**
      * La page de Playwright, pour un geste que cette classe n'offre pas.
      */
     public function page(): Page
@@ -122,11 +158,11 @@ final class Navigation
      */
     public function attendre(): self
     {
-        $fin = microtime(true) + self::DELAI;
+        $fin = microtime(true) + self::delai();
 
         while ($this->evaluerPendantUneNavigation('async () => { try { return window.__piliqi !== undefined && await window.__piliqi.auRepos('.self::REPOS_EN_MS.'); } catch (e) { return false; } }') !== true) {
             if (microtime(true) > $fin) {
-                Assert::fail('Au bout de '.self::DELAI.' s, la page ne revient pas au repos (page '.$this->page()->url().').');
+                Assert::fail('Au bout de '.self::delai().' s, la page ne revient pas au repos (page '.$this->page()->url().').');
             }
 
             Execution::instance()->wait(0.05);
@@ -142,7 +178,7 @@ final class Navigation
      */
     public function attendreQue(string $expression, string $motif): self
     {
-        $fin = microtime(true) + self::DELAI;
+        $fin = microtime(true) + self::delai();
 
         while (true) {
             $vrai = $this->evaluerPendantUneNavigation('() => { try { return Boolean('.$expression.'); } catch (e) { return false; } }');
@@ -152,7 +188,7 @@ final class Navigation
             }
 
             if (microtime(true) > $fin) {
-                Assert::fail('Au bout de '.self::DELAI.' s, '.$motif.' (page '.$this->page()->url().').');
+                Assert::fail('Au bout de '.self::delai().' s, '.$motif.' (page '.$this->page()->url().').');
             }
 
             Execution::instance()->wait(0.05);
@@ -329,11 +365,17 @@ final class Navigation
     /**
      * Donne ce fichier au champ de fichier de la fenêtre ouverte, ou de la
      * page, comme une personne qui le choisit sur son poste, puis attend que
-     * son envoi soit fini.
+     * son envoi soit fini. Playwright n'accepte qu'un chemin absolu et
+     * entièrement résolu, avec les séparateurs du système : le chemin donné
+     * l'est par realpath() (constat C6 de l'éditeur : sous Windows,
+     * storage_path() mêle « \\ » et « / »).
      */
     public function envoyerLeFichier(string $chemin): self
     {
-        return $this->geste(fn () => $this->element($this->portee().' input[type=file]')->setInputFiles($chemin), 'le choix du fichier '.basename($chemin));
+        $resolu = realpath($chemin);
+        Assert::assertIsString($resolu, "Le fichier {$chemin} n'existe pas sur le poste.");
+
+        return $this->geste(fn () => $this->element($this->portee().' input[type=file]')->setInputFiles($resolu), 'le choix du fichier '.basename($resolu));
     }
 
     /**
@@ -447,7 +489,7 @@ final class Navigation
      */
     public function voir(string $texte): self
     {
-        $fin = microtime(true) + self::DELAI;
+        $fin = microtime(true) + self::delai();
 
         while (true) {
             try {

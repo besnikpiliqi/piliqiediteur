@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use PHPUnit\Framework\AssertionFailedError;
+use Tests\Browser\Support\Navigation;
 use Tests\Fixtures\FichiersDeTest;
 
 /*
@@ -148,6 +149,49 @@ test('un fichier envoyé par un formulaire arrive au serveur avec les autres cha
         ->envoyerLeFichier(fichierDuPoste('facture.txt', 'Facture n° 12 : 18,00 €'))
         ->cliquerSur('Envoyer')
         ->voir('Reçu facture.txt (Facture n° 12 : 18,00 €) de Jeanne Dupont');
+});
+
+/*
+ * Constat C6 de l'éditeur : Playwright n'accepte qu'un chemin absolu et
+ * entièrement résolu ; sous Windows, storage_path() mêle « \\ » et « / ».
+ * Un chemin qui passe par « .. », refusé de la même façon ici, arrive au
+ * serveur une fois résolu par l'aide.
+ */
+test('un fichier donné par un chemin qui n’est pas entièrement résolu arrive au serveur', function () {
+    Route::get('/essai-envoi', fn () => '<html><body><form method="post" action="/essai-envoi" enctype="multipart/form-data"><input type="file" name="pieces[]"><button type="submit">Envoyer</button></form></body></html>');
+    Route::post('/essai-envoi', fn (Request $requete) => 'Reçu '.$requete->file('pieces')[0]->getClientOriginalName());
+    $chemin = fichierDuPoste('facture.txt', 'Facture n° 12');
+    $nonResolu = dirname($chemin).'/../'.basename(dirname($chemin)).'/'.basename($chemin);
+
+    $this->naviguer('/essai-envoi')
+        ->envoyerLeFichier($nonResolu)
+        ->cliquerSur('Envoyer')
+        ->voir('Reçu facture.txt');
+});
+
+/*
+ * Constat C6 de l'éditeur : un poste plus lent que la CI règle le délai
+ * des gestes par PILIQI_NAVIGATEUR_DELAI, en secondes ; 15 sans elle ; une
+ * valeur qui n'est pas un nombre entier de secondes est refusée.
+ */
+test('le délai des gestes se règle par la variable PILIQI_NAVIGATEUR_DELAI', function () {
+    $avant = getenv(Navigation::VARIABLE_DU_DELAI);
+
+    try {
+        putenv(Navigation::VARIABLE_DU_DELAI);
+        expect(Navigation::delai())->toBe(15);
+
+        putenv(Navigation::VARIABLE_DU_DELAI.'=60');
+        expect(Navigation::delai())->toBe(60);
+
+        putenv(Navigation::VARIABLE_DU_DELAI.'=une minute');
+        expect(fn () => Navigation::delai())->toThrow(InvalidArgumentException::class, 'PILIQI_NAVIGATEUR_DELAI doit être un nombre entier de secondes, au moins 1');
+
+        putenv(Navigation::VARIABLE_DU_DELAI.'=0');
+        expect(fn () => Navigation::delai())->toThrow(InvalidArgumentException::class);
+    } finally {
+        putenv($avant === false ? Navigation::VARIABLE_DU_DELAI : Navigation::VARIABLE_DU_DELAI.'='.$avant);
+    }
 });
 
 test('le propriétaire dont les courriers ne sont pas parvenus dépose une pièce par le champ de fichier de Filament', function () {

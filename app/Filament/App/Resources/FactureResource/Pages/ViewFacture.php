@@ -8,6 +8,7 @@ use App\Domain\Facturation\Actions\EmettreLaFactureRectificativeAction;
 use App\Domain\Facturation\Actions\FaireLAvoirDeRegularisationAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Actions\RelancerLaTransmissionAction;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -28,7 +29,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
 /**
- * La fiche d'une facture ou d'un ticket. Un brouillon s'y émet, par
+ * La fiche d'une facture ou d'un ticket. Un brouillon s'y modifie
+ * (« Modifier ») et s'y émet, par
  * « Émettre » ou par « Émettre et encaisser », qui enregistre aussi son
  * règlement, en tout ou en partie (R1, voir FactureResource::emettre() et
  * FactureResource::emettreEtEncaisser()). Ce qui suit la vente sans la
@@ -58,6 +60,15 @@ class ViewFacture extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            // Un brouillon se modifie depuis sa fiche comme depuis la liste
+            // (constat C9, réponse de l'éditeur à T42), pour qui peut le
+            // modifier (voir FacturePolicy::update()) : jamais une facture
+            // émise, ni le propriétaire hors du magasin de démonstration.
+            // Son droit se lit à l'ouverture de la page : l'état du
+            // brouillon, relu après son émission (voir
+            // FactureResource::emettre()), le cache dès qu'il est émis.
+            Actions\EditAction::make()
+                ->visible(fn (Facture $record): bool => $record->statut === StatutFacture::Brouillon),
             FactureResource::emettre(Actions\Action::make('emettre')),
             FactureResource::emettreEtEncaisser(Actions\Action::make('emettre_et_encaisser')),
             FactureResource::encaisser(Actions\Action::make('encaisser')),

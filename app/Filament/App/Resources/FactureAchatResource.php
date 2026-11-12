@@ -30,6 +30,7 @@ use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -212,8 +213,8 @@ class FactureAchatResource extends Resource
                             TextEntry::make('numero')
                                 ->label('Numéro')
                                 ->state(fn (AvoirFournisseur $record) => $record->numero)
-                                ->url(fn (AvoirFournisseur $record): ?string => CompteConnecte::exiger()->can('view', $record) ? AvoirFournisseurResource::getUrl('view', ['record' => $record]) : null)
-                                ->color('primary'),
+                                ->url(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record))
+                                ->color(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record) === null ? null : 'primary'),
                             TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->state(fn (AvoirFournisseur $record) => $record->numero_fournisseur)->placeholder('—'),
                             TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR'),
@@ -467,9 +468,10 @@ class FactureAchatResource extends Resource
             ->sortBy(fn (LigneAvoirFournisseur $retour): array => [self::emissionDuRetour($retour)->getTimestamp(), self::avoirDuRetour($retour)->numero])
             ->map(function (LigneAvoirFournisseur $retour): string {
                 $avoir = self::avoirDuRetour($retour);
-                $numero = auth()->user()?->can('view', $avoir)
-                    ? '<a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>'
-                    : e($avoir->numero);
+                $adresse = FicheDUnDocument::adresse($avoir);
+                $numero = $adresse === null
+                    ? e($avoir->numero)
+                    : '<a href="'.e($adresse).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>';
 
                 return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.self::calendrierDuMagasin()->afficher(self::emissionDuRetour($retour), 'd/m/Y').')')))->toHtml();
             });

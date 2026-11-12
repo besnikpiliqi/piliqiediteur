@@ -1,0 +1,25 @@
+/*
+ * La rangée choisie d'une fenêtre de sélection (les produits ajoutés à une
+ * vente), la ligne cochée d'une liste qui a des actions groupées et le
+ * service coché d'une fenêtre de sélection (constat C5 de l'éditeur) : une
+ * teinte légère de la couleur principale du panneau, celle de ses boutons,
+ * au texte bien lisible, au repos comme au survol, en clair comme en
+ * sombre. Écrite à la main, sans aucun outil Node, elle ne lit que les
+ * variables de couleur que Filament pose pour le panneau ; ses sélecteurs
+ * l'emportent sur les fonds gris de Filament.
+ */
+.fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
+.fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
+.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
+.fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
+.fi-fo-checkbox-list .fi-fo-checkbox-list-option-label:has(input:checked) {
+    background-color: rgba(var(--primary-50), 1);
+}
+
+.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie,
+.dark .fi-ta-table .fi-ta-row.piliqi-rangee-choisie:hover,
+.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked),
+.dark .fi-ta-table .fi-ta-row:has(.fi-ta-record-checkbox:checked):hover,
+.dark .fi-fo-checkbox-list .fi-fo-checkbox-list-option-label:has(input:checked) {
+    background-color: rgba(var(--primary-500), 0.15);
+}

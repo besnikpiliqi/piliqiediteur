@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -66,7 +67,12 @@ class AvoirFournisseurResource extends Resource
                 TextEntry::make('statut')->badge(),
                 FactureAchatResource::marqueTvaAVerifier(),
                 TextEntry::make('source')->badge(),
-                TextEntry::make('factureAchat.numero')->label('Facture d\'achat créditée'),
+                // Son numéro mène à la fiche de la facture d'achat, pour qui
+                // peut la voir (constat C2, voir FicheDUnDocument).
+                TextEntry::make('factureAchat.numero')
+                    ->label('Facture d\'achat créditée')
+                    ->url(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record->factureAchat))
+                    ->color(fn (AvoirFournisseur $record): ?string => FicheDUnDocument::adresse($record->factureAchat) === null ? null : 'primary'),
                 TextEntry::make('factureAchat.fournisseur.nom')->label('Fournisseur'),
                 TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—'),
                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->placeholder('—'),

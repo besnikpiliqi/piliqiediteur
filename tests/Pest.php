@@ -14,6 +14,6 @@ use Tests\Browser\TestCaseDuNavigateur;
  */
 pest()->extend(TestCaseDuNavigateur::class)->use(RefreshDatabase::class)->in('Browser');
 
-pest()->browser()->timeout(Navigation::DELAI * 1000);
+pest()->browser()->timeout(Navigation::delai() * 1000);
 
 ServeurPlaywright::arreterALaFin();

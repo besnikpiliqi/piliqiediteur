@@ -8,7 +8,6 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
@@ -27,6 +26,7 @@ use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
@@ -217,6 +217,9 @@ class Caisse extends Page implements HasForms
      * La seule part payée du règlement, tant que le vendeur n'en a pas
      * saisi le montant, prend ce qui reste à payer : le panier, le client
      * ou les bons d'avoir qui changent changent le montant qu'elle propose.
+     * Le refus d'un encaissement affiché sous les parts s'efface dès que le
+     * panier, le client ou les parts le rendent faux (constat C1, voir
+     * SaisitUnReglementEnParts::oublierLeRefusDevenuFaux()).
      */
     public function rendering(): void
     {
@@ -231,6 +234,11 @@ class Caisse extends Page implements HasForms
         }
 
         $this->suivreLeResteAPayer();
+
+        if ($this->getErrorBag()->has('data.parts')) {
+            $parts = ValeursLues::tableau($this->data['parts'] ?? []);
+            self::oublierLeRefusDevenuFaux($this, 'data.parts', self::ecartDesParts($parts, $this->apercuDuReglement($this->data['lignes'] ?? [], $this->data['client_id'] ?? null, self::bonsDesParts($parts)), true));
+        }
     }
 
     /**
@@ -308,9 +316,13 @@ class Caisse extends Page implements HasForms
      * que le vendeur a encaissée dans ce magasin (voir
      * ActionsUniques::dernierResultat()) : la caisse rechargée après une
      * réponse perdue, son panier vidé par l'encaissement, dit ainsi que la
-     * vente est faite. Null s'il n'en a encaissé aucune depuis 30 jours.
+     * vente est faite. Son numéro mène à sa fiche, pour qui peut la voir
+     * (constat C2, voir FicheDUnDocument). Null s'il n'en a encaissé aucune
+     * depuis 30 jours.
+     *
+     * @return array{texte: string, numero: string, adresse: string|null}|null
      */
-    public function derniereVenteEnregistree(): ?string
+    public function derniereVenteEnregistree(): ?array
     {
         $facture = app(ActionsUniques::class)->dernierResultat(ActionsUniques::VENDRE_A_LA_CAISSE, CompteConnecte::exiger());
 
@@ -318,7 +330,11 @@ class Caisse extends Page implements HasForms
             return null;
         }
 
-        return 'Dernière vente enregistrée : '.($facture->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture')." N° {$facture->numero}";
+        return [
+            'texte' => 'Dernière vente enregistrée : '.mb_strtolower(FicheDUnDocument::nature($facture)).' N° ',
+            'numero' => (string) $facture->numero,
+            'adresse' => FicheDUnDocument::adresse($facture),
+        ];
     }
 
     /**
@@ -644,7 +660,7 @@ class Caisse extends Page implements HasForms
         }
 
         Notification::make()
-            ->title("Vente encaissée : facture {$facture->numero}")
+            ->title('Vente encaissée : '.mb_strtolower(FicheDUnDocument::nature($facture)).' '.$facture->numero)
             ->body($this->resumeEncaissement($facture))
             ->success()
             ->send();

@@ -49,6 +49,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
 use App\Filament\App\Resources\AvoirResource\Pages\ViewAvoir;
@@ -291,6 +292,29 @@ class RegularisationDUneFactureTest extends TestCase
      * faisant sur sa rectificative : sa fiche ne propose plus « Avoir », et
      * « Nouvel avoir » refuse son numéro en le disant.
      */
+    /**
+     * Constat C2 de l'éditeur : la fiche de la facture régularisée mène à
+     * sa facture rectificative, et celle de la rectificative à la facture
+     * qu'elle rectifie, pour qui peut les voir ; un compte qui ne voit pas
+     * l'autre facture en lit le numéro, sans lien.
+     */
+    public function test_la_facture_regularisee_et_sa_rectificative_menent_l_une_a_l_autre_pour_qui_les_voit(): void
+    {
+        [$magasin, $facture] = $this->factureDUneSocieteCorrigee();
+        $responsable = self::responsableDeTest($magasin);
+        $rectificative = app(EmettreLaFactureRectificativeAction::class)->handle($responsable, $facture);
+        $this->dansLeMagasin($magasin->fresh(), $responsable);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSee(FactureResource::getUrl('view', ['record' => $rectificative]));
+        Livewire::test(ViewFacture::class, ['record' => $rectificative->getRouteKey()])
+            ->assertSee(FactureResource::getUrl('view', ['record' => $facture]));
+
+        $this->dansLeMagasin($magasin->fresh(), $this->membre($magasin, RoleMagasin::Vendeur));
+        $this->assertNull(FicheDUnDocument::adresse($rectificative), 'Le vendeur ne voit pas la rectificative du responsable : aucun lien ne doit y mener.');
+        $this->assertNull(FicheDUnDocument::adresse($facture));
+    }
+
     public function test_une_facture_deja_regularisee_ne_se_regularise_plus(): void
     {
         [$magasin, $facture, $client] = $this->factureDUneSocieteCorrigee(quantite: 3);

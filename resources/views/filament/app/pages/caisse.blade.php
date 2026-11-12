@@ -9,7 +9,9 @@
     @endif
 
     @if ($derniereVente !== null)
-        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $derniereVente }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+            {{ $derniereVente['texte'] }}@if ($derniereVente['adresse'] !== null)<a href="{{ $derniereVente['adresse'] }}" class="text-primary-600 underline dark:text-primary-400">{{ $derniereVente['numero'] }}</a>@else{{ $derniereVente['numero'] }}@endif
+        </p>
     @endif
 
     <form wire:submit="encaisser">

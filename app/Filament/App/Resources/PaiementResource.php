@@ -11,12 +11,14 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Support\CompteConnecte;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -38,6 +40,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
 
@@ -322,11 +325,14 @@ class PaiementResource extends Resource
                     ->badge()
                     ->color(fn (?string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray')
                     ->placeholder('—'),
+                // Chaque numéro mène à la fiche du ticket ou de la facture,
+                // pour qui peut la voir (constat C2, voir FicheDUnDocument) :
+                // la rangée d'un paiement n'ouvre aucune fiche.
                 Tables\Columns\TextColumn::make('allocations')
-                    ->label('Factures réglées')
-                    ->state(fn (Paiement $record) => $record->allocations
-                        ->map(fn ($allocation) => $allocation->facture->numero ?? '—')
-                        ->join(', '))
+                    ->label('Documents réglés')
+                    ->state(fn (Paiement $record): HtmlString => new HtmlString($record->allocations
+                        ->map(fn (PaiementAllocation $allocation): string => $allocation->facture === null ? '—' : FicheDUnDocument::numeroEnLien($allocation->facture, (string) $allocation->facture->numero)->toHtml())
+                        ->join(', ')))
                     ->wrap(),
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->toggleable(),
                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Enregistré par')->toggleable(),

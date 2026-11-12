@@ -41,6 +41,20 @@ class RessourcesServiesParPiliqiTest extends TestCase
     }
 
     /**
+     * La feuille écrite à la main qui teinte les rangées choisies et les
+     * lignes cochées (constat C5 de l'éditeur) se sert dans chaque panneau,
+     * depuis la copie que « php artisan filament:assets » publie, identique
+     * à la feuille du dépôt : une feuille changée sans être republiée ne
+     * passerait pas.
+     */
+    #[DataProvider('pagesDeConnexion')]
+    public function test_chaque_panneau_sert_la_feuille_des_rangees_choisies_publiee_telle_quelle(string $page): void
+    {
+        $this->get($page)->assertOk()->assertSee('css/app/rangees-choisies.css', false);
+        $this->assertFileEquals(resource_path('css/rangees-choisies.css'), public_path('css/app/rangees-choisies.css'));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function noms(): array

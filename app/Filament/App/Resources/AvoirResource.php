@@ -19,6 +19,7 @@ use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -44,6 +45,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -437,9 +439,14 @@ class AvoirResource extends Resource
             InfolistSection::make('Avoir')->schema([
                 TextEntry::make('numero')->label('Numéro'),
                 FactureResource::clientEntry(),
+                // Chaque ticket ou facture que l'avoir crédite, nommé selon
+                // ce qu'il est, son numéro en lien vers sa fiche pour qui
+                // peut la voir (constat C2, voir FicheDUnDocument).
                 TextEntry::make('factures_concernees')
-                    ->label('Factures créditées')
-                    ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
+                    ->label('Documents crédités')
+                    ->state(fn (Avoir $record): HtmlString => new HtmlString($record->facturesConcernees()->sortBy('numero')
+                        ->map(fn (Facture $document): string => FicheDUnDocument::nature($document).' '.FicheDUnDocument::numeroEnLien($document, (string) $document->numero)->toHtml())
+                        ->implode(', '))),
                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y à H:i'),
                 TextEntry::make('cree_par_nom')->label('Émis par'),
                 TextEntry::make('motif')->label('Motif')->columnSpanFull(),
@@ -489,10 +496,17 @@ class AvoirResource extends Resource
                     // imputé y figure avec sa contre-passation, en négatif,
                     // qui le rend à l'avoir (voir ContrePasserPaiementAction),
                     // dans l'ordre où ils ont été imputés.
+                    // Chaque document est nommé selon ce qu'il est, ticket ou
+                    // facture, son numéro en lien vers sa fiche pour qui peut
+                    // la voir (constat C2, voir FicheDUnDocument).
                     RepeatableEntry::make('allocations')
                         ->label('')
+                        ->state(fn (Avoir $record) => $record->loadMissing('allocations.facture')->allocations)
                         ->schema([
-                            TextEntry::make('facture.numero')->label('Facture'),
+                            TextEntry::make('facture.numero')
+                                ->label(fn (AvoirAllocation $record): string => FicheDUnDocument::nature(ValeurRequise::de($record->facture, 'le document de l\'imputation')))
+                                ->url(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->facture))
+                                ->color(fn (AvoirAllocation $record): ?string => FicheDUnDocument::adresse($record->facture) === null ? null : 'primary'),
                             TextEntry::make('montant_alloue')
                                 ->label('Montant crédité')
                                 ->money('EUR')

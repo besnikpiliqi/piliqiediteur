@@ -287,6 +287,35 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
+     * Constat C1 de l'éditeur : ce qui sépare les parts saisies de ce qui
+     * reste dû ne s'affiche qu'une fois, avant comme après le clic sur
+     * « Encaisser » : le refus prend la place de l'aide en direct, puis
+     * s'efface dès que la saisie le rend faux.
+     */
+    public function test_l_ecart_du_reglement_d_une_facture_ne_s_affiche_qu_une_fois_avant_comme_apres_le_clic(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+        $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create()); // total TTC 120
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
+        $cle = array_key_first($liste->get('mountedTableActionsData.0.parts'));
+        $ecart = 'Les parts du règlement (150,00 €) dépassent ce qui reste dû (120,00 €).';
+
+        $liste->setTableActionData(["parts.{$cle}.montant" => 150]);
+        $this->assertSame(1, substr_count($liste->html(), $ecart));
+
+        $liste->callMountedTableAction()->assertHasTableActionErrors(['parts']);
+        $this->assertSame(1, substr_count($liste->html(), $ecart));
+
+        $liste->setTableActionData(["parts.{$cle}.montant" => 120]);
+        $this->assertSame(0, substr_count($liste->html(), 'dépassent ce qui reste dû'));
+
+        $liste->callMountedTableAction()->assertHasNoTableActionErrors();
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    /**
      * Un virement vu hier sur le relevé s'enregistre aujourd'hui avec sa
      * vraie date de réception.
      */

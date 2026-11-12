@@ -155,7 +155,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
             ->recordAction('basculer')
             ->recordClasses(fn (Produit $produit): array => [
                 'opacity-50' => DevisResource::refusDuProduit($produit, $vendSansStock) !== null,
-                'bg-gray-100 dark:bg-white/5 font-semibold' => $this->quantiteChoisie(CleDuModele::de($produit)) !== null,
+                'piliqi-rangee-choisie font-semibold' => $this->quantiteChoisie(CleDuModele::de($produit)) !== null,
             ])
             ->searchPlaceholder('Nom, référence ou code-barres')
             ->emptyStateHeading('Aucun produit ne correspond.')

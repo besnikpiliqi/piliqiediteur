@@ -286,6 +286,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
+        'lien:factureAchat.numero' => ['lot' => 'NAV-3', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe de l’avoir fournisseur à la facture d’achat qu’il crédite, et retour',
+        ]],
         'recherche' => ['lot' => 'NAV-3', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -349,6 +352,10 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le collaborateur du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le propriétaire du cabinet lié ouvre chaque page et chaque action du magasin de son client sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+        ]],
+        'lien:facture.numero' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le responsable passe d’un document à l’autre par leurs numéros : avoir, ticket crédité, ticket réglé par le crédit',
+            'tests/Browser/Parcours/LiensVersLesDocumentsTest.php › le collaborateur du cabinet lié ouvre de même le ticket que le crédit d’un avoir a réglé',
         ]],
         'recherche' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -1266,7 +1273,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › l’observateur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
         'lien:avoir.numero' => ['lot' => 'NAV-2', 'tests' => []],
+        'lien:facture_rectifiee' => ['lot' => 'NAV-2', 'tests' => []],
         'lien:numero' => ['lot' => 'NAV-2', 'tests' => []],
+        'lien:rectificative' => ['lot' => 'NAV-2', 'tests' => []],
         'recherche' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1345,6 +1354,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
+        ]],
+        'action:edit' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › le responsable modifie puis émet un brouillon depuis sa fiche',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › le vendeur modifie puis émet son brouillon depuis sa fiche',
+            'tests/Browser/Parcours/FicheDUneFactureTest.php › « Modifier » et « Émettre » ne se montrent sur la fiche d’un brouillon qu’à qui peut le modifier et l’émettre',
         ]],
         'action:emettre' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › l’administrateur autorisé à vendre émet un brouillon depuis sa fiche, sans l’encaisser',
@@ -2149,12 +2163,16 @@ return [
         'champ:mode' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'champ:montant' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/EmettreEtEncaisserTest.php › le responsable ramène à zéro la part préremplie, et « Émettre et encaisser » émet le brouillon sans l’encaisser',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
         'champ:montant_recu' => ['lot' => 'NAV-2', 'tests' => []],
@@ -2167,6 +2185,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire fait une facture dans la démonstration, l’émet et l’encaisse depuis sa fiche',
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › sur l’encaissement d’une facture, l’écart ne s’affiche qu’une fois, avant comme après le clic, puis plus du tout',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse de l’administrateur autorisé à vendre, l’écart ne s’affiche qu’une fois après « Encaisser »',
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le responsable fait un devis puis une facture avec la loupe des clients et « Ajouter un produit », l’émet, l’encaisse et la crédite par un avoir',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
         ]],
@@ -2510,6 +2531,9 @@ return [
         'envoi:encaisser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/ProprietaireEnDemonstrationTest.php › le propriétaire vend à la caisse de la démonstration, encaisse en espèces et par carte, ferme sa caisse et clôture la journée',
             'tests/Browser/Parcours/VentesDeBoutEnBoutTest.php › le vendeur vend à la caisse au client comptoir et encaisse en espèces et par carte',
+        ]],
+        'lien:{{ $derniereVente[\'numero\'] }}' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/ReglementEnPartsTest.php › à la caisse, « Il reste … à répartir » ne s’affiche qu’une fois, avant comme après « Encaisser » ; la vente faite, son numéro mène au ticket, dont le PDF imprime chaque règlement à gauche du Total TTC',
         ]],
     ],
     'resources/views/filament/app/pages/formulaire-de-parametres.blade.php' => [

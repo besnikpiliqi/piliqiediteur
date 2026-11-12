@@ -27,6 +27,7 @@ use Filament\Forms\Set;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
+use Livewire\Component as LivewireComponent;
 use LogicException;
 
 /**
@@ -55,7 +56,11 @@ use LogicException;
  * règlement sans aucun montant, ou à zéro, revient à « Émettre ».
  * L'écran le dit pendant la saisie (« Il reste 10,00 € à répartir. ») et
  * refuse un règlement qui ne tombe pas juste ; l'enregistrement le
- * revérifie sous le verrou du registre.
+ * revérifie sous le verrou du registre. Ce qui sépare les parts du
+ * règlement, comme le refus d'un bon d'avoir, ne s'affiche qu'une fois
+ * (constat C1 de l'éditeur) : l'aide en direct pendant la saisie, puis,
+ * après un clic refusé, le refus à sa place, sous les parts, qui s'efface
+ * dès que la saisie le rend faux (voir oublierLeRefusDevenuFaux()).
  */
 trait SaisitUnReglementEnParts
 {
@@ -104,6 +109,11 @@ trait SaisitUnReglementEnParts
                 ->reorderable(false)
                 ->defaultItems(1)
                 ->live()
+                ->afterStateUpdated(fn (Repeater $component, Get $get, ?Model $record) => self::oublierLeRefusDevenuFaux(
+                    $component->getLivewire(),
+                    $component->getStatePath(),
+                    self::ecartDesParts(ValeursLues::tableau($component->getState() ?? []), $apercu($get, $record, ''), $aLaCaisse),
+                ))
                 ->rule(fn (Get $get, ?Model $record): Closure => function (string $attribute, mixed $parts, Closure $echec) use ($get, $record, $apercu, $aLaCaisse): void {
                     $ecart = self::ecartDesParts(is_array($parts) ? $parts : [], $apercu($get, $record, ''), $aLaCaisse);
 
@@ -111,11 +121,39 @@ trait SaisitUnReglementEnParts
                         $echec($ecart);
                     }
                 }),
+            // L'aide en direct, tant qu'aucun refus ne la remplace sous les
+            // parts (voir oublierLeRefusDevenuFaux()).
             Placeholder::make('reste_a_repartir')
                 ->label('')
                 ->content(fn (Get $get, ?Model $record): Htmlable => ClientResource::enEvidence((string) self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse)))
-                ->visible(fn (Get $get, ?Model $record): bool => self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse) !== null),
+                ->visible(fn (Placeholder $component, Get $get, ?Model $record): bool => self::ecartDesParts(ValeursLues::tableau($get('parts') ?? []), $apercu($get, $record, ''), $aLaCaisse) !== null
+                    && ! self::refusAffiche($component->getLivewire(), ltrim($component->getContainer()->getStatePath().'.parts', '.'))),
         ];
+    }
+
+    /**
+     * Le refus d'un champ du règlement, affiché sous lui après un clic
+     * refusé, s'efface dès qu'il ne dit plus vrai : l'écart de ses parts ou
+     * le refus de son bon d'avoir, recalculé sur la saisie, a changé.
+     * L'aide en direct reprend alors sa place, si un écart reste (constat
+     * C1 de l'éditeur). La caisse le fait aussi à chaque affichage (voir
+     * Caisse::rendering()), son panier et son client changeant ce qui
+     * reste à payer.
+     */
+    public static function oublierLeRefusDevenuFaux(LivewireComponent $livewire, string $chemin, ?string $refusActuel): void
+    {
+        if (self::refusAffiche($livewire, $chemin) && $livewire->getErrorBag()->first($chemin) !== $refusActuel) {
+            $livewire->resetErrorBag($chemin);
+        }
+    }
+
+    /**
+     * Un refus est affiché sous ce champ : Filament l'écrit à sa place, et
+     * l'aide qui dirait la même chose se tait.
+     */
+    private static function refusAffiche(LivewireComponent $livewire, string $chemin): bool
+    {
+        return $livewire->getErrorBag()->has($chemin);
     }
 
     /**
@@ -251,12 +289,17 @@ trait SaisitUnReglementEnParts
                 ->visible($estAvoir)
                 ->required($estAvoir)
                 ->live(onBlur: true)
-                ->helperText(function (Get $get, ?Model $record) use ($apercu, $aLaCaisse): Htmlable|string|null {
+                ->afterStateUpdated(fn (TextInput $component, Get $get, ?Model $record) => self::oublierLeRefusDevenuFaux(
+                    $component->getLivewire(),
+                    $component->getStatePath(),
+                    self::refusDuBon($apercu($get, $record, '../../'), $get('bon')),
+                ))
+                ->helperText(function (TextInput $component, Get $get, ?Model $record) use ($apercu, $aLaCaisse): Htmlable|string|null {
                     $refus = self::refusDuBon($apercu($get, $record, '../../'), $get('bon'));
 
                     return match (true) {
-                        $refus !== null => ClientResource::enEvidence($refus),
-                        $aLaCaisse => null,
+                        $refus !== null && ! self::refusAffiche($component->getLivewire(), $component->getStatePath()) => ClientResource::enEvidence($refus),
+                        $refus !== null, $aLaCaisse => null,
                         default => self::BON_SIGNE_PAR_LA_PREMIERE_PART,
                     };
                 })

@@ -82,6 +82,11 @@ test('le responsable télécharge le reçu du virement reçu après l’émissio
         ->toBe(['compta@hotel-des-pins.fr', StatutEnvoi::Envoye, app(TenantContext::class)->runAs($societe->magasin, fn (): int => RecuPaiement::query()->sole()->id)]);
 });
 
+/*
+ * La section « Paiements reçus », et le reçu qu'elle donne, ne se montre
+ * qu'à qui voit les paiements du document (constat C8, réponse de
+ * l'éditeur à T41) : un compte sans « Paiements : voir » n'en voit rien.
+ */
 test('« Reçu (PDF) » ne se montre qu’à qui voit le paiement, « Envoyer le reçu » qu’à qui envoie la facture, jamais au cabinet lié', function () {
     $societe = $this->societeComplete();
     $facture = factureRegleeApresSonEmission(app(TenantContext::class), $societe->magasin);
@@ -96,22 +101,25 @@ test('« Reçu (PDF) » ne se montre qu’à qui voit le paiement, « Envoyer le
     ]);
     $deLaVendeuse = factureEncaisseeParUnAutre($societe->magasin, $vendeuse, $societe->responsable);
     $comptes = [
-        'le propriétaire' => [$societe->proprietaire, 'app', $facture, true, true],
-        'l’administrateur sans la vente' => [$societe->administrateur, 'app', $facture, true, true],
-        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', $facture, true, true],
-        'l’administrateur sans « Paiements : voir »' => [$administrateurSansLesPaiements, 'app', $facture, false, false],
-        'le responsable' => [$societe->responsable, 'app', $facture, true, true],
-        'le vendeur qui a encaissé' => [$societe->vendeur, 'app', $facture, true, true],
-        'la vendeuse, sur sa facture encaissée par le responsable' => [$vendeuse, 'app', $deLaVendeuse, false, false],
-        'le vendeur qui voit toutes les factures, sans « Paiements : voir »' => [$vendeurSansLesPaiements, 'app', $facture, false, false],
-        'l’observateur qui voit toutes les factures, sans « Paiements : voir »' => [$observateurSansLesPaiements, 'app', $facture, false, false],
-        'l’observateur qui voit toutes les factures et les paiements' => [$observateurAvecLesPaiements, 'app', $facture, true, false],
-        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', $facture, true, false],
+        'le propriétaire' => [$societe->proprietaire, 'app', $facture, true, true, true],
+        'l’administrateur sans la vente' => [$societe->administrateur, 'app', $facture, true, true, true],
+        'l’administrateur autorisé à vendre' => [$societe->administrateurVendeur, 'app', $facture, true, true, true],
+        'l’administrateur sans « Paiements : voir »' => [$administrateurSansLesPaiements, 'app', $facture, false, false, false],
+        'le responsable' => [$societe->responsable, 'app', $facture, true, true, true],
+        'le vendeur qui a encaissé' => [$societe->vendeur, 'app', $facture, true, true, true],
+        'la vendeuse, sur sa facture encaissée par le responsable' => [$vendeuse, 'app', $deLaVendeuse, true, false, false],
+        'le vendeur qui voit toutes les factures, sans « Paiements : voir »' => [$vendeurSansLesPaiements, 'app', $facture, false, false, false],
+        'l’observateur qui voit toutes les factures, sans « Paiements : voir »' => [$observateurSansLesPaiements, 'app', $facture, false, false, false],
+        'l’observateur qui voit toutes les factures et les paiements' => [$observateurAvecLesPaiements, 'app', $facture, true, true, false],
+        'le collaborateur du cabinet lié' => [$societe->collaborateur, 'cabinet', $facture, true, true, false],
     ];
 
-    foreach ($comptes as $qui => [$compte, $panneau, $document, $telecharge, $envoie]) {
+    foreach ($comptes as $qui => [$compte, $panneau, $document, $voitLesPaiements, $telecharge, $envoie]) {
         $recu = app(TenantContext::class)->runAs($societe->magasin, fn (): string => $document->allocationsPaiement()->sole()->paiement->recuPaiement->numero);
-        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$document->id)->voir('Paiements reçus')->voir($recu);
+        $onglet = $this->seConnecter($compte, panneau: $panneau)->aller('/app/'.$societe->magasin->uuid.'/factures/'.$document->id)->voir('Restant dû');
+        $voitLesPaiements
+            ? $onglet->voir('Paiements reçus')->voir($recu)
+            : $onglet->nePasVoir('Paiements reçus')->nePasVoir($recu);
         $boutons = fn (string $libelle): int => $onglet->element('.fi-in-repeatable-item >> '.Navigation::bouton($libelle))->count();
 
         expect([$qui, $boutons('Reçu (PDF)'), $boutons('Envoyer le reçu')])->toBe([$qui, $telecharge ? 1 : 0, $envoie ? 1 : 0]);

@@ -1845,7 +1845,7 @@ class CaisseTest extends TestCase
             ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === '8.00')
             ->call('encaisser')
             ->assertHasNoFormErrors()
-            ->assertNotified('Vente encaissée : facture TK-MABOUT-2026-000002');
+            ->assertNotified('Vente encaissée : ticket TK-MABOUT-2026-000002');
 
         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000002')->sole();
         $this->assertSame([StatutFacture::Payee, 1200, 800, 0], [$ticket->statut, $ticket->montantCrediteParAvoirEnCentimes(), $ticket->montantPayeEnCentimes(), $ticket->montantRestantEnCentimes()]);
@@ -1976,7 +1976,7 @@ class CaisseTest extends TestCase
         $caisse
             ->call('encaisser')
             ->assertHasNoFormErrors()
-            ->assertNotified(Notification::make()->title('Vente encaissée : facture TK-MABOUT-2026-000003')->body('Réglée par 10,00 € du crédit d\'avoir AV-MABOUT-2026-000002 et 5,00 € du bon d\'avoir AV-MABOUT-2026-000001.')->success());
+            ->assertNotified(Notification::make()->title('Vente encaissée : ticket TK-MABOUT-2026-000003')->body('Réglée par 10,00 € du crédit d\'avoir AV-MABOUT-2026-000002 et 5,00 € du bon d\'avoir AV-MABOUT-2026-000001.')->success());
 
         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000003')->sole();
         $this->assertSame([$martin->id, 'Mme Martin'], [(int) $ticket->client_id, $ticket->client_nom]);
@@ -2063,6 +2063,38 @@ class CaisseTest extends TestCase
             [[ModePaiement::Especes, '50.00'], [ModePaiement::CarteBancaire, '30.00']],
             $ticket->allocationsPaiement()->with('paiement')->orderBy('id')->get()->map(fn ($allocation): array => [$allocation->paiement->mode_paiement, $allocation->montant_alloue])->all(),
         );
+    }
+
+    /**
+     * Constat C1 de l'éditeur : « Il reste … à répartir » ne s'affiche
+     * qu'une fois, avant comme après le clic sur « Encaisser » : le refus
+     * prend la place de l'aide en direct. Il s'efface dès que la saisie le
+     * rend faux : un panier qui change laisse l'aide dire le nouveau reste,
+     * un règlement qui tombe juste ne laisse plus aucun message.
+     */
+    public function test_ce_qu_il_reste_a_repartir_ne_s_affiche_qu_une_fois_avant_comme_apres_le_clic(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ligne = ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 0];
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [$ligne]]);
+        $especes = $this->premierePart($caisse);
+
+        $caisse->set("data.parts.{$especes}.montant", '50');
+        $this->assertSame(1, substr_count($caisse->html(), 'Il reste 30,00 € à répartir.'));
+
+        $caisse->call('encaisser')->assertHasFormErrors(['parts']);
+        $this->assertSame(1, substr_count($caisse->html(), 'Il reste 30,00 € à répartir.'));
+
+        $caisse->fillForm(['lignes' => [[...$ligne, 'quantite' => 3]]]);
+        $this->assertSame(0, substr_count($caisse->html(), 'Il reste 30,00 € à répartir.'));
+        $this->assertSame(1, substr_count($caisse->html(), 'Il reste 70,00 € à répartir.'));
+
+        $caisse->set("data.parts.{$especes}.montant", '120');
+        $this->assertSame(0, substr_count($caisse->html(), 'à répartir'));
+
+        $caisse->call('encaisser')->assertHasNoFormErrors();
+        $this->assertSame(1, Facture::query()->count());
     }
 
     /**

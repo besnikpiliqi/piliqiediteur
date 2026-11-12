@@ -151,13 +151,13 @@ class ActionsUniquesTest extends TestCase
         $ticket = self::vendreAuComptant($vendeur, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
 
         $caisse->call('encaisser')
-            ->assertNotified("Vente encaissée : facture {$ticket->numero}")
+            ->assertNotified("Vente encaissée : ticket {$ticket->numero}")
             ->assertFormSet(['lignes' => []]);
 
         $this->assertSame([1, 1, 0], [Facture::query()->count(), Paiement::query()->count(), PanierCaisse::query()->count()]);
         Livewire::test(Caisse::class)
             ->assertFormSet(['lignes' => []])
-            ->assertSee("Dernière vente enregistrée : ticket N° {$ticket->numero}");
+            ->assertSeeText("Dernière vente enregistrée : ticket N° {$ticket->numero}");
     }
 
     public function test_le_meme_jeton_avec_un_autre_montant_est_refuse(): void

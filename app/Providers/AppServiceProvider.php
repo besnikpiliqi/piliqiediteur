@@ -71,6 +71,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Support\Assets\Css;
+use Filament\Support\Facades\FilamentAsset;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\Htmlable;
@@ -207,6 +209,20 @@ class AppServiceProvider extends ServiceProvider
         $this->nommerLesChampsDansLesMessages();
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
         $this->neJamaisMettreEnFormeLesTextesDesEmails();
+        $this->teinterLesRangeesChoisies();
+    }
+
+    /**
+     * La feuille écrite à la main qui teinte la rangée choisie d'une
+     * fenêtre de sélection et la ligne cochée d'une liste, dans les trois
+     * panneaux (constat C5 de l'éditeur, voir
+     * resources/css/rangees-choisies.css) : Filament la sert, après ses
+     * propres feuilles, depuis la copie que « php artisan filament:assets »
+     * publie dans public/css/app.
+     */
+    private function teinterLesRangeesChoisies(): void
+    {
+        FilamentAsset::register([Css::make('rangees-choisies', resource_path('css/rangees-choisies.css'))], 'app');
     }
 
     /**

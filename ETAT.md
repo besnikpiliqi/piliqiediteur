@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 12/11/2026 à 22:13 UTC par pilotage-sync.sh : « D76 : jamais attendre l'avis du comptable ; lot ER-PRO ».
+Mis à jour le 12/11/2026 à 22:26 UTC par pilotage-sync.sh : « Point de suivi 22 h 27 UTC ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -104,7 +104,6 @@ c2455dd Passe Larastan au niveau 10 sans erreur : les valeurs lues sans type son
 Course `wf_1d467e9e-93e`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-DEMO:poussee
 DEMO:notes
 UI:implementation
 UI:relecture1
@@ -129,4 +128,5 @@ EC2:implementation
 EC2:implementation-2
 EC2:implementation-3
 EC2:implementation-4
+EC2:implementation-5
 ```

@@ -11,3 +11,14 @@
   - Mais rien ne prévient la cloche, déjà rendue au chargement de la page. Le test ne passe donc que si une interrogation de 30 s tombe dans les 15 s qui suivent le clic sur la cloche : il dépend de l'horloge.
 - Correction proposée (code, pas test) : après l'envoi du job dans l'action « Télécharger », `$this->dispatch('databaseNotificationsSent')`. La cloche se recharge aussitôt quand l'avis est déjà là (file sync, ou job rapide) ; sinon, l'interrogation de 30 s le montre comme aujourd'hui.
 - Qui répare : la chaîne. La consigne commune (serie9-rapide.js l. 34) fait revérifier la CI à l'agent DEMO:implementation avant son dernier commit, et réparer d'abord une CI rouge, dans un commit à part. Je contrôle à l'envoi de DEMO que la réparation y est. Sinon, je la fais faire.
+
+## Contrôle de 08 h 10 UTC : l'hypothèse des 30 s est FAUSSE
+
+- Rejoué dans l'arbre jetable wt-demo, à d23eb96, base piliqi_verif, avec un autoload Composer propre à cet arbre :
+  - sans correction : 2 réussites sur 2 ;
+  - avec la correction (`databaseNotificationsSent`) : 3 sur 3 ;
+  - interrogation de la cloche coupée (`databaseNotificationsPolling(null)`), avec ou sans la correction : les deux passent ;
+  - interrogation forcée à 1 s : 3 sur 3.
+- La cloche reçoit donc l'avis sans l'interrogation. La correction proposée ne change rien et n'est pas poussée.
+- La capture de la CI (artefact captures-php-8.4-postgresql-17) montre la cloche avec le badge « 2 », mais sa fenêtre fermée. Le clic sur la cloche n'a pas pris, ou la fenêtre s'est refermée. Cause non trouvée.
+- Suite : la CI de l'envoi du lot DEMO rejoue ce test sur les 5 configurations ; elle tient lieu de l'unique nouvel essai permis. S'il échoue de nouveau, il faut chercher plus loin : clic couvert par l'avis « Votre fichier est en préparation. », ou fenêtre fermée par un redessin.

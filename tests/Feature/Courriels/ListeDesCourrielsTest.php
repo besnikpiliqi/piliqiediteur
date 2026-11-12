@@ -2,7 +2,11 @@
 
 namespace Tests\Feature\Courriels;
 
+use Illuminate\Mail\Mailable;
+use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use ReflectionClass;
 use Tests\TestCase;
 
 /**
@@ -14,22 +18,27 @@ class ListeDesCourrielsTest extends TestCase
 {
     /**
      * Chaque e-mail (une classe qui étend Mailable) et chaque notification
-     * qui part par e-mail (toMail()) du code de l'application figure dans
-     * la liste du groupe, et la liste ne nomme que ceux-là.
+     * qui part par e-mail (une méthode toMail(), la sienne ou celle dont
+     * elle hérite) du code de l'application figure dans la liste du
+     * groupe, et la liste ne nomme que ceux-là. Les classes se lisent par
+     * réflexion, quelle que soit la façon de les déclarer (finale, fille
+     * d'une notification commune) ; une classe abstraite n'envoie rien
+     * elle-même.
      */
     public function test_chaque_e_mail_du_code_figure_dans_le_groupe_courriels_reels(): void
     {
         $courriels = [];
 
         foreach (File::allFiles(app_path()) as $fichier) {
-            $code = $fichier->getContents();
+            $classe = 'App\\'.str_replace('/', '\\', Str::beforeLast($fichier->getRelativePathname(), '.php'));
 
-            if (preg_match('/^class (\w+) extends (Mailable|Notification)\b/m', $code, $classe) !== 1 || ($classe[2] === 'Notification' && ! str_contains($code, 'function toMail('))) {
+            if (! class_exists($classe) || (new ReflectionClass($classe))->isAbstract()) {
                 continue;
             }
 
-            preg_match('/^namespace ([\w\\\\]+);/m', $code, $espace);
-            $courriels[] = "{$espace[1]}\\{$classe[1]}";
+            if (is_subclass_of($classe, Mailable::class) || (is_subclass_of($classe, Notification::class) && method_exists($classe, 'toMail'))) {
+                $courriels[] = $classe;
+            }
         }
 
         sort($courriels);

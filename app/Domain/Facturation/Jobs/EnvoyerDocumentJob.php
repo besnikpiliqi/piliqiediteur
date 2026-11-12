@@ -32,6 +32,7 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -95,6 +96,11 @@ use UnexpectedValueException;
  * tentatives en tout, la première aussitôt, la deuxième 30 secondes après,
  * la troisième 2 minutes après (décision de l'éditeur du 02/11/2026) :
  * l'échec définitif se connaît environ trois minutes après la demande.
+ * Ces tentatives demandent une vraie file d'attente, qui remet la tâche en
+ * attente : avec QUEUE_CONNECTION=sync, la tâche tourne pendant le geste
+ * et rien ne la relance (voir seRetente()), si bien qu'un refus fait
+ * échouer l'envoi aussitôt, en le disant à qui doit le savoir, au lieu de
+ * le laisser attendre une tentative qui ne viendrait jamais.
  * Une adresse refusée échoue aussitôt, sans nouvelle tentative. Le texte
  * du serveur, qui peut porter l'identifiant SMTP de la plateforme, ne
  * s'écrit nulle part : ni sur l'envoi, ni dans la notification, ni au
@@ -212,8 +218,9 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
      * Le serveur d'envoi a refusé l'e-mail ou n'a pas répondu : une cause
      * qui tient à la plateforme s'inscrit au journal au niveau critique,
      * sans le texte du serveur ; l'envoi attend sa tentative suivante, la
-     * cause et l'heure notées pour la fiche, ou, après la dernière, ou pour
-     * une adresse refusée, échoue en le disant.
+     * cause et l'heure notées pour la fiche, ou, après la dernière, pour
+     * une adresse refusée, ou quand rien ne relancerait la tâche (voir
+     * seRetente()), échoue en le disant.
      */
     private function constaterLeRefusDuServeur(EnvoiDocument $envoi, CauseDEchecDEnvoi $cause): void
     {
@@ -226,6 +233,12 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             Log::warning("Un e-mail d'un document n'est pas parti : {$cause->libelle()}.", $contexte);
         }
 
+        if (! $this->seRetente()) {
+            $this->echouer($envoi, $cause->messagePourLeMagasin($this->consigne($envoi), apresChaqueTentative: false), cause: $cause);
+
+            return;
+        }
+
         if (! $cause->vautUneNouvelleTentative() || $tentative >= $this->tries) {
             $this->echouer($envoi, $cause->messagePourLeMagasin($this->consigne($envoi)), cause: $cause);
 
@@ -235,6 +248,18 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $delai = $this->backoff[$tentative - 1] ?? $this->backoff[array_key_last($this->backoff)];
         $envoi->forceFill(['derniere_erreur' => $cause->libelle(), 'prochaine_tentative_le' => now()->addSeconds($delai)])->save();
         $this->release($delai);
+    }
+
+    /**
+     * La tâche repart d'elle-même après un refus : seulement sur une vraie
+     * file d'attente, qui la remet en attente pour sa tentative suivante.
+     * Avec QUEUE_CONNECTION=sync, elle tourne pendant le geste et
+     * SyncJob::release() ne remet rien en file ; appelée hors de toute
+     * file (handle() appelé directement), rien ne la relance non plus.
+     */
+    private function seRetente(): bool
+    {
+        return $this->job !== null && ! $this->job instanceof SyncJob;
     }
 
     /**

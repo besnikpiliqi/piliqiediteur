@@ -162,6 +162,19 @@ class EssayerUnCourrielTest extends TestCase
             ->assertSuccessful();
     }
 
+    /**
+     * Avec QUEUE_CONNECTION=sync, les e-mails des documents n'ont qu'une
+     * tentative : la commande le dit, et comment en avoir trois.
+     */
+    public function test_la_commande_dit_qu_avec_la_file_sync_un_envoi_n_a_qu_une_tentative(): void
+    {
+        config(['mail.default' => 'log', 'queue.default' => 'sync']);
+
+        $this->artisan('courriel:essayer', ['adresse' => 'essai@exemple.test'])
+            ->expectsOutput('File d\'attente : « sync » : les e-mails des documents partent pendant le geste, en une seule tentative ; un refus du serveur d\'envoi fait aussitôt échouer l\'envoi. Pour les trois tentatives, QUEUE_CONNECTION=database et php artisan queue:listen.')
+            ->assertSuccessful();
+    }
+
     public function test_une_adresse_invalide_est_refusee(): void
     {
         $this->artisan('courriel:essayer', ['adresse' => 'pas-une-adresse'])

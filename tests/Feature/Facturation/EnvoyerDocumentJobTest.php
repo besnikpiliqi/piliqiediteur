@@ -49,6 +49,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
 use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mailer\Transport\Dsn;
 use Tests\TestCase;
 use UnexpectedValueException;
@@ -529,6 +531,47 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertStringStartsWith('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas', (string) $envoi->erreur);
         $this->assertSame(1, $vendeur->notifications()->count());
         $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * Avec QUEUE_CONNECTION=sync, la tâche tourne pendant le geste et rien
+     * ne la relancerait : un serveur muet fait échouer l'envoi aussitôt,
+     * après sa seule tentative, en le disant à qui l'a demandé et au
+     * propriétaire, au lieu de le laisser attendre une tentative qui ne
+     * viendrait jamais ; aucune tâche ne reste dans la file.
+     */
+    public function test_avec_la_file_sync_un_serveur_muet_fait_echouer_l_envoi_aussitot_et_previent(): void
+    {
+        config(['queue.default' => 'sync']);
+        Mail::extend('en-panne', fn (): AbstractTransport => new class extends AbstractTransport
+        {
+            protected function doSend(SentMessage $message): void
+            {
+                throw new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.');
+            }
+
+            public function __toString(): string
+            {
+                return 'en-panne';
+            }
+        });
+        config(['mail.mailers.en-panne' => ['transport' => 'en-panne'], 'mail.default' => 'en-panne']);
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $facture = $this->emettreFacture(Client::factory()->create());
+
+        $envoi = app(EnvoyerDocumentAction::class)->handle($vendeur, $facture, 'client@exemple.fr', null);
+
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame(1, $envoi->tentatives);
+        $this->assertNull($envoi->prochaine_tentative_le);
+        $this->assertSame('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas. Plus tard, renvoyez-le ; si cela se répète, prévenez l\'éditeur.', $envoi->erreur);
+        $this->assertSame(EnvoiDocumentEchoue::class, $vendeur->notifications()->sole()->type);
+        $this->assertSame(EnvoiDocumentEchoue::class, $this->proprietaireDe($magasin)->notifications()->sole()->type);
+        $this->assertSame([0, 0], [DB::table('jobs')->count(), DB::table('failed_jobs')->count()]);
     }
 
     /**

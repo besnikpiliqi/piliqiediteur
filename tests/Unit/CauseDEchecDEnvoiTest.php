@@ -18,8 +18,9 @@ use Throwable;
  * Le classement des échecs d'envoi (voir CauseDEchecDEnvoi), sur les
  * messages que lèvent vraiment le transport SMTP de Symfony et la file
  * d'attente de Laravel (diagnostic vérifié du 02/11/2026), sous Linux et,
- * pour la connexion, sous Windows ; l'identifiant SMTP qu'ils portent ne
- * figure jamais dans le message pour le magasin.
+ * pour la connexion, sous Windows, en anglais comme en français (le texte
+ * de l'erreur du système suit la langue de Windows) ; l'identifiant SMTP
+ * qu'ils portent ne figure jamais dans le message pour le magasin.
  */
 class CauseDEchecDEnvoiTest extends TestCase
 {
@@ -33,6 +34,30 @@ class CauseDEchecDEnvoiTest extends TestCase
 
         $this->assertSame($attendue, $cause);
         $this->assertStringNotContainsString('smtp-user', $cause->messagePourLeMagasin('renvoyez-le'));
+    }
+
+    /**
+     * Une connexion qui ne s'établit pas, dans une langue du système que
+     * PILIQI ne lit pas, donne les deux pistes : l'adresse et le port du
+     * serveur, puis le port filtré et l'essai du port 587.
+     */
+    public function test_une_connexion_qui_ne_s_etablit_pas_donne_les_remedes_du_port_ferme_et_du_port_filtre(): void
+    {
+        $remede = CauseDEchecDEnvoi::ConnexionImpossible->remede();
+
+        $this->assertStringContainsString('vérifiez MAIL_HOST et MAIL_PORT', $remede);
+        $this->assertStringContainsString('MAIL_PORT=587', $remede);
+        $this->assertStringContainsString('Test-NetConnection sandbox.smtp.mailtrap.io -Port 2525', $remede);
+    }
+
+    /**
+     * Un envoi qui n'a eu qu'une tentative (QUEUE_CONNECTION=sync) ne dit
+     * pas qu'il a échoué « à chaque tentative ».
+     */
+    public function test_un_envoi_d_une_seule_tentative_ne_parle_pas_de_chaque_tentative(): void
+    {
+        $this->assertSame('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas, à chaque tentative. Plus tard, renvoyez-le ; si cela se répète, prévenez l\'éditeur.', CauseDEchecDEnvoi::ServeurMuet->messagePourLeMagasin('renvoyez-le'));
+        $this->assertSame('L\'e-mail n\'est pas parti : le serveur d\'envoi ne répond pas. Plus tard, renvoyez-le ; si cela se répète, prévenez l\'éditeur.', CauseDEchecDEnvoi::ServeurMuet->messagePourLeMagasin('renvoyez-le', apresChaqueTentative: false));
     }
 
     /**
@@ -53,6 +78,9 @@ class CauseDEchecDEnvoiTest extends TestCase
             'port filtré (Windows)' => [fn () => new TransportException('Connection could not be established with host "sandbox.smtp.mailtrap.io:2525": stream_socket_client(): Unable to connect to sandbox.smtp.mailtrap.io:2525 (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond)'), CauseDEchecDEnvoi::PortFiltre],
             'connexion refusée (Linux)' => [fn () => new TransportException('Connection could not be established with host "127.0.0.1:2531": stream_socket_client(): Unable to connect to 127.0.0.1:2531 (Connection refused)'), CauseDEchecDEnvoi::ConnexionRefusee],
             'connexion refusée (Windows)' => [fn () => new TransportException('Connection could not be established with host "127.0.0.1:2531": stream_socket_client(): Unable to connect to 127.0.0.1:2531 (No connection could be made because the target machine actively refused it)'), CauseDEchecDEnvoi::ConnexionRefusee],
+            'port filtré (Windows en français)' => [fn () => new TransportException('Connection could not be established with host "sandbox.smtp.mailtrap.io:2525": stream_socket_client(): Unable to connect to sandbox.smtp.mailtrap.io:2525 (Une tentative de connexion a échoué car le parti connecté n’a pas répondu convenablement au-delà d’une certaine durée ou une connexion établie a échoué car l’hôte de connexion n’a pas répondu)'), CauseDEchecDEnvoi::PortFiltre],
+            'connexion refusée (Windows en français)' => [fn () => new TransportException('Connection could not be established with host "127.0.0.1:2531": stream_socket_client(): Unable to connect to 127.0.0.1:2531 (Aucune connexion n’a pu être établie car l’ordinateur cible l’a expressément refusée)'), CauseDEchecDEnvoi::ConnexionRefusee],
+            'connexion impossible, dans une autre langue du système' => [fn () => new TransportException('Connection could not be established with host "sandbox.smtp.mailtrap.io:2525": stream_socket_client(): Unable to connect to sandbox.smtp.mailtrap.io:2525 (Ein Verbindungsversuch ist fehlgeschlagen, da die Gegenstelle nach einer bestimmten Zeitspanne nicht richtig reagiert hat)'), CauseDEchecDEnvoi::ConnexionImpossible],
             'nom d\'hôte introuvable' => [fn () => new TransportException('Connection could not be established with host "sandbox.smtp.mailtrap.oi:2525": stream_socket_client(): php_network_getaddresses: getaddrinfo for sandbox.smtp.mailtrap.oi failed: Name or service not known'), CauseDEchecDEnvoi::NomDHoteInconnu],
             'STARTTLS et certificat' => [fn () => new TransportException('Unable to connect with STARTTLS: stream_socket_enable_crypto(): SSL operation failed with code 1. OpenSSL Error messages: error:0A000086:SSL routines::certificate verify failed'), CauseDEchecDEnvoi::Chiffrement],
             'smtps refusé, sans cause de chiffrement' => [fn () => new TransportException('Connection could not be established with host "ssl://127.0.0.1:465": stream_socket_client(): Unable to connect to ssl://127.0.0.1:465 (Connection refused)'), CauseDEchecDEnvoi::ConnexionRefusee],

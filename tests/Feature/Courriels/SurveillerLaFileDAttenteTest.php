@@ -67,6 +67,34 @@ class SurveillerLaFileDAttenteTest extends TestCase
     }
 
     /**
+     * Un téléchargement qui attend son tour derrière un autre en cours de
+     * préparation depuis 10 minutes, sous le délai de reprise de sa file
+     * (1 900 secondes), n'est pas un incident : son travailleur tourne. Le
+     * même, dans une file où rien n'est en cours, en est un.
+     */
+    public function test_une_tache_qui_attend_derriere_une_tache_en_cours_ne_declenche_rien(): void
+    {
+        Mail::fake();
+        Log::spy();
+        config(['queue.connections.telechargements.driver' => 'database']);
+        $this->tache(disponibleIlYA: 700, reserveeIlYA: 600, file: 'telechargements');
+        $this->tache(disponibleIlYA: 180, file: 'telechargements');
+
+        $this->artisan('app:surveiller-la-file-d-attente')
+            ->expectsOutput('La file d\'attente part normalement.')
+            ->assertSuccessful();
+
+        Log::shouldNotHaveReceived('critical');
+        Mail::assertNothingSent();
+
+        DB::table('jobs')->whereNotNull('reserved_at')->delete();
+
+        $this->artisan('app:surveiller-la-file-d-attente')
+            ->expectsOutputToContain('File « telechargements » : 1 tâche(s) disponible(s) depuis plus de 2 minutes, que personne ne prend')
+            ->assertFailed();
+    }
+
+    /**
      * Tant que l'incident dure, chaque passage l'écrit au journal, mais
      * l'éditeur n'est prévenu qu'une fois ; une fois la file repartie, un
      * nouvel incident le prévient de nouveau.
@@ -104,12 +132,12 @@ class SurveillerLaFileDAttenteTest extends TestCase
         Log::shouldHaveReceived('critical')->withArgs(fn (string $message): bool => $message === 'L\'alerte de l\'éditeur « La file d\'attente ne part plus » n\'est pas partie par e-mail : le serveur d\'envoi ne répond pas.')->once();
     }
 
-    private function tache(int $disponibleIlYA, ?int $reserveeIlYA = null): void
+    private function tache(int $disponibleIlYA, ?int $reserveeIlYA = null, string $file = 'default'): void
     {
         $maintenant = now()->getTimestamp();
 
         DB::table('jobs')->insert([
-            'queue' => 'default',
+            'queue' => $file,
             'payload' => '{}',
             'attempts' => $reserveeIlYA === null ? 0 : 1,
             'reserved_at' => $reserveeIlYA === null ? null : $maintenant - $reserveeIlYA,

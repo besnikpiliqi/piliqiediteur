@@ -17,7 +17,6 @@ use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutEnvoi;
-use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
@@ -39,9 +38,14 @@ use App\Integrations\Courriel\CourrielDEssai;
 use App\Integrations\Courriel\RefusDeMailtrap;
 use App\Models\User;
 use Closure;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Mail\Factory as MailFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Mail\Markdown;
+use Illuminate\Notifications\ChannelManager;
+use Illuminate\Notifications\Channels\MailChannel;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -65,6 +69,12 @@ use Tests\TestCase;
  * MAILTRAP_API_TOKEN et MAILTRAP_INBOX_ID, et se saute en disant ce qui
  * manque. Il compte sur la boîte : une vingtaine d'e-mails par passage,
  * en une minute et demie environ (la boîte en prend cinq par dix secondes).
+ * Chaque e-mail refusé fait échouer le test, avis compris : ceux-ci
+ * passent ici par le canal « mail » de Laravel, qui laisse remonter le
+ * refus, et non par CanalDesCourriels, qui le tait pour ne pas casser le
+ * geste qui fait naître l'avis ; et le nombre d'e-mails arrivés est celui
+ * qu'attendent la liste COURRIELS et les documents envoyés, pas seulement
+ * celui des e-mails partis.
  * L'API de lecture, d'après sa documentation officielle (Email Sandbox
  * API 2.0.0, « Get messages », « Get attachments » et « Delete
  * message », https://docs.mailtrap.io/developers/email-sandbox/messages) :
@@ -135,7 +145,9 @@ class CourrielsReelsTest extends TestCase
         };
 
         Http::allowStrayRequests();
-        config(['mail.default' => 'mailtrap', 'mail.mailers.mailtrap.timeout' => 30]);
+        config(['mail.default' => 'mailtrap', 'mail.mailers.mailtrap.timeout' => 30, 'queue.default' => 'sync']);
+        $this->app->bind(MailChannel::class, fn (Application $app): MailChannel => new MailChannel($app->make(MailFactory::class), $app->make(Markdown::class)));
+        $this->app->make(ChannelManager::class)->forgetDrivers();
         $this->effacerLesMessagesDuGroupe();
         Event::listen(MessageSent::class, function (MessageSent $envoi): void {
             $this->envoyes[] = $envoi->message;
@@ -151,12 +163,13 @@ class CourrielsReelsTest extends TestCase
         $this->travelTo(self::aParis('2026-11-12 10:00:00'));
         $this->envoyerLesEMails();
         $this->envoyerLesNotifications();
-        $this->envoyerLesDocuments();
+        $attendus = count(self::COURRIELS) - 1 + $this->envoyerLesDocuments();
 
-        $recus = $this->messagesRecus(count($this->envoyes));
+        $recus = $this->messagesRecus($attendus);
 
         try {
-            $this->assertCount(count($this->envoyes), $recus, 'Des e-mails partis ne sont pas arrivés dans la boîte de test.');
+            $this->assertCount($attendus, $this->envoyes, 'PILIQI n\'a pas remis au transport chaque e-mail attendu.');
+            $this->assertCount($attendus, $recus, 'Des e-mails attendus ne sont pas arrivés dans la boîte de test.');
 
             foreach ($this->envoyes as $envoye) {
                 $this->assertArriveTelQuIlEstParti($envoye, $recus);
@@ -217,8 +230,10 @@ class CourrielsReelsTest extends TestCase
      * Une facture à un professionnel, un ticket, un devis, un avoir, un
      * reçu de paiement et une relance, chacun avec son PDF, par
      * EnvoyerDocumentAction et sa tâche d'envoi.
+     *
+     * @return int le nombre de documents envoyés, chacun dans un DocumentMail
      */
-    private function envoyerLesDocuments(): void
+    private function envoyerLesDocuments(): int
     {
         $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Boutique Essai', 'code' => 'ESSAI']));
         $professionnel = Client::factory()->professionnel()->create(['email' => self::DESTINATAIRE, 'delai_paiement_jours' => 0]);
@@ -235,12 +250,16 @@ class CourrielsReelsTest extends TestCase
         $avoir = app(EmettreAvoirAction::class)->handle($auteur, app(CreerAvoirAction::class)->handle($auteur, $particulier, [['ligne_facture_id' => $ticket->lignes->first()->id, 'quantite' => 1]]));
         $envoi = app(EnvoyerDocumentAction::class);
 
-        foreach ([$facture, $ticket, $devis, $avoir, RecuPaiement::query()->sole()] as $document) {
+        $documents = [$facture, $ticket, $devis, $avoir, RecuPaiement::query()->sole()];
+
+        foreach ($documents as $document) {
             $this->envoyer(fn () => $envoi->handle($auteur, $document, self::DESTINATAIRE, 'Message d\'essai des e-mails de PILIQI.', (string) Str::uuid()));
         }
         $this->envoyer(fn () => $envoi->relancer($auteur, $echue, self::DESTINATAIRE, (string) Str::uuid()));
 
-        $this->assertSame([], EnvoiDocument::query()->where('statut', '!=', StatutEnvoi::Envoye)->pluck('derniere_erreur')->all(), 'Un document n\'est pas parti.');
+        $this->assertSame(count($documents) + 1, EnvoiDocument::query()->where('statut', StatutEnvoi::Envoye)->count(), 'Un document n\'est pas parti.');
+
+        return count($documents) + 1;
     }
 
     private function facture(User $auteur, Client $client, Produit $produit): Facture
@@ -252,12 +271,30 @@ class CourrielsReelsTest extends TestCase
      * Un envoi, puis une pause de deux secondes et demie : la boîte de test
      * refuse plus de cinq e-mails en dix secondes (« Too many emails per
      * second »). Un e-mail refusé pour cette limite repart une fois, dix
-     * secondes plus tard ; un document, dont la tâche d'envoi garde le
-     * refus pour sa tentative suivante, repart de même par sa tâche.
+     * secondes plus tard ; tout autre refus fait échouer le test.
      *
      * @param  Closure(): mixed  $envoi
      */
     private function envoyer(Closure $envoi): void
+    {
+        if (! $this->partir($envoi)) {
+            sleep(10);
+            $this->assertTrue($this->partir($envoi), 'La boîte de test limite encore les envois dix secondes plus tard.');
+        }
+
+        usleep(2_500_000);
+    }
+
+    /**
+     * L'e-mail part (vrai), ou la boîte de test le refuse pour sa limite
+     * d'envois (faux) : un e-mail ou un avis lève alors RefusDeMailtrap ;
+     * un document, dont la tâche d'envoi tourne pendant le geste
+     * (QUEUE_CONNECTION=sync), passe en échec avec cette cause, et repart
+     * par un nouvel envoi. Tout autre refus fait échouer le test.
+     *
+     * @param  Closure(): mixed  $envoi
+     */
+    private function partir(Closure $envoi): bool
     {
         try {
             $resultat = $envoi();
@@ -266,16 +303,22 @@ class CourrielsReelsTest extends TestCase
                 throw $refus;
             }
 
-            sleep(10);
-            $resultat = $envoi();
+            return false;
         }
 
-        if ($resultat instanceof EnvoiDocument && $resultat->refresh()->statut === StatutEnvoi::EnAttente) {
-            sleep(10);
-            (new EnvoyerDocumentJob((int) $resultat->magasin_id, (int) $resultat->getKey()))->handle();
+        if (! $resultat instanceof EnvoiDocument) {
+            return true;
         }
 
-        usleep(2_500_000);
+        $resultat->refresh();
+
+        if ($resultat->statut === StatutEnvoi::Echec && $resultat->derniere_erreur === CauseDEchecDEnvoi::ServeurOccupe->libelle()) {
+            return false;
+        }
+
+        $this->assertSame(StatutEnvoi::Envoye, $resultat->statut, "Un document n'est pas parti : {$resultat->erreur}");
+
+        return true;
     }
 
     /**

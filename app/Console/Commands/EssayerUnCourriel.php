@@ -30,8 +30,9 @@ use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
  * Elle signale aussi une configuration en cache, qui garde un ancien
  * .env, et l'état de la file d'attente par laquelle partent les e-mails
  * des documents : tâches en attente, en attente d'une nouvelle tentative,
- * réservées par un travailleur arrêté. Elle ne lit de la file que ces
- * nombres.
+ * réservées par un travailleur arrêté ; avec QUEUE_CONNECTION=sync, qu'un
+ * envoi n'y a qu'une tentative (voir EnvoyerDocumentJob). Elle ne lit de
+ * la file que ces nombres.
  */
 #[Signature('courriel:essayer {adresse : l\'adresse qui reçoit l\'e-mail d\'essai}')]
 #[Description('Envoie un e-mail d\'essai par le transport configuré et dit si le serveur l\'a accepté')]
@@ -114,11 +115,18 @@ class EssayerUnCourriel extends Command
     }
 
     /**
-     * L'état de la file d'attente des e-mails des documents.
+     * L'état de la file d'attente des e-mails des documents ; avec la
+     * connexion sync, qu'un envoi n'a qu'une tentative.
      */
     private function decrireLaFile(): void
     {
         $connexion = Reglage::texte('queue.default');
+
+        if (config("queue.connections.{$connexion}.driver") === 'sync') {
+            $this->warn("File d'attente : « {$connexion} » : les e-mails des documents partent pendant le geste, en une seule tentative ; un refus du serveur d'envoi fait aussitôt échouer l'envoi. Pour les trois tentatives, QUEUE_CONNECTION=database et php artisan queue:listen.");
+
+            return;
+        }
 
         if (config("queue.connections.{$connexion}.driver") !== 'database') {
             $this->line("File d'attente : « {$connexion} » ; les e-mails des documents partent selon cette connexion.");

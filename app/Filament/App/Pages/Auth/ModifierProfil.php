@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules\Unique;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Throwable;
 
 /**
  * Chacun change ici son nom, son adresse e-mail et son mot de passe, en
@@ -190,7 +191,11 @@ class ModifierProfil extends EditProfile
      * Enregistre le profil, en une transaction : une adresse de connexion
      * qui change part d'abord en confirmation (refusée, par le débit des
      * e-mails de la personne, rien ne s'écrit) ; une adresse de contact
-     * s'écrit ; puis le nom et le mot de passe.
+     * s'écrit ; puis le nom et le mot de passe. Une transaction annulée
+     * (un lien qui n'est pas parti, un refus) n'a rien écrit : le compte en
+     * mémoire, que la page affiche, reprend ce que la base garde, et la
+     * page n'annonce aucune adresse en attente dont le lien ne serait pas
+     * parti.
      */
     public function save(): void
     {
@@ -217,8 +222,10 @@ class ModifierProfil extends EditProfile
                     app(ChangerSonMotDePasseAction::class)->handle($compte, ValeurSimple::enTexte($motDePasse), request()->hasSession() ? request()->session()->getId() : null, 'data.password');
                 }
             });
-        } catch (LogicException $refus) {
-            throw ValidationException::withMessages(['data.email' => $refus->getMessage()]);
+        } catch (Throwable $erreur) {
+            $compte->refresh();
+
+            throw $erreur instanceof LogicException ? ValidationException::withMessages(['data.email' => $erreur->getMessage()]) : $erreur;
         }
 
         if (filled($motDePasse) && request()->hasSession()) {

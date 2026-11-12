@@ -28,6 +28,16 @@ use Throwable;
  * acceptée, puis rien dans le délai MAIL_TIMEOUT), serveur qui coupe la
  * connexion.
  *
+ * Une connexion qui ne s'établit pas se dit par le préfixe anglais de
+ * Symfony (« Connection could not be established with host … »), suivi du
+ * texte de l'erreur du système, que Windows écrit dans sa langue : la
+ * connexion refusée et le port filtré se reconnaissent aussi dans le
+ * Windows français du PC de l'éditeur (« … l'a expressément refusée »,
+ * « … n'a pas répondu convenablement … »), par des mots sans accent ni
+ * apostrophe (« refus », « convenablement »), que l'encodage du message ne
+ * change pas ; dans une autre langue, la connexion qui ne s'établit pas
+ * garde un remède qui couvre les deux (ConnexionImpossible).
+ *
  * Seule une adresse refusée tient au message lui-même : toute autre cause
  * tient à la plateforme, ne dit jamais de vérifier l'adresse, et
  * s'inscrit au journal de l'application au niveau critique.
@@ -40,6 +50,7 @@ enum CauseDEchecDEnvoi: string
     case ServeurMuet = 'serveur_muet';
     case PortFiltre = 'port_filtre';
     case ConnexionRefusee = 'connexion_refusee';
+    case ConnexionImpossible = 'connexion_impossible';
     case NomDHoteInconnu = 'nom_d_hote_inconnu';
     case Chiffrement = 'chiffrement';
     case Schema = 'schema';
@@ -56,6 +67,7 @@ enum CauseDEchecDEnvoi: string
 
         $message = $erreur->getMessage();
         $contient = static fn (string ...$mots): bool => Str::contains($message, $mots, ignoreCase: true);
+        $sansConnexion = $contient('could not be established');
 
         return match (true) {
             $erreur instanceof UnsupportedSchemeException => self::Schema,
@@ -67,10 +79,11 @@ enum CauseDEchecDEnvoi: string
             in_array($erreur->getCode(), [421, 450, 451, 452], true) => self::ServeurOccupe,
             $contient('starttls', 'certificate', 'ssl operation', 'ssl routines', 'enable_crypto', 'tls required') => self::Chiffrement,
             $contient('getaddrinfo', 'name or service not known', 'no such host', 'name resolution') => self::NomDHoteInconnu,
-            $contient('refused') => self::ConnexionRefusee,
-            $contient('could not be established') && $contient('timed out', 'did not properly respond') => self::PortFiltre,
+            $contient('refused'), $sansConnexion && $contient('refus') => self::ConnexionRefusee,
+            $sansConnexion && $contient('timed out', 'did not properly respond', 'convenablement') => self::PortFiltre,
             $contient('timed out') => self::ServeurMuet,
-            $contient('could not be established', 'closed unexpectedly', 'unable to read', 'unable to write') => self::Indisponible,
+            $sansConnexion => self::ConnexionImpossible,
+            $contient('closed unexpectedly', 'unable to read', 'unable to write') => self::Indisponible,
             default => self::Inattendue,
         };
     }
@@ -88,6 +101,7 @@ enum CauseDEchecDEnvoi: string
             self::ServeurMuet => 'le serveur d\'envoi ne répond pas',
             self::PortFiltre => 'le serveur d\'envoi ne se joint pas',
             self::ConnexionRefusee => 'le serveur d\'envoi refuse la connexion',
+            self::ConnexionImpossible => 'la connexion au serveur d\'envoi ne s\'établit pas',
             self::NomDHoteInconnu => 'le serveur d\'envoi est introuvable',
             self::Chiffrement => 'la connexion chiffrée au serveur d\'envoi a échoué',
             self::Schema => 'le chiffrement du serveur d\'envoi est mal réglé',
@@ -122,14 +136,17 @@ enum CauseDEchecDEnvoi: string
      * et prévenir l'éditeur.
      *
      * @param  string  $consigne  comment faire repartir l'e-mail (« renvoyez-le »)
+     * @param  bool  $apresChaqueTentative  l'e-mail a eu toutes ses tentatives ; faux quand il n'en a eu qu'une (QUEUE_CONNECTION=sync, voir EnvoyerDocumentJob)
      */
-    public function messagePourLeMagasin(string $consigne): string
+    public function messagePourLeMagasin(string $consigne, bool $apresChaqueTentative = true): string
     {
+        $tentatives = $apresChaqueTentative ? ', à chaque tentative' : '';
+
         return match ($this) {
             self::AdresseRefusee => "Le serveur d'envoi des e-mails a refusé une adresse de ce message : vérifiez l'adresse du destinataire, puis {$consigne} ; si elle est juste, prévenez l'éditeur.",
             self::Identifiants, self::Chiffrement, self::Schema, self::Configuration => "L'e-mail n'est pas parti : {$this->libelle()}, un incident de la plateforme, sans rapport avec l'adresse du destinataire. Prévenez l'éditeur ; une fois le service rétabli, {$consigne}.",
             self::Inattendue => "Une erreur inattendue a empêché l'envoi : {$consigne}, et prévenez l'éditeur si elle se répète.",
-            default => "L'e-mail n'est pas parti : {$this->libelle()}, à chaque tentative. Plus tard, {$consigne} ; si cela se répète, prévenez l'éditeur.",
+            default => "L'e-mail n'est pas parti : {$this->libelle()}{$tentatives}. Plus tard, {$consigne} ; si cela se répète, prévenez l'éditeur.",
         };
     }
 
@@ -146,6 +163,7 @@ enum CauseDEchecDEnvoi: string
             self::ServeurMuet => 'La connexion est acceptée, mais le serveur ne dit rien dans le délai MAIL_TIMEOUT : un antivirus ou un pare-feu qui intercepte les e-mails en est souvent la cause (désactivez sa protection des e-mails), sinon essayez le port 587 (MAIL_PORT=587).',
             self::PortFiltre => 'La connexion ne s\'établit pas dans le délai MAIL_TIMEOUT : le port est filtré (pare-feu, réseau). Essayez le port 587 (MAIL_PORT=587) ; sous Windows, « Test-NetConnection sandbox.smtp.mailtrap.io -Port 2525 », puis « -Port 587 », dit lequel passe.',
             self::ConnexionRefusee => 'Rien n\'écoute à cette adresse : vérifiez MAIL_HOST et MAIL_PORT (pour Mailtrap, sandbox.smtp.mailtrap.io, port 2525 ou 587).',
+            self::ConnexionImpossible => 'La connexion au serveur ne s\'établit pas : vérifiez MAIL_HOST et MAIL_PORT (pour Mailtrap, sandbox.smtp.mailtrap.io, port 2525 ou 587) ; s\'ils sont justes, le port est sans doute filtré (pare-feu, réseau) : essayez le port 587 (MAIL_PORT=587) ; sous Windows, « Test-NetConnection sandbox.smtp.mailtrap.io -Port 2525 », puis « -Port 587 », dit lequel passe.',
             self::NomDHoteInconnu => 'Le nom du serveur est introuvable : vérifiez l\'orthographe de MAIL_HOST, ou la connexion à Internet.',
             self::Chiffrement => 'La connexion chiffrée (STARTTLS) a échoué ou son certificat est refusé : un antivirus qui inspecte les connexions chiffrées en est souvent la cause (désactivez sa protection des e-mails). Sur les ports 2525 et 587, laissez MAIL_SCHEME=null.',
             self::Schema => 'MAIL_SCHEME n\'accepte que smtp, smtps ou null, jamais tls : MAIL_SCHEME=null sur les ports 2525 et 587, smtps sur le port 465.',

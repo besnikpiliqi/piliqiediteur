@@ -343,7 +343,9 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLeCabinetEtLEntrainementTest.php › le responsable d’entraînement ouvre chaque page et chaque action du magasin de démonstration sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
+        ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => []],
         'action:view' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -401,7 +403,9 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/AvoirResource/Pages/ViewAvoir.php' => [
-        'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
+        ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/PuHtExactTest.php › le responsable lit le PU HT tel qu’il est enregistré et la note de calcul d’un retour sur la fiche et sur le PDF d’un avoir sur une facture à un professionnel',
         ]],
@@ -695,6 +699,7 @@ return [
         ]],
         'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
         ]],
         'action:refuser' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
@@ -803,6 +808,7 @@ return [
     'app/Filament/App/Resources/DevisResource/Pages/ViewDevis.php' => [
         'action:envoyer_par_email' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
         ]],
         'action:telecharger_pdf' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/PuHtExactTest.php › le propriétaire lit le PU HT tel qu’il est enregistré et la note de calcul sur la fiche et sur le PDF d’un devis envoyé à un professionnel',
@@ -1229,8 +1235,11 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
         ]],
-        'action:relancer' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
+        ]],
         'action:retourner_ce_produit' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
@@ -1400,14 +1409,17 @@ return [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur sans la vente ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
-            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie la facture lit que l’envoi est demandé, puis son résultat dans « Envois »',
             'tests/Browser/Parcours/EnvoiParEMailTest.php › un serveur d’envoi muet se lit dans « Envois » avec l’heure de la tentative suivante, puis le résultat s’affiche sans rechargement',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui envoie un document lit, depuis sa liste comme depuis sa fiche, que l’envoi est demandé, puis son résultat dans « Envois », relu sans rechargement',
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › avec la file d’attente sync, un serveur d’envoi muet fait échouer l’envoi aussitôt, et « Envois » le dit sans annoncer de nouvelle tentative',
         ]],
         'action:faireLAvoirDeRegularisation' => ['lot' => 'NAV-2', 'tests' => []],
         'action:noter_bordereau_detaxe' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le vendeur ouvre chaque page et chaque action du magasin sans erreur',
         ]],
-        'action:relancer' => ['lot' => 'NAV-2', 'tests' => []],
+        'action:relancer' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/EnvoiParEMailTest.php › chaque compte qui relance une facture échue lit, depuis la liste comme depuis sa fiche, que la relance est demandée, puis son résultat dans « Envois », relu sans rechargement',
+        ]],
         'action:relancerLaTransmission' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › le propriétaire relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',
             'tests/Browser/Parcours/TransmissionALaPlateformeTest.php › l’administrateur qui suit la plateforme agréée relance la transmission d’une facture que la plateforme n’a pas reçue, et elle est acceptée',

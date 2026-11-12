@@ -27,6 +27,9 @@ use Illuminate\Support\Str;
 use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Tests\TestCase;
 
 /**
@@ -222,6 +225,44 @@ class ModifierProfilTest extends TestCase
         $this->assertSame('Jeanne Dupont', $proprietaire->name);
         $this->assertSame([$adresse, null], [$proprietaire->email, $proprietaire->nouvelle_adresse]);
         Mail::assertNotSent(ConfirmationNouvelleAdresseMail::class);
+    }
+
+    /**
+     * Un lien de confirmation qui ne part pas (serveur d'envoi muet) ne
+     * change rien : la page dit pourquoi sous le champ, et n'annonce
+     * aucune adresse en attente, ni sur le compte relu, ni à l'écran.
+     */
+    public function test_un_lien_de_confirmation_qui_ne_part_pas_n_annonce_aucune_adresse_en_attente(): void
+    {
+        Mail::extend('en-panne', fn (): AbstractTransport => new class extends AbstractTransport
+        {
+            protected function doSend(SentMessage $message): void
+            {
+                throw new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.');
+            }
+
+            public function __toString(): string
+            {
+                return 'en-panne';
+            }
+        });
+        config(['mail.mailers.en-panne' => ['transport' => 'en-panne'], 'mail.default' => 'en-panne']);
+        $proprietaire = $this->creerProprietaire();
+        $this->actingAs($proprietaire);
+
+        $page = Livewire::test(ModifierProfil::class)
+            ->fillForm([
+                'email' => 'jeanne.martin@example.test',
+                'mot_de_passe_actuel' => self::MOT_DE_PASSE_DU_PROPRIETAIRE,
+            ])
+            ->call('save')
+            ->assertHasErrors(['data.email'])
+            ->assertDontSee('Nouvelle adresse en attente');
+
+        $this->assertSame(['L\'e-mail qui confirme votre nouvelle adresse n\'est pas parti : le serveur d\'envoi ne répond pas. Votre adresse ne change pas : réessayez dans quelques minutes.'], $page->errors()->get('data.email'));
+        $this->assertSame([null, null, null], [$proprietaire->nouvelle_adresse, $proprietaire->nouvelle_adresse_jeton_hache, $proprietaire->nouvelle_adresse_expire_le]);
+        $proprietaire->refresh();
+        $this->assertSame(['jeanne@example.test', null], [$proprietaire->email, $proprietaire->nouvelle_adresse]);
     }
 
     public function test_changer_son_nom_et_son_adresse_sans_le_mot_de_passe_actuel_est_refuse(): void

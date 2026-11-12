@@ -19,7 +19,11 @@ use Illuminate\Support\Facades\Log;
  * des tâches réservées depuis plus que le délai de reprise de leur
  * connexion (retry_after), laissées par un travailleur tombé en route
  * (`queue:listen` coupé), que creationTimeOfOldestPendingJob() de Laravel
- * ne voit pas. Elle lit, pour chaque connexion de file en base de données
+ * ne voit pas. Une tâche disponible qui attend son tour derrière une tâche
+ * de sa file en cours (réservée depuis moins que retry_after) n'est pas un
+ * incident : un travailleur tourne, occupé, comme celui de la file
+ * « telechargements », dont une préparation dure jusqu'à une demi-heure.
+ * Elle lit, pour chaque connexion de file en base de données
  * (config/queue.php), le seul nombre de ces tâches, jamais leur contenu :
  * la table des tâches est commune à toutes les sociétés, et rien d'un
  * magasin n'en sort.
@@ -34,8 +38,9 @@ use Illuminate\Support\Facades\Log;
 class SurveillerLaFileDAttente extends Command
 {
     /**
-     * Au-delà de ce délai, une tâche disponible que personne n'a prise
-     * signale qu'aucun travailleur ne tourne.
+     * Au-delà de ce délai, une tâche disponible que personne n'a prise,
+     * dans une file où aucune tâche n'est en cours, signale qu'aucun
+     * travailleur ne tourne.
      */
     public const ATTENTE_MAXIMALE_EN_SECONDES = 120;
 
@@ -72,8 +77,9 @@ class SurveillerLaFileDAttente extends Command
 
     /**
      * Pour chaque file en base de données qui a des tâches en retard : son
-     * nom, le nombre de tâches disponibles que personne ne prend, celui des
-     * tâches réservées au-delà du délai de reprise, et ce délai.
+     * nom, le nombre de tâches disponibles que personne ne prend (aucune
+     * tâche de la file n'est en cours), celui des tâches réservées au-delà
+     * du délai de reprise, et ce délai.
      *
      * @return list<array{file: string, en_attente: int, reservees: int, retry_after: int}>
      */
@@ -92,7 +98,8 @@ class SurveillerLaFileDAttente extends Command
             $taches = DB::connection(is_string($connexion['connection'] ?? null) ? $connexion['connection'] : null)
                 ->table(is_string($connexion['table'] ?? null) ? $connexion['table'] : 'jobs')
                 ->where('queue', $file);
-            $enAttente = (clone $taches)->whereNull('reserved_at')->where('available_at', '<=', $maintenant - self::ATTENTE_MAXIMALE_EN_SECONDES)->count();
+            $enCours = (clone $taches)->where('reserved_at', '>', $maintenant - $retryAfter)->exists();
+            $enAttente = $enCours ? 0 : (clone $taches)->whereNull('reserved_at')->where('available_at', '<=', $maintenant - self::ATTENTE_MAXIMALE_EN_SECONDES)->count();
             $reservees = (clone $taches)->whereNotNull('reserved_at')->where('reserved_at', '<=', $maintenant - $retryAfter)->count();
 
             if ($enAttente + $reservees > 0) {

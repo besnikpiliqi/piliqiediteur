@@ -75,7 +75,7 @@
     @if ($validite)
         <p>Valable jusqu'au <strong>{{ \App\Domain\Calendrier\Calendrier::afficherJour($validite, 'd/m/Y') }}</strong>.</p>
     @endif
-    <p><a class="pdf" href="{{ $adresseDuPdf }}" rel="noreferrer">Télécharger le devis en PDF</a></p>
+    <p><a class="pdf" href="{{ $adresseDuPdf }}" rel="noreferrer" download>Télécharger le devis en PDF</a></p>
 
     <table>
         <thead>

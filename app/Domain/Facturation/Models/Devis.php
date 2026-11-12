@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -195,7 +196,7 @@ class Devis extends Model implements DocumentEnvoyable
     {
         $lien = $this->liens()->latest('id')->first();
 
-        return $lien !== null && $lien->jeton_hache !== null && $lien->estValable($this) ? $lien : null;
+        return $lien !== null && $lien->estValable($this) ? $lien : null;
     }
 
     /**
@@ -246,40 +247,66 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les lignes de produits suivis en stock dont la quantité dépasse le
-     * stock disponible du magasin aujourd'hui, une par produit, quantités
-     * des lignes d'un même produit additionnées : le devis ne réserve
-     * aucun stock (décision de l'éditeur du 02/11/2026), sa fiche et
-     * l'avis de son acceptation le signalent, et l'émission de la facture
-     * le contrôle (voir VerificateurDeStock).
+     * Le stock disponible du magasin aujourd'hui de chaque produit suivi en
+     * stock de ses lignes, et la quantité que ses lignes en demandent, les
+     * lignes d'un même produit additionnées, par identifiant de produit
+     * (un produit archivé depuis compris) : le devis ne réserve aucun stock
+     * (décision de l'éditeur du 02/11/2026), sa fiche le montre sous chaque
+     * ligne (voir FactureResource::lignesEntry()), l'avis de son
+     * acceptation nomme les produits qui manquent (voir
+     * stocksInsuffisants()), et l'émission de la facture le contrôle (voir
+     * VerificateurDeStock). Dans l'ordre de ses lignes ; deux lectures,
+     * quel que soit le nombre de lignes.
+     *
+     * @return array<int, array{produit: string, demande: int, disponible: int}>
+     */
+    public function stocksDeSesProduits(): array
+    {
+        $demandes = [];
+
+        foreach ($this->lignes()->whereNotNull('produit_id')->get(['produit_id', 'quantite']) as $ligne) {
+            $demandes[(int) $ligne->produit_id] = ($demandes[(int) $ligne->produit_id] ?? 0) + $ligne->quantite;
+        }
+
+        $produits = Produit::withTrashed()
+            ->whereKey(array_keys($demandes))
+            ->where('suivi_stock', true)
+            ->get(['id', 'nom', 'stock_quantite'])
+            ->keyBy(fn (Produit $produit): int => $produit->getKey());
+        $stocks = [];
+
+        foreach ($demandes as $id => $demande) {
+            $produit = $produits->get($id);
+
+            if ($produit !== null) {
+                $stocks[$id] = ['produit' => $produit->nom, 'demande' => $demande, 'disponible' => $produit->stock_quantite];
+            }
+        }
+
+        return $stocks;
+    }
+
+    /**
+     * Les produits suivis en stock dont ses lignes demandent plus que le
+     * stock disponible du magasin aujourd'hui, un par produit (voir
+     * stocksDeSesProduits()).
      *
      * @return list<array{produit: string, demande: int, disponible: int}>
      */
     public function stocksInsuffisants(): array
     {
-        $demandes = [];
-        $produits = [];
+        return array_values(array_filter($this->stocksDeSesProduits(), fn (array $stock): bool => $stock['demande'] > $stock['disponible']));
+    }
 
-        foreach ($this->lignes()->with('produit')->get() as $ligne) {
-            $produit = $ligne->produit;
-
-            if ($produit === null || ! $produit->suivi_stock) {
-                continue;
-            }
-
-            $demandes[$produit->getKey()] = ($demandes[$produit->getKey()] ?? 0) + $ligne->quantite;
-            $produits[$produit->getKey()] = $produit;
-        }
-
-        $manques = [];
-
-        foreach ($demandes as $id => $demande) {
-            if ($demande > $produits[$id]->stock_quantite) {
-                $manques[] = ['produit' => $produits[$id]->nom, 'demande' => $demande, 'disponible' => $produits[$id]->stock_quantite];
-            }
-        }
-
-        return $manques;
+    /**
+     * Sa fiche montre-t-elle le stock de ses lignes ? Tant que sa facture
+     * n'est pas émise : brouillon, envoyé, accepté, ou transformé en une
+     * facture encore brouillon ; ni refusé ni expiré.
+     */
+    public function montreLeStockDeSesLignes(): bool
+    {
+        return in_array($this->statut, [StatutDevis::Brouillon, StatutDevis::Envoye, StatutDevis::Accepte, StatutDevis::Converti], true)
+            && $this->factures->every(fn (Facture $facture): bool => $facture->numero === null);
     }
 
     public function libelleDocument(): string

@@ -25,6 +25,7 @@ use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -52,6 +53,7 @@ use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mailer\Transport\Dsn;
+use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 use UnexpectedValueException;
 
@@ -572,6 +574,61 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertSame(EnvoiDocumentEchoue::class, $vendeur->notifications()->sole()->type);
         $this->assertSame(EnvoiDocumentEchoue::class, $this->proprietaireDe($magasin)->notifications()->sole()->type);
         $this->assertSame([0, 0], [DB::table('jobs')->count(), DB::table('failed_jobs')->count()]);
+    }
+
+    /**
+     * Le lien de réponse d'un devis se tire une seule fois par envoi : la
+     * tâche le porte, chiffré, dans la file d'attente, et chaque tentative
+     * le remet dans l'e-mail. Un e-mail remis au client mais constaté en
+     * échec (la connexion coupée après son acceptation) lui laisse donc un
+     * lien qui vaut encore après la tentative suivante ; le jeton ne se lit
+     * pas dans la file.
+     */
+    public function test_chaque_tentative_de_l_envoi_d_un_devis_porte_le_meme_lien(): void
+    {
+        $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+        $transport = new class extends AbstractTransport
+        {
+            /** @var list<string> */
+            public array $corps = [];
+
+            protected function doSend(SentMessage $message): void
+            {
+                $email = $message->getOriginalMessage();
+                $this->corps[] = $email instanceof Email ? (string) $email->getHtmlBody() : '';
+
+                if (count($this->corps) === 1) {
+                    throw new TransportException('Connection to "sandbox.smtp.mailtrap.io:2525" timed out.');
+                }
+            }
+
+            public function __toString(): string
+            {
+                return 'coupe-puis-repond';
+            }
+        };
+        Mail::extend('coupe-puis-repond', fn (): AbstractTransport => $transport);
+        config(['mail.mailers.coupe-puis-repond' => ['transport' => 'coupe-puis-repond'], 'mail.default' => 'coupe-puis-repond', 'queue.default' => 'database']);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
+
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
+        $this->assertSame(1, DB::table('jobs')->count());
+        $file = (string) DB::table('jobs')->value('payload');
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true]);
+        $this->assertSame(StatutEnvoi::EnAttente, $envoi->fresh()->statut);
+        $this->travel(31)->seconds();
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true]);
+
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
+        $this->assertCount(2, $transport->corps);
+        $jetons = array_map(fn (string $corps): string => preg_match('#/devis/([A-Za-z0-9]{64})"#', $corps, $trouve) === 1 ? $trouve[1] : '', $transport->corps);
+        $this->assertSame(64, strlen($jetons[0]));
+        $this->assertSame($jetons[0], $jetons[1]);
+        $this->assertStringNotContainsString($jetons[0], $file);
+        $this->assertSame(LienDuDevis::empreinte($jetons[0]), DB::table('liens_des_devis')->where('envoi_document_id', $envoi->id)->value('jeton_hache'));
+        app(TenantContext::class)->clear();
+        $this->get(route('devis.reponse.afficher', ['jeton' => $jetons[0]]))->assertOk()->assertSee("Devis {$devis->numero}");
     }
 
     /**

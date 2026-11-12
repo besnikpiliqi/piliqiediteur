@@ -25,17 +25,24 @@ use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Facturation\Notifications\ReponseDuClientAuDevis;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
+use App\Http\Controllers\ReponseAuDevisController;
+use App\Models\User;
+use Filament\Notifications\Notification as NotificationFilament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
 
@@ -106,6 +113,14 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertSame([route('devis.reponse.pdf', ['jeton' => $jeton])], $liens[1]);
     }
 
+    public function test_la_page_du_lien_ecrit_une_remise_decimale_avec_une_virgule(): void
+    {
+        $produit = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $jeton = $this->envoyer($this->devisEnvoyable(lignes: [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => '12.5']]));
+
+        $this->repondre('get', $jeton)->assertOk()->assertSee('12,5 %')->assertDontSee('12.5 %');
+    }
+
     public function test_le_pdf_du_lien_est_celui_du_devis_envoye_en_piece_jointe(): void
     {
         $devis = $this->devisEnvoyable();
@@ -128,8 +143,39 @@ class ReponseAuDevisEnLigneTest extends TestCase
             $this->repondre($geste, Str::random(64))->assertStatus(410)->assertSee(LienDuDevis::PLUS_VALABLE)->assertDontSee('Ma Boutique')->assertHeader('X-Robots-Tag', 'noindex, nofollow');
         }
 
-        $this->get('/devis/'.Str::random(63))->assertNotFound();
         $this->assertSame(0, ReponseDuDevis::query()->count());
+    }
+
+    /**
+     * Une adresse tronquée ou altérée (un jeton trop court, trop long, ou
+     * qui porte d'autres caractères) mène à la même page neutre, sans
+     * lien vers le reste de PILIQI, sans que la base soit lue pour la
+     * chercher, sous la même limite d'essais.
+     */
+    public function test_un_jeton_mal_forme_ne_dit_que_ce_lien_n_est_plus_valable_sans_rien_lire(): void
+    {
+        $jeton = $this->envoyer($this->devisEnvoyable());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        foreach ([substr($jeton, 0, 63), $jeton.'A', substr($jeton, 0, 63).'-', '<script>', 'x'] as $altere) {
+            foreach (['get', 'pdf', 'accepter', 'refuser'] as $geste) {
+                $reponse = $this->repondre($geste, $altere, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1']);
+
+                $reponse->assertStatus(410)
+                    ->assertSee(LienDuDevis::PLUS_VALABLE)
+                    ->assertDontSee('Ma Boutique')
+                    ->assertDontSee('Revenir à l\'accueil', false)
+                    ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+                    ->assertHeader('Referrer-Policy', 'no-referrer');
+                $this->assertSame(0, preg_match_all('/href="/', (string) $reponse->getContent()));
+            }
+        }
+
+        $this->assertFalse(collect(DB::getQueryLog())->contains(fn (array $requete): bool => str_contains($requete['query'], 'liens_des_devis')));
+        DB::disableQueryLog();
+        $this->assertSame(0, ReponseDuDevis::query()->count());
+        $this->repondre('get', $jeton)->assertOk();
     }
 
     public function test_accepter_enregistre_le_nom_la_date_l_empreinte_et_les_traces_une_seule_fois(): void
@@ -214,6 +260,93 @@ class ReponseAuDevisEnLigneTest extends TestCase
         });
     }
 
+    /**
+     * Le nom et le motif viennent d'une page sans compte : dans la cloche,
+     * dont Filament interprète le corps en HTML, ils se lisent tels qu'ils
+     * ont été tapés, sans jamais devenir un lien ni une mise en forme, chez
+     * le demandeur de l'envoi comme chez le propriétaire.
+     */
+    public function test_le_nom_et_le_motif_du_client_se_lisent_en_texte_dans_la_cloche(): void
+    {
+        $piege = '<a href="https://evil.example/connexion" style="position:fixed;top:0;left:0;width:100vw;height:100vh">Votre session a expiré</a>';
+        $refuse = $this->devisEnvoyable();
+        $this->repondre('refuser', $this->envoyer($refuse), ['motif' => $piege])->assertOk();
+        $accepte = $this->devisEnvoyable();
+        $this->repondre('accepter', $this->envoyer($accepte), ['signataire' => '<a href="https://evil.example">Paul</a>', 'bon_pour_accord' => '1'])->assertOk();
+
+        foreach ([$this->proprietaireDe($this->magasin), self::responsableDeTest($this->magasin)] as $compte) {
+            $avis = $compte->notifications()->where('type', ReponseDuClientAuDevis::class)->get();
+            $this->assertCount(2, $avis);
+
+            // Le corps tel que la cloche l'écrit dans la page (voir la vue
+            // filament-notifications::notification) : passé au filtre de
+            // Filament, qui garde les liens.
+            $corps = $avis->map(fn ($notification): string => (string) str(NotificationFilament::fromDatabase($notification)->getBody())->sanitizeHtml());
+            $this->assertDoesNotMatchRegularExpression('#<a\b#i', $corps->implode(' '));
+
+            $textes = $corps->map(fn (string $html): string => html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5))->implode(' ');
+            $this->assertStringContainsString("avec ce motif : « {$piege} »", $textes);
+            $this->assertStringContainsString('signé « <a href="https://evil.example">Paul</a> »', $textes);
+        }
+    }
+
+    /**
+     * La cloche et la boîte du propriétaire réunissent les avis de tous ses
+     * magasins : l'heure d'un magasin d'outre-mer y porte le nom de son
+     * heure, comme sur la page du client.
+     */
+    public function test_l_avis_nomme_l_heure_d_un_magasin_d_outre_mer(): void
+    {
+        Notification::fake();
+        $this->magasin = $this->completerIdentiteLegale($this->ouvrirUneSocieteSituee(Territoire::Martinique, ['nom' => 'Boutique de Fort-de-France', 'code' => 'FDF1']));
+        app(TenantContext::class)->set($this->magasin);
+        $jeton = $this->envoyer($this->devisEnvoyable());
+        $this->travelTo(self::aLHeureDe(Territoire::Martinique, '2026-11-12 06:00'));
+
+        $this->repondre('accepter', $jeton, ['signataire' => 'Paul Durand', 'bon_pour_accord' => '1'])->assertOk()->assertSee('12/11/2026 à 06:00 (heure de la Martinique)');
+
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        Notification::assertSentTo($proprietaire, ReponseDuClientAuDevis::class, function (ReponseDuClientAuDevis $avis) use ($proprietaire): bool {
+            $courriel = implode(' ', $avis->toMail($proprietaire)->introLines);
+            $cloche = $avis->toDatabase($proprietaire)['body'];
+
+            return str_contains($courriel, 'le 12/11/2026 à 06:00 (heure de la Martinique)')
+                && str_contains(html_entity_decode((string) $cloche, ENT_QUOTES | ENT_HTML5), 'le 12/11/2026 à 06:00 (heure de la Martinique)');
+        });
+    }
+
+    /**
+     * Le client n'a pas de compte : sa réponse s'inscrit au journal des
+     * événements au nom du système, quel que soit le compte connecté dans
+     * le navigateur qui ouvre le lien, d'une autre société ou du magasin
+     * du devis.
+     */
+    public function test_la_reponse_s_inscrit_au_journal_des_evenements_sans_le_compte_connecte_dans_le_navigateur(): void
+    {
+        $jetons = [$this->envoyer($this->devisEnvoyable()), $this->envoyer($this->devisEnvoyable())];
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Autre Boutique', 'code' => 'AUTRE']);
+        $connectes = [self::responsableDeTest($ailleurs)];
+        app(TenantContext::class)->set($this->magasin);
+        $connectes[] = $this->membre($this->magasin, RoleMagasin::Vendeur);
+
+        foreach ($connectes as $rang => $compte) {
+            $this->actingAs($compte);
+
+            $this->repondre('accepter', $jetons[$rang], ['signataire' => 'Paul Durand', 'bon_pour_accord' => '1'])->assertOk();
+        }
+
+        $evenements = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement)->where('type', (string) CodeEvenement::ReponseAUnDevis->value)->get();
+        $this->assertCount(2, $evenements);
+
+        foreach ($evenements as $evenement) {
+            $this->assertNull($evenement->operateur_id);
+            $this->assertNull(json_decode($evenement->contenu, true)['operateur']);
+            $this->assertSame((int) $this->magasin->id, (int) $evenement->magasin_id);
+        }
+
+        $this->assertTrue(collect($connectes)->every(fn (User $compte): bool => ! str_contains($evenements->pluck('contenu')->implode(' '), $compte->name)));
+    }
+
     public function test_accepter_exige_le_nom_tape_et_bon_pour_accord(): void
     {
         $jeton = $this->envoyer($this->devisEnvoyable());
@@ -242,6 +375,24 @@ class ReponseAuDevisEnLigneTest extends TestCase
         $this->assertSame('paul@client.fr', EnvoiDocument::query()->where('nature', NatureEnvoi::Refus)->sole()->destinataire);
         Notification::assertSentTo($this->proprietaireDe($this->magasin), ReponseDuClientAuDevis::class, fn (ReponseDuClientAuDevis $avis): bool => str_contains(implode(' ', $avis->toMail($this->proprietaireDe($this->magasin))->introLines), 'avec ce motif : « Trop cher pour nous. »'));
         $this->repondre('get', $jeton)->assertStatus(410);
+    }
+
+    /**
+     * La confirmation de la réponse en ligne part sans que personne du
+     * magasin l'ait demandée : la section « Envois » de la fiche du devis
+     * dit qu'elle vient de la réponse du client, jamais d'une relance.
+     */
+    public function test_la_fiche_dit_que_la_confirmation_vient_de_la_reponse_du_client(): void
+    {
+        $devis = $this->devisEnvoyable();
+        $this->repondre('refuser', $this->envoyer($devis))->assertOk();
+        $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
+
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertSee('Confirmation du refus')
+            ->assertSee('Le client, par sa réponse en ligne')
+            ->assertSee('Responsable de test')
+            ->assertDontSee('Relance automatique');
     }
 
     public function test_un_refus_sans_motif_est_enregistre(): void
@@ -357,14 +508,25 @@ class ReponseAuDevisEnLigneTest extends TestCase
             $this->repondre('get', Str::random(64), [], ['REMOTE_ADDR' => '198.51.100.7'])->assertStatus(410);
         }
 
-        $this->repondre('get', $jeton, [], ['REMOTE_ADDR' => '198.51.100.7'])->assertStatus(429);
+        $this->repondre('get', $jeton, [], ['REMOTE_ADDR' => '198.51.100.7'])
+            ->assertStatus(429)
+            ->assertSee(ReponseAuDevisController::TROP_D_ESSAIS)
+            ->assertDontSee('Too Many')
+            ->assertDontSee('Ma Boutique')
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertHeader('Retry-After');
+        $this->repondre('pdf', $jeton, [], ['REMOTE_ADDR' => '198.51.100.7'])->assertStatus(429);
         $this->repondre('get', $jeton, [], ['REMOTE_ADDR' => '198.51.100.8'])->assertOk();
 
         for ($essai = 1; $essai <= 10; $essai++) {
             $this->repondre('accepter', Str::random(64), ['signataire' => 'X Y', 'bon_pour_accord' => '1'], ['REMOTE_ADDR' => '198.51.100.9'])->assertStatus(410);
         }
 
-        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'], ['REMOTE_ADDR' => '198.51.100.9'])->assertStatus(429);
+        $this->repondre('accepter', $jeton, ['signataire' => 'Claire Martin', 'bon_pour_accord' => '1'], ['REMOTE_ADDR' => '198.51.100.9'])
+            ->assertStatus(429)
+            ->assertSee(ReponseAuDevisController::TROP_D_ESSAIS)
+            ->assertHeader('Referrer-Policy', 'no-referrer');
         $this->assertSame(0, ReponseDuDevis::query()->count());
     }
 

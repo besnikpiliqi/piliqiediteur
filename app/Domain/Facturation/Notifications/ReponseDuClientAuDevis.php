@@ -22,6 +22,14 @@ use Illuminate\Notifications\Messages\MailMessage;
  * lesquels : le devis ne réserve rien, l'émission de la facture contrôle
  * le stock. Il mène à la fiche du devis, où se fait la transformation en
  * facture.
+ *
+ * Le nom tapé et le motif viennent d'une page publique, sans compte : dans
+ * la cloche, dont Filament interprète le corps en HTML, tout le texte est
+ * échappé (voir contenu()) et s'y lit tel qu'il a été tapé, sans jamais
+ * devenir un lien ni une mise en forme ; l'e-mail l'échappe de lui-même.
+ * L'heure de la réponse est celle du magasin, nommée hors de Paris (voir
+ * Calendrier::afficherHorsDuMagasin()) : la cloche et la boîte du
+ * propriétaire réunissent les avis de tous ses magasins.
  */
 final class ReponseDuClientAuDevis extends NotificationDuMagasin
 {
@@ -64,7 +72,7 @@ final class ReponseDuClientAuDevis extends NotificationDuMagasin
     {
         $notification = NotificationFilament::make()
             ->title($this->titre())
-            ->body(implode(' ', [$this->texte(), ...$this->lignesDuStock()]))
+            ->body(e(implode(' ', [$this->texte(), ...$this->lignesDuStock()])))
             ->icon($this->reponse->reponse === ReponseAuDevis::Acceptation ? 'heroicon-o-check-circle' : 'heroicon-o-x-circle')
             ->actions([
                 Action::make('voir')
@@ -89,7 +97,7 @@ final class ReponseDuClientAuDevis extends NotificationDuMagasin
 
     private function texte(): string
     {
-        $quand = $this->magasin->calendrier()->afficher($this->reponse->created_at, 'd/m/Y à H:i');
+        $quand = $this->magasin->calendrier()->afficherHorsDuMagasin($this->reponse->created_at, 'd/m/Y à H:i');
 
         if ($this->reponse->reponse === ReponseAuDevis::Acceptation) {
             return "Le client a accepté le devis {$this->devis->numero} le {$quand}, signé « {$this->reponse->signataire} » avec la mention « Bon pour accord ». Un compte autorisé à vendre peut maintenant le transformer en facture.";

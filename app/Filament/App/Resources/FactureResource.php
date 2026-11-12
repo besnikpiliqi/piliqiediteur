@@ -638,7 +638,13 @@ class FactureResource extends Resource
      * validée, en orange, ce qu'en a retourné chaque avoir fournisseur émis
      * (voir FactureAchatResource::retoursDeLaLigne()), et, sur une ligne
      * qui peut encore l'être, « Retourner ce produit » (voir
-     * FactureAchatResource::creerUnAvoirFournisseur()).
+     * FactureAchatResource::creerUnAvoirFournisseur()). Sous la quantité de
+     * chaque ligne de produit suivi en stock d'un devis dont la facture
+     * n'est pas émise, le stock disponible du magasin et l'avertissement
+     * quand ses lignes de ce produit le dépassent, comme dans son
+     * formulaire (voir Devis::stocksDeSesProduits() et
+     * AjouteDesLignesDeVente::texteDuStockDUneLigne()), lus une fois pour
+     * toutes ses lignes.
      *
      * Une vente sans TVA française (voir
      * ContexteDeVente::documentRetireLaTvaDuPrix()) montre, comme ses PDF,
@@ -667,6 +673,7 @@ class FactureResource extends Resource
         $prixUnitaire = fn (string $state): string => $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($state));
         $prixExact = fn (string $state): string => $calculateur->prixUnitaireExact($calculateur->enMillioniemes($state));
         $montreLePuHtExact = $estUnAchat || ($estUneVente && ContexteDeVente::documentMontreLePuHt($document));
+        $stocks = $document instanceof Devis && $document->montreLeStockDeSesLignes() ? $document->stocksDeSesProduits() : [];
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -678,7 +685,12 @@ class FactureResource extends Resource
                         $record->nouveau_produit !== null => 'Nouveau produit, créé à la validation',
                         default => FactureAchatResource::retoursDeLaLigne($record),
                     }),
-                TextEntry::make('quantite')->label('Quantité')->numeric(),
+                TextEntry::make('quantite')
+                    ->label('Quantité')
+                    ->numeric()
+                    ->helperText(fn (?Model $record): ?string => $record instanceof LigneDevis && $record->produit_id !== null && isset($stocks[$record->produit_id])
+                        ? DevisResource::texteDuStockDUneLigne($stocks[$record->produit_id]['disponible'], $record->quantite, $stocks[$record->produit_id]['demande'])
+                        : null),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')
                     ->formatStateUsing($montreLePuHtExact ? $prixExact : $prixUnitaire),

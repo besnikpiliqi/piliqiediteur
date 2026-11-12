@@ -29,6 +29,21 @@ enum NatureEnvoi: string implements HasColor, HasLabel
         };
     }
 
+    /**
+     * Qui a demandé l'envoi quand aucune personne ne l'a fait (voir la
+     * section « Envois » d'une fiche) : la relance automatique, ou le
+     * client, dont la réponse en ligne fait partir sa confirmation ; null
+     * pour un envoi, toujours demandé par une personne.
+     */
+    public function demandeSansPersonne(): ?string
+    {
+        return match ($this) {
+            self::Envoi => null,
+            self::Relance => 'Relance automatique',
+            self::Acceptation, self::Refus => 'Le client, par sa réponse en ligne',
+        };
+    }
+
     public function getColor(): string
     {
         return match ($this) {

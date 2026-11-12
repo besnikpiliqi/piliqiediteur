@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\ReponseAuDevis;
@@ -44,9 +45,13 @@ use Illuminate\Validation\ValidationException;
  * acceptation, ou « Refusé » ; la réponse s'inscrit au journal d'audit du
  * magasin (origine « client ») et à son journal des événements (JET 900),
  * l'adresse IP et le navigateur du client allant à part, dans leurs
- * traces (voir TraceDuVisiteur) ; l'e-mail qui confirme la réponse au
- * client, devis joint, part en file d'attente une fois la transaction
- * validée, à l'adresse du lien (voir EnvoyerDocumentJob).
+ * traces (voir TraceDuVisiteur). Le client n'a pas de compte : la réponse
+ * s'inscrit au nom du système (voir OperateurCourant::pendantLeSysteme()),
+ * jamais au nom d'un compte connecté dans le navigateur qui ouvre le lien,
+ * d'un autre magasin, d'une autre société ou du magasin du devis lui-même.
+ * L'e-mail qui confirme la réponse au client, devis joint, part en file
+ * d'attente une fois la transaction validée, à l'adresse du lien (voir
+ * EnvoyerDocumentJob).
  *
  * Après la transaction, le magasin est prévenu, dans la cloche et par
  * e-mail : la personne qui a demandé l'envoi, si elle peut encore ouvrir
@@ -66,6 +71,7 @@ class RepondreAuDevisEnLigneAction
     public function __construct(
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journal,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -115,7 +121,7 @@ class RepondreAuDevisEnLigneAction
         $magasin = Magasin::query()->findOrFail($lien->magasin_id);
 
         return app(TenantContext::class)->runAs($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif): ReponseDuDevis {
-            [$enregistree, $devis, $envoi] = $this->registre->sousVerrou($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif): array {
+            [$enregistree, $devis, $envoi] = $this->operateur->pendantLeSysteme(fn (): array => $this->registre->sousVerrou($magasin, function () use ($lien, $magasin, $reponse, $signataire, $motif): array {
                 $magasinRelu = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
                 $devis = Devis::query()->whereKey($lien->devis_id)->lockForUpdate()->first() ?? throw new LienDuDevisInvalideException;
                 $lien = LienDuDevis::query()->whereKey($lien->getKey())->with('envoi')->firstOrFail();
@@ -168,7 +174,7 @@ class RepondreAuDevisEnLigneAction
                 ]);
 
                 return [$enregistree, $devis, $lien->envoi];
-            });
+            }));
 
             Notification::send($this->aPrevenir($magasin, $envoi), new ReponseDuClientAuDevis($magasin, $devis, $enregistree, $reponse === ReponseAuDevis::Acceptation ? $devis->stocksInsuffisants() : []));
 

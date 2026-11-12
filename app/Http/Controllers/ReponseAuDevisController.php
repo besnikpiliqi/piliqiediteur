@@ -32,15 +32,20 @@ use Symfony\Component\HttpFoundation\Response as ReponseHttp;
  * - accepter (POST) demande le nom tapé et « Bon pour accord » coché,
  *   refuser (POST) un motif facultatif (voir RepondreAuDevisEnLigneAction) ;
  *   la page dit ensuite la réponse enregistrée, et le lien ne vaut plus.
- * Un jeton inconnu, un lien retiré, remplacé ou déjà servi, un devis
- * expiré, modifié ou déjà répondu ne donnent que « Ce lien n'est plus
- * valable. » (410), sans rien dire de plus. Chaque page est marquée
- * noindex (balise et en-tête X-Robots-Tag), ne transmet pas son adresse
- * (Referrer-Policy: no-referrer) et ne mène nulle part ailleurs dans
- * PILIQI ; les essais sont limités par adresse IP (voir routes/web.php).
+ * Un jeton mal formé (une adresse tronquée ou altérée, lue sans aucune
+ * recherche, voir LienDuDevis::parSonJeton()) ou inconnu, un lien retiré,
+ * remplacé ou déjà servi, un devis expiré, modifié ou déjà répondu ne
+ * donnent que « Ce lien n'est plus valable. » (410), sans rien dire de
+ * plus. Chaque page est marquée noindex (balise et en-tête X-Robots-Tag),
+ * ne transmet pas son adresse (Referrer-Policy: no-referrer) et ne mène
+ * nulle part ailleurs dans PILIQI ; les essais sont limités par adresse
+ * IP, la page de l'attente étant la même page neutre (voir
+ * tropDEssais()).
  */
 class ReponseAuDevisController
 {
+    public const TROP_D_ESSAIS = 'Trop d\'essais depuis cette adresse : réessayez dans une minute.';
+
     public function afficher(string $jeton): ReponseHttp
     {
         return $this->dansLeMagasinDuLien($jeton, fn (LienDuDevis $lien, Devis $devis): ReponseHttp => $this->page($jeton, $devis, [], null, null));
@@ -140,7 +145,7 @@ class ReponseAuDevisController
             'prix_unitaire' => $horsTaxe
                 ? $calculateur->prixUnitaireExact($calculateur->enMillioniemes($ligne->prix_unitaire_ht))
                 : $calculateur->prixUnitaireAffiche($calculateur->enMillioniemes($ligne->prix_unitaire_ttc)),
-            'remise' => $calculateur->enCentiemes($ligne->remise_pourcentage) === 0 ? null : CalculateurLigne::centiemesDansUnChamp($calculateur->enCentiemes($ligne->remise_pourcentage)).' %',
+            'remise' => $calculateur->enCentiemes($ligne->remise_pourcentage) === 0 ? null : CalculateurLigne::tauxEnTexte($calculateur->enCentiemes($ligne->remise_pourcentage)),
             'total' => $calculateur->enEuros($calculateur->enCentiemes($horsTaxe ? $ligne->montant_ht : $ligne->montant_ttc)),
         ])->all();
 
@@ -168,6 +173,19 @@ class ReponseAuDevisController
     private static function invalide(): Response
     {
         return self::protegee(response()->view('devis.reponse-invalide', ['message' => LienDuDevis::PLUS_VALABLE], 410));
+    }
+
+    /**
+     * Trop d'essais depuis cette adresse IP (voir
+     * AppServiceProvider::limiterLesEssaisDuLienDUnDevis()) : la page
+     * neutre du lien, en français, avec ses en-têtes et le délai de
+     * l'attente (Retry-After).
+     *
+     * @param  array<string, int|string>  $entetes
+     */
+    public static function tropDEssais(array $entetes): Response
+    {
+        return self::protegee(response()->view('devis.reponse-invalide', ['message' => self::TROP_D_ESSAIS], 429, $entetes));
     }
 
     /**

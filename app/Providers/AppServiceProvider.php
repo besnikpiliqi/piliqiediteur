@@ -37,6 +37,7 @@ use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
+use App\Http\Controllers\ReponseAuDevisController;
 use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
 use App\Policies\AffectationPolicy;
@@ -74,6 +75,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Tables\Columns\TextColumn;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Connection;
@@ -86,10 +88,12 @@ use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
 use Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Http\Request;
 use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -98,6 +102,7 @@ use Illuminate\Validation\Validator as ValidatorDeLaravel;
 use LogicException;
 use PDO;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -210,6 +215,25 @@ class AppServiceProvider extends ServiceProvider
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
         $this->neJamaisMettreEnFormeLesTextesDesEmails();
         $this->teinterLesRangeesChoisies();
+        $this->limiterLesEssaisDuLienDUnDevis();
+    }
+
+    /**
+     * Les essais sur le lien secret d'un devis (voir routes/web.php), par
+     * adresse IP, jetons faux compris : 30 ouvertures de la page ou du PDF
+     * par minute, 10 réponses par minute. Au-delà, la page du client le
+     * dit en français, avec les en-têtes de toute page du lien (voir
+     * ReponseAuDevisController::tropDEssais()), au lieu de la page
+     * technique de Laravel.
+     */
+    private function limiterLesEssaisDuLienDUnDevis(): void
+    {
+        RateLimiter::for('lien-du-devis', static fn (Request $requete): Limit => Limit::perMinute(30)
+            ->by((string) $requete->ip())
+            ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais($entetes)));
+        RateLimiter::for('reponse-au-devis', static fn (Request $requete): Limit => Limit::perMinute(10)
+            ->by((string) $requete->ip())
+            ->response(static fn (Request $requete, array $entetes): Response => ReponseAuDevisController::tropDEssais($entetes)));
     }
 
     /**

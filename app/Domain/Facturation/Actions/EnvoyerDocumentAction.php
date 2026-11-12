@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 use LogicException;
+use SensitiveParameter;
 
 /**
  * Envoie un devis, une facture, un avoir ou un reçu de paiement (voir
@@ -128,12 +129,18 @@ class EnvoyerDocumentAction
 
             // Un devis déjà accepté, refusé, expiré ou transformé repart tel
             // que le client l'a reçu, sans lien : il n'attend plus de
-            // réponse.
+            // réponse. Le jeton du lien se tire ici, une fois pour l'envoi :
+            // la base n'en garde que l'empreinte, la tâche d'envoi le porte,
+            // chiffré, jusqu'au départ de l'e-mail, le même à chaque
+            // tentative (voir EnvoyerDocumentJob).
+            $jetonDuLien = null;
+
             if ($document instanceof Devis && $document->statut === StatutDevis::Envoye) {
-                (new LienDuDevis)->forceFill(['devis_id' => $document->getKey(), 'envoi_document_id' => $envoi->getKey()])->save();
+                $jetonDuLien = LienDuDevis::nouveauJeton();
+                (new LienDuDevis)->forceFill(['devis_id' => $document->getKey(), 'envoi_document_id' => $envoi->getKey(), 'jeton_hache' => LienDuDevis::empreinte($jetonDuLien)])->save();
             }
 
-            return $this->programmer($envoi, $expediteur);
+            return $this->programmer($envoi, $expediteur, $jetonDuLien);
         }));
     }
 
@@ -319,13 +326,13 @@ class EnvoyerDocumentAction
         }
     }
 
-    private function programmer(EnvoiDocument $envoi, ?User $expediteur): EnvoiDocument
+    private function programmer(EnvoiDocument $envoi, ?User $expediteur, #[SensitiveParameter] ?string $jetonDuLien = null): EnvoiDocument
     {
         if ($expediteur !== null) {
             $this->debit->compter($expediteur, (int) $envoi->magasin_id);
         }
 
-        EnvoyerDocumentJob::dispatch($envoi->magasin_id, $envoi->id)->afterCommit();
+        EnvoyerDocumentJob::dispatch($envoi->magasin_id, $envoi->id, $jetonDuLien)->afterCommit();
 
         return $envoi;
     }

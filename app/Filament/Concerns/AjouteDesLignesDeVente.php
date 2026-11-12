@@ -788,13 +788,15 @@ trait AjouteDesLignesDeVente
 
     /**
      * Sous la quantité d'une ligne de produit d'un devis : le stock
-     * disponible du magasin aujourd'hui, et un avertissement quand la
-     * quantité le dépasse (décision de l'éditeur du 02/11/2026, option
-     * « a ») ; le devis ne réserve rien, et l'émission de la facture qui en
-     * sortira contrôle le stock (voir VerificateurDeStock). Rien hors des
-     * pages d'un devis (une facture, la caisse, qui reprennent les mêmes
-     * lignes), ni pour un service ou un produit qui ne suit pas son stock.
-     * Les stocks de tous les produits du formulaire se lisent en une seule
+     * disponible du magasin aujourd'hui, et un avertissement quand ce que
+     * demandent toutes les lignes de ce produit le dépasse (décision de
+     * l'éditeur du 02/11/2026, option « a »), comme le compte sa fiche et
+     * l'avis de son acceptation (voir Devis::stocksDeSesProduits()) ; le
+     * devis ne réserve rien, et l'émission de la facture qui en sortira
+     * contrôle le stock (voir VerificateurDeStock). Rien hors des pages
+     * d'un devis (une facture, la caisse, qui reprennent les mêmes lignes),
+     * ni pour un service ou un produit qui ne suit pas son stock. Les
+     * stocks de tous les produits du formulaire se lisent en une seule
      * requête par requête de la page (voir calculUneFoisParRequete()) :
      * autant de lectures du catalogue pour vingt lignes que pour une.
      */
@@ -806,10 +808,11 @@ trait AjouteDesLignesDeVente
             return null;
         }
 
-        $identifiants = collect(ValeursLues::tableau($get('../../lignes') ?? []))
-            ->map(fn (mixed $ligne): mixed => is_array($ligne) ? ($ligne['produit_id'] ?? null) : null)
-            ->filter(fn (mixed $identifiant): bool => filled($identifiant))
-            ->map(fn (mixed $identifiant): int|string => ValeursLues::cleDeTableau($identifiant))
+        $produit = ValeursLues::cleDeTableau($produitId);
+        $lignes = collect(ValeursLues::tableau($get('../../lignes') ?? []))
+            ->filter(fn (mixed $ligne): bool => is_array($ligne) && filled($ligne['produit_id'] ?? null));
+        $identifiants = $lignes
+            ->map(fn (array $ligne): int|string => ValeursLues::cleDeTableau($ligne['produit_id']))
             ->unique()
             ->sort()
             ->values()
@@ -820,15 +823,32 @@ trait AjouteDesLignesDeVente
             ->get(['id', 'stock_quantite'])
             ->mapWithKeys(fn (Produit $produit): array => [$produit->getKey() => $produit->stock_quantite])
             ->all());
-        $disponible = $stocks[ValeursLues::cleDeTableau($produitId)] ?? null;
+        $disponible = $stocks[$produit] ?? null;
 
         if ($disponible === null) {
             return null;
         }
 
-        return ValeurSimple::enEntierOuNul($get('quantite')) > $disponible
-            ? "Stock disponible : {$disponible}. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera."
-            : "Stock disponible : {$disponible}.";
+        $demandeDuProduit = $lignes
+            ->filter(fn (array $ligne): bool => (string) ValeursLues::cleDeTableau($ligne['produit_id']) === (string) $produit)
+            ->sum(fn (array $ligne): int => max(0, ValeurSimple::enEntierOuNul($ligne['quantite'] ?? null) ?? 0));
+
+        return self::texteDuStockDUneLigne($disponible, max(0, ValeurSimple::enEntierOuNul($get('quantite')) ?? 0), $demandeDuProduit);
+    }
+
+    /**
+     * Ce que dit le stock sous une ligne de produit d'un devis, dans son
+     * formulaire comme sur sa fiche (voir FactureResource::lignesEntry()) :
+     * le stock disponible, puis l'avertissement quand la quantité de la
+     * ligne, ou celle de toutes les lignes de ce produit, le dépasse.
+     */
+    public static function texteDuStockDUneLigne(int $disponible, int $quantiteDeLaLigne, int $demandeDuProduit): string
+    {
+        return match (true) {
+            $demandeDuProduit <= $disponible => "Stock disponible : {$disponible}.",
+            $quantiteDeLaLigne >= $demandeDuProduit => "Stock disponible : {$disponible}. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.",
+            default => "Stock disponible : {$disponible}. Les lignes de ce produit en demandent {$demandeDuProduit}, plus que le stock : le devis ne réserve rien, la facture le contrôlera.",
+        };
     }
 
     /**

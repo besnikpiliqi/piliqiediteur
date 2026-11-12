@@ -18,9 +18,11 @@ use Illuminate\Support\Str;
  * Le lien secret par lequel le client répond à un devis envoyé par
  * e-mail, sans compte (décision de l'éditeur du 02/11/2026) : un par
  * envoi, créé avec lui (voir EnvoyerDocumentAction). Son jeton, d'au moins
- * 256 bits, est tiré par la tâche d'envoi juste avant le départ de
- * l'e-mail, qui seul le porte (voir EnvoyerDocumentJob::jetonDuLien()) :
- * la base n'en garde que l'empreinte SHA-256, aucun journal ne l'écrit.
+ * 256 bits, se tire alors une seule fois : la base n'en garde que
+ * l'empreinte SHA-256, aucun journal ne l'écrit, et seuls la tâche
+ * d'envoi, qui le porte chiffré jusqu'au départ de l'e-mail, le même à
+ * chaque tentative, et l'e-mail le portent (voir
+ * EnvoyerDocumentJob::lienDeReponse()).
  *
  * Il vaut tant que son devis, envoyé, attend sa réponse dans sa validité,
  * dans la version que cet e-mail a portée (voir estValable()) : il cesse
@@ -92,11 +94,16 @@ class LienDuDevis extends Model
     /**
      * Le lien que désigne ce jeton, hors de tout magasin (la page du lien
      * s'ouvre avant qu'aucun ne le soit), valable ou non ; null pour un
-     * jeton inconnu. Seulement les colonnes qui disent si le lien vaut et
-     * de quel devis il s'agit.
+     * jeton inconnu, et sans aucune lecture pour un jeton qui n'a pas la
+     * forme d'un jeton (une adresse tronquée ou altérée). Seulement les
+     * colonnes qui disent si le lien vaut et de quel devis il s'agit.
      */
     public static function parSonJeton(string $jeton): ?self
     {
+        if (preg_match('/\A[A-Za-z0-9]{'.self::LONGUEUR_DU_JETON.'}\z/', $jeton) !== 1) {
+            return null;
+        }
+
         return self::withoutGlobalScopes()
             ->where('jeton_hache', self::empreinte($jeton))
             ->first(['id', 'magasin_id', 'devis_id', 'envoi_document_id', 'retire_le', 'created_at']);

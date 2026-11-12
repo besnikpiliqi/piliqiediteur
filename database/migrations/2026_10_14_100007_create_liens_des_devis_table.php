@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\Schema;
  * Le lien secret par lequel le client répond à un devis envoyé par
  * e-mail (voir LienDuDevis) : un par envoi, créé avec lui (voir
  * EnvoyerDocumentAction). Seule l'empreinte SHA-256 de son jeton se garde,
- * écrite par la tâche d'envoi juste avant le départ de l'e-mail (voir
- * EnvoyerDocumentJob), jamais le jeton.
+ * écrite avec lui, jamais le jeton, que seuls la tâche d'envoi, chiffré,
+ * et l'e-mail portent (voir EnvoyerDocumentJob).
  */
 return new class extends Migration
 {
@@ -22,8 +22,8 @@ return new class extends Migration
             $table->unsignedBigInteger('envoi_document_id');
             // L'empreinte du jeton que porte l'e-mail, unique dans tout le
             // logiciel : la page du lien la cherche avant qu'aucun magasin
-            // ne soit ouvert. Vide tant que l'e-mail n'est pas parti.
-            $table->char('jeton_hache', 64)->nullable()->unique();
+            // ne soit ouvert.
+            $table->char('jeton_hache', 64)->unique();
             // Le retrait du lien par le magasin (voir
             // RetirerLeLienDuDevisAction), avec le nom figé de qui l'a fait.
             $table->timestamp('retire_le')->nullable();

@@ -36,10 +36,12 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use SensitiveParameter;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Exception\UnsupportedSchemeException;
 use Symfony\Component\Mime\Exception\RfcComplianceException;
@@ -145,10 +147,24 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
      */
     public int $timeout = 45;
 
+    /**
+     * Le jeton du lien secret de l'envoi d'un devis (voir LienDuDevis),
+     * chiffré par la clé de l'application : la tâche le garde ainsi dans la
+     * file d'attente, et chaque tentative, qui repart de la même tâche, met
+     * le même lien dans l'e-mail ; un e-mail parti mais constaté en échec
+     * (une connexion coupée après son acceptation) ne laisse pas au client
+     * un lien qu'une tentative suivante aurait remplacé. Null pour tout
+     * autre envoi.
+     */
+    private readonly ?string $jetonDuLienChiffre;
+
     public function __construct(
         public readonly int $magasinId,
         public readonly int $envoiId,
-    ) {}
+        #[SensitiveParameter] ?string $jetonDuLien = null,
+    ) {
+        $this->jetonDuLienChiffre = $jetonDuLien === null ? null : Crypt::encryptString($jetonDuLien);
+    }
 
     public function uniqueId(): string
     {
@@ -253,24 +269,23 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
     /**
      * L'adresse du lien secret de l'envoi d'un devis (voir LienDuDevis),
-     * quand il vaut encore au départ de l'e-mail : un nouveau jeton, tiré
-     * à chaque tentative juste avant l'envoi, dont seule l'empreinte
-     * s'écrit, et que seul l'e-mail porte ; null pour tout autre envoi, ou
-     * un devis déjà accepté, refusé, expiré ou transformé, renvoyé tel que
-     * le client l'a reçu, sans lien.
+     * quand il vaut encore au départ de l'e-mail : celle du jeton tiré à la
+     * demande d'envoi, que la tâche porte chiffré, le même à chaque
+     * tentative, et dont la base ne garde que l'empreinte ; null pour tout
+     * autre envoi, ou un devis déjà accepté, refusé, expiré ou transformé,
+     * renvoyé tel que le client l'a reçu, sans lien.
      */
     private function lienDeReponse(EnvoiDocument $envoi, Facture|Devis|Avoir|RecuPaiement $document): ?string
     {
-        $lien = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi ? $envoi->lienDuDevis()->first() : null;
+        $lien = $document instanceof Devis && $envoi->nature === NatureEnvoi::Envoi && $this->jetonDuLienChiffre !== null ? $envoi->lienDuDevis()->first() : null;
 
         if ($lien === null || ! $lien->estValable($document)) {
             return null;
         }
 
-        $jeton = LienDuDevis::nouveauJeton();
-        $lien->forceFill(['jeton_hache' => LienDuDevis::empreinte($jeton)])->save();
+        $jeton = Crypt::decryptString($this->jetonDuLienChiffre);
 
-        return route('devis.reponse.afficher', ['jeton' => $jeton]);
+        return hash_equals($lien->jeton_hache, LienDuDevis::empreinte($jeton)) ? route('devis.reponse.afficher', ['jeton' => $jeton]) : null;
     }
 
     /**

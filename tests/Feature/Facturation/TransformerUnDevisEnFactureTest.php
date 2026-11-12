@@ -172,6 +172,12 @@ class TransformerUnDevisEnFactureTest extends TestCase
         ];
     }
 
+    /**
+     * Sur la fiche, le bouton désactivé a son explication juste au-dessous ;
+     * dans la liste, où un lien désactivé ne réagit ni au survol ni au clic,
+     * le bouton grisé n'ouvre qu'une fenêtre qui l'explique, sans bouton
+     * pour transformer ; rien n'est transformé.
+     */
     #[DataProvider('comptesSansLaVente')]
     public function test_le_bouton_reste_visible_desactive_et_explique_pour_qui_ne_peut_pas_creer_de_facture(string $compte): void
     {
@@ -186,9 +192,12 @@ class TransformerUnDevisEnFactureTest extends TestCase
             ->assertActionDisabled('convertir')
             ->assertSee(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT)
             ->callAction('convertir');
-        Livewire::test(ListDevis::class)
+        $liste = Livewire::test(ListDevis::class)
             ->assertTableActionVisible('convertir', $devis)
-            ->assertTableActionDisabled('convertir', $devis);
+            ->mountTableAction('convertir', $devis)
+            ->assertSee(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT);
+        $this->assertNull($liste->instance()->getMountedTableAction()?->getModalSubmitAction());
+        $liste->callMountedTableAction();
 
         $this->assertSame(0, Facture::query()->count());
         $this->assertSame(StatutDevis::Accepte, $devis->fresh()->statut);
@@ -229,8 +238,59 @@ class TransformerUnDevisEnFactureTest extends TestCase
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 4]]);
 
         Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
-            ->assertSee('« Lampe de bureau » : 4 demandés, 2 en stock.');
+            ->assertSee('Stock disponible : 2. La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.');
         $this->assertSame([['produit' => 'Lampe de bureau', 'demande' => 4, 'disponible' => 2]], $devis->stocksInsuffisants());
+    }
+
+    /**
+     * Après l'envoi, la fiche est le seul écran du devis (le modifier le
+     * repasserait en brouillon) : chaque ligne de produit suivi en stock y
+     * montre le stock disponible, même suffisant, avant comme après
+     * l'acceptation, et plus rien une fois la facture émise ; un service
+     * ou un produit qui ne suit pas son stock n'en montre pas.
+     */
+    public function test_la_fiche_du_devis_montre_le_stock_de_chaque_ligne_de_produit_avant_et_apres_l_envoi(): void
+    {
+        $lampe = Produit::factory()->create(['nom' => 'Lampe de bureau', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'stock_quantite' => 10]);
+        $cable = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $lampe->id, 'quantite' => 2], ['produit_id' => $cable->id, 'quantite' => 1]]);
+        $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
+
+        $brouillon = Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])->assertSeeText('Stock disponible : 10.')->assertDontSee('dépasse le stock');
+        $this->assertSame(1, substr_count($brouillon->html(), 'Stock disponible'));
+        $envoye = app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
+        Livewire::test(ViewDevis::class, ['record' => $envoye->getRouteKey()])->assertSeeText('Stock disponible : 10.');
+        $accepte = app(AccepterDevisAction::class)->handle(self::auteur(), $envoye);
+        Livewire::test(ViewDevis::class, ['record' => $accepte->getRouteKey()])->assertSeeText('Stock disponible : 10.');
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $accepte);
+        Livewire::test(ViewDevis::class, ['record' => $accepte->getRouteKey()])->assertSeeText('Stock disponible : 10.');
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
+
+        Livewire::test(ViewDevis::class, ['record' => $accepte->getRouteKey()])->assertDontSee('Stock disponible');
+    }
+
+    /**
+     * Deux lignes d'un même produit se comptent ensemble, dans le
+     * formulaire comme sur la fiche et dans l'avis de l'acceptation : 2 et
+     * 2 pour 3 en stock en demandent 4, plus que le stock.
+     */
+    public function test_les_lignes_d_un_meme_produit_se_comptent_ensemble_face_au_stock(): void
+    {
+        $lampe = Produit::factory()->create(['nom' => 'Lampe de bureau', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'stock_quantite' => 3]);
+        $this->dansLeMagasin($this->magasin, self::responsableDeTest($this->magasin));
+        $avertissement = 'Stock disponible : 3. Les lignes de ce produit en demandent 4, plus que le stock : le devis ne réserve rien, la facture le contrôlera.';
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => Client::factory()->create()->id, 'lignes' => [
+                ['produit_id' => $lampe->id, 'quantite' => 2, 'remise_pourcentage' => 0],
+                ['produit_id' => $lampe->id, 'quantite' => 2, 'remise_pourcentage' => 0],
+            ]])
+            ->assertSee($avertissement);
+
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $lampe->id, 'quantite' => 2], ['produit_id' => $lampe->id, 'quantite' => 2]]);
+
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])->assertSee($avertissement);
+        $this->assertSame([['produit' => 'Lampe de bureau', 'demande' => 4, 'disponible' => 3]], $devis->stocksInsuffisants());
     }
 
     /**

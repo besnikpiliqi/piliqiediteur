@@ -89,21 +89,24 @@ Route::get('/rattachement-cabinet/{jeton}', [RattachementAuCabinetController::cl
 
 // La réponse du client à un devis envoyé par e-mail, par le lien secret
 // de cet envoi, sans compte (voir ReponseAuDevisController) : ouvrir la
-// page ou le PDF n'écrit rien, un formulaire accepte, l'autre refuse. Les
-// essais sont limités par adresse IP, jetons faux compris.
+// page ou le PDF n'écrit rien, un formulaire accepte, l'autre refuse. Toute
+// adresse sous /devis/ y mène, même tronquée ou altérée, pour n'y lire que
+// « Ce lien n'est plus valable. » ; les essais sont limités par adresse IP,
+// jetons faux compris, avec une page en français (voir
+// AppServiceProvider::limiterLesEssaisDuLienDUnDevis()).
 Route::get('/devis/{jeton}', [ReponseAuDevisController::class, 'afficher'])
-    ->where('jeton', '[A-Za-z0-9]{64}')
-    ->middleware('throttle:30,1')
+    ->where('jeton', '[^/]+')
+    ->middleware('throttle:lien-du-devis')
     ->name('devis.reponse.afficher');
 Route::get('/devis/{jeton}/pdf', [ReponseAuDevisController::class, 'pdf'])
-    ->where('jeton', '[A-Za-z0-9]{64}')
-    ->middleware('throttle:30,1')
+    ->where('jeton', '[^/]+')
+    ->middleware('throttle:lien-du-devis')
     ->name('devis.reponse.pdf');
 Route::post('/devis/{jeton}/acceptation', [ReponseAuDevisController::class, 'accepter'])
-    ->where('jeton', '[A-Za-z0-9]{64}')
-    ->middleware('throttle:10,1')
+    ->where('jeton', '[^/]+')
+    ->middleware('throttle:reponse-au-devis')
     ->name('devis.reponse.accepter');
 Route::post('/devis/{jeton}/refus', [ReponseAuDevisController::class, 'refuser'])
-    ->where('jeton', '[A-Za-z0-9]{64}')
-    ->middleware('throttle:10,1')
+    ->where('jeton', '[^/]+')
+    ->middleware('throttle:reponse-au-devis')
     ->name('devis.reponse.refuser');

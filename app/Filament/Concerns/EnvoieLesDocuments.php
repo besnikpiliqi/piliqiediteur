@@ -157,7 +157,9 @@ trait EnvoieLesDocuments
     /**
      * Chaque envoi et chaque relance du document, du plus récent au plus
      * ancien, aboutis ou non, avec le nom de la personne qui l'a demandé
-     * tel qu'il était ce jour-là, et le détail de son résultat (voir
+     * tel qu'il était ce jour-là (ou, sans personne, la relance automatique
+     * ou la réponse en ligne du client, voir NatureEnvoi::demandeSansPersonne()),
+     * et le détail de son résultat (voir
      * EnvoiDocument::detail()). Tant qu'un envoi attend, la fiche se relit
      * toutes les 5 secondes (wire:poll), sans rechargement : le résultat
      * s'y affiche dès qu'il est connu ; ensuite, plus rien ne se relit.
@@ -178,7 +180,7 @@ trait EnvoieLesDocuments
                         TextEntry::make('niveau_relance')->label('Niveau')->state(fn (EnvoiDocument $record) => $record->niveau_relance)->prefix('n°')->placeholder('—'),
                         TextEntry::make('statut')->label('Statut')->state(fn (EnvoiDocument $record) => $record->statut)->badge(),
                         TextEntry::make('detail')->label('Détail')->state(fn (EnvoiDocument $record): ?string => $record->detail())->placeholder('—'),
-                        TextEntry::make('envoye_par_nom')->label('Demandé par')->state(fn (EnvoiDocument $record) => $record->envoye_par_nom)->placeholder('Relance automatique'),
+                        TextEntry::make('envoye_par_nom')->label('Demandé par')->state(fn (EnvoiDocument $record): ?string => $record->envoye_par_nom ?? $record->nature->demandeSansPersonne())->placeholder('—'),
                     ])
                     ->columns(7),
             ]);

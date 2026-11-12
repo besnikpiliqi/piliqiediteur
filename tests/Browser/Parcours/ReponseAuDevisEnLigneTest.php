@@ -1,12 +1,15 @@
 <?php
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\RepondreAuDevisEnLigneAction;
 use App\Domain\Facturation\Enums\ReponseAuDevis;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Mail\DocumentMail;
@@ -15,12 +18,15 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\ReponseDuDevis;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\MailFake;
 use Tests\Browser\Support\Navigation;
+use Tests\Browser\TestCaseDuNavigateur;
 
 /*
  * La réponse du client à son devis en ligne et la transformation d'un
@@ -30,10 +36,18 @@ use Tests\Browser\Support\Navigation;
  * ne vaut plus ensuite ; un lien faux ou caduc ne dit que « Ce lien n'est
  * plus valable. » ; le responsable et le vendeur autorisé transforment le
  * devis accepté, la facture brouillon dit d'où elle vient et mène au devis
- * ; le propriétaire et le vendeur sans la vente voient le bouton
- * désactivé, avec son explication ; le propriétaire transforme dans le
- * magasin de démonstration ; le responsable retire le lien ; la ligne d'un
- * devis montre le stock du produit.
+ * ; le propriétaire, l'observateur et un vendeur sans la création de
+ * facture voient le bouton désactivé sur la fiche, avec son explication,
+ * et lisent cette explication dans la fenêtre du bouton grisé de la
+ * liste ; le propriétaire transforme dans le magasin de démonstration ; le
+ * propriétaire, l'administrateur, le responsable et le vendeur retirent
+ * le lien ; la ligne d'un devis montre le stock du produit, et
+ * l'acceptation par la liste nomme le produit qui manque ; le PDF de la
+ * facture transformée dit d'après quel devis elle est établie ; le client
+ * télécharge le PDF de son devis depuis la page de son lien ; le
+ * demandeur de l'envoi et le propriétaire lisent la réponse du client
+ * dans la cloche, en texte, puis ouvrent la fiche du devis par « Voir le
+ * devis ».
  */
 
 /**
@@ -44,7 +58,10 @@ use Tests\Browser\Support\Navigation;
  */
 function devisEnvoyeParEMail(Magasin $magasin, User $responsable): array
 {
-    Mail::fake();
+    if (! Mail::getFacadeRoot() instanceof MailFake) {
+        Mail::fake();
+    }
+
     app(TenantContext::class)->set($magasin);
     $produit = Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
     $devis = app(CreerDevisAction::class)->handle($responsable, Client::factory()->create(['nom' => 'Paul Durand']), [['produit_id' => $produit->id, 'quantite' => 2]], ['date_validite' => '2026-12-31']);
@@ -72,6 +89,18 @@ function devisAccepteDuMagasin(Magasin $magasin, User $auteur): Devis
     app(TenantContext::class)->clear();
 
     return $devis;
+}
+
+/**
+ * Un vendeur du magasin à qui le propriétaire n'a coché que la
+ * consultation des devis et des factures : il ne crée pas de facture.
+ */
+function vendeurSansLaCreationDeFacture(TestCaseDuNavigateur $test, Magasin $magasin): User
+{
+    $vendeur = (fn (): User => $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::DEVIS_VIEW, PermissionRegistry::FACTURE_VIEW], ['name' => 'Valérie Blanc']))->call($test);
+    app(TenantContext::class)->clear();
+
+    return $vendeur;
 }
 
 test('le client accepte son devis en ligne en tapant son nom et en cochant « Bon pour accord », puis le lien ne vaut plus', function () {
@@ -184,11 +213,11 @@ test('le vendeur transforme un devis accepté depuis la liste des devis', functi
     expect(Facture::query()->where('devis_id', $devis->id)->sole()->cree_par)->toBe($equipe->vendeur->id);
 });
 
-test('le propriétaire et l’observateur voient « Transformer en facture » désactivé, avec son explication', function () {
+test('le propriétaire, l’observateur et un vendeur sans la création de facture voient « Transformer en facture » désactivé sur la fiche, avec son explication', function () {
     $equipe = $this->societeComplete();
     $devis = devisAccepteDuMagasin($equipe->magasin, $equipe->responsable);
 
-    foreach ([$equipe->proprietaire, $equipe->observateur] as $compte) {
+    foreach ([$equipe->proprietaire, $equipe->observateur, vendeurSansLaCreationDeFacture($this, $equipe->magasin)] as $compte) {
         $onglet = $this->seConnecter($compte);
         $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey())
             ->voir(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT)
@@ -233,4 +262,138 @@ test('le responsable lit le stock disponible sous la quantité d’une ligne de 
         ->voir('Stock disponible : 2.')
         ->remplirLaLigne('lignes', 0, 'quantite', '4')
         ->voir('La quantité dépasse le stock : le devis ne réserve rien, la facture le contrôlera.');
+});
+
+test('dans la liste des devis, le propriétaire, l’observateur et un vendeur sans la création de facture lisent pourquoi ils ne transforment pas un devis accepté', function () {
+    $equipe = $this->societeComplete();
+    $devis = devisAccepteDuMagasin($equipe->magasin, $equipe->responsable);
+
+    foreach ([$equipe->proprietaire, $equipe->observateur, vendeurSansLaCreationDeFacture($this, $equipe->magasin)] as $compte) {
+        $onglet = $this->seConnecter($compte);
+        $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis')
+            ->cliquer('.fi-ta-row:has-text('.Navigation::texte($devis->numero).') >> '.Navigation::bouton('Transformer en facture'))
+            ->voir(CreerFactureDepuisDevisAction::EXPLICATION_SANS_DROIT);
+        expect($onglet->element(Navigation::FENETRE.' button[type=submit]')->count())->toBe(0);
+        $onglet->fermerLaFenetre()
+            ->attendreQue('document.querySelector('.Navigation::texte(Navigation::FENETRE).') === null', 'la fenêtre ne s\'est pas fermée');
+        $onglet->seDeconnecter();
+    }
+
+    app(TenantContext::class)->set($equipe->magasin);
+    expect(Facture::query()->where('devis_id', $devis->id)->exists())->toBeFalse()
+        ->and($devis->fresh()->statut)->toBe(StatutDevis::Accepte);
+});
+
+test('le propriétaire, l’administrateur et le vendeur retirent le lien de réponse d’un devis envoyé, et le client ne peut plus répondre', function () {
+    $equipe = $this->societeComplete();
+
+    foreach ([$equipe->proprietaire, $equipe->administrateur, $equipe->vendeur] as $compte) {
+        [$devis, $jeton] = devisEnvoyeParEMail($equipe->magasin, $equipe->responsable);
+        $onglet = $this->seConnecter($compte);
+
+        $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey())
+            ->voir('Le client peut répondre en ligne par le lien envoyé à paul@client.fr')
+            ->cliquerSur('Retirer le lien de réponse')
+            ->soumettre('Confirmer')
+            ->voir('Le lien de réponse est retiré : le client ne peut plus répondre en ligne.')
+            ->nePasVoir('Le client peut répondre en ligne par le lien envoyé à paul@client.fr');
+
+        $this->tolerer(410, '/devis/');
+        $onglet->aller('/devis/'.$jeton)->voir(LienDuDevis::PLUS_VALABLE);
+        app(TenantContext::class)->set($equipe->magasin);
+        expect(LienDuDevis::query()->where('devis_id', $devis->id)->sole()->retire_par)->toBe($compte->id);
+        app(TenantContext::class)->clear();
+    }
+});
+
+test('le responsable accepte depuis la liste un devis dont un produit manque, et l’avis qui reste nomme ce produit', function () {
+    $equipe = $this->societeComplete();
+    app(TenantContext::class)->set($equipe->magasin);
+    $lampe = Produit::factory()->create(['nom' => 'Lampe de chevet', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'stock_quantite' => 2]);
+    $devis = app(EmettreDevisAction::class)->handle($equipe->responsable, app(CreerDevisAction::class)->handle($equipe->responsable, Client::factory()->create(['nom' => 'Paul Durand']), [['produit_id' => $lampe->id, 'quantite' => 4]]));
+    app(TenantContext::class)->clear();
+    $onglet = $this->seConnecter($equipe->responsable);
+
+    $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis')
+        ->cliquer('.fi-ta-row:has-text('.Navigation::texte($devis->numero).') >> '.Navigation::bouton('Accepter'))
+        ->soumettre('Confirmer')
+        ->voir("Le devis {$devis->numero} est accepté, mais 1 produit n'a plus assez de stock.")
+        ->voir('« Lampe de chevet » : 4 demandés, 2 en stock.');
+
+    app(TenantContext::class)->set($equipe->magasin);
+    expect($devis->fresh()->statut)->toBe(StatutDevis::Accepte);
+});
+
+test('le responsable lit sur le PDF de la facture transformée d’après quel devis elle est établie', function () {
+    $equipe = $this->societeComplete();
+    $devis = devisAccepteDuMagasin($equipe->magasin, $equipe->responsable);
+    $facture = app(TenantContext::class)->runAs($equipe->magasin, fn (): Facture => app(EmettreFactureAction::class)->handle($equipe->responsable, app(CreerFactureDepuisDevisAction::class)->handle($equipe->responsable, $devis)));
+    $mention = "Établie d'après le devis n° {$devis->numero} accepté le ".$equipe->magasin->calendrier()->afficher($devis->accepte_le, 'd/m/Y');
+    $onglet = $this->seConnecter($equipe->responsable);
+
+    $onglet->aller('/app/'.$equipe->magasin->uuid.'/factures/'.$facture->getRouteKey())
+        ->voir($mention)
+        ->cliquerSur('PDF');
+    $fichiers = $onglet->telechargements();
+
+    expect($fichiers)->toHaveCount(1);
+    $textes = collect($this->pagesDuPdf(base64_decode($fichiers[0]['contenu'])))->flatMap(fn (array $page): array => array_column($page['textes'], 'texte'))->implode(' ');
+    expect(preg_replace('/\s+/u', ' ', $textes))->toContain($mention);
+});
+
+test('le client télécharge le PDF de son devis depuis la page de son lien', function () {
+    $this->travelTo(self::aParis('2026-11-12 10:00:00'));
+    $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']));
+    [$devis, $jeton] = devisEnvoyeParEMail($magasin, self::responsableDeTest($magasin));
+
+    $onglet = $this->naviguer('/devis/'.$jeton)->voir("Devis {$devis->numero}");
+    $onglet->geste(fn () => $onglet->page()->evaluate('() => document.querySelector("a.pdf").click()'), 'le lien « Télécharger le devis en PDF »');
+    $fichiers = $onglet->telechargements();
+
+    expect($fichiers)->toHaveCount(1)
+        ->and($fichiers[0]['type'])->toBe('application/pdf')
+        ->and($fichiers[0]['debut'])->toStartWith('%PDF');
+    $textes = collect($this->pagesDuPdf(base64_decode($fichiers[0]['contenu'])))->flatMap(fn (array $page): array => array_column($page['textes'], 'texte'))->implode(' ');
+    expect($textes)->toContain($devis->numero);
+    $onglet->voir('Accepter le devis');
+});
+
+test('le responsable qui a envoyé le devis et le propriétaire lisent dans la cloche le motif du client en texte, puis « Voir le devis » les mène à sa fiche', function () {
+    $equipe = $this->societeComplete();
+    [$devis, $jeton] = devisEnvoyeParEMail($equipe->magasin, $equipe->responsable);
+    $piege = '<a href="https://evil.example/connexion" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:#fff">Votre session a expiré : reconnectez-vous ici</a>';
+    app(RepondreAuDevisEnLigneAction::class)->refuser($jeton, $piege);
+
+    foreach ([$equipe->responsable, $equipe->proprietaire] as $compte) {
+        $onglet = $this->seConnecter($compte);
+        $onglet->aller('/app/'.$equipe->magasin->uuid.'/devis')
+            ->cliquer('.fi-topbar-database-notifications-btn')
+            ->voir("Devis {$devis->numero} refusé en ligne")
+            ->voir($piege);
+        expect($onglet->page()->evaluate('() => document.querySelectorAll(\'a[href^="https://evil"]\').length'))->toBe(0);
+
+        $onglet->cliquerSurLeLien('Voir le devis')
+            ->attendreLaPage('^/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey().'$')
+            ->voir('Refusé en ligne le')
+            ->voir('Le client, par sa réponse en ligne');
+        $onglet->seDeconnecter();
+    }
+});
+
+test('le responsable lit sur la fiche d’un devis envoyé le stock de chaque ligne de produit, et l’avertissement quand ses lignes en demandent plus', function () {
+    $equipe = $this->societeComplete();
+    app(TenantContext::class)->set($equipe->magasin);
+    $lampe = Produit::factory()->create(['nom' => 'Lampe de chevet', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'stock_quantite' => 3]);
+    $ampoule = Produit::factory()->create(['nom' => 'Ampoule LED', 'prix_vente_ttc' => 6, 'taux_tva' => 20, 'stock_quantite' => 10]);
+    $devis = app(EmettreDevisAction::class)->handle($equipe->responsable, app(CreerDevisAction::class)->handle($equipe->responsable, Client::factory()->create(['nom' => 'Paul Durand']), [
+        ['produit_id' => $lampe->id, 'quantite' => 2],
+        ['produit_id' => $ampoule->id, 'quantite' => 2],
+        ['produit_id' => $lampe->id, 'quantite' => 2],
+    ]));
+    app(TenantContext::class)->clear();
+
+    $this->seConnecter($equipe->responsable)
+        ->aller('/app/'.$equipe->magasin->uuid.'/devis/'.$devis->getRouteKey())
+        ->voir('Stock disponible : 10.')
+        ->voir('Stock disponible : 3. Les lignes de ce produit en demandent 4, plus que le stock : le devis ne réserve rien, la facture le contrôlera.');
 });
